@@ -1,5 +1,11 @@
 import { describe, test, expect } from 'vitest';
-import { scoreChangedFile, representativeExecutionSections } from '../../server/utils/ai-context';
+import {
+  scoreChangedFile,
+  representativeExecutionSections,
+  extractPageSnapshotSection,
+  extractLocatorLiterals,
+  findLiteralInPatch,
+} from '../../server/utils/ai-context';
 import type { ContextLimits } from '#shared/ai-context-limits';
 
 // Minimal limits object — large enough that nothing truncates in these tests.
@@ -103,5 +109,88 @@ describe('scoreChangedFile — generic relevance (Tier 0.5)', () => {
     const lock = scoreChangedFile('package-lock.json', {});
     const src = scoreChangedFile('src/app/main.ts', {});
     expect(src).toBeGreaterThan(lock);
+  });
+});
+
+describe('extractPageSnapshotSection — Playwright error-context parsing (0.5.4a)', () => {
+  test('extracts the yaml fence under the h1 heading Playwright ≥ 1.53 writes', () => {
+    const md = [
+      '# Test info',
+      '',
+      '- Name: pressing Escape cancels label edit',
+      '',
+      '# Error details',
+      '',
+      '```',
+      'TimeoutError: locator.click: Timeout 30000ms exceeded.',
+      '```',
+      '',
+      '# Page snapshot',
+      '',
+      '```yaml',
+      '- banner [ref=e2]:',
+      '  - heading "Run trend" [level=2] [ref=e14]',
+      '```',
+    ].join('\n');
+    expect(extractPageSnapshotSection(md)).toBe('- banner [ref=e2]:\n  - heading "Run trend" [level=2] [ref=e14]');
+  });
+
+  test('tolerates an h2 heading and stops at the next section', () => {
+    const md = '## Page snapshot\n\n```yaml\n- link "Home"\n```\n\n## Next section\ntext';
+    expect(extractPageSnapshotSection(md)).toBe('- link "Home"');
+  });
+
+  test('returns null when there is no snapshot section', () => {
+    expect(extractPageSnapshotSection('# Error details\nboom')).toBeNull();
+  });
+});
+
+describe('locator-literal SCM matching (diff-content relevance)', () => {
+  const timeoutError = [
+    'Test timeout of 30000ms exceeded.',
+    '---',
+    'locator.click: Test timeout of 30000ms exceeded.',
+    'Call log:',
+    "  - waiting for locator('h2').getByTitle('Add a label')",
+    '',
+    '    at tests/labels.spec.ts:42:7',
+  ].join('\n');
+
+  test('pulls the locator string literals out of a call log', () => {
+    const lits = extractLocatorLiterals(timeoutError);
+    expect(lits).toContain('Add a label');
+    // Short CSS selector args (< 3 chars) are noise and filtered out.
+    expect(lits).not.toContain('h2');
+  });
+
+  test('getByRole name option is extracted', () => {
+    const lits = extractLocatorLiterals("expect(page.getByRole('button', { name: 'Pay now' })).toBeVisible()");
+    expect(lits).toContain('Pay now');
+  });
+
+  test('a removed patch line containing the literal beats an added-line hit elsewhere in the patch', () => {
+    const patch = [
+      '--- a/app/pages/index.vue',
+      '+++ b/app/pages/index.vue',
+      '@@ -640,7 +640,7 @@',
+      '-      subtitle="Add a label to organize runs"',
+      '+      subtitle="Tag your runs"',
+    ].join('\n');
+    expect(findLiteralInPatch(patch, ['Add a label'])).toEqual({ literal: 'Add a label', removed: true });
+  });
+
+  test('an added-only hit is reported as non-removed; no hit yields null', () => {
+    expect(findLiteralInPatch('+ <h2 title="Add a label">…</h2>', ['Add a label'])).toEqual({
+      literal: 'Add a label',
+      removed: false,
+    });
+    expect(findLiteralInPatch('+ unrelated', ['Add a label'])).toBeNull();
+  });
+
+  test('a patch hit outranks filename-only signals in scoring', () => {
+    const signals = { testTitle: 'labels can be edited' };
+    const withHit = scoreChangedFile('app/pages/whatever.vue', signals, { literal: 'Add a label', removed: true });
+    const pathOnly = scoreChangedFile('app/pages/labels-editor.vue', signals);
+    expect(withHit).toBeGreaterThan(pathOnly);
   });
 });
