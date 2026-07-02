@@ -25,7 +25,7 @@ export interface RawAttachment {
 
 /** Performance metrics collected from `result.steps` by `step-analyzer`. */
 export interface CollectedPerformanceMetrics {
-  steps: Array<{ title: string; duration: number; category: string }>;
+  steps: Array<{ title: string; duration: number; category: string; error?: { message: string }; failed?: boolean }>;
   totalStepDuration: number;
   slowestStep: { title: string; duration: number } | null;
   navigationCount: number;

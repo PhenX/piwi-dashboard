@@ -207,9 +207,9 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
             // Bound with a timeout: without it, ariaSnapshot waits up to the
             // test timeout when the page is mid-navigation, which hangs the
             // teardown that drains these capture promises.
-            // `ref` is a valid runtime flag but absent from the installed
-            // @playwright/test option types, so cast the options to keep passing it.
-            const ariaOpts = { ref: true, timeout: 500 } as Parameters<Locator['ariaSnapshot']>[0];
+            // The `ref` and `mode: 'ai'` flags require Playwright ≥ 1.52 and
+            // are typed only in newer @playwright/test versions — cast the opts.
+            const ariaOpts = { ref: true, mode: 'ai' as const, timeout: 500 } as Parameters<Locator['ariaSnapshot']>[0];
             const aria = role || isFormField ? await target.ariaSnapshot(ariaOpts).catch(() => null) : null;
 
             const accessibleName =
@@ -402,7 +402,9 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
 
   if (page && testInfo.status !== 'passed' && testInfo.status !== 'skipped') {
     try {
-      const snapshot = await page.locator(':root').ariaSnapshot();
+      const snapshot = await page
+        .locator(':root')
+        .ariaSnapshot({ ref: true, mode: 'ai' as const } as Parameters<Locator['ariaSnapshot']>[0]);
       if (snapshot) {
         await testInfo.attach(ATTACHMENT_NAMES.ariaSnapshot, {
           contentType: 'text/plain',

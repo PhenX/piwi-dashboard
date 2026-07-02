@@ -130,6 +130,8 @@ export interface ParsedTraceData {
   failingActionIndex: number;
   /** All parsed events (raw), for building the summary. */
   eventCount: number;
+  /** True when the failing action was identified by timeout fallback (no action had an error). */
+  timeoutFallback: boolean;
 }
 
 /** Parse trace events from a loaded slim ZIP buffer. Returns null on failure. */
@@ -248,17 +250,34 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
     }
   }
 
-  // Find the failing action
-  const failingIndex = actions.findIndex((a) => a.error);
-  const failingAction = failingIndex >= 0 ? actions[failingIndex]! : null;
+  // Find the failing action: error-bearing action first, then timeout fallback.
+  let failingIndex = actions.findIndex((a) => a.error);
+  let failingAction: TraceAction | null = failingIndex >= 0 ? actions[failingIndex]! : null;
+  let timeoutFallback = false;
+
+  // Timeout fallback: when no action has an error, the test was killed
+  // mid-action. The interrupted action has no endTime and no error entry —
+  // its log tail (e.g. "waiting for locator(…)") is the most diagnostic fact.
+  if (!failingAction && actions.length > 0) {
+    failingIndex = actions.length - 1;
+    for (let i = actions.length - 1; i >= 0; i--) {
+      if (actions[i]!.endTime == null && !actions[i]!.error) {
+        failingIndex = i;
+        break;
+      }
+    }
+    failingAction = actions[failingIndex]!;
+    timeoutFallback = true;
+  }
 
   return {
     actions,
     consoleEntries,
     networkRequests,
     failingAction,
-    failingActionIndex: failingIndex >= 0 ? failingIndex : -1,
+    failingActionIndex: failingAction ? failingIndex : -1,
     eventCount: events.length,
+    timeoutFallback,
   };
 }
 
@@ -275,6 +294,9 @@ export function formatFailingActionSection(
   const lines: string[] = ['## Failing Action (from Trace)'];
   const action = data.failingAction;
 
+  if (data.timeoutFallback) {
+    lines.push('- **Note**: test timed out during this action — no error struct recorded by Playwright');
+  }
   lines.push(`- Action: ${action.apiName}`);
   if (action.method) lines.push(`- Method: ${action.class ?? ''}.${action.method}`);
   if (action.params?.selector) lines.push(`- Selector: \`${String(action.params.selector)}\``);
@@ -284,8 +306,12 @@ export function formatFailingActionSection(
     if (Array.isArray(vals)) lines.push(`- Values: ${vals.map(String).join(', ')}`);
   }
   if (action.startTime) {
-    const duration = action.endTime ? action.endTime - action.startTime : 0;
-    lines.push(`- Duration: ${Math.round(duration)}ms`);
+    const duration = action.endTime ? action.endTime - action.startTime : null;
+    if (duration != null) {
+      lines.push(`- Duration: ${Math.round(duration)}ms`);
+    } else if (data.timeoutFallback) {
+      lines.push(`- Duration: timed out after ${Math.round(Date.now() / 1000 - action.startTime / 1000)}ms+`);
+    }
   }
   if (action.error) {
     lines.push(`- Error: ${(action.error.message ?? '').slice(0, 500)}`);
@@ -344,10 +370,16 @@ export function formatFailingActionSection(
     }
   }
 
-  // Action log entries (Playwright's verbose log for this action)
+  // Action log entries (Playwright's verbose log for this action).
+  // For timeout fallbacks the log is the primary signal — show the tail (most
+  // recent entries are typically the decisive "waiting for locator(…)" lines).
   if (action.log?.length) {
-    const shown = action.log.slice(0, 10).map((l) => (l.length > traceDomChars ? l.slice(0, traceDomChars) + '…' : l));
-    lines.push('', `### Action Log (${action.log.length} entries)`);
+    const logEntries = data.timeoutFallback ? action.log.slice(-10) : action.log.slice(0, 10);
+    const shown = logEntries.map((l) => (l.length > traceDomChars ? l.slice(0, traceDomChars) + '…' : l));
+    const label = data.timeoutFallback
+      ? `### Action Log — tail (${action.log.length} entries total)`
+      : `### Action Log (${action.log.length} entries)`;
+    lines.push('', label);
     for (const l of shown) lines.push(`  ${l}`);
   }
 

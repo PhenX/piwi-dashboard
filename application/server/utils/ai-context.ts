@@ -11,7 +11,7 @@ import {
 } from '../database/schema';
 import type { FailureCluster } from '../database/schema';
 import type { DiagnosisContextCoverage } from '~~/types/api';
-import { stripAnsi } from '#shared/error-fingerprint';
+import { condenseErrorText, maskVolatile, stripAnsi } from '#shared/error-fingerprint';
 import { DIAGNOSIS_SECTIONS } from '#shared/diagnosis-sections';
 import { durationStats } from '#shared/utils/stats';
 import { computeRegressionContext, normalizeGitUrl } from './regression-context';
@@ -87,6 +87,46 @@ const CLUSTER_ONLY_SECTIONS = new Set<SectionId>([
   'topSuspectedCommit',
   'priorDiagnosis',
 ]);
+
+/**
+ * Fixed narrative order for one-pass reading: coverage (always first, inserted
+ * by the assembler) → cluster context → errors → what happened (actions/steps/
+ * page state) → runtime signals → history → what changed → prior assessment →
+ * supporting artifacts. Sorting by this order also stabilizes output for prompt
+ * caching across re-runs.
+ */
+const SECTION_ORDER: SectionId[] = [
+  'clusterSummary',
+  'sampleError',
+  'executionError',
+  'representativeExecution',
+  'testSource',
+  'failingAction',
+  'failingSteps',
+  'steps',
+  'ariaSnapshot',
+  'screenshots',
+  'nearestAriaNames',
+  'locatorHealing',
+  'console',
+  'networkRequests',
+  'serverLogs',
+  'webVitals',
+  'retryProgression',
+  'baselineComparison',
+  'recurrenceFlakiness',
+  'browserDistribution',
+  'affectedTests',
+  'passedPeers',
+  'scmInvestigation',
+  'topSuspectedCommit',
+  'selectedCommits',
+  'priorDiagnosis',
+  'runContext',
+  'testAnnotations',
+  'tracePointers',
+  'artifacts',
+];
 
 /**
  * Build the "## Data Coverage" block: a compact present/absent/not-applicable map
@@ -199,22 +239,40 @@ function renderChangedFiles(
 // ── Section builders ────────────────────────────────────────────────────────
 // Each returns the markdown for one context section (or null to omit it).
 
-function clusterSummarySection(cluster: FailureCluster): string {
+async function clusterSummarySection(db: DbClient, cluster: FailureCluster): Promise<string> {
+  // Resolve timestamps for first/last seen runs to add relative-time anchors —
+  // "run #142" is meaningless to both the model and the human reading the preview.
+  const runIds = [cluster.firstSeenRunId, cluster.lastSeenRunId].filter((id) => id != null);
+  const runTimes = new Map<number, Date>();
+  if (runIds.length > 0) {
+    const rows = await db
+      .select({ id: testRuns.id, startTime: testRuns.startTime })
+      .from(testRuns)
+      .where(inArray(testRuns.id, runIds));
+    for (const r of rows) {
+      if (r.startTime instanceof Date) runTimes.set(r.id, r.startTime);
+    }
+  }
+  const firstWhen = runTimes.has(cluster.firstSeenRunId)
+    ? ` (${relativeDays(runTimes.get(cluster.firstSeenRunId)!)})`
+    : '';
+  const lastWhen = runTimes.has(cluster.lastSeenRunId)
+    ? ` (${relativeDays(runTimes.get(cluster.lastSeenRunId)!)})`
+    : '';
   return `## Failure Cluster
 - Signature: ${cluster.signature}
 - Error type: ${cluster.errorType ?? 'unknown'}
 - Selector: ${cluster.selector ?? 'none'}
 - Triage status: ${cluster.status}
 - Total occurrences: ${cluster.occurrences}
-- First seen run: #${cluster.firstSeenRunId}
-- Last seen run: #${cluster.lastSeenRunId}`;
+- First seen: run #${cluster.firstSeenRunId}${firstWhen}
+- Last seen: run #${cluster.lastSeenRunId}${lastWhen}`;
 }
 
 function sampleErrorSection(cluster: FailureCluster, limits: ContextLimits): string | null {
   if (!cluster.sampleError) return null;
-  const clean = stripAnsi(cluster.sampleError);
-  const truncated = clean.slice(0, limits.sampleErrorChars);
-  return `## Sample Raw Error\n\`\`\`\n${truncated}${clean.length > limits.sampleErrorChars ? '\n[truncated]' : ''}\n\`\`\``;
+  const condensed = condenseErrorText(stripAnsi(cluster.sampleError), limits.sampleErrorChars);
+  return `## Sample Raw Error\n\`\`\`\n${condensed}\n\`\`\``;
 }
 
 async function affectedTestsSection(
@@ -286,6 +344,7 @@ async function loadExecutionRow(db: DbClient, where: SQL) {
       shardIndex: testRunsCases.shardIndex,
       testCaseId: testRunsCases.testCaseId,
       browserName: testRunsCases.browserName,
+      startedAt: testRunsCases.startedAt,
       testTitle: testCases.title,
       testFilePath: testCases.filePath,
       testSuitePath: testCases.suitePath,
@@ -307,6 +366,7 @@ async function loadExecutionRow(db: DbClient, where: SQL) {
         metadata: testRuns.metadata,
         isFullRun: testRuns.isFullRun,
         filterDetails: testRuns.filterDetails,
+        startTime: testRuns.startTime,
       })
       .from(testRuns)
       .where(eq(testRuns.id, rep.testRunId))
@@ -323,6 +383,7 @@ async function loadExecutionRow(db: DbClient, where: SQL) {
     runMetadata: (run?.metadata as RunMetadata | null) ?? null,
     runIsFullRun: run?.isFullRun ?? null,
     runFilterDetails: (run?.filterDetails as { grep?: string; grepInvert?: string } | null) ?? null,
+    runStartTime: run?.startTime instanceof Date ? run.startTime : null,
   };
 }
 
@@ -358,12 +419,12 @@ function ciRunHeaderLines(rep: RepresentativeRow): string[] {
 
 /** Extract steps that have an error attached (D6). */
 function failingStepsSection(rep: RepresentativeRow, limits: ContextLimits): string | null {
-  const steps = (rep.steps as (TestStepInfo & { error?: { message?: string } })[] | null) ?? [];
+  const steps = (rep.steps as TestStepInfo[] | null) ?? [];
   const failing = steps.filter((s) => s.error?.message);
   if (failing.length === 0) return null;
   const out = failing.map(
     (s) =>
-      `- [${s.category ?? 'step'}] ${s.title}\n\`\`\`\n${s.error!.message!.slice(0, limits.sampleErrorChars)}\n\`\`\``,
+      `- [${s.category ?? 'step'}] ${s.title}\n\`\`\`\n${condenseErrorText(s.error!.message!, limits.sampleErrorChars)}\n\`\`\``,
   );
   return `### Failed Steps\n${out.join('\n')}`;
 }
@@ -684,6 +745,43 @@ async function artifactsSection(db: DbClient, rep: RepresentativeRow): Promise<s
     return `- ${name}${ct}${sz}: /api/files/${f.path}`;
   });
   return `## Attachments & Artifacts\nFiles captured for this execution (video, HAR, custom artifacts) — available for inspection, not inlined:\n${lines.join('\n')}`;
+}
+
+/**
+ * When Playwright attaches an `error-context.md` (automatically for failed
+ * tests), it contains a ref-annotated ARIA snapshot under `## Page snapshot`
+ * that carries the full DOM hierarchy with `[ref=eXX]` / `[cursor=pointer]` /
+ * `[active]` annotations. This is richer than the stored flat snapshot and
+ * works retroactively — the file is already uploaded, it just wasn't read.
+ *
+ * Returns the extracted snapshot YAML block (without the heading), or null
+ * when no error-context attachment exists or parsing fails.
+ */
+async function resolveErrorContextAria(db: DbClient, rep: RepresentativeRow): Promise<string | null> {
+  const row = await db
+    .select({ path: files.path })
+    .from(files)
+    .where(and(eq(files.testRunsCaseId, rep.id), eq(files.type, 'attachment'), eq(files.subtype, 'error-context.md')))
+    .limit(1)
+    .then((r) => r[0] ?? null);
+
+  if (!row) return null;
+
+  try {
+    const storage = getStorage();
+    const buf = await storage.readFile(row.path);
+    const text = buf.toString('utf8');
+    const snapshotMatch = text.match(
+      /## Page snapshot\s*\n(```(?:ya?ml)?\s*\n[\s\S]*?\n```|[\s\S]*?)(?=\n## |\n---\n|$)/,
+    );
+    if (!snapshotMatch) return null;
+    let snapshot = snapshotMatch[1]!.trim();
+    const fenceMatch = snapshot.match(/^```(?:ya?ml)?\s*\n([\s\S]*?)\n```$/);
+    if (fenceMatch) snapshot = fenceMatch[1]!;
+    return snapshot || null;
+  } catch {
+    return null;
+  }
 }
 
 /** Auto-resolve screenshots for the representative execution (D1). */
@@ -1214,8 +1312,10 @@ export function representativeExecutionSections(
   const browserStr = [browser?.projectName, browser?.browserName].filter(Boolean).join(' / ');
   const location = rep.line ? `${rep.testFilePath}:${rep.line}${rep.column ? `:${rep.column}` : ''}` : rep.testFilePath;
 
+  const runWhen = (rep as any).runStartTime instanceof Date ? ` (${relativeDays((rep as any).runStartTime)})` : '';
+
   const headerLines: string[] = [
-    `## Representative Execution (run #${rep.testRunId})`,
+    `## Representative Execution (run #${rep.testRunId}${runWhen})`,
     `- Test: ${rep.testTitle}`,
     `- Location: ${location}`,
     `- Browser: ${browserStr || 'unknown'}`,
@@ -1228,14 +1328,21 @@ export function representativeExecutionSections(
 
   out.push({ id: 'representativeExecution', markdown: headerLines.join('\n') });
 
-  // Direct error from this execution (may be more detailed than cluster sampleError)
-  if (rep.error && rep.error !== cluster?.sampleError) {
+  // Direct error from this execution. Normalized comparison (masking volatile
+  // tokens like timestamps/durations/ids that differ between runs of the same
+  // root cause) avoids ~20 KB of near-duplicate stack frames that the naive
+  // strict-equality check misses.
+  if (rep.error) {
     const clean = stripAnsi(rep.error);
-    const truncated = clean.slice(0, limits.sampleErrorChars);
-    out.push({
-      id: 'executionError',
-      markdown: `### Execution Error\n\`\`\`\n${truncated}${clean.length > limits.sampleErrorChars ? '\n[truncated]' : ''}\n\`\`\``,
-    });
+    const normalizedRep = maskVolatile(clean);
+    const normalizedCluster = cluster?.sampleError ? maskVolatile(stripAnsi(cluster.sampleError)) : null;
+    if (normalizedRep !== normalizedCluster) {
+      const condensed = condenseErrorText(clean, limits.sampleErrorChars);
+      out.push({
+        id: 'executionError',
+        markdown: `### Execution Error\n\`\`\`\n${condensed}\n\`\`\``,
+      });
+    }
   }
 
   // D7: Test source — keep failing test body full, truncate surrounding
@@ -1263,35 +1370,69 @@ export function representativeExecutionSections(
     });
   }
 
-  // Steps
+  // Steps — failed steps are annotated inline so the narrative flow
+  // ("it did A, B, C, then D failed") is readable in one pass.
   const steps = (rep.steps as TestStepInfo[] | null) ?? [];
   if (steps.length > 0) {
     const shown = steps.slice(-limits.steps);
     out.push({
       id: 'steps',
-      markdown: `### Steps (last ${shown.length})\n${shown.map((s) => `- [${s.category ?? 'step'}] ${s.title}${s.duration != null ? ` (${s.duration}ms)` : ''}`).join('\n')}`,
+      markdown: `### Steps (last ${shown.length})\n${shown
+        .map((s) => {
+          const prefix = s.failed ? '✗ ' : '- ';
+          const suffix = s.failed ? ' ← FAILED' : '';
+          const dur = s.duration != null ? ` (${s.duration}ms)` : '';
+          return `${prefix}[${s.category ?? 'step'}] ${s.title}${dur}${suffix}`;
+        })
+        .join('\n')}`,
     });
   }
 
-  // D8: Console — include last N entries of any type in window before failure
+  // D8: Console — dedupe consecutive identical lines (SPA test failures
+  // routinely repeat one error dozens of times, eating the window).
   const consoleLogs = (rep.consoleLogs as ConsoleLogEntry[] | null) ?? [];
   const windowLogs = consoleLogs.slice(-limits.maxConsoleWindow);
   if (windowLogs.length > 0) {
+    const condensed: string[] = [];
+    let repeatCount = 1;
+    for (let i = 0; i < windowLogs.length; i++) {
+      const cur = windowLogs[i]!;
+      const prev = i > 0 ? windowLogs[i - 1]! : null;
+      if (prev && prev.type === cur.type && prev.text === cur.text) {
+        repeatCount++;
+        continue;
+      }
+      if (repeatCount > 1 && i > 0) {
+        condensed[condensed.length - 1] += ` (×${repeatCount})`;
+      }
+      repeatCount = 1;
+      condensed.push(`[${cur.type}] ${cur.text.slice(0, limits.consoleEntryChars)}`);
+    }
+    if (repeatCount > 1) {
+      condensed[condensed.length - 1] += ` (×${repeatCount})`;
+    }
     out.push({
       id: 'console',
-      markdown: `### Console (last ${windowLogs.length} entries)\n${windowLogs.map((l) => `[${l.type}] ${l.text.slice(0, limits.consoleEntryChars)}`).join('\n')}`,
+      markdown: `### Console (last ${windowLogs.length} entries, deduped)\n${condensed.join('\n')}`,
     });
   }
 
-  // D9: Network — add slow-but-2xx and stalled alongside failures
+  // D9: Network — correlate with the failure when timing data allows
   const nrItems = (rep as any).nrItems ?? [];
   const networkLines: string[] = [];
+  // Find the failure time anchor: from the last failed network request, endTime or startedAt
+  const failureAnchor = rep.startedAt ?? 0;
   const failedReqs = nrItems.filter((r: any) => r.status >= 400 || r.status === 0).slice(0, limits.networkRequests);
   const slowReqs = nrItems
     .filter((r: any) => r.status >= 200 && r.status < 400 && r.duration != null && r.duration > limits.slowRequestMs)
     .slice(0, limits.networkRequests);
-  for (const r of failedReqs)
-    networkLines.push(`- [failed] ${r.method} ${r.url} → ${r.status}${r.duration != null ? ` (${r.duration}ms)` : ''}`);
+  for (const r of failedReqs) {
+    const timing =
+      r.startTime != null && failureAnchor ? ` (t+${Math.round((r.startTime - failureAnchor) * 1000)}ms)` : '';
+    networkLines.push(
+      `- [failed] ${r.method} ${r.url} → ${r.status}${r.duration != null ? ` (${r.duration}ms)` : ''}${timing}`,
+    );
+  }
   for (const r of slowReqs)
     networkLines.push(`- [slow] ${r.method} ${r.url} → ${r.status}${r.duration != null ? ` (${r.duration}ms)` : ''}`);
   if (networkLines.length > 0) {
@@ -1793,7 +1934,7 @@ export async function buildDiagnosisContext(
     };
 
     // Cluster-level summary sections.
-    push(section('clusterSummary', 'Failure Cluster', clusterSummarySection(cluster)));
+    push(section('clusterSummary', 'Failure Cluster', await clusterSummarySection(db, cluster)));
     push(section('sampleError', 'Sample Raw Error', sampleErrorSection(cluster, limits)));
     push(section('affectedTests', 'Affected Tests', await affectedTestsSection(db, cluster, limits), undefined));
     push(section('browserDistribution', 'Browser Distribution', await browserDistributionSection(db, cluster)));
@@ -1809,6 +1950,14 @@ export async function buildDiagnosisContext(
       : await loadExecutionById(db, opts.testRunsCaseId);
 
   if (rep) {
+    // When Playwright attaches an error-context.md (ref-annotated page snapshot
+    // with DOM hierarchy), prefer it over the stored flat snapshot. It is already
+    // uploaded — this just reads it.
+    const errorContextAria = await resolveErrorContextAria(db, rep);
+    if (errorContextAria) {
+      rep.ariaSnapshot = errorContextAria;
+    }
+
     // Self-labeling per-execution sections (error/source/steps/console/network/
     // server-logs/web-vitals/ARIA) — pushed by their own id, no positional guessing.
     for (const s of representativeExecutionSections(rep, cluster, limits)) {
@@ -1934,6 +2083,12 @@ export async function buildDiagnosisContext(
     hasCluster: Boolean(cluster),
     notApplicable: coverage.notApplicable,
   });
+
+  // Sort sections into a fixed narrative order — stable across re-runs
+  // (makes prompt caching effective) and optimised for one-pass reading.
+  const orderMap = new Map(SECTION_ORDER.map((id, i) => [id, i]));
+  contextSections.sort((a, b) => (orderMap.get(a.id) ?? 999) - (orderMap.get(b.id) ?? 999));
+
   const text = [coverageBlock, ...contextSections.map((s) => s.markdown).filter(Boolean)].join('\n\n');
   const textChars = contextSections.reduce((sum, s) => sum + s.chars, 0) + coverageBlock.length;
 

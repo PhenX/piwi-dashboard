@@ -12,7 +12,7 @@ import { MetadataCollector } from '../internal/collect/metadata-collector.js';
 import { StreamManager } from '../internal/streaming/stream-manager.js';
 import { collectStepMetrics, extractTestStepEvents, extractWaitEvents } from '../internal/collect/step-analyzer.js';
 import { computeInstanceId } from '../internal/support/instance-id.js';
-import { readSourceSnippet } from '../internal/support/source-snippet.js';
+import { extractFailingLine, readSourceSnippet } from '../internal/support/source-snippet.js';
 import { detectCiRunLabel } from '../internal/support/ci.js';
 import { workerIndexOf } from '../internal/support/worker-index.js';
 import { detectCliFileFilters } from '../internal/support/cli-filters.js';
@@ -272,7 +272,8 @@ export class PiwiDashboardReporter {
     };
 
     if (result.status === 'failed' || result.status === 'timedOut') {
-      const snippet = readSourceSnippet(test.location.file, test.location.line, 30);
+      const failingLine = extractFailingLine(testCase.error, test.location.file, test.location.line);
+      const snippet = readSourceSnippet(test.location.file, test.location.line, 30, failingLine);
       if (snippet) testCase.testSource = snippet;
     }
 
