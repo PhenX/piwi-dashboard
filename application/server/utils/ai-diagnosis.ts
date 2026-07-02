@@ -256,6 +256,7 @@ export async function runClusterDiagnosis(
       user: userContent,
       jsonSchema: DIAGNOSIS_JSON_SCHEMA,
       images,
+      cacheControl: true,
     });
     pipeline.push({
       role: 'diagnosis',
@@ -521,6 +522,7 @@ export async function streamClusterDiagnosis(
       user: userContent,
       jsonSchema: DIAGNOSIS_JSON_SCHEMA,
       images,
+      cacheControl: true,
     })) {
       if (chunk.type === 'text') {
         accumulatedText += chunk.data as string;

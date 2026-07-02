@@ -178,6 +178,8 @@ export interface AiCallOptions {
   jsonSchema?: object;
   maxTokens?: number;
   images?: AiAttachedImage[];
+  /** When true, mark the system prompt and stable context prefix for Anthropic cache_control. Re-runs become ~90 % cached input. */
+  cacheControl?: boolean;
 }
 
 export interface AiCallResult {
@@ -236,11 +238,42 @@ async function callAnthropic(config: ResolvedAiRole, opts: AiCallOptions): Promi
       ]
     : opts.user;
 
+  // Prompt caching: mark the system prompt (identical across re-runs) and
+  // the first user-message content block for Anthropic cache_control. With
+  // 1.6's stable section ordering the prefix is cache-friendly; volatile
+  // parts (user additional context, research block) sit at the end where
+  // they cannot invalidate earlier cached blocks.
+  const system: Anthropic.Messages.MessageCreateParams['system'] = opts.cacheControl
+    ? [{ type: 'text', text: opts.system, cache_control: { type: 'ephemeral' } }]
+    : opts.system;
+
+  let messages: Anthropic.Messages.MessageCreateParams['messages'];
+  if (opts.cacheControl) {
+    let contentBlock: Array<ImageBlock | TextBlock>;
+    if (Array.isArray(userContent)) {
+      // Images first, text with cache_control last
+      const textBlocks = userContent.filter((b) => b.type === 'text') as TextBlock[];
+      const imageBlocks = userContent.filter((b) => b.type === 'image') as ImageBlock[];
+      const lastText = textBlocks[textBlocks.length - 1];
+      contentBlock = [
+        ...imageBlocks,
+        ...(lastText
+          ? [{ type: 'text' as const, text: lastText.text, cache_control: { type: 'ephemeral' as const } } as any]
+          : []),
+      ];
+    } else {
+      contentBlock = [{ type: 'text', text: userContent, cache_control: { type: 'ephemeral' } } as any];
+    }
+    messages = [{ role: 'user', content: contentBlock } as any];
+  } else {
+    messages = [{ role: 'user', content: userContent as Anthropic.MessageParam['content'] }];
+  }
+
   const res = await client.messages.create({
     model: config.model || 'claude-opus-4-8',
     max_tokens: opts.maxTokens ?? 8192,
-    system: opts.system,
-    messages: [{ role: 'user', content: userContent as Anthropic.MessageParam['content'] }],
+    system: system as any,
+    messages,
     ...(opts.jsonSchema
       ? {
           output_config: {
@@ -378,11 +411,36 @@ async function* streamAnthropic(config: ResolvedAiRole, opts: AiCallOptions): As
     resolveFinal = r;
   });
 
+  const systemStream: Anthropic.Messages.MessageCreateParamsStreaming['system'] = opts.cacheControl
+    ? [{ type: 'text', text: opts.system, cache_control: { type: 'ephemeral' } }]
+    : opts.system;
+
+  let messagesStream: Anthropic.Messages.MessageCreateParamsStreaming['messages'];
+  if (opts.cacheControl) {
+    let contentBlock: Array<ImageBlock | TextBlock>;
+    if (Array.isArray(userContent)) {
+      const textBlocks = userContent.filter((b) => b.type === 'text') as TextBlock[];
+      const imageBlocks = userContent.filter((b) => b.type === 'image') as ImageBlock[];
+      const lastText = textBlocks[textBlocks.length - 1];
+      contentBlock = [
+        ...imageBlocks,
+        ...(lastText
+          ? [{ type: 'text' as const, text: lastText.text, cache_control: { type: 'ephemeral' as const } } as any]
+          : []),
+      ];
+    } else {
+      contentBlock = [{ type: 'text', text: userContent, cache_control: { type: 'ephemeral' } } as any];
+    }
+    messagesStream = [{ role: 'user', content: contentBlock } as any];
+  } else {
+    messagesStream = [{ role: 'user', content: userContent as Anthropic.MessageParam['content'] }];
+  }
+
   const stream = client.messages.stream({
     model: config.model || 'claude-opus-4-8',
     max_tokens: opts.maxTokens ?? 8192,
-    system: opts.system,
-    messages: [{ role: 'user', content: userContent as Anthropic.MessageParam['content'] }],
+    system: systemStream as any,
+    messages: messagesStream,
     ...(opts.jsonSchema
       ? {
           output_config: {

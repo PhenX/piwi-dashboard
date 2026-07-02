@@ -137,11 +137,12 @@ const SECTION_ORDER: SectionId[] = [
  */
 function buildCoverageBlock(
   sections: ContextSection[],
-  opts: { hasCluster: boolean; notApplicable?: Record<string, string> },
+  opts: { hasCluster: boolean; notApplicable?: Record<string, string>; absentReasons?: Record<string, string> },
 ): string {
   const byId = new Map<string, ContextSection>();
   for (const s of sections) if (!byId.has(s.id)) byId.set(s.id, s);
   const notApplicable = opts.notApplicable ?? {};
+  const absentReasons = opts.absentReasons ?? {};
 
   const lines = [
     '## Data Coverage',
@@ -157,6 +158,8 @@ function buildCoverageBlock(
       state = `not applicable (${notApplicable[id]})`;
     } else if (!opts.hasCluster && CLUSTER_ONLY_SECTIONS.has(id as SectionId)) {
       state = 'not applicable (execution scope, no cluster)';
+    } else if (absentReasons[id]) {
+      state = `absent (${absentReasons[id]})`;
     } else {
       state = 'absent (no data)';
     }
@@ -904,7 +907,7 @@ async function recurrenceFlakinessSection(db: DbClient, cluster: FailureCluster)
   return lines.join('\n');
 }
 
-/** Prior diagnosis + triage note feedback (D10). */
+/** Prior diagnosis + triage note + user feedback (D10). */
 async function priorDiagnosisSection(db: DbClient, cluster: FailureCluster): Promise<string | null> {
   const prev = await db
     .select({
@@ -913,6 +916,8 @@ async function priorDiagnosisSection(db: DbClient, cluster: FailureCluster): Pro
       confidence: failureDiagnoses.confidence,
       summary: failureDiagnoses.summary,
       rootCause: failureDiagnoses.rootCause,
+      feedback: failureDiagnoses.feedback,
+      feedbackNote: failureDiagnoses.feedbackNote,
     })
     .from(failureDiagnoses)
     .where(eq(failureDiagnoses.clusterId, cluster.id))
@@ -929,6 +934,17 @@ async function priorDiagnosisSection(db: DbClient, cluster: FailureCluster): Pro
 
   if (cluster.triageNote) {
     lines.push(`- Triage note: ${cluster.triageNote}`);
+  }
+
+  // Feedback loop: when the user marked the prior diagnosis unhelpful,
+  // warn the model not to repeat the same assessment without new evidence.
+  if (d.feedback === 'down') {
+    lines.push('');
+    lines.push(
+      `**User feedback: the previous diagnosis was marked unhelpful**` +
+        (d.feedbackNote ? ` — note: "${d.feedbackNote}"` : '') +
+        `. Do not repeat this assessment without new evidence.`,
+    );
   }
 
   lines.push('');
@@ -2079,9 +2095,32 @@ export async function buildDiagnosisContext(
     push(section('priorDiagnosis', 'Prior Assessment', await priorDiagnosisSection(db, cluster)));
   }
 
+  // Build absent-section reasons for sections where we know *why* data is
+  // missing — helps the model stop speculating and tells the human which
+  // reporter/dashboard setting would buy better evidence.
+  const absentReasons: Record<string, string> = {};
+  const sectionIds = new Set(contextSections.map((s) => s.id));
+  if (!sectionIds.has('testSource')) {
+    absentReasons.testSource = 'reporter option collectTestSource may be disabled';
+  }
+  if (!sectionIds.has('failingAction')) {
+    absentReasons.failingAction = 'no trace files found — enable trace recording in Playwright config';
+  }
+  if (!sectionIds.has('scmInvestigation') && cluster) {
+    absentReasons.scmInvestigation =
+      'no SCM diff available — check repository URL in project settings or configure a SCM token';
+  }
+  if (!sectionIds.has('console')) {
+    absentReasons.console = 'collectPerformanceMetrics or captureConsole may be disabled in reporter options';
+  }
+  if (!sectionIds.has('networkRequests')) {
+    absentReasons.networkRequests = 'collectPerformanceMetrics or captureNetwork may be disabled in reporter options';
+  }
+
   const coverageBlock = buildCoverageBlock(contextSections, {
     hasCluster: Boolean(cluster),
     notApplicable: coverage.notApplicable,
+    absentReasons,
   });
 
   // Sort sections into a fixed narrative order — stable across re-runs
