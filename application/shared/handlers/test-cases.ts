@@ -297,3 +297,61 @@ export async function getTestRunCaseTraces(db: DrizzleDB, id: number) {
     createdAt: t.createdAt,
   }));
 }
+
+/**
+ * Time-series stability of a single test case: the last 200 executions grouped
+ * into `bucketCount` chronological buckets with flaky rate, pass rate, and
+ * average duration. Shared by the REST stability-trend endpoint and the MCP
+ * `get_test_stability_trend` tool.
+ */
+export async function getTestCaseStabilityTrend(db: DrizzleDB, testCaseId: number, bucketCount: number) {
+  const buckets = Math.min(50, Math.max(5, bucketCount));
+
+  const tcRows: any[] = await db.select({ id: testCases.id }).from(testCases).where(eq(testCases.id, testCaseId));
+  if (tcRows.length === 0) throw new Error('Test case not found');
+
+  const rows: any[] = await db
+    .select({
+      id: testRunsCases.id,
+      status: testRunsCases.status,
+      duration: testRunsCases.duration,
+      retries: testRunsCases.retries,
+      testRunId: testRunsCases.testRunId,
+      startTime: testRuns.startTime,
+    })
+    .from(testRunsCases)
+    .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
+    .where(eq(testRunsCases.testCaseId, testCaseId))
+    .orderBy(desc(testRuns.startTime))
+    .limit(200);
+
+  if (rows.length === 0) return { testCaseId, buckets: [] };
+
+  rows.reverse();
+
+  const bucketSize = Math.max(1, Math.floor(rows.length / buckets));
+  const result: Array<{ date: string; flakyRate: number; passRate: number; avgDuration: number; totalRuns: number }> =
+    [];
+
+  for (let i = 0; i < rows.length; i += bucketSize) {
+    const slice = rows.slice(i, i + bucketSize);
+    const totalRuns = slice.length;
+    const passedRuns = slice.filter((r: any) => r.status === 'passed').length;
+    const flakyRuns = slice.filter((r: any) => r.status === 'passed' && (r.retries ?? 0) > 0).length;
+    const durations = slice.filter((r: any) => r.duration != null).map((r: any) => r.duration);
+    const avgDuration =
+      durations.length > 0 ? Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length) : 0;
+    const midIndex = Math.min(slice.length - 1, Math.floor(slice.length / 2));
+    const date = slice[midIndex]?.startTime?.toISOString?.()?.slice(0, 10) ?? '';
+
+    result.push({
+      date,
+      flakyRate: Math.round((flakyRuns / totalRuns) * 100) / 100,
+      passRate: Math.round((passedRuns / totalRuns) * 100) / 100,
+      avgDuration,
+      totalRuns,
+    });
+  }
+
+  return { testCaseId, buckets: result };
+}

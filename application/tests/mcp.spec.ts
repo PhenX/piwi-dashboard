@@ -72,7 +72,7 @@ test.describe.serial('MCP server', () => {
   test('tools/list — returns all tools', async ({ request }) => {
     const body = await mcp(request, 'tools/list');
     const tools: { name: string }[] = body.result.tools;
-    expect(tools.length).toBe(18);
+    expect(tools.length).toBe(38);
     const names = tools.map((t) => t.name);
     expect(names).toContain('list_projects');
     expect(names).toContain('get_run');
@@ -82,6 +82,15 @@ test.describe.serial('MCP server', () => {
     expect(names).toContain('list_recent_activity');
     expect(names).toContain('get_repo_commits');
     expect(names).toContain('get_repo_diff');
+    // New tools
+    expect(names).toContain('get_run_insights');
+    expect(names).toContain('get_spec_health');
+    expect(names).toContain('get_network_requests');
+    expect(names).toContain('get_locator_healing');
+    expect(names).toContain('search');
+    expect(names).toContain('explain_failure');
+    expect(names).toContain('set_cluster_status');
+    expect(names).toContain('list_open_clusters');
     // Every tool has a description and inputSchema
     for (const t of tools) {
       expect(t).toHaveProperty('description');
@@ -138,8 +147,28 @@ test.describe.serial('MCP server', () => {
       arguments: { id: runId, status_filter: 'all' },
     });
     const run = JSON.parse(body.result.content[0].text);
-    expect(run.casesTotal).toBe(3);
+    expect(run.total).toBe(3);
     expect(run.cases.length).toBe(3);
+  });
+
+  test('tools/call get_run — paginates cases with pageSize', async ({ request }) => {
+    const body = await mcp(request, 'tools/call', {
+      name: 'get_run',
+      arguments: { id: runId, status_filter: 'all', pageSize: 2 },
+    });
+    const run = JSON.parse(body.result.content[0].text);
+    expect(run.cases.length).toBe(2);
+    expect(run.nextCursor).toBeTruthy();
+    const page2 = await mcp(request, 'tools/call', {
+      name: 'get_run',
+      arguments: { id: runId, status_filter: 'all', pageSize: 2, cursor: run.nextCursor },
+    });
+    const run2 = JSON.parse(page2.result.content[0].text);
+    expect(run2.cases.length).toBe(1);
+    // Pages are disjoint
+    const ids1 = run.cases.map((c: any) => c.executionId);
+    const ids2 = run2.cases.map((c: any) => c.executionId);
+    expect(ids1.some((x: number) => ids2.includes(x))).toBe(false);
   });
 
   test('tools/call list_failed_cases — returns failed cases for project', async ({ request }) => {
@@ -162,6 +191,89 @@ test.describe.serial('MCP server', () => {
     expect(result.items.length).toBeGreaterThan(0);
     expect(result.items[0]).toHaveProperty('id');
     expect(result.items[0]).toHaveProperty('status');
+  });
+
+  test('tools/call list_failed_cases — cursor paginates without error (regression)', async ({ request }) => {
+    const p1 = JSON.parse(
+      (await mcp(request, 'tools/call', { name: 'list_failed_cases', arguments: { projectId, runId, pageSize: 1 } }))
+        .result.content[0].text,
+    );
+    expect(p1.items.length).toBe(1);
+    expect(p1.nextCursor).toBeTruthy();
+    expect(String(p1.nextCursor)).not.toBe('undefined');
+    const p2res = await mcp(request, 'tools/call', {
+      name: 'list_failed_cases',
+      arguments: { projectId, runId, pageSize: 1, cursor: p1.nextCursor },
+    });
+    // The bug made this a JSON-RPC error (Number("undefined") → NaN SQL query).
+    expect(p2res.error).toBeUndefined();
+    const p2 = JSON.parse(p2res.result.content[0].text);
+    expect(p2.items.length).toBe(1);
+    expect(p2.items[0].executionId).not.toBe(p1.items[0].executionId);
+  });
+
+  test('tools/call list_flaky_tests — stat fields are populated (regression)', async ({ request }) => {
+    const result = JSON.parse(
+      (await mcp(request, 'tools/call', { name: 'list_flaky_tests', arguments: { projectId } })).result.content[0].text,
+    );
+    expect(Array.isArray(result.items)).toBe(true);
+    // The bug stripped every stat via dropNulls; when present, flakyScore is a number.
+    for (const item of result.items) {
+      expect(typeof item.flakyScore).toBe('number');
+      expect(typeof item.runCount).toBe('number');
+    }
+  });
+
+  test('tools/call get_test_case_context — returns evidence sections (regression)', async ({ request }) => {
+    const run = JSON.parse(
+      (await mcp(request, 'tools/call', { name: 'get_run', arguments: { id: runId, status_filter: 'failed' } })).result
+        .content[0].text,
+    );
+    const execId = run.cases[0].executionId;
+    const ctx = JSON.parse(
+      (await mcp(request, 'tools/call', { name: 'get_test_case_context', arguments: { id: execId } })).result.content[0]
+        .text,
+    );
+    // Previously execution scope produced an empty coverage stub with 0 sections.
+    const hasEvidence = (ctx.sections?.length ?? 0) > 0 || !!ctx.rawExecution;
+    expect(hasEvidence).toBe(true);
+  });
+
+  test('tools/call get_run_insights — returns baseline comparison shape', async ({ request }) => {
+    const insights = JSON.parse(
+      (await mcp(request, 'tools/call', { name: 'get_run_insights', arguments: { id: runId } })).result.content[0].text,
+    );
+    expect(insights.runId).toBe(runId);
+    expect(typeof insights.passRate).toBe('number');
+    expect(typeof insights.hasBaseline).toBe('boolean');
+    // Empty arrays are stripped by dropNulls; when present, it's an array.
+    if (insights.newRegressions !== undefined) expect(Array.isArray(insights.newRegressions)).toBe(true);
+  });
+
+  test('tools/call search — global search returns grouped results', async ({ request }) => {
+    const res = JSON.parse(
+      (await mcp(request, 'tools/call', { name: 'search', arguments: { q: 'checkout' } })).result.content[0].text,
+    );
+    expect(res).toHaveProperty('projects');
+    expect(res).toHaveProperty('runs');
+    expect(res).toHaveProperty('cases');
+  });
+
+  test('tools/call set_cluster_status — triages a cluster', async ({ request }) => {
+    const clusters = JSON.parse(
+      (await mcp(request, 'tools/call', { name: 'list_clusters', arguments: { projectId } })).result.content[0].text,
+    );
+    const clusterId = clusters.items[0].id;
+    const res = JSON.parse(
+      (
+        await mcp(request, 'tools/call', {
+          name: 'set_cluster_status',
+          arguments: { id: clusterId, status: 'resolved', triageNote: 'fixed by test' },
+        })
+      ).result.content[0].text,
+    );
+    expect(res.ok).toBe(true);
+    expect(res.status).toBe('resolved');
   });
 
   test('tools/call with unknown tool — returns method error', async ({ request }) => {
@@ -187,6 +299,6 @@ test.describe.serial('MCP server', () => {
     const ping = body.find((r: any) => r.id === 1);
     const list = body.find((r: any) => r.id === 2);
     expect(ping.result).toEqual({});
-    expect(list.result.tools.length).toBe(18);
+    expect(list.result.tools.length).toBe(38);
   });
 });

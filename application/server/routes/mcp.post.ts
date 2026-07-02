@@ -1,7 +1,9 @@
 import { requireAuth } from '../utils/auth';
 import { getDatabase } from '../database';
 import { MCP_TOOLS, toContent } from '../utils/mcp/tools';
-import { ok, rpcErr, RPC, MCP_PROTOCOL_VERSION, MCP_SERVER_INFO } from '../utils/mcp/protocol';
+import type { McpContext } from '../utils/mcp/tools';
+import { getProjectScope } from '../utils/project-access';
+import { ok, rpcErr, RPC, MCP_SERVER_INFO, negotiateProtocolVersion } from '../utils/mcp/protocol';
 import type { JsonRpcRequest } from '../utils/mcp/protocol';
 
 const TOOL_MAP = new Map(MCP_TOOLS.map((t) => [t.name, t]));
@@ -27,8 +29,14 @@ export default eventHandler(async (event) => {
     return null;
   }
 
-  // Authenticate using the same API-key / session mechanism as the REST API.
-  await requireAuth(event);
+  // Authenticate using the same API-key / session mechanism as the REST API,
+  // then resolve the caller's project scope. Every tool honors this scope so a
+  // non-admin key can only read the projects it is assigned to — the same
+  // isolation the REST API enforces.
+  const user = await requireAuth(event);
+  const db = await getDatabase();
+  const scope = await getProjectScope(db, user);
+  const ctx: McpContext = { user, scope };
 
   const contentLength = Number(event.headers.get('content-length') ?? 0);
   if (contentLength > MAX_BODY_BYTES) {
@@ -43,7 +51,7 @@ export default eventHandler(async (event) => {
   const body = await readBody<JsonRpcRequest | JsonRpcRequest[]>(event);
   const requests = Array.isArray(body) ? body : [body];
 
-  const responses = await Promise.all(requests.map((req) => handleRequest(event, req)));
+  const responses = await Promise.all(requests.map((req) => handleRequest(ctx, req)));
 
   // Notifications (no id) have no response — filter them out.
   const toSend = responses.filter((r) => r !== null);
@@ -52,7 +60,7 @@ export default eventHandler(async (event) => {
   return Array.isArray(body) ? toSend : (toSend[0] ?? null);
 });
 
-async function handleRequest(event: ReturnType<typeof createEvent> | any, req: JsonRpcRequest) {
+async function handleRequest(ctx: McpContext, req: JsonRpcRequest) {
   if (!req || req.jsonrpc !== '2.0' || !req.method) {
     return rpcErr(req?.id, RPC.INVALID_REQUEST, 'Invalid JSON-RPC request');
   }
@@ -64,7 +72,7 @@ async function handleRequest(event: ReturnType<typeof createEvent> | any, req: J
   }
 
   try {
-    return await dispatch(req);
+    return await dispatch(ctx, req);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[MCP] error handling', req.method, message);
@@ -74,18 +82,24 @@ async function handleRequest(event: ReturnType<typeof createEvent> | any, req: J
 
 // ── JSON-RPC dispatcher ───────────────────────────────────────────────────────
 
-async function dispatch(req: JsonRpcRequest) {
+async function dispatch(ctx: McpContext, req: JsonRpcRequest) {
   const { id, method, params } = req;
 
   switch (method) {
     // ── Protocol handshake ──────────────────────────────────────────────────
     case 'initialize': {
+      const requested = (params as { protocolVersion?: unknown } | undefined)?.protocolVersion;
       return ok(id, {
-        protocolVersion: MCP_PROTOCOL_VERSION,
+        protocolVersion: negotiateProtocolVersion(requested),
         capabilities: { tools: {} },
         serverInfo: MCP_SERVER_INFO,
         instructions:
-          'Piwi Dashboard MCP server. Provides tools to query Playwright test results, failure clusters, AI diagnoses, and SCM diffs. Start with list_projects to discover available projects.',
+          'Piwi Dashboard MCP server — query Playwright test results, failure clusters, AI diagnoses, and SCM diffs. ' +
+          'Start with list_projects to discover project IDs. ' +
+          'List tools return {items, nextCursor}; pass nextCursor back (when non-null) to page. ' +
+          'IDs: testCaseId = stable test identity; executionId/testRunsCaseId = one per-run execution. ' +
+          'Errors are truncated; use get_test_run_case for full error text and explain_failure for a one-call evidence bundle. ' +
+          'Write/triage tools (set_cluster_status, run_cluster_diagnosis, set_cluster_base_commit, submit_diagnosis_feedback) require reporter or admin access.',
       });
     }
 
@@ -114,7 +128,7 @@ async function dispatch(req: JsonRpcRequest) {
 
       const db = await getDatabase();
       const args = p?.arguments ?? {};
-      const data = await tool.handler(db, args);
+      const data = await tool.handler(db, args, ctx);
       return ok(id, toContent(data));
     }
 

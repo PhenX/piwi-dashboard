@@ -568,6 +568,13 @@ The app can be built as a fully client-side SPA (no server needed) by setting `P
 
 MCP tools (`server/utils/mcp/tools.ts`) return JSON consumed by AI coding agents. Consistency across tools saves the agent from guessing.
 
+### Authorization & handler signature
+
+- Every handler has the signature `(db, params, ctx)` where `ctx: McpContext = { user, scope }`. `server/routes/mcp.post.ts` resolves `scope = getProjectScope(db, user)` once and passes it in.
+- **Every project- or entity-scoped tool MUST enforce scope**: call `assertProject(ctx, projectId)` when the route arg *is* a project id, or `checkEntityScope(db, ctx, id, resolveXProjectId)` (returns `'not-found'` → handler returns null/empty, throws when out of scope) for run/case/cluster/diagnosis ids. Cross-project feeds (`list_recent_activity`, `list_open_clusters`, `search`, `list_projects`) filter by `ctx.scope`.
+- **Write/triage tools** (`set_cluster_status`, `run_cluster_diagnosis`, `set_cluster_base_commit`, `submit_diagnosis_feedback`) MUST call `assertWriteRole(ctx)` (reporter or admin) *and* scope-check the target.
+- Prefer calling a **shared handler** (`#shared/handlers/*`) over re-querying. When a REST endpoint has inline logic an MCP tool also needs (e.g. `getProjectSpecHealth`, `getTestCaseStabilityTrend`), extract it to a shared handler and have both the endpoint and the tool call it — never duplicate.
+
 ### Field naming
 
 | Field name | Meaning | Usage |
@@ -596,8 +603,10 @@ MCP tools (`server/utils/mcp/tools.ts`) return JSON consumed by AI coding agents
 ### Validation
 
 - Use `numericParam(raw, name)` for every numeric param — throws on `NaN`.
+- Use `numericCursor(raw)` for numeric cursors — returns `undefined` for empty and throws a clean error (not a SQL failure) on garbage. Never `Number(cursor)` inline.
 - Use `clampPageSize(raw)` — returns 1–50, default 10.
-- Use `paginatedItems(items, pageSize, getCursor)` to wrap a `pageSize + 1` fetch into `{ items, nextCursor }`.
+- Use `paginatedItems(items, pageSize, getCursor)` to wrap a `pageSize + 1` fetch into `{ items, nextCursor }`. **`getCursor` must read the POST-map field name** (e.g. `r.executionId`, not the pre-map `r.caseId`) — reading a field the mapper renamed yields a `"undefined"` cursor that crashes the next page.
+- In-memory-filtered list paths (e.g. `list_runs` branch filter) MUST still apply the cursor in memory on the same axis as the emitted cursor, or paging loops on the first page.
 
 ## Important Notes
 - DB auto-initialized on first API call

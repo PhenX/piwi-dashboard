@@ -502,6 +502,75 @@ export async function getProjectTestCases(db: DrizzleDB, projectId: number) {
   return testCasesWithStats;
 }
 
+/**
+ * Group a project's recent test executions by spec-file prefix and compute
+ * pass rate, flaky rate, failure count, test count, and average duration over
+ * the last `days` days. Shared by the REST spec-health endpoint and the MCP
+ * `get_spec_health` tool.
+ */
+export async function getProjectSpecHealth(db: DrizzleDB, projectId: number, days: number) {
+  const boundedDays = Math.min(90, Math.max(1, days));
+  const since = new Date(Date.now() - boundedDays * 24 * 60 * 60 * 1000);
+
+  const projRows: any[] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId));
+  if (projRows.length === 0) throw new Error('Project not found');
+
+  const recentRuns: any[] = await db
+    .select({ id: testRuns.id })
+    .from(testRuns)
+    .where(and(eq(testRuns.projectId, projectId), gte(testRuns.startTime, since)))
+    .orderBy(desc(testRuns.startTime))
+    .limit(100);
+  if (recentRuns.length === 0) return { specs: [] };
+
+  const runIds: number[] = recentRuns.map((r: any) => r.id);
+  const rows: any[] = await db
+    .select({
+      filePath: testCases.filePath,
+      status: testRunsCases.status,
+      duration: testRunsCases.duration,
+      retries: testRunsCases.retries,
+    })
+    .from(testRunsCases)
+    .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+    .where(inArray(testRunsCases.testRunId, runIds));
+
+  const specMap = new Map<
+    string,
+    { testCount: number; passCount: number; failCount: number; flakyCount: number; durations: number[] }
+  >();
+
+  for (const row of rows) {
+    const prefix = row.filePath.split(/[\\/]/).slice(0, 2).join('/');
+    if (!specMap.has(prefix)) {
+      specMap.set(prefix, { testCount: 0, passCount: 0, failCount: 0, flakyCount: 0, durations: [] });
+    }
+    const spec = specMap.get(prefix)!;
+    spec.testCount++;
+    if (row.status === 'passed') {
+      spec.passCount++;
+      if ((row.retries ?? 0) > 0) spec.flakyCount++;
+    } else if (row.status === 'failed' || row.status === 'timedOut' || row.status === 'timedout') {
+      spec.failCount++;
+    }
+    if (row.duration != null) spec.durations.push(row.duration);
+  }
+
+  const specs = [...specMap.entries()]
+    .map(([prefix, data]) => ({
+      prefix,
+      passRate: data.testCount > 0 ? Math.round((data.passCount / data.testCount) * 100) / 100 : 0,
+      flakyRate: data.testCount > 0 ? Math.round((data.flakyCount / data.testCount) * 100) / 100 : 0,
+      failureCount: data.failCount,
+      testCount: data.testCount,
+      avgDuration:
+        data.durations.length > 0 ? Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length) : 0,
+    }))
+    .sort((a, b) => a.prefix.localeCompare(b.prefix));
+
+  return { specs };
+}
+
 // ─── getProjectSlowTests ─────────────────────────────────────────
 
 export async function getProjectSlowTests(db: DrizzleDB, projectId: number, runsCount: number) {

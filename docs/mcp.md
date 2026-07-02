@@ -15,7 +15,7 @@ The MCP server is served from the same Nitro process as the dashboard. There is 
 
 ## What it provides
 
-The server exposes 18 read-only tools that cover the full diagnostic workflow, from browsing projects to inspecting the exact evidence behind a failure.
+The server exposes 38 tools — mostly read-only, plus a few write/triage tools — that cover the full diagnostic workflow, from browsing projects to inspecting the exact evidence behind a failure and closing the loop after a fix.
 
 **Projects & activity**
 
@@ -23,30 +23,54 @@ The server exposes 18 read-only tools that cover the full diagnostic workflow, f
 |------|-------------|
 | `list_projects` | All projects with run stats and latest run status |
 | `get_project` | Project details and recent test runs |
+| `get_project_test_catalog` | Whole test-case catalog for a project with aggregated pass/fail/flaky counts |
 | `list_recent_activity` | Most recent runs across *all* projects — a cross-project CI feed (no project ID needed) |
+| `search` | Global search across projects, runs (by label or id), and test cases |
+| `list_tags` | The project tag catalog |
+| `get_instance_stats` | Instance-wide counts and storage size (admin only) |
 
 **Runs & test cases**
 
 | Tool | Description |
 |------|-------------|
 | `list_runs` | Filter runs by project, branch, or status |
-| `get_run` | Run summary and test cases filtered by status |
+| `get_run` | Run summary and test cases (paginated) filtered by status |
+| `get_run_insights` | Run-vs-last-green comparison: regressions, recoveries, new flaky, perf deltas, worker imbalance — "did my fix work?" |
+| `get_network_requests` | A run's network calls aggregated by route with backend server logs — pin a failure on a slow/failing endpoint |
+| `get_failure_groups` | One run's failures grouped by cluster with worker correlation |
 | `list_failed_cases` | Failed/timed-out cases across runs for a project |
-| `list_flaky_tests` | Flaky test analysis with flakiness scores and retry patterns |
+| `list_flaky_tests` | Flaky test analysis with scores, impact ranking, and root-cause category |
 | `search_test_cases` | Find a test case by title or file path within a project |
 | `get_test_case` | Test case stats and recent execution history |
-| `get_test_run_case` | One execution record with full (untruncated) error, steps, console, network, web vitals, and ARIA snapshot |
+| `get_test_stability_trend` | Flaky/pass rate and duration over time for one test — "is it getting flakier?" |
+| `get_slow_tests` / `get_performance_trend` | Slowest tests and run-duration/p90 time series |
+| `get_spec_health` | Per-spec-file pass rate, flaky rate, and failures — find unhealthy areas |
+| `get_test_run_case` | One execution record with full (untruncated) error, steps, console, web vitals, ARIA snapshot (use `include` to select blobs) |
 | `get_test_case_context` | Execution-scoped AI evidence for a single failure (steps, console, network, SCM diff) |
+| `get_locator_healing` | Ranked alternative locators for a failing case — the recommended durable fix plus full alternatives |
+| `list_case_traces` | Playwright trace files for an execution, with download paths |
 | `get_case_screenshots` | Screenshots for an execution — metadata by default, or base64 image data on request |
+| `explain_failure` | **One-call evidence bundle** for a failure: error + steps + console + locator fix + diagnosis context |
+| `list_links` | External links (Jira/PR/issue) attached to a run, execution, or test case |
 
 **Failure clusters**
 
 | Tool | Description |
 |------|-------------|
 | `list_clusters` | Failure clusters grouped by error fingerprint |
+| `list_open_clusters` | Open clusters across *all* projects, ranked by occurrences — a triage queue |
 | `get_cluster` | Cluster detail with affected tests and diagnosis summary |
 | `get_cluster_diagnosis` | Full AI diagnosis: root cause, evidence, suggested fix |
 | `get_cluster_context` | Full AI evidence context (errors, steps, console logs, SCM diff) — the same data the built-in diagnosis AI receives |
+
+**Triage & write** *(require reporter or admin access)*
+
+| Tool | Description |
+|------|-------------|
+| `set_cluster_status` | Mark a cluster open / resolved / ignored with a note — close the loop after a fix |
+| `run_cluster_diagnosis` | Trigger an AI diagnosis and return the result |
+| `set_cluster_base_commit` | Pin the baseline commit for a cluster's SCM-diff context |
+| `submit_diagnosis_feedback` | Thumbs up/down on a diagnosis |
 
 **Source control** *(requires an SCM token — per-project or global)*
 
@@ -55,7 +79,11 @@ The server exposes 18 read-only tools that cover the full diagnostic workflow, f
 | `get_repo_commits` | Recent commits for a project's repository (SHA, message, author, date) |
 | `get_repo_diff` | Changed files with patches for a single commit — inspect what a suspect commit changed |
 
-All tools return **token-optimized** compact JSON: null fields are omitted, errors are truncated, and large blobs (browser configs, metadata) are flattened to short strings.
+All tools return **token-optimized** compact JSON: null fields are omitted, errors are truncated, and large blobs (browser configs, metadata) are flattened to short strings. List tools return `{ items, nextCursor }` — pass `nextCursor` back (when non-null) to page.
+
+### Access scope
+
+The MCP server honors the same **project-assignment** rules as the REST API. When authentication is enabled, a non-admin API key can only read the projects it is assigned to; project- and entity-scoped tools return an access error for anything out of scope, and cross-project feeds (`list_recent_activity`, `list_open_clusters`, `search`) are filtered to the caller's projects. Write/triage tools additionally require the **reporter** or **administrator** role.
 
 ---
 
@@ -75,7 +103,7 @@ When `PIWI_AUTH_ENABLED` is not set, any request is accepted without a key.
 
 ## Transport
 
-The server implements the **MCP Streamable HTTP transport** (protocol version `2024-11-05`). Requests and responses are standard JSON-RPC 2.0 messages over `POST /mcp`. No SSE or WebSocket is required for the read-only tools in v1.
+The server implements the **MCP Streamable HTTP transport**. On `initialize` it negotiates the protocol version, echoing the client's requested version when supported (`2025-06-18`, `2025-03-26`, `2024-11-05`) and otherwise replying with the latest it implements. Requests and responses are standard JSON-RPC 2.0 messages over `POST /mcp`. No SSE or WebSocket is required for these tools. (`GET /mcp` serves the human setup page, not a stream.)
 
 ---
 

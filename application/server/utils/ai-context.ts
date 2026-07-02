@@ -225,7 +225,7 @@ async function browserDistributionSection(db: DbClient, cluster: FailureCluster)
 }
 
 /** Latest run-case for this cluster, with its test info + run metadata — the diagnosis's main evidence. */
-async function loadRepresentativeExecution(db: DbClient, cluster: FailureCluster) {
+async function loadRepresentativeExecution(db: DbClient, cluster: FailureCluster, preferredCaseId?: number) {
   const repRows = await db
     .select({
       id: testRunsCases.id,
@@ -253,7 +253,12 @@ async function loadRepresentativeExecution(db: DbClient, cluster: FailureCluster
     })
     .from(testRunsCases)
     .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
-    .where(eq(testRunsCases.failureClusterId, cluster.id))
+    // Cluster scope uses the latest execution in the cluster; execution scope
+    // pins the representative to a specific test-run-case so the evidence
+    // reflects that exact failure.
+    .where(
+      preferredCaseId != null ? eq(testRunsCases.id, preferredCaseId) : eq(testRunsCases.failureClusterId, cluster.id),
+    )
     .orderBy(desc(testRunsCases.id))
     .limit(1);
 
@@ -1651,18 +1656,44 @@ export async function buildDiagnosisContext(
     if (cs) contextSections.push(cs);
   };
 
+  // Resolve the cluster for both scopes. Execution scope pins the evidence to a
+  // specific test-run-case (`preferredCaseId`) but still surrounds it with the
+  // cluster's context (recurrence, SCM baseline, prior diagnosis) when the case
+  // belongs to a cluster — which failed cases always do.
+  let cluster: FailureCluster | null = null;
+  let preferredCaseId: number | undefined;
+
   if (opts.kind === 'cluster') {
-    const cluster = await db
+    cluster = await db
       .select()
       .from(failureClusters)
       .where(eq(failureClusters.id, opts.clusterId))
       .limit(1)
       .then((r) => r[0] ?? null);
-
     if (!cluster) {
       throw new Error(`Failure cluster ${opts.clusterId} not found`);
     }
+  } else {
+    preferredCaseId = opts.testRunsCaseId;
+    const clusterId =
+      opts.clusterId ??
+      (await db
+        .select({ c: testRunsCases.failureClusterId })
+        .from(testRunsCases)
+        .where(eq(testRunsCases.id, preferredCaseId))
+        .limit(1)
+        .then((r) => r[0]?.c ?? null));
+    if (clusterId != null) {
+      cluster = await db
+        .select()
+        .from(failureClusters)
+        .where(eq(failureClusters.id, clusterId))
+        .limit(1)
+        .then((r) => r[0] ?? null);
+    }
+  }
 
+  if (cluster) {
     clusterInfo = {
       id: cluster.id,
       signature: cluster.signature,
@@ -1675,7 +1706,7 @@ export async function buildDiagnosisContext(
     push(section('affectedTests', 'Affected Tests', await affectedTestsSection(db, cluster, limits), undefined));
     push(section('browserDistribution', 'Browser Distribution', await browserDistributionSection(db, cluster)));
 
-    const rep = await loadRepresentativeExecution(db, cluster);
+    const rep = await loadRepresentativeExecution(db, cluster, preferredCaseId);
     if (rep) {
       const repSections = representativeExecutionSections(rep, cluster, limits);
 
