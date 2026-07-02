@@ -23,11 +23,12 @@ export function readSourceSnippet(
       .slice(start, end)
       .map((l, i) => {
         const lineNum = start + i + 1;
-        const isFailing = failingLine != null && lineNum === failingLine;
+        const hasFailingLine = failingLine != null;
+        const isFailing = hasFailingLine && lineNum === failingLine;
         const isDecl = lineNum === declLine && !isFailing;
         let marker = '  ';
         if (isFailing) marker = '> ';
-        else if (isDecl) marker = '* ';
+        else if (isDecl) marker = hasFailingLine ? '* ' : '> ';
         return `${marker}${String(lineNum).padStart(4)} | ${l}`;
       })
       .join('\n');

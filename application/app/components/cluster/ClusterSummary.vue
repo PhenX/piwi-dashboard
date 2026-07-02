@@ -89,6 +89,7 @@ const triageStatusOptions = [
               <NuxtLink :to="`/test-runs/${cluster.firstSeenRunId}`" class="text-primary hover:underline">
                 run #{{ cluster.firstSeenRunId }}
               </NuxtLink>
+              <template v-if="cluster.firstSeenAt"> ({{ formatRelativeTime(cluster.firstSeenAt) }}) </template>
               · Last seen in
               <NuxtLink :to="`/test-runs/${cluster.lastSeenRunId}`" class="text-primary hover:underline">
                 run #{{ cluster.lastSeenRunId }}
