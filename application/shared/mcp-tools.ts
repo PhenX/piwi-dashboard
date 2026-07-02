@@ -48,8 +48,7 @@ export const MCP_TOOL_DEFS = [
   },
   {
     name: 'list_runs',
-    description:
-      'List test runs for a project with filters. Returns a paginated response — use nextCursor from the result to fetch the next page.',
+    description: 'List test runs for a project with filters.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -69,7 +68,7 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'get_run',
     description:
-      'Get full test run details including all test cases with their status, error messages, and failure cluster IDs. Failed and timed-out cases include truncated error text.',
+      'Get a test run summary plus its test cases (paginated), with status, truncated error text, and failure cluster IDs. Filter by status and page with pageSize/cursor.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -80,14 +79,15 @@ export const MCP_TOOL_DEFS = [
           description:
             'Which test cases to include (default: "failed" — only failed+timedOut; "flaky" — only flaky; "all" — every case)',
         },
+        pageSize: { type: 'number', description: 'Cases per page (default 10, max 50)' },
+        cursor: { type: 'string', description: 'Opaque cursor from a previous response for the next page of cases' },
       },
       required: ['id'],
     },
   },
   {
     name: 'list_failed_cases',
-    description:
-      'List failed and timed-out test cases across recent runs for a project. Returns a paginated response — use nextCursor from the result to fetch the next page.',
+    description: 'List failed and timed-out test cases across recent runs for a project.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -101,8 +101,7 @@ export const MCP_TOOL_DEFS = [
   },
   {
     name: 'list_flaky_tests',
-    description:
-      'List flaky tests for a project with flakiness scores. Returns a paginated response — use nextCursor from the result to fetch the next page.',
+    description: 'List flaky tests for a project with flakiness scores.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -136,8 +135,7 @@ export const MCP_TOOL_DEFS = [
   },
   {
     name: 'list_clusters',
-    description:
-      'List failure clusters for a project. Each cluster groups similar failures by error fingerprint. Returns a paginated response — use nextCursor from the result to fetch the next page.',
+    description: 'List failure clusters for a project. Each cluster groups similar failures by error fingerprint.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -241,7 +239,7 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'get_test_run_case',
     description:
-      'Get a single test-run-case execution record with full error text (untruncated), steps, console logs, network requests, web vitals, and ARIA snapshot. Use this to inspect a specific failure in detail — the ID is the executionId from get_run.cases or testRunsCaseId from get_cluster.affectedTestCases.',
+      'Get a single test-run-case execution record with full (untruncated) error text plus steps, console logs, web vitals, and ARIA snapshot. Use include to fetch only the blobs you need. The ID is the executionId from get_run.cases or testRunsCaseId from get_cluster.affectedTestCases.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -249,6 +247,12 @@ export const MCP_TOOL_DEFS = [
           type: 'number',
           description:
             'Test run case ID (executionId from get_run.cases or testRunsCaseId from get_cluster.affectedTestCases)',
+        },
+        include: {
+          type: 'array',
+          items: { type: 'string', enum: ['steps', 'console', 'webVitals', 'aria', 'source'] },
+          description:
+            'Optional: which heavy blobs to include (default: all). The error, status, and summary are always returned.',
         },
       },
       required: ['id'],
@@ -291,6 +295,238 @@ export const MCP_TOOL_DEFS = [
         sha: { type: 'string', description: 'Full commit SHA' },
       },
       required: ['projectId', 'sha'],
+    },
+  },
+  {
+    name: 'get_run_insights',
+    description:
+      'Compare a run to its last green baseline: pass-rate delta, new regressions, recurrences, recovered tests, new flaky tests, biggest perf improvements/regressions, worker imbalance, and newly opened clusters. Use this to answer "what changed?" and "did my fix work?".',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'number', description: 'Test run ID' } },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'get_spec_health',
+    description:
+      'Per-spec-file health for a project: pass rate, flaky rate, failure count, test count, and average duration grouped by spec-file prefix over the last N days. Use to find which areas of the suite are unhealthy.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'number', description: 'Project ID' },
+        days: { type: 'number', description: 'Lookback window in days (default 30, max 90)' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'get_slow_tests',
+    description:
+      'Slowest test cases in a project by average duration, with max/min and trend direction across recent runs. Use to target performance work.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'number', description: 'Project ID' },
+        runs: { type: 'number', description: 'Recent runs to analyze (default 50, max 100)' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'get_performance_trend',
+    description:
+      'Time series of run duration, average test duration, and p90 test duration for a project. Use to answer "is the suite getting slower?".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'number', description: 'Project ID' },
+        limit: { type: 'number', description: 'Number of recent runs (default 30, max 100)' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'get_test_stability_trend',
+    description:
+      'Time-series stability for a single test case: flaky rate, pass rate, and average duration bucketed over its recent execution history. Use to answer "is this test getting flakier?".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'Test case ID (stable testCaseId)' },
+        buckets: { type: 'number', description: 'Number of time buckets (default 20, 5–50)' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'get_network_requests',
+    description:
+      "A run's network requests aggregated by method + normalized route, sorted by average duration, with status codes and captured backend server logs. Use to pin a UI failure on a slow or failing endpoint.",
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'number', description: 'Test run ID' } },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'get_failure_groups',
+    description:
+      "One run's failures grouped by failure cluster, with per-group affected cases and worker correlation. Run-scoped counterpart to list_clusters.",
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'number', description: 'Test run ID' } },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'get_locator_healing',
+    description:
+      'Ranked alternative locators for a failing test-run-case: the failing locator, the recommended durable fix, and the full alternative lists (from prior success, element match, and ARIA snapshot). Use when fixing a broken selector.',
+    inputSchema: {
+      type: 'object',
+      properties: { testRunsCaseId: { type: 'number', description: 'Test run case ID (executionId)' } },
+      required: ['testRunsCaseId'],
+    },
+  },
+  {
+    name: 'search',
+    description:
+      'Global search across all in-scope projects, runs (by label or numeric id), and test cases (by title). Use to find a run by its label or locate an entity across projects.',
+    inputSchema: {
+      type: 'object',
+      properties: { q: { type: 'string', description: 'Search query (min 2 chars)' } },
+      required: ['q'],
+    },
+  },
+  {
+    name: 'list_case_traces',
+    description:
+      'List Playwright trace files for a test-run-case, with a download path for each. Fetch the bytes via GET /api/files/<path>.',
+    inputSchema: {
+      type: 'object',
+      properties: { testRunsCaseId: { type: 'number', description: 'Test run case ID (executionId)' } },
+      required: ['testRunsCaseId'],
+    },
+  },
+  {
+    name: 'list_links',
+    description:
+      'List external entity links (Jira, GitHub PR/issue, etc.) attached to a run, test-run-case, or test case, with provider and unfurled status.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        entityType: {
+          type: 'string',
+          enum: ['test_run', 'test_runs_case', 'test_case'],
+          description: 'Which entity the links are attached to',
+        },
+        id: { type: 'number', description: 'The entity ID matching entityType' },
+      },
+      required: ['entityType', 'id'],
+    },
+  },
+  {
+    name: 'list_tags',
+    description: 'List the project tag catalog (id, text, color).',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_project_test_catalog',
+    description:
+      'The full test-case catalog for a project with aggregated pass/fail/flaky counts, average duration, and last status per test. Offset-paginated bulk companion to get_test_case.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'number', description: 'Project ID' },
+        pageSize: { type: 'number', description: 'Results per page (default 10, max 50)' },
+        offset: { type: 'number', description: 'Row offset for paging (default 0)' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'list_open_clusters',
+    description:
+      'Open failure clusters across all in-scope projects, ranked by occurrences — a cross-project triage queue. Filter by status; paginate with pageSize/cursor.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['open', 'resolved', 'ignored'], description: 'Triage status (default: open)' },
+        pageSize: { type: 'number', description: 'Results per page (default 10, max 50)' },
+        cursor: { type: 'string', description: 'Opaque cursor from a previous response to get the next page' },
+      },
+    },
+  },
+  {
+    name: 'get_instance_stats',
+    description:
+      'Instance-wide counts (projects, runs, test cases, executions, files) and total storage size. Admin only.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'explain_failure',
+    description:
+      'One-call evidence bundle for a single failing execution: error, steps, console, ARIA snapshot, the recommended locator fix, a screenshot count, and the AI diagnosis context. Prefer this over chaining get_test_run_case + get_locator_healing + get_test_case_context.',
+    inputSchema: {
+      type: 'object',
+      properties: { testRunsCaseId: { type: 'number', description: 'Test run case ID (executionId)' } },
+      required: ['testRunsCaseId'],
+    },
+  },
+  {
+    name: 'set_cluster_status',
+    description:
+      'Triage a failure cluster: set its status to open, resolved, or ignored with an optional note. Requires reporter or admin access. Use after fixing the underlying issue.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'Cluster ID' },
+        status: { type: 'string', enum: ['open', 'resolved', 'ignored'], description: 'New triage status' },
+        triageNote: { type: 'string', description: 'Optional note explaining the status change' },
+      },
+      required: ['id', 'status'],
+    },
+  },
+  {
+    name: 'set_cluster_base_commit',
+    description:
+      'Pin the baseline commit SHA a cluster uses for its SCM-diff diagnosis context, so "what changed since green" is accurate. Requires reporter or admin access.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'Cluster ID' },
+        commit: { type: 'string', description: 'Baseline commit SHA (empty to clear)' },
+      },
+      required: ['id', 'commit'],
+    },
+  },
+  {
+    name: 'submit_diagnosis_feedback',
+    description:
+      'Record thumbs up/down feedback on a stored diagnosis, with an optional note. Requires reporter or admin access.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'Diagnosis ID' },
+        feedback: { type: 'string', enum: ['up', 'down'], description: 'Rating (omit to clear)' },
+        feedbackNote: { type: 'string', description: 'Optional note' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'run_cluster_diagnosis',
+    description:
+      'Trigger an AI diagnosis for a failure cluster and return the result (category, confidence, root cause, suggested fix). Returns the existing completed diagnosis unless force is set. Requires reporter or admin access and a configured AI provider.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'Cluster ID' },
+        force: { type: 'boolean', description: 'Re-run even if a completed diagnosis exists (default false)' },
+        baseCommit: { type: 'string', description: 'Optional baseline commit SHA for SCM-diff context' },
+      },
+      required: ['id'],
     },
   },
 ] as const satisfies readonly McpToolDef[];
@@ -378,11 +614,15 @@ export interface McpFlakyTestItem {
   title: string;
   filePath: string;
   flakyScore: number;
+  failureRate?: number;
+  runCount: number;
+  failCount?: number;
   retryPassCount?: number;
   alternationCount?: number;
-  runCount: number;
-  passCount?: number;
-  failCount?: number;
+  rootCause?: string;
+  impact?: number;
+  wastedCiMinutes?: number;
+  avgFailedDurationMs?: number;
 }
 
 /** Affected test case in get_cluster.affectedTestCases. */

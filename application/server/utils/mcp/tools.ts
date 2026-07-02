@@ -1,9 +1,34 @@
-import { eq, and, desc, or, lt, like } from 'drizzle-orm';
-import { listProjects, getProjectFlakyTests } from '#shared/handlers/projects';
-import { getTestRun } from '#shared/handlers/test-runs';
-import { getTestCase } from '#shared/handlers/test-cases';
-import { getFailureCluster, getClusterDiagnosis } from '#shared/handlers/failure-clusters';
-import { projects, testRuns, testRunsCases, testCases, failureClusters, files } from '../../database/schema';
+import { eq, and, desc, or, lt, gt, like, inArray } from 'drizzle-orm';
+import {
+  listProjects,
+  getProjectFlakyTests,
+  getProjectSlowTests,
+  getProjectPerformance,
+  getProjectTestCases,
+  getProjectSpecHealth,
+} from '#shared/handlers/projects';
+import { getNetworkRequests, getFailureGroups } from '#shared/handlers/test-runs';
+import { getTestCase, getTestRunCaseTraces, getTestCaseStabilityTrend } from '#shared/handlers/test-cases';
+import {
+  getFailureCluster,
+  getClusterDiagnosis,
+  patchClusterStatus,
+  patchClusterBaseCommit,
+} from '#shared/handlers/failure-clusters';
+import { computeRunInsights } from '#shared/handlers/run-insights';
+import { searchProjectsTestRunsCases } from '#shared/handlers/search';
+import { listTags } from '#shared/handlers/tags';
+import { listLinks } from '#shared/handlers/links';
+import { getAdminStats } from '#shared/handlers/admin';
+import {
+  projects,
+  testRuns,
+  testRunsCases,
+  testCases,
+  failureClusters,
+  failureDiagnoses,
+  files,
+} from '../../database/schema';
 import { buildDiagnosisContext, buildClusterDiagnosisContext } from '../ai-context';
 import { stripAnsi } from '#shared/error-fingerprint';
 import { MCP_TOOL_DEFS } from '#shared/mcp-tools';
@@ -16,8 +41,20 @@ import type {
 } from '#shared/mcp-tools';
 import type { RunMetadata, BrowserConfig } from '../run-json-types';
 import { getStorage } from '../../storage';
-import { getLocatorHealingBatch } from '../locator-healing';
+import { getLocatorHealingBatch, getLocatorHealing } from '../locator-healing';
 import { createScmProvider } from '../scm';
+import { resolveAiConfig } from '../ai-provider';
+import { runClusterDiagnosis, isDiagnosisRunning } from '../ai-diagnosis';
+import {
+  scopeAllows,
+  resolveRunProjectId,
+  resolveClusterProjectId,
+  resolveCaseProjectId,
+  resolveTestRunCaseProjectId,
+} from '../project-access';
+import type { ProjectScope } from '../project-access';
+import type { User } from '../../database/schema';
+import { Role } from '#shared/types';
 
 type DbClient = Awaited<ReturnType<typeof import('../../database').getDatabase>>;
 
@@ -82,9 +119,60 @@ function numericParam(raw: unknown, name: string): number {
   return n;
 }
 
+/** Parse a numeric cursor, throwing a clean error (not a SQL failure) on garbage. */
+function numericCursor(raw: unknown): number | undefined {
+  if (raw == null || raw === '') return undefined;
+  const n = Number(raw);
+  if (isNaN(n)) throw new Error('Invalid cursor');
+  return n;
+}
+
+// ── Authorization scope ──────────────────────────────────────────────────────
+//
+// The dispatcher resolves the caller's project scope once and passes it in.
+// Every project- or entity-scoped tool checks it so a non-admin key can only
+// read the projects it is assigned to (mirrors the REST project-access layer).
+
+export interface McpContext {
+  user: User | null;
+  scope: ProjectScope;
+}
+
+/** Throw if the caller's scope does not include this project. */
+function assertProject(ctx: McpContext, projectId: number): void {
+  if (!scopeAllows(ctx.scope, projectId)) {
+    throw new Error(`No access to project ${projectId}`);
+  }
+}
+
+/**
+ * Resolve an entity's owning project, returning 'not-found' when it doesn't
+ * exist (handlers map that to null) and throwing when it's out of scope.
+ */
+async function checkEntityScope(
+  db: DbClient,
+  ctx: McpContext,
+  id: number,
+  resolve: (db: DbClient, id: number) => Promise<number | null>,
+): Promise<'ok' | 'not-found'> {
+  const projectId = await resolve(db, id);
+  if (projectId == null) return 'not-found';
+  assertProject(ctx, projectId);
+  return 'ok';
+}
+
+/** Roles allowed to invoke write/triage tools. */
+function assertWriteRole(ctx: McpContext): void {
+  // Auth off → virtual admin (user is a synthetic admin); allow.
+  const role = ctx.user?.role as Role | undefined;
+  if (role && role !== Role.ADMINISTRATOR && role !== Role.REPORTER) {
+    throw new Error('This action requires reporter or administrator access');
+  }
+}
+
 // ── Tool definition type ─────────────────────────────────────────────────────
 
-export type McpToolHandler = (db: DbClient, params: Record<string, unknown>) => Promise<unknown>;
+export type McpToolHandler = (db: DbClient, params: Record<string, unknown>, ctx: McpContext) => Promise<unknown>;
 
 export interface McpTool extends McpToolDef {
   handler: McpToolHandler;
@@ -107,8 +195,8 @@ export function toContent(data: unknown): { content: Array<{ type: 'text'; text:
 // handler whose name isn't a declared tool, and a declared tool with no handler.
 const HANDLERS: Record<McpToolName, McpToolHandler> = {
   // ── list_projects ──────────────────────────────────────────────────────────
-  async list_projects(db) {
-    const projects = await listProjects(db);
+  async list_projects(db, _params, ctx) {
+    const projects = await listProjects(db, ctx.scope);
     return projects.map((p: any) =>
       dropNulls({
         id: p.id,
@@ -133,8 +221,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── get_project ────────────────────────────────────────────────────────────
-  async get_project(db, params) {
+  async get_project(db, params, ctx) {
     const id = numericParam(params.id, 'id');
+    assertProject(ctx, id);
     const pageSize = clampPageSize(params.pageSize);
     const cursor = params.cursor as string | undefined;
 
@@ -195,8 +284,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── list_runs ──────────────────────────────────────────────────────────────
-  async list_runs(db, params) {
+  async list_runs(db, params, ctx) {
     const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
     const pageSize = clampPageSize(params.pageSize);
     const cursor = params.cursor as string | undefined;
     const statusFilter = params.status as string | undefined;
@@ -206,7 +296,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     if (statusFilter) conditions.push(eq(testRuns.status, statusFilter));
 
     // Branch lives inside JSON metadata — can't index it efficiently, so the
-    // branch-filter path fetches a larger batch and filters in-memory.
+    // branch-filter path fetches a larger batch and filters in-memory. The
+    // cursor is applied on the same startTime axis for both paths (in SQL when
+    // possible, else in-memory) so paging always advances.
     const fetchSize = branchFilter ? (pageSize + 1) * 3 : pageSize + 1;
 
     if (cursor && !branchFilter) conditions.push(lt(testRuns.startTime, new Date(cursor)));
@@ -234,6 +326,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
     const scopeRows = branchFilter
       ? signRows.filter((r) => {
+          if (cursor && r.startTime && !(new Date(r.startTime) < new Date(cursor))) return false;
           const meta = r.metadata as RunMetadata | null;
           return meta?.scm?.branch === branchFilter;
         })
@@ -261,66 +354,119 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── get_run ────────────────────────────────────────────────────────────────
-  async get_run(db, params) {
-    const runId = Number(params.id);
+  async get_run(db, params, ctx) {
+    const runId = numericParam(params.id, 'id');
     const statusFilter = (params.status_filter as string) || 'failed';
-    const run = await getTestRun(db, runId);
+    const pageSize = clampPageSize(params.pageSize);
+    const cursor = numericCursor(params.cursor);
+
+    // Slim run-summary select — counts come from denormalized columns, so we
+    // never load every case just to summarize the run.
+    const [run] = await db
+      .select({
+        id: testRuns.id,
+        projectId: testRuns.projectId,
+        projectName: projects.name,
+        status: testRuns.status,
+        startTime: testRuns.startTime,
+        duration: testRuns.duration,
+        totalTests: testRuns.totalTests,
+        passedTests: testRuns.passedTests,
+        failedTests: testRuns.failedTests,
+        flakyTests: testRuns.flakyTests,
+        skippedTests: testRuns.skippedTests,
+        didNotRunTests: testRuns.didNotRunTests,
+        environment: testRuns.environment,
+        label: testRuns.label,
+        metadata: testRuns.metadata,
+        playwrightVersion: testRuns.playwrightVersion,
+      })
+      .from(testRuns)
+      .innerJoin(projects, eq(testRuns.projectId, projects.id))
+      .where(eq(testRuns.id, runId));
     if (!run) return null;
+    assertProject(ctx, run.projectId);
 
-    const allCases: any[] = run.testCases ?? [];
-    const filtered =
-      statusFilter === 'all'
-        ? allCases
-        : statusFilter === 'flaky'
-          ? allCases.filter((c: any) => c.status === 'passed' && c.retries > 0)
-          : allCases.filter((c: any) => c.status === 'failed' || c.status === 'timedOut');
+    // Push the status filter into SQL and paginate — no more loading passed
+    // cases (and their step JSON) just to discard them.
+    const caseConditions = [eq(testRunsCases.testRunId, runId)];
+    if (statusFilter === 'flaky') {
+      caseConditions.push(and(eq(testRunsCases.status, 'passed'), gt(testRunsCases.retries, 0))!);
+    } else if (statusFilter !== 'all') {
+      caseConditions.push(or(eq(testRunsCases.status, 'failed'), eq(testRunsCases.status, 'timedOut'))!);
+    }
+    if (cursor) caseConditions.push(lt(testRunsCases.id, cursor));
 
-    const meta = (run as any).metadata as RunMetadata | null;
+    const caseRows = await db
+      .select({
+        executionId: testRunsCases.id,
+        testCaseId: testRunsCases.testCaseId,
+        title: testCases.title,
+        filePath: testCases.filePath,
+        status: testRunsCases.status,
+        duration: testRunsCases.duration,
+        retries: testRunsCases.retries,
+        error: testRunsCases.error,
+        clusterId: testRunsCases.failureClusterId,
+        browser: testRunsCases.browser,
+        workerIndex: testRunsCases.workerIndex,
+        line: testRunsCases.line,
+      })
+      .from(testRunsCases)
+      .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+      .where(and(...caseConditions))
+      .orderBy(desc(testRunsCases.id))
+      .limit(pageSize + 1);
+
+    const mappedCases = caseRows.map((c) =>
+      dropNulls({
+        executionId: c.executionId,
+        testCaseId: c.testCaseId,
+        title: c.title,
+        filePath: c.filePath,
+        status: c.status,
+        duration: c.duration,
+        retries: c.retries || null,
+        error: trunc(c.error, 400),
+        clusterId: c.clusterId || null,
+        browser: compactBrowser(c.browser),
+        worker: c.workerIndex ?? null,
+        line: c.line || null,
+      }),
+    );
+    const paged = paginatedItems(mappedCases, pageSize, (c: any) => String(c.executionId));
+
+    const meta = run.metadata as RunMetadata | null;
     return dropNulls({
       id: run.id,
       projectId: run.projectId,
-      projectName: (run as any).project?.name || null,
+      projectName: run.projectName || null,
       status: run.status,
-      startedAt: iso((run as any).startTime),
-      duration: (run as any).duration,
-      total: (run as any).totalTests,
-      passed: (run as any).passedTests,
-      failed: (run as any).failedTests,
-      flaky: (run as any).flakyTests || null,
-      skipped: (run as any).skippedTests || null,
-      didNotRun: (run as any).didNotRunTests || null,
-      env: (run as any).environment || null,
-      label: (run as any).label || null,
+      startedAt: iso(run.startTime),
+      duration: run.duration,
+      total: run.totalTests,
+      passed: run.passedTests,
+      failed: run.failedTests,
+      flaky: run.flakyTests || null,
+      skipped: run.skippedTests || null,
+      didNotRun: run.didNotRunTests || null,
+      env: run.environment || null,
+      label: run.label || null,
       branch: meta?.scm?.branch || null,
       commit: meta?.scm?.commit?.slice(0, 8) || null,
-      playwrightVersion: (run as any).playwrightVersion || null,
-      cases: filtered.map((c: any) =>
-        dropNulls({
-          executionId: c.id,
-          testCaseId: c.testCaseId,
-          title: c.title,
-          filePath: c.filePath,
-          status: c.status,
-          duration: c.duration,
-          retries: c.retries || null,
-          error: trunc(c.error, 400),
-          clusterId: c.failureClusterId || null,
-          browser: compactBrowser(c.browser),
-          worker: c.workerIndex ?? null,
-          line: c.line || null,
-        }),
-      ),
-      casesShown: filtered.length,
-      casesTotal: allCases.length,
+      playwrightVersion: run.playwrightVersion || null,
+      cases: paged.items,
+      nextCursor: paged.nextCursor,
       filter: statusFilter,
     });
   },
 
   // ── list_failed_cases ──────────────────────────────────────────────────────
-  async list_failed_cases(db, params) {
+  async list_failed_cases(db, params, ctx) {
     const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
     const pageSize = clampPageSize(params.pageSize);
-    const cursor = params.cursor as string | undefined;
+    const cursor = numericCursor(params.cursor);
     const runId = params.runId ? numericParam(params.runId, 'runId') : undefined;
 
     const conditions = [
@@ -328,7 +474,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       or(eq(testRunsCases.status, 'failed'), eq(testRunsCases.status, 'timedOut'))!,
     ];
     if (runId) conditions.push(eq(testRunsCases.testRunId, runId));
-    if (cursor) conditions.push(lt(testRunsCases.id, Number(cursor)));
+    if (cursor) conditions.push(lt(testRunsCases.id, cursor));
 
     const rows = await db
       .select({
@@ -371,25 +517,24 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       }),
     );
 
-    return paginatedItems(mapped, pageSize, (r: any) => String(r.caseId));
+    return paginatedItems(mapped, pageSize, (r: any) => String(r.executionId));
   },
 
   // ── list_flaky_tests ───────────────────────────────────────────────────────
-  async list_flaky_tests(db, params) {
+  async list_flaky_tests(db, params, ctx) {
     const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
     const pageSize = clampPageSize(params.pageSize);
-    const cursor = params.cursor as string | undefined;
+    const cursor = numericCursor(params.cursor);
     const runsLimit = Math.min(200, Number(params.runs) || 50);
 
     const result = await getProjectFlakyTests(db, projectId, runsLimit);
     const items: any[] = (result as any)?.items ?? result ?? [];
 
-    // Cursor is the flakyScore (number string), descending. Since the list is
-    // computed in-memory we sort deterministically and cursor on flakyScore.
-    const sorted = cursor ? items.filter((t: any) => t.flakyScore < Number(cursor)) : items;
-
-    // Stable deterministic order: flakyScore DESC, testCaseId ASC as tiebreaker
-    sorted.sort((a: any, b: any) => b.flakyScore - a.flakyScore || a.testCaseId - b.testCaseId);
+    // Cursor is the flakiness `score` (descending). getProjectFlakyTests already
+    // returns the list sorted by impact; re-sort by score for stable cursoring.
+    const sorted = cursor != null ? items.filter((t: any) => t.score < cursor) : items.slice();
+    sorted.sort((a: any, b: any) => b.score - a.score || a.testCaseId - b.testCaseId);
 
     const mapped = sorted.slice(0, pageSize + 1).map(
       (t: any): Partial<McpFlakyTestItem> =>
@@ -397,12 +542,16 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
           testCaseId: t.testCaseId,
           title: t.title,
           filePath: t.filePath,
-          flakyScore: t.flakyScore,
-          retryPassCount: t.retryPassCount || null,
-          alternationCount: t.alternationCount || null,
-          runCount: t.runCount,
-          passCount: t.passCount || null,
-          failCount: t.failCount || null,
+          flakyScore: t.score,
+          failureRate: t.failureRate ?? null,
+          runCount: t.totalRuns,
+          failCount: t.failedRuns || null,
+          retryPassCount: t.retryPassRuns || null,
+          alternationCount: t.alternations || null,
+          rootCause: t.rootCause || null,
+          impact: t.impact || null,
+          wastedCiMinutes: t.wastedCiMinutes || null,
+          avgFailedDurationMs: t.avgFailedDurationMs || null,
         }),
     );
 
@@ -410,17 +559,18 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── get_test_case ──────────────────────────────────────────────────────────
-  async get_test_case(db, params) {
+  async get_test_case(db, params, ctx) {
     const id = numericParam(params.id, 'id');
     const pageSize = clampPageSize(params.pageSize);
-    const cursor = params.cursor as string | undefined;
+    const cursor = numericCursor(params.cursor);
 
     const tc = (await getTestCase(db, id)) as any;
     if (!tc) return null;
+    if (tc.project?.id != null) assertProject(ctx, tc.project.id);
 
     // Fetch executions with cursor pagination instead of hard-coded 10
     const execConditions = [eq(testRunsCases.testCaseId, id)];
-    if (cursor) execConditions.push(lt(testRunsCases.id, Number(cursor)));
+    if (cursor) execConditions.push(lt(testRunsCases.id, cursor));
 
     const execRows = tc.recentExecutions
       ? await db
@@ -474,10 +624,11 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── list_clusters ──────────────────────────────────────────────────────────
-  async list_clusters(db, params) {
+  async list_clusters(db, params, ctx) {
     const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
     const pageSize = clampPageSize(params.pageSize);
-    const cursor = params.cursor as string | undefined;
+    const cursor = numericCursor(params.cursor);
     const statusFilter = params.status as string | undefined;
 
     const conditions = [eq(failureClusters.projectId, projectId)];
@@ -485,7 +636,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
     // Cursor is the cluster `id` (descending). Auto-increment ensures
     // deterministic ordering — no tiebreaker needed.
-    if (cursor) conditions.push(lt(failureClusters.id, Number(cursor)));
+    if (cursor) conditions.push(lt(failureClusters.id, cursor));
 
     const clusterRows = await db
       .select()
@@ -515,10 +666,11 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── get_cluster ────────────────────────────────────────────────────────────
-  async get_cluster(db, params) {
-    const id = Number(params.id);
+  async get_cluster(db, params, ctx) {
+    const id = numericParam(params.id, 'id');
     const cluster = await getFailureCluster(db, id);
     if (!cluster) return null;
+    if (cluster.project?.id != null) assertProject(ctx, cluster.project.id);
 
     // Fetch locator healing for up to 5 affected cases via a single batch
     // query (2 DB round-trips instead of 5×2) so AI coding agents get fix
@@ -603,8 +755,11 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── get_cluster_diagnosis ──────────────────────────────────────────────────
-  async get_cluster_diagnosis(db, params) {
-    const id = Number(params.id);
+  async get_cluster_diagnosis(db, params, ctx) {
+    const id = numericParam(params.id, 'id');
+    if ((await checkEntityScope(db, ctx, id, resolveClusterProjectId)) === 'not-found') {
+      return { diagnosis: null };
+    }
     const result = await getClusterDiagnosis(db, id);
     const diag = result.diagnosis as any;
     if (!diag) return { diagnosis: null, manualBaseCommit: result.manualBaseCommit };
@@ -635,37 +790,64 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── get_test_case_context ─────────────────────────────────────────────────
-  async get_test_case_context(db, params) {
-    const id = Number(params.id);
+  async get_test_case_context(db, params, ctx) {
+    const id = numericParam(params.id, 'id');
+    if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
+
     const [trc] = await db
       .select({ id: testRunsCases.id, failureClusterId: testRunsCases.failureClusterId })
       .from(testRunsCases)
       .where(eq(testRunsCases.id, id))
       .limit(1);
     if (!trc) return null;
-    const ctx = await buildDiagnosisContext(db, {
+
+    const built = await buildDiagnosisContext(db, {
       kind: 'execution',
       testRunsCaseId: id,
       clusterId: trc.failureClusterId ?? undefined,
     });
-    return dropNulls({
+
+    const base = dropNulls({
       testRunsCaseId: id,
-      text: ctx.text,
-      sections: ctx.sections.map((s) => ({
+      text: built.text,
+      sections: built.sections.map((s) => ({
         id: s.id,
         title: s.title,
         chars: s.chars,
         truncated: s.truncated,
         items: s.items ?? null,
       })),
-      tokenEstimate: ctx.tokenEstimate,
-      cluster: ctx.cluster ?? null,
+      tokenEstimate: built.tokenEstimate,
+      cluster: built.cluster ?? null,
     });
+
+    // When the execution has no cluster, the diagnosis context has nothing to
+    // assemble. Fall back to the raw stored evidence so the tool still returns
+    // something actionable instead of an empty coverage stub.
+    if (built.sections.length === 0) {
+      const [row] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id)).limit(1);
+      if (row) {
+        return {
+          ...base,
+          rawExecution: dropNulls({
+            status: row.status,
+            error: trunc(row.error, 1500),
+            steps: row.steps,
+            consoleLogs: row.consoleLogs,
+            webVitals: row.webVitals,
+            ariaSnapshot: trunc(row.ariaSnapshot, 4000),
+          }),
+        };
+      }
+    }
+
+    return base;
   },
 
   // ── get_case_screenshots ───────────────────────────────────────────────────
-  async get_case_screenshots(db, params) {
+  async get_case_screenshots(db, params, ctx) {
     const id = numericParam(params.testRunsCaseId, 'testRunsCaseId');
+    if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return [];
     const withContent = params.content === true || params.content === 'true';
 
     const screenshotRows = await db
@@ -713,10 +895,11 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── get_cluster_context ────────────────────────────────────────────────────
-  async get_cluster_context(db, params) {
-    const id = Number(params.id);
+  async get_cluster_context(db, params, ctx) {
+    const id = numericParam(params.id, 'id');
     const [clusterRow] = await db.select().from(failureClusters).where(eq(failureClusters.id, id));
     if (!clusterRow) return null;
+    assertProject(ctx, clusterRow.projectId);
 
     const baseCommit = params.baseCommit as string | undefined;
     const selectedCommitShas = params.selectedCommitShas as string[] | undefined;
@@ -726,8 +909,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       selectedCommitShas,
     });
 
-    const ctx = text;
-    let context = ctx;
+    let context = text;
 
     // Promote screenshots: if images are included, add a note at the end
     if (images?.length) {
@@ -757,17 +939,18 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── search_test_cases ───────────────────────────────────────────────────────
-  async search_test_cases(db, params) {
+  async search_test_cases(db, params, ctx) {
     const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
     const q = String(params.q ?? '').trim();
     if (!q) return { items: [], nextCursor: null };
     const pageSize = clampPageSize(params.pageSize);
-    const cursor = params.cursor as string | undefined;
+    const cursor = numericCursor(params.cursor);
     const pattern = `%${q}%`;
 
     const conditions = [eq(testCases.projectId, projectId)];
     conditions.push(or(like(testCases.title, pattern), like(testCases.filePath, pattern))!);
-    if (cursor) conditions.push(lt(testCases.id, Number(cursor)));
+    if (cursor) conditions.push(lt(testCases.id, cursor));
 
     const rows = await db
       .select({
@@ -786,15 +969,27 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── get_test_run_case ──────────────────────────────────────────────────────
-  async get_test_run_case(db, params) {
+  async get_test_run_case(db, params, ctx) {
     const id = numericParam(params.id, 'id');
     const [row] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
     if (!row) return null;
+    if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
 
     const [tc] = await db
       .select({ title: testCases.title, filePath: testCases.filePath })
       .from(testCases)
       .where(eq(testCases.id, row.testCaseId));
+
+    // `include` lets an agent pull only the blobs it needs. Default: everything.
+    // The big JSON/text columns (steps, stepEvents, console, aria, source) are
+    // gated so a caller after just the error+summary pays only for that.
+    const rawInclude = params.include;
+    const include: Set<string> | null = Array.isArray(rawInclude)
+      ? new Set(rawInclude.map(String))
+      : typeof rawInclude === 'string' && rawInclude
+        ? new Set([rawInclude])
+        : null;
+    const want = (k: string) => include === null || include.has(k);
 
     return dropNulls({
       executionId: row.id,
@@ -810,14 +1005,14 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       column: row.column || null,
       workerIndex: row.workerIndex ?? null,
       browser: compactBrowser(row.browser),
-      steps: row.steps,
-      stepEvents: row.stepEvents,
+      steps: want('steps') ? row.steps : null,
+      stepEvents: want('steps') ? row.stepEvents : null,
       slowestStep: row.slowestStep || null,
       slowestStepDuration: row.slowestStepDuration || null,
-      consoleLogs: row.consoleLogs,
-      webVitals: row.webVitals,
-      ariaSnapshot: row.ariaSnapshot || null,
-      testSource: row.testSource || null,
+      consoleLogs: want('console') ? row.consoleLogs : null,
+      webVitals: want('webVitals') ? row.webVitals : null,
+      ariaSnapshot: want('aria') ? trunc(row.ariaSnapshot, 8000) : null,
+      testSource: want('source') ? row.testSource || null : null,
       testAnnotations: row.testAnnotations,
       startedAt: iso(row.startedAt),
       isNewRegression: row.isNewRegression || null,
@@ -826,11 +1021,14 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── list_recent_activity ──────────────────────────────────────────────────
-  async list_recent_activity(db, params) {
+  async list_recent_activity(db, params, ctx) {
     const pageSize = clampPageSize(params.pageSize);
     const cursor = params.cursor as string | undefined;
 
+    // Restrict the cross-project feed to the caller's assigned projects.
+    if (ctx.scope !== 'all' && ctx.scope.size === 0) return { items: [], nextCursor: null };
     const conditions = cursor ? [lt(testRuns.startTime, new Date(cursor))] : [];
+    if (ctx.scope !== 'all') conditions.push(inArray(testRuns.projectId, [...ctx.scope]));
 
     const rows = await db
       .select({
@@ -872,8 +1070,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── get_repo_commits ───────────────────────────────────────────────────────
-  async get_repo_commits(db, params) {
+  async get_repo_commits(db, params, ctx) {
     const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
     const limit = Math.min(100, Number(params.limit) || 20);
     const branch = params.branch as string | undefined;
 
@@ -897,8 +1096,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   },
 
   // ── get_repo_diff ──────────────────────────────────────────────────────────
-  async get_repo_diff(db, params) {
+  async get_repo_diff(db, params, ctx) {
     const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
     const sha = (params.sha as string)?.trim();
     if (!sha) return { error: 'sha is required' };
 
@@ -927,6 +1127,429 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }
+  },
+
+  // ── get_run_insights ───────────────────────────────────────────────────────
+  async get_run_insights(db, params, ctx) {
+    const runId = numericParam(params.id, 'id');
+    if ((await checkEntityScope(db, ctx, runId, resolveRunProjectId)) === 'not-found') return null;
+
+    const r = await computeRunInsights(db, runId);
+    const cap = <T>(a: T[]) => a.slice(0, 15);
+    return dropNulls({
+      runId,
+      hasBaseline: r.hasBaseline,
+      totalTests: r.totalTests,
+      passedTests: r.passedTests,
+      failedTests: r.failedTests,
+      passRate: r.passRate,
+      baselinePassRate: r.hasBaseline ? r.baselinePassRate : null,
+      passRateDelta: r.hasBaseline ? r.passRateDelta : null,
+      avgDurationDelta: r.avgDurationDelta,
+      newRegressions: cap(r.newRegressions),
+      recurrences: cap(r.recurrences),
+      recovered: cap(r.recovered),
+      newFlaky: cap(r.newFlaky),
+      slowestTests: cap(r.slowestTests),
+      mostImproved: cap(r.mostImproved),
+      mostRegressed: cap(r.mostRegressed),
+      workerImbalance: r.workerImbalance,
+      workerImbalanceWarning: r.workerImbalanceWarning || null,
+      flakyOnRetry: cap(r.flakyOnRetry),
+      clusterNew: cap(r.clusterNew),
+    });
+  },
+
+  // ── get_spec_health ────────────────────────────────────────────────────────
+  async get_spec_health(db, params, ctx) {
+    const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
+    const days = params.days != null ? numericParam(params.days, 'days') : 30;
+    return getProjectSpecHealth(db, projectId, days);
+  },
+
+  // ── get_slow_tests ─────────────────────────────────────────────────────────
+  async get_slow_tests(db, params, ctx) {
+    const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
+    const runs = Math.min(100, Number(params.runs) || 50);
+    const result = (await getProjectSlowTests(db, projectId, runs)) as any[];
+    return { items: result.slice(0, 25).map((t: any) => dropNulls(t)) };
+  },
+
+  // ── get_performance_trend ──────────────────────────────────────────────────
+  async get_performance_trend(db, params, ctx) {
+    const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
+    const limit = Math.min(100, Number(params.limit) || 30);
+    return getProjectPerformance(db, projectId, limit);
+  },
+
+  // ── get_test_stability_trend ───────────────────────────────────────────────
+  async get_test_stability_trend(db, params, ctx) {
+    const testCaseId = numericParam(params.id, 'id');
+    if ((await checkEntityScope(db, ctx, testCaseId, resolveCaseProjectId)) === 'not-found') return null;
+    const buckets = params.buckets != null ? numericParam(params.buckets, 'buckets') : 20;
+    return getTestCaseStabilityTrend(db, testCaseId, buckets);
+  },
+
+  // ── get_network_requests ───────────────────────────────────────────────────
+  async get_network_requests(db, params, ctx) {
+    const runId = numericParam(params.id, 'id');
+    if ((await checkEntityScope(db, ctx, runId, resolveRunProjectId)) === 'not-found') return null;
+    const summaries = (await getNetworkRequests(db, runId)) as any[] | null;
+    if (!summaries) return null;
+    return { endpoints: summaries.slice(0, 30).map((e: any) => dropNulls(e)) };
+  },
+
+  // ── get_failure_groups ─────────────────────────────────────────────────────
+  async get_failure_groups(db, params, ctx) {
+    const runId = numericParam(params.id, 'id');
+    if ((await checkEntityScope(db, ctx, runId, resolveRunProjectId)) === 'not-found') return null;
+    const groups = (await getFailureGroups(db, runId)) as any[];
+    return {
+      groups: groups.slice(0, 30).map((g: any) =>
+        dropNulls({
+          clusterId: g.clusterId,
+          signature: g.signature,
+          title: g.title || null,
+          status: g.status,
+          count: g.count ?? (g.cases?.length || null),
+          workerCorrelated: g.workerCorrelated || null,
+          cases: Array.isArray(g.cases)
+            ? g.cases.slice(0, 10).map((c: any) =>
+                dropNulls({
+                  testRunsCaseId: c.testRunsCaseId ?? c.id,
+                  testCaseId: c.testCaseId,
+                  title: c.title,
+                  filePath: c.filePath,
+                }),
+              )
+            : null,
+        }),
+      ),
+    };
+  },
+
+  // ── get_locator_healing ────────────────────────────────────────────────────
+  async get_locator_healing(db, params, ctx) {
+    const id = numericParam(params.testRunsCaseId, 'testRunsCaseId');
+    if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
+    const h = await getLocatorHealing(db, id);
+    if (!h || h.source === 'none') return { source: 'none' };
+    const rankedList = (arr: any[] | null | undefined) =>
+      arr && arr.length
+        ? arr.slice(0, 8).map((a: any) => dropNulls({ locator: a.locator, method: a.method, score: a.score }))
+        : null;
+    return dropNulls({
+      testRunsCaseId: id,
+      source: h.source,
+      failingLocator: h.failingLocator,
+      recommendation: h.recommendation
+        ? dropNulls({
+            recommended: h.recommendation.recommended
+              ? dropNulls({
+                  locator: h.recommendation.recommended.locator,
+                  method: h.recommendation.recommended.method,
+                  score: h.recommendation.recommended.score,
+                })
+              : null,
+            durable: h.recommendation.durable
+              ? dropNulls({
+                  locator: h.recommendation.durable.locator,
+                  method: h.recommendation.durable.method,
+                  score: h.recommendation.durable.score,
+                })
+              : null,
+            preservesConvention: h.recommendation.preservesConvention || null,
+            hasDurableAlternative: h.recommendation.hasDurableAlternative || null,
+            suggestAddTestId: h.recommendation.suggestAddTestId || null,
+          })
+        : null,
+      fromPriorSuccess: rankedList(h.fromPriorSuccess),
+      fromElementMatch: rankedList(h.fromElementMatch),
+      fromAriaSnapshot: rankedList(h.fromAriaSnapshot),
+    });
+  },
+
+  // ── search ─────────────────────────────────────────────────────────────────
+  async search(db, params, ctx) {
+    const q = String(params.q ?? '').trim();
+    if (q.length < 2) return { projects: [], runs: [], cases: [] };
+    const res = await searchProjectsTestRunsCases(db, q, ctx.scope);
+    return {
+      projects: res.projects.map((p: any) => dropNulls({ id: p.id, name: p.name, label: p.label || null })),
+      runs: res.runs.map((r: any) =>
+        dropNulls({
+          id: r.id,
+          label: r.label || null,
+          status: r.status,
+          projectId: r.projectId,
+          projectName: r.projectName,
+          startedAt: iso(r.startTime),
+        }),
+      ),
+      cases: res.cases.map((c: any) =>
+        dropNulls({ testCaseId: c.id, title: c.title, filePath: c.filePath, projectId: c.projectId }),
+      ),
+    };
+  },
+
+  // ── list_case_traces ───────────────────────────────────────────────────────
+  async list_case_traces(db, params, ctx) {
+    const id = numericParam(params.testRunsCaseId, 'testRunsCaseId');
+    if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return { traces: [] };
+    const traces = (await getTestRunCaseTraces(db, id)) as any[];
+    return {
+      traces: traces.map((t: any) =>
+        dropNulls({ id: t.id, filePath: t.filePath, downloadPath: `/api/files/${t.filePath}` }),
+      ),
+    };
+  },
+
+  // ── list_links ─────────────────────────────────────────────────────────────
+  async list_links(db, params, ctx) {
+    const entityType = String(params.entityType ?? '');
+    const entityId = numericParam(params.id, 'id');
+    const resolver =
+      entityType === 'test_run'
+        ? resolveRunProjectId
+        : entityType === 'test_runs_case'
+          ? resolveTestRunCaseProjectId
+          : entityType === 'test_case'
+            ? resolveCaseProjectId
+            : null;
+    if (!resolver) throw new Error('entityType must be test_run, test_runs_case, or test_case');
+    if ((await checkEntityScope(db, ctx, entityId, resolver)) === 'not-found') return { links: [] };
+    const { links } = await listLinks(db, entityType, entityId);
+    return {
+      links: links.map((l: any) =>
+        dropNulls({
+          id: l.id,
+          url: l.url,
+          provider: l.provider,
+          key: l.key || null,
+          title: l.title || null,
+          statusText: l.statusText || null,
+        }),
+      ),
+    };
+  },
+
+  // ── list_tags ──────────────────────────────────────────────────────────────
+  async list_tags(db) {
+    const { tags } = await listTags(db);
+    return { tags: tags.map((t: any) => dropNulls({ id: t.id, text: t.text, color: t.color })) };
+  },
+
+  // ── get_project_test_catalog ───────────────────────────────────────────────
+  async get_project_test_catalog(db, params, ctx) {
+    const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
+    const pageSize = clampPageSize(params.pageSize);
+    const offset = Math.max(0, Number(params.offset) || 0);
+    const all = (await getProjectTestCases(db, projectId)) as any[];
+    const page = all.slice(offset, offset + pageSize);
+    return {
+      total: all.length,
+      offset,
+      items: page.map((t: any) =>
+        dropNulls({
+          testCaseId: t.id,
+          title: t.title,
+          filePath: t.filePath,
+          totalRuns: t.totalRuns,
+          passed: t.passedRuns || null,
+          failed: t.failedRuns || null,
+          flaky: t.flakyRuns || null,
+          lastStatus: t.lastStatus || null,
+          avgDuration: t.avgDuration != null ? Math.round(t.avgDuration) : null,
+        }),
+      ),
+      nextOffset: offset + pageSize < all.length ? offset + pageSize : null,
+    };
+  },
+
+  // ── list_open_clusters ─────────────────────────────────────────────────────
+  async list_open_clusters(db, params, ctx) {
+    if (ctx.scope !== 'all' && ctx.scope.size === 0) return { items: [], nextCursor: null };
+    const pageSize = clampPageSize(params.pageSize);
+    const cursor = numericCursor(params.cursor);
+    const statusFilter = (params.status as string) || 'open';
+
+    const conditions = [eq(failureClusters.status, statusFilter)];
+    if (ctx.scope !== 'all') conditions.push(inArray(failureClusters.projectId, [...ctx.scope]));
+    if (cursor) conditions.push(lt(failureClusters.id, cursor));
+
+    const rows = await db
+      .select({
+        id: failureClusters.id,
+        projectId: failureClusters.projectId,
+        signature: failureClusters.signature,
+        title: failureClusters.title,
+        errorType: failureClusters.errorType,
+        status: failureClusters.status,
+        occurrences: failureClusters.occurrences,
+        lastSeenRunId: failureClusters.lastSeenRunId,
+        sampleError: failureClusters.sampleError,
+      })
+      .from(failureClusters)
+      .where(and(...conditions))
+      .orderBy(desc(failureClusters.occurrences), desc(failureClusters.id))
+      .limit(pageSize + 1);
+
+    const mapped = rows.map((c) =>
+      dropNulls({
+        id: c.id,
+        projectId: c.projectId,
+        signature: c.signature,
+        title: c.title || null,
+        errorType: c.errorType || null,
+        status: c.status,
+        occurrences: c.occurrences,
+        lastSeenRunId: c.lastSeenRunId,
+        sampleError: trunc(c.sampleError, 300),
+      }),
+    );
+    // Cursor is the last id; ordering is (occurrences DESC, id DESC) so paging by
+    // id is approximate but monotonic enough for a triage sweep.
+    return paginatedItems(mapped, pageSize, (c: any) => String(c.id));
+  },
+
+  // ── get_instance_stats ─────────────────────────────────────────────────────
+  async get_instance_stats(db, _params, ctx) {
+    if ((ctx.user?.role as Role) !== Role.ADMINISTRATOR) {
+      throw new Error('This action requires administrator access');
+    }
+    return getAdminStats(db);
+  },
+
+  // ── explain_failure ────────────────────────────────────────────────────────
+  async explain_failure(db, params, ctx) {
+    const id = numericParam(params.testRunsCaseId, 'testRunsCaseId');
+    if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
+
+    const [row] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
+    if (!row) return null;
+    const [tc] = await db
+      .select({ title: testCases.title, filePath: testCases.filePath })
+      .from(testCases)
+      .where(eq(testCases.id, row.testCaseId));
+
+    const [healing, screenshotRows, diagContext] = await Promise.all([
+      getLocatorHealing(db, id).catch(() => null),
+      db
+        .select({ id: files.id })
+        .from(files)
+        .where(and(eq(files.testRunsCaseId, id), eq(files.type, 'screenshot'))),
+      row.failureClusterId
+        ? buildDiagnosisContext(db, {
+            kind: 'execution',
+            testRunsCaseId: id,
+            clusterId: row.failureClusterId,
+            skipScm: true,
+          }).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    const rec = healing && healing.source !== 'none' ? healing.recommendation?.recommended : null;
+
+    return dropNulls({
+      testRunsCaseId: id,
+      testCaseId: row.testCaseId,
+      title: tc?.title || null,
+      filePath: tc?.filePath || null,
+      status: row.status,
+      error: trunc(row.error, 1500),
+      clusterId: row.failureClusterId || null,
+      slowestStep: row.slowestStep || null,
+      steps: row.steps,
+      consoleLogs: row.consoleLogs,
+      ariaSnapshot: trunc(row.ariaSnapshot, 3000),
+      locatorFix: rec ? dropNulls({ locator: rec.locator, method: rec.method, score: rec.score }) : null,
+      screenshotCount: screenshotRows.length || null,
+      diagnosisContext: diagContext?.text || null,
+      isNewRegression: row.isNewRegression || null,
+      isNewFlaky: row.isNewFlaky || null,
+    });
+  },
+
+  // ── set_cluster_status ─────────────────────────────────────────────────────
+  async set_cluster_status(db, params, ctx) {
+    assertWriteRole(ctx);
+    const id = numericParam(params.id, 'id');
+    if ((await checkEntityScope(db, ctx, id, resolveClusterProjectId)) === 'not-found') return null;
+    const status = String(params.status ?? '');
+    if (!['open', 'resolved', 'ignored'].includes(status)) {
+      throw new Error('status must be one of: open, resolved, ignored');
+    }
+    const note = typeof params.triageNote === 'string' ? params.triageNote : undefined;
+    const result = await patchClusterStatus(db, id, status, note);
+    if (!result) return null;
+    return dropNulls({ id, status, triageNote: note || null, ok: true });
+  },
+
+  // ── set_cluster_base_commit ────────────────────────────────────────────────
+  async set_cluster_base_commit(db, params, ctx) {
+    assertWriteRole(ctx);
+    const id = numericParam(params.id, 'id');
+    if ((await checkEntityScope(db, ctx, id, resolveClusterProjectId)) === 'not-found') return null;
+    const commit = typeof params.commit === 'string' ? params.commit.trim() : null;
+    const result = await patchClusterBaseCommit(db, id, commit);
+    if (!result) return null;
+    return dropNulls({ id, manualBaseCommit: commit, ok: true });
+  },
+
+  // ── submit_diagnosis_feedback ──────────────────────────────────────────────
+  async submit_diagnosis_feedback(db, params, ctx) {
+    assertWriteRole(ctx);
+    const id = numericParam(params.id, 'id');
+    const feedback = params.feedback == null ? null : String(params.feedback);
+    if (feedback !== null && feedback !== 'up' && feedback !== 'down') {
+      throw new Error('feedback must be "up", "down", or null');
+    }
+    const [existing] = await db
+      .select({ id: failureDiagnoses.id, clusterId: failureDiagnoses.clusterId })
+      .from(failureDiagnoses)
+      .where(eq(failureDiagnoses.id, id))
+      .limit(1);
+    if (!existing) return null;
+    if ((await checkEntityScope(db, ctx, existing.clusterId, resolveClusterProjectId)) === 'not-found') return null;
+    const note = typeof params.feedbackNote === 'string' ? params.feedbackNote.trim() || null : null;
+    await db
+      .update(failureDiagnoses)
+      .set({ feedback, feedbackNote: note, updatedAt: new Date() })
+      .where(eq(failureDiagnoses.id, id));
+    return { id, feedback, ok: true };
+  },
+
+  // ── run_cluster_diagnosis ──────────────────────────────────────────────────
+  async run_cluster_diagnosis(db, params, ctx) {
+    assertWriteRole(ctx);
+    const id = numericParam(params.id, 'id');
+    if ((await checkEntityScope(db, ctx, id, resolveClusterProjectId)) === 'not-found') return null;
+    if (isDiagnosisRunning(id)) throw new Error('Diagnosis is already running for this cluster');
+
+    const [cluster] = await db.select().from(failureClusters).where(eq(failureClusters.id, id));
+    if (!cluster) return null;
+
+    const config = await resolveAiConfig(db);
+    if (!config) return { error: 'AI diagnosis is not configured' };
+
+    const force = params.force === true || params.force === 'true';
+    const baseCommit = typeof params.baseCommit === 'string' ? params.baseCommit : undefined;
+
+    const diag = (await runClusterDiagnosis(db, cluster, config, { force, baseCommit })) as any;
+    const det = diag.details as Record<string, unknown> | null;
+    return dropNulls({
+      clusterId: id,
+      status: diag.status,
+      category: diag.category || null,
+      confidence: diag.confidence || null,
+      summary: diag.summary || null,
+      rootCause: diag.rootCause || null,
+      suggestedFix: det?.suggestedFix || null,
+    });
   },
 };
 
