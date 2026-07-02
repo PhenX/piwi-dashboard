@@ -12,14 +12,14 @@ Pull the latest image from Docker Hub and run it:
 
 ```bash
 # Linux / macOS
-docker pull phenx/piwi-dashboard:latest
-docker run -p 3000:3000 -v $(pwd)/.data:/app/.data phenx/piwi-dashboard:latest
+docker pull phenx/piwitests-server:latest
+docker run -p 3000:3000 -v $(pwd)/.data:/app/.data phenx/piwitests-server:latest
 ```
 
 ```powershell
 # Windows (PowerShell)
-docker pull phenx/piwi-dashboard:latest
-docker run -p 3000:3000 -v ${PWD}/.data:/app/.data phenx/piwi-dashboard:latest
+docker pull phenx/piwitests-server:latest
+docker run -p 3000:3000 -v ${PWD}/.data:/app/.data phenx/piwitests-server:latest
 ```
 
 The dashboard will be available at `http://localhost:3000`.
@@ -30,7 +30,7 @@ The dashboard will be available at `http://localhost:3000`.
 - **Build Type**: Multistage build (builder + production stages)
 - **Image Size**: ~400 MB
 - **Architecture**: Multi-platform (linux/amd64, linux/arm64)
-- **Registry**: Docker Hub (`phenx/piwi-dashboard`)
+- **Registry**: Docker Hub (`phenx/piwitests-server`)
 
 ## Building the Image Locally
 
@@ -78,7 +78,7 @@ The Dockerfile uses a two-stage build:
 Mount a volume to persist data:
 
 ```bash
-docker run -p 3000:3000 -v /path/to/data:/app/.data phenx/piwi-dashboard:latest
+docker run -p 3000:3000 -v /path/to/data:/app/.data phenx/piwitests-server:latest
 ```
 
 > On Windows (PowerShell), use a host path like `C:\piwi\data` in place of `/path/to/data`.
@@ -94,7 +94,7 @@ The `.data` directory contains:
 ```yaml
 services:
   piwi-dashboard:
-    image: phenx/piwi-dashboard:latest
+    image: phenx/piwitests-server:latest
     ports:
       - "3000:3000"
     volumes:
@@ -119,7 +119,7 @@ services:
     restart: unless-stopped
 
   piwi-dashboard:
-    image: phenx/piwi-dashboard:latest
+    image: phenx/piwitests-server:latest
     ports:
       - "3000:3000"
     volumes:
@@ -167,14 +167,14 @@ On **Linux hosts**, ensure the mounted directory is writable by the container's 
 ```bash
 mkdir -p .data
 chmod 777 .data  # or chown 1001:1001 .data
-docker run -p 3000:3000 -v $(pwd)/.data:/app/.data phenx/piwi-dashboard:latest
+docker run -p 3000:3000 -v $(pwd)/.data:/app/.data phenx/piwitests-server:latest
 ```
 
 On **Windows** and **macOS**, Docker Desktop handles volume permissions automatically — no `chmod` needed:
 
 ```powershell
 # Windows (PowerShell)
-docker run -p 3000:3000 -v ${PWD}/.data:/app/.data phenx/piwi-dashboard:latest
+docker run -p 3000:3000 -v ${PWD}/.data:/app/.data phenx/piwitests-server:latest
 ```
 
 ### Database Locked
@@ -187,12 +187,12 @@ Map to a different host port:
 
 ```bash
 # Linux / macOS
-docker run -p 8080:3000 -v $(pwd)/.data:/app/.data phenx/piwi-dashboard:latest
+docker run -p 8080:3000 -v $(pwd)/.data:/app/.data phenx/piwitests-server:latest
 ```
 
 ```powershell
 # Windows (PowerShell)
-docker run -p 8080:3000 -v ${PWD}/.data:/app/.data phenx/piwi-dashboard:latest
+docker run -p 8080:3000 -v ${PWD}/.data:/app/.data phenx/piwitests-server:latest
 ```
 
 The dashboard will be available at `http://localhost:8080`.

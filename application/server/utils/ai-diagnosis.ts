@@ -256,6 +256,10 @@ export async function runClusterDiagnosis(
       user: userContent,
       jsonSchema: DIAGNOSIS_JSON_SCHEMA,
       images,
+      cacheControl: true,
+      // The built context is the cache-stable prefix; additional context and
+      // the research block vary between re-runs and sit after the breakpoint.
+      stablePrefixChars: ctx.text.length,
     });
     pipeline.push({
       role: 'diagnosis',
@@ -521,6 +525,10 @@ export async function streamClusterDiagnosis(
       user: userContent,
       jsonSchema: DIAGNOSIS_JSON_SCHEMA,
       images,
+      cacheControl: true,
+      // The built context is the cache-stable prefix; additional context and
+      // the research block vary between re-runs and sit after the breakpoint.
+      stablePrefixChars: ctx.text.length,
     })) {
       if (chunk.type === 'text') {
         accumulatedText += chunk.data as string;

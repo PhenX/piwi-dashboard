@@ -178,6 +178,57 @@ export interface AiCallOptions {
   jsonSchema?: object;
   maxTokens?: number;
   images?: AiAttachedImage[];
+  /** When true, mark the system prompt and stable context prefix for Anthropic cache_control. Re-runs become ~90 % cached input. */
+  cacheControl?: boolean;
+  /**
+   * With `cacheControl`: how many characters at the start of `user` are stable
+   * across re-runs (the built diagnosis context). The cache breakpoint sits at
+   * the end of that prefix; the remainder (user-provided additional context,
+   * research block) is sent as a separate uncached block so its variation
+   * cannot invalidate the cached prefix. Defaults to the whole user text,
+   * which only hits the cache on byte-identical re-runs.
+   */
+  stablePrefixChars?: number;
+}
+
+type AnthropicImageBlock = {
+  type: 'image';
+  source: { type: 'base64'; media_type: AiAttachedImage['mediaType']; data: string };
+};
+type AnthropicTextBlock = { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } };
+
+/** System prompt param — one cache breakpoint when caching is on (it is identical across re-runs). */
+function anthropicSystem(opts: AiCallOptions): Anthropic.Messages.MessageCreateParams['system'] {
+  return opts.cacheControl ? [{ type: 'text', text: opts.system, cache_control: { type: 'ephemeral' } }] : opts.system;
+}
+
+/**
+ * User-message content. Without caching: optional image blocks followed by one
+ * text block (or a bare string). With caching: images (stable across re-runs —
+ * same screenshots for the same execution) precede the stable text block that
+ * carries the cache breakpoint, so both are covered by the cached prefix; the
+ * volatile tail of `user` (see `stablePrefixChars`) follows as its own
+ * uncached block.
+ */
+function anthropicUserContent(opts: AiCallOptions): string | Array<AnthropicImageBlock | AnthropicTextBlock> {
+  const imageBlocks: AnthropicImageBlock[] = (opts.images ?? []).map((img) => ({
+    type: 'image',
+    source: { type: 'base64', media_type: img.mediaType, data: img.data },
+  }));
+
+  if (!opts.cacheControl) {
+    return imageBlocks.length > 0 ? [...imageBlocks, { type: 'text', text: opts.user }] : opts.user;
+  }
+
+  const split = Math.max(0, Math.min(opts.stablePrefixChars ?? opts.user.length, opts.user.length));
+  const stable = opts.user.slice(0, split);
+  const volatileTail = opts.user.slice(split);
+
+  const blocks: Array<AnthropicImageBlock | AnthropicTextBlock> = [...imageBlocks];
+  if (stable) blocks.push({ type: 'text', text: stable, cache_control: { type: 'ephemeral' } });
+  if (volatileTail) blocks.push({ type: 'text', text: volatileTail });
+  if (blocks.length === 0) blocks.push({ type: 'text', text: opts.user });
+  return blocks;
 }
 
 export interface AiCallResult {
@@ -218,29 +269,15 @@ async function callAnthropic(config: ResolvedAiRole, opts: AiCallOptions): Promi
     maxRetries: 1,
   });
 
-  type ImageBlock = {
-    type: 'image';
-    source: { type: 'base64'; media_type: AiAttachedImage['mediaType']; data: string };
-  };
-  type TextBlock = { type: 'text'; text: string };
-
-  const userContent: string | Array<ImageBlock | TextBlock> = opts.images?.length
-    ? [
-        ...opts.images.map(
-          (img): ImageBlock => ({
-            type: 'image',
-            source: { type: 'base64', media_type: img.mediaType, data: img.data },
-          }),
-        ),
-        { type: 'text', text: opts.user },
-      ]
-    : opts.user;
-
+  // Prompt caching (when opts.cacheControl): two breakpoints — the system
+  // prompt and the stable user prefix (images + built context). With 1.6's
+  // stable section ordering the prefix is cache-friendly; the volatile tail
+  // (user additional context, research block) is a separate uncached block.
   const res = await client.messages.create({
     model: config.model || 'claude-opus-4-8',
     max_tokens: opts.maxTokens ?? 8192,
-    system: opts.system,
-    messages: [{ role: 'user', content: userContent as Anthropic.MessageParam['content'] }],
+    system: anthropicSystem(opts),
+    messages: [{ role: 'user', content: anthropicUserContent(opts) as Anthropic.MessageParam['content'] }],
     ...(opts.jsonSchema
       ? {
           output_config: {
@@ -351,24 +388,6 @@ async function* streamAnthropic(config: ResolvedAiRole, opts: AiCallOptions): As
     maxRetries: 1,
   });
 
-  type ImageBlock = {
-    type: 'image';
-    source: { type: 'base64'; media_type: AiAttachedImage['mediaType']; data: string };
-  };
-  type TextBlock = { type: 'text'; text: string };
-
-  const userContent: string | Array<ImageBlock | TextBlock> = opts.images?.length
-    ? [
-        ...opts.images.map(
-          (img): ImageBlock => ({
-            type: 'image',
-            source: { type: 'base64', media_type: img.mediaType, data: img.data },
-          }),
-        ),
-        { type: 'text', text: opts.user },
-      ]
-    : opts.user;
-
   const textChunks: string[] = [];
   let streamError: Error | null = null;
   let finalMsg: Anthropic.Message | null = null;
@@ -378,11 +397,12 @@ async function* streamAnthropic(config: ResolvedAiRole, opts: AiCallOptions): As
     resolveFinal = r;
   });
 
+  // Same caching layout as callAnthropic — see anthropicSystem/anthropicUserContent.
   const stream = client.messages.stream({
     model: config.model || 'claude-opus-4-8',
     max_tokens: opts.maxTokens ?? 8192,
-    system: opts.system,
-    messages: [{ role: 'user', content: userContent as Anthropic.MessageParam['content'] }],
+    system: anthropicSystem(opts),
+    messages: [{ role: 'user', content: anthropicUserContent(opts) as Anthropic.MessageParam['content'] }],
     ...(opts.jsonSchema
       ? {
           output_config: {

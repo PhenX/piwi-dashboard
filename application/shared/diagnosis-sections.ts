@@ -16,6 +16,7 @@ export interface DiagnosisSectionMeta {
 export const DIAGNOSIS_SECTIONS: DiagnosisSectionMeta[] = [
   { id: 'clusterSummary', label: 'Failure cluster summary', short: 'Cluster' },
   { id: 'sampleError', label: 'Raw error message', short: 'Error' },
+  { id: 'representativeExecution', label: 'Representative execution overview', short: 'Execution' },
   { id: 'executionError', label: 'Representative execution error', short: 'Error' },
   { id: 'runContext', label: 'Run context (partial run, parallelism, flaky class)', short: 'Run context' },
   { id: 'testAnnotations', label: 'Test annotations (@fixme/@flaky …)', short: 'Annotations' },
@@ -28,6 +29,7 @@ export const DIAGNOSIS_SECTIONS: DiagnosisSectionMeta[] = [
   { id: 'serverLogs', label: 'Backend server logs', short: 'Server logs' },
   { id: 'webVitals', label: 'Web vitals', short: 'Web vitals' },
   { id: 'ariaSnapshot', label: 'ARIA snapshot', short: 'ARIA' },
+  { id: 'screenshots', label: 'Screenshots (attached as images)', short: 'Screenshots' },
   { id: 'browserDistribution', label: 'Browser distribution', short: 'Browsers' },
   { id: 'recurrenceFlakiness', label: 'Recurrence & flakiness', short: 'Flakiness' },
   { id: 'baselineComparison', label: 'Compared to last pass (duration/vitals/steps)', short: 'Baseline' },

@@ -10,6 +10,10 @@ export interface TestStepInfo {
   title: string;
   duration?: number;
   category?: string;
+  /** Error message when the step failed (undefined when the step passed). */
+  error?: { message?: string };
+  /** True when the step carried an error — the signal for inline failure markers. */
+  failed?: boolean;
 }
 
 export interface ConsoleLogEntry {

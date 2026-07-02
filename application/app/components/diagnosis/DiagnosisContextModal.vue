@@ -14,6 +14,8 @@ const props = defineProps<{
   open: boolean;
   sections: ContextSection[];
   tokenEstimate: number;
+  /** Portion of the estimate attributable to attached images (vision tokens). */
+  imageTokenEstimate?: number;
   loading: boolean;
   /** Section id to scroll to and briefly highlight when the modal opens. */
   focusSection?: string | null;
@@ -160,7 +162,11 @@ function sectionHeading(s: ContextSection): string {
           <span class="font-semibold inline-flex items-center gap-1">
             Context sent to AI <HelpHint topic="cluster.context-preview" />
           </span>
-          <span class="text-xs text-gray-400">~{{ tokenEstimate }} tokens</span>
+          <span class="text-xs text-gray-400">
+            ~{{ tokenEstimate }} tokens<template v-if="imageTokenEstimate">
+              ({{ tokenEstimate - imageTokenEstimate }} text + {{ imageTokenEstimate }} image)</template
+            >
+          </span>
         </div>
         <div class="flex items-center gap-1">
           <UButton

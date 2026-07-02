@@ -333,6 +333,10 @@ export interface PerformanceStep {
   title: string;
   duration: number;
   category: string;
+  /** Error message when the step failed (undefined when the step passed). */
+  error?: { message?: string };
+  /** True when the step failed. */
+  failed?: boolean;
 }
 
 /**
@@ -519,6 +523,7 @@ export interface FailureClusterDetail {
   triageNote: string | null;
   firstSeenRunId: number;
   lastSeenRunId: number;
+  firstSeenAt: string | Date | null;
   occurrences: number;
   affectedTests: number;
   lastSeenRunStatus: string | null;

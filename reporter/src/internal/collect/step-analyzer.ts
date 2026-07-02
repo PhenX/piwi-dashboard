@@ -86,6 +86,10 @@ export interface FlatStep {
   title: string;
   duration: number;
   category: string;
+  /** Error message when the step failed (undefined when the step passed). */
+  error?: { message: string };
+  /** True when the step carried an error — the signal the server needs for inline failure markers. */
+  failed?: boolean;
 }
 
 /** Step-event category restricted to the values `extractTestStepEvents` emits. */
@@ -95,11 +99,16 @@ export type StepEventCategory = 'hook' | 'fixture' | 'test.step' | 'expect' | 'w
 export function flattenSteps(steps: any[]): FlatStep[] {
   const result: FlatStep[] = [];
   for (const step of steps) {
-    result.push({
+    const flat: FlatStep = {
       title: step.title,
       duration: step.duration,
       category: categorizeStep(step.title, step.category),
-    });
+    };
+    if (step.error?.message) {
+      flat.error = { message: step.error.message };
+      flat.failed = true;
+    }
+    result.push(flat);
     if (step.steps?.length > 0) result.push(...flattenSteps(step.steps));
   }
   return result;

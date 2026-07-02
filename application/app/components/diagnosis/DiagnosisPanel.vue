@@ -22,6 +22,7 @@ const {
   contextText,
   contextSections,
   tokenEstimate,
+  imageTokenEstimate,
   contextLoading,
   coverage,
   baseCommit,
@@ -221,6 +222,7 @@ function showResult() {
       :open="showAiContext"
       :sections="contextSections"
       :token-estimate="tokenEstimate"
+      :image-token-estimate="imageTokenEstimate"
       :loading="contextLoading"
       :focus-section="focusSection"
       :cited-sections="citedSections"

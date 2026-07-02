@@ -115,7 +115,7 @@ function extractMessageHead(text: string): string {
  * are preserved — those discriminate genuinely different failures. (Capture-group
  * form rather than a lookbehind, for Safari < 16.4 compatibility in demo mode.)
  */
-function maskVolatile(text: string): string {
+export function maskVolatile(text: string): string {
   return text
     .replace(/^(\s*(?:Received|Expected)[^:\n]*:).*$/gm, '$1 <VALUE>')
     .replace(URL_RE, '<URL>')
@@ -273,4 +273,60 @@ export async function computeErrorFingerprint(rawError: string): Promise<ErrorFi
     sig.selector ? maskSelector(sig.selector) : '',
   ].join('\u0000');
   return { ...sig, fingerprint: await sha256Hex(input) };
+}
+
+/**
+ * Condense a Playwright error for AI context: keep the message head, call log
+ * and user-file stack frames; collapse consecutive `node_modules`/`node:`
+ * internal frames to a `… (N internal frames)` placeholder. Apply an optional
+ * character budget (truncating from the stack tail first). Use this anywhere a
+ * flat `slice(0, N)` currently dominates — the message + call log carries the
+ * diagnostic signal; 200 internal frames carry none.
+ */
+export function condenseErrorText(text: string, maxChars?: number): string {
+  const stackStart = text.search(/\n    at /);
+  if (stackStart === -1) {
+    return maxChars !== undefined && text.length > maxChars ? text.slice(0, maxChars) + '\n[truncated]' : text;
+  }
+
+  const preStack = text.slice(0, stackStart);
+  const stackBlock = text.slice(stackStart);
+
+  const frameLines = stackBlock.split('\n');
+  const userFrames: string[] = [];
+  let internalCount = 0;
+
+  const flushInternal = () => {
+    if (internalCount > 0) {
+      userFrames.push(`\u2026 (${internalCount} internal frame${internalCount > 1 ? 's' : ''})`);
+      internalCount = 0;
+    }
+  };
+
+  for (const line of frameLines) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith('at ')) {
+      const isInternal = line.includes('node_modules') || trimmed.startsWith('at node:');
+      if (isInternal) {
+        internalCount++;
+      } else {
+        flushInternal();
+        userFrames.push(line);
+      }
+    } else if (trimmed === '') {
+      // Pass blank lines through (between stack segments); don't flush internal group yet
+      userFrames.push(line);
+    } else {
+      // Non-stack content inside the stack block (e.g. additional error messages)
+      flushInternal();
+      userFrames.push(line);
+    }
+  }
+  flushInternal();
+
+  let result = preStack + '\n' + userFrames.join('\n');
+  if (maxChars !== undefined && result.length > maxChars) {
+    result = result.slice(0, maxChars) + '\n[truncated]';
+  }
+  return result;
 }
