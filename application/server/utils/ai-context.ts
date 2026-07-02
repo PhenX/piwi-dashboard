@@ -1,4 +1,5 @@
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import {
   testRunsCases,
   testCases,
@@ -63,23 +64,62 @@ function section(
 }
 
 /**
- * Build the "## Data Coverage" block: a compact present/truncated/absent map of
- * the evidence available for this diagnosis, prepended to the AI context so the
- * model can ground its confidence in what it could actually see. The expected
- * section list is shared with the UI via `#shared/diagnosis-sections`.
+ * Sections that can only exist when a failure cluster is in scope. For an
+ * execution-scope diagnosis with no cluster these are structurally impossible,
+ * so the coverage block renders them "not applicable" rather than "absent" —
+ * otherwise the model learns to under-confidence for evidence it never could see.
  */
-function buildCoverageBlock(sections: ContextSection[]): string {
+/**
+ * Fixed per-image vision-token estimate. Anthropic bills an image at roughly
+ * (width × height) / 750 tokens; a typical Playwright screenshot lands near this
+ * value, and it is vastly closer to reality than counting base64 chars as text.
+ */
+const IMAGE_TOKEN_ESTIMATE = 1600;
+
+const CLUSTER_ONLY_SECTIONS = new Set<SectionId>([
+  'clusterSummary',
+  'sampleError',
+  'affectedTests',
+  'browserDistribution',
+  'recurrenceFlakiness',
+  'scmInvestigation',
+  'selectedCommits',
+  'topSuspectedCommit',
+  'priorDiagnosis',
+]);
+
+/**
+ * Build the "## Data Coverage" block: a compact present/absent/not-applicable map
+ * of the evidence available for this diagnosis, prepended to the AI context so the
+ * model can ground its confidence in what it could actually see. The expected
+ * section list is shared with the UI via `#shared/diagnosis-sections` and the
+ * applicable subset is scope-aware.
+ */
+function buildCoverageBlock(
+  sections: ContextSection[],
+  opts: { hasCluster: boolean; notApplicable?: Record<string, string> },
+): string {
   const byId = new Map<string, ContextSection>();
   for (const s of sections) if (!byId.has(s.id)) byId.set(s.id, s);
+  const notApplicable = opts.notApplicable ?? {};
 
   const lines = [
     '## Data Coverage',
-    'Evidence available for this diagnosis. Absent or truncated sections mean you are working with partial information — calibrate confidenceScore accordingly and do not assert what you could not see.',
+    'Evidence available for this diagnosis. Absent or truncated sections mean you are working with partial information — calibrate confidenceScore accordingly and do not assert what you could not see. Sections marked "not applicable" carry no signal for this scope; do not treat them as gaps.',
     '',
   ];
   for (const { id, label } of DIAGNOSIS_SECTIONS) {
     const s = byId.get(id);
-    const state = !s ? 'absent' : s.truncated ? 'present (truncated)' : 'present';
+    let state: string;
+    if (s) {
+      state = s.truncated ? 'present (truncated)' : 'present';
+    } else if (notApplicable[id]) {
+      state = `not applicable (${notApplicable[id]})`;
+    } else if (!opts.hasCluster && CLUSTER_ONLY_SECTIONS.has(id as SectionId)) {
+      state = 'not applicable (execution scope, no cluster)';
+    } else {
+      state = 'absent (no data)';
+    }
     lines.push(`- [${id}] ${label}: ${state}`);
   }
   return lines.join('\n');
@@ -224,8 +264,8 @@ async function browserDistributionSection(db: DbClient, cluster: FailureCluster)
   return `## Browser Distribution\n${browserSummary}`;
 }
 
-/** Latest run-case for this cluster, with its test info + run metadata — the diagnosis's main evidence. */
-async function loadRepresentativeExecution(db: DbClient, cluster: FailureCluster) {
+/** Shared select for an execution row + its test/run metadata. Filtered by the given `where`. */
+async function loadExecutionRow(db: DbClient, where: SQL) {
   const repRows = await db
     .select({
       id: testRunsCases.id,
@@ -253,7 +293,7 @@ async function loadRepresentativeExecution(db: DbClient, cluster: FailureCluster
     })
     .from(testRunsCases)
     .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
-    .where(eq(testRunsCases.failureClusterId, cluster.id))
+    .where(where)
     .orderBy(desc(testRunsCases.id))
     .limit(1);
 
@@ -286,7 +326,17 @@ async function loadRepresentativeExecution(db: DbClient, cluster: FailureCluster
   };
 }
 
-type RepresentativeRow = NonNullable<Awaited<ReturnType<typeof loadRepresentativeExecution>>>;
+/** Latest run-case for this cluster — the diagnosis's main evidence in cluster scope. */
+function loadRepresentativeExecution(db: DbClient, cluster: FailureCluster) {
+  return loadExecutionRow(db, eq(testRunsCases.failureClusterId, cluster.id));
+}
+
+/** A specific run-case by id — the diagnosis's main evidence in execution scope. */
+function loadExecutionById(db: DbClient, testRunsCaseId: number) {
+  return loadExecutionRow(db, eq(testRunsCases.id, testRunsCaseId));
+}
+
+type RepresentativeRow = NonNullable<Awaited<ReturnType<typeof loadExecutionRow>>>;
 
 /** Build a CI/run header string from the representative execution's run metadata (D4). */
 function ciRunHeaderLines(rep: RepresentativeRow): string[] {
@@ -1147,13 +1197,18 @@ async function locatorHealingSection(
   };
 }
 
-/** Header + error/source/steps/console/network/web-vitals/ARIA sub-sections from one execution. */
-function representativeExecutionSections(
+/**
+ * Header + error/source/steps/console/network/server-logs/web-vitals/ARIA
+ * sub-sections from one execution, each tagged with its `SectionId`. Returning
+ * ids (rather than a positional array) keeps every element self-labeling — the
+ * assembler no longer has to guess which slot holds which evidence.
+ */
+export function representativeExecutionSections(
   rep: RepresentativeRow,
-  cluster: FailureCluster,
+  cluster: FailureCluster | null,
   limits: ContextLimits,
-): string[] {
-  const out: string[] = [];
+): Array<{ id: SectionId; markdown: string }> {
+  const out: Array<{ id: SectionId; markdown: string }> = [];
 
   const browser = rep.browser as BrowserConfig | null;
   const browserStr = [browser?.projectName, browser?.browserName].filter(Boolean).join(' / ');
@@ -1171,15 +1226,16 @@ function representativeExecutionSections(
   // D4: CI/env/OS metadata
   headerLines.push(...ciRunHeaderLines(rep));
 
-  out.push(headerLines.join('\n'));
+  out.push({ id: 'representativeExecution', markdown: headerLines.join('\n') });
 
   // Direct error from this execution (may be more detailed than cluster sampleError)
-  if (rep.error && rep.error !== cluster.sampleError) {
+  if (rep.error && rep.error !== cluster?.sampleError) {
     const clean = stripAnsi(rep.error);
     const truncated = clean.slice(0, limits.sampleErrorChars);
-    out.push(
-      `### Execution Error\n\`\`\`\n${truncated}${clean.length > limits.sampleErrorChars ? '\n[truncated]' : ''}\n\`\`\``,
-    );
+    out.push({
+      id: 'executionError',
+      markdown: `### Execution Error\n\`\`\`\n${truncated}${clean.length > limits.sampleErrorChars ? '\n[truncated]' : ''}\n\`\`\``,
+    });
   }
 
   // D7: Test source — keep failing test body full, truncate surrounding
@@ -1201,25 +1257,30 @@ function representativeExecutionSections(
         source = source.slice(0, limits.testSourceChars);
       }
     }
-    out.push(`### Test Source\n\`\`\`typescript\n${source}${isTruncated ? '\n[truncated]' : ''}\n\`\`\``);
+    out.push({
+      id: 'testSource',
+      markdown: `### Test Source\n\`\`\`typescript\n${source}${isTruncated ? '\n[truncated]' : ''}\n\`\`\``,
+    });
   }
 
   // Steps
   const steps = (rep.steps as TestStepInfo[] | null) ?? [];
   if (steps.length > 0) {
     const shown = steps.slice(-limits.steps);
-    out.push(
-      `### Steps (last ${shown.length})\n${shown.map((s) => `- [${s.category ?? 'step'}] ${s.title}${s.duration != null ? ` (${s.duration}ms)` : ''}`).join('\n')}`,
-    );
+    out.push({
+      id: 'steps',
+      markdown: `### Steps (last ${shown.length})\n${shown.map((s) => `- [${s.category ?? 'step'}] ${s.title}${s.duration != null ? ` (${s.duration}ms)` : ''}`).join('\n')}`,
+    });
   }
 
   // D8: Console — include last N entries of any type in window before failure
   const consoleLogs = (rep.consoleLogs as ConsoleLogEntry[] | null) ?? [];
   const windowLogs = consoleLogs.slice(-limits.maxConsoleWindow);
   if (windowLogs.length > 0) {
-    out.push(
-      `### Console (last ${windowLogs.length} entries)\n${windowLogs.map((l) => `[${l.type}] ${l.text.slice(0, limits.consoleEntryChars)}`).join('\n')}`,
-    );
+    out.push({
+      id: 'console',
+      markdown: `### Console (last ${windowLogs.length} entries)\n${windowLogs.map((l) => `[${l.type}] ${l.text.slice(0, limits.consoleEntryChars)}`).join('\n')}`,
+    });
   }
 
   // D9: Network — add slow-but-2xx and stalled alongside failures
@@ -1234,7 +1295,7 @@ function representativeExecutionSections(
   for (const r of slowReqs)
     networkLines.push(`- [slow] ${r.method} ${r.url} → ${r.status}${r.duration != null ? ` (${r.duration}ms)` : ''}`);
   if (networkLines.length > 0) {
-    out.push(`### Network Requests\n${networkLines.join('\n')}`);
+    out.push({ id: 'networkRequests', markdown: `### Network Requests\n${networkLines.join('\n')}` });
   }
 
   // Backend server logs (aggregated from X-Piwi-Logs headers across all requests)
@@ -1259,7 +1320,7 @@ function representativeExecutionSections(
           }
         }
       }
-      out.push(`### Backend Server Logs\n${lines.join('\n')}`);
+      out.push({ id: 'serverLogs', markdown: `### Backend Server Logs\n${lines.join('\n')}` });
     }
   }
 
@@ -1273,19 +1334,33 @@ function representativeExecutionSections(
     if (nav?.loadComplete != null) lines.push(`- Load complete: ${nav.loadComplete}ms`);
     if (paint?.FCP != null) lines.push(`- FCP: ${paint.FCP}ms`);
     if (paint?.LCP != null) lines.push(`- LCP: ${paint.LCP}ms`);
-    if (lines.length > 0) out.push(`### Web Vitals\n${lines.join('\n')}`);
+    if (lines.length > 0) out.push({ id: 'webVitals', markdown: `### Web Vitals\n${lines.join('\n')}` });
   }
 
   // ARIA snapshot (content-aware truncation)
   if (rep.ariaSnapshot) {
     const truncated = selectAriaForBudget(rep.ariaSnapshot, limits.ariaSnapshotChars);
-    out.push(
-      `### ARIA Snapshot (page state at failure)\n\`\`\`yaml\n${truncated}${truncated.length < rep.ariaSnapshot.length ? '\n[truncated]' : ''}\n\`\`\``,
-    );
+    out.push({
+      id: 'ariaSnapshot',
+      markdown: `### ARIA Snapshot (page state at failure)\n\`\`\`yaml\n${truncated}${truncated.length < rep.ariaSnapshot.length ? '\n[truncated]' : ''}\n\`\`\``,
+    });
   }
 
   return out;
 }
+
+/** Human-readable section titles keyed by the ids emitted by `representativeExecutionSections`. */
+const REP_SECTION_TITLES: Partial<Record<SectionId, string>> = {
+  representativeExecution: 'Representative Execution',
+  executionError: 'Execution Error',
+  testSource: 'Test Source',
+  steps: 'Steps',
+  console: 'Console',
+  networkRequests: 'Network Requests',
+  serverLogs: 'Backend Server Logs',
+  webVitals: 'Web Vitals',
+  ariaSnapshot: 'ARIA Snapshot',
+};
 
 async function retryBehaviorSection(db: DbClient, cluster: FailureCluster): Promise<string | null> {
   const retryPassRows = await db
@@ -1305,46 +1380,81 @@ async function retryBehaviorSection(db: DbClient, cluster: FailureCluster): Prom
 }
 
 /**
- * Score a changed file by relevance to the failing test.
- * Higher score = more likely to be the cause.
+ * Signals about the failing test used to score how likely a changed file caused
+ * the failure. Kept ecosystem-agnostic — no assumptions about a specific repo
+ * layout — so scoring works for any user's repository.
  */
-function scoreChangedFile(filename: string, testFilePath?: string | null, ariaSnapshot?: string | null): number {
+export interface RelevanceSignals {
+  testFilePath?: string | null;
+  testTitle?: string | null;
+  ariaSnapshot?: string | null;
+  /** Failing test source, when in context — enables import-based scoring. */
+  testSource?: string | null;
+}
+
+/** Split a string into lowercase alphanumeric tokens of length ≥ 3. */
+function relevanceTokens(s: string): string[] {
+  return s
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2') // split camelCase
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3);
+}
+
+/** Extract the module specifiers from `import ... from '…'` / `require('…')`. */
+function extractImportSpecifiers(source: string): string[] {
+  const out: string[] = [];
+  for (const m of source.matchAll(/(?:from|require\s*\(|import\s*\()\s*['"]([^'"]+)['"]/g)) {
+    if (m[1]) out.push(m[1]);
+  }
+  return out;
+}
+
+/** Basename without directory or extension, lowercased. */
+function fileStem(path: string): string {
+  return (path.replace(/\\/g, '/').split('/').pop() ?? path).replace(/\.\w+$/, '').toLowerCase();
+}
+
+/**
+ * Score a changed file by relevance to the failing test using generic,
+ * repo-layout-independent signals. Higher score = more likely to be the cause.
+ * Exported for unit testing.
+ */
+export function scoreChangedFile(filename: string, signals: RelevanceSignals): number {
   let score = 0;
+  const fnLower = filename.toLowerCase().replace(/\\/g, '/');
+  const stem = fileStem(filename);
 
-  // +++ file path matches the failing test's route (derive from test file path)
-  if (testFilePath) {
-    // Direct match: the changed file IS the test file
-    if (filename === testFilePath) score += 3;
-    // Try to derive the page route from the test file path
-    // e.g. tests/user-management.spec.ts → app/pages/settings/users.vue
-    const testFileLower = testFilePath.toLowerCase().replace(/\\/g, '/');
-    const filenameLower = filename.toLowerCase().replace(/\\/g, '/');
-    // Check if filename contains parts of the test file name
-    const baseName = testFileLower.replace(/^.*[/\\]/, '').replace(/\.(spec|test)\.\w+$/, '');
-    if (filenameLower.includes(baseName)) score += 2;
+  // Strongest signal: the failing test imports this file (by basename match).
+  if (signals.testSource) {
+    for (const spec of extractImportSpecifiers(signals.testSource)) {
+      if (fileStem(spec) && fileStem(spec) === stem) {
+        score += 5;
+        break;
+      }
+    }
   }
 
-  // ++ file is a component under app/components/
-  if (filename.startsWith('app/components/') || filename.includes('/components/')) {
-    score += 2;
+  // The changed file IS the test file, or shares its base name.
+  if (signals.testFilePath) {
+    const tfLower = signals.testFilePath.toLowerCase().replace(/\\/g, '/');
+    if (fnLower === tfLower) score += 4;
+    const testBase = fileStem(signals.testFilePath).replace(/\.(spec|test)$/, '');
+    if (testBase && stem.includes(testBase)) score += 2;
   }
 
-  // ++ file name tokens match role/text from the ARIA snapshot
-  if (ariaSnapshot && filename.includes('/')) {
-    const baseName = filename.split('/').pop()?.toLowerCase() ?? '';
-    const ariaLower = ariaSnapshot.toLowerCase();
-    // Component name like "SectionCard" → check if it appears in the snapshot
-    const componentName = baseName
-      .replace(/\.\w+$/, '')
-      .replace(/([A-Z])/g, ' $1')
-      .trim()
-      .toLowerCase();
-    if (componentName && ariaLower.includes(componentName)) score += 2;
+  // Token overlap between the file name and the test title / ARIA page state.
+  const haystack = new Set<string>();
+  if (signals.testTitle) for (const t of relevanceTokens(signals.testTitle)) haystack.add(t);
+  if (signals.ariaSnapshot) for (const t of relevanceTokens(signals.ariaSnapshot)) haystack.add(t);
+  if (haystack.size > 0) {
+    for (const t of relevanceTokens(stem)) if (haystack.has(t)) score += 1;
   }
 
-  // + file is under app/ (source code vs config/test/docs)
-  if (filename.startsWith('app/')) {
-    score += 1;
+  // Prefer source files over config/lockfiles/docs (generic across ecosystems).
+  if (/(^|\/)(src|lib|app|packages|components|pages|server|api|routes)\//.test(fnLower)) score += 1;
+  if (/\.(lock|md|txt|ya?ml|toml|cfg|ini)$/.test(fnLower) || /(^|\/)package(-lock)?\.json$/.test(fnLower)) {
+    score -= 1;
   }
 
   return score;
@@ -1355,25 +1465,41 @@ interface ScoredFile {
   score: number;
 }
 
-function scoreFilesByRelevance(
-  files: ChangedFile[],
-  testFilePath?: string | null,
-  ariaSnapshot?: string | null,
-): ScoredFile[] {
+function scoreFilesByRelevance(files: ChangedFile[], signals: RelevanceSignals): ScoredFile[] {
   return files
-    .map((f) => ({ file: f, score: scoreChangedFile(f.filename, testFilePath, ariaSnapshot) }))
+    .map((f) => ({ file: f, score: scoreChangedFile(f.filename, signals) }))
     .sort((a, b) => b.score - a.score);
 }
 
-function getTopSuspectedCommit(
+/**
+ * The genuinely most-suspect change: the highest-relevance-scored changed file
+ * paired with the newest commit in the range (as the entry point to inspect).
+ * Returns null when nothing scored above zero — a wrong-but-confident hint is
+ * worse than none.
+ */
+function getTopSuspectedChange(
   scored: ScoredFile[],
   commits: Array<{ sha: string; message: string }>,
-): { sha: string; message: string } | null {
-  if (scored.length === 0 || commits.length === 0 || !scored[0]) return null;
+): { file: string; score: number; recentCommit: { sha: string; message: string } | null } | null {
   const topFile = scored[0];
-  if (topFile?.score === 0) return null;
-  // Return the most recent commit (last in the range, first in the array)
-  return commits[0] ?? null;
+  if (!topFile || topFile.score <= 0) return null;
+  return {
+    file: topFile.file.filename,
+    score: topFile.score,
+    recentCommit: commits[0] ?? null,
+  };
+}
+
+/** Render the "Top Suspected Change" section honestly: the scored file, then the newest commit. */
+function formatTopSuspectedChange(top: NonNullable<ReturnType<typeof getTopSuspectedChange>>): string {
+  const lines = [
+    `### Top Suspected Change`,
+    `- Most relevant changed file: \`${top.file}\` (relevance score ${top.score})`,
+  ];
+  if (top.recentCommit) {
+    lines.push(`- Most recent commit in range: \`${top.recentCommit.sha.slice(0, 7)}\` (${top.recentCommit.message})`);
+  }
+  return lines.join('\n');
 }
 
 /**
@@ -1385,10 +1511,8 @@ async function scmInvestigationSections(
   cluster: FailureCluster,
   opts: BuildContextOptions,
   limits: ContextLimits,
-  /** The failing test's file path, used for relevance scoring. */
-  testFilePath?: string | null,
-  /** The failing test's ARIA snapshot, used for relevance scoring. */
-  ariaSnapshot?: string | null,
+  /** Signals about the failing test, used for changed-file relevance scoring. */
+  signals: RelevanceSignals,
 ): Promise<{
   sections: string[];
   coverage: ScmCoverage | null;
@@ -1462,7 +1586,7 @@ async function scmInvestigationSections(
           const changes = provider ? await provider.fetchChanges(fromSha, regression.commitRange.toSha) : null;
           if (changes && (changes.commits.length > 0 || changes.files.length > 0)) {
             // Score and sort files by relevance, then render with budget
-            const scored = scoreFilesByRelevance(changes.files, testFilePath, ariaSnapshot);
+            const scored = scoreFilesByRelevance(changes.files, signals);
             changes.files = scored.map((s) => s.file);
             scmChanges = changes;
             scmCov.filesCount = changes.files.length;
@@ -1477,13 +1601,9 @@ async function scmInvestigationSections(
             scmCov.patchesTruncated = rendered.patchesTruncated;
             sections.push(rendered.text);
 
-            // Surface top suspected commit
-            const topCommit = getTopSuspectedCommit(scored, changes.commits);
-            if (topCommit) {
-              sections.push(
-                `### Top Suspected Change\nMost relevant change in range: \`${topCommit.sha.slice(0, 7)}\` (${topCommit.message})`,
-              );
-            }
+            // Surface the most-suspect changed file (by relevance) + newest commit
+            const top = getTopSuspectedChange(scored, changes.commits);
+            if (top) sections.push(formatTopSuspectedChange(top));
           }
         } catch {
           // silently skip if SCM fetch fails
@@ -1519,7 +1639,7 @@ async function scmInvestigationSections(
           const changes = provider ? await provider.fetchChanges(baseCommitOverride, currentCommit) : null;
           if (changes && (changes.commits.length > 0 || changes.files.length > 0)) {
             // Score and sort files by relevance
-            const scored = scoreFilesByRelevance(changes.files, testFilePath, null);
+            const scored = scoreFilesByRelevance(changes.files, signals);
             changes.files = scored.map((s) => s.file);
             scmChanges = changes;
             scmCov.filesCount = changes.files.length;
@@ -1534,12 +1654,8 @@ async function scmInvestigationSections(
             scmCov.patchesTruncated = rendered.patchesTruncated;
             sections.push(rendered.text);
 
-            const topCommit = getTopSuspectedCommit(scored, changes.commits);
-            if (topCommit) {
-              sections.push(
-                `### Top Suspected Change\nMost relevant change in range: \`${topCommit.sha.slice(0, 7)}\` (${topCommit.message})`,
-              );
-            }
+            const top = getTopSuspectedChange(scored, changes.commits);
+            if (top) sections.push(formatTopSuspectedChange(top));
           }
         } catch {
           // silently skip
@@ -1651,18 +1767,24 @@ export async function buildDiagnosisContext(
     if (cs) contextSections.push(cs);
   };
 
-  if (opts.kind === 'cluster') {
-    const cluster = await db
-      .select()
-      .from(failureClusters)
-      .where(eq(failureClusters.id, opts.clusterId))
-      .limit(1)
-      .then((r) => r[0] ?? null);
+  // Resolve the failure cluster: required in cluster scope, optional context in
+  // execution scope (only when the caller passes a clusterId).
+  const clusterId = opts.clusterId;
+  const cluster =
+    clusterId != null
+      ? await db
+          .select()
+          .from(failureClusters)
+          .where(eq(failureClusters.id, clusterId))
+          .limit(1)
+          .then((r) => r[0] ?? null)
+      : null;
 
-    if (!cluster) {
-      throw new Error(`Failure cluster ${opts.clusterId} not found`);
-    }
+  if (opts.kind === 'cluster' && !cluster) {
+    throw new Error(`Failure cluster ${opts.clusterId} not found`);
+  }
 
+  if (cluster) {
     clusterInfo = {
       id: cluster.id,
       signature: cluster.signature,
@@ -1670,177 +1792,169 @@ export async function buildDiagnosisContext(
       pattern: 'unknown',
     };
 
+    // Cluster-level summary sections.
     push(section('clusterSummary', 'Failure Cluster', clusterSummarySection(cluster)));
     push(section('sampleError', 'Sample Raw Error', sampleErrorSection(cluster, limits)));
     push(section('affectedTests', 'Affected Tests', await affectedTestsSection(db, cluster, limits), undefined));
     push(section('browserDistribution', 'Browser Distribution', await browserDistributionSection(db, cluster)));
+  }
 
-    const rep = await loadRepresentativeExecution(db, cluster);
-    if (rep) {
-      const repSections = representativeExecutionSections(rep, cluster, limits);
+  // The representative/target execution: latest in the cluster (cluster scope) or
+  // the specific run-case (execution scope).
+  const rep =
+    opts.kind === 'cluster'
+      ? cluster
+        ? await loadRepresentativeExecution(db, cluster)
+        : null
+      : await loadExecutionById(db, opts.testRunsCaseId);
 
-      // First item is the representative execution header
-      if (repSections.length > 0) {
-        push(section('representativeExecution', 'Representative Execution', repSections[0]));
-      }
+  if (rep) {
+    // Self-labeling per-execution sections (error/source/steps/console/network/
+    // server-logs/web-vitals/ARIA) — pushed by their own id, no positional guessing.
+    for (const s of representativeExecutionSections(rep, cluster, limits)) {
+      push(section(s.id, REP_SECTION_TITLES[s.id] ?? s.id, s.markdown));
+    }
 
-      // Second item (if present) is execution error
-      if (repSections.length > 1) {
-        push(section('executionError', 'Execution Error', repSections[1]));
-      }
+    // Failing steps (D6)
+    push(section('failingSteps', 'Failed Steps', failingStepsSection(rep, limits)));
 
-      // Test source
-      if (repSections.length > 2) {
-        push(section('testSource', 'Test Source', repSections[2]));
-      }
+    // Run context (partial run, parallelism, describe path, flaky class)
+    push(section('runContext', 'Run Context', runContextSection(rep)));
 
-      // Steps
-      if (repSections.length > 3) {
-        push(section('steps', 'Steps', repSections[3], undefined));
-      }
+    // Test annotations (@fixme/@flaky/@slow …)
+    push(section('testAnnotations', 'Test Annotations', testAnnotationsSection(rep)));
 
-      // Console
-      if (repSections.length > 4) {
-        push(section('console', 'Console', repSections[4]));
-      }
+    // Passed peers (with serial-mode detection)
+    const peersResult = await passedPeersSection(db, rep, limits);
+    if (peersResult.notApplicableReason) {
+      coverage = {
+        ...coverage,
+        notApplicable: { ...coverage.notApplicable, passedPeers: peersResult.notApplicableReason },
+      };
+    } else {
+      push(section('passedPeers', 'Passed Peers', peersResult.section));
+    }
 
-      // Network
-      if (repSections.length > 5) {
-        push(section('networkRequests', 'Network Requests', repSections[5]));
-      }
+    // Nearest accessible-name hint for locator failures
+    push(section('nearestAriaNames', 'Nearest Matching ARIA Names', nearestAriaNamesSection(rep)));
 
-      // Failing steps (D6)
-      push(section('failingSteps', 'Failed Steps', failingStepsSection(rep, limits)));
+    // Compared to last pass (duration/vitals/console/steps deltas) + already-green check
+    const baselineResult = await baselineComparisonSection(db, rep, cluster?.lastSeenRunId);
+    push(section('baselineComparison', 'Compared to Last Pass', baselineResult.section));
+    if (baselineResult.alreadyGreen) {
+      coverage = { ...coverage, alreadyGreen: true };
+    }
 
-      // Run context (partial run, parallelism, describe path, flaky class)
-      push(section('runContext', 'Run Context', runContextSection(rep)));
+    // Retry progression (per-attempt error evolution)
+    push(section('retryProgression', 'Retry Progression', await retryProgressionSection(db, rep)));
 
-      // Test annotations (@fixme/@flaky/@slow …)
-      push(section('testAnnotations', 'Test Annotations', testAnnotationsSection(rep)));
-
-      // Web vitals
-      const vitalsSub = repSections.find((s) => s.startsWith('### Web Vitals'));
-      if (vitalsSub) push(section('webVitals', 'Web Vitals', vitalsSub));
-
-      // ARIA snapshot (D7: smarter truncation)
-      const ariaSub = repSections.find((s) => s.startsWith('### ARIA Snapshot'));
-      if (ariaSub) push(section('ariaSnapshot', 'ARIA Snapshot', ariaSub));
-
-      // Server logs
-      const logsSub = repSections.find((s) => s.startsWith('### Backend Server Logs'));
-      if (logsSub) push(section('serverLogs', 'Backend Server Logs', logsSub));
-
-      // Passed peers (with serial-mode detection)
-      const peersResult = await passedPeersSection(db, rep, limits);
-      if (peersResult.notApplicableReason) {
-        coverage = {
-          ...coverage,
-          notApplicable: { ...coverage.notApplicable, passedPeers: peersResult.notApplicableReason },
-        };
-      } else {
-        push(section('passedPeers', 'Passed Peers', peersResult.section));
-      }
-
-      // Nearest accessible-name hint for locator failures
-      push(section('nearestAriaNames', 'Nearest Matching ARIA Names', nearestAriaNamesSection(rep)));
-
-      // Compared to last pass (duration/vitals/console/steps deltas) + already-green check
-      const baselineResult = await baselineComparisonSection(db, rep, cluster.lastSeenRunId);
-      push(section('baselineComparison', 'Compared to Last Pass', baselineResult.section));
-      if (baselineResult.alreadyGreen) {
-        coverage = { ...coverage, alreadyGreen: true };
-      }
-
-      // Retry progression (per-attempt error evolution)
-      push(section('retryProgression', 'Retry Progression', await retryProgressionSection(db, rep)));
-
-      // D2/D3: Recurrence & flakiness
-      const flakinessText = await recurrenceFlakinessSection(db, cluster);
+    // D2/D3: Recurrence & flakiness (cluster-scoped) — the retry-behavior one-liner
+    // is folded in here rather than mislabeled as its own section.
+    if (cluster) {
+      let flakinessText = await recurrenceFlakinessSection(db, cluster);
+      const retryText = await retryBehaviorSection(db, cluster);
+      if (retryText) flakinessText = flakinessText ? `${flakinessText}\n\n${retryText}` : retryText;
       push(section('recurrenceFlakiness', 'Recurrence & Flakiness', flakinessText));
 
-      if (flakinessText) {
+      if (flakinessText && clusterInfo) {
         if (flakinessText.includes('intermittent')) clusterInfo.pattern = 'intermittent';
         else if (flakinessText.includes('persistent')) clusterInfo.pattern = 'persistent';
       }
-
-      // D12: Trace pointers
-      push(section('tracePointers', 'Trace Files', await tracePointersSection(db, rep)));
-
-      // B1: Failing action from trace parsing
-      push(section('failingAction', 'Failing Action (from Trace)', await failingActionSection(db, rep, limits)));
-
-      // Alternative locators from prior success / ARIA snapshot
-      const healing = await locatorHealingSection(db, rep);
-      push(section('locatorHealing', 'Alternative Locators (Locator Healing)', healing.section));
-      if (healing.coverage) {
-        coverage = { ...coverage, locatorHealing: healing.coverage };
-      }
-
-      // Attachments & artifacts (video, HAR, custom files) — pointers only
-      push(section('artifacts', 'Attachments & Artifacts', await artifactsSection(db, rep)));
-
-      // D1: Auto-resolve screenshots
-      images = await resolveScreenshots(db, rep, limits);
-      if (images.length > 0) {
-        for (const img of images) {
-          contextSections.push({
-            id: 'screenshots' as SectionId,
-            title: `Screenshot: ${img.name}`,
-            chars: img.data.length,
-            truncated: false,
-            markdown: `![${img.name}](/api/files/screenshot)`,
-          });
-        }
-      }
-
-      // SCM investigation (network fetch) — skippable for the lean research pass
-      if (!opts.skipScm) {
-        const scm = await scmInvestigationSections(db, cluster, opts, limits, rep.testFilePath, rep.ariaSnapshot);
-        for (const s of scm.sections) {
-          if (s.startsWith('## What Changed')) {
-            push(section('scmInvestigation', 'SCM Investigation', s));
-          }
-          // Top suspected commit section
-          if (s.startsWith('### Top Suspected Change')) {
-            push(section('topSuspectedCommit', 'Top Suspected Commit', s));
-          }
-        }
-        coverage = { ...coverage, scm: scm.coverage };
-        scmChanges = scm.scmChanges;
-
-        // Selected commits (network fetch)
-        push(
-          section(
-            'selectedCommits',
-            'Manually Selected Commits',
-            await selectedCommitsSection(db, cluster, opts, limits),
-          ),
-        );
-      }
-
-      // Retry behavior (DB only; kept for backward compat — folded into recurrenceFlakiness)
-      push(section('scmInvestigation', 'SCM Investigation', await retryBehaviorSection(db, cluster)));
     }
 
-    // D10: Prior diagnosis + triage note
+    // D12: Trace pointers
+    push(section('tracePointers', 'Trace Files', await tracePointersSection(db, rep)));
+
+    // B1: Failing action from trace parsing
+    push(section('failingAction', 'Failing Action (from Trace)', await failingActionSection(db, rep, limits)));
+
+    // Alternative locators from prior success / ARIA snapshot
+    const healing = await locatorHealingSection(db, rep);
+    push(section('locatorHealing', 'Alternative Locators (Locator Healing)', healing.section));
+    if (healing.coverage) {
+      coverage = { ...coverage, locatorHealing: healing.coverage };
+    }
+
+    // Attachments & artifacts (video, HAR, custom files) — pointers only
+    push(section('artifacts', 'Attachments & Artifacts', await artifactsSection(db, rep)));
+
+    // D1: Auto-resolve screenshots. `chars` reflects the markdown reference only;
+    // the base64 image payload is billed as vision tokens, estimated separately.
+    images = await resolveScreenshots(db, rep, limits);
+    if (images.length > 0) {
+      for (const img of images) {
+        const markdown = `![${img.name}](/api/files/screenshot)`;
+        contextSections.push({
+          id: 'screenshots',
+          title: `Screenshot: ${img.name}`,
+          chars: markdown.length,
+          truncated: false,
+          markdown,
+        });
+      }
+    }
+
+    // SCM investigation (network fetch, cluster-scoped) — skippable for the lean research pass
+    if (cluster && !opts.skipScm) {
+      const scm = await scmInvestigationSections(db, cluster, opts, limits, {
+        testFilePath: rep.testFilePath,
+        testTitle: rep.testTitle,
+        ariaSnapshot: rep.ariaSnapshot,
+        testSource: rep.testSource,
+      });
+      for (const s of scm.sections) {
+        if (s.startsWith('## What Changed')) {
+          push(section('scmInvestigation', 'SCM Investigation', s));
+        }
+        // Top suspected change section
+        if (s.startsWith('### Top Suspected Change')) {
+          push(section('topSuspectedCommit', 'Top Suspected Commit', s));
+        }
+      }
+      coverage = { ...coverage, scm: scm.coverage };
+      scmChanges = scm.scmChanges;
+
+      // Selected commits (network fetch)
+      push(
+        section(
+          'selectedCommits',
+          'Manually Selected Commits',
+          await selectedCommitsSection(db, cluster, opts, limits),
+        ),
+      );
+    }
+  }
+
+  // D10: Prior diagnosis + triage note (cluster-scoped)
+  if (cluster) {
     push(section('priorDiagnosis', 'Prior Assessment', await priorDiagnosisSection(db, cluster)));
   }
 
-  const coverageBlock = buildCoverageBlock(contextSections);
+  const coverageBlock = buildCoverageBlock(contextSections, {
+    hasCluster: Boolean(cluster),
+    notApplicable: coverage.notApplicable,
+  });
   const text = [coverageBlock, ...contextSections.map((s) => s.markdown).filter(Boolean)].join('\n\n');
-  const totalChars = contextSections.reduce((sum, s) => sum + s.chars, 0) + coverageBlock.length;
+  const textChars = contextSections.reduce((sum, s) => sum + s.chars, 0) + coverageBlock.length;
+
+  // Images are billed as vision tokens (fixed per-image estimate), not as the
+  // base64 text length — counting the base64 as text over-estimates by ~100×.
+  const imageTokenEstimate = (images?.length ?? 0) * IMAGE_TOKEN_ESTIMATE;
+  const textTokenEstimate = Math.ceil(textChars / 4);
 
   return {
     scope:
       opts.kind === 'cluster'
         ? { kind: 'cluster', clusterId: opts.clusterId }
-        : { kind: 'execution', testRunsCaseId: (opts as { testRunsCaseId: number }).testRunsCaseId },
+        : { kind: 'execution', testRunsCaseId: opts.testRunsCaseId },
     text,
     sections: contextSections,
     coverage,
     scmChanges,
     images,
-    tokenEstimate: Math.ceil(totalChars / 4),
+    tokenEstimate: textTokenEstimate + imageTokenEstimate,
+    textTokenEstimate,
+    imageTokenEstimate,
     cluster: clusterInfo,
   };
 }
