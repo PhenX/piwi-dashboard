@@ -197,10 +197,47 @@ function extractErrorLocation(error: string): string | null {
 }
 
 /**
- * Generate basic alternatives from ARIA snapshot text.
- * Limited — only role + name, label, placeholder, text. No HTML attrs.
+ * TEXTSM_ROLES — roles whose visible text content matches what `getByText`
+ * inspects, so a `getByText` alternative is valid when the element bears one
+ * of these roles. Mirrors `freshLocatorsFromCandidate` in locator-fingerprint.ts
+ * so the ARIA fallback ladder generates the same shape as the element-match path.
  */
-function generateFromAriaSnapshot(ariaSnapshot: string | null): RankedLocator[] | null {
+const TEXT_CONTENT_ROLES = new Set([
+  'button',
+  'link',
+  'heading',
+  'menuitem',
+  'option',
+  'tab',
+  'listitem',
+  'cell',
+  'rowheader',
+  'columnheader',
+  'combobox',
+  'alert',
+  'status',
+  'label',
+  'legend',
+  'caption',
+  'term',
+]);
+
+/**
+ * Generate alternatives from ARIA snapshot text, filtered and scored by
+ * relevance to the failing locator. Previously this dumped every named element
+ * on the page with a flat score of 40 — a sidebar button and the actual
+ * replacement heading were scored identically, and since all scores were equal,
+ * the first element in ARIA tree order (always nav/sidebar) "won".
+ *
+ * Now the function accepts the failing locator's args so it can:
+ * 1. Filter to elements whose accessible name overlaps the failing text
+ * 2. Score proportionally to token overlap
+ * 3. Generate `getByText` alternatives for text-bearing roles
+ */
+function generateFromAriaSnapshot(
+  ariaSnapshot: string | null,
+  failingLocator: { method: string; args: Record<string, unknown> } | null,
+): RankedLocator[] | null {
   if (!ariaSnapshot) return null;
 
   const alts: RankedLocator[] = [];
@@ -215,31 +252,89 @@ function generateFromAriaSnapshot(ariaSnapshot: string | null): RankedLocator[] 
 
   const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
-  // Reuse the shared ARIA parser so escaped quotes in accessible names are
-  // unescaped consistently (the previous inline regex dropped them) and the
-  // structural-wrapper filtering stays in one place.
-  for (const { role, name } of parseAriaCandidates(ariaSnapshot)) {
+  // Extract the failing text: the string literal(s) the test was searching for.
+  const failingText = extractFailingText(failingLocator);
+  const failingTokens = failingText ? tokenize(failingText) : null;
+
+  // Collect all candidates first so we can apply a position bonus (content-area
+  // elements appear later in the ARIA tree than sidebar/nav). Without this, the
+  // sidebar wins every time because all scores were identical.
+  const candidates = parseAriaCandidates(ariaSnapshot);
+  const totalCandidates = candidates.length;
+
+  for (let idx = 0; idx < candidates.length; idx++) {
+    const { role, name } = candidates[idx]!;
     if (!name) continue;
+
+    // Score: 40 base + text-overlap bonus (Jaccard similarity, 0–25)
+    // + position bonus (0–10, linear across the tree order). Content-area
+    // elements sit after the sidebar so they naturally score higher.
+    let score = 40;
+    if (failingTokens && failingTokens.size > 0) {
+      const nameTokens = tokenize(name);
+      const intersection = [...nameTokens].filter((t) => failingTokens.has(t)).length;
+      const union = failingTokens.size + nameTokens.size - intersection;
+      if (intersection > 0 && union > 0) {
+        score += Math.round((intersection / union) * 25);
+      }
+    }
+    // Position bonus: later elements in the ARIA tree are more likely to
+    // be content than sidebar. Linear 0–10 ramp across all candidates.
+    if (totalCandidates > 1) {
+      score += Math.round((idx / (totalCandidates - 1)) * 10);
+    }
 
     add({
       locator: `getByRole('${role}', { name: '${esc(name)}' })`,
       method: 'getByRole',
       args: { role, name },
-      score: 40,
+      score,
     });
+
+    // getByText for roles whose visible text `getByText` inspects
+    if (TEXT_CONTENT_ROLES.has(role)) {
+      add({
+        locator: `getByText('${esc(name)}')`,
+        method: 'getByText',
+        args: { text: name },
+        score: score - 5, // slightly below the role-based locator
+      });
+    }
 
     if (['textbox', 'combobox', 'searchbox'].includes(role)) {
       add({
         locator: `getByLabel('${esc(name)}')`,
         method: 'getByLabel',
         args: { label: name },
-        score: 35,
+        score: score - 5,
       });
     }
   }
 
   if (alts.length === 0) return null;
-  return alts.sort((a, b) => b.score - a.score);
+  return alts.sort((a, b) => b.score - a.score).slice(0, 8);
+}
+
+/**
+ * Extract the first meaningful string argument from a failing locator as
+ * lowercase tokens for relevance comparison. For getByText/getByLabel/
+ * getByPlaceholder/getByAltText getByTitle, this is the primary text argument.
+ * For getByRole, it's the name option.
+ */
+function extractFailingText(locator: { method: string; args: Record<string, unknown> } | null): string | null {
+  if (!locator) return null;
+  const a = locator.args;
+  const text = (a.text ?? a.label ?? a.placeholder ?? a.alt ?? a.title ?? a.name) as string | undefined;
+  return text?.toLowerCase().trim() || null;
+}
+
+function tokenize(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .split(/[\s\-_.:,;!?()[\]{}'"\\/]+/)
+      .filter((t) => t.length > 0),
+  );
 }
 
 /**
@@ -274,9 +369,60 @@ function buildHealingResult(
  */
 function fingerprintFromSnapshot(priorAlts: RankedLocator[] | null, row: LocatorSnapshotRow): ElementFingerprint {
   const roleAlt = priorAlts?.find((a) => a.method === 'getByRole');
-  const role = typeof roleAlt?.args?.role === 'string' ? roleAlt.args.role : null;
+  let role = typeof roleAlt?.args?.role === 'string' ? roleAlt.args.role : null;
+  // Fall back to the stored HTML element tag when no getByRole was captured
+  // (common for getByText locators on <span>/<div>). Map semantic elements to
+  // their implicit ARIA role so the renamed-element match stays scoped.
+  if (!role && row.elementTag) {
+    role = implicitRoleForTag(row.elementTag);
+  }
   const name = typeof roleAlt?.args?.name === 'string' ? roleAlt.args.name : (row.elementText ?? null);
   return { role, name };
+}
+
+/**
+ * Map HTML element tags to their implicit ARIA roles so the element-match
+ * fingerprint retains role-based scoping even when the stored alternatives
+ * had no getByRole entry (which happens for getByText locators on elements
+ * without explicit role attributes).
+ */
+function implicitRoleForTag(tag: string): string | null {
+  const MAP: Record<string, string> = {
+    a: 'link',
+    button: 'button',
+    h1: 'heading',
+    h2: 'heading',
+    h3: 'heading',
+    h4: 'heading',
+    h5: 'heading',
+    h6: 'heading',
+    img: 'img',
+    input: 'textbox',
+    textarea: 'textbox',
+    select: 'combobox',
+    nav: 'navigation',
+    main: 'main',
+    aside: 'complementary',
+    header: 'banner',
+    footer: 'contentinfo',
+    form: 'form',
+    table: 'table',
+    ul: 'list',
+    ol: 'list',
+    li: 'listitem',
+    section: 'region',
+    article: 'article',
+    dialog: 'dialog',
+    label: 'label',
+    figcaption: 'caption',
+    legend: 'legend',
+    td: 'cell',
+    th: 'columnheader',
+    tr: 'row',
+    option: 'option',
+    menuitem: 'menuitem',
+  };
+  return MAP[tag.toLowerCase()] ?? null;
 }
 
 /**
@@ -369,7 +515,7 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
   }
 
   // Ladder 3: ARIA snapshot fallback
-  const ariaAlts = generateFromAriaSnapshot(row.ariaSnapshot ?? null);
+  const ariaAlts = generateFromAriaSnapshot(row.ariaSnapshot ?? null, failingLocator);
   if (ariaAlts) {
     return buildHealingResult(failingLocator, null, ariaAlts, 'aria-snapshot');
   }
@@ -449,7 +595,7 @@ export async function getLocatorHealingBatch(
     }
 
     // Ladder 3: ARIA fallback
-    const ariaAlts = generateFromAriaSnapshot(row.ariaSnapshot ?? null);
+    const ariaAlts = generateFromAriaSnapshot(row.ariaSnapshot ?? null, failingLocator);
     if (ariaAlts) {
       results.set(row.id, buildHealingResult(failingLocator, null, ariaAlts, 'aria-snapshot'));
       continue;

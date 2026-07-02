@@ -1639,7 +1639,10 @@ function getTopSuspectedChange(
   commits: Array<{ sha: string; message: string }>,
 ): { file: string; score: number; recentCommit: { sha: string; message: string } | null } | null {
   const topFile = scored[0];
-  if (!topFile || topFile.score <= 0) return null;
+  // Only show a file as "most relevant" when the signal is genuine — a score
+  // of ≤ 2 means the file happened to share a generic path prefix or one common
+  // word; a wrong-but-confident hint is worse than none.
+  if (!topFile || topFile.score <= 2) return null;
   return {
     file: topFile.file.filename,
     score: topFile.score,

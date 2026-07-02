@@ -642,7 +642,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
             <ChartCard
               v-if="project?.testRuns && project.testRuns.length > 0"
               title="Run trend"
-              :subtitle="`Test run stats over time for ${project?.label || project?.name}`"
+              :subtitle="`Test run statistics over time for ${project?.label || project?.name}`"
               help="project.runs-trend"
             >
               <TestRunsChart :test-runs="chartRuns" :height="200" />
