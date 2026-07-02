@@ -40,8 +40,15 @@ const PRESENT_SIMILARITY = 0.8;
 /** Minimum name similarity to accept a match when several same-role candidates compete. */
 const MATCH_SIMILARITY = 0.2;
 
-/** Roles whose accessible name comes from their visible text — `getByText` is viable. */
-const TEXT_CONTENT_ROLES = new Set([
+/**
+ * Roles whose accessible name comes from their visible text — `getByText` is
+ * viable. The single source of truth shared by fresh-locator generation
+ * (`freshLocatorsFromCandidate`, below) and the server's ARIA-fallback healing
+ * (`generateFromAriaSnapshot` in server/utils/locator-healing.ts): both emit a
+ * `getByText` alternative for these roles, whose visible text content is exactly
+ * what `getByText` matches.
+ */
+export const TEXT_CONTENT_ROLES = new Set([
   'button',
   'link',
   'heading',

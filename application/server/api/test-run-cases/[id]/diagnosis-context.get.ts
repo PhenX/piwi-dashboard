@@ -63,6 +63,8 @@ export default eventHandler(async (event) => {
       coverage: ctx.coverage,
       scmChanges: ctx.scmChanges,
       tokenEstimate: ctx.tokenEstimate,
+      textTokenEstimate: ctx.textTokenEstimate,
+      imageTokenEstimate: ctx.imageTokenEstimate,
       cluster: ctx.cluster,
     };
   }

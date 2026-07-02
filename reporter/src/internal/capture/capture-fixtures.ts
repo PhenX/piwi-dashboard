@@ -108,6 +108,40 @@ const FORM_FIELD_TAGS = new Set(['input', 'select', 'textarea']);
 // it once instead of spreading a fresh array per call.
 const CAPTURED_ATTRS_ARG: string[] = [...CAPTURED_ATTRIBUTES];
 
+/**
+ * ARIA snapshot that tolerates every Playwright version the reporter supports,
+ * returning null instead of throwing so a capture can never fail the test. The
+ * options validator runs client-side in the user's installed Playwright, so an
+ * unsupported key surfaces as a rejected promise (not a synchronous throw):
+ *   - ≥ 1.59: `mode: 'ai'` yields the ref-annotated AI snapshot (the ideal);
+ *     `ref` is unknown and silently stripped.
+ *   - 1.52: `mode: 'ai'` fails validation (only 'raw'/'regex' are accepted) and
+ *     rejects; the `{ ref: true }` fallback then yields a ref-annotated snapshot.
+ *   - 1.53–1.58: neither `ref` nor `mode` exists — unknown keys are stripped
+ *     server-side, so the first call already returns a plain flat snapshot.
+ *   - < 1.49: `locator.ariaSnapshot` does not exist — returns null up front.
+ */
+async function ariaSnapshotBestEffort(target: Locator, timeout?: number): Promise<string | null> {
+  // Playwright < 1.49 predates locator.ariaSnapshot entirely.
+  if (typeof target.ariaSnapshot !== 'function') return null;
+  try {
+    return await target.ariaSnapshot({
+      ...(timeout != null ? { timeout } : {}),
+      mode: 'ai',
+    } as Parameters<Locator['ariaSnapshot']>[0]);
+  } catch {
+    // 1.52 rejects `mode: 'ai'`; retry with the `ref` flag that release accepts.
+    try {
+      return await target.ariaSnapshot({
+        ...(timeout != null ? { timeout } : {}),
+        ref: true,
+      } as Parameters<Locator['ariaSnapshot']>[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
 // Chain methods that take args and define a new locator scope (not just narrow).
 // Origin method/args update to the chain call, e.g. .locator('.item') → locator('.item').
 // Positional/filter chains that narrow but don't change locator identity.
@@ -207,10 +241,9 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
             // Bound with a timeout: without it, ariaSnapshot waits up to the
             // test timeout when the page is mid-navigation, which hangs the
             // teardown that drains these capture promises.
-            // `ref` is a valid runtime flag but absent from the installed
-            // @playwright/test option types, so cast the options to keep passing it.
-            const ariaOpts = { ref: true, timeout: 500 } as Parameters<Locator['ariaSnapshot']>[0];
-            const aria = role || isFormField ? await target.ariaSnapshot(ariaOpts).catch(() => null) : null;
+            // ariaSnapshotBestEffort adapts the options to the installed
+            // Playwright version and never throws (see its doc comment).
+            const aria = role || isFormField ? await ariaSnapshotBestEffort(target, 500) : null;
 
             const accessibleName =
               extractAccessibleName(aria) || approximateAccessibleName({ ...attrs, accessibleName: null });
@@ -402,7 +435,7 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
 
   if (page && testInfo.status !== 'passed' && testInfo.status !== 'skipped') {
     try {
-      const snapshot = await page.locator(':root').ariaSnapshot();
+      const snapshot = await ariaSnapshotBestEffort(page.locator(':root'));
       if (snapshot) {
         await testInfo.attach(ATTACHMENT_NAMES.ariaSnapshot, {
           contentType: 'text/plain',

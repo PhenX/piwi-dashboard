@@ -40,6 +40,7 @@ export interface ClusterDiagnosisStore {
   contextText: Ref<string | null>;
   contextSections: Ref<ContextSection[]>;
   tokenEstimate: Ref<number>;
+  imageTokenEstimate: Ref<number>;
   coverage: Ref<DiagnosisContextCoverage | null>;
   scmChanges: Ref<ScmChanges | null>;
   contextLoading: Ref<boolean>;
@@ -65,6 +66,7 @@ function createClusterDiagnosisStore(clusterId: number): ClusterDiagnosisStore {
   const contextText = ref<string | null>(null);
   const contextSections = ref<ContextSection[]>([]);
   const tokenEstimate = ref(0);
+  const imageTokenEstimate = ref(0);
   const coverage = ref<DiagnosisContextCoverage | null>(null);
   const scmChanges = ref<ScmChanges | null>(null);
   const contextLoading = ref(false);
@@ -87,6 +89,7 @@ function createClusterDiagnosisStore(clusterId: number): ClusterDiagnosisStore {
     text: string;
     sections: ContextSection[];
     tokenEstimate: number;
+    imageTokenEstimate?: number;
     coverage: DiagnosisContextCoverage;
     scmChanges: ScmChanges | null;
   }
@@ -100,12 +103,14 @@ function createClusterDiagnosisStore(clusterId: number): ClusterDiagnosisStore {
       contextText.value = res.text;
       contextSections.value = res.sections;
       tokenEstimate.value = res.tokenEstimate;
+      imageTokenEstimate.value = res.imageTokenEstimate ?? 0;
       coverage.value = res.coverage;
       scmChanges.value = res.scmChanges ?? null;
     } catch {
       contextText.value = '(failed to load context)';
       contextSections.value = [];
       tokenEstimate.value = 0;
+      imageTokenEstimate.value = 0;
       coverage.value = null;
       scmChanges.value = null;
     } finally {
@@ -245,6 +250,7 @@ function createClusterDiagnosisStore(clusterId: number): ClusterDiagnosisStore {
     contextText,
     contextSections,
     tokenEstimate,
+    imageTokenEstimate,
     coverage,
     scmChanges,
     contextLoading,

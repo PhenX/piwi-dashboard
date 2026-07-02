@@ -38,6 +38,7 @@ export type SectionId =
   | 'serverLogs'
   | 'webVitals'
   | 'ariaSnapshot'
+  | 'screenshots'
   | 'recurrenceFlakiness'
   | 'baselineComparison'
   | 'retryProgression'
@@ -69,7 +70,12 @@ export interface BuiltDiagnosisContext {
   coverage: DiagnosisContextCoverage;
   scmChanges: ScmChanges | null;
   images?: AiAttachedImage[];
+  /** Total estimated input tokens (text + images). */
   tokenEstimate: number;
+  /** Estimated tokens from the text context alone (≈ chars / 4). */
+  textTokenEstimate: number;
+  /** Estimated tokens from attached images (fixed per-image vision cost). */
+  imageTokenEstimate: number;
   cluster?: {
     id: number;
     signature: string;

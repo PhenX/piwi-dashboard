@@ -621,3 +621,46 @@ test.describe.serial('Cluster reconciliation, suggestions & naming', () => {
     expect(clusters[0].title).toMatch(/^Mock cluster \d+$/);
   });
 });
+
+// ── Execution-scope context (Tier 0.1 regression guard) ─────────────────────────
+
+test.describe('Execution-scope diagnosis context', () => {
+  test('GET /api/test-run-cases/:id/diagnosis-context builds a non-trivial context', async ({ request }) => {
+    const uniqueError = `Error: expect(locator).toBeVisible() failed\n  locator: getByRole('button', { name: 'Pay' }) (${Date.now()})`;
+    const { testRunId } = await submitRun(request, [
+      {
+        title: 'checkout flow',
+        status: 'failed',
+        duration: 1200,
+        location: 'tests/checkout.spec.ts:12:3',
+        error: uniqueError,
+      },
+    ]);
+
+    const runData = (await (await request.get(`/api/test-runs/${testRunId}`)).json()) as {
+      testCases: Array<{ id: number; status: string }>;
+    };
+    const failed = runData.testCases.find((c) => c.status === 'failed');
+    expect(failed?.id).toBeTruthy();
+
+    const res = await request.get(`/api/test-run-cases/${failed!.id}/diagnosis-context?format=json`);
+    expect(res.ok()).toBeTruthy();
+    const body = (await res.json()) as {
+      scope: { kind: string; testRunsCaseId: number };
+      sections: Array<{ id: string; markdown: string }>;
+      text: string;
+      tokenEstimate: number;
+    };
+
+    // Before 0.1 the execution branch returned only a Data Coverage block with
+    // every section "absent" — assert we now get real evidence.
+    expect(body.scope.kind).toBe('execution');
+    expect(body.scope.testRunsCaseId).toBe(failed!.id);
+    expect(body.sections.length).toBeGreaterThanOrEqual(3);
+    expect(body.sections.map((s) => s.id)).toContain('representativeExecution');
+    // The failing error must reach the context (somewhere), not be dropped.
+    expect(body.text).toContain('toBeVisible');
+    expect(body.text).toContain('## Data Coverage');
+    expect(body.tokenEstimate).toBeGreaterThan(0);
+  });
+});

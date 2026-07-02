@@ -15,7 +15,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@piwitests/reporter"><img src="https://img.shields.io/npm/v/@piwitests/reporter?logo=npm&labelColor=020420&color=CB3837" alt="npm"></a>
-  <a href="https://hub.docker.com/r/phenx/piwi-dashboard"><img src="https://img.shields.io/docker/v/phenx/piwi-dashboard?logo=docker&labelColor=020420&color=2496ED" alt="Docker"></a>
+  <a href="https://hub.docker.com/r/phenx/piwitests-server"><img src="https://img.shields.io/docker/v/phenx/piwitests-server?logo=docker&labelColor=020420&color=2496ED" alt="Docker"></a>
   <a href="https://github.com/piwitests/platform/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/piwitests/platform/ci.yml?branch=main&logo=githubactions&logoColor=white&labelColor=020420&label=CI" alt="CI status"></a>
   <a href="https://github.com/piwitests/platform/stargazers"><img src="https://img.shields.io/github/stars/piwitests/platform?logo=github&labelColor=020420&color=f59e0b" alt="GitHub stars"></a>
 </p>
@@ -45,12 +45,12 @@ Native Playwright HTML reports are great for local debugging — but they're eph
 
 ```bash
 # Linux / macOS
-docker run -p 3000:3000 -v $(pwd)/.data:/app/.data phenx/piwi-dashboard:latest
+docker run -p 3000:3000 -v $(pwd)/.data:/app/.data phenx/piwitests-server:latest
 ```
 
 ```powershell
 # Windows (PowerShell)
-docker run -p 3000:3000 -v ${PWD}/.data:/app/.data phenx/piwi-dashboard:latest
+docker run -p 3000:3000 -v ${PWD}/.data:/app/.data phenx/piwitests-server:latest
 ```
 
 Visit `http://localhost:3000`.

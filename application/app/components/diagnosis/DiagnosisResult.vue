@@ -29,6 +29,13 @@ const showNoteEditor = ref(false);
 const localFeedback = ref<string | null>(null);
 const localFeedbackNote = ref<string | undefined>(undefined);
 
+const checkedSteps = reactive(new Set<number>());
+
+watch(
+  () => props.diagnosis?.id,
+  () => checkedSteps.clear(),
+);
+
 watch(
   () => props.diagnosis?.feedback,
   (v) => {
@@ -543,9 +550,19 @@ const pipeline = computed<Array<{ role: string; model: string }>>(() => {
           <li
             v-for="(s, i) in details.investigationSteps"
             :key="i"
-            class="text-sm text-gray-600 dark:text-gray-400 flex gap-1.5"
+            class="text-sm flex gap-2 items-start cursor-pointer select-none"
+            :class="
+              checkedSteps.has(Number(i))
+                ? 'text-gray-400 dark:text-gray-500 line-through'
+                : 'text-gray-600 dark:text-gray-400'
+            "
+            @click="checkedSteps.has(Number(i)) ? checkedSteps.delete(Number(i)) : checkedSteps.add(Number(i))"
           >
-            <UIcon name="i-lucide-search-check" class="size-3.5 shrink-0 mt-0.5 text-primary" />
+            <UIcon
+              :name="checkedSteps.has(Number(i)) ? 'i-lucide-check-square' : 'i-lucide-square'"
+              class="size-4 shrink-0 mt-0.5"
+              :class="checkedSteps.has(Number(i)) ? 'text-primary' : 'text-gray-400'"
+            />
             {{ s }}
           </li>
         </ul>

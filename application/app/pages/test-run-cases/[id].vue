@@ -3,6 +3,7 @@ import type { PerformanceStep, WebVitals, NetworkRequest, TestCaseHistoryPoint, 
 import type { TableColumn } from '@nuxt/ui';
 import { getPerformanceHints } from '~/utils/performance-hints';
 import { renderAnsi } from '~/utils';
+import { condenseErrorText } from '#shared/error-fingerprint';
 
 const route = useRoute();
 const testCaseId = route.params.id;
@@ -147,6 +148,11 @@ const stepCategoryColor: Record<string, 'info' | 'success' | 'warning' | 'neutra
 };
 
 const stepColumns: TableColumn<PerformanceStep>[] = [
+  {
+    id: 'status',
+    header: '',
+    size: 32,
+  },
   {
     accessorKey: 'category',
     header: 'Category',
@@ -339,16 +345,16 @@ function copyFailure() {
                 />
               </UTooltip>
             </template>
-            <pre
-              class="text-xs font-mono whitespace-pre-wrap break-words text-red-600 dark:text-red-400 max-h-96 overflow-y-auto"
-              >{{ testCase.error }}</pre
-            >
+            <div
+              class="text-xs font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto rounded bg-red-50 dark:bg-red-950/20 p-3"
+              v-html="renderAnsi(condenseErrorText(testCase.error))"
+            />
           </SectionCard>
 
           <SectionCard v-if="testCase?.ariaSnapshot" icon="i-lucide-scan-text" title="ARIA snapshot" help="case.aria">
-            <pre class="text-xs font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto">{{
-              testCase.ariaSnapshot
-            }}</pre>
+            <div class="max-h-96 overflow-y-auto">
+              <MarkdownPreview :text="'```yaml\n' + testCase.ariaSnapshot + '\n```'" />
+            </div>
           </SectionCard>
 
           <p v-else-if="testCase?.error" class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
@@ -372,6 +378,14 @@ function copyFailure() {
                 td: 'border-b border-default',
               }"
             >
+              <template #status-cell="{ row }">
+                <span
+                  v-if="row.original.failed"
+                  class="inline-flex items-center justify-center size-5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs leading-none"
+                  title="Step failed"
+                  >✗</span
+                >
+              </template>
               <template #category-cell="{ row }">
                 <UBadge :color="stepCategoryColor[row.original.category] || 'neutral'" variant="soft" size="xs">
                   {{ row.original.category }}
