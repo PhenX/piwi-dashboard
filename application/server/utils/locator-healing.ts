@@ -15,7 +15,12 @@ import {
   locatorSignature,
   recommendLocatorFix,
 } from '#shared/locator-healing';
-import { elementMatchAlternatives, parseAriaCandidates, type ElementFingerprint } from '#shared/locator-fingerprint';
+import {
+  elementMatchAlternatives,
+  parseAriaCandidates,
+  TEXT_CONTENT_ROLES,
+  type ElementFingerprint,
+} from '#shared/locator-fingerprint';
 import type { RankedLocator, LocatorSnapshot, LocatorFixRecommendation } from '#shared/locator-healing.types';
 import type { DrizzleDB } from '#shared/handlers/db';
 
@@ -195,32 +200,6 @@ function extractErrorLocation(error: string): string | null {
 
   return topFrame; // fallback: just the file
 }
-
-/**
- * TEXTSM_ROLES — roles whose visible text content matches what `getByText`
- * inspects, so a `getByText` alternative is valid when the element bears one
- * of these roles. Mirrors `freshLocatorsFromCandidate` in locator-fingerprint.ts
- * so the ARIA fallback ladder generates the same shape as the element-match path.
- */
-const TEXT_CONTENT_ROLES = new Set([
-  'button',
-  'link',
-  'heading',
-  'menuitem',
-  'option',
-  'tab',
-  'listitem',
-  'cell',
-  'rowheader',
-  'columnheader',
-  'combobox',
-  'alert',
-  'status',
-  'label',
-  'legend',
-  'caption',
-  'term',
-]);
 
 /**
  * Generate alternatives from ARIA snapshot text, filtered and scored by

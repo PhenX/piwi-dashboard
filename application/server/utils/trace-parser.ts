@@ -132,6 +132,11 @@ export interface ParsedTraceData {
   eventCount: number;
   /** True when the failing action was identified by timeout fallback (no action had an error). */
   timeoutFallback: boolean;
+  /**
+   * Largest timestamp observed anywhere in the trace, in the same timebase as
+   * action startTime/endTime. 0 when no timestamp was found.
+   */
+  traceEndTime: number;
 }
 
 /** Parse trace events from a loaded slim ZIP buffer. Returns null on failure. */
@@ -167,8 +172,20 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
   const beforeSnapshots = new Map<string, string>();
   const afterSnapshots = new Map<string, string>();
 
+  // Largest timestamp seen across all events, in the trace's own timebase.
+  let traceEndTime = 0;
+
   for (const evt of events) {
     const type = evt.type as string;
+
+    // Fold in any timestamp this event carries so traceEndTime tracks the last
+    // moment the trace recorded (used as an upper bound for timed-out actions).
+    for (const key of ['time', 'startTime', 'endTime'] as const) {
+      const ts = evt[key];
+      if (typeof ts === 'number' && Number.isFinite(ts) && ts > traceEndTime) {
+        traceEndTime = ts;
+      }
+    }
 
     if (type === 'before') {
       const callId = evt.callId as string;
@@ -278,6 +295,7 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
     failingActionIndex: failingAction ? failingIndex : -1,
     eventCount: events.length,
     timeoutFallback,
+    traceEndTime,
   };
 }
 
@@ -309,8 +327,11 @@ export function formatFailingActionSection(
     const duration = action.endTime ? action.endTime - action.startTime : null;
     if (duration != null) {
       lines.push(`- Duration: ${Math.round(duration)}ms`);
-    } else if (data.timeoutFallback) {
-      lines.push(`- Duration: timed out after ${Math.round(Date.now() / 1000 - action.startTime / 1000)}ms+`);
+    } else if (data.timeoutFallback && data.traceEndTime > action.startTime) {
+      // Killed mid-action: no endTime was recorded. Use the last timestamp seen
+      // in the trace (same timebase as startTime) as a lower bound on how long
+      // the action had been running before the process was torn down.
+      lines.push(`- Duration: ran ≥ ${Math.round(data.traceEndTime - action.startTime)}ms before the test was killed`);
     }
   }
   if (action.error) {

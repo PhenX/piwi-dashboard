@@ -751,11 +751,31 @@ async function artifactsSection(db: DbClient, rep: RepresentativeRow): Promise<s
 }
 
 /**
- * When Playwright attaches an `error-context.md` (automatically for failed
- * tests), it contains a ref-annotated ARIA snapshot under `## Page snapshot`
- * that carries the full DOM hierarchy with `[ref=eXX]` / `[cursor=pointer]` /
- * `[active]` annotations. This is richer than the stored flat snapshot and
- * works retroactively — the file is already uploaded, it just wasn't read.
+ * Extract the "Page snapshot" section from a Playwright `error-context.md`
+ * body. Playwright (1.53 through at least 1.61) writes it as an h1 —
+ * `# Page snapshot` — followed by a ```yaml fence; h2 is tolerated for other
+ * generators. Returns the snapshot YAML (fence contents when fenced), or null
+ * when no section is found. Exported for unit testing.
+ */
+export function extractPageSnapshotSection(text: string): string | null {
+  const snapshotMatch = text.match(
+    /(?:^|\n)#{1,2} Page snapshot\s*\n(```(?:ya?ml)?\s*\n[\s\S]*?\n```|[\s\S]*?)(?=\n#{1,2} |\n---\n|$)/,
+  );
+  if (!snapshotMatch) return null;
+  let snapshot = snapshotMatch[1]!.trim();
+  const fenceMatch = snapshot.match(/^```(?:ya?ml)?\s*\n([\s\S]*?)\n```$/);
+  if (fenceMatch) snapshot = fenceMatch[1]!;
+  return snapshot || null;
+}
+
+/**
+ * When Playwright attaches an error context (automatically for failed tests
+ * since ~1.53), it contains a ref-annotated ARIA snapshot under `# Page
+ * snapshot` that carries the full DOM hierarchy with `[ref=eXX]` /
+ * `[cursor=pointer]` / `[active]` annotations. This is richer than the stored
+ * flat snapshot and works retroactively — the file is already uploaded, it
+ * just wasn't read. The attachment is stored under Playwright's attachment
+ * *name* (`error-context`), not its on-disk file name (`error-context.md`).
  *
  * Returns the extracted snapshot YAML block (without the heading), or null
  * when no error-context attachment exists or parsing fails.
@@ -764,7 +784,7 @@ async function resolveErrorContextAria(db: DbClient, rep: RepresentativeRow): Pr
   const row = await db
     .select({ path: files.path })
     .from(files)
-    .where(and(eq(files.testRunsCaseId, rep.id), eq(files.type, 'attachment'), eq(files.subtype, 'error-context.md')))
+    .where(and(eq(files.testRunsCaseId, rep.id), eq(files.type, 'attachment'), eq(files.subtype, 'error-context')))
     .limit(1)
     .then((r) => r[0] ?? null);
 
@@ -773,15 +793,7 @@ async function resolveErrorContextAria(db: DbClient, rep: RepresentativeRow): Pr
   try {
     const storage = getStorage();
     const buf = await storage.readFile(row.path);
-    const text = buf.toString('utf8');
-    const snapshotMatch = text.match(
-      /## Page snapshot\s*\n(```(?:ya?ml)?\s*\n[\s\S]*?\n```|[\s\S]*?)(?=\n## |\n---\n|$)/,
-    );
-    if (!snapshotMatch) return null;
-    let snapshot = snapshotMatch[1]!.trim();
-    const fenceMatch = snapshot.match(/^```(?:ya?ml)?\s*\n([\s\S]*?)\n```$/);
-    if (fenceMatch) snapshot = fenceMatch[1]!;
-    return snapshot || null;
+    return extractPageSnapshotSection(buf.toString('utf8'));
   } catch {
     return null;
   }
@@ -1436,15 +1448,17 @@ export function representativeExecutionSections(
   // D9: Network — correlate with the failure when timing data allows
   const nrItems = (rep as any).nrItems ?? [];
   const networkLines: string[] = [];
-  // Find the failure time anchor: from the last failed network request, endTime or startedAt
+  // Time anchor: the case's startedAt and the request's startTime are both
+  // Unix epoch milliseconds, so their difference is already the ms offset
+  // from test start.
   const failureAnchor = rep.startedAt ?? 0;
   const failedReqs = nrItems.filter((r: any) => r.status >= 400 || r.status === 0).slice(0, limits.networkRequests);
   const slowReqs = nrItems
     .filter((r: any) => r.status >= 200 && r.status < 400 && r.duration != null && r.duration > limits.slowRequestMs)
     .slice(0, limits.networkRequests);
   for (const r of failedReqs) {
-    const timing =
-      r.startTime != null && failureAnchor ? ` (t+${Math.round((r.startTime - failureAnchor) * 1000)}ms)` : '';
+    const offsetMs = r.startTime != null && failureAnchor ? Math.round(r.startTime - failureAnchor) : null;
+    const timing = offsetMs != null && offsetMs >= 0 ? ` (t+${offsetMs}ms)` : '';
     networkLines.push(
       `- [failed] ${r.method} ${r.url} → ${r.status}${r.duration != null ? ` (${r.duration}ms)` : ''}${timing}`,
     );
@@ -1547,6 +1561,8 @@ export interface RelevanceSignals {
   ariaSnapshot?: string | null;
   /** Failing test source, when in context — enables import-based scoring. */
   testSource?: string | null;
+  /** Raw failing error text — enables locator-literal matching against patch contents. */
+  errorText?: string | null;
 }
 
 /** Split a string into lowercase alphanumeric tokens of length ≥ 3. */
@@ -1567,6 +1583,54 @@ function extractImportSpecifiers(source: string): string[] {
   return out;
 }
 
+/**
+ * Extract the string literals the failing test was locating, from the error
+ * text's call log — `getByText('Run trend')`, `locator('.card')`,
+ * `getByRole('button', { name: 'Pay' })`. These are the highest-precision
+ * search keys for the SCM diff: a changed line containing one of them is very
+ * likely the causal change. Deduped, ≥ 3 chars, capped at 10. Exported for
+ * unit testing.
+ */
+export function extractLocatorLiterals(errorText: string): string[] {
+  const clean = stripAnsi(errorText);
+  const out = new Set<string>();
+  const patterns = [
+    /getBy[A-Za-z]+\(\s*['"]([^'"\n]{3,100})['"]/g,
+    /\blocator\(\s*['"]([^'"\n]{3,100})['"]/g,
+    /\bname:\s*['"]([^'"\n]{3,100})['"]/g,
+  ];
+  for (const re of patterns) {
+    for (const m of clean.matchAll(re)) {
+      if (m[1]) out.add(m[1]);
+      if (out.size >= 10) return [...out];
+    }
+  }
+  return [...out];
+}
+
+/**
+ * Find the first locator literal that appears in a changed file's patch.
+ * A hit on a removed (`-`) line is the smoking gun — the text the test expects
+ * was just renamed or deleted — and is preferred over a hit anywhere else in
+ * the patch. Exported for unit testing.
+ */
+export function findLiteralInPatch(
+  patch: string | null | undefined,
+  literals: string[],
+): { literal: string; removed: boolean } | null {
+  if (!patch || literals.length === 0) return null;
+  const removedText = patch
+    .split('\n')
+    .filter((l) => l.startsWith('-') && !l.startsWith('---'))
+    .join('\n');
+  let plainHit: { literal: string; removed: boolean } | null = null;
+  for (const lit of literals) {
+    if (removedText.includes(lit)) return { literal: lit, removed: true };
+    if (!plainHit && patch.includes(lit)) plainHit = { literal: lit, removed: false };
+  }
+  return plainHit;
+}
+
 /** Basename without directory or extension, lowercased. */
 function fileStem(path: string): string {
   return (path.replace(/\\/g, '/').split('/').pop() ?? path).replace(/\.\w+$/, '').toLowerCase();
@@ -1577,10 +1641,20 @@ function fileStem(path: string): string {
  * repo-layout-independent signals. Higher score = more likely to be the cause.
  * Exported for unit testing.
  */
-export function scoreChangedFile(filename: string, signals: RelevanceSignals): number {
+export function scoreChangedFile(
+  filename: string,
+  signals: RelevanceSignals,
+  /** Precomputed locator-literal hit in this file's patch (see `findLiteralInPatch`). */
+  patchMatch?: { literal: string; removed: boolean } | null,
+): number {
   let score = 0;
   const fnLower = filename.toLowerCase().replace(/\\/g, '/');
   const stem = fileStem(filename);
+
+  // Smoking gun: a changed line contains a string literal the failing test was
+  // locating. A removed line is the strongest form — the text the test expects
+  // was just renamed away. Outranks every filename-based signal.
+  if (patchMatch) score += patchMatch.removed ? 8 : 6;
 
   // Strongest signal: the failing test imports this file (by basename match).
   if (signals.testSource) {
@@ -1620,11 +1694,17 @@ export function scoreChangedFile(filename: string, signals: RelevanceSignals): n
 interface ScoredFile {
   file: ChangedFile;
   score: number;
+  /** Locator literal from the failing error found in this file's patch, if any. */
+  literalMatch: { literal: string; removed: boolean } | null;
 }
 
 function scoreFilesByRelevance(files: ChangedFile[], signals: RelevanceSignals): ScoredFile[] {
+  const literals = signals.errorText ? extractLocatorLiterals(signals.errorText) : [];
   return files
-    .map((f) => ({ file: f, score: scoreChangedFile(f.filename, signals) }))
+    .map((f) => {
+      const literalMatch = findLiteralInPatch(f.patch, literals);
+      return { file: f, score: scoreChangedFile(f.filename, signals, literalMatch), literalMatch };
+    })
     .sort((a, b) => b.score - a.score);
 }
 
@@ -1637,7 +1717,12 @@ function scoreFilesByRelevance(files: ChangedFile[], signals: RelevanceSignals):
 function getTopSuspectedChange(
   scored: ScoredFile[],
   commits: Array<{ sha: string; message: string }>,
-): { file: string; score: number; recentCommit: { sha: string; message: string } | null } | null {
+): {
+  file: string;
+  score: number;
+  literalMatch: { literal: string; removed: boolean } | null;
+  recentCommit: { sha: string; message: string } | null;
+} | null {
   const topFile = scored[0];
   // Only show a file as "most relevant" when the signal is genuine — a score
   // of ≤ 2 means the file happened to share a generic path prefix or one common
@@ -1646,6 +1731,7 @@ function getTopSuspectedChange(
   return {
     file: topFile.file.filename,
     score: topFile.score,
+    literalMatch: topFile.literalMatch,
     recentCommit: commits[0] ?? null,
   };
 }
@@ -1656,6 +1742,13 @@ function formatTopSuspectedChange(top: NonNullable<ReturnType<typeof getTopSuspe
     `### Top Suspected Change`,
     `- Most relevant changed file: \`${top.file}\` (relevance score ${top.score})`,
   ];
+  if (top.literalMatch) {
+    lines.push(
+      top.literalMatch.removed
+        ? `- Why: the diff removes a line containing the test's target text "${top.literalMatch.literal}" — likely renamed or deleted`
+        : `- Why: the diff touches a line containing the test's target text "${top.literalMatch.literal}"`,
+    );
+  }
   if (top.recentCommit) {
     lines.push(`- Most recent commit in range: \`${top.recentCommit.sha.slice(0, 7)}\` (${top.recentCommit.message})`);
   }
@@ -2069,6 +2162,7 @@ export async function buildDiagnosisContext(
         testTitle: rep.testTitle,
         ariaSnapshot: rep.ariaSnapshot,
         testSource: rep.testSource,
+        errorText: rep.error ?? cluster.sampleError,
       });
       for (const s of scm.sections) {
         if (s.startsWith('## What Changed')) {
@@ -2104,7 +2198,8 @@ export async function buildDiagnosisContext(
   const absentReasons: Record<string, string> = {};
   const sectionIds = new Set(contextSections.map((s) => s.id));
   if (!sectionIds.has('testSource')) {
-    absentReasons.testSource = 'reporter option collectTestSource may be disabled';
+    absentReasons.testSource =
+      'not captured by the reporter — requires a recent reporter version and the test file to be readable at run time';
   }
   if (!sectionIds.has('failingAction')) {
     absentReasons.failingAction = 'no trace files found — enable trace recording in Playwright config';
@@ -2114,10 +2209,11 @@ export async function buildDiagnosisContext(
       'no SCM diff available — check repository URL in project settings or configure a SCM token';
   }
   if (!sectionIds.has('console')) {
-    absentReasons.console = 'collectPerformanceMetrics or captureConsole may be disabled in reporter options';
+    absentReasons.console = 'no console entries captured — collectPerformanceMetrics may be disabled in reporter options';
   }
   if (!sectionIds.has('networkRequests')) {
-    absentReasons.networkRequests = 'collectPerformanceMetrics or captureNetwork may be disabled in reporter options';
+    absentReasons.networkRequests =
+      'no network data captured — collectPerformanceMetrics may be disabled in reporter options';
   }
 
   const coverageBlock = buildCoverageBlock(contextSections, {
