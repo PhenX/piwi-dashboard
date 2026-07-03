@@ -3,6 +3,7 @@ import type { SQL } from 'drizzle-orm';
 import {
   testRunsCases,
   testCases,
+  testSuites,
   testRuns,
   networkRequests,
   files,
@@ -352,9 +353,11 @@ async function loadExecutionRow(db: DbClient, where: SQL) {
       testFilePath: testCases.filePath,
       testSuitePath: testCases.suitePath,
       flakyRootCause: testCases.flakyRootCause,
+      suiteMode: testSuites.mode,
     })
     .from(testRunsCases)
     .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+    .leftJoin(testSuites, eq(testCases.suiteId, testSuites.id))
     .where(where)
     .orderBy(desc(testRunsCases.id))
     .limit(1);
@@ -640,9 +643,8 @@ async function passedPeersSection(
   const testFilePath = rep.testFilePath;
   if (!testFilePath) return { section: null, notApplicableReason: null };
 
-  // Detect serial mode — check if any test in the same file was skipped
-  const suiteInfo = rep.testSuitePath as string | null;
-  const serialMode = suiteInfo?.includes('serial') ?? false;
+  // Detect serial mode from the suite's stored parallel mode, not from the suite title substring.
+  const serialMode = rep.suiteMode === 'serial';
 
   if (serialMode) {
     // Check if peers exist but were skipped (serial mode — one failure skips the rest)
@@ -806,10 +808,12 @@ async function resolveScreenshots(
   limits: ContextLimits,
 ): Promise<AiAttachedImage[]> {
   if (limits.maxImages <= 0) return [];
+  // Order by id DESC so the most recently captured screenshot (usually the on-failure one) comes first.
   const screenshotRows = await db
     .select({ path: files.path, label: files.label })
     .from(files)
     .where(and(eq(files.testRunsCaseId, rep.id), eq(files.type, 'screenshot')))
+    .orderBy(desc(files.id))
     .limit(limits.maxImages);
 
   if (screenshotRows.length === 0) return [];
@@ -1563,6 +1567,8 @@ export interface RelevanceSignals {
   testSource?: string | null;
   /** Raw failing error text — enables locator-literal matching against patch contents. */
   errorText?: string | null;
+  /** Test case id — used for per-test last-passing baseline fallback when no project-green run exists. */
+  testCaseId?: number | null;
 }
 
 /** Split a string into lowercase alphanumeric tokens of length ≥ 3. */
@@ -1783,11 +1789,15 @@ async function scmInvestigationSections(
     patchedFilesCount: 0,
     patchesOmitted: false,
     patchesTruncated: false,
+    baselineKind: undefined,
+    error: null,
   };
   let scmReached = false;
   let scmChanges: ScmChanges | null = null;
 
-  const lastSeenRunRows = await db
+  // Anchor the diff at firstSeenRunId (the earliest run where the failure appeared) so the
+  // causal window [lastGreenCommit .. firstBadCommit] is as tight as possible.
+  const firstSeenRunRows = await db
     .select({
       id: testRuns.id,
       projectId: testRuns.projectId,
@@ -1797,18 +1807,19 @@ async function scmInvestigationSections(
       metadata: testRuns.metadata,
     })
     .from(testRuns)
-    .where(eq(testRuns.id, cluster.lastSeenRunId));
+    .where(eq(testRuns.id, cluster.firstSeenRunId));
 
-  if (!lastSeenRunRows[0]) return { sections, coverage: null, scmChanges: null, topSuspectedCommit: null };
+  if (!firstSeenRunRows[0]) return { sections, coverage: null, scmChanges: null, topSuspectedCommit: null };
 
   try {
-    const regression = await computeRegressionContext(db, lastSeenRunRows[0]);
+    const regression = await computeRegressionContext(db, firstSeenRunRows[0]);
     scmReached = true;
     const baseCommitOverride = opts.baseCommit?.trim() || undefined;
 
     if (regression.hasGreen) {
       scmCov.hasLastGreen = true;
       scmCov.hasCommitRange = Boolean(regression.commitRange);
+      scmCov.baselineKind = baseCommitOverride ? 'manual' : 'run-green';
 
       const lines: string[] = [
         `## What Changed Since Last Green Run`,
@@ -1858,13 +1869,13 @@ async function scmInvestigationSections(
             const top = getTopSuspectedChange(scored, changes.commits);
             if (top) sections.push(formatTopSuspectedChange(top));
           }
-        } catch {
-          // silently skip if SCM fetch fails
+        } catch (fetchErr) {
+          scmCov.error = (fetchErr instanceof Error ? fetchErr.message : String(fetchErr)).slice(0, 300);
         }
       }
     } else if (baseCommitOverride) {
       // No last green run — user provided a manual baseline commit; try to fetch diff anyway
-      const currMeta = lastSeenRunRows[0].metadata as RunMetadata | null;
+      const currMeta = firstSeenRunRows[0].metadata as RunMetadata | null;
       const currentCommit: string | null = currMeta?.scm?.commit ?? null;
       const remoteUrl: string | null = currMeta?.scm?.remoteUrl ?? null;
       const repositoryUrl = normalizeGitUrl(remoteUrl);
@@ -1874,6 +1885,7 @@ async function scmInvestigationSections(
       if (currentCommit && repositoryUrl) {
         scmCov.provider = detectScmProvider(repositoryUrl);
         scmCov.baseCommitUsed = baseCommitOverride;
+        scmCov.baselineKind = 'manual';
 
         const fromShort = baseCommitOverride.slice(0, 7);
         const toShort = currentCommit.slice(0, 7);
@@ -1910,8 +1922,8 @@ async function scmInvestigationSections(
             const top = getTopSuspectedChange(scored, changes.commits);
             if (top) sections.push(formatTopSuspectedChange(top));
           }
-        } catch {
-          // silently skip
+        } catch (fetchErr) {
+          scmCov.error = (fetchErr instanceof Error ? fetchErr.message : String(fetchErr)).slice(0, 300);
         }
       } else {
         sections.push(
@@ -1920,6 +1932,75 @@ async function scmInvestigationSections(
             `> Note: baseline commit provided (${baseCommitOverride}) but could not determine current commit or repository URL from run metadata.`,
           ].join('\n'),
         );
+      }
+    } else if (signals.testCaseId) {
+      // No project-wide green run and no manual override — fall back to the last run where
+      // this specific test case passed. Gives a tighter causal window than "no SCM data."
+      const lastPassRows = await db
+        .select({ testRunId: testRunsCases.testRunId })
+        .from(testRunsCases)
+        .where(and(eq(testRunsCases.testCaseId, signals.testCaseId), eq(testRunsCases.status, 'passed')))
+        .orderBy(desc(testRunsCases.id))
+        .limit(1);
+
+      if (lastPassRows[0]) {
+        const [lastPassRun] = await db
+          .select({ metadata: testRuns.metadata })
+          .from(testRuns)
+          .where(eq(testRuns.id, lastPassRows[0].testRunId))
+          .limit(1);
+
+        const lastPassMeta = (lastPassRun?.metadata as RunMetadata | null) ?? null;
+        const lastPassCommit: string | null = lastPassMeta?.scm?.commit ?? null;
+        const currMeta = firstSeenRunRows[0].metadata as RunMetadata | null;
+        const currentCommit: string | null = currMeta?.scm?.commit ?? null;
+        const remoteUrl: string | null = currMeta?.scm?.remoteUrl ?? lastPassMeta?.scm?.remoteUrl ?? null;
+        const repositoryUrl = normalizeGitUrl(remoteUrl);
+
+        if (lastPassCommit && currentCommit && repositoryUrl && lastPassCommit !== currentCommit) {
+          scmCov.baselineKind = 'test-green';
+          scmCov.hasCommitRange = true;
+          scmCov.baseCommitUsed = lastPassCommit;
+          scmCov.provider = detectScmProvider(repositoryUrl);
+
+          const fromShort = lastPassCommit.slice(0, 7);
+          const toShort = currentCommit.slice(0, 7);
+          sections.push(
+            [
+              `## What Changed (Per-Test Baseline)`,
+              `- Last passing run for this test: run #${lastPassRows[0].testRunId}`,
+              `- No project-wide green run found; using per-test last-pass as baseline`,
+              `- Commit range: ${fromShort}..${toShort}`,
+              `- Git command: \`git log ${fromShort}..${toShort}\``,
+            ].join('\n'),
+          );
+
+          try {
+            const provider = await createScmProvider(repositoryUrl, db, cluster.projectId);
+            const changes = provider ? await provider.fetchChanges(lastPassCommit, currentCommit) : null;
+            if (changes && (changes.commits.length > 0 || changes.files.length > 0)) {
+              const scored = scoreFilesByRelevance(changes.files, signals);
+              changes.files = scored.map((s) => s.file);
+              scmChanges = changes;
+              scmCov.filesCount = changes.files.length;
+              scmCov.commitsCount = changes.commits.length;
+              scmCov.patchesOmitted = Boolean(changes.patchesOmitted);
+
+              const rendered = renderChangedFiles(changes, {
+                title: '## Changed Files (Per-Test Baseline)',
+                budget: limits.scmPatchBudget,
+              });
+              scmCov.patchedFilesCount = rendered.patchedFilesCount;
+              scmCov.patchesTruncated = rendered.patchesTruncated;
+              sections.push(rendered.text);
+
+              const top = getTopSuspectedChange(scored, changes.commits);
+              if (top) sections.push(formatTopSuspectedChange(top));
+            }
+          } catch (fetchErr) {
+            scmCov.error = (fetchErr instanceof Error ? fetchErr.message : String(fetchErr)).slice(0, 300);
+          }
+        }
       }
     }
   } catch {
@@ -2163,6 +2244,7 @@ export async function buildDiagnosisContext(
         ariaSnapshot: rep.ariaSnapshot,
         testSource: rep.testSource,
         errorText: rep.error ?? cluster.sampleError,
+        testCaseId: rep.testCaseId,
       });
       for (const s of scm.sections) {
         if (s.startsWith('## What Changed')) {
@@ -2205,8 +2287,10 @@ export async function buildDiagnosisContext(
     absentReasons.failingAction = 'no trace files found — enable trace recording in Playwright config';
   }
   if (!sectionIds.has('scmInvestigation') && cluster) {
-    absentReasons.scmInvestigation =
-      'no SCM diff available — check repository URL in project settings or configure a SCM token';
+    const scmError = coverage.scm?.error;
+    absentReasons.scmInvestigation = scmError
+      ? `SCM diff fetch failed: ${scmError}`
+      : 'no SCM diff available — check repository URL in project settings or configure a SCM token';
   }
   if (!sectionIds.has('console')) {
     absentReasons.console = 'no console entries captured — collectPerformanceMetrics may be disabled in reporter options';

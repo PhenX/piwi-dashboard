@@ -107,6 +107,37 @@ The real power is feeding the model the code that changed. On a cluster page you
 - **Browse and cherry-pick commits** — add the full diff of specific commits to the context for targeted analysis.
 - **Preview the exact context** that will be sent before running (`GET /api/failure-clusters/[id]/context`), so there are no surprises about what leaves your server.
 
+### Commit selection algorithm
+
+When you trigger a diagnosis, Piwi determines the commit range to diff using the following priority chain:
+
+1. **Manual override** — if you pinned a baseline commit (or the cluster has a `manualBaseCommit` saved), that commit is used as `fromSha`. This applies even in auto-diagnose and MCP-triggered diagnoses. The `Data Coverage` block in the AI context will show `baselineKind: manual`.
+
+2. **Project-wide last-green run** — Piwi looks for the most recent test run (for the same project) that finished with `status = 'passed'` *before* the **first** run in which this cluster appeared (`firstSeenRunId`, not `lastSeenRunId`). Using `firstSeenRunId` gives the tightest possible causal window: the diff covers exactly the commits introduced between when the suite was last fully-green and when the failure was first observed. `baselineKind: run-green`.
+
+3. **Per-test last-passing fallback** — if no project-wide green run exists (e.g. the project is new, or CI has been failing for a long time), Piwi falls back to the last run where *this specific test case* passed. This is less precise than a project-green baseline but still vastly better than no diff. `baselineKind: test-green`.
+
+4. **No SCM data** — if none of the above yields both a baseline commit and a current commit (from the run's SCM metadata), no diff is fetched. The `Data Coverage` block marks `scmInvestigation` absent and explains why (missing repository URL, no SCM token, or a fetch error).
+
+The `coverage.scm.baselineKind` field is available on every diagnosis response and in the context-preview endpoint, so you can always tell which path was taken. If an SCM fetch fails, `coverage.scm.error` contains the first 300 characters of the error message.
+
+#### Relevance scoring
+
+Changed files are ranked by relevance to the failing test before patch text is included in the context (the patch budget is limited). The scoring signals are:
+
+| Signal | Score |
+|--------|------:|
+| Patch removes a line containing a string the test was trying to locate (smoking gun) | +8 |
+| Patch touches (but doesn't remove) a locator-literal string | +6 |
+| Test imports this file (basename match) | +5 |
+| Changed file IS the test file | +4 |
+| Changed file shares the test file's basename | +2 |
+| Filename token overlaps with the test title or page ARIA state | +1 each |
+| File is under a source directory (`src/`, `lib/`, `app/`, …) | +1 |
+| File is a lockfile, doc, or config | −1 |
+
+Files scoring ≤ 2 are excluded from the "Top Suspected Change" callout (a low-signal hint is worse than none), but they still appear in the full changed-files list.
+
 ## Locator healing
 
 When the failure is a broken locator, the context includes an **Alternative Locators** section: ranked replacement locators sourced from a prior passing run (highest confidence — captured against the real DOM), from a fresh match of the renamed/moved element on the failing page, or from the failure-time ARIA snapshot. The section also names a single **recommended fix** — convention-preserving where the original locator style is stable enough — which the model is instructed to use verbatim in `suggestedFix.code` rather than fabricating a locator. When nothing scores as stable, it advises adding a `data-testid` to the application as the durable fix.
