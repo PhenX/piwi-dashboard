@@ -2,6 +2,8 @@ import { eq, and } from 'drizzle-orm';
 import { failureDiagnoses, failureDiagnosisVersions, failureClusters, projects } from '../database/schema';
 import type { FailureDiagnosis, FailureCluster } from '../database/schema';
 import { DIAGNOSIS_JSON_SCHEMA, parseDiagnosisJson } from '#shared/ai-diagnosis';
+import { validatePatch } from '#shared/patch';
+import type { BuiltDiagnosisContext } from './ai-context.types';
 import type { AiConfig } from '~~/types/api';
 import { callAiProvider, resolveAiConfig, streamAiProvider, DEFAULT_ANTHROPIC_MODEL } from './ai-provider';
 import type { AiAttachedImage, StreamChunk, StreamResult } from './ai-provider';
@@ -105,6 +107,18 @@ function runningDiagnosisFields(config: AiConfig) {
     durationMs: null,
     updatedAt: new Date(),
   };
+}
+
+/**
+ * Validate a suggested unified-diff patch against the exact source files the
+ * model was shown (fetched into the `sourceFiles` context section), so the UI
+ * can badge it as verified rather than taking it on faith. Returns null when
+ * there is no patch.
+ */
+function validateSuggestedPatch(ctx: BuiltDiagnosisContext, patch: string | null) {
+  if (!patch) return null;
+  const files = new Map((ctx.sourceFiles ?? []).map((f) => [f.path, f.content] as const));
+  return validatePatch(patch, files);
 }
 
 export async function runClusterDiagnosis(
@@ -312,6 +326,7 @@ export async function runClusterDiagnosis(
           selectedCommitShas: opts?.selectedCommitShas ?? null,
           additionalContext: opts?.additionalContext ?? null,
           autoSelectedCommits: ctx.scmChanges?.commits?.slice(0, 3).map((c) => c.sha) ?? null,
+          patchValidation: validateSuggestedPatch(ctx, diagnosis.suggestedFix.patch),
         },
         error: null,
         inputTokens: sumTokens('inputTokens'),
@@ -598,6 +613,7 @@ export async function streamClusterDiagnosis(
           selectedCommitShas: opts?.selectedCommitShas ?? null,
           additionalContext: opts?.additionalContext ?? null,
           autoSelectedCommits: ctx.scmChanges?.commits?.slice(0, 3).map((c) => c.sha) ?? null,
+          patchValidation: validateSuggestedPatch(ctx, diagnosis.suggestedFix.patch),
         },
         error: null,
         inputTokens: sumTokens('inputTokens'),

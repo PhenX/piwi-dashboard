@@ -221,6 +221,51 @@ function copyGitApply() {
   copy(cmd, { toast: 'git apply command copied' });
 }
 
+function downloadPatch() {
+  const patch = details.value?.suggestedFix?.patch as string | undefined;
+  if (!patch) return;
+  const body = patch.endsWith('\n') ? patch : patch + '\n';
+  const blob = new Blob([body], { type: 'text/x-patch' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `piwi-diagnosis-${props.diagnosis?.id ?? 'fix'}.patch`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+interface PatchValidation {
+  status: 'applies' | 'applies-with-offset' | 'stale-file' | 'bad-path' | 'invalid' | 'unchecked';
+  filesChecked: number;
+  filesInPatch: number;
+  errors: string[];
+}
+
+const patchValidation = computed<PatchValidation | null>(() => {
+  const v = details.value?.patchValidation;
+  return v && typeof v === 'object' ? (v as PatchValidation) : null;
+});
+
+/** Badge describing whether the suggested patch was verified to apply. */
+const patchBadge = computed<{ color: 'success' | 'warning' | 'error' | 'neutral'; icon: string; label: string; title: string } | null>(() => {
+  const v = patchValidation.value;
+  if (!v) return null;
+  switch (v.status) {
+    case 'applies':
+      return { color: 'success', icon: 'i-lucide-badge-check', label: 'Applies cleanly', title: 'Verified against the real file at the failing commit' };
+    case 'applies-with-offset':
+      return { color: 'warning', icon: 'i-lucide-badge-check', label: 'Applies with offset', title: 'Context matched at a shifted line — apply should still succeed' };
+    case 'stale-file':
+      return { color: 'error', icon: 'i-lucide-badge-alert', label: 'Does not apply', title: v.errors.join('\n') || 'The file changed since — patch context did not match' };
+    case 'invalid':
+      return { color: 'error', icon: 'i-lucide-badge-alert', label: 'Invalid diff', title: v.errors.join('\n') || 'Could not parse the patch as a unified diff' };
+    case 'bad-path':
+      return { color: 'error', icon: 'i-lucide-badge-alert', label: 'Bad path', title: v.errors.join('\n') || 'Target file path does not exist' };
+    default:
+      return { color: 'neutral', icon: 'i-lucide-badge-help', label: 'Unverified', title: 'The source file was not in context, so the patch could not be validated' };
+  }
+});
+
 const categoryColors: Record<string, 'error' | 'warning' | 'info' | 'secondary' | 'neutral'> = {
   'app-bug': 'error',
   'test-bug': 'warning',
@@ -466,8 +511,28 @@ const pipeline = computed<Array<{ role: string; model: string }>>(() => {
 
         <div v-if="details.suggestedFix.patch" class="mt-2">
           <div class="flex items-center justify-between mb-1">
-            <span class="text-xs text-gray-500 font-mono">patch</span>
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs text-gray-500 font-mono">patch</span>
+              <UBadge
+                v-if="patchBadge"
+                :color="patchBadge.color"
+                variant="subtle"
+                size="sm"
+                :icon="patchBadge.icon"
+                :title="patchBadge.title"
+              >
+                {{ patchBadge.label }}
+              </UBadge>
+            </div>
             <div class="flex items-center gap-1">
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-download"
+                title="Download .patch file"
+                @click="downloadPatch"
+              />
               <UButton
                 size="xs"
                 color="neutral"
@@ -487,6 +552,12 @@ const pipeline = computed<Array<{ role: string; model: string }>>(() => {
             </div>
           </div>
           <MarkdownPreview :text="'```diff\n' + details.suggestedFix.patch + '\n```'" />
+          <p
+            v-if="patchValidation && (patchValidation.status === 'stale-file' || patchValidation.status === 'invalid' || patchValidation.status === 'bad-path')"
+            class="text-xs text-rose-600 dark:text-rose-400 mt-1"
+          >
+            {{ patchValidation.errors[0] || 'This patch could not be verified against the source.' }}
+          </p>
         </div>
 
         <div v-else-if="details.suggestedFix.code" class="mt-2">

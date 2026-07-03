@@ -96,6 +96,8 @@ export interface TestCasePayload {
   testAnnotations?: TestAnnotation[] | null;
   /** Per-element locator snapshots with ranked alternatives (transient — not stored as a column). */
   locatorSnapshots?: LocatorSnapshot[] | null;
+  /** Source snippet around the failing line of the spec file (captured on failure only). */
+  testSource?: string | null;
 }
 
 // ── Test run counters ─────────────────────────────────────────────────────────
@@ -189,6 +191,8 @@ export interface StreamEventPayload {
   suiteConfig?: SuiteConfigEntry[] | null;
   testAnnotations?: TestAnnotation[] | null;
   locatorSnapshots?: LocatorSnapshot[] | null;
+  /** Source snippet around the failing line of the spec file (captured on failure only). */
+  testSource?: string | null;
 }
 
 // ── Finish payload ────────────────────────────────────────────────────────────

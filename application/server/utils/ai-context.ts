@@ -102,6 +102,7 @@ const SECTION_ORDER: SectionId[] = [
   'executionError',
   'representativeExecution',
   'testSource',
+  'sourceFiles',
   'failingAction',
   'failingSteps',
   'steps',
@@ -1761,6 +1762,160 @@ function formatTopSuspectedChange(top: NonNullable<ReturnType<typeof getTopSuspe
   return lines.join('\n');
 }
 
+type ScmProviderInstance = NonNullable<Awaited<ReturnType<typeof createScmProvider>>>;
+
+type SourceFilesCoverage = NonNullable<DiagnosisContextCoverage['sourceFiles']>;
+
+interface SourceFilesResult {
+  text: string | null;
+  files: Array<{ path: string; content: string }>;
+  coverage: SourceFilesCoverage | null;
+}
+
+/** True when a path is repo-relative (not absolute POSIX or Windows). */
+function isRepoRelativePath(p: string): boolean {
+  return !p.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(p);
+}
+
+/** Resolve an import specifier against a repo-relative source file's directory. Exported for unit testing. */
+export function resolveImportPath(fromRepoRelPath: string, spec: string): string {
+  const dir = fromRepoRelPath.replace(/\\/g, '/').split('/').slice(0, -1);
+  const stack = [...dir];
+  for (const part of spec.replace(/\\/g, '/').split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') stack.pop();
+    else stack.push(part);
+  }
+  return stack.join('/');
+}
+
+const CODE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts', '.mjs', '.cjs', '.vue'];
+
+/**
+ * Candidate on-disk paths for a resolved, extension-less import (TS resolution
+ * order + index files). When the path already has a code extension, it is the
+ * only candidate. Exported for unit testing.
+ */
+export function candidateFilePaths(resolved: string): string[] {
+  if (CODE_EXTENSIONS.some((e) => resolved.endsWith(e))) return [resolved];
+  const out: string[] = [];
+  for (const e of CODE_EXTENSIONS) out.push(resolved + e);
+  for (const e of CODE_EXTENSIONS) out.push(`${resolved}/index${e}`);
+  return out;
+}
+
+/** Number lines `NNNN | text` (same format as the reporter snippet) so hunk headers can be computed. */
+function numberSourceLines(text: string): string {
+  return text
+    .split('\n')
+    .map((l, i) => `${String(i + 1).padStart(4)} | ${l}`)
+    .join('\n');
+}
+
+/** Best-effort repo-relative form of the failing test file (uses the SCM tree when the path is absolute). */
+async function resolveRepoRelativeTestPath(
+  provider: ScmProviderInstance,
+  ref: string,
+  testFilePath: string,
+): Promise<string | null> {
+  const norm = testFilePath.replace(/\\/g, '/');
+  if (isRepoRelativePath(norm)) return norm.replace(/^\.\//, '');
+  const tree = await provider.fetchTree(ref).catch(() => null);
+  if (!tree) return null;
+  let best: string | null = null;
+  for (const entry of tree) {
+    if (norm === entry || norm.endsWith('/' + entry)) {
+      if (!best || entry.length > best.length) best = entry;
+    }
+  }
+  return best;
+}
+
+/**
+ * Fetch full content of the most-suspect changed files and the failing test's
+ * local import closure at the commit under test — the grounding that lets the
+ * model write a patch against code it has actually seen (and that we can then
+ * validate). Never throws; degrades to an empty result on any SCM failure.
+ */
+async function buildSourceFiles(
+  provider: ScmProviderInstance,
+  ref: string,
+  scored: ScoredFile[],
+  signals: RelevanceSignals,
+  limits: ContextLimits,
+): Promise<SourceFilesResult> {
+  const empty: SourceFilesResult = { text: null, files: [], coverage: null };
+  if (limits.maxSourceFiles <= 0 || !ref) return empty;
+
+  try {
+    // Each target is an ordered candidate list; the first candidate that resolves wins.
+    const targets: string[][] = [];
+    const seen = new Set<string>();
+    const addTarget = (candidates: string[]) => {
+      const key = candidates[0]!;
+      if (seen.has(key)) return;
+      seen.add(key);
+      targets.push(candidates);
+    };
+
+    // 1. Top suspect changed files (repo-relative filenames straight from SCM).
+    for (const s of scored) {
+      if (s.score <= 0) break; // sorted desc — stop at the first non-signal file
+      addTarget([s.file.filename]);
+      if (targets.length >= limits.maxSourceFiles) break;
+    }
+
+    // 2. Failing test's local (relative) import closure, one hop.
+    if (targets.length < limits.maxSourceFiles && signals.testFilePath && signals.testSource) {
+      const repoTestPath = await resolveRepoRelativeTestPath(provider, ref, signals.testFilePath);
+      if (repoTestPath) {
+        for (const spec of extractImportSpecifiers(signals.testSource)) {
+          if (!spec.startsWith('.')) continue; // only in-repo relative imports
+          addTarget(candidateFilePaths(resolveImportPath(repoTestPath, spec)));
+        }
+      }
+    }
+
+    const files: Array<{ path: string; content: string }> = [];
+    let truncatedAny = false;
+    for (const candidates of targets) {
+      if (files.length >= limits.maxSourceFiles) break;
+      for (const path of candidates) {
+        const fetched = await provider.fetchFileAtRef(path, ref).catch(() => null);
+        if (fetched) {
+          files.push({ path: fetched.path, content: fetched.content });
+          if (fetched.truncated) truncatedAny = true;
+          break; // first resolving candidate for this target
+        }
+      }
+    }
+
+    if (files.length === 0) return empty;
+
+    const blocks = files.map((f) => {
+      const clipped =
+        f.content.length > limits.sourceFileChars
+          ? f.content.slice(0, limits.sourceFileChars) + '\n[truncated]'
+          : f.content;
+      return `### ${f.path}\n\`\`\`\n${numberSourceLines(clipped)}\n\`\`\``;
+    });
+    const text =
+      '## Source Files (full content at the failing commit)\n' +
+      "Full current content of the most-suspect changed files and the failing test's local imports, " +
+      'at the commit under test. Line numbers are included so a patch can compute correct hunk headers. ' +
+      'Only propose a patch for lines you can quote from these files.\n\n' +
+      blocks.join('\n\n');
+
+    return {
+      text,
+      files,
+      coverage: { count: files.length, paths: files.map((f) => f.path), truncated: truncatedAny },
+    };
+  } catch {
+    return empty;
+  }
+}
+
 /**
  * "What changed since last green run" + the actual SCM diff (or a manual-baseline
  * diff when there is no last green run). Tracks SCM coverage for the UI status line.
@@ -1777,8 +1932,10 @@ async function scmInvestigationSections(
   coverage: ScmCoverage | null;
   scmChanges: ScmChanges | null;
   topSuspectedCommit: string | null;
+  sourceFiles: SourceFilesResult;
 }> {
   const sections: string[] = [];
+  let sourceFilesResult: SourceFilesResult = { text: null, files: [], coverage: null };
   const scmCov: ScmCoverage = {
     hasLastGreen: false,
     hasCommitRange: false,
@@ -1809,7 +1966,8 @@ async function scmInvestigationSections(
     .from(testRuns)
     .where(eq(testRuns.id, cluster.firstSeenRunId));
 
-  if (!firstSeenRunRows[0]) return { sections, coverage: null, scmChanges: null, topSuspectedCommit: null };
+  if (!firstSeenRunRows[0])
+    return { sections, coverage: null, scmChanges: null, topSuspectedCommit: null, sourceFiles: sourceFilesResult };
 
   try {
     const regression = await computeRegressionContext(db, firstSeenRunRows[0]);
@@ -1868,6 +2026,11 @@ async function scmInvestigationSections(
             // Surface the most-suspect changed file (by relevance) + newest commit
             const top = getTopSuspectedChange(scored, changes.commits);
             if (top) sections.push(formatTopSuspectedChange(top));
+
+            // Full source of the suspect files + test imports at the failing commit.
+            if (provider) {
+              sourceFilesResult = await buildSourceFiles(provider, regression.commitRange.toSha, scored, signals, limits);
+            }
           }
         } catch (fetchErr) {
           scmCov.error = (fetchErr instanceof Error ? fetchErr.message : String(fetchErr)).slice(0, 300);
@@ -1921,6 +2084,10 @@ async function scmInvestigationSections(
 
             const top = getTopSuspectedChange(scored, changes.commits);
             if (top) sections.push(formatTopSuspectedChange(top));
+
+            if (provider) {
+              sourceFilesResult = await buildSourceFiles(provider, currentCommit, scored, signals, limits);
+            }
           }
         } catch (fetchErr) {
           scmCov.error = (fetchErr instanceof Error ? fetchErr.message : String(fetchErr)).slice(0, 300);
@@ -1996,6 +2163,10 @@ async function scmInvestigationSections(
 
               const top = getTopSuspectedChange(scored, changes.commits);
               if (top) sections.push(formatTopSuspectedChange(top));
+
+              if (provider) {
+                sourceFilesResult = await buildSourceFiles(provider, currentCommit, scored, signals, limits);
+              }
             }
           } catch (fetchErr) {
             scmCov.error = (fetchErr instanceof Error ? fetchErr.message : String(fetchErr)).slice(0, 300);
@@ -2007,7 +2178,13 @@ async function scmInvestigationSections(
     // omit section if regression context fails
   }
 
-  return { sections, coverage: scmReached ? scmCov : null, scmChanges, topSuspectedCommit: null };
+  return {
+    sections,
+    coverage: scmReached ? scmCov : null,
+    scmChanges,
+    topSuspectedCommit: null,
+    sourceFiles: sourceFilesResult,
+  };
 }
 
 /** Diffs for commits the user explicitly picked, sharing one patch budget. */
@@ -2095,6 +2272,7 @@ export async function buildDiagnosisContext(
   let coverage: DiagnosisContextCoverage = { scm: null };
   let scmChanges: ScmChanges | null = null;
   let images: AiAttachedImage[] | undefined;
+  let sourceFilesOut: BuiltDiagnosisContext['sourceFiles'];
   let clusterInfo: BuiltDiagnosisContext['cluster'];
 
   const push = (cs: ContextSection | null | undefined) => {
@@ -2258,6 +2436,11 @@ export async function buildDiagnosisContext(
       coverage = { ...coverage, scm: scm.coverage };
       scmChanges = scm.scmChanges;
 
+      // Full source files (suspect changed files + test imports) — grounds patch suggestions.
+      if (scm.sourceFiles.text) push(section('sourceFiles', 'Source Files', scm.sourceFiles.text));
+      if (scm.sourceFiles.coverage) coverage = { ...coverage, sourceFiles: scm.sourceFiles.coverage };
+      if (scm.sourceFiles.files.length > 0) sourceFilesOut = scm.sourceFiles.files;
+
       // Selected commits (network fetch)
       push(
         section(
@@ -2329,6 +2512,7 @@ export async function buildDiagnosisContext(
     coverage,
     scmChanges,
     images,
+    sourceFiles: sourceFilesOut,
     tokenEstimate: textTokenEstimate + imageTokenEstimate,
     textTokenEstimate,
     imageTokenEstimate,

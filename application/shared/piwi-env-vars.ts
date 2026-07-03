@@ -254,6 +254,14 @@ export const PIWI_ENV_VARS = {
     description: 'Max characters of the test source snippet.',
     category: 'ai-limits',
   },
+  PIWI_AI_MAX_SOURCE_FILES: {
+    description: 'Max full source files fetched from SCM to ground patches (0 disables).',
+    category: 'ai-limits',
+  },
+  PIWI_AI_MAX_SOURCE_FILE_CHARS: {
+    description: 'Max characters per fetched full source file.',
+    category: 'ai-limits',
+  },
   PIWI_AI_MAX_SERVER_LOG_ENTRIES: {
     description: 'Max backend server log entries (from X-Piwi-Logs header) included.',
     category: 'ai-limits',

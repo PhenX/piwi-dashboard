@@ -1,11 +1,14 @@
-import { ScmProvider, truncatePatch, MAX_SCM_FILES, FETCH_TIMEOUT_MS } from './ScmProvider';
-import type { ScmCommitDetail, ScmChanges } from './ScmProvider';
+import { ScmProvider, truncatePatch, MAX_SCM_FILES, MAX_FILE_BYTES, FETCH_TIMEOUT_MS } from './ScmProvider';
+import type { ScmCommitDetail, ScmChanges, ScmFileContent } from './ScmProvider';
 import { TtlCache } from './cache';
 
 const listBranchesCache = new TtlCache<string[]>(3 * 60 * 1000);
 const listCommitsCache = new TtlCache<ScmCommitDetail[]>(3 * 60 * 1000);
 const fetchChangesCache = new TtlCache<ScmChanges>(10 * 60 * 1000);
 const fetchCommitDiffCache = new TtlCache<ScmChanges>(10 * 60 * 1000);
+// Content is immutable per SHA, so cache it (incl. negative lookups) for longer.
+const fetchFileCache = new TtlCache<ScmFileContent | null>(30 * 60 * 1000);
+const fetchTreeCache = new TtlCache<string[]>(10 * 60 * 1000);
 
 export class GitHubProvider extends ScmProvider {
   readonly provider = 'github' as const;
@@ -26,7 +29,7 @@ export class GitHubProvider extends ScmProvider {
   }
 
   async listBranches(limit = 100): Promise<string[]> {
-    const key = `branches:${this.repoPath}:${limit}`;
+    const key = `${this.keyPrefix}:branches:${this.repoPath}:${limit}`;
     const hit = listBranchesCache.get(key);
     if (hit !== undefined) return hit;
 
@@ -42,7 +45,7 @@ export class GitHubProvider extends ScmProvider {
   }
 
   async listCommits(limit = 50, branch?: string): Promise<ScmCommitDetail[]> {
-    const key = `${this.repoPath}:${limit}:${branch ?? ''}`;
+    const key = `${this.keyPrefix}:${this.repoPath}:${limit}:${branch ?? ''}`;
     const hit = listCommitsCache.get(key);
     if (hit !== undefined) return hit;
 
@@ -71,7 +74,7 @@ export class GitHubProvider extends ScmProvider {
   }
 
   async fetchChanges(fromSha: string, toSha: string): Promise<ScmChanges | null> {
-    const key = `${this.repoPath}:${fromSha}:${toSha}`;
+    const key = `${this.keyPrefix}:${this.repoPath}:${fromSha}:${toSha}`;
     const hit = fetchChangesCache.get(key);
     if (hit !== undefined) return hit;
 
@@ -102,7 +105,7 @@ export class GitHubProvider extends ScmProvider {
   }
 
   async fetchCommitDiff(sha: string): Promise<ScmChanges | null> {
-    const key = `${this.repoPath}:${sha}`;
+    const key = `${this.keyPrefix}:${this.repoPath}:${sha}`;
     const hit = fetchCommitDiffCache.get(key);
     if (hit !== undefined) return hit;
 
@@ -128,6 +131,48 @@ export class GitHubProvider extends ScmProvider {
       })),
     };
     fetchCommitDiffCache.set(key, result);
+    return result;
+  }
+
+  async fetchFileAtRef(path: string, ref: string): Promise<ScmFileContent | null> {
+    const cleanPath = path.replace(/^\//, '');
+    const key = `${this.keyPrefix}:file:${this.repoPath}:${ref}:${cleanPath}`;
+    const hit = fetchFileCache.get(key);
+    if (hit !== undefined) return hit;
+
+    const url = new URL(`https://api.github.com/repos/${this.repoPath}/contents/${cleanPath}`);
+    url.searchParams.set('ref', ref);
+    const res = await fetch(url.toString(), {
+      headers: { ...this.makeHeaders(), Accept: 'application/vnd.github.raw' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      fetchFileCache.set(key, null);
+      return null;
+    }
+    const raw = await res.text();
+    const result: ScmFileContent = {
+      path: cleanPath,
+      content: raw.length > MAX_FILE_BYTES ? raw.slice(0, MAX_FILE_BYTES) : raw,
+      truncated: raw.length > MAX_FILE_BYTES,
+    };
+    fetchFileCache.set(key, result);
+    return result;
+  }
+
+  async fetchTree(ref: string): Promise<string[] | null> {
+    const key = `${this.keyPrefix}:tree:${this.repoPath}:${ref}`;
+    const hit = fetchTreeCache.get(key);
+    if (hit !== undefined) return hit;
+
+    const res = await fetch(`https://api.github.com/repos/${this.repoPath}/git/trees/${ref}?recursive=1`, {
+      headers: this.makeHeaders(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { tree?: Array<{ path: string; type: string }> };
+    const result = (data.tree ?? []).filter((e) => e.type === 'blob').map((e) => e.path);
+    fetchTreeCache.set(key, result);
     return result;
   }
 

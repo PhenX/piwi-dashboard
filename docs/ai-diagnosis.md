@@ -138,6 +138,26 @@ Changed files are ranked by relevance to the failing test before patch text is i
 
 Files scoring ≤ 2 are excluded from the "Top Suspected Change" callout (a low-signal hint is worse than none), but they still appear in the full changed-files list.
 
+### Full source files
+
+A diff shows only the lines that changed. To write a patch the model needs the surrounding code too, so — when SCM is reachable — Piwi also fetches the **full current content** of the most-suspect changed files (top-ranked by the relevance score above) and the failing test's local imports (page objects, helpers, fixtures resolved one hop from the test's `import` statements), at the commit under test. These land in a `Source Files` context section with `NNNN | ` line numbers so the model can compute correct hunk headers.
+
+Capped by `PIWI_AI_MAX_SOURCE_FILES` (default 4, set to 0 to disable) and `PIWI_AI_MAX_SOURCE_FILE_CHARS` (default 12000). Fetched over the same SCM provider API as the diff (GitHub/GitLab/Bitbucket), cached per commit SHA. The `coverage.sourceFiles` field on the context/diagnosis response lists which files were pulled in.
+
+### Validated patches
+
+Every `suggestedFix.patch` is checked server-side, before it reaches you, against the exact source files the model was shown: Piwi parses the unified diff and dry-runs each hunk against the real file content (tolerating line-offset drift). The result is stored on the diagnosis as `details.patchValidation.status` and shown as a badge on the patch:
+
+| Status | Badge | Meaning |
+|--------|-------|---------|
+| `applies` | ✅ Applies cleanly | Every hunk matched at its stated position |
+| `applies-with-offset` | ⚠️ Applies with offset | Matched, but at a shifted line — `git apply` should still succeed |
+| `stale-file` | ❌ Does not apply | The file diverged from what the patch expects |
+| `invalid` | ❌ Invalid diff | The text isn't a parseable unified diff |
+| `unchecked` | Unverified | The target file wasn't in context, so the patch couldn't be validated |
+
+A wrong patch is worse than none, so the model is instructed to set `patch` to null unless it can quote the lines it changes from the `Source Files` / `Test Source` sections. The patch card offers **Copy**, **Copy `git apply` command**, and **Download `.patch`**; applying is always manual (the dashboard never writes to your repository).
+
 ## Locator healing
 
 When the failure is a broken locator, the context includes an **Alternative Locators** section: ranked replacement locators sourced from a prior passing run (highest confidence — captured against the real DOM), from a fresh match of the renamed/moved element on the failing page, or from the failure-time ARIA snapshot. The section also names a single **recommended fix** — convention-preserving where the original locator style is stable enough — which the model is instructed to use verbatim in `suggestedFix.code` rather than fabricating a locator. When nothing scores as stable, it advises adding a `data-testid` to the application as the durable fix.
@@ -154,20 +174,22 @@ Every piece of evidence sent to the model costs tokens. Piwi caps each input so 
 
 | Environment variable | Default | What it caps |
 |----------------------|--------:|--------------|
-| `PIWI_AI_MAX_SAMPLE_ERROR_CHARS` | 3000 | Characters of raw error text per error block |
-| `PIWI_AI_MAX_SCM_PATCH_BUDGET` | 4000 | Total characters of diff patches across changed files |
-| `PIWI_AI_MAX_AFFECTED_TESTS` | 15 | Affected tests listed |
-| `PIWI_AI_MAX_STEPS` | 30 | Recent test steps included |
-| `PIWI_AI_MAX_CONSOLE_ENTRIES` | 15 | Console error/warning entries |
-| `PIWI_AI_MAX_CONSOLE_ENTRY_CHARS` | 400 | Characters per console entry |
-| `PIWI_AI_MAX_NETWORK_REQUESTS` | 15 | Failed network requests included |
-| `PIWI_AI_MAX_ARIA_SNAPSHOT_CHARS` | 4000 | Characters of the page ARIA snapshot |
-| `PIWI_AI_MAX_TEST_SOURCE_CHARS` | 3000 | Characters of the test source snippet |
-| `PIWI_AI_MAX_SERVER_LOG_ENTRIES` | 30 | Backend server log entries (from the `X-Piwi-Logs` header) |
-| `PIWI_AI_MAX_SERVER_LOG_ENTRY_CHARS` | 400 | Characters per server log entry |
-| `PIWI_AI_MAX_IMAGES` | 3 | Screenshots auto-included in the context |
-| `PIWI_AI_MAX_PASSED_PEERS` | 10 | Passing peer tests in the same file listed |
-| `PIWI_AI_MAX_CONSOLE_WINDOW` | 30 | Console entries (any level) in the window before failure |
+| `PIWI_AI_MAX_SAMPLE_ERROR_CHARS` | 10000 | Characters of raw error text per error block |
+| `PIWI_AI_MAX_SCM_PATCH_BUDGET` | 15000 | Total characters of diff patches across changed files |
+| `PIWI_AI_MAX_AFFECTED_TESTS` | 30 | Affected tests listed |
+| `PIWI_AI_MAX_STEPS` | 50 | Recent test steps included |
+| `PIWI_AI_MAX_CONSOLE_ENTRIES` | 30 | Console error/warning entries |
+| `PIWI_AI_MAX_CONSOLE_ENTRY_CHARS` | 1000 | Characters per console entry |
+| `PIWI_AI_MAX_NETWORK_REQUESTS` | 25 | Failed network requests included |
+| `PIWI_AI_MAX_ARIA_SNAPSHOT_CHARS` | 12000 | Characters of the page ARIA snapshot |
+| `PIWI_AI_MAX_TEST_SOURCE_CHARS` | 8000 | Characters of the test source snippet |
+| `PIWI_AI_MAX_SOURCE_FILES` | 4 | Full source files fetched from SCM to ground patches (0 disables) |
+| `PIWI_AI_MAX_SOURCE_FILE_CHARS` | 12000 | Characters per fetched full source file |
+| `PIWI_AI_MAX_SERVER_LOG_ENTRIES` | 50 | Backend server log entries (from the `X-Piwi-Logs` header) |
+| `PIWI_AI_MAX_SERVER_LOG_ENTRY_CHARS` | 1000 | Characters per server log entry |
+| `PIWI_AI_MAX_IMAGES` | 5 | Screenshots auto-included in the context |
+| `PIWI_AI_MAX_PASSED_PEERS` | 20 | Passing peer tests in the same file listed |
+| `PIWI_AI_MAX_CONSOLE_WINDOW` | 50 | Console entries (any level) in the window before failure |
 | `PIWI_AI_SLOW_REQUEST_MS` | 1500 | Duration (ms) above which a network request is flagged as slow |
 
 ## Privacy
