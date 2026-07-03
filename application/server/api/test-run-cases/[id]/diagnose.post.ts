@@ -8,7 +8,7 @@ import {
 import { Role } from '#shared/types';
 import { resolveAiConfig } from '../../../utils/ai-provider';
 import type { AiAttachedImage } from '../../../utils/ai-provider';
-import { runClusterDiagnosis, isDiagnosisRunning, isDiagnosisStale } from '../../../utils/ai-diagnosis';
+import { runClusterDiagnosis, isDiagnosisRunning, isDiagnosisRunningForExecution, isDiagnosisStale } from '../../../utils/ai-diagnosis';
 
 const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
@@ -61,8 +61,11 @@ export default eventHandler(async (event) => {
     [cluster] = await db.select().from(failureClusters).where(eq(failureClusters.id, trc.failureClusterId));
   }
 
-  // Check if already running
+  // Check if already running — execution-scope uses its own key to avoid sharing slot 0 with other executions
   if (cluster && isDiagnosisRunning(cluster.id)) {
+    throw createError({ statusCode: 409, message: 'Diagnosis is already running' });
+  }
+  if (!cluster && isDiagnosisRunningForExecution(id)) {
     throw createError({ statusCode: 409, message: 'Diagnosis is already running' });
   }
 

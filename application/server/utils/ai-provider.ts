@@ -5,6 +5,9 @@ import type { AiProvider, AiConfig, AiModelRole, ResolvedAiRole } from '~~/types
 
 export type { AiConfig };
 
+/** Default Anthropic model when none is configured. */
+export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-4-8';
+
 type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
 
 /** Stored shape of a single role in the `ai` app-setting (apiKey is encrypted). */
@@ -274,8 +277,9 @@ async function callAnthropic(config: ResolvedAiRole, opts: AiCallOptions): Promi
   // stable section ordering the prefix is cache-friendly; the volatile tail
   // (user additional context, research block) is a separate uncached block.
   const res = await client.messages.create({
-    model: config.model || 'claude-opus-4-8',
+    model: config.model || DEFAULT_ANTHROPIC_MODEL,
     max_tokens: opts.maxTokens ?? 8192,
+    temperature: 0,
     system: anthropicSystem(opts),
     messages: [{ role: 'user', content: anthropicUserContent(opts) as Anthropic.MessageParam['content'] }],
     ...(opts.jsonSchema
@@ -328,7 +332,7 @@ async function callOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions): Pr
   const body = JSON.stringify({
     model: config.model,
     max_tokens: opts.maxTokens ?? 8192,
-    temperature: 0.2,
+    temperature: 0,
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: systemContent },
@@ -399,8 +403,9 @@ async function* streamAnthropic(config: ResolvedAiRole, opts: AiCallOptions): As
 
   // Same caching layout as callAnthropic — see anthropicSystem/anthropicUserContent.
   const stream = client.messages.stream({
-    model: config.model || 'claude-opus-4-8',
+    model: config.model || DEFAULT_ANTHROPIC_MODEL,
     max_tokens: opts.maxTokens ?? 8192,
+    temperature: 0,
     system: anthropicSystem(opts),
     messages: [{ role: 'user', content: anthropicUserContent(opts) as Anthropic.MessageParam['content'] }],
     ...(opts.jsonSchema
@@ -488,7 +493,7 @@ async function* streamOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions):
   const body = JSON.stringify({
     model: config.model,
     max_tokens: opts.maxTokens ?? 8192,
-    temperature: 0.2,
+    temperature: 0,
     stream: true,
     stream_options: { include_usage: true },
     messages: [

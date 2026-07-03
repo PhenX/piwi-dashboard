@@ -3,7 +3,7 @@ import { failureDiagnoses, failureDiagnosisVersions, failureClusters, projects }
 import type { FailureDiagnosis, FailureCluster } from '../database/schema';
 import { DIAGNOSIS_JSON_SCHEMA, parseDiagnosisJson } from '#shared/ai-diagnosis';
 import type { AiConfig } from '~~/types/api';
-import { callAiProvider, resolveAiConfig, streamAiProvider } from './ai-provider';
+import { callAiProvider, resolveAiConfig, streamAiProvider, DEFAULT_ANTHROPIC_MODEL } from './ai-provider';
 import type { AiAttachedImage, StreamChunk, StreamResult } from './ai-provider';
 import { buildDiagnosisContext } from './ai-context';
 import { buildDiagnosisSystemPrompt } from './ai-system-prompt';
@@ -15,11 +15,21 @@ type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
 
 const STALE_RUNNING_MS = 5 * 60 * 1000;
 
-// Concurrency guard: prevent double-running for the same cluster
-const running = new Set<number>();
+// Concurrency guard: prevent double-running for the same cluster/execution.
+// Keys are scoped: 'cluster:<id>' for cluster-scope, 'exec:<testRunsCaseId>' for execution-scope.
+// This prevents the id=0 synthetic cluster used for unclustered executions from creating a shared slot.
+const running = new Set<string>();
+
+function runningKey(clusterId: number, testRunsCaseId?: number): string {
+  return testRunsCaseId != null ? `exec:${testRunsCaseId}` : `cluster:${clusterId}`;
+}
 
 export function isDiagnosisRunning(clusterId: number): boolean {
-  return running.has(clusterId);
+  return running.has(`cluster:${clusterId}`);
+}
+
+export function isDiagnosisRunningForExecution(testRunsCaseId: number): boolean {
+  return running.has(`exec:${testRunsCaseId}`);
 }
 
 export function isDiagnosisStale(row: FailureDiagnosis): boolean {
@@ -29,7 +39,7 @@ export function isDiagnosisStale(row: FailureDiagnosis): boolean {
 
 /** Default model when none is configured (Anthropic only; OpenAI requires an explicit model). */
 function resolveModel(config: AiConfig): string {
-  return config.model || (config.provider === 'anthropic' ? 'claude-opus-4-8' : config.model);
+  return config.model || (config.provider === 'anthropic' ? DEFAULT_ANTHROPIC_MODEL : config.model);
 }
 
 /**
@@ -111,11 +121,12 @@ export async function runClusterDiagnosis(
     testRunsCaseId?: number;
   },
 ): Promise<FailureDiagnosis> {
-  if (running.has(cluster.id)) {
+  const mutexKey = runningKey(cluster.id, opts?.testRunsCaseId);
+  if (running.has(mutexKey)) {
     throw Object.assign(new Error('Diagnosis already running for this cluster'), { statusCode: 409 });
   }
 
-  running.add(cluster.id);
+  running.add(mutexKey);
 
   const isExecutionScope = Boolean(opts?.testRunsCaseId);
 
@@ -176,20 +187,24 @@ export async function runClusterDiagnosis(
   const t0 = Date.now();
 
   try {
+    // Honour the cluster's manually-pinned baseline commit when the caller
+    // didn't supply one explicitly (auto-diagnose and MCP paths never set opts.baseCommit).
+    const effectiveBaseCommit = opts?.baseCommit || cluster.manualBaseCommit || undefined;
+
     const buildCtx = (skipScm: boolean) =>
       isExecutionScope
         ? buildDiagnosisContext(db, {
             kind: 'execution',
             clusterId: cluster.id,
             testRunsCaseId: opts!.testRunsCaseId!,
-            baseCommit: opts?.baseCommit,
+            baseCommit: effectiveBaseCommit,
             selectedCommitShas: opts?.selectedCommitShas,
             skipScm,
           })
         : buildDiagnosisContext(db, {
             kind: 'cluster',
             clusterId: cluster.id,
-            baseCommit: opts?.baseCommit,
+            baseCommit: effectiveBaseCommit,
             selectedCommitShas: opts?.selectedCommitShas,
             skipScm,
           });
@@ -209,7 +224,7 @@ export async function runClusterDiagnosis(
       );
 
     // The user may have pinned a baseline/commits — always fetch SCM then.
-    const manualScm = Boolean(opts?.baseCommit || opts?.selectedCommitShas?.length);
+    const manualScm = Boolean(effectiveBaseCommit || opts?.selectedCommitShas?.length);
 
     // Two-stage pipeline: the research model pre-analyzes a lean, SCM-free
     // projection of the context. Its hints are folded into the final prompt, and
@@ -327,7 +342,7 @@ export async function runClusterDiagnosis(
 
     return failed[0]!;
   } finally {
-    running.delete(cluster.id);
+    running.delete(mutexKey);
   }
 }
 
@@ -383,11 +398,12 @@ export async function streamClusterDiagnosis(
     onChunk?: (chunk: StreamChunk) => void;
   } = {},
 ): Promise<FailureDiagnosis> {
-  if (running.has(cluster.id)) {
+  const mutexKey = runningKey(cluster.id, opts.testRunsCaseId);
+  if (running.has(mutexKey)) {
     throw Object.assign(new Error('Diagnosis already running for this cluster'), { statusCode: 409 });
   }
 
-  running.add(cluster.id);
+  running.add(mutexKey);
 
   const isExecutionScope = Boolean(opts.testRunsCaseId);
 
@@ -448,20 +464,22 @@ export async function streamClusterDiagnosis(
   const t0 = Date.now();
 
   try {
+    const effectiveBaseCommit = opts?.baseCommit || cluster.manualBaseCommit || undefined;
+
     const buildCtx = (skipScm: boolean) =>
       isExecutionScope
         ? buildDiagnosisContext(db, {
             kind: 'execution',
             clusterId: cluster.id,
             testRunsCaseId: opts.testRunsCaseId!,
-            baseCommit: opts?.baseCommit,
+            baseCommit: effectiveBaseCommit,
             selectedCommitShas: opts?.selectedCommitShas,
             skipScm,
           })
         : buildDiagnosisContext(db, {
             kind: 'cluster',
             clusterId: cluster.id,
-            baseCommit: opts?.baseCommit,
+            baseCommit: effectiveBaseCommit,
             selectedCommitShas: opts?.selectedCommitShas,
             skipScm,
           });
@@ -479,7 +497,7 @@ export async function streamClusterDiagnosis(
         (researchConfig.baseUrl ?? null) === (config.baseUrl ?? null)
       );
 
-    const manualScm = Boolean(opts?.baseCommit || opts?.selectedCommitShas?.length);
+    const manualScm = Boolean(effectiveBaseCommit || opts?.selectedCommitShas?.length);
 
     let ctx = await buildCtx(useResearch);
     let researchBlock = '';
@@ -614,7 +632,7 @@ export async function streamClusterDiagnosis(
     if (opts.onChunk) opts.onChunk({ type: 'error', data: message });
     return result;
   } finally {
-    running.delete(cluster.id);
+    running.delete(mutexKey);
   }
 }
 
@@ -670,7 +688,7 @@ export async function autoDiagnoseRun(db: DbClient, projectId: number, runId: nu
         continue;
       }
 
-      if (running.has(cluster.id)) continue;
+      if (running.has(`cluster:${cluster.id}`)) continue;
 
       await runClusterDiagnosis(db, cluster, config);
     } catch (e) {

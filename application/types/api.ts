@@ -849,6 +849,10 @@ export interface DiagnosisContextCoverage {
     patchedFilesCount: number;
     patchesOmitted: boolean;
     patchesTruncated: boolean;
+    /** What established the baseline commit: project-wide green run, per-test last-pass, or manual override. */
+    baselineKind?: 'run-green' | 'test-green' | 'manual';
+    /** Error message when the SCM diff fetch failed. */
+    error?: string | null;
   } | null;
   /** True when the last passing run is newer than the cluster's lastSeen — test may already be fixed. */
   alreadyGreen?: boolean;
