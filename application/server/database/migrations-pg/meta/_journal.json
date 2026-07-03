@@ -169,6 +169,13 @@
       "when": 1782578655201,
       "tag": "0023_minor_loners",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783094696344,
+      "tag": "0024_naive_black_widow",
+      "breakpoints": true
     }
   ]
 }

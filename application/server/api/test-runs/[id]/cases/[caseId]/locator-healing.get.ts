@@ -13,7 +13,7 @@ defineRouteMeta({
     tags: ['Test Runs'],
     summary: 'Get locator healing suggestions for a failed test case',
     description:
-      'Returns ranked alternative locator suggestions for a failing locator in a test run case. Uses pre-captured element snapshots from the last passing run, falling back to ARIA snapshot analysis.',
+      'Returns ranked alternative locator suggestions for a failing locator in a test run case. Uses pre-captured element snapshots from the last passing run (including snapshots captured by other tests in the project that use the same locator), falling back to ARIA snapshot analysis.',
     parameters: [
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' }, description: 'Test run id' },
       { name: 'caseId', in: 'path', required: true, schema: { type: 'integer' }, description: 'Test run case id' },

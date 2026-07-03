@@ -16,6 +16,7 @@ import {
   extractAccessibleName,
   approximateAccessibleName,
   captureCallerLocation,
+  dedupeSnapshotsByLocation,
   resolveAriaRole,
   suggestLocatorsFromAria,
   LOCATOR_METHODS,
@@ -37,6 +38,15 @@ interface CapturedAttrs {
   attributes: Record<string, string | null>;
   textContent: string;
   center: { x: number; y: number };
+  /** True when the element has an associated <label> — gates getByLabel. */
+  hasLabel: boolean;
+  /** querySelectorAll match counts for candidate selectors (uniqueness probe). */
+  selectorCounts: {
+    testId?: number;
+    id?: number;
+    name?: number;
+    classes?: Record<string, number>;
+  };
 }
 
 /** Shape returned by the in-page web-vitals probe (see `flushSink`). */
@@ -121,7 +131,7 @@ const CAPTURED_ATTRS_ARG: string[] = [...CAPTURED_ATTRIBUTES];
  *     server-side, so the first call already returns a plain flat snapshot.
  *   - < 1.49: `locator.ariaSnapshot` does not exist — returns null up front.
  */
-async function ariaSnapshotBestEffort(target: Locator, timeout?: number): Promise<string | null> {
+export async function ariaSnapshotBestEffort(target: Locator, timeout?: number): Promise<string | null> {
   // Playwright < 1.49 predates locator.ariaSnapshot entirely.
   if (typeof target.ariaSnapshot !== 'function') return null;
   try {
@@ -188,7 +198,6 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
         // Push a placeholder immediately — DOM capture runs async below
         sink.capturedLocators.push({
           location: callerLocation,
-          stepIndex: seq,
           used,
           element: null,
           alternatives: [],
@@ -209,6 +218,7 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
         // evaluate() can hang when page navigates (element detaches), so
         // race it against a 500ms deadline and never throw.
         const resolveAttrs = (async () => {
+          let deadline: ReturnType<typeof setTimeout> | undefined;
           try {
             // `el` is browser-context (no DOM lib in this Node package), so it
             // stays `any`; the callback's return type pins `attrs` to CapturedAttrs.
@@ -220,17 +230,58 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
                   attrMap[key] = typeof v === 'string' ? v.slice(0, 200) : v ? String(v).slice(0, 200) : null;
                 }
                 const r = el.getBoundingClientRect();
+                // Uniqueness probe: how many elements each candidate selector
+                // matches. A count > 1 marks the alternative as ambiguous
+                // (strict-mode violation) so generateAlternatives drops it.
+                // All DOM/CSS access goes through `el` (no DOM lib here).
+                const selectorCounts: CapturedAttrs['selectorCounts'] = {};
+                try {
+                  const doc = el.ownerDocument;
+                  const cssEsc = (s: string): string => doc.defaultView.CSS.escape(s);
+                  const count = (sel: string): number | undefined => {
+                    try {
+                      return doc.querySelectorAll(sel).length;
+                    } catch {
+                      return undefined;
+                    }
+                  };
+                  if (attrMap['data-testid']) {
+                    selectorCounts.testId = count(`[data-testid=${JSON.stringify(attrMap['data-testid'])}]`);
+                  }
+                  if (attrMap['id']) selectorCounts.id = count(`#${cssEsc(attrMap['id'])}`);
+                  if (attrMap['name']) selectorCounts.name = count(`[name=${JSON.stringify(attrMap['name'])}]`);
+                  const classList = (attrMap['class'] || '')
+                    .split(/\s+/)
+                    .filter((c: string) => c.length > 1)
+                    .slice(0, 10);
+                  if (classList.length > 0) {
+                    const classCounts: Record<string, number> = {};
+                    for (const cls of classList) {
+                      const n = count(`.${cssEsc(cls)}`);
+                      if (n !== undefined) classCounts[cls] = n;
+                    }
+                    selectorCounts.classes = classCounts;
+                  }
+                } catch {
+                  // Uniqueness probing is best-effort — never fail the capture.
+                }
                 return {
                   tagName: el.tagName?.toLowerCase?.() ?? 'unknown',
                   attributes: attrMap,
-                  textContent: (el.textContent || '').trim().slice(0, 80),
+                  // Collapse whitespace so multi-line text can't produce a
+                  // getByText suggestion with literal newlines in it.
+                  textContent: (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
                   center: {
                     x: Math.round(r.x + r.width / 2),
                     y: Math.round(r.y + r.height / 2),
                   },
+                  hasLabel: !!(el.labels && el.labels.length > 0),
+                  selectorCounts,
                 };
               }, CAPTURED_ATTRS_ARG),
-              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('locator capture timeout')), 500)),
+              new Promise<never>((_, reject) => {
+                deadline = setTimeout(() => reject(new Error('locator capture timeout')), 500);
+              }),
             ]);
 
             // The browser-computed accessible name only feeds role-based and
@@ -250,13 +301,22 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
 
             sink.capturedLocators[seq] = {
               location: callerLocation,
-              stepIndex: seq,
               used,
-              element: { ...attrs, accessibleName },
+              // hasLabel/selectorCounts inform alternative generation only —
+              // keep the stored element to the wire shape.
+              element: {
+                tagName: attrs.tagName,
+                attributes: attrs.attributes,
+                textContent: attrs.textContent,
+                accessibleName,
+                center: attrs.center,
+              },
               alternatives: generateAlternatives({ ...attrs, accessibleName }),
             };
           } catch {
             // element detached or timeout — keep the placeholder
+          } finally {
+            clearTimeout(deadline);
           }
         })();
 
@@ -422,12 +482,22 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
   // Cap the drain so a stuck capture (e.g. a navigation in flight) can never
   // hang teardown past the test timeout; per-action evaluate/ariaSnapshot are
   // already bounded, this is a backstop.
-  await Promise.race([Promise.allSettled(sink.capturePromises), new Promise((resolve) => setTimeout(resolve, 2000))]);
+  let drainDeadline: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    Promise.allSettled(sink.capturePromises),
+    new Promise((resolve) => {
+      drainDeadline = setTimeout(resolve, 2000);
+    }),
+  ]);
+  clearTimeout(drainDeadline);
 
   if (sink.capturedLocators.length > 0) {
     await testInfo.attach(ATTACHMENT_NAMES.locators, {
       contentType: 'application/json',
-      body: Buffer.from(JSON.stringify(sink.capturedLocators)),
+      // Repeated call sites (loops) keep only their latest capture — the
+      // server stores one row per location anyway, so shipping every
+      // iteration is pure payload bloat.
+      body: Buffer.from(JSON.stringify(dedupeSnapshotsByLocation(sink.capturedLocators))),
     });
   }
 

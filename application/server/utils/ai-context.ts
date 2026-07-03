@@ -31,6 +31,7 @@ import { resolveContextLimits } from './ai-context-limits';
 import type { ContextLimits } from '#shared/ai-context-limits';
 import { getTraceFailingActionSection } from './trace-parser';
 import { getLocatorHealing } from './locator-healing';
+import { parseAriaCandidates, textSimilarity } from '#shared/locator-fingerprint';
 import type {
   BuildContextOptions,
   DiagnosisScope,
@@ -1168,37 +1169,17 @@ function parseLocatorFromError(
   // Match: getByText('some text')
   const textMatch = error.match(/getBy(Text|Label|Placeholder|Title|AltText)\(\s*['"]([^'"]+)['"]\s*\)/);
   if (textMatch) {
-    return { method: textMatch[1]!, name: textMatch[2], exact: false };
+    return { method: `getBy${textMatch[1]!}`, name: textMatch[2], exact: false };
   }
   return null;
-}
-
-/** Parse ARIA snapshot YAML lines into {role, name} pairs. */
-function parseAriaEntries(snapshot: string): Array<{ role: string; name: string }> {
-  const entries: Array<{ role: string; name: string }> = [];
-  for (const line of snapshot.split('\n')) {
-    const roleMatch = line.match(/\[role=(\w+)\]/);
-    if (!roleMatch) continue;
-    const nameMatch = line.match(/"([^"]+)"/);
-    entries.push({ role: (roleMatch[1] ?? '').toLowerCase(), name: nameMatch ? (nameMatch[1] ?? '') : '' });
-  }
-  return entries;
-}
-
-/** Simple token-overlap similarity between two strings (0–1). */
-function tokenSimilarity(a: string, b: string): number {
-  const aTokens = new Set(a.toLowerCase().split(/\s+/));
-  const bTokens = b.toLowerCase().split(/\s+/);
-  if (aTokens.size === 0 && bTokens.length === 0) return 1;
-  let overlap = 0;
-  for (const t of bTokens) if (aTokens.has(t)) overlap++;
-  return overlap / Math.max(aTokens.size, bTokens.length);
 }
 
 /**
  * Nearest accessible-name hint for locator failures.
  * When the failing error contains a role/name locator, parse the stored ARIA
- * snapshot and surface the closest candidates.
+ * snapshot and surface the closest candidates. Parsing and similarity reuse
+ * the shared healing helpers (`parseAriaCandidates` / `textSimilarity`) so
+ * this section agrees with the locator-healing pipeline.
  */
 function nearestAriaNamesSection(rep: RepresentativeRow): string | null {
   if (!rep.error && !rep.ariaSnapshot) return null;
@@ -1209,7 +1190,7 @@ function nearestAriaNamesSection(rep: RepresentativeRow): string | null {
   const locator = parseLocatorFromError(error);
   if (!locator) return null;
 
-  const entries = parseAriaEntries(snapshot);
+  const entries = parseAriaCandidates(snapshot).filter((e): e is { role: string; name: string } => e.name != null);
   if (entries.length === 0) return null;
 
   // Filter entries matching the locator's role
@@ -1220,7 +1201,7 @@ function nearestAriaNamesSection(rep: RepresentativeRow): string | null {
   // Score by token similarity
   const scored = sameRole.map((e) => ({
     ...e,
-    score: tokenSimilarity(locator.name!, e.name),
+    score: textSimilarity(locator.name, e.name),
   }));
   scored.sort((a, b) => b.score - a.score);
 
@@ -1228,9 +1209,11 @@ function nearestAriaNamesSection(rep: RepresentativeRow): string | null {
   if (top.length === 0) return null;
 
   const lines: string[] = ['### Nearest matching elements (from ARIA)'];
-  lines.push(
-    `Requested: ${locator.method}('${locator.role ?? ''}', name="${locator.name}"${locator.exact ? ', exact: true' : ''})`,
-  );
+  const requested =
+    locator.method === 'getByRole'
+      ? `getByRole('${locator.role ?? ''}', { name: '${locator.name}'${locator.exact ? ', exact: true' : ''} })`
+      : `${locator.method}('${locator.name}')`;
+  lines.push(`Requested: ${requested}`);
   for (const e of top) {
     const note =
       e.score >= 1
@@ -1288,8 +1271,13 @@ async function locatorHealingSection(
         ? "the locator's element appears renamed/moved — these are fresh locators for its current identity on the failing page"
         : healing.source === 'fingerprint'
           ? 'matched by locator fingerprint from a prior passing run'
-          : 'derived from the current ARIA snapshot';
+          : healing.source === 'cross-test'
+            ? 'the same locator was captured against the real DOM by another test in this project'
+            : 'derived from the current ARIA snapshot';
   lines.push(`Source: ${healing.source} (${sourceLabel})`);
+  if (healing.capturedAt) {
+    lines.push(`Captured: ${healing.capturedAt}`);
+  }
 
   // Surface the single convention-preserving recommendation so the model picks
   // the same minimal, idiomatic fix the dashboard highlights — not just the
@@ -2177,8 +2165,15 @@ export async function buildDiagnosisContext(
       push(section('passedPeers', 'Passed Peers', peersResult.section));
     }
 
+    // Alternative locators from prior success / ARIA snapshot — computed here
+    // so the nearest-ARIA hint below can be skipped when healing already
+    // surfaces grounded alternatives (the two would duplicate evidence).
+    const healing = await locatorHealingSection(db, rep);
+
     // Nearest accessible-name hint for locator failures
-    push(section('nearestAriaNames', 'Nearest Matching ARIA Names', nearestAriaNamesSection(rep)));
+    if (!healing.section) {
+      push(section('nearestAriaNames', 'Nearest Matching ARIA Names', nearestAriaNamesSection(rep)));
+    }
 
     // Compared to last pass (duration/vitals/console/steps deltas) + already-green check
     const baselineResult = await baselineComparisonSection(db, rep, cluster?.lastSeenRunId);
@@ -2210,8 +2205,8 @@ export async function buildDiagnosisContext(
     // B1: Failing action from trace parsing
     push(section('failingAction', 'Failing Action (from Trace)', await failingActionSection(db, rep, limits)));
 
-    // Alternative locators from prior success / ARIA snapshot
-    const healing = await locatorHealingSection(db, rep);
+    // Alternative locators from prior success / ARIA snapshot (computed above,
+    // before the nearest-ARIA hint)
     push(section('locatorHealing', 'Alternative Locators (Locator Healing)', healing.section));
     if (healing.coverage) {
       coverage = { ...coverage, locatorHealing: healing.coverage };

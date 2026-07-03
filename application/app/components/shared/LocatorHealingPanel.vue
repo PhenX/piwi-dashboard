@@ -6,21 +6,12 @@
  */
 
 import { recommendLocatorFix } from '#shared/locator-healing';
-import type { RankedLocator, LocatorFixRecommendation } from '#shared/locator-healing.types';
+import type { RankedLocator, LocatorFixRecommendation, LocatorHealingResult } from '#shared/locator-healing.types';
 
 const props = defineProps<{
   runId: number;
   testRunsCaseId: number;
 }>();
-
-interface LocatorHealingResult {
-  failingLocator: { method: string; args: Record<string, unknown> } | null;
-  fromPriorSuccess: RankedLocator[] | null;
-  fromElementMatch: RankedLocator[] | null;
-  fromAriaSnapshot: RankedLocator[] | null;
-  source: 'prior-run' | 'element-match' | 'fingerprint' | 'aria-snapshot' | 'none';
-  recommendation: LocatorFixRecommendation | null;
-}
 
 const {
   data: healing,
@@ -64,18 +55,25 @@ const recommendationNote = computed(() => {
 });
 
 const sourceNote = computed(() => {
-  switch (healing.value?.source) {
-    case 'prior-run':
-      return 'Pre-captured from the last passing run — highest confidence';
-    case 'element-match':
-      return 'The element looks renamed or moved — these are fresh locators for its current identity on the failing page';
-    case 'fingerprint':
-      return 'Matched by locator signature (line numbers shifted)';
-    case 'aria-snapshot':
-      return 'Generated from the failure-time ARIA snapshot — limited, no HTML attributes';
-    default:
-      return '';
-  }
+  const note = (() => {
+    switch (healing.value?.source) {
+      case 'prior-run':
+        return 'Pre-captured from the last passing run — highest confidence';
+      case 'element-match':
+        return 'The element looks renamed or moved — these are fresh locators for its current identity on the failing page';
+      case 'fingerprint':
+        return 'Matched by locator signature (line numbers shifted)';
+      case 'cross-test':
+        return 'Captured by another test in this project that uses the same locator';
+      case 'aria-snapshot':
+        return 'Generated from the failure-time ARIA snapshot — limited, no HTML attributes';
+      default:
+        return '';
+    }
+  })();
+  // Stored snapshots age — surface when the data was last captured.
+  const captured = healing.value?.capturedAt;
+  return captured ? `${note} · captured ${formatRelativeTime(captured)}` : note;
 });
 
 // Subtitle color: green for pre-captured (high confidence), primary for a
@@ -84,6 +82,7 @@ const sourceClass = computed(() => {
   switch (healing.value?.source) {
     case 'prior-run':
     case 'fingerprint':
+    case 'cross-test':
       return 'text-success-600 dark:text-success-400';
     case 'element-match':
       return 'text-primary-600 dark:text-primary-400';

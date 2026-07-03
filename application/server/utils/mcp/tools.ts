@@ -1244,6 +1244,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     return dropNulls({
       testRunsCaseId: id,
       source: h.source,
+      capturedAt: h.capturedAt,
       failingLocator: h.failingLocator,
       recommendation: h.recommendation
         ? dropNulls({

@@ -17,17 +17,38 @@ export interface RankedLocator {
   score: number;
 }
 
+/**
+ * Match counts for candidate selectors, probed with `querySelectorAll` against
+ * the live page at capture time. A count > 1 means the selector is ambiguous
+ * (would be a strict-mode violation) and the alternative is suppressed; a
+ * missing count means the probe didn't run and the alternative is kept.
+ */
+export interface SelectorCounts {
+  testId?: number;
+  id?: number;
+  name?: number;
+  classes?: Record<string, number>;
+}
+
 export interface ElementAttributes {
   tagName: string;
   attributes: Record<string, string | null>;
   textContent: string | null;
   accessibleName: string | null;
   center: { x: number; y: number } | null;
+  /**
+   * True when the element has an associated `<label>` (`el.labels`). Gates the
+   * `getByLabel` alternative — an accessible name approximated from
+   * placeholder/title would produce a `getByLabel` that matches nothing.
+   * Undefined on payloads from older capture probes (legacy behavior applies).
+   */
+  hasLabel?: boolean;
+  /** Live-page uniqueness probe results for candidate selectors. */
+  selectorCounts?: SelectorCounts;
 }
 
 export interface LocatorSnapshot {
   location: string | null;
-  stepIndex: number;
   used: {
     method: string;
     args: unknown[];
@@ -41,6 +62,28 @@ export interface LocatorSnapshot {
     center: { x: number; y: number } | null;
   } | null;
   alternatives: RankedLocator[];
+}
+
+/**
+ * Drop repeated captures of the same call site before attaching: a loop (or a
+ * page-object method called repeatedly) produces one snapshot per action, but
+ * the server keeps only the latest per location anyway. Keeps the last
+ * element-bearing snapshot per location — falling back to the last placeholder
+ * when no capture resolved, so the location still counts as "seen this run"
+ * for the server's stale-location purge. Entries with no location pass through.
+ */
+export function dedupeSnapshotsByLocation(snaps: LocatorSnapshot[]): LocatorSnapshot[] {
+  const lastWithElement = new Map<string, number>();
+  const lastAny = new Map<string, number>();
+  snaps.forEach((s, i) => {
+    if (!s.location) return;
+    lastAny.set(s.location, i);
+    if (s.element) lastWithElement.set(s.location, i);
+  });
+  return snaps.filter((s, i) => {
+    if (!s.location) return true;
+    return (lastWithElement.get(s.location) ?? lastAny.get(s.location)) === i;
+  });
 }
 
 // ── Playwright method surface (shared with the fixture proxy) ────────────────
@@ -95,12 +138,18 @@ export const ACTION_METHODS: string[] = [
   'hover',
   'press',
   'type',
+  'pressSequentially',
   'clear',
   'setInputFiles',
   'dragTo',
   'focus',
   'blur',
   'scrollIntoViewIfNeeded',
+  'dispatchEvent',
+  'selectText',
+  // Not an action, but a successful waitFor proves the element resolved — the
+  // closest capture hook available for assertion-style usage of a locator.
+  'waitFor',
 ];
 
 /** Chain methods that create a new locator scope (origin tracks the chain call). */
@@ -123,7 +172,11 @@ export const CAPTURED_ATTRIBUTES: string[] = [
   'role',
   'type',
   'href',
-  'value',
+  // `multiple` distinguishes listbox vs combobox for <select>. `value` is
+  // deliberately NOT captured: no alternative generator uses it, and reading
+  // the live value after fill() would leak user-typed secrets (passwords,
+  // tokens) into the snapshot payload and server storage.
+  'multiple',
 ];
 
 // ── ARIA role resolution ─────────────────────────────────────────────────────
@@ -149,7 +202,6 @@ const TAG_TO_ROLE: Record<string, string> = {
   output: 'status',
   progress: 'progressbar',
   meter: 'meter',
-  select: 'listbox',
   textarea: 'textbox',
   h1: 'heading',
   h2: 'heading',
@@ -199,6 +251,12 @@ export function resolveAriaRole(attrs: ElementAttributes): string | null {
     return INPUT_TYPE_TO_ROLE[type] ?? 'textbox';
   }
 
+  // A plain <select> is a combobox; only with `multiple` (or size > 1, not
+  // captured) does it become a listbox. Matches the server's implicitRoleForTag.
+  if (tag === 'select') {
+    return attrs.attributes['multiple'] != null ? 'listbox' : 'combobox';
+  }
+
   if (tag === 'a') {
     return attrs.attributes['href'] != null ? 'link' : null;
   }
@@ -210,6 +268,10 @@ export function resolveAriaRole(attrs: ElementAttributes): string | null {
 
 const attr = (a: ElementAttributes, key: string): string | null => a.attributes[key] || null;
 const esc = (s: string): string => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+/** Escape a value for use inside a double-quoted CSS attribute selector. */
+const escCssAttrValue = (s: string): string => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+/** An id usable as a bare `#id` CSS selector without escaping (framework ids like `:r3:` are not). */
+const isCssSafeId = (id: string): boolean => /^[A-Za-z][A-Za-z0-9_-]*$/.test(id);
 
 /**
  * Build a ranked list of alternative locators from the captured element
@@ -231,10 +293,18 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
   const { accessibleName } = attrs;
   const tag = attrs.tagName;
   const role = resolveAriaRole(attrs);
+  // A probed count > 1 means the selector matches several elements on the
+  // captured page — a strict-mode violation, so the alternative is suppressed.
+  // Unknown counts (probe absent/failed) keep the alternative.
+  const counts = attrs.selectorCounts;
+  const isUnique = (n: number | undefined): boolean => n == null || n <= 1;
+  // Collapse whitespace: multi-line/indented textContent would otherwise
+  // produce a getByText with literal newlines — invalid when pasted as code.
+  const text = attrs.textContent ? attrs.textContent.replace(/\s+/g, ' ').trim() : null;
 
   // 1. data-testid — highest stability (100)
   const testId = attr(attrs, 'data-testid');
-  if (testId) {
+  if (testId && isUnique(counts?.testId)) {
     add({
       locator: `getByTestId('${esc(testId)}')`,
       method: 'getByTestId',
@@ -264,14 +334,23 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
     });
   }
 
-  // 4. getByLabel — for form fields with associated <label> (85)
+  // 4. getByLabel — for form fields (85). getByLabel only matches a real
+  // <label> association or aria-label — but the accessible name may have been
+  // computed (or approximated) from placeholder/title, where getByLabel would
+  // match nothing. Only emit when a label/aria-label actually backs the name;
+  // legacy payloads without the hasLabel probe keep the old permissive behavior.
   if (accessibleName && ['input', 'select', 'textarea'].includes(tag)) {
-    add({
-      locator: `getByLabel('${esc(accessibleName)}')`,
-      method: 'getByLabel',
-      args: { label: accessibleName },
-      score: 85,
-    });
+    const label = attr(attrs, 'aria-label');
+    const labelBacked =
+      attrs.hasLabel === undefined ? true : attrs.hasLabel === true || label === accessibleName;
+    if (labelBacked) {
+      add({
+        locator: `getByLabel('${esc(accessibleName)}')`,
+        method: 'getByLabel',
+        args: { label: accessibleName },
+        score: 85,
+      });
+    }
   }
 
   // 5. getByPlaceholder — for inputs (80)
@@ -286,33 +365,37 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
   }
 
   // 6. getByText — from visible text content (70-80)
-  if (attrs.textContent && attrs.textContent.length < 80) {
+  if (text && text.length < 80) {
     add({
-      locator: `getByText('${esc(attrs.textContent)}')`,
+      locator: `getByText('${esc(text)}')`,
       method: 'getByText',
-      args: { text: attrs.textContent },
+      args: { text },
       score: 75,
     });
   }
 
-  // 7. locator('#id') — if id exists and doesn't look auto-generated (50-70)
+  // 7. locator('#id') — if id exists and doesn't look auto-generated (50-70).
+  // Framework ids that aren't valid bare CSS identifiers (React useId's
+  // `:r3:`, ids with dots) fall back to an attribute selector.
   const id = attr(attrs, 'id');
-  if (id && !isAutoGenerated(id)) {
+  if (id && !isAutoGenerated(id) && isUnique(counts?.id)) {
+    const selector = isCssSafeId(id) ? `#${id}` : `[id="${escCssAttrValue(id)}"]`;
     add({
-      locator: `locator('#${esc(id)}')`,
+      locator: `locator('${esc(selector)}')`,
       method: 'locator',
-      args: { selector: `#${id}` },
+      args: { selector },
       score: 65,
     });
   }
 
   // 8. locator('[name="..."]') — for form elements (60)
   const name = attr(attrs, 'name');
-  if (name) {
+  if (name && isUnique(counts?.name)) {
+    const selector = `[name="${escCssAttrValue(name)}"]`;
     add({
-      locator: `locator('[name="${esc(name)}"]')`,
+      locator: `locator('${esc(selector)}')`,
       method: 'locator',
-      args: { selector: `[name="${name}"]` },
+      args: { selector },
       score: 60,
     });
   }
@@ -339,12 +422,15 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
     });
   }
 
-  // 11. CSS class-based locators — capped at 3 most stable classes
+  // 11. CSS class-based locators — capped at 3 most stable classes; classes
+  // the uniqueness probe saw on more than one element are dropped outright.
   const clsStr = attr(attrs, 'class');
   if (clsStr) {
     const classes = clsStr
       .split(/\s+/)
-      .filter((c) => c.length > 1)
+      // Only classes valid as a bare `.cls` selector — Tailwind variants
+      // (`hover:bg-red-500`) and arbitrary values (`w-[10px]`) are not.
+      .filter((c) => c.length > 1 && /^[A-Za-z_-][A-Za-z0-9_-]*$/.test(c) && isUnique(counts?.classes?.[c]))
       .map((cls) => ({
         cls,
         score: classifyCssStability(cls),
@@ -425,6 +511,10 @@ export function isAutoGenerated(value: string): boolean {
   if (/^(emotion-|styled-|css-|sc-)/.test(value)) return true;
   // Angular-style generated IDs (ng-xxx-N)
   if (value.startsWith('ng-')) return true;
+  // Component-library generated ids (Radix, Headless UI, MUI, Mantine, Chakra)
+  if (/^(radix-|headlessui-|mui-|mantine-|chakra-)/i.test(value)) return true;
+  // React useId format — `:r1:` (18) / `«r1»` (19)
+  if (/^:r[0-9a-z]+:$/i.test(value) || /^«r[0-9a-z]+»$/i.test(value)) return true;
   return false;
 }
 
@@ -500,8 +590,12 @@ const NAME_BASED_METHODS = new Set([
 
 const escAttr = (s: string): string => s.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
 
-/** Parse `ariaSnapshot()` lines into role/name pairs (mirrors the server-side matcher). */
-function parseAriaRoleName(ariaSnapshot: string): Array<{ role: string; name: string | null }> {
+/**
+ * Parse `ariaSnapshot()` lines into role/name pairs (mirrors the server-side
+ * `parseAriaCandidates` in application/shared/locator-fingerprint.ts).
+ * Exported so the dashboard's drift-guard unit test can compare the two.
+ */
+export function parseAriaRoleName(ariaSnapshot: string): Array<{ role: string; name: string | null }> {
   const out: Array<{ role: string; name: string | null }> = [];
   for (const line of ariaSnapshot.split('\n')) {
     const m = /^\s*-\s+([a-z]+)(?:\s+"((?:[^"\\]|\\.)*)")?/i.exec(line);
@@ -518,9 +612,10 @@ function parseAriaRoleName(ariaSnapshot: string): Array<{ role: string; name: st
  * Token-set (Dice) similarity, 0-1, case- and punctuation-insensitive.
  * Duplicated from `textSimilarity` in application/shared/locator-fingerprint.ts —
  * this package publishes standalone to npm and can't import monorepo-relative
- * shared/ code, so keep the two implementations in sync by hand.
+ * shared/ code, so keep the two implementations in sync by hand. Exported so
+ * the dashboard's drift-guard unit test can compare the two.
  */
-function nameSimilarity(a: string | null, b: string | null): number {
+export function nameSimilarity(a: string | null, b: string | null): number {
   const tok = (s: string | null): Set<string> =>
     new Set(
       (s ?? '')

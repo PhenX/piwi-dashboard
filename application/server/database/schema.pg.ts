@@ -386,6 +386,8 @@ export const locatorSnapshots = pgTable(
   (table) => ({
     uniqueLocation: uniqueIndex('idx_locator_snapshots_location').on(table.testCaseId, table.location),
     fingerprintIdx: index('idx_locator_snapshots_fp').on(table.testCaseId, table.usedMethod, table.usedArgsFp),
+    // Cross-test healing looks a signature up across all of a project's cases.
+    argsFpIdx: index('idx_locator_snapshots_args_fp').on(table.usedArgsFp),
   }),
 );
 
