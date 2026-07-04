@@ -1,9 +1,8 @@
 import { describe, test, expect } from 'vitest';
 import { textSimilarity, parseAriaCandidates } from '#shared/locator-fingerprint';
-import {
-  nameSimilarity,
-  parseAriaRoleName,
-} from '../../../reporter/dist/internal/capture/locator-healing.js';
+// Imported from the reporter's *source* (vitest transpiles it), not dist/ —
+// `npm run app:test:unit` must pass without a prior `npm run reporter:build`.
+import { nameSimilarity, parseAriaRoleName } from '../../../reporter/src/internal/capture/locator-healing';
 
 /**
  * Drift guard: the reporter package publishes standalone to npm and cannot
