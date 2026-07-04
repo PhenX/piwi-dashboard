@@ -183,6 +183,13 @@
       "when": 1782578647664,
       "tag": "0025_mute_wong",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1783094695497,
+      "tag": "0026_careful_wendigo",
+      "breakpoints": true
     }
   ]
 }

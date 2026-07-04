@@ -6,9 +6,9 @@
  * "element changed" case), fuzzy matching by locator signature, and ARIA
  * snapshot generation when no prior snapshot exists.
  */
-import { and, eq, notInArray, sql, inArray } from 'drizzle-orm';
-import { locatorSnapshots, testRunsCases, type LocatorSnapshotRow } from '../database/schema';
-import { extractLeafSelector, extractTopFrameFile } from '#shared/error-fingerprint';
+import { and, eq, ne, notInArray, sql, inArray } from 'drizzle-orm';
+import { locatorSnapshots, testCases, testRunsCases, type LocatorSnapshotRow } from '../database/schema';
+import { extractLeafSelector } from '#shared/error-fingerprint';
 import {
   locatorSignatureFromExpression,
   locatorExpressionMethod,
@@ -21,25 +21,12 @@ import {
   TEXT_CONTENT_ROLES,
   type ElementFingerprint,
 } from '#shared/locator-fingerprint';
-import type { RankedLocator, LocatorSnapshot, LocatorFixRecommendation } from '#shared/locator-healing.types';
+import type { RankedLocator, LocatorSnapshot, LocatorHealingResult } from '#shared/locator-healing.types';
 import type { DrizzleDB } from '#shared/handlers/db';
 
-export interface LocatorHealingResult {
-  failingLocator: { method: string; args: Record<string, unknown> } | null;
-  fromPriorSuccess: RankedLocator[] | null;
-  /**
-   * Fresh locators generated from the element's *current* identity, when the
-   * pre-captured locator no longer matches the live page (renamed/moved element).
-   */
-  fromElementMatch: RankedLocator[] | null;
-  fromAriaSnapshot: RankedLocator[] | null;
-  source: 'prior-run' | 'element-match' | 'fingerprint' | 'aria-snapshot' | 'none';
-  /**
-   * The single recommended fix — convention-preserving where possible — chosen
-   * from the active alternative list. Null when no alternatives are available.
-   */
-  recommendation: LocatorFixRecommendation | null;
-}
+// The payload shape lives in shared/ so the API handler, MCP tools, AI context
+// and the dashboard panel all agree on it; re-exported for existing importers.
+export type { LocatorHealingResult, LocatorHealingSource } from '#shared/locator-healing.types';
 
 /**
  * Parse a Playwright locator expression into method + args.
@@ -184,21 +171,20 @@ function normalizeParsedArgs(method: string, args: unknown[]): { method: string;
 }
 
 /**
- * Extract the call-site location from a Playwright error's stack trace.
- * Uses the first user-code frame (file not in node_modules).
+ * Extract the call-site location (`file:line:col`) from a Playwright error's
+ * stack frames — the first frame outside node_modules and Node internals.
+ * Handles both anonymous frames (`at tests/x.spec.ts:42:5`) and named ones
+ * (`at Object.foo (tests/x.spec.ts:42:5)`), mirroring `extractTopFrameFile`.
  */
 function extractErrorLocation(error: string): string | null {
-  const topFrame = extractTopFrameFile(error);
-  if (!topFrame) return null;
-
-  // The error message contains stack frames like:
-  //     at tests/checkout.spec.ts:42:5
-  const frameMatch = error.match(/\s+at\s+([^(:\s]+\.[a-z]+):(\d+):(\d+)/i);
-  if (frameMatch) {
-    return `${frameMatch[1]}:${frameMatch[2]}:${frameMatch[3]}`;
+  const frameRe = /^\s+at (?:.*? \()?([^()\s][^()]*?):(\d+):(\d+)\)?\s*$/gm;
+  let m: RegExpExecArray | null;
+  while ((m = frameRe.exec(error)) !== null) {
+    const file = m[1]!.replace(/\\/g, '/');
+    if (file.includes('node_modules') || file.startsWith('node:')) continue;
+    return `${file}:${m[2]}:${m[3]}`;
   }
-
-  return topFrame; // fallback: just the file
+  return null;
 }
 
 /**
@@ -322,21 +308,34 @@ function tokenize(text: string): Set<string> {
  * wins over prior-success (pre-captured), which wins over the ARIA fallback.
  * Kept in one place so every return path picks the recommendation the same way.
  */
+/** Sources whose alternative scores are real stability scores from a pre-captured DOM snapshot. */
+const STABILITY_SCORED_SOURCES = new Set<LocatorHealingResult['source']>(['prior-run', 'fingerprint', 'cross-test']);
+
 function buildHealingResult(
   failingLocator: LocatorHealingResult['failingLocator'],
   fromPriorSuccess: RankedLocator[] | null,
   fromAriaSnapshot: RankedLocator[] | null,
   source: LocatorHealingResult['source'],
   fromElementMatch: RankedLocator[] | null = null,
+  capturedAt: Date | null = null,
 ): LocatorHealingResult {
   const alternatives = fromElementMatch ?? fromPriorSuccess ?? fromAriaSnapshot ?? [];
+  const recommendation = alternatives.length ? recommendLocatorFix(failingLocator?.method, alternatives) : null;
+  // "Everything is fragile — add a data-testid" only makes sense when the
+  // scores are stability scores. ARIA-fallback scores measure text-overlap
+  // relevance and element-match scores are a fixed band, so a low score there
+  // says nothing about the element lacking stable hooks.
+  if (recommendation && !STABILITY_SCORED_SOURCES.has(source)) {
+    recommendation.suggestAddTestId = false;
+  }
   return {
     failingLocator,
     fromPriorSuccess,
     fromElementMatch,
     fromAriaSnapshot,
     source,
-    recommendation: alternatives.length ? recommendLocatorFix(failingLocator?.method, alternatives) : null,
+    recommendation,
+    capturedAt: capturedAt ? capturedAt.toISOString() : null,
   };
 }
 
@@ -415,7 +414,7 @@ function resolveStoredHit(
   failingLocator: LocatorHealingResult['failingLocator'],
   hit: LocatorSnapshotRow,
   ariaSnapshot: string | null,
-  priorSource: 'prior-run' | 'fingerprint',
+  priorSource: 'prior-run' | 'fingerprint' | 'cross-test',
 ): LocatorHealingResult {
   const priorAlts = parseAlternativesColumn(hit);
   const fingerprint = fingerprintFromSnapshot(priorAlts, hit);
@@ -423,7 +422,7 @@ function resolveStoredHit(
   if (fresh) {
     return buildHealingResult(failingLocator, null, null, 'element-match', fresh);
   }
-  return buildHealingResult(failingLocator, priorAlts, null, priorSource);
+  return buildHealingResult(failingLocator, priorAlts, null, priorSource, null, hit.lastSeenAt ?? null);
 }
 
 /**
@@ -481,15 +480,27 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
     }
   }
 
-  // Ladder 2: locator signature (method + ordered string literals) — survives
-  // line shifts. Cannot tell apart repeated identical locators; returns the
-  // first match.
-  if (selector && snaps.length > 0) {
+  if (selector) {
     const sig = await locatorSignatureFromExpression(selector);
     const method = locatorExpressionMethod(selector);
+
+    // Ladder 2: locator signature (method + ordered string literals) — survives
+    // line shifts. Cannot tell apart repeated identical locators; returns the
+    // first match.
     const hit = snaps.find((s) => s.usedArgsFp === sig && (!method || s.usedMethod === method));
     if (hit) {
       return resolveStoredHit(failingLocator, hit, row.ariaSnapshot ?? null, 'fingerprint');
+    }
+
+    // Ladder 2.5: cross-test — the same locator captured by another test in
+    // the same project (assert-only locators are never captured by their own
+    // test, but an action elsewhere frequently touches the same element).
+    // Freshest capture wins.
+    if (testCaseId) {
+      const crossHit = await findCrossTestSnapshot(db, testCaseId, sig, method);
+      if (crossHit) {
+        return resolveStoredHit(failingLocator, crossHit, row.ariaSnapshot ?? null, 'cross-test');
+      }
     }
   }
 
@@ -500,6 +511,38 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
   }
 
   return buildHealingResult(failingLocator, null, null, 'none');
+}
+
+/**
+ * Find the freshest snapshot of the same locator signature captured by a
+ * *different* test case in the same project — the cross-test healing ladder.
+ * The project scope keeps suggestions on the same application; the signature
+ * (method + ordered string literals) guarantees it is the same locator text.
+ */
+async function findCrossTestSnapshot(
+  db: DrizzleDB,
+  testCaseId: number,
+  sig: string,
+  method: string | null,
+): Promise<LocatorSnapshotRow | null> {
+  const rows = await db
+    .select({ snap: locatorSnapshots })
+    .from(locatorSnapshots)
+    .innerJoin(testCases, eq(locatorSnapshots.testCaseId, testCases.id))
+    .where(
+      and(
+        eq(
+          testCases.projectId,
+          sql`(select project_id from test_cases where id = ${testCaseId})`,
+        ),
+        eq(locatorSnapshots.usedArgsFp, sig),
+        ne(locatorSnapshots.testCaseId, testCaseId),
+        ...(method ? [eq(locatorSnapshots.usedMethod, method)] : []),
+      ),
+    )
+    .orderBy(sql`${locatorSnapshots.lastSeenAt} desc`)
+    .limit(1);
+  return rows[0]?.snap ?? null;
 }
 
 /**
@@ -562,14 +605,22 @@ export async function getLocatorHealingBatch(
       }
     }
 
-    // Ladder 2: signature
-    if (selector && snaps.length > 0) {
+    // Ladder 2: signature; ladder 2.5: cross-test (same locator captured by
+    // another test in the project)
+    if (selector) {
       const sig = await locatorSignatureFromExpression(selector);
       const method = locatorExpressionMethod(selector);
       const hit = snaps.find((s) => s.usedArgsFp === sig && (!method || s.usedMethod === method));
       if (hit) {
         results.set(row.id, resolveStoredHit(failingLocator, hit, row.ariaSnapshot ?? null, 'fingerprint'));
         continue;
+      }
+      if (row.testCaseId) {
+        const crossHit = await findCrossTestSnapshot(db, row.testCaseId, sig, method);
+        if (crossHit) {
+          results.set(row.id, resolveStoredHit(failingLocator, crossHit, row.ariaSnapshot ?? null, 'cross-test'));
+          continue;
+        }
       }
     }
 
@@ -586,14 +637,25 @@ export async function getLocatorHealingBatch(
   return results;
 }
 
-/** Compare two `file:line:col` locations ignoring the trailing column. */
+/**
+ * Compare two `file:line:col` locations ignoring the trailing column. The file
+ * parts match on a path suffix at a `/` boundary, so the stored cwd-relative
+ * capture location (`tests/x.spec.ts`) still matches an absolute path from an
+ * error stack frame (`/repo/tests/x.spec.ts`).
+ */
 function sameFileLine(a: string | null, b: string | null): boolean {
   if (!a || !b) return false;
-  return stripColumn(a) === stripColumn(b);
+  const [fileA, lineA] = splitFileLine(a);
+  const [fileB, lineB] = splitFileLine(b);
+  if (lineA !== lineB || !fileA || !fileB) return false;
+  if (fileA === fileB) return true;
+  return fileA.endsWith(`/${fileB}`) || fileB.endsWith(`/${fileA}`);
 }
 
-function stripColumn(loc: string): string {
-  return loc.replace(/:\d+$/, '');
+/** Split `file:line:col` into `[file, line]`, dropping the column. */
+function splitFileLine(loc: string): [string, string] {
+  const m = loc.match(/^(.*):(\d+):\d+$/) ?? loc.match(/^(.*):(\d+)$/);
+  return m ? [m[1]!, m[2]!] : [loc, ''];
 }
 
 function parseAlternativesColumn(row: LocatorSnapshotRow): RankedLocator[] | null {
@@ -628,7 +690,7 @@ export async function upsertLocatorSnapshots(
   perCase: Array<{ caseId: number; snapshots: LocatorSnapshot[] | null | undefined; purge?: boolean }>,
   runId: number,
 ): Promise<void> {
-  // Keyed by `${caseId} ${location}` so a repeated call site yields one row.
+  // Keyed by `${caseId}\x00${location}` so a repeated call site yields one row.
   const rowByKey = new Map<string, typeof locatorSnapshots.$inferInsert>();
   const seenByCase = new Map<number, Set<string>>();
   // Cases whose run completed (passed) — only these may purge stale locations.
@@ -648,7 +710,7 @@ export async function upsertLocatorSnapshots(
     const captured = snapshots.filter((s) => s.element && s.location);
     const fps = await Promise.all(captured.map((s) => locatorSignature(s.used.method, s.used.args)));
     captured.forEach((snap, idx) => {
-      rowByKey.set(`${caseId} ${snap.location}`, {
+      rowByKey.set(`${caseId}\x00${snap.location}`, {
         testCaseId: caseId,
         location: snap.location!,
         usedMethod: snap.used.method,

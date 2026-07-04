@@ -1,0 +1,1 @@
+CREATE INDEX `idx_locator_snapshots_args_fp` ON `locator_snapshots` (`used_args_fp`);

@@ -19,6 +19,7 @@ import {
   extractAccessibleName,
   approximateAccessibleName,
   captureCallerLocation,
+  dedupeSnapshotsByLocation,
   resolveAriaRole,
   suggestLocatorsFromAria,
   LOCATOR_METHODS,
@@ -29,6 +30,7 @@ import {
   type LocatorSnapshot,
   type FailedLocatorInfo,
 } from '../../reporter/dist/internal/capture/locator-healing.js';
+import { ariaSnapshotBestEffort } from '../../reporter/dist/internal/capture/capture-fixtures.js';
 import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from '../../reporter/dist/internal/capture/attachments.js';
 
 type NetworkRequest = {
@@ -173,16 +175,16 @@ export const test = base.extend<{ page: Page }>({
             // Capture the test call-site now (sync) so the snapshot's location
             // matches the error stack's first user frame.
             const callerLocation = captureCallerLocation();
+            const used = {
+              method: originMethod,
+              args: originArgs,
+              raw: `${originMethod}(${JSON.stringify(originArgs)})`,
+            };
 
             // Push a placeholder immediately — DOM capture runs async below
             capturedLocators.push({
               location: callerLocation,
-              stepIndex: seq,
-              used: {
-                method: originMethod,
-                args: originArgs,
-                raw: `${originMethod}(${JSON.stringify(originArgs)})`,
-              },
+              used,
               element: null,
               alternatives: [],
             });
@@ -199,6 +201,7 @@ export const test = base.extend<{ page: Page }>({
             }
 
             const resolveAttrs = (async () => {
+              let deadline: ReturnType<typeof setTimeout> | undefined;
               try {
                 const attrs = (await Promise.race([
                   target.evaluate(
@@ -209,68 +212,94 @@ export const test = base.extend<{ page: Page }>({
                         attrMap[key] = typeof v === 'string' ? v.slice(0, 200) : v ? String(v).slice(0, 200) : null;
                       }
                       const r = el.getBoundingClientRect();
+                      // Uniqueness probe — mirrors reporter/src/internal/capture/capture-fixtures.ts.
+                      const selectorCounts: {
+                        testId?: number;
+                        id?: number;
+                        name?: number;
+                        classes?: Record<string, number>;
+                      } = {};
+                      try {
+                        const doc = el.ownerDocument;
+                        const cssEsc = (s: string): string => doc.defaultView.CSS.escape(s);
+                        const count = (sel: string): number | undefined => {
+                          try {
+                            return doc.querySelectorAll(sel).length;
+                          } catch {
+                            return undefined;
+                          }
+                        };
+                        if (attrMap['data-testid']) {
+                          selectorCounts.testId = count(`[data-testid=${JSON.stringify(attrMap['data-testid'])}]`);
+                        }
+                        if (attrMap['id']) selectorCounts.id = count(`#${cssEsc(attrMap['id'])}`);
+                        if (attrMap['name']) selectorCounts.name = count(`[name=${JSON.stringify(attrMap['name'])}]`);
+                        const classList = (attrMap['class'] || '')
+                          .split(/\s+/)
+                          .filter((c: string) => c.length > 1)
+                          .slice(0, 10);
+                        if (classList.length > 0) {
+                          const classCounts: Record<string, number> = {};
+                          for (const cls of classList) {
+                            const n = count(`.${cssEsc(cls)}`);
+                            if (n !== undefined) classCounts[cls] = n;
+                          }
+                          selectorCounts.classes = classCounts;
+                        }
+                      } catch {
+                        // Uniqueness probing is best-effort — never fail the capture.
+                      }
                       return {
                         tagName: el.tagName?.toLowerCase?.() ?? 'unknown',
                         attributes: attrMap,
-                        textContent: (el.textContent || '').trim().slice(0, 80),
+                        // Collapse whitespace so multi-line text can't produce
+                        // a getByText suggestion with literal newlines in it.
+                        textContent: (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
                         center: {
                           x: Math.round(r.x + r.width / 2),
                           y: Math.round(r.y + r.height / 2),
                         },
+                        hasLabel: !!(el.labels && el.labels.length > 0),
+                        selectorCounts,
                       };
                     },
                     [...CAPTURED_ATTRIBUTES],
                   ),
-                  new Promise<null>((_, reject) => setTimeout(() => reject(new Error('locator capture timeout')), 500)),
+                  new Promise<null>((_, reject) => {
+                    deadline = setTimeout(() => reject(new Error('locator capture timeout')), 500);
+                  }),
                 ])) as any;
 
                 // Only pay for the ARIA snapshot when the accessible name will
                 // be used (role-based or form-field alternatives).
-                const role = resolveAriaRole({
-                  tagName: attrs.tagName,
-                  attributes: attrs.attributes,
-                  textContent: attrs.textContent,
-                  accessibleName: null,
-                  center: attrs.center,
-                });
+                const role = resolveAriaRole({ ...attrs, accessibleName: null });
                 const isFormField = ['input', 'select', 'textarea'].includes(attrs.tagName);
                 // Bound with a timeout: without it, ariaSnapshot waits up to the
                 // test timeout when the page is mid-navigation, hanging the
                 // fixture teardown that drains these capture promises.
-                const aria =
-                  role || isFormField
-                    ? ((await target.ariaSnapshot({ ref: true, timeout: 500 }).catch(() => null)) as string | null)
-                    : null;
+                const aria = role || isFormField ? await ariaSnapshotBestEffort(target as any, 500) : null;
 
                 const accessibleName =
-                  extractAccessibleName(aria) ||
-                  approximateAccessibleName({
-                    tagName: attrs.tagName,
-                    attributes: attrs.attributes,
-                    textContent: attrs.textContent,
-                    accessibleName: null,
-                    center: attrs.center,
-                  });
+                  extractAccessibleName(aria) || approximateAccessibleName({ ...attrs, accessibleName: null });
 
                 capturedLocators[seq] = {
                   location: callerLocation,
-                  stepIndex: seq,
-                  used: {
-                    method: originMethod,
-                    args: originArgs,
-                    raw: `${originMethod}(${JSON.stringify(originArgs)})`,
-                  },
-                  element: { ...attrs, accessibleName },
-                  alternatives: generateAlternatives({
+                  used,
+                  // hasLabel/selectorCounts inform alternative generation only —
+                  // keep the stored element to the wire shape.
+                  element: {
                     tagName: attrs.tagName,
                     attributes: attrs.attributes,
                     textContent: attrs.textContent,
                     accessibleName,
                     center: attrs.center,
-                  }),
+                  },
+                  alternatives: generateAlternatives({ ...attrs, accessibleName }),
                 };
               } catch {
                 // keep the placeholder
+              } finally {
+                clearTimeout(deadline);
               }
             })();
 
@@ -297,11 +326,19 @@ export const test = base.extend<{ page: Page }>({
     // Cap the drain so a stuck capture (e.g. a navigation in flight) can never
     // hang teardown past the test timeout; per-action evaluate/ariaSnapshot are
     // already bounded, this is a backstop.
-    await Promise.race([Promise.allSettled(capturePromises), new Promise((resolve) => setTimeout(resolve, 2000))]);
+    let drainDeadline: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      Promise.allSettled(capturePromises),
+      new Promise((resolve) => {
+        drainDeadline = setTimeout(resolve, 2000);
+      }),
+    ]);
+    clearTimeout(drainDeadline);
     if (capturedLocators.length > 0) {
       await testInfo.attach(ATTACHMENT_NAMES.locators, {
         contentType: 'application/json',
-        body: Buffer.from(JSON.stringify(capturedLocators)),
+        // Repeated call sites (loops) keep only their latest capture.
+        body: Buffer.from(JSON.stringify(dedupeSnapshotsByLocation(capturedLocators))),
       });
     }
 
@@ -319,7 +356,8 @@ export const test = base.extend<{ page: Page }>({
 
     try {
       if (testInfo.status !== 'passed' && testInfo.status !== 'skipped') {
-        const snapshot = await page.locator(':root').ariaSnapshot();
+        // Version-tolerant + bounded — mirrors the reporter's flushSink.
+        const snapshot = await ariaSnapshotBestEffort(page.locator(':root') as any);
         if (snapshot) {
           await testInfo.attach(ATTACHMENT_NAMES.ariaSnapshot, {
             contentType: 'text/plain',

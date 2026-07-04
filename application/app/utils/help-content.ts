@@ -518,7 +518,7 @@ export const HELP_TOPICS = {
   // ── Locator healing ────────────────────────────────────────────────────
   'locator-healing': {
     title: 'Alternative locators',
-    text: 'When a locator breaks after a UI change, Piwi suggests pre-captured alternatives from the last passing run. Each alternative is ranked by stability score — prefer data-testid (100) over CSS classes (10–40).',
+    text: 'When a locator breaks after a UI change, Piwi suggests pre-captured alternatives from the last passing run — or from another test in the project that uses the same locator. Each alternative is ranked by stability score — prefer data-testid (100) over CSS classes (10–40).',
     doc: 'reporter#locator-healing',
   },
 } as const satisfies Record<string, HelpTopic>;

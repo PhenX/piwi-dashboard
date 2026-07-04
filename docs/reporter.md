@@ -295,14 +295,15 @@ These are only collected when `collectPerformanceMetrics` is `true` (the default
 
 When a locator stops matching — a button was renamed, an element moved, a hashed class changed — Piwi suggests concrete, ranked replacements instead of leaving you to guess.
 
-While tests run, the fixtures wrap Playwright's locator methods (`getByRole`, `getByTestId`, `locator`, …) and, after each successful action, record the target element's attributes plus a list of alternative locators ranked by a stability score (`data-testid` = 100, role + accessible name ≈ 90, semantic CSS ≈ 35–40, hash-suffixed ≈ 10). One row per call site is upserted into the `locator_snapshots` table, so the latest known-good snapshot for every locator is always available.
+While tests run, the fixtures wrap Playwright's locator methods (`getByRole`, `getByTestId`, `locator`, …) and, after each successful action, record the target element's attributes plus a list of alternative locators ranked by a stability score (`data-testid` = 100, role + accessible name ≈ 90, semantic CSS ≈ 35–40, hash-suffixed ≈ 10). Each candidate selector is probed against the live page for uniqueness — alternatives that would match several elements (strict-mode violations) are dropped at capture time. Live input *values* are never captured, so filled-in secrets can't leak into snapshots. One row per call site is upserted into the `locator_snapshots` table, so the latest known-good snapshot for every locator is always available.
 
 When a locator later fails, the server resolves replacements through a ladder, most-trustworthy first:
 
 1. **Prior run** — the exact call site (`file:line:col`) had a passing snapshot; its pre-captured alternatives are reused.
 2. **Element match** — the old element appears renamed or moved (its identity is gone from the failing page's ARIA snapshot), so *fresh* locators are generated for the element it most likely became.
 3. **Fingerprint** — the call site shifted lines, but a locator-signature match finds the prior snapshot anyway.
-4. **ARIA fallback** — no prior snapshot exists; limited suggestions are derived from the failure-time ARIA snapshot (no HTML attributes).
+4. **Cross-test** — the same locator was captured by *another* test in the project (common for locators that are only asserted, never acted on, in the failing test); the freshest snapshot is reused.
+5. **ARIA fallback** — no prior snapshot exists; limited suggestions are derived from the failure-time ARIA snapshot (no HTML attributes).
 
 The result is shown as an **Alternative locators** panel on the test-case and failure-cluster pages, and folded into the AI diagnosis context so the model recommends a grounded fix (see [AI diagnosis](./ai-diagnosis#locator-healing)). A single **recommended fix** is highlighted — it keeps your original locator *style* where that style is stable enough (a minimal, idiomatic edit), and escalates to the sturdiest alternative (or advises adding a `data-testid`) only when the original style has nothing stable to fall back on.
 

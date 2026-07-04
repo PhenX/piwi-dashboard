@@ -35,6 +35,17 @@ export interface LocatorFixRecommendation {
   suggestAddTestId: boolean;
 }
 
+/**
+ * Match counts for candidate selectors, probed against the live DOM at capture
+ * time. A count > 1 marks the selector ambiguous (strict-mode violation).
+ */
+export interface SelectorCounts {
+  testId?: number;
+  id?: number;
+  name?: number;
+  classes?: Record<string, number>;
+}
+
 /** Raw element attributes captured after a successful action. */
 export interface ElementAttributes {
   tagName: string;
@@ -45,14 +56,16 @@ export interface ElementAttributes {
   accessibleName: string | null;
   /** Center point of the element's bounding box — spatial discriminator. */
   center: { x: number; y: number } | null;
+  /** True when the element has an associated <label> — gates getByLabel. */
+  hasLabel?: boolean;
+  /** Live-page uniqueness probe results for candidate selectors. */
+  selectorCounts?: SelectorCounts;
 }
 
 /** One captured element interaction (per locator call site). */
 export interface LocatorSnapshot {
   /** The Playwright step location — unique, stable identity of this call site. */
   location: string | null;
-  /** Index of this step within the test case's pw:api steps. */
-  stepIndex: number;
   /** The locator the test code actually used. */
   used: {
     method: string;
@@ -71,4 +84,48 @@ export interface LocatorSnapshot {
   } | null;
   /** Computed alternative locators, ranked by stability score (max 10). */
   alternatives: RankedLocator[];
+}
+
+/**
+ * Where a healing lookup's alternatives came from, best first:
+ * `prior-run` (exact call-site match against a pre-captured snapshot),
+ * `fingerprint` (locator-signature match, survives line shifts),
+ * `cross-test` (same locator signature captured by another test in the project),
+ * `element-match` (element renamed/moved — fresh locators for its current identity),
+ * `aria-snapshot` (derived from the failure-time ARIA snapshot only).
+ */
+export type LocatorHealingSource =
+  | 'prior-run'
+  | 'element-match'
+  | 'fingerprint'
+  | 'cross-test'
+  | 'aria-snapshot'
+  | 'none';
+
+/**
+ * Result of a healing lookup for one failing test-run case. Single source of
+ * truth for the API payload shape — the server handler, MCP tools, AI context
+ * and the dashboard panel all import this.
+ */
+export interface LocatorHealingResult {
+  failingLocator: { method: string; args: Record<string, unknown> } | null;
+  fromPriorSuccess: RankedLocator[] | null;
+  /**
+   * Fresh locators generated from the element's *current* identity, when the
+   * pre-captured locator no longer matches the live page (renamed/moved element).
+   */
+  fromElementMatch: RankedLocator[] | null;
+  fromAriaSnapshot: RankedLocator[] | null;
+  source: LocatorHealingSource;
+  /**
+   * The single recommended fix — convention-preserving where possible — chosen
+   * from the active alternative list. Null when no alternatives are available.
+   */
+  recommendation: LocatorFixRecommendation | null;
+  /**
+   * When the alternatives come from a stored snapshot (`prior-run` /
+   * `fingerprint` / `cross-test`), the time that snapshot was last captured —
+   * lets consumers judge freshness. Null otherwise.
+   */
+  capturedAt: string | null;
 }
