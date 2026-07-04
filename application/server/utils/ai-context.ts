@@ -1876,15 +1876,21 @@ async function buildSourceFiles(
       }
     }
 
-    const files: Array<{ path: string; content: string }> = [];
-    let truncatedAny = false;
+    // Clip to sourceFileChars at fetch time so the stored content is exactly
+    // what the model is shown — patch validation must run against that, not the
+    // full fetched file. A clip counts as truncation for coverage.
+    const files: Array<{ path: string; content: string; truncated: boolean }> = [];
     for (const candidates of targets) {
       if (files.length >= limits.maxSourceFiles) break;
       for (const path of candidates) {
         const fetched = await provider.fetchFileAtRef(path, ref).catch(() => null);
         if (fetched) {
-          files.push({ path: fetched.path, content: fetched.content });
-          if (fetched.truncated) truncatedAny = true;
+          const clipped = fetched.content.length > limits.sourceFileChars;
+          files.push({
+            path: fetched.path,
+            content: clipped ? fetched.content.slice(0, limits.sourceFileChars) : fetched.content,
+            truncated: clipped || fetched.truncated,
+          });
           break; // first resolving candidate for this target
         }
       }
@@ -1892,13 +1898,9 @@ async function buildSourceFiles(
 
     if (files.length === 0) return empty;
 
-    const blocks = files.map((f) => {
-      const clipped =
-        f.content.length > limits.sourceFileChars
-          ? f.content.slice(0, limits.sourceFileChars) + '\n[truncated]'
-          : f.content;
-      return `### ${f.path}\n\`\`\`\n${numberSourceLines(clipped)}\n\`\`\``;
-    });
+    const blocks = files.map(
+      (f) => `### ${f.path}\n\`\`\`\n${numberSourceLines(f.content)}${f.truncated ? '\n[truncated]' : ''}\n\`\`\``,
+    );
     const text =
       '## Source Files (full content at the failing commit)\n' +
       "Full current content of the most-suspect changed files and the failing test's local imports, " +
@@ -1908,8 +1910,8 @@ async function buildSourceFiles(
 
     return {
       text,
-      files,
-      coverage: { count: files.length, paths: files.map((f) => f.path), truncated: truncatedAny },
+      files: files.map((f) => ({ path: f.path, content: f.content })),
+      coverage: { count: files.length, paths: files.map((f) => f.path), truncated: files.some((f) => f.truncated) },
     };
   } catch {
     return empty;

@@ -230,12 +230,17 @@ function downloadPatch() {
   const a = document.createElement('a');
   a.href = url;
   a.download = `piwi-diagnosis-${props.diagnosis?.id ?? 'fix'}.patch`;
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  // Defer cleanup so the download isn't cut short mid-flight in some browsers.
+  setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
 
 interface PatchValidation {
-  status: 'applies' | 'applies-with-offset' | 'stale-file' | 'bad-path' | 'invalid' | 'unchecked';
+  status: 'applies' | 'applies-with-offset' | 'stale-file' | 'invalid' | 'unchecked';
   filesChecked: number;
   filesInPatch: number;
   errors: string[];
@@ -259,8 +264,6 @@ const patchBadge = computed<{ color: 'success' | 'warning' | 'error' | 'neutral'
       return { color: 'error', icon: 'i-lucide-badge-alert', label: 'Does not apply', title: v.errors.join('\n') || 'The file changed since — patch context did not match' };
     case 'invalid':
       return { color: 'error', icon: 'i-lucide-badge-alert', label: 'Invalid diff', title: v.errors.join('\n') || 'Could not parse the patch as a unified diff' };
-    case 'bad-path':
-      return { color: 'error', icon: 'i-lucide-badge-alert', label: 'Bad path', title: v.errors.join('\n') || 'Target file path does not exist' };
     default:
       return { color: 'neutral', icon: 'i-lucide-badge-help', label: 'Unverified', title: 'The source file was not in context, so the patch could not be validated' };
   }
@@ -553,7 +556,7 @@ const pipeline = computed<Array<{ role: string; model: string }>>(() => {
           </div>
           <MarkdownPreview :text="'```diff\n' + details.suggestedFix.patch + '\n```'" />
           <p
-            v-if="patchValidation && (patchValidation.status === 'stale-file' || patchValidation.status === 'invalid' || patchValidation.status === 'bad-path')"
+            v-if="patchValidation && (patchValidation.status === 'stale-file' || patchValidation.status === 'invalid')"
             class="text-xs text-rose-600 dark:text-rose-400 mt-1"
           >
             {{ patchValidation.errors[0] || 'This patch could not be verified against the source.' }}

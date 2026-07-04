@@ -34,7 +34,6 @@ export type PatchValidationStatus =
   | 'applies'
   | 'applies-with-offset'
   | 'stale-file'
-  | 'bad-path'
   | 'invalid'
   | 'unchecked';
 

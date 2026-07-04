@@ -165,13 +165,31 @@ export class GitHubProvider extends ScmProvider {
     const hit = fetchTreeCache.get(key);
     if (hit !== undefined) return hit;
 
-    const res = await fetch(`https://api.github.com/repos/${this.repoPath}/git/trees/${ref}?recursive=1`, {
-      headers: this.makeHeaders(),
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { tree?: Array<{ path: string; type: string }> };
-    const result = (data.tree ?? []).filter((e) => e.type === 'blob').map((e) => e.path);
+    const treePaths = async (treeish: string): Promise<string[] | null> => {
+      const res = await fetch(`https://api.github.com/repos/${this.repoPath}/git/trees/${treeish}?recursive=1`, {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { tree?: Array<{ path: string; type: string }> };
+      return (data.tree ?? []).filter((e) => e.type === 'blob').map((e) => e.path);
+    };
+
+    // The trees endpoint takes a tree SHA or ref. A commit SHA usually resolves
+    // too, but when it doesn't, resolve the commit to its tree SHA and retry.
+    let result = await treePaths(ref);
+    if (result === null) {
+      const commitRes = await fetch(`https://api.github.com/repos/${this.repoPath}/commits/${ref}`, {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!commitRes.ok) return null;
+      const commit = (await commitRes.json()) as { commit?: { tree?: { sha?: string } } };
+      const treeSha = commit.commit?.tree?.sha;
+      if (!treeSha) return null;
+      result = await treePaths(treeSha);
+    }
+    if (result === null) return null;
     fetchTreeCache.set(key, result);
     return result;
   }
