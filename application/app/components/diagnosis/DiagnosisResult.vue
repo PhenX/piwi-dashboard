@@ -252,20 +252,50 @@ const patchValidation = computed<PatchValidation | null>(() => {
 });
 
 /** Badge describing whether the suggested patch was verified to apply. */
-const patchBadge = computed<{ color: 'success' | 'warning' | 'error' | 'neutral'; icon: string; label: string; title: string } | null>(() => {
+const patchBadge = computed<{
+  color: 'success' | 'warning' | 'error' | 'neutral';
+  icon: string;
+  label: string;
+  title: string;
+} | null>(() => {
   const v = patchValidation.value;
   if (!v) return null;
   switch (v.status) {
     case 'applies':
-      return { color: 'success', icon: 'i-lucide-badge-check', label: 'Applies cleanly', title: 'Verified against the real file at the failing commit' };
+      return {
+        color: 'success',
+        icon: 'i-lucide-badge-check',
+        label: 'Applies cleanly',
+        title: 'Verified against the real file at the failing commit',
+      };
     case 'applies-with-offset':
-      return { color: 'warning', icon: 'i-lucide-badge-check', label: 'Applies with offset', title: 'Context matched at a shifted line — apply should still succeed' };
+      return {
+        color: 'warning',
+        icon: 'i-lucide-badge-check',
+        label: 'Applies with offset',
+        title: 'Context matched at a shifted line — apply should still succeed',
+      };
     case 'stale-file':
-      return { color: 'error', icon: 'i-lucide-badge-alert', label: 'Does not apply', title: v.errors.join('\n') || 'The file changed since — patch context did not match' };
+      return {
+        color: 'error',
+        icon: 'i-lucide-badge-alert',
+        label: 'Does not apply',
+        title: v.errors.join('\n') || 'The file changed since — patch context did not match',
+      };
     case 'invalid':
-      return { color: 'error', icon: 'i-lucide-badge-alert', label: 'Invalid diff', title: v.errors.join('\n') || 'Could not parse the patch as a unified diff' };
+      return {
+        color: 'error',
+        icon: 'i-lucide-badge-alert',
+        label: 'Invalid diff',
+        title: v.errors.join('\n') || 'Could not parse the patch as a unified diff',
+      };
     default:
-      return { color: 'neutral', icon: 'i-lucide-badge-help', label: 'Unverified', title: 'The source file was not in context, so the patch could not be validated' };
+      return {
+        color: 'neutral',
+        icon: 'i-lucide-badge-help',
+        label: 'Unverified',
+        title: 'The source file was not in context, so the patch could not be validated',
+      };
   }
 });
 

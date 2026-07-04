@@ -187,9 +187,13 @@ export class BitbucketProvider extends ScmProvider {
 
   async probeError(branch?: string): Promise<string | null> {
     try {
-      const res = await fetch(this.base, { headers: this.makeHeaders(), signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+      const res = await fetch(this.base, {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
       if (!res.ok) {
-        if (res.status === 404) return 'Repository not found on Bitbucket. Check the remote URL in your test run metadata.';
+        if (res.status === 404)
+          return 'Repository not found on Bitbucket. Check the remote URL in your test run metadata.';
         if (res.status === 401 || res.status === 403)
           return 'Bitbucket API authentication failed. Check your SCM token in Settings → AI.';
         return `Bitbucket API returned ${res.status}.`;

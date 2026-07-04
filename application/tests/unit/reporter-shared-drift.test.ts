@@ -40,9 +40,7 @@ describe('reporter ↔ shared drift guard', () => {
 
   test('parseAriaRoleName (reporter) matches parseAriaCandidates (shared) on all fixtures', () => {
     for (const snapshot of ARIA_FIXTURES) {
-      expect(parseAriaRoleName(snapshot), `parse(${JSON.stringify(snapshot)})`).toEqual(
-        parseAriaCandidates(snapshot),
-      );
+      expect(parseAriaRoleName(snapshot), `parse(${JSON.stringify(snapshot)})`).toEqual(parseAriaCandidates(snapshot));
     }
   });
 });

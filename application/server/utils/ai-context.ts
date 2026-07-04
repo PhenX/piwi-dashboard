@@ -2019,7 +2019,13 @@ async function scmInvestigationSections(
 
             // Full source of the suspect files + test imports at the failing commit.
             if (provider) {
-              sourceFilesResult = await buildSourceFiles(provider, regression.commitRange.toSha, scored, signals, limits);
+              sourceFilesResult = await buildSourceFiles(
+                provider,
+                regression.commitRange.toSha,
+                scored,
+                signals,
+                limits,
+              );
             }
           }
         } catch (fetchErr) {
@@ -2473,7 +2479,8 @@ export async function buildDiagnosisContext(
       : 'no SCM diff available — check repository URL in project settings or configure a SCM token';
   }
   if (!sectionIds.has('console')) {
-    absentReasons.console = 'no console entries captured — collectPerformanceMetrics may be disabled in reporter options';
+    absentReasons.console =
+      'no console entries captured — collectPerformanceMetrics may be disabled in reporter options';
   }
   if (!sectionIds.has('networkRequests')) {
     absentReasons.networkRequests =

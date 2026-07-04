@@ -30,12 +30,7 @@ export interface ParsedPatch {
   files: PatchFile[];
 }
 
-export type PatchValidationStatus =
-  | 'applies'
-  | 'applies-with-offset'
-  | 'stale-file'
-  | 'invalid'
-  | 'unchecked';
+export type PatchValidationStatus = 'applies' | 'applies-with-offset' | 'stale-file' | 'invalid' | 'unchecked';
 
 export interface PatchValidation {
   status: PatchValidationStatus;
