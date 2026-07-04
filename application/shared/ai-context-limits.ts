@@ -23,6 +23,10 @@ export interface ContextLimits {
   ariaSnapshotChars: number;
   /** Max characters of the test source snippet. */
   testSourceChars: number;
+  /** Max number of full source files fetched from SCM to ground patches (0 disables). */
+  maxSourceFiles: number;
+  /** Max characters per fetched full source file. */
+  sourceFileChars: number;
   /** When > 0, parse the Playwright trace ZIP to extract failing action context. */
   maxTraceActions: number;
   /** Max characters for trace-derived DOM/ARIA excerpt. */
@@ -51,6 +55,8 @@ export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
   networkRequests: 25,
   ariaSnapshotChars: 12000,
   testSourceChars: 8000,
+  maxSourceFiles: 4,
+  sourceFileChars: 12000,
   serverLogEntries: 50,
   serverLogEntryChars: 1000,
   maxImages: 5,
@@ -142,6 +148,22 @@ export const CONTEXT_LIMIT_FIELDS: ContextLimitField[] = [
     label: 'Test source characters',
     envVar: 'PIWI_AI_MAX_TEST_SOURCE_CHARS',
     description: 'Max characters of the test source snippet.',
+    min: 0,
+    max: 50000,
+  },
+  {
+    key: 'maxSourceFiles',
+    label: 'Full source files',
+    envVar: 'PIWI_AI_MAX_SOURCE_FILES',
+    description: 'Max full source files fetched from SCM to ground patches (0 disables).',
+    min: 0,
+    max: 20,
+  },
+  {
+    key: 'sourceFileChars',
+    label: 'Source file characters',
+    envVar: 'PIWI_AI_MAX_SOURCE_FILE_CHARS',
+    description: 'Max characters per fetched full source file.',
     min: 0,
     max: 50000,
   },

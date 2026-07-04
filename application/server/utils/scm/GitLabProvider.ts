@@ -1,11 +1,24 @@
-import { ScmProvider, truncatePatch, MAX_SCM_FILES, FETCH_TIMEOUT_MS } from './ScmProvider';
-import type { ScmCommitDetail, ScmChanges } from './ScmProvider';
+import { ScmProvider, truncatePatch, MAX_SCM_FILES, MAX_FILE_BYTES, FETCH_TIMEOUT_MS } from './ScmProvider';
+import type { ScmCommitDetail, ScmChanges, ScmFileContent } from './ScmProvider';
 import { TtlCache } from './cache';
 
 const listBranchesCache = new TtlCache<string[]>(3 * 60 * 1000);
 const listCommitsCache = new TtlCache<ScmCommitDetail[]>(3 * 60 * 1000);
 const fetchChangesCache = new TtlCache<ScmChanges>(10 * 60 * 1000);
 const fetchCommitDiffCache = new TtlCache<ScmChanges>(10 * 60 * 1000);
+const fetchFileCache = new TtlCache<ScmFileContent | null>(30 * 60 * 1000);
+const fetchTreeCache = new TtlCache<string[]>(10 * 60 * 1000);
+
+/** Count added/removed lines in a unified-diff hunk body (ignores +++/--- headers). */
+function countDiffLines(diff: string): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+') && !line.startsWith('+++')) additions++;
+    else if (line.startsWith('-') && !line.startsWith('---')) deletions++;
+  }
+  return { additions, deletions };
+}
 
 export class GitLabProvider extends ScmProvider {
   readonly provider = 'gitlab' as const;
@@ -19,7 +32,7 @@ export class GitLabProvider extends ScmProvider {
   }
 
   async listBranches(limit = 100): Promise<string[]> {
-    const key = `branches:${this.hostname}:${this.repoPath}:${limit}`;
+    const key = `${this.keyPrefix}:branches:${this.hostname}:${this.repoPath}:${limit}`;
     const hit = listBranchesCache.get(key);
     if (hit !== undefined) return hit;
 
@@ -36,7 +49,7 @@ export class GitLabProvider extends ScmProvider {
   }
 
   async listCommits(limit = 50, branch?: string): Promise<ScmCommitDetail[]> {
-    const key = `${this.hostname}:${this.repoPath}:${limit}:${branch ?? ''}`;
+    const key = `${this.keyPrefix}:${this.hostname}:${this.repoPath}:${limit}:${branch ?? ''}`;
     const hit = listCommitsCache.get(key);
     if (hit !== undefined) return hit;
 
@@ -68,7 +81,7 @@ export class GitLabProvider extends ScmProvider {
   }
 
   async fetchChanges(fromSha: string, toSha: string): Promise<ScmChanges | null> {
-    const key = `${this.hostname}:${this.repoPath}:${fromSha}:${toSha}`;
+    const key = `${this.keyPrefix}:${this.hostname}:${this.repoPath}:${fromSha}:${toSha}`;
     const hit = fetchChangesCache.get(key);
     if (hit !== undefined) return hit;
 
@@ -91,20 +104,23 @@ export class GitLabProvider extends ScmProvider {
     };
     const result: ScmChanges = {
       commits: (data.commits ?? []).map((c) => ({ sha: c.id.slice(0, 7), message: c.message.split('\n')[0] ?? '' })),
-      files: (data.diffs ?? []).slice(0, MAX_SCM_FILES).map((f) => ({
-        filename: f.new_path || f.old_path,
-        status: f.new_file ? 'added' : f.deleted_file ? 'removed' : f.renamed_file ? 'renamed' : 'modified',
-        additions: 0,
-        deletions: 0,
-        patch: f.diff ? truncatePatch(f.diff) : undefined,
-      })),
+      files: (data.diffs ?? []).slice(0, MAX_SCM_FILES).map((f) => {
+        const { additions, deletions } = countDiffLines(f.diff ?? '');
+        return {
+          filename: f.new_path || f.old_path,
+          status: f.new_file ? 'added' : f.deleted_file ? 'removed' : f.renamed_file ? 'renamed' : 'modified',
+          additions,
+          deletions,
+          patch: f.diff ? truncatePatch(f.diff) : undefined,
+        };
+      }),
     };
     fetchChangesCache.set(key, result);
     return result;
   }
 
   async fetchCommitDiff(sha: string): Promise<ScmChanges | null> {
-    const key = `${this.hostname}:${this.repoPath}:${sha}`;
+    const key = `${this.keyPrefix}:${this.hostname}:${this.repoPath}:${sha}`;
     const hit = fetchCommitDiffCache.get(key);
     if (hit !== undefined) return hit;
 
@@ -127,16 +143,67 @@ export class GitLabProvider extends ScmProvider {
     }>;
     const result: ScmChanges = {
       commits: [],
-      files: data.slice(0, MAX_SCM_FILES).map((f) => ({
-        filename: f.new_path || f.old_path,
-        status: f.new_file ? 'added' : f.deleted_file ? 'removed' : f.renamed_file ? 'renamed' : 'modified',
-        additions: 0,
-        deletions: 0,
-        patch: f.diff ? truncatePatch(f.diff) : undefined,
-      })),
+      files: data.slice(0, MAX_SCM_FILES).map((f) => {
+        const { additions, deletions } = countDiffLines(f.diff ?? '');
+        return {
+          filename: f.new_path || f.old_path,
+          status: f.new_file ? 'added' : f.deleted_file ? 'removed' : f.renamed_file ? 'renamed' : 'modified',
+          additions,
+          deletions,
+          patch: f.diff ? truncatePatch(f.diff) : undefined,
+        };
+      }),
     };
     fetchCommitDiffCache.set(key, result);
     return result;
+  }
+
+  async fetchFileAtRef(path: string, ref: string): Promise<ScmFileContent | null> {
+    const cleanPath = path.replace(/^\//, '');
+    const key = `${this.keyPrefix}:file:${this.hostname}:${this.repoPath}:${ref}:${cleanPath}`;
+    const hit = fetchFileCache.get(key);
+    if (hit !== undefined) return hit;
+
+    const projectPath = encodeURIComponent(this.repoPath);
+    const encodedFile = encodeURIComponent(cleanPath);
+    const res = await fetch(
+      `https://${this.hostname}/api/v4/projects/${projectPath}/repository/files/${encodedFile}/raw?ref=${encodeURIComponent(ref)}`,
+      { headers: this.makeHeaders(), signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
+    );
+    if (!res.ok) {
+      fetchFileCache.set(key, null);
+      return null;
+    }
+    const raw = await res.text();
+    const result: ScmFileContent = {
+      path: cleanPath,
+      content: raw.length > MAX_FILE_BYTES ? raw.slice(0, MAX_FILE_BYTES) : raw,
+      truncated: raw.length > MAX_FILE_BYTES,
+    };
+    fetchFileCache.set(key, result);
+    return result;
+  }
+
+  async fetchTree(ref: string): Promise<string[] | null> {
+    const key = `${this.keyPrefix}:tree:${this.hostname}:${this.repoPath}:${ref}`;
+    const hit = fetchTreeCache.get(key);
+    if (hit !== undefined) return hit;
+
+    const projectPath = encodeURIComponent(this.repoPath);
+    const paths: string[] = [];
+    // GitLab paginates the tree; fetch a bounded number of pages for best-effort coverage.
+    for (let page = 1; page <= 10; page++) {
+      const res = await fetch(
+        `https://${this.hostname}/api/v4/projects/${projectPath}/repository/tree?ref=${encodeURIComponent(ref)}&recursive=true&per_page=100&page=${page}`,
+        { headers: this.makeHeaders(), signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
+      );
+      if (!res.ok) return page === 1 ? null : paths;
+      const data = (await res.json()) as Array<{ path: string; type: string }>;
+      for (const e of data) if (e.type === 'blob') paths.push(e.path);
+      if (data.length < 100) break;
+    }
+    fetchTreeCache.set(key, paths);
+    return paths;
   }
 
   async probeError(branch?: string): Promise<string | null> {

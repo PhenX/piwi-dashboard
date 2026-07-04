@@ -43,10 +43,10 @@ The user message contains diagnostic evidence collected from a CI environment. T
 ## suggestedFix.patch
 When you have enough context to determine the exact lines to change, output a standard unified diff that can be applied with \`git apply\`. Rules:
 - Use the real file paths from the evidence (e.g. \`--- a/tests/foo.spec.ts\`, \`+++ b/tests/foo.spec.ts\`).
-- Include correct \`@@ -L,N +L,N @@\` hunk headers.
-- For test-bug: the patch should fix the test file using the test source provided.
-- For app-bug with a git diff showing the regression: the patch should fix the application file (revert or correct the breaking change).
-- Set patch to null if you are not confident in the exact lines, if the fix spans unknown files, or if no source was provided.
+- Ground every hunk in a section that shows the actual file content — the \`Source Files\` section (full files, with \`NNNN | \` line numbers) or \`Test Source\`. Only change lines you can quote from one of those sections; compute the \`@@ -L,N +L,N @@\` hunk header from the shown line numbers. If a file you need is not shown, set patch to null.
+- For test-bug: the patch should fix the test file using the test source / source files provided.
+- For app-bug with a git diff showing the regression: the patch should fix the application file (revert or correct the breaking change), using the full file content in \`Source Files\` to get the surrounding lines and hunk offsets right.
+- Set patch to null if you are not confident in the exact lines, if the fix spans files whose content you were not shown, or if no source was provided. A wrong patch is worse than none — the dashboard validates every patch against the real file and will flag one that does not apply.
 - Do not output a patch and a code snippet for the same fix; prefer patch when possible and set code to null.`;
 
 /**

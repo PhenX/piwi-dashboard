@@ -5,6 +5,8 @@ import {
   extractPageSnapshotSection,
   extractLocatorLiterals,
   findLiteralInPatch,
+  resolveImportPath,
+  candidateFilePaths,
 } from '../../server/utils/ai-context';
 import type { ContextLimits } from '#shared/ai-context-limits';
 
@@ -192,5 +194,29 @@ describe('locator-literal SCM matching (diff-content relevance)', () => {
     const withHit = scoreChangedFile('app/pages/whatever.vue', signals, { literal: 'Add a label', removed: true });
     const pathOnly = scoreChangedFile('app/pages/labels-editor.vue', signals);
     expect(withHit).toBeGreaterThan(pathOnly);
+  });
+});
+
+describe('resolveImportPath', () => {
+  test('resolves a sibling import', () => {
+    expect(resolveImportPath('tests/login.spec.ts', './helpers')).toBe('tests/helpers');
+  });
+  test('resolves a parent-dir import', () => {
+    expect(resolveImportPath('tests/e2e/login.spec.ts', '../pages/LoginPage')).toBe('tests/pages/LoginPage');
+  });
+  test('collapses redundant segments', () => {
+    expect(resolveImportPath('a/b/c.spec.ts', './../b/./x')).toBe('a/b/x');
+  });
+});
+
+describe('candidateFilePaths', () => {
+  test('returns the path as-is when it already has a code extension', () => {
+    expect(candidateFilePaths('tests/helpers.ts')).toEqual(['tests/helpers.ts']);
+  });
+  test('expands an extension-less path to ts/tsx/... and index files', () => {
+    const c = candidateFilePaths('tests/pages/LoginPage');
+    expect(c).toContain('tests/pages/LoginPage.ts');
+    expect(c).toContain('tests/pages/LoginPage.tsx');
+    expect(c).toContain('tests/pages/LoginPage/index.ts');
   });
 });

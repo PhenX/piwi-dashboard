@@ -22,6 +22,7 @@ export const DIAGNOSIS_SECTIONS: DiagnosisSectionMeta[] = [
   { id: 'testAnnotations', label: 'Test annotations (@fixme/@flaky …)', short: 'Annotations' },
   { id: 'affectedTests', label: 'Affected tests', short: 'Tests' },
   { id: 'testSource', label: 'Test source code', short: 'Source' },
+  { id: 'sourceFiles', label: 'Full source files (suspect + imports)', short: 'Files' },
   { id: 'steps', label: 'Test steps', short: 'Steps' },
   { id: 'failingSteps', label: 'Failing steps', short: 'Steps' },
   { id: 'console', label: 'Browser console logs', short: 'Console' },

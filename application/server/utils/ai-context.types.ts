@@ -31,6 +31,7 @@ export type SectionId =
   | 'runContext'
   | 'testAnnotations'
   | 'testSource'
+  | 'sourceFiles'
   | 'steps'
   | 'failingSteps'
   | 'console'
@@ -70,6 +71,12 @@ export interface BuiltDiagnosisContext {
   coverage: DiagnosisContextCoverage;
   scmChanges: ScmChanges | null;
   images?: AiAttachedImage[];
+  /**
+   * Full content of the source files fetched into the `sourceFiles` section,
+   * keyed by repo-relative path. Used to validate a suggested patch against the
+   * exact bytes the model was shown (see `validatePatch`).
+   */
+  sourceFiles?: Array<{ path: string; content: string }>;
   /** Total estimated input tokens (text + images). */
   tokenEstimate: number;
   /** Estimated tokens from the text context alone (≈ chars / 4). */

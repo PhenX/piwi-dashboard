@@ -1,10 +1,18 @@
-import { ScmProvider, truncatePatch, MAX_SCM_FILES, MAX_RAW_DIFF_BYTES, FETCH_TIMEOUT_MS } from './ScmProvider';
-import type { ScmCommitDetail, ScmChanges } from './ScmProvider';
+import {
+  ScmProvider,
+  truncatePatch,
+  MAX_SCM_FILES,
+  MAX_FILE_BYTES,
+  MAX_RAW_DIFF_BYTES,
+  FETCH_TIMEOUT_MS,
+} from './ScmProvider';
+import type { ScmCommitDetail, ScmChanges, ScmFileContent } from './ScmProvider';
 import { TtlCache } from './cache';
 
 const listBranchesCache = new TtlCache<string[]>(3 * 60 * 1000);
 const listCommitsCache = new TtlCache<ScmCommitDetail[]>(3 * 60 * 1000);
 const fetchChangesCache = new TtlCache<ScmChanges>(10 * 60 * 1000);
+const fetchFileCache = new TtlCache<ScmFileContent | null>(30 * 60 * 1000);
 
 function parsePatchesByFile(rawDiff: string): Map<string, string> {
   const result = new Map<string, string>();
@@ -44,7 +52,7 @@ export class BitbucketProvider extends ScmProvider {
   }
 
   async listBranches(limit = 100): Promise<string[]> {
-    const key = `branches:${this.workspace}/${this.repoSlug}:${limit}`;
+    const key = `${this.keyPrefix}:branches:${this.workspace}/${this.repoSlug}:${limit}`;
     const hit = listBranchesCache.get(key);
     if (hit !== undefined) return hit;
 
@@ -60,7 +68,7 @@ export class BitbucketProvider extends ScmProvider {
   }
 
   async listCommits(limit = 50, branch?: string): Promise<ScmCommitDetail[]> {
-    const key = `${this.workspace}/${this.repoSlug}:${limit}:${branch ?? ''}`;
+    const key = `${this.keyPrefix}:${this.workspace}/${this.repoSlug}:${limit}:${branch ?? ''}`;
     const hit = listCommitsCache.get(key);
     if (hit !== undefined) return hit;
 
@@ -87,7 +95,7 @@ export class BitbucketProvider extends ScmProvider {
   }
 
   async fetchChanges(fromSha: string, toSha: string): Promise<ScmChanges | null> {
-    const key = `${this.workspace}/${this.repoSlug}:${fromSha}:${toSha}`;
+    const key = `${this.keyPrefix}:${this.workspace}/${this.repoSlug}:${fromSha}:${toSha}`;
     const hit = fetchChangesCache.get(key);
     if (hit !== undefined) return hit;
 
@@ -147,7 +155,48 @@ export class BitbucketProvider extends ScmProvider {
     return this.fetchChanges(`${sha}~1`, sha);
   }
 
-  async probeError(_branch?: string): Promise<string | null> {
+  async fetchFileAtRef(path: string, ref: string): Promise<ScmFileContent | null> {
+    const cleanPath = path.replace(/^\//, '');
+    const key = `${this.keyPrefix}:file:${this.workspace}/${this.repoSlug}:${ref}:${cleanPath}`;
+    const hit = fetchFileCache.get(key);
+    if (hit !== undefined) return hit;
+
+    const res = await fetch(`${this.base}/src/${encodeURIComponent(ref)}/${cleanPath}`, {
+      headers: this.makeHeaders(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      fetchFileCache.set(key, null);
+      return null;
+    }
+    const raw = await res.text();
+    const result: ScmFileContent = {
+      path: cleanPath,
+      content: raw.length > MAX_FILE_BYTES ? raw.slice(0, MAX_FILE_BYTES) : raw,
+      truncated: raw.length > MAX_FILE_BYTES,
+    };
+    fetchFileCache.set(key, result);
+    return result;
+  }
+
+  async fetchTree(_ref: string): Promise<string[] | null> {
+    // Bitbucket's `src` endpoint has no clean recursive listing; skip tree-based
+    // path normalization for Bitbucket (callers degrade gracefully to null).
     return null;
+  }
+
+  async probeError(branch?: string): Promise<string | null> {
+    try {
+      const res = await fetch(this.base, { headers: this.makeHeaders(), signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+      if (!res.ok) {
+        if (res.status === 404) return 'Repository not found on Bitbucket. Check the remote URL in your test run metadata.';
+        if (res.status === 401 || res.status === 403)
+          return 'Bitbucket API authentication failed. Check your SCM token in Settings → AI.';
+        return `Bitbucket API returned ${res.status}.`;
+      }
+      return `No commits found on ${branch ? `branch '${branch}'` : 'the default branch'}.`;
+    } catch {
+      return 'Could not reach the Bitbucket API. Check your network connection.';
+    }
   }
 }

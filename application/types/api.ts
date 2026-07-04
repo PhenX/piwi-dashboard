@@ -861,6 +861,14 @@ export interface DiagnosisContextCoverage {
     source: import('#shared/locator-healing.types').LocatorHealingSource;
     alternativesCount: number;
   } | null;
+  /** Full source files fetched to ground the diagnosis (suspect changed files + test imports). */
+  sourceFiles?: {
+    count: number;
+    /** Repo-relative paths of the fetched files. */
+    paths: string[];
+    /** true when at least one file was truncated to the size cap. */
+    truncated: boolean;
+  } | null;
   /** Sections where data is not applicable (with reason), keyed by section id. Absent in coverage means "no data". */
   notApplicable?: Record<string, string>;
 }
