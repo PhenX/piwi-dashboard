@@ -256,6 +256,12 @@ export default defineNuxtConfig({
       // excluding it ensures the WASM file is loaded at runtime via locateFile.
       exclude: ['sql.js'],
     },
+    server: {
+      warmup: {
+        // relative to Vite root = Nuxt srcDir (application/app)
+        clientFiles: ['./pages/**/*.vue', './components/**/*.vue', './layouts/**/*.vue'],
+      },
+    },
   },
 
   hooks: {

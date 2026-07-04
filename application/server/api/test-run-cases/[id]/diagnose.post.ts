@@ -8,7 +8,12 @@ import {
 import { Role } from '#shared/types';
 import { resolveAiConfig } from '../../../utils/ai-provider';
 import type { AiAttachedImage } from '../../../utils/ai-provider';
-import { runClusterDiagnosis, isDiagnosisRunning, isDiagnosisRunningForExecution, isDiagnosisStale } from '../../../utils/ai-diagnosis';
+import {
+  runClusterDiagnosis,
+  isDiagnosisRunning,
+  isDiagnosisRunningForExecution,
+  isDiagnosisStale,
+} from '../../../utils/ai-diagnosis';
 
 const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 

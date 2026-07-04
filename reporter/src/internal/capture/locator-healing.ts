@@ -341,8 +341,7 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
   // legacy payloads without the hasLabel probe keep the old permissive behavior.
   if (accessibleName && ['input', 'select', 'textarea'].includes(tag)) {
     const label = attr(attrs, 'aria-label');
-    const labelBacked =
-      attrs.hasLabel === undefined ? true : attrs.hasLabel === true || label === accessibleName;
+    const labelBacked = attrs.hasLabel === undefined ? true : attrs.hasLabel === true || label === accessibleName;
     if (labelBacked) {
       add({
         locator: `getByLabel('${esc(accessibleName)}')`,

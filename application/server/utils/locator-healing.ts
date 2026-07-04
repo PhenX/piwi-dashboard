@@ -531,10 +531,7 @@ async function findCrossTestSnapshot(
     .innerJoin(testCases, eq(locatorSnapshots.testCaseId, testCases.id))
     .where(
       and(
-        eq(
-          testCases.projectId,
-          sql`(select project_id from test_cases where id = ${testCaseId})`,
-        ),
+        eq(testCases.projectId, sql`(select project_id from test_cases where id = ${testCaseId})`),
         eq(locatorSnapshots.usedArgsFp, sig),
         ne(locatorSnapshots.testCaseId, testCaseId),
         ...(method ? [eq(locatorSnapshots.usedMethod, method)] : []),
