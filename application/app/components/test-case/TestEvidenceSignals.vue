@@ -34,7 +34,7 @@ const label = computed(() => {
   return parts.join(', ');
 });
 
-const open = ref(false);
+const open = defineModel<boolean>('open', { default: false });
 </script>
 
 <template>

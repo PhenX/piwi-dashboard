@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import type { FailureClusterDetail } from '~~/types/api';
 import { renderAnsi } from '~/utils';
+import { stripAnsi } from '~/utils/text-format';
+import { buildRetryCommand } from '~/utils/retry-command';
 
 const route = useRoute();
 const clusterId = parseInt(String(route.params.id));
 
 // Provide shared diagnosis/investigation state (consumed by ClusterInvestigation
 // and ClusterDiagnosis). Must run before the top-level await below so provide()
-// and lifecycle hooks register against the active setup instance.
-provideClusterDiagnosis(clusterId);
+// and lifecycle hooks register against the active setup instance. Keep the store
+// so the page can read coverage directly (a component can't inject its own provide).
+const clusterDiagnosis = provideClusterDiagnosis(clusterId);
 
 const { data: cluster, refresh } = await useFetch<FailureClusterDetail>(`/api/failure-clusters/${clusterId}`);
 
@@ -66,8 +69,6 @@ function copyCluster() {
   if (!c) return;
   const url = window.location.href;
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  // eslint-disable-next-line no-control-regex
-  const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
 
   const meta = [
     c.errorType,
@@ -104,6 +105,61 @@ function copyCluster() {
 
   copyRich(plain, html, { toast: 'Failure cluster copied' });
 }
+
+// Left-column section peeks (shown while the section is folded)
+const errorPeek = computed(() => {
+  const raw = cluster.value?.sampleError;
+  if (!raw) return '';
+  return stripAnsi(raw)
+    .split('\n')
+    .find((l) => l.trim()) ?? '';
+});
+
+const { scmStatus } = useScmStatusSummary(clusterDiagnosis.coverage);
+
+// Retry command for the test-evidence header (built from all affected cases).
+const retryCommand = computed(() =>
+  buildRetryCommand(
+    (cluster.value?.affectedTestCases ?? []).map((tc) => ({
+      filePath: tc.filePath,
+      title: tc.title,
+      line: null,
+      projectName: null,
+    })),
+  ),
+);
+const { copy: copyRetry, copied: retryCopied } = useCopy();
+
+// Reveal-on-citation: a diagnosis evidence citation (right column) can unfold and
+// scroll to the matching left-column section. Refs point at the foldable cards.
+const errorSection = ref<{ reveal: () => void } | null>(null);
+const evidenceSection = ref<{ reveal: () => void } | null>(null);
+const scmSection = ref<{ reveal: () => void } | null>(null);
+
+const sectionToCard: Record<string, () => { reveal: () => void } | null> = {
+  sampleError: () => errorSection.value,
+  executionError: () => errorSection.value,
+  scmInvestigation: () => scmSection.value,
+  selectedCommits: () => scmSection.value,
+  topSuspectedCommit: () => scmSection.value,
+  failingAction: () => scmSection.value,
+  affectedTests: () => evidenceSection.value,
+  testSource: () => evidenceSection.value,
+  sourceFiles: () => evidenceSection.value,
+  steps: () => evidenceSection.value,
+  failingSteps: () => evidenceSection.value,
+  console: () => evidenceSection.value,
+  networkRequests: () => evidenceSection.value,
+  ariaSnapshot: () => evidenceSection.value,
+  screenshots: () => evidenceSection.value,
+  tracePointers: () => evidenceSection.value,
+  artifacts: () => evidenceSection.value,
+};
+
+provide(clusterSectionLocatorKey, {
+  canLocate: (id: string) => id in sectionToCard,
+  open: (id: string) => sectionToCard[id]?.()?.reveal(),
+});
 
 // Breadcrumbs
 const breadcrumbItems = computed(() => [
@@ -156,58 +212,102 @@ const breadcrumbItems = computed(() => [
             @update:triage-status="triageStatus = $event"
             @update:triage-note="triageNote = $event"
             @save-triage="saveTriage"
-            @extract="extractModalOpen = true"
           />
         </div>
 
         <!-- Body: two columns — left is wider (investigation heavy) -->
         <div class="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 p-1 overflow-hidden">
-          <!-- Left: error + test evidence + SCM investigation -->
+          <!-- Left: error + test evidence + SCM investigation. Sections fold to a
+               single header with a peek so the whole failure reads at a glance. -->
           <div class="space-y-4 overflow-y-auto">
             <!-- Error message -->
-            <SectionCard
+            <CollapsibleSectionCard
               v-if="cluster.sampleError"
+              ref="errorSection"
+              storage-key="cluster-error"
               icon="i-lucide-circle-x"
               icon-class="text-red-500"
               title="Error message"
             >
+              <template #folded>
+                <span class="font-mono text-xs">{{ errorPeek }}</span>
+              </template>
               <!-- eslint-disable-next-line vue/no-v-html -->
               <div
                 class="text-xs font-mono overflow-x-auto whitespace-pre-wrap"
                 v-html="renderAnsi(cluster.sampleError)"
               />
-            </SectionCard>
+            </CollapsibleSectionCard>
 
             <!-- Locator healing: alternative suggestions for the failing locator -->
             <LocatorHealingPanel
               v-if="cluster.affectedTestCases?.length && cluster.affectedTestCases[0]?.recentTestRunsCaseId"
+              ref="locatorSection"
+              storage-key="cluster-locators"
               :run-id="cluster.lastSeenRunId"
               :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
             />
 
             <!-- Test evidence: source, screenshots, traces, steps, aria, signals -->
-            <SectionCard
+            <CollapsibleSectionCard
               v-if="cluster.affectedTestCases?.length"
+              ref="evidenceSection"
+              storage-key="cluster-evidence"
               icon="i-lucide-flask-conical"
               title="Test evidence"
               help="cluster.evidence"
             >
+              <template #folded>
+                {{ cluster.affectedTests }} {{ cluster.affectedTests === 1 ? 'test' : 'tests' }} ·
+                {{ cluster.occurrences }} occurrence{{ cluster.occurrences === 1 ? '' : 's' }} ·
+                <span class="font-mono text-xs">{{ cluster.affectedTestCases[0]?.filePath }}</span>
+              </template>
               <template #actions>
                 <UBadge color="neutral" variant="subtle" size="sm">
                   {{ cluster.affectedTestCases.length }}
                   {{ cluster.affectedTestCases.length === 1 ? 'test' : 'tests' }}
                 </UBadge>
+                <UButton
+                  size="xs"
+                  variant="outline"
+                  color="neutral"
+                  :icon="retryCopied ? 'i-lucide-check' : 'i-lucide-play'"
+                  :title="retryCopied ? 'Copied!' : copyPreview(retryCommand)"
+                  @click="copyRetry(retryCommand, { toast: 'Retry command copied' })"
+                >
+                  Copy retry command
+                </UButton>
+                <UTooltip text="Unlink incorrectly clustered test cases from this group">
+                  <UButton
+                    size="xs"
+                    color="warning"
+                    variant="outline"
+                    icon="i-lucide-arrow-up-from-line"
+                    @click="extractModalOpen = true"
+                  >
+                    Extract
+                  </UButton>
+                </UTooltip>
               </template>
-              <ClusterTestEvidence
-                :affected-test-cases="cluster.affectedTestCases"
-                :sample-error="cluster.sampleError"
-              />
-            </SectionCard>
+              <ClusterTestEvidence :affected-test-cases="cluster.affectedTestCases" />
+            </CollapsibleSectionCard>
 
             <!-- SCM investigation: baseline picker + commit diff -->
-            <SectionCard icon="i-lucide-git-compare-arrows" title="What changed" help="cluster.scm">
+            <CollapsibleSectionCard
+              ref="scmSection"
+              storage-key="cluster-scm"
+              icon="i-lucide-git-compare-arrows"
+              title="What changed"
+              help="cluster.scm"
+            >
+              <template #folded>
+                <span class="inline-flex items-center gap-1.5">
+                  <UIcon :name="scmStatus.icon" class="size-3.5 shrink-0" :class="scmStatus.color" />
+                  <span :class="scmStatus.color">{{ scmStatus.text }}</span>
+                </span>
+              </template>
               <ClusterInvestigation />
-            </SectionCard>
+            </CollapsibleSectionCard>
           </div>
 
           <!-- Right: diagnosis -->
