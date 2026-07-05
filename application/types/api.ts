@@ -530,7 +530,6 @@ export interface FailureClusterDetail {
   lastSeenAt: string | Date | null;
   diagnosis: DiagnosisCompact | null;
   project: { id: number; name: string; label: string | null } | null;
-  recentRunIds: number[];
   affectedTestCases: Array<{
     testCaseId: number;
     title: string;

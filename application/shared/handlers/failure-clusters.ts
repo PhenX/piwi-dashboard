@@ -17,7 +17,7 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
   const [cluster] = await db.select().from(failureClusters).where(eq(failureClusters.id, clusterId));
   if (!cluster) return null;
 
-  const [[countRow], [lastRun], [firstSeenRun], [diag], [project], affectedTestCases, recentRuns] = await Promise.all([
+  const [[countRow], [lastRun], [firstSeenRun], [diag], [project], affectedTestCases] = await Promise.all([
     db
       .select({ affectedTests: sql<number>`count(distinct ${testRunsCases.testCaseId})` })
       .from(testRunsCases)
@@ -54,15 +54,6 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
       .groupBy(testCases.id, testCases.title, testCases.filePath)
       .orderBy(desc(sql`count(${testRunsCases.id})`))
       .limit(50),
-
-    db
-      .select({ id: testRuns.id })
-      .from(testRunsCases)
-      .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
-      .where(eq(testRunsCases.failureClusterId, clusterId))
-      .groupBy(testRuns.id)
-      .orderBy(desc(testRuns.startTime))
-      .limit(3),
   ]);
 
   return {
@@ -81,7 +72,6 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
       : null,
     project: project ?? null,
     affectedTestCases: affectedTestCases.map((t: any) => ({ ...t, runCount: Number(t.runCount) })),
-    recentRunIds: recentRuns.map((r) => r.id),
   };
 }
 
