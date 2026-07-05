@@ -21,6 +21,7 @@ export const PROJECT = {
   CASE_FILES_LIVE: 'case-files-live-test',
   CLUSTER_MERGE: 'cluster-merge-test',
   CLUSTER_NAMING: 'cluster-naming-test',
+  CLUSTER_PAGE_LAYOUT: 'cluster-page-layout-test',
   CLUSTER_SUGGEST: 'cluster-suggest-test',
   DASHBOARD_PERF: 'dashboard-perf-tracking',
   DEFAULT_PROJECT: 'default-project',
