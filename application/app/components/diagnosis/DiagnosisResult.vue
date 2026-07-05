@@ -10,6 +10,7 @@ const props = defineProps<{
 }>();
 
 const { copy, copied } = useCopy();
+const sectionLocator = useClusterSectionLocator();
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const details = computed(() => props.diagnosis?.details as any);
@@ -519,16 +520,25 @@ const pipeline = computed<Array<{ role: string; model: string }>>(() => {
           <span class="text-gray-400 shrink-0 leading-5">&bull;</span>
           <span class="flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
             <span>{{ e.text }}</span>
-            <button
-              v-for="c in e.citations"
-              :key="c"
-              class="inline-flex items-center gap-0.5 rounded bg-elevated border border-default px-1.5 text-xs text-gray-500 hover:text-primary hover:border-primary transition-colors"
-              :title="`View ${sectionLabel(c)} in the AI context`"
-              @click="emit('view-section', c)"
-            >
-              <UIcon name="i-lucide-link" class="size-2.5" />
-              {{ sectionLabel(c) }}
-            </button>
+            <span v-for="c in e.citations" :key="c" class="inline-flex items-center">
+              <button
+                class="inline-flex items-center gap-0.5 border border-default px-1.5 text-xs text-gray-500 hover:text-primary hover:border-primary transition-colors"
+                :class="sectionLocator.canLocate(c) ? 'rounded-l bg-elevated' : 'rounded bg-elevated'"
+                :title="`View ${sectionLabel(c)} in the AI context`"
+                @click="emit('view-section', c)"
+              >
+                <UIcon name="i-lucide-link" class="size-2.5" />
+                {{ sectionLabel(c) }}
+              </button>
+              <button
+                v-if="sectionLocator.canLocate(c)"
+                class="inline-flex items-center rounded-r border border-l-0 border-default bg-elevated px-1 text-xs text-gray-500 hover:text-primary hover:border-primary transition-colors"
+                :title="`Show ${sectionLabel(c)} on the page`"
+                @click="sectionLocator.open(c)"
+              >
+                <UIcon name="i-lucide-map-pin" class="size-2.5" />
+              </button>
+            </span>
           </span>
         </li>
       </ul>
