@@ -6,6 +6,7 @@ import { renderAnsi } from '~/utils';
 import { condenseErrorText } from '#shared/error-fingerprint';
 
 const route = useRoute();
+const router = useRouter();
 const testCaseId = route.params.id;
 
 const { data: testCase, refresh } = await useFetch(`/api/test-run-cases/${testCaseId}`);
@@ -92,12 +93,33 @@ const failureCluster = computed(() => {
   } | null;
 });
 
-const activeTab = ref('steps');
+const VALID_TABS = ['steps', 'traces', 'error', 'performance', 'history'];
+const activeTab = ref(
+  typeof route.query.tab === 'string' && VALID_TABS.includes(route.query.tab) ? route.query.tab : 'steps',
+);
+
+// Default a failed case to the Failure tab (unless a tab was pinned in the URL),
+// so the error is what you land on. Runs once when the case loads.
+watch(
+  () => testCase.value?.error,
+  (err) => {
+    if (err && typeof route.query.tab !== 'string' && activeTab.value === 'steps') {
+      activeTab.value = 'error';
+    }
+  },
+  { immediate: true },
+);
+
+// Keep the active tab in the URL so a failure can be deep-linked and shared.
+watch(activeTab, (tab) => {
+  if (route.query.tab === tab) return;
+  router.replace({ query: { ...route.query, tab } });
+});
 
 const tabItems = computed(() => [
   { label: `Steps (${steps.value.length})`, icon: 'i-lucide-list-checks', value: 'steps', slot: 'steps' },
   { label: 'Traces & Console', icon: 'i-lucide-terminal', value: 'traces', slot: 'traces' },
-  { label: 'Diagnosis', icon: 'i-lucide-bug', value: 'error', slot: 'error', disabled: !testCase.value?.error },
+  { label: 'Failure', icon: 'i-lucide-circle-x', value: 'error', slot: 'error', disabled: !testCase.value?.error },
   {
     label: `Performance (${performanceHints.value.length})`,
     icon: 'i-lucide-gauge',
@@ -325,44 +347,58 @@ function copyFailure() {
         </template>
 
         <template #tab-error>
-          <TestCaseErrorCard v-if="testCase?.error" :cluster="failureCluster" />
+          <div class="space-y-4">
+            <!-- The error itself, first — it's what you open this tab for -->
+            <SectionCard v-if="testCase?.error" icon="i-lucide-circle-x" icon-class="text-red-500" title="Error">
+              <template #actions>
+                <UTooltip :text="failureCopied ? 'Copied!' : 'Copy failure'">
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    :icon="failureCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
+                    @click="copyFailure"
+                  />
+                </UTooltip>
+              </template>
+              <div
+                class="text-xs font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto rounded bg-red-50 dark:bg-red-950/20 p-3"
+                v-html="renderAnsi(condenseErrorText(testCase.error))"
+              />
+            </SectionCard>
 
-          <LocatorHealingPanel
-            v-if="testCase?.error && testCase.testRun?.id"
-            :run-id="testCase.testRun.id"
-            :test-runs-case-id="Number(testCaseId)"
-          />
+            <!-- Cluster hand-off: the full investigation (incl. AI diagnosis) lives on the cluster page -->
+            <FailureClusterBanner v-if="failureCluster" :cluster="failureCluster" />
 
-          <SectionCard v-if="testCase?.error" icon="i-lucide-bug" icon-class="text-red-500" title="Error">
-            <template #actions>
-              <UTooltip :text="failureCopied ? 'Copied!' : 'Copy failure'">
-                <UButton
-                  size="xs"
-                  variant="ghost"
-                  color="neutral"
-                  :icon="failureCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
-                  @click="copyFailure"
-                />
-              </UTooltip>
-            </template>
-            <div
-              class="text-xs font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto rounded bg-red-50 dark:bg-red-950/20 p-3"
-              v-html="renderAnsi(condenseErrorText(testCase.error))"
+            <!-- Alternative locators for a broken locator — folded to its recommended-fix peek -->
+            <LocatorHealingPanel
+              v-if="testCase?.error && testCase.testRun?.id"
+              storage-key="case-locators"
+              :run-id="testCase.testRun.id"
+              :test-runs-case-id="Number(testCaseId)"
             />
-          </SectionCard>
 
-          <SectionCard v-if="testCase?.ariaSnapshot" icon="i-lucide-scan-text" title="ARIA snapshot" help="case.aria">
-            <div class="max-h-96 overflow-y-auto">
-              <MarkdownPreview :text="'```yaml\n' + testCase.ariaSnapshot + '\n```'" />
-            </div>
-          </SectionCard>
+            <!-- ARIA snapshot captured at failure time — folded by default -->
+            <CollapsibleSectionCard
+              v-if="testCase?.ariaSnapshot"
+              storage-key="case-aria"
+              icon="i-lucide-scan-text"
+              title="ARIA snapshot"
+              help="case.aria"
+            >
+              <template #folded>Accessibility tree captured at the moment of failure</template>
+              <div class="max-h-96 overflow-y-auto">
+                <MarkdownPreview :text="'```yaml\n' + testCase.ariaSnapshot + '\n```'" />
+              </div>
+            </CollapsibleSectionCard>
 
-          <p v-else-if="testCase?.error" class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
-            <UIcon name="i-lucide-info" class="size-3.5 shrink-0" />
-            ARIA snapshot not captured — make sure your test imports
-            <code class="rounded bg-gray-100 px-1 dark:bg-gray-800">test</code>
-            from the piwi-dashboard fixtures.
-          </p>
+            <p v-else-if="testCase?.error" class="flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+              <UIcon name="i-lucide-info" class="size-3.5 shrink-0" />
+              ARIA snapshot not captured — make sure your test imports
+              <code class="rounded bg-gray-100 px-1 dark:bg-gray-800">test</code>
+              from the piwi-dashboard fixtures.
+            </p>
+          </div>
         </template>
 
         <template #tab-steps>
