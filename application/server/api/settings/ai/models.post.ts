@@ -1,6 +1,8 @@
+import { getDatabase } from '../../../database';
 import { requireAuth } from '../../../utils/auth';
 import { Role } from '#shared/types';
-import type { ModelInfo } from '~~/types/api';
+import { resolveAiConfig } from '../../../utils/ai-provider';
+import type { AiModelRole, ModelInfo } from '~~/types/api';
 
 /** Convert per-token pricing string to per-million-tokens, keeping larger values as-is. */
 function normalizePricing(v: string | undefined): string | undefined {
@@ -35,7 +37,7 @@ defineRouteMeta({
     tags: ['Settings'],
     summary: 'List available models from an AI provider',
     description:
-      "Calls the provider's models endpoint to return available models with metadata. Accepts provider, baseUrl, and apiKey in the request body. Requires administrator role.",
+      "Calls the provider's models endpoint to return available models with metadata. Accepts provider, baseUrl, apiKey, and role in the request body; when apiKey is omitted, the saved key for that role (then the diagnosis role) is used. Requires administrator role.",
     'x-required-roles': [Role.ADMINISTRATOR],
   },
 });
@@ -47,9 +49,19 @@ export default eventHandler(async (event) => {
     provider?: string;
     baseUrl?: string;
     apiKey?: string;
+    role?: string;
   }>(event).catch(() => null);
 
-  const { provider, baseUrl, apiKey } = body || {};
+  const { provider, baseUrl } = body || {};
+
+  // The form clears key fields after save, so listing models for a saved
+  // config must fall back to the stored (decrypted) or env-managed key.
+  let apiKey = body?.apiKey;
+  if (!apiKey) {
+    const role: AiModelRole = body?.role === 'research' || body?.role === 'embedding' ? body.role : 'diagnosis';
+    const resolved = await resolveAiConfig(await getDatabase());
+    apiKey = resolved?.roles[role]?.apiKey || resolved?.roles.diagnosis?.apiKey || undefined;
+  }
 
   if (provider === 'openai') {
     if (!baseUrl) return { models: [] };
@@ -102,8 +114,10 @@ export default eventHandler(async (event) => {
 
   if (provider === 'anthropic') {
     if (!apiKey) return { models: [] };
+    // Honour a configured baseUrl (proxy override) like the diagnosis calls do.
+    const root = (baseUrl || 'https://api.anthropic.com').replace(/\/+$/, '');
     try {
-      const res = await fetch('https://api.anthropic.com/v1/models', {
+      const res = await fetch(`${root}/v1/models`, {
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
         signal: AbortSignal.timeout(10000),
       });

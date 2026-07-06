@@ -126,6 +126,19 @@ export default eventHandler(async (event) => {
       throw createError({ statusCode: 400, message: 'A diagnosis role with its own provider is required' });
     }
 
+    // Embeddings need an OpenAI-compatible endpoint — Anthropic has no
+    // embeddings API, so reject configs that would only fail at run time.
+    if (out.embedding) {
+      let cfg: RawStoredRole | undefined = out.embedding;
+      for (let hops = 0; cfg?.reuse && hops < AI_ROLES.length; hops++) cfg = out[cfg.reuse];
+      if (cfg?.provider !== 'openai') {
+        throw createError({
+          statusCode: 400,
+          message: 'The embedding role requires an OpenAI-compatible provider (Anthropic has no embeddings API)',
+        });
+      }
+    }
+
     const autoDiagnose = 'autoDiagnose' in body ? Boolean(body.autoDiagnose) : Boolean(existing.autoDiagnose);
     await setAppSetting(db, 'ai', { autoDiagnose, roles: out });
   }

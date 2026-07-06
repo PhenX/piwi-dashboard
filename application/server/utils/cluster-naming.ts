@@ -66,6 +66,7 @@ export async function generateClusterTitles(
     user: `Name these ${clusters.length} failure clusters. Return one title per id.\n\n${user}`,
     jsonSchema: NAMING_JSON_SCHEMA as unknown as object,
     maxTokens: 1024,
+    effort: 'low',
   });
 
   try {

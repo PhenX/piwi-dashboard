@@ -35,7 +35,11 @@ interface StoredAi {
   researchApiKey?: string;
 }
 
-function isValidRole(role: ResolvedAiRole): boolean {
+/** What a role is used for: embeddings need an OpenAI-compatible endpoint (Anthropic has no embeddings API). */
+type RoleKind = 'chat' | 'embedding';
+
+function isValidRole(role: ResolvedAiRole, kind: RoleKind): boolean {
+  if (kind === 'embedding') return role.provider === 'openai' && Boolean(role.baseUrl && role.model);
   if (role.provider === 'anthropic') return Boolean(role.apiKey);
   if (role.provider === 'openai') return Boolean(role.baseUrl && role.model);
   return false;
@@ -47,11 +51,12 @@ function makeRole(
   apiKey?: string | null,
   model?: string | null,
   baseUrl?: string | null,
+  kind: RoleKind = 'chat',
 ): ResolvedAiRole | null {
   const p = (provider || '') as AiProvider;
   if (p !== 'anthropic' && p !== 'openai') return null;
   const role: ResolvedAiRole = { provider: p, apiKey: apiKey || '', model: model || '', baseUrl: baseUrl || null };
-  return isValidRole(role) ? role : null;
+  return isValidRole(role, kind) ? role : null;
 }
 
 const ROLE_ORDER: AiModelRole[] = ['diagnosis', 'research', 'embedding'];
@@ -62,13 +67,14 @@ function resolveStoredRoles(roles: Partial<Record<AiModelRole, StoredRole>>): Ai
   const out: Record<AiModelRole, ResolvedAiRole | null> = { diagnosis: null, research: null, embedding: null };
 
   for (const role of ROLE_ORDER) {
+    const kind: RoleKind = role === 'embedding' ? 'embedding' : 'chat';
     const cfg = roles[role];
     if (!cfg) continue;
     if (cfg.reuse && out[cfg.reuse]) {
       const base = out[cfg.reuse]!;
-      out[role] = makeRole(base.provider, base.apiKey, cfg.model || base.model, base.baseUrl);
+      out[role] = makeRole(base.provider, base.apiKey, cfg.model || base.model, base.baseUrl, kind);
     } else {
-      out[role] = makeRole(cfg.provider, decrypt(cfg.apiKey), cfg.model, cfg.baseUrl);
+      out[role] = makeRole(cfg.provider, decrypt(cfg.apiKey), cfg.model, cfg.baseUrl, kind);
     }
   }
 
@@ -129,12 +135,18 @@ export async function resolveAiConfig(db: DbClient): Promise<AiConfig | null> {
           envAi.researchBaseUrl || envAi.baseUrl,
         )
       : null;
-    const embedding = makeRole(
-      envAi.embeddingProvider,
-      envAi.embeddingApiKey,
-      envAi.embeddingModel,
-      envAi.embeddingBaseUrl,
-    );
+    // Embedding defaults its provider/key/baseUrl to the main role when not
+    // overridden (same convention as research). Only useful when the main
+    // provider is OpenAI-compatible — embeddings require one.
+    const embedding = envAi.embeddingModel
+      ? makeRole(
+          envAi.embeddingProvider || envAi.provider,
+          envAi.embeddingApiKey || envAi.apiKey,
+          envAi.embeddingModel,
+          envAi.embeddingBaseUrl || envAi.baseUrl,
+          'embedding',
+        )
+      : null;
     return assembleConfig(diagnosis, research, embedding, String(envAi.autoDiagnose) === 'true', 'env');
   }
 
@@ -181,6 +193,18 @@ export interface AiCallOptions {
   jsonSchema?: object;
   maxTokens?: number;
   images?: AiAttachedImage[];
+  /**
+   * Anthropic only: enable adaptive thinking (better diagnosis quality on
+   * current Claude models). Ignored for OpenAI-compat providers; if the
+   * configured model rejects it, the call is retried once without it.
+   */
+  adaptiveThinking?: boolean;
+  /**
+   * Anthropic only: output effort hint — 'low' keeps utility calls (research,
+   * naming, adjudication) cheap. Same reject-then-retry behavior as
+   * adaptiveThinking on models that don't support it.
+   */
+  effort?: 'low' | 'medium' | 'high';
   /** When true, mark the system prompt and stable context prefix for Anthropic cache_control. Re-runs become ~90 % cached input. */
   cacheControl?: boolean;
   /**
@@ -239,6 +263,10 @@ export interface AiCallResult {
   model: string;
   inputTokens: number | null;
   outputTokens: number | null;
+  /** Tokens written to the provider prompt cache (Anthropic), null when unknown. */
+  cacheCreationInputTokens: number | null;
+  /** Tokens served from the provider prompt cache (Anthropic `cache_read_input_tokens`, OpenAI `cached_tokens`). */
+  cacheReadInputTokens: number | null;
 }
 
 export interface StreamChunk {
@@ -250,6 +278,8 @@ export interface StreamResult {
   model: string;
   inputTokens: number | null;
   outputTokens: number | null;
+  cacheCreationInputTokens: number | null;
+  cacheReadInputTokens: number | null;
 }
 
 export async function callAiProvider(config: ResolvedAiRole, opts: AiCallOptions): Promise<AiCallResult> {
@@ -264,36 +294,77 @@ export async function callAiProvider(config: ResolvedAiRole, opts: AiCallOptions
   }
 }
 
-async function callAnthropic(config: ResolvedAiRole, opts: AiCallOptions): Promise<AiCallResult> {
-  const client = new Anthropic({
+function anthropicClient(config: ResolvedAiRole): Anthropic {
+  return new Anthropic({
     apiKey: config.apiKey,
     baseURL: config.baseUrl || undefined,
     timeout: 120_000,
     maxRetries: 1,
   });
+}
 
-  // Prompt caching (when opts.cacheControl): two breakpoints — the system
-  // prompt and the stable user prefix (images + built context). With 1.6's
-  // stable section ordering the prefix is cache-friendly; the volatile tail
-  // (user additional context, research block) is a separate uncached block.
-  const res = await client.messages.create({
+/**
+ * Request params for an Anthropic call. Prompt caching (when opts.cacheControl):
+ * two breakpoints — the system prompt and the stable user prefix (images +
+ * built context); the volatile tail (user additional context, research block)
+ * is a separate uncached block. No sampling params: `temperature` & co. are
+ * rejected by current Claude models (Opus 4.7+).
+ *
+ * `tuned` adds adaptive thinking / effort when requested; callers retry once
+ * untuned when the configured model rejects those fields (older models).
+ */
+function buildAnthropicParams(
+  config: ResolvedAiRole,
+  opts: AiCallOptions,
+  tuned: boolean,
+): Anthropic.Messages.MessageCreateParamsNonStreaming {
+  const outputConfig: Record<string, unknown> = {};
+  if (opts.jsonSchema) {
+    outputConfig.format = { type: 'json_schema' as const, schema: opts.jsonSchema as { [key: string]: unknown } };
+  }
+  if (tuned && opts.effort) outputConfig.effort = opts.effort;
+
+  return {
     model: config.model || DEFAULT_ANTHROPIC_MODEL,
     max_tokens: opts.maxTokens ?? 8192,
-    temperature: 0,
     system: anthropicSystem(opts),
     messages: [{ role: 'user', content: anthropicUserContent(opts) as Anthropic.MessageParam['content'] }],
-    ...(opts.jsonSchema
-      ? {
-          output_config: {
-            format: { type: 'json_schema' as const, schema: opts.jsonSchema as { [key: string]: unknown } },
-          },
-        }
-      : {}),
-  });
+    ...(tuned && opts.adaptiveThinking ? { thinking: { type: 'adaptive' } } : {}),
+    ...(Object.keys(outputConfig).length > 0 ? { output_config: outputConfig } : {}),
+  } as Anthropic.Messages.MessageCreateParamsNonStreaming;
+}
 
-  if (res.stop_reason === 'refusal') {
+function wantsTuning(opts: AiCallOptions): boolean {
+  return Boolean(opts.adaptiveThinking || opts.effort);
+}
+
+/** 400 from a model that doesn't support the thinking/effort params — retry untuned. */
+function isTuningRejection(err: unknown): boolean {
+  return err instanceof Anthropic.BadRequestError && /thinking|effort/i.test(err.message);
+}
+
+/** Throw a clear error for terminal stop reasons shared by the sync and streaming paths. */
+function checkAnthropicStopReason(msg: Anthropic.Message, opts: AiCallOptions): void {
+  if (msg.stop_reason === 'refusal') {
     throw new Error('The model declined to analyze this failure');
   }
+  if (msg.stop_reason === 'max_tokens') {
+    throw new Error(`Model output was truncated at ${opts.maxTokens ?? 8192} tokens — raise the max token limit`);
+  }
+}
+
+async function callAnthropic(config: ResolvedAiRole, opts: AiCallOptions): Promise<AiCallResult> {
+  const client = anthropicClient(config);
+
+  let res: Anthropic.Message;
+  try {
+    res = await client.messages.create(buildAnthropicParams(config, opts, true));
+  } catch (err) {
+    if (!wantsTuning(opts) || !isTuningRejection(err)) throw err;
+    res = await client.messages.create(buildAnthropicParams(config, opts, false));
+  }
+
+  checkAnthropicStopReason(res, opts);
 
   const text = res.content.find((b) => b.type === 'text')?.text ?? '';
   return {
@@ -301,23 +372,20 @@ async function callAnthropic(config: ResolvedAiRole, opts: AiCallOptions): Promi
     model: res.model,
     inputTokens: res.usage.input_tokens ?? null,
     outputTokens: res.usage.output_tokens ?? null,
+    cacheCreationInputTokens: res.usage.cache_creation_input_tokens ?? null,
+    cacheReadInputTokens: res.usage.cache_read_input_tokens ?? null,
   };
 }
 
-async function callOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions): Promise<AiCallResult> {
-  const baseUrl = (config.baseUrl || '').replace(/\/$/, '');
-  const url = `${baseUrl}/chat/completions`;
+type OAIPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
+type OAIUsage = {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
+};
 
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (config.apiKey) headers['authorization'] = `Bearer ${config.apiKey}`;
-
-  const systemContent = opts.jsonSchema
-    ? `${opts.system}\n\nRespond ONLY with a JSON object matching this schema:\n${JSON.stringify(opts.jsonSchema)}`
-    : opts.system;
-
-  type OAIPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
-
-  const userMessageContent: string | OAIPart[] = opts.images?.length
+function openAiUserContent(opts: AiCallOptions): string | OAIPart[] {
+  return opts.images?.length
     ? [
         ...opts.images.map(
           (img): OAIPart => ({
@@ -328,24 +396,58 @@ async function callOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions): Pr
         { type: 'text', text: opts.user },
       ]
     : opts.user;
+}
 
-  const body = JSON.stringify({
+/**
+ * Base chat-completions body. The JSON schema is enforced with
+ * `response_format: json_schema` where the server supports it (`strictFormat`);
+ * callers retry with the older `json_object` mode on HTTP 400. The schema also
+ * stays inlined in the system prompt so servers that ignore response_format
+ * still see it.
+ */
+function buildOpenAiBody(config: ResolvedAiRole, opts: AiCallOptions, strictFormat: boolean): Record<string, unknown> {
+  const systemContent = opts.jsonSchema
+    ? `${opts.system}\n\nRespond ONLY with a JSON object matching this schema:\n${JSON.stringify(opts.jsonSchema)}`
+    : opts.system;
+
+  const responseFormat = opts.jsonSchema
+    ? strictFormat
+      ? { type: 'json_schema', json_schema: { name: 'response', schema: opts.jsonSchema } }
+      : { type: 'json_object' }
+    : undefined;
+
+  return {
     model: config.model,
     max_tokens: opts.maxTokens ?? 8192,
     temperature: 0,
-    response_format: { type: 'json_object' },
+    ...(responseFormat ? { response_format: responseFormat } : {}),
     messages: [
       { role: 'system', content: systemContent },
-      { role: 'user', content: userMessageContent },
+      { role: 'user', content: openAiUserContent(opts) },
     ],
-  });
+  };
+}
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body,
-    signal: AbortSignal.timeout(120_000),
-  });
+async function callOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions): Promise<AiCallResult> {
+  const baseUrl = (config.baseUrl || '').replace(/\/$/, '');
+  const url = `${baseUrl}/chat/completions`;
+
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (config.apiKey) headers['authorization'] = `Bearer ${config.apiKey}`;
+
+  const post = (strictFormat: boolean) =>
+    fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(buildOpenAiBody(config, opts, strictFormat)),
+      signal: AbortSignal.timeout(120_000),
+    });
+
+  let res = await post(true);
+  if (res.status === 400 && opts.jsonSchema) {
+    // Server rejects response_format json_schema (older OpenAI-compat) — fall back to json_object.
+    res = await post(false);
+  }
 
   if (!res.ok) {
     const bodyText = await res.text().catch(() => '');
@@ -353,10 +455,14 @@ async function callOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions): Pr
   }
 
   const data = (await res.json()) as {
-    choices: Array<{ message: { content: string } }>;
+    choices: Array<{ message: { content: string }; finish_reason?: string }>;
     model?: string;
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
+    usage?: OAIUsage;
   };
+
+  if (data.choices?.[0]?.finish_reason === 'length') {
+    throw new Error(`Model output was truncated at ${opts.maxTokens ?? 8192} tokens — raise the max token limit`);
+  }
 
   const text = data.choices?.[0]?.message?.content ?? '';
   return {
@@ -364,6 +470,8 @@ async function callOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions): Pr
     model: data.model || config.model,
     inputTokens: data.usage?.prompt_tokens ?? null,
     outputTokens: data.usage?.completion_tokens ?? null,
+    cacheCreationInputTokens: null,
+    cacheReadInputTokens: data.usage?.prompt_tokens_details?.cached_tokens ?? null,
   };
 }
 
@@ -384,74 +492,45 @@ export async function* streamAiProvider(config: ResolvedAiRole, opts: AiCallOpti
   }
 }
 
-async function* streamAnthropic(config: ResolvedAiRole, opts: AiCallOptions): AsyncGenerator<StreamChunk> {
-  const client = new Anthropic({
-    apiKey: config.apiKey,
-    baseURL: config.baseUrl || undefined,
-    timeout: 120_000,
-    maxRetries: 1,
-  });
-
-  const textChunks: string[] = [];
-  let streamError: Error | null = null;
-  let finalMsg: Anthropic.Message | null = null;
-  let index = 0;
-  let resolveFinal: (() => void) | null = null;
-  const finalDone = new Promise<void>((r) => {
-    resolveFinal = r;
-  });
-
-  // Same caching layout as callAnthropic — see anthropicSystem/anthropicUserContent.
-  const stream = client.messages.stream({
-    model: config.model || DEFAULT_ANTHROPIC_MODEL,
-    max_tokens: opts.maxTokens ?? 8192,
-    temperature: 0,
-    system: anthropicSystem(opts),
-    messages: [{ role: 'user', content: anthropicUserContent(opts) as Anthropic.MessageParam['content'] }],
-    ...(opts.jsonSchema
-      ? {
-          output_config: {
-            format: { type: 'json_schema' as const, schema: opts.jsonSchema as { [key: string]: unknown } },
-          },
-        }
-      : {}),
-  });
-
-  stream.on('text', (text: string) => {
-    textChunks.push(text);
-  });
-
-  stream.finalMessage().then(
-    (msg) => {
-      finalMsg = msg;
-      if (resolveFinal) resolveFinal();
-    },
-    (err) => {
-      streamError = err;
-      if (resolveFinal) resolveFinal();
-    },
-  );
-
-  // Poll for text chunks until the stream completes
-  while (!finalMsg && !streamError) {
-    while (index < textChunks.length) {
-      yield { type: 'text', data: textChunks[index++] };
+/** Yield the text deltas of one Anthropic message stream. */
+async function* anthropicTextDeltas(stream: ReturnType<Anthropic['messages']['stream']>): AsyncGenerator<string> {
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+      yield event.delta.text;
     }
-    const raceResult = await Promise.race([finalDone, new Promise<undefined>((r) => setTimeout(r, 80))]);
-    if (raceResult !== undefined) break;
+  }
+}
+
+async function* streamAnthropic(config: ResolvedAiRole, opts: AiCallOptions): AsyncGenerator<StreamChunk> {
+  const client = anthropicClient(config);
+
+  // Same params/caching layout as callAnthropic. A tuning rejection surfaces
+  // on the first iteration, before any delta arrives, so the untuned retry
+  // never duplicates already-yielded text.
+  let stream = client.messages.stream(buildAnthropicParams(config, opts, true));
+  try {
+    for await (const text of anthropicTextDeltas(stream)) {
+      yield { type: 'text', data: text };
+    }
+  } catch (err) {
+    if (!wantsTuning(opts) || !isTuningRejection(err)) throw err;
+    stream = client.messages.stream(buildAnthropicParams(config, opts, false));
+    for await (const text of anthropicTextDeltas(stream)) {
+      yield { type: 'text', data: text };
+    }
   }
 
-  // Drain any remaining chunks
-  while (index < textChunks.length) {
-    yield { type: 'text', data: textChunks[index++] };
-  }
-
-  if (streamError) throw streamError;
-
-  const msg = finalMsg!;
+  const msg = await stream.finalMessage();
 
   if (msg.stop_reason === 'refusal') {
     yield { type: 'error', data: 'The model declined to analyze this failure' };
+    return;
+  }
+  if (msg.stop_reason === 'max_tokens') {
+    yield {
+      type: 'error',
+      data: `Model output was truncated at ${opts.maxTokens ?? 8192} tokens — raise the max token limit`,
+    };
     return;
   }
 
@@ -461,6 +540,8 @@ async function* streamAnthropic(config: ResolvedAiRole, opts: AiCallOptions): As
       model: msg.model,
       inputTokens: msg.usage?.input_tokens ?? null,
       outputTokens: msg.usage?.output_tokens ?? null,
+      cacheCreationInputTokens: msg.usage?.cache_creation_input_tokens ?? null,
+      cacheReadInputTokens: msg.usage?.cache_read_input_tokens ?? null,
     } as StreamResult,
   };
 }
@@ -472,46 +553,27 @@ async function* streamOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions):
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (config.apiKey) headers['authorization'] = `Bearer ${config.apiKey}`;
 
-  const systemContent = opts.jsonSchema
-    ? `${opts.system}\n\nRespond ONLY with a JSON object matching this schema:\n${JSON.stringify(opts.jsonSchema)}`
-    : opts.system;
-
-  type OAIPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
-
-  const userMessageContent: string | OAIPart[] = opts.images?.length
-    ? [
-        ...opts.images.map(
-          (img): OAIPart => ({
-            type: 'image_url',
-            image_url: { url: `data:${img.mediaType};base64,${img.data}` },
-          }),
-        ),
-        { type: 'text', text: opts.user },
-      ]
-    : opts.user;
-
-  const body = JSON.stringify({
-    model: config.model,
-    max_tokens: opts.maxTokens ?? 8192,
-    temperature: 0,
-    stream: true,
-    stream_options: { include_usage: true },
-    messages: [
-      { role: 'system', content: systemContent },
-      { role: 'user', content: userMessageContent },
-    ],
-  });
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
-  try {
-    const res = await fetch(url, {
+  const post = (strictFormat: boolean) =>
+    fetch(url, {
       method: 'POST',
       headers,
-      body,
+      body: JSON.stringify({
+        ...buildOpenAiBody(config, opts, strictFormat),
+        stream: true,
+        stream_options: { include_usage: true },
+      }),
       signal: controller.signal,
     });
+
+  try {
+    let res = await post(true);
+    if (res.status === 400 && opts.jsonSchema) {
+      // Server rejects response_format json_schema (older OpenAI-compat) — fall back to json_object.
+      res = await post(false);
+    }
 
     if (!res.ok) {
       const bodyText = await res.text().catch(() => '');
@@ -526,6 +588,8 @@ async function* streamOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions):
     let modelName = config.model;
     let inputTokens: number | null = null;
     let outputTokens: number | null = null;
+    let cachedTokens: number | null = null;
+    let truncated = false;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -546,7 +610,7 @@ async function* streamOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions):
           const parsed = JSON.parse(data) as {
             choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>;
             model?: string;
-            usage?: { prompt_tokens?: number; completion_tokens?: number };
+            usage?: OAIUsage;
             x_groq?: { usage?: { completion_tokens?: number; prompt_tokens?: number } };
           };
 
@@ -561,9 +625,12 @@ async function* streamOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions):
           if (usage) {
             if (usage.prompt_tokens != null) inputTokens = usage.prompt_tokens;
             if (usage.completion_tokens != null) outputTokens = usage.completion_tokens;
+            const cached = (usage as OAIUsage).prompt_tokens_details?.cached_tokens;
+            if (cached != null) cachedTokens = cached;
           }
 
           const choice = parsed.choices?.[0];
+          if (choice?.finish_reason === 'length') truncated = true;
           if (choice?.delta?.content) {
             yield { type: 'text', data: choice.delta.content };
           }
@@ -573,7 +640,24 @@ async function* streamOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions):
       }
     }
 
-    yield { type: 'done', data: { model: modelName, inputTokens, outputTokens } as StreamResult };
+    if (truncated) {
+      yield {
+        type: 'error',
+        data: `Model output was truncated at ${opts.maxTokens ?? 8192} tokens — raise the max token limit`,
+      };
+      return;
+    }
+
+    yield {
+      type: 'done',
+      data: {
+        model: modelName,
+        inputTokens,
+        outputTokens,
+        cacheCreationInputTokens: null,
+        cacheReadInputTokens: cachedTokens,
+      } as StreamResult,
+    };
   } finally {
     clearTimeout(timeoutId);
   }
