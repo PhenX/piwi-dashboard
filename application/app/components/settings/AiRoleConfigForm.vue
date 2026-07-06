@@ -43,9 +43,10 @@ const props = defineProps<{
   models: ModelInfo[];
   loadingModels: boolean;
   providerResolved: string;
+  testing: boolean;
 }>();
 
-const emit = defineEmits<{ applyPreset: [label: string]; loadModels: [] }>();
+const emit = defineEmits<{ applyPreset: [label: string]; loadModels: []; test: [] }>();
 
 const model = defineModel<RoleForm>({ required: true });
 
@@ -174,6 +175,12 @@ const roleEnvVars = computed<PiwiEnvVarName[]>(() => helpEnvVars(props.meta.help
           @load-models="emit('loadModels')"
         />
       </UFormField>
+
+      <div v-if="providerResolved" class="flex justify-end">
+        <UButton size="xs" color="neutral" variant="soft" icon="i-lucide-plug" :loading="testing" @click="emit('test')">
+          Test connection
+        </UButton>
+      </div>
     </template>
   </div>
 </template>

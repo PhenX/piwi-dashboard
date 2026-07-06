@@ -404,10 +404,15 @@ const alternateHypotheses = computed<Array<{ category?: string; rootCause?: stri
 const showAlternates = ref(false);
 
 /** Pipeline stages (two-stage research → diagnosis), when present. */
-const pipeline = computed<Array<{ role: string; model: string }>>(() => {
+const pipeline = computed<
+  Array<{ role: string; model: string; inputTokens?: number | null; cacheReadInputTokens?: number | null }>
+>(() => {
   const p = details.value?.pipeline;
   return Array.isArray(p) ? p : [];
 });
+
+/** Tokens served from the provider prompt cache across stages (0 when unknown/none). */
+const cachedTokens = computed<number>(() => pipeline.value.reduce((acc, s) => acc + (s.cacheReadInputTokens ?? 0), 0));
 </script>
 
 <template>
@@ -760,7 +765,8 @@ const pipeline = computed<Array<{ role: string; model: string }>>(() => {
             2-stage
           </UBadge>
           <span>
-            {{ diagnosis.model }} · {{ formatTokens(diagnosis.inputTokens, diagnosis.outputTokens) }} ·
+            {{ diagnosis.model }} · {{ formatTokens(diagnosis.inputTokens, diagnosis.outputTokens)
+            }}<template v-if="cachedTokens > 0"> ({{ cachedTokens }} cached)</template> ·
             {{ formatRelativeTime(diagnosis.updatedAt) }}
           </span>
         </div>
