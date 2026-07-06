@@ -27,9 +27,11 @@ Clustering is always on and requires no configuration. When the normalization al
 
 If an **embedding** model role is configured (Settings → AI), Piwi adds a semantic layer on top of the deterministic fingerprint. After a run, the clusters first seen in it are embedded and compared (cosine similarity) against the project's other open clusters; near-duplicates above `PIWI_CLUSTER_SIMILARITY_THRESHOLD` (default `0.92`) are merged into the longest-lived cluster. This catches failures that are the same root cause but phrased differently enough to dodge the fingerprint. Merges record a fingerprint alias so future occurrences attach to the survivor instead of re-forking. With no embedding role configured, clustering stays purely deterministic.
 
-When auto-diagnose is enabled, new clusters are also given a short **human-readable title** (one cheap batched model call per run) shown in place of the raw normalized signature across the lists and the cluster page — the signature stays available on hover and below the title. Clusters fall back to the signature when no title has been generated.
+When auto-diagnose is enabled, new clusters are also given a short **human-readable title** (one cheap batched model call per run, using the research model when one is configured, otherwise the diagnosis model) shown in place of the raw normalized signature across the lists and the cluster page — the signature stays available on hover and below the title. Clusters fall back to the signature when no title has been generated.
 
-Pairs that fall in the **ambiguous band** (similarity between `PIWI_CLUSTER_SUGGEST_THRESHOLD`, default `0.80`, and the merge threshold) aren't merged automatically. If a **research** model is configured it adjudicates the pair ("same root cause?") and merges only on a high-confidence yes; otherwise — or when it's unsure — the pair becomes a **merge suggestion** on the project's Failure clusters tab, where a reporter or admin approves (merge) or dismisses it. Adjudication is budget-capped per run to control cost.
+Pairs that fall in the **ambiguous band** (similarity between `PIWI_CLUSTER_SUGGEST_THRESHOLD`, default `0.80`, and the merge threshold) aren't merged automatically. Whenever AI is configured, a model adjudicates the pair ("same root cause?") — the **research** model when one is configured, the diagnosis model otherwise — and merges only on a high-confidence yes; when it's unsure (or no AI is configured at all), the pair becomes a **merge suggestion** on the project's Failure clusters tab, where a reporter or admin approves (merge) or dismisses it. Adjudication is budget-capped per run to control cost.
+
+Embedding-based reconciliation runs after every finished run whenever an embedding role is configured — it is independent of the auto-diagnose toggle.
 
 ## Enabling AI diagnosis
 
@@ -206,6 +208,9 @@ Every piece of evidence sent to the model costs tokens. Piwi caps each input so 
 | `PIWI_AI_MAX_PASSED_PEERS` | 20 | Passing peer tests in the same file listed |
 | `PIWI_AI_MAX_CONSOLE_WINDOW` | 50 | Console entries (any level) in the window before failure |
 | `PIWI_AI_SLOW_REQUEST_MS` | 1500 | Duration (ms) above which a network request is flagged as slow |
+| `PIWI_AI_MAX_TRACE_ACTIONS` | 10 | Actions extracted from the Playwright trace ZIP for failing-action context (0 disables) |
+| `PIWI_AI_TRACE_DOM_CHARS` | 6000 | Characters of the trace-derived DOM/ARIA excerpt |
+| `PIWI_AI_IMAGE_MAX_EDGE` | 1920 | Screenshots are downscaled so their long edge is at most this many pixels before being sent |
 
 ## Privacy
 

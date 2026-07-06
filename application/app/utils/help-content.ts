@@ -356,7 +356,7 @@ export const HELP_TOPICS = {
   },
   'settings.ai-provider': {
     title: 'AI provider',
-    text: 'Choose the model provider and key used for failure diagnosis. The key is stored encrypted and never returned by the API.',
+    text: 'Configure the model providers behind the three AI roles — diagnosis, research and embedding. Each role has its own provider config, or reuses another role’s provider and credentials. Keys are stored encrypted and never returned by the API.',
     doc: 'ai-diagnosis#enabling-ai-diagnosis',
     envVars: ['PIWI_AI_PROVIDER', 'PIWI_AI_MODEL', 'PIWI_AI_API_KEY', 'PIWI_AI_BASE_URL'],
   },
@@ -367,7 +367,7 @@ export const HELP_TOPICS = {
   },
   'settings.ai-research': {
     title: 'Research model',
-    text: 'An optional cheaper/faster model that pre-analyzes the failure (on a lean view) before the main model writes the final diagnosis. It can use its own provider, and the costly SCM diff is only fetched when it flags a likely regression.',
+    text: 'An optional cheaper/faster model that pre-analyzes the failure (on a lean view) before the main model writes the final diagnosis. It can use its own provider, and the costly SCM diff is only fetched when it flags a likely regression. It also handles cluster naming and merge adjudication, so configuring a cheap research model routes those utility calls away from the expensive diagnosis model.',
     doc: 'ai-diagnosis#enabling-ai-diagnosis',
     envVars: [
       'PIWI_AI_RESEARCH_PROVIDER',
@@ -419,7 +419,7 @@ export const HELP_TOPICS = {
   },
   'settings.auto-diagnose': {
     title: 'Auto-diagnose',
-    text: 'Automatically diagnose new failure clusters when a run finishes — one LLM call per new cluster, max 3 per run. Requires the diagnosis model to be configured.',
+    text: 'When a run finishes, up to 3 new failure clusters are diagnosed automatically — each diagnosis is one research call (when a research model is configured) plus one diagnosis call — and new clusters get human-readable titles in one batched call. Requires the diagnosis model to be configured.',
     doc: 'ai-diagnosis#enabling-ai-diagnosis',
     envVars: ['PIWI_AI_AUTO_DIAGNOSE'],
   },

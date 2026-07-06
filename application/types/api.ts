@@ -1026,6 +1026,28 @@ export interface SaveAiSettingsBody {
   scmToken?: string | null;
 }
 
+/**
+ * Aggregated AI token usage for one provider + model pair.
+ */
+export interface AiUsageModelRow {
+  provider: string | null;
+  model: string;
+  diagnoses: number;
+  failed: number;
+  inputTokens: number;
+  outputTokens: number;
+  avgDurationMs: number | null;
+}
+
+/**
+ * AI usage summary — returned by GET /api/settings/ai/usage
+ */
+export interface AiUsageSummary {
+  days: number;
+  totals: { diagnoses: number; inputTokens: number; outputTokens: number };
+  byModel: AiUsageModelRow[];
+}
+
 // ============================================================================
 // Entity Link types (A.4)
 // ============================================================================

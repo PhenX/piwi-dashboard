@@ -43,6 +43,8 @@ export interface ContextLimits {
   maxConsoleWindow: number;
   /** Network request duration (ms) threshold for flagging as slow (D9). */
   slowRequestMs: number;
+  /** Screenshots are downscaled so their long edge is at most this many pixels before being sent. */
+  imageMaxEdge: number;
 }
 
 export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
@@ -65,6 +67,7 @@ export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
   slowRequestMs: 1500,
   maxTraceActions: 10,
   traceDomChars: 6000,
+  imageMaxEdge: 1920,
 };
 
 export interface ContextLimitField {
@@ -230,6 +233,14 @@ export const CONTEXT_LIMIT_FIELDS: ContextLimitField[] = [
     description: 'Max characters for the trace-derived DOM/ARIA excerpt in failing-action context.',
     min: 0,
     max: 20000,
+  },
+  {
+    key: 'imageMaxEdge',
+    label: 'Screenshot max edge (px)',
+    envVar: 'PIWI_AI_IMAGE_MAX_EDGE',
+    description: 'Screenshots are downscaled to at most this many pixels on the long edge before being sent.',
+    min: 512,
+    max: 8192,
   },
 ];
 

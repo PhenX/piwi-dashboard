@@ -30,7 +30,11 @@ const saving = ref(false);
 const savingInstructions = ref(false);
 const savingScmToken = ref(false);
 
-const testing = ref(false);
+const testingRoles = reactive<Record<RoleKey, boolean>>({
+  diagnosis: false,
+  research: false,
+  embedding: false,
+});
 
 const modelsRecord = reactive<Record<RoleKey, ModelInfo[]>>({
   diagnosis: [],
@@ -58,7 +62,8 @@ async function loadModels(role: RoleKey) {
   try {
     const res = await $fetch<{ models: ModelInfo[] }>('/api/settings/ai/models', {
       method: 'POST',
-      body: { provider, baseUrl: source.baseUrl || undefined, apiKey },
+      // role lets the server fall back to the stored key when the form key is blank
+      body: { role, provider, baseUrl: source.baseUrl || undefined, apiKey },
     });
     modelsRecord[role] = res.models;
   } catch {
@@ -88,7 +93,8 @@ const ROLE_META = [
     help: 'settings.ai-research',
     optional: true,
     enableLabel: 'Two-stage diagnosis',
-    blurb: 'A cheaper/faster model that pre-analyzes the failure before the diagnosis model writes the final answer.',
+    blurb:
+      'A cheaper/faster model that pre-analyzes the failure before the diagnosis model writes the final answer. Also used for cluster naming and merge adjudication.',
     reuseTargets: ['diagnosis'],
     modelPlaceholderAnthropic: 'e.g. claude-haiku-4-5',
     modelPlaceholderOpenai: 'e.g. llama-3.1-8b-instant',
@@ -97,7 +103,7 @@ const ROLE_META = [
     key: 'embedding',
     title: 'Embedding model',
     icon: 'i-lucide-vector-square',
-    help: 'settings.ai-provider',
+    help: 'settings.embedding-model',
     optional: true,
     enableLabel: 'Semantic clustering',
     blurb: 'Embeds failures so semantically-similar errors group together (used by failure clustering).',
@@ -111,6 +117,8 @@ const providerOptions = [
   { label: 'Anthropic API', value: 'anthropic' },
   { label: 'OpenAI-compatible', value: 'openai' },
 ];
+// Anthropic has no embeddings API — the embedding role must be OpenAI-compatible.
+const embeddingProviderOptions = providerOptions.filter((p) => p.value !== 'anthropic');
 
 // Stable per-role reuse options (recomputed only when role-enable state changes),
 // so the child <USelect>'s `items` keep a stable reference and the listbox doesn't
@@ -122,6 +130,8 @@ const reuseOptionsByRole = computed<Record<RoleKey, Array<{ label: string; value
       { label: 'Configure its own provider', value: 'own' },
       ...meta.reuseTargets
         .filter((t) => roles[t].enabled || t === 'diagnosis')
+        // Embeddings can only reuse OpenAI-compatible roles.
+        .filter((t) => meta.key !== 'embedding' || roles[t].provider === 'openai')
         .map((t) => ({ label: `Reuse ${ROLE_META.find((m) => m.key === t)!.title.toLowerCase()}`, value: t })),
     ];
   }
@@ -251,17 +261,21 @@ async function saveInstructions() {
   }
 }
 
-async function testConnection() {
-  testing.value = true;
+async function testRole(role: RoleKey) {
+  testingRoles[role] = true;
   try {
-    const d = roles.diagnosis;
+    const r = roles[role];
+    // Reused roles source provider/key/baseUrl from the reused role's form
+    // state; the server falls back to saved keys when the form key is blank.
+    const src = r.reuse ? roles[r.reuse] : r;
     const res = await $fetch<{ success: boolean; model?: string; error?: string }>('/api/settings/ai/test', {
       method: 'POST',
       body: {
-        provider: d.provider,
-        apiKey: d.apiKey || undefined,
-        model: d.model || undefined,
-        baseUrl: d.baseUrl || undefined,
+        role,
+        provider: src.provider || undefined,
+        apiKey: src.apiKey || undefined,
+        model: r.model || (r.reuse ? src.model : '') || undefined,
+        baseUrl: src.baseUrl || undefined,
       },
     });
     if (res.success)
@@ -270,7 +284,7 @@ async function testConnection() {
   } catch (err) {
     toast.add({ title: 'Connection failed', description: String((err as Error)?.message ?? err), color: 'error' });
   } finally {
-    testing.value = false;
+    testingRoles[role] = false;
   }
 }
 
@@ -343,23 +357,25 @@ function resetLimits() {
           :meta="meta"
           :has-api-key="hasStoredKey(meta.key)"
           :reuse-options="reuseOptionsByRole[meta.key]"
-          :provider-options="providerOptions"
+          :provider-options="meta.key === 'embedding' ? embeddingProviderOptions : providerOptions"
           :preset-options="presetOptions"
           :disabled="envManaged"
           :env-managed="envManaged"
           :provider-resolved="resolvedProvider(meta.key)"
           :models="modelsRecord[meta.key]"
           :loading-models="loadingModels[meta.key]"
+          :testing="testingRoles[meta.key]"
           @apply-preset="(label: string) => applyPreset(meta.key, label)"
           @load-models="loadModels(meta.key)"
+          @test="testRole(meta.key)"
         />
 
         <SettingsField label="Auto-diagnose" help="settings.auto-diagnose" :env-managed="envManaged">
           <div class="flex items-center gap-3">
             <USwitch v-model="autoDiagnose" :disabled="envManaged || !roles.diagnosis.enabled" />
             <span class="text-sm text-gray-500">
-              Automatically diagnose new failure clusters when a run finishes — one LLM call per new cluster, max 3 per
-              run
+              Automatically diagnose new failure clusters when a run finishes — up to 3 clusters per run (research +
+              diagnosis call each), plus one batched call to title new clusters
             </span>
           </div>
         </SettingsField>
@@ -367,20 +383,12 @@ function resetLimits() {
 
       <template #footer>
         <div class="flex items-center gap-2 justify-end">
-          <UButton
-            color="neutral"
-            variant="soft"
-            :loading="testing"
-            :disabled="!roles.diagnosis.provider"
-            icon="i-lucide-plug"
-            @click="testConnection"
-          >
-            Test diagnosis connection
-          </UButton>
           <UButton color="primary" :loading="saving" icon="i-lucide-save" @click="save"> Save </UButton>
         </div>
       </template>
     </SectionCard>
+
+    <AiUsagePanel />
 
     <SectionCard title="Repository access" help="project.scm-token">
       <template #subtitle> Optional — required for private repositories. Per-project tokens override this. </template>

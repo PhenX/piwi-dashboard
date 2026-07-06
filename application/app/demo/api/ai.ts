@@ -265,3 +265,12 @@ export async function apiGetAiLimits() {
 export async function apiPutAiLimits(_body: unknown) {
   return { success: true };
 }
+
+/** GET /api/settings/ai/usage — no live AI calls in demo mode */
+export async function apiGetAiUsage() {
+  return {
+    days: 30,
+    totals: { diagnoses: 0, inputTokens: 0, outputTokens: 0 },
+    byModel: [],
+  };
+}

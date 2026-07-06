@@ -54,6 +54,7 @@ export async function adjudicateClusterPair(
     user,
     jsonSchema: ADJUDICATION_JSON_SCHEMA as unknown as object,
     maxTokens: 512,
+    effort: 'low',
   });
   try {
     const j = JSON.parse(res.text) as Partial<AdjudicationResult>;

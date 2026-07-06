@@ -2,8 +2,8 @@ import { getDatabase } from '../../../database';
 import { requireAuth } from '../../../utils/auth';
 import { Role } from '#shared/types';
 import { resolveAiConfig, callAiProvider } from '../../../utils/ai-provider';
-import { getAppSetting } from '../../../utils/app-settings';
-import type { AiProvider, ResolvedAiRole } from '~~/types/api';
+import { embedTexts } from '../../../utils/ai-embeddings';
+import type { AiModelRole, AiProvider, ResolvedAiRole } from '~~/types/api';
 
 const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
@@ -12,7 +12,7 @@ defineRouteMeta({
     tags: ['Settings'],
     summary: 'Test AI provider connection',
     description:
-      'Sends a connectivity test to the configured AI provider. Accepts optional provider, apiKey, model, and baseUrl in the request body. Requires administrator role.',
+      'Sends a connectivity test to the configured AI provider for a given model role (`diagnosis`, `research`, or `embedding` — the embedding role is probed via the embeddings endpoint). Accepts optional role, provider, apiKey, model, and baseUrl in the request body; omitted fields fall back to the saved configuration. Requires administrator role.',
     'x-required-roles': REQUIRED_ROLES,
   },
 });
@@ -21,32 +21,27 @@ export default eventHandler(async (event) => {
   await requireAuth(event, REQUIRED_ROLES);
 
   const body = (await readBody(event).catch(() => null)) as {
+    role?: string;
     provider?: string;
     apiKey?: string;
     model?: string;
     baseUrl?: string;
   } | null;
 
+  const role: AiModelRole = body?.role === 'research' || body?.role === 'embedding' ? body.role : 'diagnosis';
+
   const db = await getDatabase();
+  const resolved = await resolveAiConfig(db);
 
   let config: ResolvedAiRole | null;
 
   if (!body?.provider) {
-    const resolved = await resolveAiConfig(db);
-    config = resolved ? resolved.roles.diagnosis : null;
+    config = resolved ? resolved.roles[role] : null;
   } else {
-    let apiKey = body.apiKey || '';
-    if (!apiKey) {
-      // User didn't type a new key — fall back to whatever is currently active
-      // (env var key via resolveAiConfig, or stored DB key)
-      const existing = await resolveAiConfig(db);
-      apiKey = existing?.apiKey || '';
-      if (!apiKey) {
-        // Last resort: read raw stored value (handles case where existing config is invalid)
-        const stored = await getAppSetting<{ apiKey?: string }>(db, 'ai');
-        apiKey = stored?.apiKey || '';
-      }
-    }
+    // Form values win; a blank key falls back to the saved key for this role
+    // (users leave the field empty to keep the stored secret), then to the
+    // diagnosis role's key (the common "reuse" source).
+    const apiKey = body.apiKey || resolved?.roles[role]?.apiKey || resolved?.roles.diagnosis?.apiKey || '';
     config = {
       provider: body.provider as AiProvider,
       apiKey,
@@ -55,9 +50,14 @@ export default eventHandler(async (event) => {
     };
   }
 
-  if (!config) throw createError({ statusCode: 503, message: 'AI diagnosis is not configured' });
+  if (!config) throw createError({ statusCode: 503, message: `The ${role} role is not configured` });
 
   try {
+    if (role === 'embedding') {
+      const vectors = await embedTexts(config, ['connectivity check']);
+      if (!vectors[0]?.length) throw new Error('embeddings endpoint returned no vector');
+      return { success: true, model: config.model };
+    }
     const result = await callAiProvider(config, {
       system: 'You are a connectivity check.',
       user: 'Reply with the single word OK.',

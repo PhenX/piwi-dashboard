@@ -68,12 +68,13 @@ export function rolesFromLegacy(flat: {
         }
       : { reuse: 'diagnosis', model: flat.researchModel };
   }
-  if (flat.embeddingProvider) {
+  if (flat.embeddingModel) {
+    // Provider/baseUrl/key default to the main role's (mirrors resolveAiConfig).
     roles.embedding = {
-      provider: flat.embeddingProvider,
+      provider: flat.embeddingProvider || flat.provider,
       model: flat.embeddingModel,
-      baseUrl: flat.embeddingBaseUrl,
-      apiKey: flat.embeddingApiKey,
+      baseUrl: flat.embeddingBaseUrl || flat.baseUrl,
+      apiKey: flat.embeddingApiKey || flat.apiKey,
     };
   }
   return roles;

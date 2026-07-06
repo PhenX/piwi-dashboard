@@ -83,6 +83,7 @@ import {
   apiTestAiSettings,
   apiGetAiLimits,
   apiPutAiLimits,
+  apiGetAiUsage,
 } from './ai';
 import { apiGetAdminStats } from './admin';
 import { apiDeleteTestRun } from './test-runs';
@@ -362,6 +363,7 @@ const routes: RouteEntry[] = [
   { method: 'GET', pattern: /^\/api\/settings\/ai$/, handler: () => apiGetAiSettings() },
   { method: 'PUT', pattern: /^\/api\/settings\/ai$/, handler: (_, body) => apiPutAiSettings(body) },
   { method: 'POST', pattern: /^\/api\/settings\/ai\/test$/, handler: () => apiTestAiSettings() },
+  { method: 'GET', pattern: /^\/api\/settings\/ai\/usage$/, handler: () => apiGetAiUsage() },
   {
     method: 'GET',
     pattern: /^\/api\/settings\/ai\/limits$/,

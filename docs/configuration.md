@@ -90,10 +90,10 @@ When unset, configure the patterns from **Settings → Wasted time** (administra
 | `PIWI_AI_RESEARCH_MODEL` | — | Cheaper/faster model for the research stage. Empty disables the two-stage pipeline. |
 | `PIWI_AI_RESEARCH_BASE_URL` | — | Base URL for the research-stage provider. Falls back to `PIWI_AI_BASE_URL`. |
 | `PIWI_AI_RESEARCH_API_KEY` | — | API key for the research-stage provider. Falls back to `PIWI_AI_API_KEY`. |
-| `PIWI_AI_EMBEDDING_PROVIDER` | — | Provider for embeddings (semantic clustering). Falls back to `PIWI_AI_PROVIDER`. |
-| `PIWI_AI_EMBEDDING_MODEL` | — | Embedding model name (e.g. `text-embedding-3-small`). |
-| `PIWI_AI_EMBEDDING_BASE_URL` | — | Base URL for the embedding provider. Falls back to `PIWI_AI_BASE_URL`. |
-| `PIWI_AI_EMBEDDING_API_KEY` | — | API key for the embedding provider. Falls back to `PIWI_AI_API_KEY`. |
+| `PIWI_AI_EMBEDDING_PROVIDER` | — | Provider for embeddings (semantic clustering). Falls back to `PIWI_AI_PROVIDER` when `PIWI_AI_EMBEDDING_MODEL` is set. Must be OpenAI-compatible — Anthropic has no embeddings API — so the fallback only helps when the main provider is `openai`. |
+| `PIWI_AI_EMBEDDING_MODEL` | — | Embedding model name (e.g. `text-embedding-3-small`). Empty disables semantic clustering (and the embedding fallbacks). |
+| `PIWI_AI_EMBEDDING_BASE_URL` | — | Base URL for the embedding provider. Falls back to `PIWI_AI_BASE_URL` when `PIWI_AI_EMBEDDING_MODEL` is set. |
+| `PIWI_AI_EMBEDDING_API_KEY` | — | API key for the embedding provider. Falls back to `PIWI_AI_API_KEY` when `PIWI_AI_EMBEDDING_MODEL` is set. |
 
 The `PIWI_AI_MAX_*` and `PIWI_AI_SLOW_REQUEST_MS` context-limit variables are documented in [AI diagnosis → Context limits](./ai-diagnosis#context-limits-and-token-cost).
 

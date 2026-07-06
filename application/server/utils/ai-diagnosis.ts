@@ -8,6 +8,8 @@ import type { AiConfig } from '~~/types/api';
 import { callAiProvider, resolveAiConfig, streamAiProvider, DEFAULT_ANTHROPIC_MODEL } from './ai-provider';
 import type { AiAttachedImage, StreamChunk, StreamResult } from './ai-provider';
 import { buildDiagnosisContext } from './ai-context';
+import { resolveContextLimits } from './ai-context-limits';
+import { downscaleImages } from './ai-images';
 import { buildDiagnosisSystemPrompt } from './ai-system-prompt';
 import { reconcileNewClusters } from './cluster-reconcile';
 import { nameNewClusters } from './cluster-naming';
@@ -223,7 +225,14 @@ export async function runClusterDiagnosis(
             skipScm,
           });
 
-    type PipelineStage = { role: string; model: string; inputTokens: number | null; outputTokens: number | null };
+    type PipelineStage = {
+      role: string;
+      model: string;
+      inputTokens: number | null;
+      outputTokens: number | null;
+      cacheCreationInputTokens: number | null;
+      cacheReadInputTokens: number | null;
+    };
     const pipeline: PipelineStage[] = [];
 
     // The research stage runs only when a distinct research role is configured
@@ -254,12 +263,15 @@ export async function runClusterDiagnosis(
           user: buildResearchProjection(ctx),
           jsonSchema: RESEARCH_JSON_SCHEMA,
           maxTokens: 2048,
+          effort: 'low',
         });
         pipeline.push({
           role: 'research',
           model: research.model,
           inputTokens: research.inputTokens,
           outputTokens: research.outputTokens,
+          cacheCreationInputTokens: research.cacheCreationInputTokens,
+          cacheReadInputTokens: research.cacheReadInputTokens,
         });
         const parsed = parseResearchJson(research.text);
         researchBlock = formatResearchBlock(parsed);
@@ -277,14 +289,20 @@ export async function runClusterDiagnosis(
     const baseContent = extra ? `${ctx.text}\n\n## Additional Context Provided by User\n${extra}` : ctx.text;
     const userContent = researchBlock ? `${baseContent}\n\n${researchBlock}` : baseContent;
     // Merge auto-resolved screenshots (D1) with user-provided images
+    // Downscale screenshots (auto-resolved + user-provided) — full-resolution
+    // images cost ~3× more tokens on current models without helping diagnosis.
     const allImages = [...(ctx.images ?? []), ...(opts?.images ?? [])];
-    const images = allImages.length > 0 ? allImages : undefined;
+    const images =
+      allImages.length > 0
+        ? await downscaleImages(allImages, (await resolveContextLimits(db)).imageMaxEdge)
+        : undefined;
 
     const result = await callAiProvider(config, {
       system: systemPrompt,
       user: userContent,
       jsonSchema: DIAGNOSIS_JSON_SCHEMA,
       images,
+      adaptiveThinking: true,
       cacheControl: true,
       // The built context is the cache-stable prefix; additional context and
       // the research block vary between re-runs and sit after the breakpoint.
@@ -295,6 +313,8 @@ export async function runClusterDiagnosis(
       model: result.model,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
+      cacheCreationInputTokens: result.cacheCreationInputTokens,
+      cacheReadInputTokens: result.cacheReadInputTokens,
     });
     const diagnosis = parseDiagnosisJson(result.text);
 
@@ -322,7 +342,8 @@ export async function runClusterDiagnosis(
           affectedArea: diagnosis.affectedArea,
           hypotheses: diagnosis.hypotheses,
           investigationSteps: diagnosis.investigationSteps,
-          ...(pipeline.length > 1 ? { pipeline } : {}),
+          // Always stored (even single-stage) so per-stage token + cache stats are inspectable.
+          pipeline,
           selectedCommitShas: opts?.selectedCommitShas ?? null,
           additionalContext: opts?.additionalContext ?? null,
           autoSelectedCommits: ctx.scmChanges?.commits?.slice(0, 3).map((c) => c.sha) ?? null,
@@ -499,7 +520,14 @@ export async function streamClusterDiagnosis(
             skipScm,
           });
 
-    type PipelineStage = { role: string; model: string; inputTokens: number | null; outputTokens: number | null };
+    type PipelineStage = {
+      role: string;
+      model: string;
+      inputTokens: number | null;
+      outputTokens: number | null;
+      cacheCreationInputTokens: number | null;
+      cacheReadInputTokens: number | null;
+    };
     const pipeline: PipelineStage[] = [];
 
     // Research stage (synchronous, not streamed)
@@ -523,12 +551,15 @@ export async function streamClusterDiagnosis(
           user: buildResearchProjection(ctx),
           jsonSchema: RESEARCH_JSON_SCHEMA,
           maxTokens: 2048,
+          effort: 'low',
         });
         pipeline.push({
           role: 'research',
           model: research.model,
           inputTokens: research.inputTokens,
           outputTokens: research.outputTokens,
+          cacheCreationInputTokens: research.cacheCreationInputTokens,
+          cacheReadInputTokens: research.cacheReadInputTokens,
         });
         const parsed = parseResearchJson(research.text);
         researchBlock = formatResearchBlock(parsed);
@@ -544,20 +575,28 @@ export async function streamClusterDiagnosis(
     const extra = opts?.additionalContext?.trim();
     const baseContent = extra ? `${ctx.text}\n\n## Additional Context Provided by User\n${extra}` : ctx.text;
     const userContent = researchBlock ? `${baseContent}\n\n${researchBlock}` : baseContent;
+    // Downscale screenshots (auto-resolved + user-provided) — full-resolution
+    // images cost ~3× more tokens on current models without helping diagnosis.
     const allImages = [...(ctx.images ?? []), ...(opts?.images ?? [])];
-    const images = allImages.length > 0 ? allImages : undefined;
+    const images =
+      allImages.length > 0
+        ? await downscaleImages(allImages, (await resolveContextLimits(db)).imageMaxEdge)
+        : undefined;
 
     // Stream the diagnosis stage
     let accumulatedText = '';
     let streamModel = config.model;
     let streamInputTokens: number | null = null;
     let streamOutputTokens: number | null = null;
+    let streamCacheCreation: number | null = null;
+    let streamCacheRead: number | null = null;
 
     for await (const chunk of streamAiProvider(config, {
       system: systemPrompt,
       user: userContent,
       jsonSchema: DIAGNOSIS_JSON_SCHEMA,
       images,
+      adaptiveThinking: true,
       cacheControl: true,
       // The built context is the cache-stable prefix; additional context and
       // the research block vary between re-runs and sit after the breakpoint.
@@ -571,6 +610,8 @@ export async function streamClusterDiagnosis(
         streamModel = result.model;
         streamInputTokens = result.inputTokens;
         streamOutputTokens = result.outputTokens;
+        streamCacheCreation = result.cacheCreationInputTokens;
+        streamCacheRead = result.cacheReadInputTokens;
       } else if (chunk.type === 'error') {
         throw new Error(chunk.data as string);
       }
@@ -581,6 +622,8 @@ export async function streamClusterDiagnosis(
       model: streamModel,
       inputTokens: streamInputTokens,
       outputTokens: streamOutputTokens,
+      cacheCreationInputTokens: streamCacheCreation,
+      cacheReadInputTokens: streamCacheRead,
     });
 
     const diagnosis = parseDiagnosisJson(accumulatedText);
@@ -609,7 +652,8 @@ export async function streamClusterDiagnosis(
           affectedArea: diagnosis.affectedArea,
           hypotheses: diagnosis.hypotheses,
           investigationSteps: diagnosis.investigationSteps,
-          ...(pipeline.length > 1 ? { pipeline } : {}),
+          // Always stored (even single-stage) so per-stage token + cache stats are inspectable.
+          pipeline,
           selectedCommitShas: opts?.selectedCommitShas ?? null,
           additionalContext: opts?.additionalContext ?? null,
           autoSelectedCommits: ctx.scmChanges?.commits?.slice(0, 3).map((c) => c.sha) ?? null,
