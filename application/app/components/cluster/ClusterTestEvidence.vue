@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TraceInfo, AttachmentInfo } from '~~/types/api';
-import { buildRetryCommand } from '~/utils/retry-command';
+import { isImageFile } from '~/utils/text-format';
 
 interface AffectedCase {
   testCaseId: number;
@@ -33,7 +33,34 @@ const traces = ref<TraceInfo[]>([]);
 const loading = ref(false);
 const tracesLoading = ref(false);
 
+const showSteps = ref(false);
+const showSignals = ref(false);
+const showSource = ref(false);
+const showAriaSnapshot = ref(false);
+
+// Cache each case's detail + traces so switching tabs is instant and doesn't
+// re-fetch. Keyed by the test-run-case id.
+const caseCache = new Map<number, { detail: TestCaseDetail; traces: TraceInfo[] }>();
+
+function resetDisclosures() {
+  showSteps.value = false;
+  showSignals.value = false;
+  showSource.value = false;
+  showAriaSnapshot.value = false;
+}
+
 async function loadCase(id: number) {
+  resetDisclosures();
+
+  const cached = caseCache.get(id);
+  if (cached) {
+    caseDetail.value = cached.detail;
+    traces.value = cached.traces;
+    loading.value = false;
+    tracesLoading.value = false;
+    return;
+  }
+
   loading.value = true;
   tracesLoading.value = true;
   caseDetail.value = null;
@@ -49,6 +76,10 @@ async function loadCase(id: number) {
 
   if (traceList.status === 'fulfilled') traces.value = traceList.value;
   tracesLoading.value = false;
+
+  if (detail.status === 'fulfilled' && traceList.status === 'fulfilled') {
+    caseCache.set(id, { detail: detail.value, traces: traceList.value });
+  }
 }
 
 watch(selectedId, (id) => {
@@ -66,63 +97,68 @@ const failingSteps = computed(() => {
   return steps.filter((s: { error?: unknown }) => s.error) as Array<{ title?: string; error?: { message?: string } }>;
 });
 
-const showSteps = ref(false);
-const showAriaSnapshot = ref(false);
-const { copy, copied } = useCopy();
-
-const clusterCases = computed(() =>
-  props.affectedTestCases.map((tc) => ({
-    filePath: tc.filePath,
-    title: tc.title,
-    line: null,
-    projectName: null,
-  })),
+const testSourceLines = computed(() =>
+  caseDetail.value?.testSource ? caseDetail.value.testSource.split('\n').length : 0,
 );
 
-const retryCommand = computed(() => buildRetryCommand(clusterCases.value));
-
-function copyRetryCommand() {
-  const cmd = retryCommand.value;
-  if (cmd) copy(cmd, { toast: 'Retry command copied' });
-}
+// One badge per evidence kind present, so the reader sees what's available
+// before scrolling. Purely informative.
+const evidenceChips = computed(() => {
+  const d = caseDetail.value;
+  if (!d) return [];
+  const screenshots = d.attachments.filter((a) => isImageFile(a.path, a.contentType)).length;
+  const consoleCount = Array.isArray(d.consoleLogs)
+    ? (d.consoleLogs as Array<{ type?: string }>).filter((l) => l.type === 'error' || l.type === 'warning').length
+    : 0;
+  const failedRequests = Array.isArray(d.networkRequests)
+    ? (d.networkRequests as Array<{ status?: number }>).filter((r) => (r.status ?? 0) >= 400).length
+    : 0;
+  return [
+    { icon: 'i-lucide-image', label: 'screenshots', count: screenshots },
+    { icon: 'i-lucide-bug-play', label: 'traces', count: traces.value.length },
+    { icon: 'i-lucide-list-checks', label: 'failing steps', count: failingSteps.value.length },
+    { icon: 'i-lucide-triangle-alert', label: 'signals', count: consoleCount + failedRequests },
+    { icon: 'i-lucide-code', label: 'source', count: d.testSource ? 1 : 0 },
+    { icon: 'i-lucide-accessibility', label: 'ARIA', count: d.ariaSnapshot ? 1 : 0 },
+  ].filter((c) => c.count > 0);
+});
 </script>
 
 <template>
   <div class="space-y-3">
-    <!-- Test case selector -->
-    <div v-if="affectedTestCases.length > 1" class="flex items-start gap-2 flex-wrap">
-      <span class="text-xs text-gray-500 font-medium shrink-0 mt-1">Case</span>
-      <div class="flex flex-wrap gap-1.5">
-        <button
-          v-for="tc in affectedTestCases"
-          :key="tc.recentTestRunsCaseId"
-          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors"
-          :class="
-            selectedId === tc.recentTestRunsCaseId
-              ? 'bg-primary text-white border-primary'
-              : 'text-gray-600 dark:text-gray-400 border-default hover:border-primary/50 bg-elevated'
-          "
-          @click="selectedId = tc.recentTestRunsCaseId"
-        >
-          <span class="truncate max-w-[18ch]">{{ tc.title.split(' › ').pop() }}</span>
-          <span class="opacity-60">{{ tc.runCount }}×</span>
-        </button>
-      </div>
+    <!-- Per-case tabs -->
+    <div v-if="affectedTestCases.length > 1" class="flex gap-0 border-b border-default overflow-x-auto">
+      <button
+        v-for="tc in affectedTestCases"
+        :key="tc.recentTestRunsCaseId"
+        class="px-3 py-1.5 text-xs whitespace-nowrap border-b-2 -mb-px transition-colors"
+        :class="
+          selectedId === tc.recentTestRunsCaseId
+            ? 'border-primary text-primary font-medium'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+        "
+        :title="tc.title"
+        @click="selectedId = tc.recentTestRunsCaseId"
+      >
+        {{ tc.title.split(' › ').pop() }}
+        <span v-if="tc.runCount > 1" class="opacity-60 ml-1">{{ tc.runCount }}×</span>
+      </button>
     </div>
 
-    <!-- Test file location -->
-    <p v-if="selectedCase" class="text-xs font-mono text-gray-400 truncate">{{ selectedCase.filePath }}</p>
-
-    <div v-if="affectedTestCases.length > 0" class="flex justify-end">
+    <!-- Selected case header: title, file location, link to the test run case -->
+    <div v-if="selectedCase" class="flex items-start justify-between gap-2 flex-wrap">
+      <div class="min-w-0">
+        <p class="text-sm font-medium break-words">{{ selectedCase.title }}</p>
+        <p class="text-xs font-mono text-gray-400 truncate">{{ selectedCase.filePath }}</p>
+      </div>
       <UButton
+        :to="`/test-run-cases/${selectedCase.recentTestRunsCaseId}`"
         size="xs"
         variant="outline"
         color="neutral"
-        :icon="copied ? 'i-lucide-check' : 'i-lucide-play'"
-        :title="copied ? 'Copied!' : copyPreview(retryCommand)"
-        @click="copyRetryCommand()"
+        trailing-icon="i-lucide-arrow-right"
       >
-        Copy retry command
+        Open test run case
       </UButton>
     </div>
 
@@ -131,12 +167,20 @@ function copyRetryCommand() {
     </div>
 
     <template v-else-if="caseDetail">
-      <!-- Test source code -->
-      <TestEvidenceSection v-if="caseDetail.testSource" icon="i-lucide-code" label="Test source" :collapsible="false">
-        <div class="overflow-x-auto max-h-64">
-          <MarkdownPreview :text="'```typescript\n' + caseDetail.testSource + '\n```'" />
-        </div>
-      </TestEvidenceSection>
+      <!-- Evidence summary chips -->
+      <div v-if="evidenceChips.length" class="flex flex-wrap gap-1.5">
+        <UBadge
+          v-for="chip in evidenceChips"
+          :key="chip.label"
+          color="neutral"
+          variant="subtle"
+          size="sm"
+          class="gap-1"
+        >
+          <UIcon :name="chip.icon" class="size-3" />
+          {{ chip.count }} {{ chip.label }}
+        </UBadge>
+      </div>
 
       <!-- Screenshots -->
       <TestEvidenceScreenshots :attachments="caseDetail.attachments" />
@@ -154,11 +198,31 @@ function copyRetryCommand() {
       >
         <div class="divide-y divide-default">
           <div v-for="(step, idx) in failingSteps" :key="idx" class="px-3 py-2 space-y-0.5">
-            <p class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ step.title }}</p>
+            <p class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ idx + 1 }}. {{ step.title }}</p>
             <p v-if="step.error?.message" class="text-xs font-mono text-red-500 whitespace-pre-wrap break-all">
               {{ step.error.message }}
             </p>
           </div>
+        </div>
+      </TestEvidenceSection>
+
+      <!-- Console + network signals (collapsible) -->
+      <TestEvidenceSignals
+        :console-logs="caseDetail.consoleLogs"
+        :network-requests="caseDetail.networkRequests"
+        v-model:open="showSignals"
+      />
+
+      <!-- Test source code (collapsible) -->
+      <TestEvidenceSection
+        v-if="caseDetail.testSource"
+        icon="i-lucide-code"
+        label="Test source"
+        :count="testSourceLines"
+        v-model:open="showSource"
+      >
+        <div class="overflow-x-auto max-h-64">
+          <MarkdownPreview :text="'```typescript\n' + caseDetail.testSource + '\n```'" />
         </div>
       </TestEvidenceSection>
 
@@ -173,9 +237,6 @@ function copyRetryCommand() {
           <MarkdownPreview :text="'```yaml\n' + caseDetail.ariaSnapshot + '\n```'" />
         </div>
       </TestEvidenceSection>
-
-      <!-- Console + network signals (collapsible) -->
-      <TestEvidenceSignals :console-logs="caseDetail.consoleLogs" :network-requests="caseDetail.networkRequests" />
     </template>
   </div>
 </template>

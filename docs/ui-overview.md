@@ -87,7 +87,7 @@ Also here: full **error details** with cluster context; **alternative locators**
 
 ## Failure cluster detail
 
-Each cluster (`/failure-clusters/:id`) has three tabs — **Overview** (signature, affected tests, and an alternative-locators panel for broken locators), **Triage** (set status open/resolved/ignored and write a note), and **AI diagnosis** (run an SCM-grounded LLM analysis with a baseline-commit picker and commit browser). Full detail: [AI diagnosis & clustering](./ai-diagnosis).
+Each cluster (`/failure-clusters/:id`) opens on a summary — signature, affected tests, and **Triage** (set status open/resolved/ignored and write a note) — above a two-column body. The left column collapses each investigation section to a header with an at-a-glance peek (click to expand, and the state is remembered): the raw **error message**, an **alternative-locators** panel for broken locators, **test evidence** (one tab per affected case, each linking through to its test-run case, with screenshots, traces, failing steps, console/network signals and source), and **what changed** (the SCM diff since the last green run, with a baseline-commit picker and commit browser). The right column holds the **AI diagnosis** — an SCM-grounded LLM analysis whose cited evidence links back to the matching left-column section. Full detail: [AI diagnosis & clustering](./ai-diagnosis).
 
 ## Settings
 

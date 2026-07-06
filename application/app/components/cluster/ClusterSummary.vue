@@ -13,14 +13,10 @@ const emit = defineEmits<{
   'update:triageStatus': [value: string];
   'update:triageNote': [value: string];
   'save-triage': [];
-  extract: [];
 }>();
 
-const { metadataBlockCount, summaryColSpanClass } = useDetailGrid(() => {
-  let count = 1; // Triage card always shown
-  if (props.cluster.affectedTestCases?.length) count++;
-  return count;
-});
+// Triage is the only metadata block alongside the cluster info card.
+const { summaryColSpanClass } = useDetailGrid(() => 1);
 
 const triageStatusOptions = [
   { label: 'Open', value: 'open', color: 'warning' as const },
@@ -50,6 +46,19 @@ const triageStatusOptions = [
           </span>
           <span class="text-xs text-gray-500 tabular-nums whitespace-nowrap">
             {{ cluster.affectedTests }} {{ cluster.affectedTests === 1 ? 'test' : 'tests' }}
+          </span>
+          <UBadge
+            v-if="cluster.diagnosis?.status === 'completed' && cluster.diagnosis?.category"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            class="gap-1 whitespace-nowrap"
+          >
+            <UIcon name="i-lucide-sparkles" class="size-3" />
+            {{ cluster.diagnosis.category }}
+          </UBadge>
+          <span v-if="cluster.lastSeenAt" class="text-xs text-gray-400 whitespace-nowrap">
+            last seen {{ formatRelativeTime(cluster.lastSeenAt) }}
           </span>
         </div>
       </div>
@@ -95,6 +104,12 @@ const triageStatusOptions = [
                 run #{{ cluster.lastSeenRunId }}
               </NuxtLink>
               <template v-if="cluster.lastSeenAt"> ({{ formatRelativeTime(cluster.lastSeenAt) }}) </template>
+              <RunStatusBadge
+                v-if="cluster.lastSeenRunStatus"
+                :status="cluster.lastSeenRunStatus"
+                size="sm"
+                class="ml-1 align-middle"
+              />
             </p>
           </div>
         </SectionCard>
@@ -145,46 +160,6 @@ const triageStatusOptions = [
         </div>
       </SectionCard>
 
-      <!-- Runs card -->
-      <SectionCard
-        v-if="cluster.affectedTestCases?.length"
-        class="lg:col-span-3"
-        icon="i-lucide-arrow-up-from-line"
-        icon-class="text-warning"
-        title="Runs"
-        help="cluster.recent-runs"
-      >
-        <template #actions>
-          <UTooltip text="Unlink incorrectly clustered test cases from this group">
-            <UButton
-              size="xs"
-              color="warning"
-              variant="outline"
-              icon="i-lucide-arrow-up-from-line"
-              @click="emit('extract')"
-            >
-              Extract
-            </UButton>
-          </UTooltip>
-        </template>
-        <div class="space-y-2">
-          <div class="flex flex-col gap-1.5">
-            <NuxtLink
-              v-for="runId in cluster.recentRunIds"
-              :key="runId"
-              :to="`/test-runs/${runId}`"
-              class="text-sm text-primary hover:underline flex items-center gap-2"
-            >
-              <UIcon name="i-lucide-list-checks" class="size-3.5 shrink-0" />
-              Run #{{ runId }}
-            </NuxtLink>
-          </div>
-          <p class="text-xs text-gray-500">
-            {{ cluster.occurrences }} occurrence{{ cluster.occurrences === 1 ? '' : 's' }} across
-            {{ cluster.affectedTests }} {{ cluster.affectedTests === 1 ? 'test' : 'tests' }}
-          </p>
-        </div>
-      </SectionCard>
     </div>
   </FoldableSummary>
 </template>

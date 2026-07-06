@@ -7,11 +7,19 @@
 
 import { recommendLocatorFix } from '#shared/locator-healing';
 import type { RankedLocator, LocatorFixRecommendation, LocatorHealingResult } from '#shared/locator-healing.types';
+import SectionCard from './SectionCard.vue';
+import CollapsibleSectionCard from './CollapsibleSectionCard.vue';
 
 const props = defineProps<{
   runId: number;
   testRunsCaseId: number;
+  /** When set, the panel folds to a header with a peek (persisted per user). */
+  storageKey?: string;
 }>();
+
+// Fold on the cluster page (storageKey set); stay a plain card on the test-case page.
+const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
+const cardBind = computed(() => (props.storageKey ? { storageKey: props.storageKey } : {}));
 
 const {
   data: healing,
@@ -140,13 +148,21 @@ function locatorNote(method: string, score: number): string {
 </script>
 
 <template>
-  <SectionCard
+  <component
+    :is="cardComponent"
     v-if="!pending && !error && hasData"
+    v-bind="cardBind"
     icon="i-lucide-bandage"
     title="Alternative locators"
     :count="alternatives.length"
     help="locator-healing"
   >
+    <template v-if="storageKey" #folded>
+      <code v-if="recommendation?.recommended" class="text-xs font-mono">
+        {{ recommendation.recommended.locator }}
+      </code>
+      <span v-else>{{ alternatives.length }} alternative{{ alternatives.length === 1 ? '' : 's' }}</span>
+    </template>
     <template #subtitle>
       <span :class="sourceClass">
         {{ sourceNote }}
@@ -262,21 +278,26 @@ function locatorNote(method: string, score: number): string {
       variant="subtle"
       description="No HTML attributes were available. Enable Piwi fixture capture for full alternatives including data-testid and CSS selectors."
     />
-  </SectionCard>
+  </component>
 
   <!-- No data -->
-  <SectionCard
+  <component
+    :is="cardComponent"
     v-else-if="!pending && !error && !hasData"
+    v-bind="cardBind"
     icon="i-lucide-bandage"
     title="Alternative locators"
     subtitle="No alternatives available"
     help="locator-healing"
   >
+    <template v-if="storageKey" #folded>
+      <span>No alternatives available</span>
+    </template>
     <UAlert
       color="neutral"
       icon="i-lucide-info"
       variant="subtle"
       description="No pre-captured alternatives — this locator has never passed in a previous run. Enable Piwi dashboard fixtures to capture element attributes at test time."
     />
-  </SectionCard>
+  </component>
 </template>

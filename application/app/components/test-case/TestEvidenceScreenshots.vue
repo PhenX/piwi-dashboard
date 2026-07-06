@@ -1,21 +1,13 @@
 <script setup lang="ts">
 import type { AttachmentInfo } from '~~/types/api';
+import { isImageFile } from '~/utils/text-format';
 
 const props = defineProps<{
   attachments: AttachmentInfo[];
 }>();
 
-const imageExts = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp']);
-const imageMimes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'image/webp']);
-
 function getExt(path: string): string {
   return '.' + (path.toLowerCase().split('.').pop() || '');
-}
-
-function isImage(path: string, contentType?: string | null): boolean {
-  if (imageExts.has(getExt(path))) return true;
-  if (contentType && imageMimes.has(contentType.toLowerCase())) return true;
-  return false;
 }
 
 function fileUrl(path: string, contentType?: string | null): string {
@@ -30,7 +22,7 @@ function fileName(path: string): string {
 
 const images = computed(() =>
   props.attachments
-    .filter((att) => isImage(att.path, att.contentType))
+    .filter((att) => isImageFile(att.path, att.contentType))
     .map((att) => ({
       src: fileUrl(att.path, att.contentType),
       name: att.name || fileName(att.path),

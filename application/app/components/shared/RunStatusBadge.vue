@@ -1,11 +1,14 @@
 <script setup lang="ts">
+import type { BadgeProps } from '@nuxt/ui';
+
 defineProps<{
   status: string;
+  size?: BadgeProps['size'];
 }>();
 </script>
 
 <template>
-  <UBadge :color="getStatusColor(status)" class="capitalize gap-1 items-center">
+  <UBadge :color="getStatusColor(status)" :size="size" class="capitalize gap-1 items-center">
     <UIcon
       v-if="status === 'running' || status === 'initialising' || status === 'finalizing'"
       name="i-lucide-loader-circle"

@@ -217,6 +217,17 @@ function showResult() {
       </div>
     </div>
 
+    <!-- Context coverage preview: what evidence will be sent, without opening the modal -->
+    <DiagnosisCoverageStrip
+      v-if="aiStatus?.configured"
+      :sections="contextSections"
+      :not-applicable="coverage?.notApplicable"
+      :token-estimate="tokenEstimate"
+      :loading="contextLoading"
+      @view-section="onViewSection"
+      @open="showAiContext = true"
+    />
+
     <!-- Context modal -->
     <DiagnosisContextModal
       :open="showAiContext"
