@@ -138,7 +138,6 @@ function validateSuggestedPatch(ctx: BuiltDiagnosisContext, patch: string | null
 // and persisting the completed/failed result — is shared below.
 
 interface DiagnosisRunOpts {
-  force?: boolean;
   additionalContext?: string;
   images?: AiAttachedImage[];
   baseCommit?: string;

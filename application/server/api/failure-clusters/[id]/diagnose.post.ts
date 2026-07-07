@@ -75,7 +75,6 @@ export default eventHandler(async (event) => {
   }
 
   return runClusterDiagnosis(db, cluster, config, {
-    force,
     additionalContext: body?.additionalContext,
     images: body?.images,
     baseCommit: body?.baseCommit,

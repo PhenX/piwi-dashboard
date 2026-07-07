@@ -1540,7 +1540,20 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     const force = params.force === true || params.force === 'true';
     const baseCommit = typeof params.baseCommit === 'string' ? params.baseCommit : undefined;
 
-    const diag = (await runClusterDiagnosis(db, cluster, config, { force, baseCommit })) as any;
+    // Honour `force` (per the tool's schema): return the existing completed
+    // diagnosis unless a re-run is explicitly requested.
+    let diag: any;
+    if (!force) {
+      const [existing] = await db
+        .select()
+        .from(failureDiagnoses)
+        .where(and(eq(failureDiagnoses.clusterId, id), eq(failureDiagnoses.scope, 'cluster')))
+        .limit(1);
+      diag =
+        existing?.status === 'completed' ? existing : await runClusterDiagnosis(db, cluster, config, { baseCommit });
+    } else {
+      diag = (await runClusterDiagnosis(db, cluster, config, { baseCommit })) as any;
+    }
     const det = diag.details as Record<string, unknown> | null;
     return dropNulls({
       clusterId: id,
