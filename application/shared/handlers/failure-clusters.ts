@@ -126,39 +126,10 @@ export async function patchClusterBaseCommit(db: DrizzleDB, clusterId: number, c
   return { success: true, manualBaseCommit };
 }
 
-export async function getClusterCommits(_db: DrizzleDB, _clusterId: number) {
-  return { commits: [], repositoryUrl: null, aggregate: null, error: null, hasMore: false };
-}
-
-export async function getClusterBranches(_db: DrizzleDB, _clusterId: number) {
-  return { branches: [] };
-}
-
-export async function getClusterCommitDiff(_db: DrizzleDB, _clusterId: number) {
-  return { files: [], totalAdditions: 0, totalDeletions: 0 };
-}
-
-export async function getClusterContext(_db: DrizzleDB, _clusterId: number) {
-  return {
-    text: 'Demo mode — no real AI context is generated. Configure a real AI provider to see the full diagnosis context with evidence sections.',
-    sections: [],
-    tokenEstimate: 0,
-    coverage: {
-      scm: {
-        hasLastGreen: false,
-        hasCommitRange: false,
-        baseCommitUsed: null,
-        provider: null,
-        commitsCount: 0,
-        filesCount: 0,
-        patchedFilesCount: 0,
-        patchesOmitted: false,
-        patchesTruncated: false,
-      },
-    },
-    scmChanges: null,
-  };
-}
+// NOTE: The demo SCM (commits/branches/commit-diff) and AI-context endpoints used
+// to be no-op stubs here. They now have real, data-grounded demo implementations in
+// `app/demo/api/scm.ts` and `app/demo/api/diagnosis-context.ts` (kept out of shared/
+// so the canned SCM data never leaks into the server bundle).
 
 export async function extractClusterCases(
   db: DrizzleDB,
