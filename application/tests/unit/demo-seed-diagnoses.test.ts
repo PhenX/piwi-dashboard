@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { allDemoSourceFiles } from '~~/app/demo/demo-scm';
 import { validatePatch } from '#shared/patch';
@@ -23,7 +23,17 @@ let ariaCount = 0;
 
 beforeAll(async () => {
   // Regenerate the (gitignored) seed so the test runs against a fresh artifact.
-  execFileSync('node', ['scripts/generate-demo-seed.mjs'], { cwd: rootDir, stdio: 'ignore' });
+  // The generator also rewrites the *tracked* seed.version.json (with random,
+  // timestamped content), so snapshot and restore it — running tests must never
+  // dirty a tracked file.
+  const versionPath = `${rootDir}/public/demo/seed.version.json`;
+  const savedVersion = existsSync(versionPath) ? readFileSync(versionPath) : null;
+  try {
+    execFileSync('node', ['scripts/generate-demo-seed.mjs'], { cwd: rootDir, stdio: 'ignore' });
+  } finally {
+    if (savedVersion) writeFileSync(versionPath, savedVersion);
+    else rmSync(versionPath, { force: true });
+  }
   const seedSql = readFileSync(`${rootDir}/public/demo/seed.sql`, 'utf-8');
 
   const initSqlJs = (await import('sql.js')).default;
