@@ -106,66 +106,22 @@ function onCancel() {
             </p>
           </template>
 
-          <UForm :schema="schema" :state="state" class="space-y-4" @submit="onSubmit">
-            <UFormField
-              label="Display label"
-              name="label"
-              description="A friendly name to display in the UI (defaults to project name if not set)"
-            >
-              <UInput v-model="state.label" placeholder="Enter display label" />
-            </UFormField>
+          <UForm :schema="schema" :state="state" class="space-y-5" @submit="onSubmit">
+            <ProjectFormFields
+              mode="edit"
+              :has-token="hasToken"
+              v-model:label="state.label"
+              v-model:description="state.description"
+              v-model:diagnosisInstructions="state.diagnosisInstructions"
+              v-model:scmToken="state.scmToken"
+              v-model:tags="selectedTags"
+              :all-tags="allTags"
+              @tag-created="refreshTags()"
+            />
 
-            <UFormField label="Description" name="description" description="A description of this project">
-              <UTextarea v-model="state.description" placeholder="Enter project description" :rows="3" />
-            </UFormField>
-
-            <UFormField
-              name="diagnosisInstructions"
-              description="Combined with the global instructions from Settings → AI."
-            >
-              <template #label>
-                <span class="inline-flex items-center gap-1">
-                  AI diagnosis instructions <HelpHint topic="project.ai-instructions" />
-                </span>
-              </template>
-              <UTextarea
-                v-model="state.diagnosisInstructions"
-                placeholder="e.g. This project tests the payment checkout flow. The backend uses Stripe for payments and the payment API is at /api/v2/payments. Database errors are usually caused by connection pool exhaustion under load."
-                :rows="5"
-                class="w-full font-mono text-sm"
-              />
-            </UFormField>
-
-            <UFormField
-              name="scmToken"
-              :description="
-                hasToken
-                  ? 'Leave empty to keep the stored token, enter a new value to replace it, or save empty to remove it'
-                  : 'For GitHub, GitLab, or Bitbucket. Falls back to the global SCM token if not set.'
-              "
-            >
-              <template #label>
-                <span class="inline-flex items-center gap-1">SCM token <HelpHint topic="project.scm-token" /></span>
-              </template>
-              <UInput
-                v-model="state.scmToken"
-                type="password"
-                :placeholder="hasToken ? '•••••••• (unchanged)' : 'ghp_..., glpat-..., or bitbucket token'"
-                class="w-full font-mono"
-              />
-            </UFormField>
-
-            <UFormField
-              label="Tags"
-              name="tags"
-              description="Select existing tags or type a new name and press Enter to create one."
-            >
-              <TagsSelect v-model="selectedTags" :all-tags="allTags" @tag-created="refreshTags()" />
-            </UFormField>
-
-            <div class="flex gap-2 pt-4">
-              <UButton type="submit" :loading="saving"> Save changes </UButton>
-              <UButton variant="outline" @click="onCancel"> Cancel </UButton>
+            <div class="flex justify-end gap-2 pt-2">
+              <UButton variant="ghost" color="neutral" @click="onCancel"> Cancel </UButton>
+              <UButton type="submit" icon="i-lucide-check" :loading="saving"> Save changes </UButton>
             </div>
           </UForm>
         </UCard>

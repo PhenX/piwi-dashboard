@@ -317,35 +317,16 @@ const columns: TableColumn<ProjectWithStats>[] = [
   <ClientOnly>
     <UModal :open="isNewProjectModalOpen" title="Create new project" @update:open="isNewProjectModalOpen = $event">
       <template #body>
-        <UForm :schema="newProjectSchema" :state="newProject" class="space-y-5">
-          <UFormField
-            label="Project name"
-            name="name"
-            required
-            description="A unique identifier used to match test results from the reporter."
-          >
-            <UInput v-model="newProject.name" placeholder="e.g. my-app" class="w-full" />
-          </UFormField>
-
-          <UFormField
-            label="Display label"
-            name="label"
-            description="A friendly name shown in the UI (defaults to project name if not set)."
-          >
-            <UInput v-model="newProject.label" placeholder="e.g. My Application" class="w-full" />
-          </UFormField>
-
-          <UFormField label="Description" name="description" description="Optional description of this project.">
-            <UTextarea v-model="newProject.description" placeholder="Enter project description" :rows="3" class="w-full" />
-          </UFormField>
-
-          <UFormField
-            label="Tags"
-            name="tags"
-            description="Select existing tags or type a new name and press Enter to create one."
-          >
-            <TagsSelect v-model="newProjectTags" :all-tags="allTags" class="w-full" @tag-created="refreshTags()" />
-          </UFormField>
+        <UForm :schema="newProjectSchema" :state="newProject">
+          <ProjectFormFields
+            mode="create"
+            v-model:name="newProject.name"
+            v-model:label="newProject.label"
+            v-model:description="newProject.description"
+            v-model:tags="newProjectTags"
+            :all-tags="allTags"
+            @tag-created="refreshTags()"
+          />
         </UForm>
       </template>
 
