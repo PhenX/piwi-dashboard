@@ -25,6 +25,7 @@ Five reusable primitives were created (this branch) to make the fixes mechanical
 | Component | Purpose |
 |---|---|
 | `shared/NavbarActions.vue` | Navbar action row; labels collapse to icon-only below `sm` |
+| `shared/BreadcrumbNav.vue` | Full breadcrumb from `sm` up; ancestors collapse into a dropdown below `sm` |
 | `shared/TableScroller.vue` | Horizontal-scroll wrapper with min-width + mobile edge-bleed |
 | `shared/FilterToolbar.vue` | Wrap-friendly filter/search toolbar (stacks below `sm`) |
 | `shared/StatTile.vue` | Standard stat tile (label / value / hint, `sm`·`lg` sizes) |
@@ -145,19 +146,28 @@ Phases are independent and PR-sized. Each lists concrete files; estimates assume
 - [x] `NavbarActions`, `TableScroller`, `FilterToolbar`, `StatTile`, `StatTileGrid` in `app/components/shared/`.
 - [x] Exemplar applications: run/projects/test-run-cases/project-test-cases navbars (G1), projects table (T1), detail tab bar (G3), test-cases toolbar wrap (F1), test-case stat tiles (S5).
 
+### ✅ Phase 0b — Follow-up fixes from mobile review (this branch)
+- [x] `BreadcrumbNav` (new): ancestors collapse into a dropdown below `sm`; applied to all detail pages (test-runs, test-run-cases, test-cases, projects/[id], projects/[id]/test-cases, projects/[id]/edit, failure-clusters). Covers **G2**.
+- [x] `ProjectTrendTable`: `md:hidden` card list per project replaces the horizontally-scrolling table on the home page (issue: home "project health" table scroll). Advances **T1**.
+- [x] `DetailPageLayout`: mobile now scrolls as one document (was `overflow-hidden`, clipping a tall summary), tabs sticky, summary collapsible via "Hide summary", and a full-width `USelect` replaces the tab strip below `sm`. Covers **G3** + the "summary not scrollable" complaint.
+- [x] `projects/[id]/index.vue`: navbar actions → `NavbarActions` (icon-only on mobile, so the breadcrumb is no longer crowded out); `UTabs` gets the mobile `USelect` treatment. Completes **G1**.
+
 ### Phase 1 — Global chrome (~½ day)
-- [ ] G1 remainder: `pages/projects/[id]/index.vue`, `pages/projects/[id]/edit.vue`, `pages/failure-clusters/[id].vue` → `NavbarActions`.
-- [ ] G2: breadcrumb truncation on run / run-case / cluster pages.
+- [x] G1: run/projects/test-run-cases/project-test-cases/project-detail navbars → `NavbarActions`.
+- [x] G2: breadcrumb collapse on run / run-case / project / cluster pages (via `BreadcrumbNav`).
+- [ ] G1 remainder: `pages/projects/[id]/edit.vue`, `pages/failure-clusters/[id].vue` → `NavbarActions` (breadcrumbs already converted).
 - [ ] G4/G5: settings toolbar scroll + body padding check.
 - [ ] F2: `HomeFilters` popover below `sm`.
 
 ### Phase 2 — Tables (~1 day)
-- [ ] T2–T6: wrap remaining `UTable`s and the two raw `<table>`s in `TableScroller` with per-table min-widths.
-- [ ] T1/T4 column pruning below `md` (projects: Branch/Duration/Reports; spec health: trend cells) using `hidden md:table-cell` th/td or conditional `columns` arrays.
+- [x] T1: home project-health table → mobile card list (`ProjectTrendTable`).
+- [ ] T2–T6: wrap remaining `UTable`s and the two raw `<table>`s in `TableScroller` (or give them a card list) with per-table min-widths — includes the several wide tables inside `projects/[id]` tabs (test runs, flaky, spec health, …).
+- [ ] T4 column pruning below `md` (spec health: trend cells) using `hidden md:table-cell` th/td or conditional `columns` arrays.
 - [ ] P6: `overflow-x-auto` on `DiffPatch` bodies.
 
 ### Phase 3 — Summaries, stat grids & toolbars (~1 day)
-- [ ] S1/S2: replace `max-sm:hidden` strips in `RunSummary` / `TestCaseSummary` with wrapping rows (headline numbers must be visible on phones).
+- [x] G3: detail-page tab bar → mobile `USelect` (`DetailPageLayout`, `projects/[id]`).
+- [ ] S1/S2: replace `max-sm:hidden` strips in `RunSummary` / `TestCaseSummary` with wrapping rows (headline numbers must be visible on phones). **Still outstanding** — the summary is now reachable/collapsible, but its inner T/P/F/S strip is still hidden below `sm`.
 - [ ] S3: `ClusterSummary` wrap.
 - [ ] S6: migrate Web-Vitals + paint tiles to `StatTileGrid`.
 - [ ] F1 remainder: migrate `TestCasesList` toolbar (and `SlowEndpoints` filter row) to `FilterToolbar`.
