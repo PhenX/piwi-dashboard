@@ -317,44 +317,48 @@ const columns: TableColumn<ProjectWithStats>[] = [
   <ClientOnly>
     <UModal :open="isNewProjectModalOpen" title="Create new project" @update:open="isNewProjectModalOpen = $event">
       <template #body>
-        <UForm :schema="newProjectSchema" :state="newProject">
+        <UForm :schema="newProjectSchema" :state="newProject" class="space-y-5">
           <UFormField
             label="Project name"
             name="name"
             required
             description="A unique identifier used to match test results from the reporter."
-            class="mb-4"
           >
-            <UInput v-model="newProject.name" placeholder="e.g. my-app" />
+            <UInput v-model="newProject.name" placeholder="e.g. my-app" class="w-full" />
           </UFormField>
 
           <UFormField
             label="Display label"
             name="label"
             description="A friendly name shown in the UI (defaults to project name if not set)."
-            class="mb-4"
           >
-            <UInput v-model="newProject.label" placeholder="e.g. My Application" />
+            <UInput v-model="newProject.label" placeholder="e.g. My Application" class="w-full" />
           </UFormField>
 
           <UFormField label="Description" name="description" description="Optional description of this project.">
-            <UTextarea v-model="newProject.description" placeholder="Enter project description" :rows="3" />
+            <UTextarea v-model="newProject.description" placeholder="Enter project description" :rows="3" class="w-full" />
           </UFormField>
 
           <UFormField
             label="Tags"
             name="tags"
             description="Select existing tags or type a new name and press Enter to create one."
-            class="mt-4"
           >
-            <TagsSelect v-model="newProjectTags" :all-tags="allTags" @tag-created="refreshTags()" />
+            <TagsSelect v-model="newProjectTags" :all-tags="allTags" class="w-full" @tag-created="refreshTags()" />
           </UFormField>
         </UForm>
       </template>
 
       <template #footer>
-        <UButton color="neutral" variant="ghost" label="Cancel" @click="isNewProjectModalOpen = false" />
-        <UButton label="Create project" icon="i-lucide-plus" :loading="creatingProject" @click="handleCreateProject" />
+        <div class="flex w-full justify-end gap-2">
+          <UButton color="neutral" variant="ghost" label="Cancel" @click="isNewProjectModalOpen = false" />
+          <UButton
+            label="Create project"
+            icon="i-lucide-plus"
+            :loading="creatingProject"
+            @click="handleCreateProject"
+          />
+        </div>
       </template>
     </UModal>
   </ClientOnly>

@@ -486,42 +486,38 @@ async function handleInviteUser(user: UserDetails) {
   <ClientOnly>
     <UModal :open="isAddUserModalOpen" title="Add new user" @update:open="isAddUserModalOpen = $event">
       <template #body>
-        <UForm :schema="addUserSchema" :state="newUser">
-          <UFormField label="Username" name="username" required class="mb-4">
-            <UInput v-model="newUser.username" placeholder="Enter username" />
+        <UForm :schema="addUserSchema" :state="newUser" class="space-y-5">
+          <UFormField label="Username" name="username" required>
+            <UInput v-model="newUser.username" placeholder="Enter username" class="w-full" />
           </UFormField>
 
           <UFormField
             label="Password"
             name="password"
-            class="mb-4"
             description="Leave blank to let the user set their own password via invite email"
           >
-            <UInput v-model="newUser.password" type="password" placeholder="Leave blank to send invite" />
+            <UInput v-model="newUser.password" type="password" placeholder="Leave blank to send invite" class="w-full" />
           </UFormField>
 
-          <UFormField label="Display name" name="name" class="mb-4">
-            <UInput v-model="newUser.name" placeholder="Enter display name (optional)" />
+          <UFormField label="Display name" name="name">
+            <UInput v-model="newUser.name" placeholder="Enter display name (optional)" class="w-full" />
           </UFormField>
 
-          <UFormField
-            label="Email"
-            name="email"
-            class="mb-4"
-            description="Optional — needed for invites and notifications"
-          >
-            <UInput v-model="newUser.email" type="email" placeholder="user@example.com (optional)" />
+          <UFormField label="Email" name="email" description="Optional — needed for invites and notifications">
+            <UInput v-model="newUser.email" type="email" placeholder="user@example.com (optional)" class="w-full" />
           </UFormField>
 
           <UFormField label="Role" name="role" required>
-            <USelect v-model="newUser.role" :items="roleOptions" />
+            <USelect v-model="newUser.role" :items="roleOptions" class="w-full" />
           </UFormField>
         </UForm>
       </template>
 
       <template #footer>
-        <UButton type="button" color="neutral" variant="ghost" label="Cancel" @click="isAddUserModalOpen = false" />
-        <UButton type="submit" label="Create user" icon="i-lucide-user-plus" @click="handleAddUser" />
+        <div class="flex w-full justify-end gap-2">
+          <UButton type="button" color="neutral" variant="ghost" label="Cancel" @click="isAddUserModalOpen = false" />
+          <UButton type="submit" label="Create user" icon="i-lucide-user-plus" @click="handleAddUser" />
+        </div>
       </template>
     </UModal>
   </ClientOnly>
