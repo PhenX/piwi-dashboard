@@ -366,6 +366,30 @@ for (const cl of CLUSTERS) {
   }
 }
 
+// ARIA snapshot for a failing case, shaped to match the cluster's failure so the
+// AI-diagnosis `ariaSnapshot` evidence section is grounded (e.g. the strict-mode
+// cluster shows the multiple button nodes that trip the unscoped locator).
+function ariaSnapshotForCluster(clusterDef) {
+  if (!clusterDef) return null;
+  const e = clusterDef.errorText || '';
+  if (clusterDef.errorType === 'strict-mode') {
+    return '- document:\n  - button "Primary"\n  - button "Disabled" [disabled]\n  - button "Loading"';
+  }
+  if (/page\.goto/.test(e)) {
+    return '- document:\n  - navigation "Loading…"\n  - img "Hero"';
+  }
+  if (clusterDef.projectId === 1) {
+    return (
+      '- document:\n  - form "Checkout":\n    - textbox "Card number"\n    - textbox "Expiry"\n' +
+      '    - textbox "CVV"\n    - button "Pay" [disabled]'
+    );
+  }
+  if (/page\.fill/.test(e)) {
+    return '- document:\n  - main:\n    - heading "Sign in"\n    - text "Email"';
+  }
+  return '- document:\n  - main:\n    - heading "Page"';
+}
+
 // Simple URL normalizer for seed data (mirrors shared/utils/route.ts)
 function seedNormalizeUrl(url) {
   try {
@@ -799,7 +823,7 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
               },
             ]
           : null,
-        aria_snapshot: null,
+        aria_snapshot: isFailedCase ? ariaSnapshotForCluster(clusterDef) : null,
         worker_index: workerIndex,
         started_at: caseStartMs,
         created_at: Math.floor(caseStartMs / 1000),
@@ -921,19 +945,76 @@ for (const cl of CLUSTERS) {
 // ── Demo AI diagnoses ─────────────────────────────────────────────────────
 const diagnosisNow = ts('2025-04-25T09:30:00');
 
+// Two-stage pipeline token accounting shared by all seeded diagnoses.
+const demoPipeline = (input, output) => [
+  {
+    role: 'research',
+    model: 'demo-research',
+    inputTokens: Math.round(input * 0.6),
+    outputTokens: 180,
+    cacheCreationInputTokens: 0,
+    cacheReadInputTokens: 0,
+  },
+  {
+    role: 'diagnosis',
+    model: 'demo-simulated',
+    inputTokens: input,
+    outputTokens: output,
+    cacheCreationInputTokens: Math.round(input * 0.4),
+    cacheReadInputTokens: Math.round(input * 0.5),
+  },
+];
+// A patch that cleanly applies against the seeded source files (app/demo/demo-scm.ts).
+const appliesPatch = { status: 'applies', filesChecked: 1, filesInPatch: 1, errors: [] };
+
+// Suggested-fix patches — kept in sync with the source files declared in
+// app/demo/demo-scm.ts so `patchValidation` genuinely reports "applies".
+const CHECKOUT_FIX_PATCH = `--- a/tests/checkout/checkout.spec.ts
++++ b/tests/checkout/checkout.spec.ts
+@@ -7,2 +7,3 @@
+   await page.getByLabel('CVV').fill('123');
++  await page.waitForLoadState('networkidle');
+   await page.getByRole('button', { name: 'Pay' }).click();`;
+
+const AUTH_FIX_PATCH = `--- a/src/routes/auth.ts
++++ b/src/routes/auth.ts
+@@ -8,2 +8,5 @@
+   const user = await verifyCredentials(email, password);
++  if (!user) {
++    return res.status(401).json({ error: 'Invalid credentials' });
++  }
+   const token = signSession(user.id);`;
+
+const BUTTON_FIX_PATCH = `--- a/tests/ui/button.spec.ts
++++ b/tests/ui/button.spec.ts
+@@ -7,1 +7,1 @@
+-  await page.getByRole('button').click();
++  await page.getByRole('button', { name: 'Primary' }).click();`;
+
+const MOBILE_FIX_PATCH = `--- a/tests/mobile/navigation.spec.ts
++++ b/tests/mobile/navigation.spec.ts
+@@ -4,1 +4,1 @@
+-  await page.goto('https://app.example.com');
++  await page.goto('https://app.example.com', { timeout: 60000 });`;
+
+// Seeded AI diagnoses — one per project, each matched to its cluster's real error
+// so the diagnosis, evidence citations, SCM diff and suggested patch all cohere.
+// Clusters 2, 4, 5 and 8 are intentionally left undiagnosed so a demo visitor can
+// trigger a live (simulated) streaming diagnosis themselves.
 const FAILURE_DIAGNOSES = [
   {
     id: 1,
     cluster_id: 1,
+    scope: 'cluster',
     status: 'completed',
     provider: 'demo',
-    model: 'demo',
+    model: 'demo-simulated',
     category: 'infrastructure',
     confidence: 'high',
     summary:
-      'Checkout button click times out consistently — suspected slow CI agent or network latency spike causing locator resolution delay.',
+      'Checkout Pay button click times out — the payment form renders slowly on CI and the click races the render.',
     root_cause:
-      'The locator.click timeout (30 000 ms) is exceeded when the checkout page renders slowly on the CI runner. The root cause is a missing explicit wait for the payment form to become interactive before clicking, combined with CI infrastructure variability.',
+      'The locator.click timeout (30 000 ms) is exceeded because the Pay button is present but not yet interactive. A recent commit added a third-party payment SDK fetched before the form is enabled; on a loaded CI runner that push interactivity past the timeout. Combined with CI variability this fails intermittently.',
     details: JSON.stringify({
       confidenceScore: 82,
       severity: 'high',
@@ -945,41 +1026,46 @@ const FAILURE_DIAGNOSES = [
           rootCause:
             'Slow CI runner renders the payment form too late; locator.click exceeds the 30s timeout before the button becomes interactive.',
           evidence: [
-            'Failure rate correlates with high-load CI runs (build numbers 1180-1200) [recurrenceFlakiness]',
-            'Element present in DOM but not interactive at click time [steps]',
+            'Failure rate correlates with high-load CI runs [recurrenceFlakiness]',
+            'Element present in the DOM but not interactive at click time [steps]',
           ],
         },
         {
           category: 'test-bug',
-          likelihood: 40,
+          likelihood: 38,
           rootCause: 'The test clicks without an explicit wait for the payment form to be ready.',
-          evidence: ['No waitFor/waitForLoadState precedes the click [testSource]'],
+          evidence: ['No waitForLoadState/waitFor precedes the click [testSource]'],
         },
+      ],
+      evidence: [
+        'TimeoutError fires during locator.click in both affected tests [executionError]',
+        'The SCM diff adds a third-party payment SDK fetched before the form is enabled [scmInvestigation]',
+        'Recurs on high-load CI runs [recurrenceFlakiness]',
       ],
       investigationSteps: [
         'Re-run the cluster on a low-load runner to confirm CI variability is the driver',
         'Check whether the payment form fires a network-idle event before becoming interactive',
       ],
-      evidence: [
-        'TimeoutError occurs at tests/checkout/checkout.spec.ts:42 in both affected tests',
-        'Error fires during locator.click — the element is present in DOM but not yet interactive',
-        'Failure rate correlates with high-load CI runs (build numbers 1180-1200)',
+      preventionTips: [
+        'Await page.waitForLoadState("networkidle") before interacting with dynamically loaded payment forms',
+        'Add a CI-aware timeout multiplier for payment-related actions',
       ],
       suggestedFix: {
         description:
-          'Add an explicit waitForLoadState("networkidle") or waitFor condition before the click, and increase the locator timeout for the payment button to 60 000 ms.',
+          'Wait for the network to settle before clicking, so the click no longer races the third-party form render.',
         file: 'tests/checkout/checkout.spec.ts',
-        code: 'await page.waitForLoadState("networkidle");\nawait page.getByRole("button", { name: "Pay" }).click({ timeout: 60000 });',
+        code: null,
+        patch: CHECKOUT_FIX_PATCH,
       },
-      preventionTips: [
-        'Use page.waitForLoadState() before interacting with dynamically loaded payment forms',
-        'Add a CI-aware timeout multiplier for payment-related actions',
-        'Consider adding a Playwright expect.poll for the button to have aria-disabled=false',
-      ],
+      patchValidation: appliesPatch,
+      pipeline: demoPipeline(1240, 380),
+      autoSelectedCommits: ['a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4'],
+      selectedCommitShas: null,
+      additionalContext: null,
     }),
     error: null,
-    input_tokens: 1240,
-    output_tokens: 380,
+    input_tokens: 1984,
+    output_tokens: 560,
     duration_ms: 2850,
     created_at: diagnosisNow,
     updated_at: diagnosisNow,
@@ -987,15 +1073,15 @@ const FAILURE_DIAGNOSES = [
   {
     id: 2,
     cluster_id: 3,
+    scope: 'cluster',
     status: 'completed',
     provider: 'demo',
-    model: 'demo',
+    model: 'demo-simulated',
     category: 'app-bug',
     confidence: 'high',
-    summary:
-      'POST /auth/login and related auth tests fail with HTTP 500 — server-side exception in the authentication handler.',
+    summary: 'POST /auth/login returns HTTP 500 — the login handler dereferences a null user after the auth refactor.',
     root_cause:
-      'The authentication endpoint returns HTTP 500 instead of the expected 200, causing the assertion expect(received).toBe(200).toBe(500) to fail. This indicates a regression in the auth service — likely an unhandled exception in the login handler introduced in recent commits.',
+      'The assertion fails because the endpoint responds 500 instead of 200. A recent auth refactor changed verifyCredentials to return null (rather than throw) for a missing user, and the login handler then reads user.id on the null path — an unhandled exception that surfaces as a 500.',
     details: JSON.stringify({
       confidenceScore: 90,
       severity: 'blocker',
@@ -1005,92 +1091,105 @@ const FAILURE_DIAGNOSES = [
           category: 'app-bug',
           likelihood: 90,
           rootCause:
-            'The /auth/login handler throws an unhandled exception introduced in the auth refactor, returning HTTP 500 instead of 200.',
+            'The login handler dereferences a null user after the auth refactor, throwing and returning HTTP 500.',
           evidence: [
-            'Expected: 200 / Received: 500 in two separate auth test cases [executionError]',
-            'Error started appearing in builds after the auth refactor commits [scmInvestigation]',
+            'Expected 200 / Received 500 in two separate auth test cases [executionError]',
+            'Backend server logs show an unhandled exception on the request [serverLogs]',
+            'The failure started after the auth refactor commit [scmInvestigation]',
           ],
         },
       ],
-      investigationSteps: [
-        'Inspect server logs for the stack trace behind the 500 on POST /auth/login',
-        'Bisect the auth refactor commits to find the breaking change',
-      ],
       evidence: [
-        'Expected: 200 / Received: 500 in two separate auth test cases',
-        'Both failures share the same cluster fingerprint, confirming a single root cause',
-        'The error started appearing in builds after the auth refactor commits',
+        'Received 500 where 200 was expected across two auth tests [executionError]',
+        'Server logs capture the 5xx and stack trace on the failing request [serverLogs]',
+        'Began appearing after the "simplify auth flow" commit [scmInvestigation]',
+      ],
+      investigationSteps: [
+        'Inspect the server stack trace behind the 500 on POST /auth/login',
+        'Confirm the null-user branch in the refactored handler',
+      ],
+      preventionTips: [
+        'Add integration tests that exercise the auth endpoint with missing/invalid users',
+        'Add error monitoring on 5xx responses for the /auth/login route',
       ],
       suggestedFix: {
         description:
-          'Inspect the /auth/login endpoint for unhandled exceptions. Add error handling around the credential verification logic and ensure the response status code is correctly set for each code path.',
-        file: 'tests/api/auth.spec.ts',
+          'Restore the missing-user guard the refactor dropped, so the handler returns 401 instead of dereferencing null.',
+        file: 'src/routes/auth.ts',
         code: null,
+        patch: AUTH_FIX_PATCH,
       },
-      preventionTips: [
-        'Add integration tests that exercise the auth endpoint with a real DB connection',
-        'Set up error monitoring (Sentry, Datadog) on the /auth/login endpoint to catch 5xx regressions early',
-        'Add a smoke test in CI that hits /auth/login before the full test suite',
-      ],
+      patchValidation: appliesPatch,
+      pipeline: demoPipeline(980, 310),
+      autoSelectedCommits: ['f1e2d3c4b5a6079887766554433221100ffeeddc'],
+      selectedCommitShas: null,
+      additionalContext: null,
     }),
     error: null,
-    input_tokens: 980,
-    output_tokens: 310,
+    input_tokens: 1568,
+    output_tokens: 490,
     duration_ms: 2100,
     created_at: diagnosisNow,
     updated_at: diagnosisNow,
   },
   {
     id: 3,
-    cluster_id: 5,
+    cluster_id: 6,
+    scope: 'cluster',
     status: 'completed',
     provider: 'demo',
-    model: 'demo',
+    model: 'demo-simulated',
     category: 'test-flakiness',
     confidence: 'medium',
     summary:
-      'Strict mode violation on button role — multiple elements match because the component page renders three button variants for visual regression testing.',
+      "Strict-mode violation — getByRole('button') matches multiple button variants rendered on the components page.",
     root_cause:
-      "getByRole('button') resolves to 3 elements on the UI components test page. This occurs because the page intentionally renders primary, disabled, and loading button variants simultaneously. The test should scope its locator to a specific container or use a more specific selector.",
+      "getByRole('button') resolves to 3 elements because the components page now renders primary, disabled and loading variants side by side (added in a recent commit). Playwright's strict mode throws on the ambiguous match; the locator needs scoping by name or container.",
     details: JSON.stringify({
-      confidenceScore: 65,
+      confidenceScore: 66,
       severity: 'medium',
       affectedArea: 'UI components / button',
       hypotheses: [
         {
           category: 'test-bug',
-          likelihood: 65,
+          likelihood: 66,
           rootCause:
-            "getByRole('button') matches 3 rendered button variants, triggering a strict-mode violation; the locator needs scoping.",
+            "getByRole('button') matches 3 rendered button variants; the locator must be scoped by name or container.",
           evidence: [
-            'Three button elements rendered by design (primary, disabled, loading) [ariaSnapshot]',
-            'Failure is deterministic, not intermittent [recurrenceFlakiness]',
+            'Strict-mode violation resolving to multiple elements [executionError]',
+            'The ARIA snapshot shows several button nodes on the page [ariaSnapshot]',
+            'Locator healing offers a scoped, higher-stability alternative [locatorHealing]',
           ],
         },
       ],
+      evidence: [
+        'Deterministic strict-mode violation, not intermittent [recurrenceFlakiness]',
+        'Three button elements rendered by design (primary, disabled, loading) [ariaSnapshot]',
+        'A name-scoped locator disambiguates the match [locatorHealing]',
+      ],
       investigationSteps: [
         'Confirm the page intentionally renders multiple button variants',
-        'Decide on a scoping strategy (name filter or container) with the component owner',
+        'Pick a scoping strategy (name filter or container) with the component owner',
       ],
-      evidence: [
-        'Error consistently occurs on the button spec page',
-        'Three button elements are rendered by design (primary, disabled, loading variants)',
-        'Failure is deterministic, not intermittent',
+      preventionTips: [
+        'Scope locators to a container when multiple matches are expected',
+        'Add data-testid attributes to disambiguate similar components',
       ],
       suggestedFix: {
-        description: 'Scope the locator to the specific button variant container, or use getByRole with a name filter.',
+        description: 'Scope the locator to a specific variant with a name filter so it matches exactly one button.',
         file: 'tests/ui/button.spec.ts',
-        code: "await page.getByRole('button', { name: 'Primary' }).click();",
+        code: null,
+        patch: BUTTON_FIX_PATCH,
       },
-      preventionTips: [
-        'Use unique aria-labels on components in visual regression pages',
-        'Scope locators to a parent element when multiple matches are expected',
-        'Add data-testid attributes to disambiguate similar elements',
-      ],
+      patchValidation: appliesPatch,
+      pipeline: demoPipeline(870, 290),
+      autoSelectedCommits: ['3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d'],
+      selectedCommitShas: null,
+      additionalContext: null,
     }),
     error: null,
-    input_tokens: 870,
-    output_tokens: 290,
+    input_tokens: 1392,
+    output_tokens: 470,
     duration_ms: 1950,
     created_at: diagnosisNow,
     updated_at: diagnosisNow,
@@ -1098,15 +1197,16 @@ const FAILURE_DIAGNOSES = [
   {
     id: 4,
     cluster_id: 7,
+    scope: 'cluster',
     status: 'completed',
     provider: 'demo',
-    model: 'demo',
+    model: 'demo-simulated',
     category: 'infrastructure',
     confidence: 'high',
     summary:
-      'Mobile page navigation fails with timeout — the Safari page load takes more than 30 seconds on CI, suggesting slow network or resource-heavy page.',
+      'Mobile page navigation times out — page.goto exceeds 30s on Mobile Safari because the landing page ships a heavy hero image.',
     root_cause:
-      'page.goto timeout (30000ms) exceeded during mobile Safari tests. The navigation endpoint loads heavy assets (images, JS bundles) that are not optimized for mobile connections. Combined with CI network variability, this consistently exceeds the default timeout.',
+      'page.goto exceeds the 30 000 ms navigation timeout during the initial load. A recent commit added a full-bleed, unoptimized hero image; on throttled mobile CI networks the load never completes inside the default timeout.',
     details: JSON.stringify({
       confidenceScore: 78,
       severity: 'high',
@@ -1115,46 +1215,99 @@ const FAILURE_DIAGNOSES = [
         {
           category: 'infrastructure',
           likelihood: 78,
-          rootCause: 'Heavy unoptimized assets push mobile Safari page load past the 30s goto timeout on CI networks.',
+          rootCause: 'Heavy unoptimized assets push mobile page load past the goto timeout on CI networks.',
           evidence: [
-            'Timeout on main navigation load, not subsequent interactions [steps]',
-            'Only affects the mobile Safari browser config [browserDistribution]',
+            'Timeout occurs on the main navigation load, not a later interaction [executionError]',
+            'Only affects the Mobile Safari browser profile [browserDistribution]',
           ],
         },
         {
           category: 'environment',
-          likelihood: 35,
+          likelihood: 34,
           rootCause: 'CI network throttling specific to the mobile project profile.',
-          evidence: ['Page load time correlates with asset bundle deployments [webVitals]'],
+          evidence: ['Page load time tracks asset-bundle deploys [webVitals]'],
         },
       ],
-      investigationSteps: [
-        'Measure the page weight and largest-contentful-paint on the mobile profile',
-        'Compare goto timing on a local mobile emulation vs CI',
-      ],
       evidence: [
-        'Timeout occurs on main navigation page load, not on subsequent interactions',
-        'Only affects the mobile Safari browser config',
-        'Page load time correlates with asset bundle size deployments',
+        'page.goto TimeoutError on the main navigation load [executionError]',
+        'Only the Mobile Safari profile is affected [browserDistribution]',
+        'The SCM diff adds a large full-bleed hero image [scmInvestigation]',
+      ],
+      investigationSteps: [
+        'Measure page weight and largest-contentful-paint on the mobile profile',
+        'Compare goto timing on local mobile emulation vs CI',
+      ],
+      preventionTips: [
+        'Set browser-specific navigation timeouts via Playwright config projects',
+        'Optimize landing-page assets for mobile (responsive images, lazy-loading)',
       ],
       suggestedFix: {
-        description:
-          'Increase the navigation timeout for mobile tests and consider lazy-loading non-critical assets on the target page.',
+        description: 'Raise the navigation timeout for the mobile profile while the asset weight is addressed.',
         file: 'tests/mobile/navigation.spec.ts',
-        code: "await page.goto('https://app.example.com', { timeout: 60000 });",
+        code: null,
+        patch: MOBILE_FIX_PATCH,
       },
-      preventionTips: [
-        'Set browser-specific timeouts via Playwright config projects',
-        'Optimize page load performance for mobile (code splitting, image optimization)',
-        'Add a smoke test that verifies page load under 10s in CI',
-      ],
+      patchValidation: appliesPatch,
+      pipeline: demoPipeline(1100, 340),
+      autoSelectedCommits: ['6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90'],
+      selectedCommitShas: null,
+      additionalContext: null,
     }),
     error: null,
-    input_tokens: 1100,
-    output_tokens: 340,
+    input_tokens: 1760,
+    output_tokens: 520,
     duration_ms: 2650,
     created_at: diagnosisNow,
     updated_at: diagnosisNow,
+  },
+];
+
+// Diagnosis version history — a snapshot of an earlier, lower-confidence take on
+// cluster 1 that was superseded when the SCM diff revealed the payment SDK. Powers
+// the "previous versions" dropdown on the cluster diagnosis panel.
+const FAILURE_DIAGNOSIS_VERSIONS = [
+  {
+    id: 1,
+    diagnosis_id: 1,
+    cluster_id: 1,
+    scope: 'cluster',
+    test_runs_case_id: null,
+    status: 'completed',
+    provider: 'demo',
+    model: 'demo-simulated',
+    category: 'test-bug',
+    confidence: 'medium',
+    summary: 'Earlier take: likely a missing explicit wait in the test before the Pay click.',
+    root_cause:
+      'Initial assessment attributed the timeout purely to a missing explicit wait in the test, before the SCM diff surfaced the newly added third-party payment SDK that delays interactivity.',
+    details: JSON.stringify({
+      confidenceScore: 58,
+      severity: 'medium',
+      affectedArea: 'checkout / payment',
+      hypotheses: [
+        {
+          category: 'test-bug',
+          likelihood: 58,
+          rootCause: 'The test clicks the Pay button without waiting for it to become interactive.',
+          evidence: ['No waitFor precedes the click [testSource]'],
+        },
+      ],
+      evidence: ['Intermittent timeouts on locator.click [recurrenceFlakiness]'],
+      investigationSteps: ['Check CI load at failure time'],
+      preventionTips: ['Await the target before interacting'],
+      suggestedFix: {
+        description: 'Add an explicit wait before clicking the Pay button.',
+        file: 'tests/checkout/checkout.spec.ts',
+        code: null,
+        patch: null,
+      },
+    }),
+    error: null,
+    input_tokens: 640,
+    output_tokens: 210,
+    duration_ms: 1700,
+    context_sha: null,
+    created_at: ts('2025-04-24T18:00:00'),
   },
 ];
 
@@ -1762,6 +1915,9 @@ const lines = [
   '-- Demo AI diagnoses',
   insert('failure_diagnoses', FAILURE_DIAGNOSES),
   '',
+  '-- Diagnosis version history (references failure_diagnoses + failure_clusters)',
+  insert('failure_diagnosis_versions', FAILURE_DIAGNOSIS_VERSIONS),
+  '',
   '-- Test run cases',
   insert('test_runs_cases', TEST_RUNS_CASES),
   '',
@@ -1810,5 +1966,6 @@ console.log(`   NR rows    : ${NETWORK_REQUESTS.length}`);
 console.log(`   Reports    : ${REPORTS.length}`);
 console.log(`   Clusters   : ${FAILURE_CLUSTERS.length}`);
 console.log(`   Diagnoses  : ${FAILURE_DIAGNOSES.length}`);
+console.log(`   DiagVersions: ${FAILURE_DIAGNOSIS_VERSIONS.length}`);
 console.log(`   Links      : ${ENTITY_LINKS.length}`);
 console.log(`   LocatorSnap: ${LOCATOR_SNAPSHOTS.length}`);

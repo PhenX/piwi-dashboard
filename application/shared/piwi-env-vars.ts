@@ -178,6 +178,10 @@ export const PIWI_ENV_VARS = {
     description: 'Set to "true" to auto-diagnose new failure clusters when a run finishes.',
     category: 'ai',
   },
+  PIWI_AI_AUTO_DIAGNOSE_MAX: {
+    description: 'Max clusters auto-diagnosed per finished run (budget cap; default 3).',
+    category: 'ai',
+  },
 
   // ── AI — research model ──────────────────────────────────────────────────
   PIWI_AI_RESEARCH_PROVIDER: {

@@ -113,7 +113,6 @@ export default eventHandler(async (event) => {
     },
     config,
     {
-      force,
       additionalContext: body?.additionalContext,
       images: body?.images,
       baseCommit: body?.baseCommit,

@@ -86,6 +86,7 @@ When unset, configure the patterns from **Settings → Wasted time** (administra
 | `PIWI_AI_MODEL` | `claude-opus-4-8` (Anthropic) | Model name. |
 | `PIWI_AI_BASE_URL` | — | Base URL for OpenAI-compatible providers (e.g. Ollama). |
 | `PIWI_AI_AUTO_DIAGNOSE` | `false` | `true` to auto-diagnose new clusters on run finish. |
+| `PIWI_AI_AUTO_DIAGNOSE_MAX` | `3` | Max clusters auto-diagnosed per finished run (budget cap). |
 | `PIWI_AI_RESEARCH_PROVIDER` | — | Provider for the optional research (pre-analysis) stage. Falls back to `PIWI_AI_PROVIDER`. |
 | `PIWI_AI_RESEARCH_MODEL` | — | Cheaper/faster model for the research stage. Empty disables the two-stage pipeline. |
 | `PIWI_AI_RESEARCH_BASE_URL` | — | Base URL for the research-stage provider. Falls back to `PIWI_AI_BASE_URL`. |

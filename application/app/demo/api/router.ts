@@ -37,13 +37,12 @@ import {
   getFailureCluster,
   patchClusterStatus,
   patchClusterBaseCommit,
-  getClusterCommits,
-  getClusterCommitDiff,
-  getClusterContext,
-  getClusterBranches,
   extractClusterCases,
   getClusterDiagnosis,
 } from '#shared/handlers/failure-clusters';
+import { getClusterCommits, getClusterCommitDiff, getClusterBranches } from './scm';
+import { getClusterContext, getExecutionContext } from './diagnosis-context';
+import { listClusterDiagnosisVersions, apiSubmitDiagnosisFeedback } from './diagnoses';
 import { listMergeSuggestions } from '#shared/handlers/cluster-merge-suggestions';
 import { listLinks, createLink, patchLink, deleteLink, refreshLinkMeta } from '#shared/handlers/links';
 import {
@@ -77,6 +76,7 @@ import { apiGetDemoFile } from './files';
 import {
   apiGetAiStatus,
   apiDiagnoseCluster,
+  apiDiagnoseExecution,
   apiStreamDiagnoseCluster,
   apiGetAiSettings,
   apiPutAiSettings,
@@ -307,17 +307,17 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/commits$/,
-    handler: async (m) => getClusterCommits(await getDemoDb(), +m[1]!),
+    handler: async (m, _, q) => getClusterCommits(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined),
   },
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/commit-diff$/,
-    handler: async (m) => getClusterCommitDiff(await getDemoDb(), +m[1]!),
+    handler: async (m, _, q) => getClusterCommitDiff(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined),
   },
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/context$/,
-    handler: async (m) => getClusterContext(await getDemoDb(), +m[1]!),
+    handler: async (m, _, q) => getClusterContext(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined),
   },
   {
     method: 'GET',
@@ -327,7 +327,7 @@ const routes: RouteEntry[] = [
   {
     method: 'POST',
     pattern: /^\/api\/failure-clusters\/(\d+)\/diagnose$/,
-    handler: (m) => apiDiagnoseCluster(+m[1]!),
+    handler: (m, body) => apiDiagnoseCluster(+m[1]!, body as Record<string, unknown> | undefined),
   },
   {
     method: 'POST',
@@ -350,12 +350,13 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/diagnoses$/,
-    handler: async () => [],
+    handler: async (m) => listClusterDiagnosisVersions(await getDemoDb(), +m[1]!),
   },
   {
     method: 'PATCH',
     pattern: /^\/api\/failure-diagnoses\/(\d+)\/feedback$/,
-    handler: async () => ({ success: true }),
+    handler: async (m, body) =>
+      apiSubmitDiagnosisFeedback(await getDemoDb(), +m[1]!, body as Record<string, unknown> | undefined),
   },
 
   // AI status and settings
@@ -404,14 +405,13 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/test-run-cases\/(\d+)\/diagnosis-context$/,
-    handler: async () => ({ context: '', sections: [], coverage: {}, scmChanges: null, tokenEstimate: 0 }),
+    handler: async (m, _, q) => getExecutionContext(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined),
   },
   {
     method: 'POST',
     pattern: /^\/api\/test-run-cases\/(\d+)\/diagnose$/,
-    handler: () => {
-      throw new Error('AI diagnosis not available in demo mode');
-    },
+    handler: async (m, body) =>
+      apiDiagnoseExecution(+m[1]!, body as Record<string, unknown> | undefined),
   },
   {
     method: 'GET',
