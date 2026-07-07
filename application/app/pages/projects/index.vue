@@ -165,9 +165,16 @@ const columns: TableColumn<ProjectWithStats>[] = [
           <UBreadcrumb :items="[{ label: 'Home', icon: 'i-lucide-house', to: '/' }, { label: 'Projects' }]" />
         </template>
         <template #right>
-          <HelpHint topic="projects.table" size="sm" />
-          <UButton icon="i-lucide-plus" size="md" label="New project" @click="isNewProjectModalOpen = true" />
-          <UButton icon="i-lucide-refresh-cw" size="md" label="Refresh" variant="outline" @click="() => refresh()" />
+          <NavbarActions
+            :actions="[
+              { label: 'New project', icon: 'i-lucide-plus', onClick: () => (isNewProjectModalOpen = true) },
+              { label: 'Refresh', icon: 'i-lucide-refresh-cw', variant: 'outline', onClick: () => refresh() },
+            ]"
+          >
+            <template #leading>
+              <HelpHint topic="projects.table" size="sm" />
+            </template>
+          </NavbarActions>
         </template>
       </UDashboardNavbar>
     </template>
@@ -209,88 +216,89 @@ const columns: TableColumn<ProjectWithStats>[] = [
         </div>
       </div>
 
-      <UTable
-        v-if="filteredProjects.length > 0"
-        :data="filteredProjects"
-        :columns="columns"
-        :ui="{
-          base: 'table-fixed border-separate border-spacing-0',
-          thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-          tbody: '[&>tr]:last:[&>td]:border-b-0',
-          th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-          td: 'border-b border-default',
-        }"
-      >
-        <template #name-cell="{ row }">
-          <div class="flex flex-col gap-1">
-            <div class="flex items-center gap-2">
-              <NuxtLink :to="`/projects/${row.original.id}`" class="text-primary hover:underline font-medium">
-                {{ row.original.label || row.original.name }}
-              </NuxtLink>
+      <TableScroller v-if="filteredProjects.length > 0" min-width="60rem" :bleed="false">
+        <UTable
+          :data="filteredProjects"
+          :columns="columns"
+          :ui="{
+            base: 'table-fixed border-separate border-spacing-0',
+            thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
+            tbody: '[&>tr]:last:[&>td]:border-b-0',
+            th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
+            td: 'border-b border-default',
+          }"
+        >
+          <template #name-cell="{ row }">
+            <div class="flex flex-col gap-1">
+              <div class="flex items-center gap-2">
+                <NuxtLink :to="`/projects/${row.original.id}`" class="text-primary hover:underline font-medium">
+                  {{ row.original.label || row.original.name }}
+                </NuxtLink>
+              </div>
+              <div v-if="row.original.tags?.length" class="flex flex-wrap gap-1">
+                <TagBadge v-for="tag in row.original.tags" :key="tag.id" :text="tag.text" :color="tag.color" />
+              </div>
             </div>
-            <div v-if="row.original.tags?.length" class="flex flex-wrap gap-1">
-              <TagBadge v-for="tag in row.original.tags" :key="tag.id" :text="tag.text" :color="tag.color" />
+          </template>
+          <template #totalRuns-cell="{ row }">
+            <span v-if="row.original.totalRuns === 0" class="text-xs text-gray-600 italic">No data</span>
+            <span v-else>{{ row.original.totalRuns }} runs</span>
+          </template>
+          <template #latestRun-cell="{ row }">
+            <span v-if="row.original.latestRun" class="text-xs text-gray-600">{{
+              prettyDateFormat(row.original.latestRun.startTime)
+            }}</span>
+            <span v-else class="text-xs text-gray-600 italic">No data</span>
+          </template>
+          <template #branch-cell="{ row }">
+            <div v-if="row.original.latestRun?.metadata?.scm" class="flex items-center gap-1 flex-wrap">
+              <span
+                v-if="row.original.latestRun.metadata.scm.branch"
+                class="text-xs font-medium bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded"
+              >
+                {{ row.original.latestRun.metadata.scm.branch }}
+              </span>
+              <code v-if="row.original.latestRun.metadata.scm.commit" class="text-xs text-gray-500">
+                {{ row.original.latestRun.metadata.scm.commit.substring(0, 7) }}
+              </code>
             </div>
-          </div>
-        </template>
-        <template #totalRuns-cell="{ row }">
-          <span v-if="row.original.totalRuns === 0" class="text-xs text-gray-600 italic">No data</span>
-          <span v-else>{{ row.original.totalRuns }} runs</span>
-        </template>
-        <template #latestRun-cell="{ row }">
-          <span v-if="row.original.latestRun" class="text-xs text-gray-600">{{
-            prettyDateFormat(row.original.latestRun.startTime)
-          }}</span>
-          <span v-else class="text-xs text-gray-600 italic">No data</span>
-        </template>
-        <template #branch-cell="{ row }">
-          <div v-if="row.original.latestRun?.metadata?.scm" class="flex items-center gap-1 flex-wrap">
-            <span
-              v-if="row.original.latestRun.metadata.scm.branch"
-              class="text-xs font-medium bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded"
-            >
-              {{ row.original.latestRun.metadata.scm.branch }}
-            </span>
-            <code v-if="row.original.latestRun.metadata.scm.commit" class="text-xs text-gray-500">
-              {{ row.original.latestRun.metadata.scm.commit.substring(0, 7) }}
-            </code>
-          </div>
-        </template>
-        <template #duration-cell="{ row }">
-          <span v-if="row.original.latestRun?.duration != null" class="text-sm text-gray-600">{{
-            formatDuration(row.original.latestRun.duration)
-          }}</span>
-          <span v-else class="text-xs text-gray-600 italic">No data</span>
-        </template>
-        <template #status-cell="{ row }">
-          <RunStatusBadge v-if="row.original.latestRun" :status="row.original.latestRun.status" />
-          <span v-else class="text-xs text-gray-600 italic">No data</span>
-        </template>
-        <template #testRatio-cell="{ row }">
-          <TestStatusBar
-            v-if="row.original.latestRun"
-            :passed="row.original.latestRun.passedTests"
-            :failed="row.original.latestRun.failedTests"
-            :skipped="row.original.latestRun.skippedTests"
-            :flaky="row.original.latestRun.flakyTests"
-            :did-not-run="row.original.latestRun.didNotRunTests ?? 0"
-            :total="row.original.latestRun.totalTests"
-          />
-          <span v-else class="text-xs text-gray-600 italic">No data</span>
-        </template>
-        <template #report-cell="{ row }">
-          <RunReports v-if="row.original.latestRun" :reports="row.original.latestRun.reports" />
-        </template>
-        <template #actions-header>
-          <div class="text-right">Project actions</div>
-        </template>
-        <template #actions-cell="{ row }">
-          <div class="flex justify-end gap-2">
-            <UButton :to="`/projects/${row.original.id}`" size="sm" variant="outline">View details</UButton>
-            <UButton :to="`/projects/${row.original.id}/edit`" size="sm" variant="ghost" icon="i-lucide-pencil" />
-          </div>
-        </template>
-      </UTable>
+          </template>
+          <template #duration-cell="{ row }">
+            <span v-if="row.original.latestRun?.duration != null" class="text-sm text-gray-600">{{
+              formatDuration(row.original.latestRun.duration)
+            }}</span>
+            <span v-else class="text-xs text-gray-600 italic">No data</span>
+          </template>
+          <template #status-cell="{ row }">
+            <RunStatusBadge v-if="row.original.latestRun" :status="row.original.latestRun.status" />
+            <span v-else class="text-xs text-gray-600 italic">No data</span>
+          </template>
+          <template #testRatio-cell="{ row }">
+            <TestStatusBar
+              v-if="row.original.latestRun"
+              :passed="row.original.latestRun.passedTests"
+              :failed="row.original.latestRun.failedTests"
+              :skipped="row.original.latestRun.skippedTests"
+              :flaky="row.original.latestRun.flakyTests"
+              :did-not-run="row.original.latestRun.didNotRunTests ?? 0"
+              :total="row.original.latestRun.totalTests"
+            />
+            <span v-else class="text-xs text-gray-600 italic">No data</span>
+          </template>
+          <template #report-cell="{ row }">
+            <RunReports v-if="row.original.latestRun" :reports="row.original.latestRun.reports" />
+          </template>
+          <template #actions-header>
+            <div class="text-right">Project actions</div>
+          </template>
+          <template #actions-cell="{ row }">
+            <div class="flex justify-end gap-2">
+              <UButton :to="`/projects/${row.original.id}`" size="sm" variant="outline">View details</UButton>
+              <UButton :to="`/projects/${row.original.id}/edit`" size="sm" variant="ghost" icon="i-lucide-pencil" />
+            </div>
+          </template>
+        </UTable>
+        </TableScroller>
 
       <div v-else-if="projects && projects.length > 0" class="text-center py-12 text-gray-500">
         <p class="text-lg mb-2">No projects match your search</p>

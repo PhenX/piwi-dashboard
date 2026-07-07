@@ -93,7 +93,7 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
           />
         </template>
         <template #right>
-          <UButton icon="i-lucide-refresh-cw" size="md" label="Refresh" @click="() => refresh()" />
+          <NavbarActions :actions="[{ label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() }]" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -124,49 +124,33 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
         </div>
 
         <!-- Stats cards -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div class="rounded-lg bg-gray-50 dark:bg-gray-900 p-3">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total runs</p>
-            <p class="text-xl font-bold mt-0.5">{{ testCase?.totalRuns ?? 0 }}</p>
-          </div>
-          <div class="rounded-lg bg-gray-50 dark:bg-gray-900 p-3">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Pass rate</p>
-            <p
-              class="text-xl font-bold mt-0.5"
-              :class="{
-                'text-green-600': (passRate ?? 0) >= 80,
-                'text-yellow-600': (passRate ?? 0) >= 50 && (passRate ?? 0) < 80,
-                'text-red-600': (passRate ?? 0) < 50,
-              }"
-            >
-              {{ passRate !== null ? `${passRate}%` : '—' }}
-            </p>
-          </div>
-          <div class="rounded-lg bg-gray-50 dark:bg-gray-900 p-3">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Failed</p>
-            <p class="text-xl font-bold mt-0.5 text-red-600">{{ testCase?.failedRuns ?? 0 }}</p>
-          </div>
-          <div class="rounded-lg bg-gray-50 dark:bg-gray-900 p-3">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Avg duration</p>
-            <p class="text-xl font-bold mt-0.5">
-              {{ testCase?.avgDuration != null ? formatDuration(testCase.avgDuration) : '—' }}
-            </p>
-          </div>
-          <div class="rounded-lg bg-gray-50 dark:bg-gray-900 p-3">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider inline-flex items-center gap-1">
-              Flaky <HelpHint topic="case.flaky-count" />
-            </p>
-            <p class="text-xl font-bold mt-0.5" :class="(testCase?.flakyRuns ?? 0) > 0 ? 'text-purple-600' : ''">
-              {{ testCase?.flakyRuns ?? 0 }}
-            </p>
-          </div>
-          <div class="rounded-lg bg-gray-50 dark:bg-gray-900 p-3">
-            <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Last run</p>
-            <p class="text-sm font-semibold mt-0.5">
-              {{ testCase?.lastRunAt ? formatRelativeTime(testCase.lastRunAt) : '—' }}
-            </p>
-          </div>
-        </div>
+        <StatTileGrid>
+          <StatTile label="Total runs" :value="testCase?.totalRuns ?? 0" />
+          <StatTile
+            label="Pass rate"
+            :value="passRate !== null ? `${passRate}%` : '—'"
+            :value-class="
+              (passRate ?? 0) >= 80 ? 'text-green-600' : (passRate ?? 0) >= 50 ? 'text-yellow-600' : 'text-red-600'
+            "
+          />
+          <StatTile label="Failed" :value="testCase?.failedRuns ?? 0" value-class="text-red-600" />
+          <StatTile
+            label="Avg duration"
+            :value="testCase?.avgDuration != null ? formatDuration(testCase.avgDuration) : '—'"
+          />
+          <StatTile
+            label="Flaky"
+            :value="testCase?.flakyRuns ?? 0"
+            :value-class="(testCase?.flakyRuns ?? 0) > 0 ? 'text-purple-600' : ''"
+          >
+            <template #label> Flaky <HelpHint topic="case.flaky-count" /> </template>
+          </StatTile>
+          <StatTile
+            label="Last run"
+            size="sm"
+            :value="testCase?.lastRunAt ? formatRelativeTime(testCase.lastRunAt) : '—'"
+          />
+        </StatTileGrid>
 
         <!-- Evolution charts -->
         <div v-if="historyData && historyData.length > 1" class="grid grid-cols-1 lg:grid-cols-2 gap-4">

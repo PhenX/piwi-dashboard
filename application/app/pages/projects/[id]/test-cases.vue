@@ -60,7 +60,7 @@ const testCasesColumns: TableColumn<TestCaseWithStats>[] = [
           />
         </template>
         <template #right>
-          <UButton icon="i-lucide-refresh-cw" size="md" label="Refresh" @click="() => refresh()" />
+          <NavbarActions :actions="[{ label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() }]" />
         </template>
       </UDashboardNavbar>
     </template>

@@ -321,9 +321,9 @@ function copyFailure() {
             title="View test case evolution and history"
           >
             <UIcon name="i-lucide-trending-up" class="size-3.5" />
-            Evolution
+            <span class="hidden sm:inline">Evolution</span>
           </NuxtLink>
-          <UButton icon="i-lucide-refresh-cw" size="md" label="Refresh" @click="() => refresh()" />
+          <NavbarActions :actions="[{ label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() }]" />
         </template>
       </UDashboardNavbar>
     </template>

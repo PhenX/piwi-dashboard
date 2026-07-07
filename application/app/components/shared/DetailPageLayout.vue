@@ -20,7 +20,14 @@ const activeTab = defineModel<string>({ required: true });
       <slot name="summary" />
     </div>
 
-    <UTabs v-model="activeTab" :items="tabItems" size="sm" class="shrink-0" />
+    <!-- On narrow screens the tab list scrolls horizontally instead of squeezing all tabs into the viewport. -->
+    <UTabs
+      v-model="activeTab"
+      :items="tabItems"
+      size="sm"
+      class="shrink-0"
+      :ui="{ list: 'overflow-x-auto', trigger: 'shrink-0' }"
+    />
 
     <template v-for="item in tabItems" :key="item.value">
       <div

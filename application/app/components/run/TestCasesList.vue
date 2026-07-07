@@ -248,13 +248,13 @@ defineExpose({ scrollToCase });
           <HelpHint topic="run.test-cases" />
         </span>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2 min-w-0">
         <UInput
           v-model="testCaseSearch"
           placeholder="Search test cases..."
           icon="i-lucide-search"
           size="sm"
-          class="min-w-48"
+          class="min-w-48 max-sm:flex-1"
         />
         <div class="flex flex-wrap items-center gap-1">
           <button

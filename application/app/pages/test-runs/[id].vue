@@ -575,15 +575,18 @@ function handleSelectCluster(clusterId: number) {
           </UBreadcrumb>
         </template>
         <template #right>
-          <UButton icon="i-lucide-refresh-cw" size="md" label="Refresh" @click="() => refresh()" />
-          <UButton
-            icon="i-lucide-trash-2"
-            size="md"
-            color="error"
-            variant="soft"
-            label="Delete"
-            :loading="deleting"
-            @click="isDeleteConfirmOpen = true"
+          <NavbarActions
+            :actions="[
+              { label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() },
+              {
+                label: 'Delete',
+                icon: 'i-lucide-trash-2',
+                color: 'error',
+                variant: 'soft',
+                loading: deleting,
+                onClick: () => (isDeleteConfirmOpen = true),
+              },
+            ]"
           />
         </template>
       </UDashboardNavbar>
