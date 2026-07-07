@@ -183,7 +183,7 @@ const breadcrumbItems = computed(() => [
       <UDashboardNavbar>
         <template #leading>
           <UDashboardSidebarCollapse />
-          <UBreadcrumb :items="breadcrumbItems" />
+          <BreadcrumbNav :items="breadcrumbItems" />
         </template>
         <template #right>
           <UTooltip v-if="cluster" :text="clusterCopied ? 'Copied!' : 'Copy failure cluster'">

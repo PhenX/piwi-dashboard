@@ -288,7 +288,7 @@ function copyFailure() {
       <UDashboardNavbar>
         <template #leading>
           <UDashboardSidebarCollapse />
-          <UBreadcrumb
+          <BreadcrumbNav
             :items="[
               { label: 'Home', icon: 'i-lucide-house', to: '/' },
               { label: 'Projects', to: '/projects' },
