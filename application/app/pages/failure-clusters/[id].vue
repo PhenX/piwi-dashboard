@@ -200,7 +200,8 @@ const breadcrumbItems = computed(() => [
     </template>
 
     <template #body>
-      <div v-if="cluster" class="flex flex-col min-h-0">
+      <!-- Below xl the whole panel scrolls as one document; at xl+ the two columns scroll independently. -->
+      <div v-if="cluster" class="flex flex-col h-full min-h-0 max-xl:overflow-y-auto xl:overflow-hidden">
         <!-- Summary -->
         <div class="border-b border-default shrink-0">
           <ClusterSummary
@@ -216,10 +217,10 @@ const breadcrumbItems = computed(() => [
         </div>
 
         <!-- Body: two columns — left is wider (investigation heavy) -->
-        <div class="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 p-1 overflow-hidden">
+        <div class="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 p-1 xl:flex-1 xl:min-h-0 xl:overflow-hidden">
           <!-- Left: error + test evidence + SCM investigation. Sections fold to a
                single header with a peek so the whole failure reads at a glance. -->
-          <div class="space-y-4 overflow-y-auto">
+          <div class="space-y-4 xl:overflow-y-auto">
             <!-- Error message -->
             <CollapsibleSectionCard
               v-if="cluster.sampleError"
@@ -311,7 +312,7 @@ const breadcrumbItems = computed(() => [
           </div>
 
           <!-- Right: diagnosis -->
-          <div class="overflow-y-auto">
+          <div class="xl:overflow-y-auto">
             <DiagnosisPanel
               :cluster-id="clusterId"
               :last-seen-run-id="cluster?.lastSeenRunId"
