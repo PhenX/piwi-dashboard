@@ -81,7 +81,8 @@ const columns: TableColumn<SpecHealth>[] = [
       description="No spec health data available for the selected period."
     />
 
-    <UTable v-else :data="specs" :columns="columns">
+    <TableScroller v-else min-width="46rem" :bleed="false">
+    <UTable :data="specs" :columns="columns">
       <template #prefix-cell="{ row }">
         <NuxtLink
           :to="`/projects/${projectId}/test-cases?file=${encodeURIComponent(row.original.prefix)}`"
@@ -117,5 +118,6 @@ const columns: TableColumn<SpecHealth>[] = [
         <span class="tabular-nums text-gray-500">{{ formatMs(row.original.avgDuration) }}</span>
       </template>
     </UTable>
+    </TableScroller>
   </UCard>
 </template>

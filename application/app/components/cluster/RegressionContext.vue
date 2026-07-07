@@ -143,7 +143,8 @@ function copyCommand() {
             <UIcon name="i-lucide-sliders-horizontal" class="size-4" />
             What changed between runs
           </div>
-          <table class="w-full text-sm">
+          <div class="overflow-x-auto">
+          <table class="w-full min-w-[36rem] text-sm">
             <thead>
               <tr class="text-xs text-gray-500 uppercase tracking-wider border-b border-default">
                 <th class="text-left px-4 py-2 font-medium w-32">Field</th>
@@ -171,6 +172,7 @@ function copyCommand() {
               </tr>
             </tbody>
           </table>
+          </div>
         </UCard>
       </div>
     </template>

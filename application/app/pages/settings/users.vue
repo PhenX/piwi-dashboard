@@ -391,6 +391,7 @@ async function handleInviteUser(user: UserDetails) {
         />
       </template>
 
+      <TableScroller min-width="44rem" :bleed="false">
       <UTable :data="users" :columns="columns">
         <template #username-cell="{ row }">
           {{ row.original.username }}
@@ -467,6 +468,7 @@ async function handleInviteUser(user: UserDetails) {
           </div>
         </template>
       </UTable>
+      </TableScroller>
     </SectionCard>
 
     <!-- Empty state -->

@@ -186,11 +186,12 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
             <UBadge color="neutral" variant="soft" size="lg"> {{ comparisonSummary.unchanged }} unchanged </UBadge>
           </div>
 
+          <TableScroller min-width="48rem" :bleed="false">
           <UTable
             :data="comparisonData"
             :columns="comparisonColumns"
             :ui="{
-              base: 'table-fixed border-separate border-spacing-0',
+              base: 'table-fixed border-separate border-spacing-0 min-w-[48rem]',
               thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
               tbody: '[&>tr]:last:[&>td]:border-b-0',
               th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
@@ -244,6 +245,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
               </span>
             </template>
           </UTable>
+          </TableScroller>
         </template>
 
         <div v-else-if="compareRunA && !loadingBaseline" class="text-center py-8 text-gray-500">

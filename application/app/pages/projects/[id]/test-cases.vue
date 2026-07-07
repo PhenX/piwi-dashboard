@@ -75,12 +75,12 @@ const testCasesColumns: TableColumn<TestCaseWithStats>[] = [
             </p>
           </template>
 
+          <TableScroller v-if="testCases && testCases.length > 0" min-width="52rem" :bleed="false">
           <UTable
-            v-if="testCases && testCases.length > 0"
             :data="testCases"
             :columns="testCasesColumns"
             :ui="{
-              base: 'table-fixed border-separate border-spacing-0',
+              base: 'table-fixed border-separate border-spacing-0 min-w-[52rem]',
               thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
               tbody: '[&>tr]:last:[&>td]:border-b-0',
               th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
@@ -172,6 +172,7 @@ const testCasesColumns: TableColumn<TestCaseWithStats>[] = [
               </div>
             </template>
           </UTable>
+          </TableScroller>
 
           <div v-else class="text-center py-8 text-gray-500">No test cases yet for this project.</div>
         </UCard>

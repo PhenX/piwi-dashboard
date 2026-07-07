@@ -51,6 +51,7 @@ const columns: TableColumn<ProjectFailureCluster>[] = [
       </div>
     </template>
 
+    <TableScroller min-width="48rem" :bleed="false">
     <UTable :data="clusters ?? []" :columns="columns" :loading="loading">
       <template #actions-header>
         <div class="text-right">Actions</div>
@@ -136,6 +137,7 @@ const columns: TableColumn<ProjectFailureCluster>[] = [
         </div>
       </template>
     </UTable>
+    </TableScroller>
 
     <EmptyState
       v-if="!loading && clusters && clusters.length === 0"

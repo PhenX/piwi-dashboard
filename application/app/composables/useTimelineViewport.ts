@@ -114,6 +114,69 @@ export function useTimelineViewport(opts: TimelineViewportOptions) {
     isPanning.value = false;
   }
 
+  // ── Pointer / touch interaction ──────────────────────────────────────────────
+  // Pointer events unify mouse + touch + pen: one finger pans, two fingers
+  // pinch-zoom. `touch-action: pan-y` on the container (set in the template)
+  // lets vertical page scroll pass through while we own horizontal drag + pinch.
+  const activePointers = new Map<number, { x: number; y: number }>();
+  let pinchStartDist = 0;
+  let pinchStartZoom = 1;
+  let pinchCenterX = 0;
+
+  function beginPanFrom(clientX: number): void {
+    isPanning.value = true;
+    panStartX.value = clientX;
+    panStartOffsetX.value = panX.value;
+  }
+
+  function onPointerDown(event: PointerEvent): void {
+    if (live()) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    containerRef.value?.setPointerCapture?.(event.pointerId);
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (activePointers.size === 1) {
+      beginPanFrom(event.clientX);
+    } else if (activePointers.size === 2) {
+      isPanning.value = false;
+      const [a, b] = [...activePointers.values()];
+      pinchStartDist = Math.hypot(a!.x - b!.x, a!.y - b!.y) || 1;
+      pinchStartZoom = zoom.value;
+      const rect = containerRef.value?.getBoundingClientRect();
+      pinchCenterX = (a!.x + b!.x) / 2 - (rect?.left ?? 0);
+    }
+    event.preventDefault();
+  }
+
+  function onPointerMove(event: PointerEvent): void {
+    if (live() || !activePointers.has(event.pointerId)) return;
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (activePointers.size >= 2) {
+      const [a, b] = [...activePointers.values()];
+      const dist = Math.hypot(a!.x - b!.x, a!.y - b!.y) || 1;
+      const fitZoom = computeFitZoom();
+      const newZoom = Math.max(fitZoom, Math.min(10, pinchStartZoom * (dist / pinchStartDist)));
+      const scale = newZoom / zoom.value;
+      panX.value = clampPanX(pinchCenterX - (pinchCenterX - panX.value) * scale);
+      zoom.value = newZoom;
+    } else if (isPanning.value) {
+      panX.value = clampPanX(panStartOffsetX.value + (event.clientX - panStartX.value));
+    }
+  }
+
+  function onPointerUp(event: PointerEvent): void {
+    activePointers.delete(event.pointerId);
+    containerRef.value?.releasePointerCapture?.(event.pointerId);
+    if (activePointers.size === 1) {
+      // Dropped from pinch to a single finger — resume panning from it.
+      const [p] = [...activePointers.values()];
+      beginPanFrom(p!.x);
+    } else if (activePointers.size === 0) {
+      isPanning.value = false;
+    }
+  }
+
   function resetView(): void {
     applyFitZoom();
   }
@@ -153,6 +216,9 @@ export function useTimelineViewport(opts: TimelineViewportOptions) {
     onMouseDown,
     onMouseMove,
     onMouseUp,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
     resetView,
   };
 }

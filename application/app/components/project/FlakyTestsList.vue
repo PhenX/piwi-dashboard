@@ -105,6 +105,7 @@ const columns: TableColumn<FlakyTest>[] = [
       </div>
     </template>
 
+    <TableScroller min-width="52rem" :bleed="false">
     <UTable :data="filteredTests" :columns="columns" :loading="loading">
       <template #actions-header>
         <div class="text-right">Actions</div>
@@ -190,6 +191,7 @@ const columns: TableColumn<FlakyTest>[] = [
         </div>
       </template>
     </UTable>
+    </TableScroller>
 
     <p v-if="!loading && filteredTests.length === 0" class="text-sm text-gray-500 py-4 text-center">
       No flaky tests detected in the last {{ runsWindow }} runs.

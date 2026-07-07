@@ -155,14 +155,15 @@ Phases are independent and PR-sized. Each lists concrete files; estimates assume
 ### Phase 1 — Global chrome (~½ day)
 - [x] G1: run/projects/test-run-cases/project-test-cases/project-detail navbars → `NavbarActions`.
 - [x] G2: breadcrumb collapse on run / run-case / project / cluster pages (via `BreadcrumbNav`).
-- [ ] G1 remainder: `pages/projects/[id]/edit.vue`, `pages/failure-clusters/[id].vue` → `NavbarActions` (breadcrumbs already converted).
-- [ ] G4/G5: settings toolbar scroll + body padding check.
-- [ ] F2: `HomeFilters` popover below `sm`.
+- [x] G4: settings toolbar (`UNavigationMenu`) scrolls horizontally below its width instead of overflowing.
+- [ ] G1 remainder: `pages/failure-clusters/[id].vue` single copy button (fine as-is); `edit.vue` has no navbar actions.
+- [ ] F2: `HomeFilters` compact/popover below `sm` (currently stacks acceptably).
 
 ### Phase 2 — Tables (~1 day)
 - [x] T1: home project-health table → mobile card list (`ProjectTrendTable`).
-- [ ] T2–T6: wrap remaining `UTable`s and the two raw `<table>`s in `TableScroller` (or give them a card list) with per-table min-widths — includes the several wide tables inside `projects/[id]` tabs (test runs, flaky, spec health, …).
-- [ ] T4 column pruning below `md` (spec health: trend cells) using `hidden md:table-cell` th/td or conditional `columns` arrays.
+- [x] T2–T6: wrapped the wide tables — `FlakyTestsList`, `SpecHealthTable`, `FailureClustersList`, `FailureGroups`, `SlowEndpoints` (min-w on sticky table), `projects/[id]/test-cases`, `settings/users`, `RunCompare`, and the raw `<table>` in `RegressionContext` (`AiUsagePanel` already had `overflow-x-auto`). `projects/index` wrapped earlier.
+- [ ] Remaining tables: `settings/tags`, and the `test-run-cases` history/steps tables.
+- [ ] T4 column pruning below `md` (spec health: trend cells) — optional polish.
 - [ ] P6: `overflow-x-auto` on `DiffPatch` bodies.
 
 ### Phase 3 — Summaries, stat grids & toolbars (~1 day)
@@ -174,12 +175,12 @@ Phases are independent and PR-sized. Each lists concrete files; estimates assume
 - [ ] F3: notifications/subscription row stacking.
 
 ### Phase 4 — Charts & timeline (~1–1.5 days)
-- [ ] V1: pointer-event pan, pinch-zoom, zoom buttons + `touch-action` on `WorkersTimeline`.
-- [ ] V2: clamp chart tooltips to viewport; tap-to-show.
+- [x] V1: `WorkersTimeline` now uses pointer events — one-finger pan, two-finger pinch-zoom — with `touch-action: pan-y` so vertical page scroll still passes through. (Dedicated zoom `+`/`−` buttons not added; pinch covers touch zoom.)
+- [x] V2: chart tooltips (`useChartMarkers`) clamp to the viewport on all axes. (Tap-to-show on touch not added — hover/tap still triggers.)
 - [ ] V3: verify all SVG charts are `viewBox`-based and fluid.
 
 ### Phase 5 — Page passes & touch polish (~1 day)
-- [ ] P1: failure-cluster page scroll model below `xl`.
+- [x] P1: failure-cluster page scroll model below `xl` (scrolls as one document below `xl`).
 - [ ] P2: step tree / network request density below `sm`.
 - [ ] P3–P5 spot checks (settings forms, auth pages, mcp/docs).
 - [ ] Touch-target sweep (§3.7): tree toggles, status pills, `HelpHint`, hover-only affordances.
