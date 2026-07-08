@@ -1,4 +1,4 @@
-import { eq, sql, desc, and, isNotNull, inArray, or, notInArray, count } from 'drizzle-orm';
+import { eq, sql, desc, and, isNotNull, inArray, or, notInArray, count, lt } from 'drizzle-orm';
 import {
   testRuns,
   testCases,
@@ -658,7 +658,7 @@ export async function computeRegressionContextForRun(db: DrizzleDB, runId: numbe
       and(
         eq(testRuns.projectId, run.projectId),
         eq(testRuns.status, 'passed'),
-        sql`${testRuns.startTime} < ${run.startTime}`,
+        lt(testRuns.startTime, run.startTime),
       ),
     )
     .orderBy(desc(testRuns.startTime))
