@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import {
   formatBytes,
   formatDuration,
@@ -118,9 +118,11 @@ describe('file path helpers', () => {
     expect(getFileApiPath('reports/index.html')).toBe('reports/index.html');
   });
 
-  test('getTraceViewerUrl embeds the encoded file API URL', () => {
-    const url = getTraceViewerUrl('.data/storage/t.zip', 'http://localhost:3000');
+  test('getTraceViewerUrl embeds the encoded file API URL using the current origin', () => {
+    vi.stubGlobal('location', { origin: 'http://localhost:3000' });
+    const url = getTraceViewerUrl('.data/storage/t.zip');
     expect(url).toBe(`/trace-viewer/?trace=${encodeURIComponent('http://localhost:3000/api/files/t.zip')}`);
+    vi.unstubAllGlobals();
   });
 });
 
