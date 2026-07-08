@@ -1,0 +1,1 @@
+ALTER TABLE "test_runs_cases" ALTER COLUMN "started_at" SET DATA TYPE bigint;
