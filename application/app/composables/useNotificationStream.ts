@@ -47,6 +47,7 @@ function renderBody(data: NotificationEventData): string {
       if (data.signature) lines.push(data.signature);
       break;
     case 'diagnosis.completed':
+    case 'diagnosis-completed':
       lines.push(data.summary || data.rootCause || '');
       if (data.category) lines.push(`Category: ${data.category}`);
       if (data.confidence) lines.push(`Confidence: ${data.confidence}`);
@@ -66,7 +67,12 @@ let _diagnosisActive: ReturnType<typeof useDiagnosisNotification>['active'] | nu
 function handleEvent(data: NotificationEventData) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
-  if (data.type === 'diagnosis.completed' && _diagnosisActive && !_diagnosisActive.value) return;
+  if (
+    (data.type === 'diagnosis.completed' || data.type === 'diagnosis-completed') &&
+    _diagnosisActive &&
+    !_diagnosisActive.value
+  )
+    return;
 
   const body = renderBody(data);
   if (!body) return;

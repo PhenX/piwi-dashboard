@@ -379,6 +379,9 @@ const routes: RouteEntry[] = [
   // Test-run streaming (no-op in demo mode; only terminal-status runs exist)
   { method: 'GET', pattern: /^\/api\/test-runs\/(\d+)\/stream$/, handler: () => Promise.resolve({ ok: true }) },
 
+  // Notification SSE (handled via BroadcastChannel in demo mode)
+  { method: 'GET', pattern: /^\/api\/notifications\/stream$/, handler: () => Promise.resolve({ ok: true }) },
+
   // Test cases (stable)
   {
     method: 'GET',

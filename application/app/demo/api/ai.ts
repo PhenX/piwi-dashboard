@@ -558,7 +558,7 @@ async function persistDiagnosis(
     .limit(1);
 
   publishDemoNotificationEvent({
-    type: 'diagnosis-completed',
+    type: 'diagnosis.completed',
     clusterId,
     projectId: cluster?.projectId ?? 0,
     summary: gen.row.summary,
