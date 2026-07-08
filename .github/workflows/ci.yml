@@ -65,13 +65,15 @@ jobs:
             -e POSTGRES_PASSWORD=postgres \
             -e POSTGRES_DB=playwright_test \
             postgres:16-alpine
-          # Wait for the real server to accept queries. The alpine image starts a
-          # temporary init server first (which pg_isready briefly reports as ready)
-          # and then restarts, so poll an actual query rather than pg_isready.
-          timeout 30 bash -c 'until docker exec postgres psql -U postgres -c "SELECT 1" >/dev/null 2>&1; do sleep 1; done'
+          # Wait for the real server over TCP. During initdb the alpine image runs
+          # a temporary server that listens only on the unix socket, so unix-socket
+          # probes (pg_isready / psql) pass against it and then get killed on
+          # restart. Forcing TCP (-h 127.0.0.1) only succeeds once the real server
+          # is up and stable.
+          timeout 60 bash -c 'until docker exec -e PGPASSWORD=postgres postgres psql -h 127.0.0.1 -U postgres -c "SELECT 1" >/dev/null 2>&1; do sleep 1; done'
           # Separate database for the main app server so it never races the
           # dedicated postgresql.spec.ts server (which owns playwright_test).
-          docker exec postgres psql -U postgres -c 'CREATE DATABASE playwright_main;'
+          docker exec -e PGPASSWORD=postgres postgres psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE playwright_main;'
 
       - name: Install node
         uses: actions/setup-node@v6
