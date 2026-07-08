@@ -989,7 +989,7 @@ interface AriaBlock {
  * small fixed budget, collapsing the remainder. Always keeps at least the
  * role headers of dropped regions so the model knows they existed.
  */
-function selectAriaForBudget(snapshot: string, budget: number): string {
+export function selectAriaForBudget(snapshot: string, budget: number): string {
   if (snapshot.length <= budget) return snapshot;
 
   const lines = snapshot.split('\n');

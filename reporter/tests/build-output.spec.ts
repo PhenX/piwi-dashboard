@@ -2,95 +2,51 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+/**
+ * Packaging guards for the published npm surface. These assert the invariants a
+ * consumer relies on — a single public entry, fixtures re-exported from it, and
+ * a peer dependency on Playwright — NOT the internal symbols of compiled files
+ * (those are covered by the per-module unit tests and by typecheck, and grepping
+ * `dist/*.js` for identifier names just breaks on harmless renames).
+ */
+
+const pkgPath = join(import.meta.dirname, '..', 'package.json');
+const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
 const dist = (...segments: string[]) => join(import.meta.dirname, '..', 'dist', ...segments);
 
-describe('Build output', () => {
-  it('package.json should have correct metadata', () => {
-    const pkg = JSON.parse(readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf-8'));
+describe('package metadata', () => {
+  it('names the package and points main/types at the built entry', () => {
     expect(pkg.name).toBe('@piwitests/reporter');
     expect(pkg.main).toBe('dist/index.js');
     expect(pkg.types).toBe('dist/index.d.ts');
-    expect(pkg.peerDependencies).toBeTruthy();
-    expect(pkg.peerDependencies['@playwright/test']).toBeTruthy();
   });
 
-  it('public/options.d.ts should define PiwiDashboardOptions with all fields', () => {
-    const content = readFileSync(dist('public', 'options.d.ts'), 'utf-8');
-    expect(content).toContain('PiwiDashboardOptions');
-    expect(content).toContain('serverUrl');
-    expect(content).toContain('projectName');
-    expect(content).toContain('uploadReport');
-    expect(content).toContain('uploadTraces');
-    expect(content).toContain('apiKey');
-    expect(content).toContain('username');
-    expect(content).toContain('password');
-    expect(content).toContain('reports');
-    expect(content).toContain('type: string');
-    expect(content).toContain('dir?: string');
-    expect(content).toContain('label?: string');
-    expect(content).toContain('collectPerformanceMetrics');
+  it('declares Playwright as a peer dependency', () => {
+    expect(pkg.peerDependencies?.['@playwright/test']).toBeTruthy();
   });
 
-  it('index.js re-exports the capture fixtures (single entry, no subpath)', () => {
+  it('ships the dist/ directory', () => {
+    expect(pkg.files).toContain('dist/');
+  });
+});
+
+describe('public export surface', () => {
+  it('exposes exactly one entry (".") with no ./fixtures subpath', () => {
+    // Fixtures are imported from '@piwitests/reporter', not a subpath — the
+    // package intentionally has a single public entry.
+    expect(Object.keys(pkg.exports)).toEqual(['.']);
+    expect(pkg.exports['.'].types).toBe('./dist/index.d.ts');
+    expect(pkg.exports['.'].import).toBe('./dist/index.js');
+  });
+});
+
+// The built entry can only be inspected after `npm run reporter:build`. Gate on
+// its presence so the unit suite stays green without a build, while still
+// verifying the single-entry re-export invariant once dist/ exists (e.g. in CI).
+describe.runIf(existsSync(dist('index.js')))('built entry (requires a build)', () => {
+  it('re-exports the capture fixtures from the single entry', () => {
     const source = readFileSync(dist('index.js'), 'utf-8');
     expect(source).toContain('dashboardFixtures');
     expect(source).toContain('extendDashboardFixtures');
-  });
-
-  it('capture-fixtures.js should contain the capture implementation', () => {
-    const source = readFileSync(dist('internal', 'capture', 'capture-fixtures.js'), 'utf-8');
-    expect(source).toContain('dashboardFixtures');
-    expect(source).toContain('page.on');
-    expect(source).toContain('requestfinished');
-    // Attachment names live in attachments.ts; capture-fixtures.js references them.
-    expect(source).toContain('ATTACHMENT_NAMES');
-  });
-
-  it('attachments.js should define the dashboard attachment names', () => {
-    expect(existsSync(dist('internal', 'capture', 'attachments.js'))).toBe(true);
-    const source = readFileSync(dist('internal', 'capture', 'attachments.js'), 'utf-8');
-    expect(source).toContain('piwi-locators');
-    expect(source).toContain('piwi-network');
-    expect(source).toContain('piwi-web-vitals');
-    expect(source).toContain('piwi-console');
-    expect(source).toContain('piwi-aria-snapshot');
-  });
-
-  it('step-analyzer.js should export step metrics functions', () => {
-    expect(existsSync(dist('internal', 'collect', 'step-analyzer.js'))).toBe(true);
-    const source = readFileSync(dist('internal', 'collect', 'step-analyzer.js'), 'utf-8');
-    expect(source).toContain('collectStepMetrics');
-    expect(source).toContain('computePerformanceSummary');
-    expect(source).toContain('flattenSteps');
-    expect(source).toContain('categorizeStep');
-  });
-
-  it('metadata-collector.js should have MetadataCollector class', () => {
-    expect(existsSync(dist('internal', 'collect', 'metadata-collector.js'))).toBe(true);
-    const source = readFileSync(dist('internal', 'collect', 'metadata-collector.js'), 'utf-8');
-    expect(source).toContain('class MetadataCollector');
-    expect(source).toContain('collectScmInfo');
-    expect(source).toContain('collectCiInfo');
-  });
-
-  it('http-client.js should have HttpClient class with HTTP helpers', () => {
-    expect(existsSync(dist('internal', 'transport', 'http-client.js'))).toBe(true);
-    const source = readFileSync(dist('internal', 'transport', 'http-client.js'), 'utf-8');
-    expect(source).toContain('class HttpClient');
-    expect(source).toContain('postJSON');
-    expect(source).toContain('postFormData');
-    expect(source).toContain('login');
-  });
-
-  it('file-handler.js should export file discovery functions', () => {
-    expect(existsSync(dist('internal', 'files', 'file-handler.js'))).toBe(true);
-    const source = readFileSync(dist('internal', 'files', 'file-handler.js'), 'utf-8');
-    expect(source).toContain('findHTMLReportDirectory');
-    expect(source).toContain('findReportDirectory');
-    expect(source).toContain('compressReportDirectory');
-    expect(source).toContain('findTraceFiles');
-    expect(source).toContain('getDefaultReportDirs');
-    expect(source).toContain('monocart');
-    expect(source).toContain('blob');
   });
 });

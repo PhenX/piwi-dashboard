@@ -16,6 +16,9 @@ export default defineConfig({
       '~': appDir,
       '@': appDir,
       '#shared': `${rootDir}/shared`,
+      // Stub Nuxt's auto-import virtual module so pure helpers in modules that
+      // reference auto-imported components can be unit-tested in isolation.
+      '#components': `${rootDir}/tests/unit/stubs/nuxt-components.ts`,
     },
   },
 });
