@@ -15,19 +15,22 @@ defaults:
 
 jobs:
   ci:
-    name: CI Tests
-    runs-on: ${{ matrix.os }}
+    name: CI (storage=${{ matrix.storage }}, db=${{ matrix.database }})
+    runs-on: ubuntu-latest
 
     strategy:
+      # Run every cell to completion so one backend failing doesn't mask the others.
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        node: [24]
+        storage: [local, s3]
+        database: [sqlite, postgres]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Start MinIO (local S3 server for tests)
+      - name: Start MinIO (local S3 server)
+        if: matrix.storage == 's3'
         working-directory: .
         run: |
           docker run -d \
@@ -39,49 +42,20 @@ jobs:
           # Wait up to 30 s for MinIO to become healthy
           timeout 30 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 1; done'
 
-      - name: Create S3 test bucket
+      - name: Create S3 buckets
+        if: matrix.storage == 's3'
         working-directory: .
         env:
           AWS_ACCESS_KEY_ID: minioadmin
           AWS_SECRET_ACCESS_KEY: minioadmin
-        run: aws --endpoint-url http://localhost:9000 s3 mb s3://playwright-test --region us-east-1
+        run: |
+          # Bucket for the main app server under test, plus the bucket the
+          # dedicated s3-storage.spec.ts adapter tests target.
+          aws --endpoint-url http://localhost:9000 s3 mb s3://piwi-main --region us-east-1
+          aws --endpoint-url http://localhost:9000 s3 mb s3://playwright-test --region us-east-1
 
-      - name: Install node
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ matrix.node }}
-          cache: npm
-          cache-dependency-path: ./package-lock.json
-
-      - name: Install dependencies
-        working-directory: .
-        run: npm ci
-
-      - name: Lint
-        run: npm run app:lint
-
-      - name: Typecheck
-        run: npm run app:typecheck
-
-      - name: Lint reporter
-        working-directory: ./reporter
-        run: npm run reporter:lint
-
-      - name: Build reporter
-        working-directory: ./reporter
-        run: npm run reporter:build
-
-      - name: Test reporter
-        working-directory: ./reporter
-        run: npm run reporter:test
-
-      - name: Test application unit tests
-        run: npm run app:test:unit
-
-      - name: Install Playwright Browsers
-        run: npx playwright install chromium firefox --with-deps --only-shell
-
-      - name: Start PostgreSQL (for PostgreSQL tests)
+      - name: Start PostgreSQL
+        if: matrix.database == 'postgres'
         working-directory: .
         run: |
           docker run -d \
@@ -93,15 +67,71 @@ jobs:
             postgres:16-alpine
           # Wait up to 30 s for PostgreSQL to become healthy
           timeout 30 bash -c 'until docker exec postgres pg_isready -U postgres; do sleep 1; done'
+          # Separate database for the main app server so it never races the
+          # dedicated postgresql.spec.ts server (which owns playwright_test).
+          docker exec postgres psql -U postgres -c 'CREATE DATABASE playwright_main;'
+
+      - name: Install node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+
+      - name: Install dependencies
+        working-directory: .
+        run: npm ci
+
+      # Backend-agnostic checks only need to run once; pin them to the baseline cell.
+      - name: Lint
+        if: matrix.storage == 'local' && matrix.database == 'sqlite'
+        run: npm run app:lint
+
+      - name: Typecheck
+        if: matrix.storage == 'local' && matrix.database == 'sqlite'
+        run: npm run app:typecheck
+
+      - name: Lint reporter
+        if: matrix.storage == 'local' && matrix.database == 'sqlite'
+        working-directory: ./reporter
+        run: npm run reporter:lint
+
+      # The reporter dist is imported by playwright.config.ts, so build it in every cell.
+      - name: Build reporter
+        working-directory: ./reporter
+        run: npm run reporter:build
+
+      - name: Test reporter
+        if: matrix.storage == 'local' && matrix.database == 'sqlite'
+        working-directory: ./reporter
+        run: npm run reporter:test
+
+      - name: Test application unit tests
+        if: matrix.storage == 'local' && matrix.database == 'sqlite'
+        run: npm run app:test:unit
+
+      - name: Install Playwright Browsers
+        run: npx playwright install chromium firefox --with-deps --only-shell
 
       - name: Run Playwright Tests
         env:
-          PIWI_S3_TEST_ENDPOINT: http://localhost:9000
-          PIWI_S3_TEST_BUCKET: playwright-test
-          PIWI_S3_TEST_REGION: us-east-1
-          PIWI_S3_TEST_ACCESS_KEY_ID: minioadmin
-          PIWI_S3_TEST_SECRET_ACCESS_KEY: minioadmin
-          PIWI_POSTGRES_TEST_URL: postgresql://postgres:postgres@localhost:5432/playwright_test
+          # --- Main app server backend (driven by the matrix) ---
+          PIWI_STORAGE_TYPE: ${{ matrix.storage }}
+          PIWI_S3_ENDPOINT: ${{ matrix.storage == 's3' && 'http://localhost:9000' || '' }}
+          PIWI_S3_BUCKET: ${{ matrix.storage == 's3' && 'piwi-main' || '' }}
+          PIWI_S3_REGION: ${{ matrix.storage == 's3' && 'us-east-1' || '' }}
+          PIWI_S3_ACCESS_KEY_ID: ${{ matrix.storage == 's3' && 'minioadmin' || '' }}
+          PIWI_S3_SECRET_ACCESS_KEY: ${{ matrix.storage == 's3' && 'minioadmin' || '' }}
+          PIWI_S3_FORCE_PATH_STYLE: ${{ matrix.storage == 's3' && 'true' || '' }}
+          PIWI_DATABASE_URL: ${{ matrix.database == 'postgres' && 'postgresql://postgres:postgres@localhost:5432/playwright_main' || '' }}
+          # --- Dedicated adapter specs (s3-storage.spec.ts / postgresql.spec.ts) ---
+          # These self-skip and self-provision their own server when their var is empty.
+          PIWI_S3_TEST_ENDPOINT: ${{ matrix.storage == 's3' && 'http://localhost:9000' || '' }}
+          PIWI_S3_TEST_BUCKET: ${{ matrix.storage == 's3' && 'playwright-test' || '' }}
+          PIWI_S3_TEST_REGION: ${{ matrix.storage == 's3' && 'us-east-1' || '' }}
+          PIWI_S3_TEST_ACCESS_KEY_ID: ${{ matrix.storage == 's3' && 'minioadmin' || '' }}
+          PIWI_S3_TEST_SECRET_ACCESS_KEY: ${{ matrix.storage == 's3' && 'minioadmin' || '' }}
+          PIWI_POSTGRES_TEST_URL: ${{ matrix.database == 'postgres' && 'postgresql://postgres:postgres@localhost:5432/playwright_test' || '' }}
         run: npm run app:test
 
   demo:
