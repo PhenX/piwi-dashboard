@@ -125,7 +125,9 @@ export default eventHandler(async (event) => {
       flakyTests: sql`${testRuns.flakyTests} + ${flakyTests}`,
       totalTests: sql`${testRuns.totalTests} + ${body.totalTests ?? 0}`,
       shardsFinished: sql`${testRuns.shardsFinished} + 1`,
-      duration: sql`MAX(coalesce(${testRuns.duration}, 0), ${duration})`,
+      // Portable "max of two values": SQLite's scalar MAX(a,b) is an aggregate in
+      // Postgres, so use a CASE expression that runs on both dialects.
+      duration: sql`CASE WHEN coalesce(${testRuns.duration}, 0) > ${duration} THEN coalesce(${testRuns.duration}, 0) ELSE ${duration} END`,
       metadata: { ...currentMeta, shardDurations: allDurations },
       ...(body.isFullRun !== undefined && { isFullRun: body.isFullRun !== false ? 1 : 0 }),
       ...(body.filterDetails !== undefined && { filterDetails: body.filterDetails ?? null }),

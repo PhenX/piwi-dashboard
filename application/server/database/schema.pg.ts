@@ -2,6 +2,7 @@ import {
   pgTable,
   text,
   integer,
+  bigint,
   serial,
   timestamp,
   jsonb,
@@ -342,7 +343,7 @@ export const testRunsCases = pgTable(
     testAnnotations: jsonb('test_annotations'), // Array<{ type, description? }> — runtime test marks (@fixme, @slow …)
     workerIndex: integer('worker_index'), // Parallel worker index (from Playwright's parallelIndex)
     shardIndex: integer('shard_index'), // Shard index (1-based) for sharded runs; null = not sharded
-    startedAt: integer('started_at'), // Unix timestamp in ms when the test started
+    startedAt: bigint('started_at', { mode: 'number' }), // Unix timestamp in ms when the test started (exceeds 32-bit int range)
     isNewRegression: integer('is_new_regression'), // boolean: passed in baseline, failed in this run
     isNewFlaky: integer('is_new_flaky'), // boolean: no retries in baseline, retry-pass in this run
     createdAt: timestamp('created_at', { mode: 'date' })
