@@ -60,6 +60,7 @@ export const PROJECT = {
   METADATA_RETRIEVAL: 'metadata-retrieval-test',
   METADATA_TEST: 'metadata-test-project',
   MINIMAL: 'minimal-project',
+  MOBILE_RESPONSIVENESS: 'mobile-responsiveness-test',
   MULTI_REPORT: 'multi-report-project',
   NO_FILES: 'no-files-project',
   NO_METADATA: 'no-metadata-test',

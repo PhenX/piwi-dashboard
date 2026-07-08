@@ -185,10 +185,15 @@ Phases are independent and PR-sized. Each lists concrete files; estimates assume
 - [ ] P3–P5 spot checks (settings forms, auth pages, mcp/docs).
 - [ ] Touch-target sweep (§3.7): tree toggles, status pills, `HelpHint`, hover-only affordances.
 
-### Phase 6 — Regression safety net (~½ day)
-- [ ] Add a Playwright project with `viewport: { width: 375, height: 812 }` (and one at 768) to `application/tests/`.
-- [ ] Smoke spec asserting `document.documentElement.scrollWidth <= window.innerWidth` (no horizontal page scroll) on: home, projects, project detail, run detail (each tab), test-case detail, cluster detail, settings pages.
-- [ ] Screenshot tests at both viewports for the run-detail and home pages.
+### ✅ Phase 6 — Regression safety net (this branch)
+- [x] `tests/mobile-responsiveness.spec.ts` — new spec (own `PROJECT.MOBILE_RESPONSIVENESS` seed, registered in `shared/test-project-names.ts`) run at two viewports (`test.use({ viewport })` per describe): phone (375×812) and tablet (768×1024). Not added as a config-level `projects` entry — that would run *every* existing spec at both viewports, doubling CI time; a dedicated spec covers the regression at a fraction of the cost.
+- [x] Smoke test asserting `scrollWidth <= clientWidth` (no horizontal page scroll) on: home, projects list, project detail, run detail, test-case detail, test-run-case detail, failure-cluster detail, settings, settings/users, settings/tags, settings/notifications.
+- [x] Run-detail: every tab (Test cases, Insights, Failure groups, Regression, Timeline, Compare, Slow endpoints) has no overflow — switched via the mobile `USelect` below `sm`, via `UTabs` triggers at `sm`+.
+- [x] Run-detail: summary is reachable and its mobile "Hide summary"/"Show summary" toggle works below `lg`.
+- [x] Project detail "Spec health" table scrolls inside its own container, not the page.
+- [x] Breadcrumb: dropdown (`menuitem`s for Home/Projects/project) below `sm`, full inline breadcrumb (`link`) at `sm`+.
+- [x] Non-baseline screenshots (`testInfo.attach`) of home + run-detail at both viewports, for manual visual spot-checks in the HTML report — no pixel-diff baseline (none exist elsewhere in this suite; introducing one is a separate, deliberate decision given font/OS rendering flakiness).
+- All 12 tests pass locally (`npx playwright test tests/mobile-responsiveness.spec.ts`).
 
 **Total estimated effort for Phases 1–6: ~5 developer-days.**
 

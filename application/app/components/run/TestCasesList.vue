@@ -219,8 +219,8 @@ defineExpose({ scrollToCase });
 
 <template>
   <div ref="listRef" class="flex flex-col overflow-y-auto">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 shrink-0">
-      <div class="flex items-center gap-2">
+    <FilterToolbar class="mb-4 shrink-0">
+      <template #start>
         <div class="flex items-center rounded-md border border-default overflow-hidden">
           <button
             class="px-2 py-1 text-xs transition-colors"
@@ -247,53 +247,52 @@ defineExpose({ scrollToCase });
           }}{{ filteredTestCases.length !== testCases.length ? ` / ${testCases.length}` : '' }} cases
           <HelpHint topic="run.test-cases" />
         </span>
-      </div>
-      <div class="flex flex-wrap items-center gap-2 min-w-0">
-        <UInput
-          v-model="testCaseSearch"
-          placeholder="Search test cases..."
-          icon="i-lucide-search"
-          size="sm"
-          class="min-w-48 max-sm:flex-1"
-        />
-        <div class="flex flex-wrap items-center gap-1">
-          <button
-            v-for="opt in STATUS_OPTIONS"
-            :key="opt.value"
-            class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap"
+      </template>
+
+      <UInput
+        v-model="testCaseSearch"
+        placeholder="Search test cases..."
+        icon="i-lucide-search"
+        size="sm"
+        class="min-w-48 max-sm:flex-1"
+      />
+      <div class="flex flex-wrap items-center gap-1">
+        <button
+          v-for="opt in STATUS_OPTIONS"
+          :key="opt.value"
+          class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap"
+          :class="
+            activeStatuses.includes(opt.value)
+              ? opt.color === 'green'
+                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                : opt.color === 'red'
+                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                  : opt.color === 'orange'
+                    ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                    : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+              : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+          "
+          @click="toggleStatus(opt.value)"
+        >
+          <span
+            class="size-2 rounded-full shrink-0"
             :class="
-              activeStatuses.includes(opt.value)
-                ? opt.color === 'green'
-                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                  : opt.color === 'red'
-                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                    : opt.color === 'orange'
-                      ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-                      : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              opt.color === 'green'
+                ? 'bg-green-500'
+                : opt.color === 'red'
+                  ? 'bg-red-500'
+                  : opt.color === 'orange'
+                    ? 'bg-orange-500'
+                    : 'bg-gray-400'
             "
-            @click="toggleStatus(opt.value)"
-          >
-            <span
-              class="size-2 rounded-full shrink-0"
-              :class="
-                opt.color === 'green'
-                  ? 'bg-green-500'
-                  : opt.color === 'red'
-                    ? 'bg-red-500'
-                    : opt.color === 'orange'
-                      ? 'bg-orange-500'
-                      : 'bg-gray-400'
-              "
-            />
-            {{ opt.label }}
-          </button>
-        </div>
-        <USelect v-model="testCaseBrowserFilter" :items="testCaseBrowserOptions" size="sm" class="w-36" />
-        <UCheckbox v-if="!isLive" v-model="showNewRegressionsOnly" label="New regressions" size="sm" />
-        <UCheckbox v-if="!isLive" v-model="showNewFlakyOnly" label="New flaky" size="sm" />
+          />
+          {{ opt.label }}
+        </button>
       </div>
-    </div>
+      <USelect v-model="testCaseBrowserFilter" :items="testCaseBrowserOptions" size="sm" class="w-36" />
+      <UCheckbox v-if="!isLive" v-model="showNewRegressionsOnly" label="New regressions" size="sm" />
+      <UCheckbox v-if="!isLive" v-model="showNewFlakyOnly" label="New flaky" size="sm" />
+    </FilterToolbar>
 
     <!-- Tree view -->
     <TestCasesTree
