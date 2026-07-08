@@ -152,6 +152,71 @@ export async function ariaSnapshotBestEffort(target: Locator, timeout?: number):
   }
 }
 
+/**
+ * Runs inside the browser via `evaluate()` — probes a captured element for its
+ * attributes, geometry, label association, and selector-uniqueness counts.
+ * Must stay a fully self-contained function (no references to this module's
+ * closure): Playwright serializes it and executes it in the page, browser-side.
+ * `el` is browser-context (no DOM lib in this Node package), hence `any`.
+ * Exported for unit testing; still passed directly to `evaluate()` below.
+ */
+export function probeElementAttrs(el: any, keep: string[]): CapturedAttrs {
+  const attrMap: Record<string, string | null> = {};
+  for (const key of keep) {
+    const v = el.getAttribute(key) ?? el[key];
+    attrMap[key] = typeof v === 'string' ? v.slice(0, 200) : v ? String(v).slice(0, 200) : null;
+  }
+  const r = el.getBoundingClientRect();
+  // Uniqueness probe: how many elements each candidate selector matches. A
+  // count > 1 marks the alternative as ambiguous (strict-mode violation) so
+  // generateAlternatives drops it. All DOM/CSS access goes through `el` (no
+  // DOM lib here).
+  const selectorCounts: CapturedAttrs['selectorCounts'] = {};
+  try {
+    const doc = el.ownerDocument;
+    const cssEsc = (s: string): string => doc.defaultView.CSS.escape(s);
+    const count = (sel: string): number | undefined => {
+      try {
+        return doc.querySelectorAll(sel).length;
+      } catch {
+        return undefined;
+      }
+    };
+    if (attrMap['data-testid']) {
+      selectorCounts.testId = count(`[data-testid=${JSON.stringify(attrMap['data-testid'])}]`);
+    }
+    if (attrMap['id']) selectorCounts.id = count(`#${cssEsc(attrMap['id'])}`);
+    if (attrMap['name']) selectorCounts.name = count(`[name=${JSON.stringify(attrMap['name'])}]`);
+    const classList = (attrMap['class'] || '')
+      .split(/\s+/)
+      .filter((c: string) => c.length > 1)
+      .slice(0, 10);
+    if (classList.length > 0) {
+      const classCounts: Record<string, number> = {};
+      for (const cls of classList) {
+        const n = count(`.${cssEsc(cls)}`);
+        if (n !== undefined) classCounts[cls] = n;
+      }
+      selectorCounts.classes = classCounts;
+    }
+  } catch {
+    // Uniqueness probing is best-effort — never fail the capture.
+  }
+  return {
+    tagName: el.tagName?.toLowerCase?.() ?? 'unknown',
+    attributes: attrMap,
+    // Collapse whitespace so multi-line text can't produce a getByText
+    // suggestion with literal newlines in it.
+    textContent: (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
+    center: {
+      x: Math.round(r.x + r.width / 2),
+      y: Math.round(r.y + r.height / 2),
+    },
+    hasLabel: !!(el.labels && el.labels.length > 0),
+    selectorCounts,
+  };
+}
+
 // Chain methods that take args and define a new locator scope (not just narrow).
 // Origin method/args update to the chain call, e.g. .locator('.item') → locator('.item').
 // Positional/filter chains that narrow but don't change locator identity.
@@ -220,65 +285,8 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
         const resolveAttrs = (async () => {
           let deadline: ReturnType<typeof setTimeout> | undefined;
           try {
-            // `el` is browser-context (no DOM lib in this Node package), so it
-            // stays `any`; the callback's return type pins `attrs` to CapturedAttrs.
             const attrs = await Promise.race([
-              target.evaluate((el: any, keep: string[]): CapturedAttrs => {
-                const attrMap: Record<string, string | null> = {};
-                for (const key of keep) {
-                  const v = el.getAttribute(key) ?? el[key];
-                  attrMap[key] = typeof v === 'string' ? v.slice(0, 200) : v ? String(v).slice(0, 200) : null;
-                }
-                const r = el.getBoundingClientRect();
-                // Uniqueness probe: how many elements each candidate selector
-                // matches. A count > 1 marks the alternative as ambiguous
-                // (strict-mode violation) so generateAlternatives drops it.
-                // All DOM/CSS access goes through `el` (no DOM lib here).
-                const selectorCounts: CapturedAttrs['selectorCounts'] = {};
-                try {
-                  const doc = el.ownerDocument;
-                  const cssEsc = (s: string): string => doc.defaultView.CSS.escape(s);
-                  const count = (sel: string): number | undefined => {
-                    try {
-                      return doc.querySelectorAll(sel).length;
-                    } catch {
-                      return undefined;
-                    }
-                  };
-                  if (attrMap['data-testid']) {
-                    selectorCounts.testId = count(`[data-testid=${JSON.stringify(attrMap['data-testid'])}]`);
-                  }
-                  if (attrMap['id']) selectorCounts.id = count(`#${cssEsc(attrMap['id'])}`);
-                  if (attrMap['name']) selectorCounts.name = count(`[name=${JSON.stringify(attrMap['name'])}]`);
-                  const classList = (attrMap['class'] || '')
-                    .split(/\s+/)
-                    .filter((c: string) => c.length > 1)
-                    .slice(0, 10);
-                  if (classList.length > 0) {
-                    const classCounts: Record<string, number> = {};
-                    for (const cls of classList) {
-                      const n = count(`.${cssEsc(cls)}`);
-                      if (n !== undefined) classCounts[cls] = n;
-                    }
-                    selectorCounts.classes = classCounts;
-                  }
-                } catch {
-                  // Uniqueness probing is best-effort — never fail the capture.
-                }
-                return {
-                  tagName: el.tagName?.toLowerCase?.() ?? 'unknown',
-                  attributes: attrMap,
-                  // Collapse whitespace so multi-line text can't produce a
-                  // getByText suggestion with literal newlines in it.
-                  textContent: (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
-                  center: {
-                    x: Math.round(r.x + r.width / 2),
-                    y: Math.round(r.y + r.height / 2),
-                  },
-                  hasLabel: !!(el.labels && el.labels.length > 0),
-                  selectorCounts,
-                };
-              }, CAPTURED_ATTRS_ARG),
+              target.evaluate(probeElementAttrs, CAPTURED_ATTRS_ARG),
               new Promise<never>((_, reject) => {
                 deadline = setTimeout(() => reject(new Error('locator capture timeout')), 500);
               }),
