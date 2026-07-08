@@ -532,7 +532,7 @@ function handleSelectCluster(clusterId: number) {
       <UDashboardNavbar>
         <template #leading>
           <UDashboardSidebarCollapse />
-          <UBreadcrumb
+          <BreadcrumbNav
             :items="[
               { label: 'Home', icon: 'i-lucide-house', to: '/' },
               { label: 'Projects', to: '/projects' },
@@ -550,10 +550,10 @@ function handleSelectCluster(clusterId: number) {
           >
             <template #project="{ item }">
               <NuxtLink
-                :to="item.to"
+                :to="item?.to"
                 class="text-sm font-medium text-[var(--ui-text-muted)] hover:text-[var(--ui-text)] transition-colors"
               >
-                {{ item.label }}
+                {{ item?.label }}
               </NuxtLink>
               <UTooltip
                 v-if="latestRunId && latestRunId !== Number(runId)"
@@ -572,18 +572,21 @@ function handleSelectCluster(clusterId: number) {
                 </NuxtLink>
               </UTooltip>
             </template>
-          </UBreadcrumb>
+          </BreadcrumbNav>
         </template>
         <template #right>
-          <UButton icon="i-lucide-refresh-cw" size="md" label="Refresh" @click="() => refresh()" />
-          <UButton
-            icon="i-lucide-trash-2"
-            size="md"
-            color="error"
-            variant="soft"
-            label="Delete"
-            :loading="deleting"
-            @click="isDeleteConfirmOpen = true"
+          <NavbarActions
+            :actions="[
+              { label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() },
+              {
+                label: 'Delete',
+                icon: 'i-lucide-trash-2',
+                color: 'error',
+                variant: 'soft',
+                loading: deleting,
+                onClick: () => (isDeleteConfirmOpen = true),
+              },
+            ]"
           />
         </template>
       </UDashboardNavbar>

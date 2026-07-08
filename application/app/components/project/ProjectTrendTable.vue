@@ -102,7 +102,8 @@ const columns: TableColumn<Row>[] = [
       <UButton to="/projects" variant="outline" size="sm">View all</UButton>
     </template>
 
-    <div class="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+    <!-- md+ : full trend table -->
+    <div class="hidden md:block overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
       <UTable
         :data="sortedProjects"
         :columns="columns"
@@ -181,6 +182,58 @@ const columns: TableColumn<Row>[] = [
           <span v-else class="text-gray-400">—</span>
         </template>
       </UTable>
+    </div>
+
+    <!-- Below md : one card per project (no horizontal scroll) -->
+    <div class="space-y-2 md:hidden">
+      <div
+        v-for="row in sortedProjects"
+        :key="row.id"
+        class="rounded-lg border border-default p-3 space-y-2"
+      >
+        <div class="flex items-start justify-between gap-2">
+          <NuxtLink
+            :to="`/projects/${row.id}`"
+            class="font-medium text-primary hover:underline truncate"
+          >
+            {{ row.label || row.name }}
+          </NuxtLink>
+          <span
+            class="inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap"
+            :class="tendencyStyle(row.tendency)"
+          >
+            <UIcon :name="tendencyIcon(row.tendency)" class="size-3 shrink-0" />
+            {{ tendencyLabel(row.tendency) }}
+          </span>
+        </div>
+
+        <div v-if="row.tags.length > 0" class="flex flex-wrap gap-1">
+          <TagBadge v-for="tag in row.tags" :key="tag.id" :text="tag.text" :color="tag.color" />
+        </div>
+
+        <MiniRunBars :runs="row.recentRuns" :height="24" />
+
+        <div class="flex items-center justify-between gap-2 text-xs">
+          <NuxtLink
+            v-if="row.latestFullRun"
+            :to="`/test-runs/${row.latestFullRun.id}`"
+            class="flex items-center gap-1.5 min-w-0 hover:opacity-80"
+          >
+            <RunStatusBadge :status="row.latestFullRun.status" />
+            <span class="text-gray-500 dark:text-gray-400 truncate">
+              {{ formatRelativeTime(row.latestFullRun.startTime) }}
+            </span>
+          </NuxtLink>
+          <span v-else class="text-gray-400">No full runs</span>
+
+          <span v-if="row.latestFullRun" class="shrink-0 tabular-nums text-gray-500 dark:text-gray-400">
+            <span class="font-semibold" :class="passRateColorClass(passRate(row.latestFullRun))">
+              {{ passRate(row.latestFullRun) }}%
+            </span>
+            · {{ row.latestFullRun.passedTests }}/{{ row.latestFullRun.totalTests }}
+          </span>
+        </div>
+      </div>
     </div>
 
     <EmptyState v-if="sortedProjects.length === 0" text="No projects yet" :padded="false" class="py-8" />

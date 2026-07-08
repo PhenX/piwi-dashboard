@@ -34,9 +34,9 @@ const {
   getBarTop,
   tickMarks,
   onWheel,
-  onMouseDown,
-  onMouseMove,
-  onMouseUp,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
   resetView,
 } = useTimelineViewport({ containerRef, maxTime, rowCount, hasData, live: () => props.live });
 
@@ -115,14 +115,15 @@ function onBarLeave() {
 
     <div
       ref="containerRef"
-      class="relative overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700"
+      class="relative overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 touch-pan-y"
       :class="{ 'cursor-grab': !isPanning, 'cursor-grabbing': isPanning }"
       :style="{ height: contentHeight + 'px' }"
       @wheel.prevent="onWheel"
-      @mousedown="onMouseDown"
-      @mousemove="onMouseMove"
-      @mouseup="onMouseUp"
-      @mouseleave="onMouseUp"
+      @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerUp"
+      @pointerleave="onPointerUp"
     >
       <svg
         class="overflow-visible"

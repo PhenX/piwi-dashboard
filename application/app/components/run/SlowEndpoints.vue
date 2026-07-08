@@ -76,7 +76,7 @@ const endpointColumns: TableColumn<EndpointSummary>[] = [
       :columns="endpointColumns"
       class="flex-1 min-h-0"
       :ui="{
-        base: 'table-fixed border-separate border-spacing-0',
+        base: 'table-fixed border-separate border-spacing-0 min-w-[44rem]',
         thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
         tbody: '[&>tr]:last:[&>td]:border-b-0 [&>tr]:hover:bg-gray-50 dark:[&>tr]:hover:bg-gray-900/50',
         th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',

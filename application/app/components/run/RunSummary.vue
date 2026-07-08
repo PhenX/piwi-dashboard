@@ -326,7 +326,7 @@ function onLabelKeydown(e: KeyboardEvent) {
               </div>
             </div>
 
-            <div class="grid grid-cols-2 sm:grid-cols-6 gap-2">
+            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
               <button
                 class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
                 :class="

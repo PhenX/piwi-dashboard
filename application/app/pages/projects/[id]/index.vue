@@ -212,6 +212,8 @@ const tabItems = computed(() => [
   ...(isAdmin.value ? [{ label: 'Members', icon: 'i-lucide-users', value: 'members', slot: 'members' }] : []),
 ]);
 
+const activeTabIcon = computed(() => tabItems.value.find((t) => t.value === activeTab.value)?.icon);
+
 // === TEST RUNS TAB ===
 const selectedRunIds = ref<number[]>([]);
 
@@ -594,7 +596,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
       <UDashboardNavbar>
         <template #leading>
           <UDashboardSidebarCollapse />
-          <UBreadcrumb
+          <BreadcrumbNav
             :items="[
               { label: 'Home', icon: 'i-lucide-house', to: '/' },
               { label: 'Projects', to: '/projects' },
@@ -603,23 +605,31 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
           />
         </template>
         <template #right>
-          <SubscribeBell :project-id="parseInt(projectId)" :project-label="project?.label || project?.name" />
-          <UButton
-            v-if="canDelete"
-            icon="i-lucide-trash-2"
+          <NavbarActions
             size="sm"
-            color="error"
-            variant="ghost"
-            label="Delete"
-            @click="
-              deleteProjectConfirmInput = '';
-              showDeleteProjectModal = true;
-            "
-          />
-          <UButton :to="`/projects/${projectId}/edit`" icon="i-lucide-pencil" size="sm" variant="outline">
-            Edit
-          </UButton>
-          <UButton icon="i-lucide-refresh-cw" size="sm" variant="outline" label="Refresh" @click="() => refresh()" />
+            :actions="[
+              ...(canDelete
+                ? [
+                    {
+                      label: 'Delete',
+                      icon: 'i-lucide-trash-2',
+                      color: 'error' as const,
+                      variant: 'ghost' as const,
+                      onClick: () => {
+                        deleteProjectConfirmInput = '';
+                        showDeleteProjectModal = true;
+                      },
+                    },
+                  ]
+                : []),
+              { label: 'Edit', icon: 'i-lucide-pencil', variant: 'outline' as const, to: `/projects/${projectId}/edit` },
+              { label: 'Refresh', icon: 'i-lucide-refresh-cw', variant: 'outline' as const, onClick: () => refresh() },
+            ]"
+          >
+            <template #leading>
+              <SubscribeBell :project-id="parseInt(projectId)" :project-label="project?.label || project?.name" />
+            </template>
+          </NavbarActions>
         </template>
       </UDashboardNavbar>
     </template>
@@ -636,7 +646,21 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
           </div>
         </div>
 
-        <UTabs v-model="activeTab" :items="tabItems" size="sm" class="p-1">
+        <!-- Mobile: a select replaces the cramped tab strip; the strip scrolls from sm up. -->
+        <USelect
+          v-model="activeTab"
+          :items="tabItems"
+          :icon="activeTabIcon"
+          size="md"
+          class="w-full mx-1 mb-1 sm:hidden"
+        />
+        <UTabs
+          v-model="activeTab"
+          :items="tabItems"
+          size="sm"
+          class="p-1"
+          :ui="{ list: 'max-sm:hidden overflow-x-auto', trigger: 'shrink-0' }"
+        >
           <!-- TEST RUNS TAB -->
           <template #test-runs>
             <ChartCard

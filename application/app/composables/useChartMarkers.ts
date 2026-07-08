@@ -112,11 +112,17 @@ export function useChartMarkers<T>(
         });
         circle.addEventListener('mousemove', (e: MouseEvent) => {
           const offset = 12;
-          const x =
-            e.clientX + offset + tooltipWidth > window.innerWidth - 8
+          const margin = 8;
+          // Prefer the right of the cursor; flip left when it would overflow, then
+          // clamp both axes so the tooltip always stays fully inside the viewport
+          // (important on narrow/mobile screens).
+          let x =
+            e.clientX + offset + tooltipWidth > window.innerWidth - margin
               ? e.clientX - tooltipWidth - offset
               : e.clientX + offset;
-          tooltipPos.value = { x, y: e.clientY - 12 };
+          x = Math.max(margin, Math.min(x, window.innerWidth - tooltipWidth - margin));
+          const y = Math.max(margin, Math.min(e.clientY - 12, window.innerHeight - 160));
+          tooltipPos.value = { x, y };
         });
         circle.addEventListener('mouseleave', () => {
           circle.setAttribute('r', String(radius));

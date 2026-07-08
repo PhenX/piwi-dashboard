@@ -288,7 +288,7 @@ function copyFailure() {
       <UDashboardNavbar>
         <template #leading>
           <UDashboardSidebarCollapse />
-          <UBreadcrumb
+          <BreadcrumbNav
             :items="[
               { label: 'Home', icon: 'i-lucide-house', to: '/' },
               { label: 'Projects', to: '/projects' },
@@ -321,9 +321,9 @@ function copyFailure() {
             title="View test case evolution and history"
           >
             <UIcon name="i-lucide-trending-up" class="size-3.5" />
-            Evolution
+            <span class="hidden sm:inline">Evolution</span>
           </NuxtLink>
-          <UButton icon="i-lucide-refresh-cw" size="md" label="Refresh" @click="() => refresh()" />
+          <NavbarActions :actions="[{ label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() }]" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -403,11 +403,12 @@ function copyFailure() {
 
         <template #tab-steps>
           <div v-if="steps.length > 0">
+            <TableScroller min-width="34rem" :bleed="false">
             <UTable
               :data="steps"
               :columns="stepColumns"
               :ui="{
-                base: 'table-fixed border-separate border-spacing-0',
+                base: 'table-fixed border-separate border-spacing-0 min-w-[34rem]',
                 thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
                 tbody: '[&>tr]:last:[&>td]:border-b-0',
                 th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
@@ -441,6 +442,7 @@ function copyFailure() {
                 </span>
               </template>
             </UTable>
+            </TableScroller>
           </div>
         </template>
 
@@ -494,99 +496,80 @@ function copyFailure() {
             help="case.web-vitals"
           >
             <div class="space-y-4">
-              <div v-if="webVitals.navigation" class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <p class="text-xs text-gray-500 uppercase tracking-wide">TTFB</p>
-                  <p
-                    class="text-xl font-semibold"
-                    :class="
-                      webVitals.navigation.ttfb > 600
-                        ? 'text-red-600'
-                        : webVitals.navigation.ttfb > 200
-                          ? 'text-orange-500'
-                          : 'text-green-600'
-                    "
-                  >
-                    {{ formatDuration(webVitals.navigation.ttfb) }}
-                  </p>
-                  <p class="text-xs text-gray-400 mt-1">Time to first byte</p>
-                </div>
-                <div>
-                  <p class="text-xs text-gray-500 uppercase tracking-wide">DOM Interactive</p>
-                  <p
-                    class="text-xl font-semibold"
-                    :class="
-                      webVitals.navigation.domInteractive > 3000
-                        ? 'text-red-600'
-                        : webVitals.navigation.domInteractive > 1500
-                          ? 'text-orange-500'
-                          : 'text-green-600'
-                    "
-                  >
-                    {{ formatDuration(webVitals.navigation.domInteractive) }}
-                  </p>
-                  <p class="text-xs text-gray-400 mt-1">DOM interactive</p>
-                </div>
-                <div>
-                  <p class="text-xs text-gray-500 uppercase tracking-wide">DOMContentLoaded</p>
-                  <p
-                    class="text-xl font-semibold"
-                    :class="
-                      webVitals.navigation.domContentLoaded > 3000
-                        ? 'text-red-600'
-                        : webVitals.navigation.domContentLoaded > 1500
-                          ? 'text-orange-500'
-                          : 'text-green-600'
-                    "
-                  >
-                    {{ formatDuration(webVitals.navigation.domContentLoaded) }}
-                  </p>
-                  <p class="text-xs text-gray-400 mt-1">DOMContentLoaded</p>
-                </div>
-                <div>
-                  <p class="text-xs text-gray-500 uppercase tracking-wide">Load Complete</p>
-                  <p
-                    class="text-xl font-semibold"
-                    :class="
-                      webVitals.navigation.loadComplete > 5000
-                        ? 'text-red-600'
-                        : webVitals.navigation.loadComplete > 3000
-                          ? 'text-orange-500'
-                          : 'text-green-600'
-                    "
-                  >
-                    {{ formatDuration(webVitals.navigation.loadComplete) }}
-                  </p>
-                  <p class="text-xs text-gray-400 mt-1">Page fully loaded</p>
-                </div>
-              </div>
+              <StatTileGrid v-if="webVitals.navigation" min-tile-width="10rem">
+                <StatTile
+                  label="TTFB"
+                  :value="formatDuration(webVitals.navigation.ttfb)"
+                  hint="Time to first byte"
+                  :value-class="
+                    webVitals.navigation.ttfb > 600
+                      ? 'text-red-600'
+                      : webVitals.navigation.ttfb > 200
+                        ? 'text-orange-500'
+                        : 'text-green-600'
+                  "
+                />
+                <StatTile
+                  label="DOM Interactive"
+                  :value="formatDuration(webVitals.navigation.domInteractive)"
+                  hint="DOM interactive"
+                  :value-class="
+                    webVitals.navigation.domInteractive > 3000
+                      ? 'text-red-600'
+                      : webVitals.navigation.domInteractive > 1500
+                        ? 'text-orange-500'
+                        : 'text-green-600'
+                  "
+                />
+                <StatTile
+                  label="DOMContentLoaded"
+                  :value="formatDuration(webVitals.navigation.domContentLoaded)"
+                  hint="DOMContentLoaded"
+                  :value-class="
+                    webVitals.navigation.domContentLoaded > 3000
+                      ? 'text-red-600'
+                      : webVitals.navigation.domContentLoaded > 1500
+                        ? 'text-orange-500'
+                        : 'text-green-600'
+                  "
+                />
+                <StatTile
+                  label="Load Complete"
+                  :value="formatDuration(webVitals.navigation.loadComplete)"
+                  hint="Page fully loaded"
+                  :value-class="
+                    webVitals.navigation.loadComplete > 5000
+                      ? 'text-red-600'
+                      : webVitals.navigation.loadComplete > 3000
+                        ? 'text-orange-500'
+                        : 'text-green-600'
+                  "
+                />
+              </StatTileGrid>
 
-              <div
+              <StatTileGrid
                 v-if="webVitals.paint && (webVitals.paint.firstPaint || webVitals.paint.firstContentfulPaint)"
-                class="grid grid-cols-2 gap-4 pt-2 border-t"
+                min-tile-width="10rem"
+                class="pt-2 border-t"
               >
-                <div v-if="webVitals.paint.firstPaint !== undefined">
-                  <p class="text-xs text-gray-500 uppercase tracking-wide">First Paint (FP)</p>
-                  <p class="text-xl font-semibold">
-                    {{ formatDuration(webVitals.paint.firstPaint) }}
-                  </p>
-                </div>
-                <div v-if="webVitals.paint.firstContentfulPaint !== undefined">
-                  <p class="text-xs text-gray-500 uppercase tracking-wide">First Contentful Paint (FCP)</p>
-                  <p
-                    class="text-xl font-semibold"
-                    :class="
-                      webVitals.paint.firstContentfulPaint > 3000
-                        ? 'text-red-600'
-                        : webVitals.paint.firstContentfulPaint > 1800
-                          ? 'text-orange-500'
-                          : 'text-green-600'
-                    "
-                  >
-                    {{ formatDuration(webVitals.paint.firstContentfulPaint) }}
-                  </p>
-                </div>
-              </div>
+                <StatTile
+                  v-if="webVitals.paint.firstPaint !== undefined"
+                  label="First Paint (FP)"
+                  :value="formatDuration(webVitals.paint.firstPaint)"
+                />
+                <StatTile
+                  v-if="webVitals.paint.firstContentfulPaint !== undefined"
+                  label="First Contentful Paint (FCP)"
+                  :value="formatDuration(webVitals.paint.firstContentfulPaint)"
+                  :value-class="
+                    webVitals.paint.firstContentfulPaint > 3000
+                      ? 'text-red-600'
+                      : webVitals.paint.firstContentfulPaint > 1800
+                        ? 'text-orange-500'
+                        : 'text-green-600'
+                  "
+                />
+              </StatTileGrid>
 
               <div v-if="webVitals.navigation?.url" class="text-xs text-gray-400 pt-1">
                 Page: <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">{{ webVitals.navigation.url }}</code>
@@ -633,11 +616,12 @@ function copyFailure() {
             <div v-if="historyData && historyData.length > 0">
               <div class="space-y-4">
                 <TestCaseHistoryChart :data="historyData" :height="200" />
+                <TableScroller min-width="44rem" :bleed="false">
                 <UTable
                   :data="historyData"
                   :columns="historyColumns"
                   :ui="{
-                    base: 'table-fixed border-separate border-spacing-0',
+                    base: 'table-fixed border-separate border-spacing-0 min-w-[44rem]',
                     thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
                     tbody: '[&>tr]:last:[&>td]:border-b-0',
                     th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
@@ -683,6 +667,7 @@ function copyFailure() {
                     </span>
                   </template>
                 </UTable>
+                </TableScroller>
               </div>
             </div>
           </div>

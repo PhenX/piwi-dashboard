@@ -95,6 +95,7 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
       </div>
 
       <UCard :ui="{ body: 'p-0 sm:p-0' }">
+        <TableScroller min-width="46rem" :bleed="false">
         <UTable :data="groups" :columns="columns">
           <template #actions-header>
             <div class="text-right">Actions</div>
@@ -220,6 +221,7 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
             </div>
           </template>
         </UTable>
+        </TableScroller>
       </UCard>
     </template>
 
