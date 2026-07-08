@@ -733,6 +733,19 @@ test.describe.serial('Reporter with authentication enabled', () => {
     });
     expect(loginRes.ok()).toBeTruthy();
 
+    // ci-reporter already has global access at this point (proven by the
+    // "GET rejected for non-admin roles" test above, and required for its
+    // earlier submit-as-reporter tests to have worked) — this file's own
+    // project-assignments backfill grants any unassigned REPORTER/USER a
+    // global row whenever the server (re)initializes, and that can happen
+    // more than once across this file's ~450 tests. Reset it to a known,
+    // explicit "no access" state so the "before" assertion below is
+    // deterministic regardless of that timing.
+    const resetReporter = await request.put(`${AUTH_SERVER_URL}/api/users/${ciReporterId}/projects`, {
+      data: { global: false, projectIds: [] },
+    });
+    expect(resetReporter.ok()).toBeTruthy();
+
     const before = await request.get(`${AUTH_SERVER_URL}/api/projects/${membersProjectId}/members`);
     expect(before.ok()).toBeTruthy();
     const beforeBody = (await before.json()) as { users: Array<{ username: string }> };
