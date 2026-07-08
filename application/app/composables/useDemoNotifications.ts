@@ -76,6 +76,15 @@ function buildScenarios(projectLabel: string, events: string[]): Scenario[] {
         color: 'success',
       },
     },
+    {
+      event: 'diagnosis.completed',
+      scenario: {
+        title: `Diagnosis complete — ${projectLabel}`,
+        description: 'Root cause: test bug — confidence: high',
+        icon: 'i-lucide-sparkles',
+        color: 'info',
+      },
+    },
   ];
 
   const matched = all.filter((s) => events.length === 0 || events.includes(s.event)).map((s) => s.scenario);

@@ -5,17 +5,15 @@ lang: en-US
 
 # Notifications & alerts
 
-Piwi can push run events to **email**, **Slack**, or **HTTP webhooks** so your team hears about failures, new failure clusters, flakiness spikes, and performance regressions without watching the dashboard.
+Piwi can push run events to **browser**, **email**, **Slack**, or **HTTP webhooks** so your team hears about failures, new failure clusters, flakiness spikes, and performance regressions without watching the dashboard. AI diagnosis completions can also notify you when they finish.
 
-::: tip
-Notifications are gated on authentication — they activate only when [`PIWI_AUTH_ENABLED=true`](./authentication). Each subscription belongs to a user.
-:::
+Browser notifications work even with auth disabled — the other channel types require `PIWI_AUTH_ENABLED=true` ([see authentication](./authentication)).
 
 ## How it works
 
-1. You create a **channel** (a destination: email address, Slack webhook, or HTTP webhook).
+1. You create a **channel** (a destination: browser tab, email address, Slack webhook, or HTTP webhook).
 2. You create a **subscription** linking a channel to the events you care about, optionally scoped to a single project, with filters and a delivery mode.
-3. When an event fires, Piwi matches active subscriptions, writes a delivery to an outbox table, and a scheduled task dispatches it with automatic retry/backoff.
+3. When an event fires, Piwi matches active subscriptions, writes a delivery to an outbox table, and a scheduled task dispatches it with automatic retry/backoff. Browser channels are delivered immediately via SSE to any open dashboard tab.
 
 Manage both from **Settings → Notifications**, and subscribe to a single project with the **bell** on the project page.
 
@@ -29,8 +27,19 @@ Manage both from **Settings → Notifications**, and subscribe to a single proje
 | `cluster.new` | A new failure cluster appears |
 | `flakiness.spike` | Flakiness rises above the configured threshold |
 | `perf.regression` | A performance regression is detected |
+| `diagnosis.completed` | An AI diagnosis finishes (requires an AI provider) |
 
 ## Channels
+
+### Browser
+
+Sends native OS notifications to any open Piwi tab, even when the tab is in the background. No configuration needed — create a channel of type `browser` and subscribe to events. Notifications fire via the [Notifications API](https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API); grant permission when prompted.
+
+Diagnosis completion notifications can be toggled on/off from the diagnosis panel without deleting the subscription.
+
+::: tip
+Browser notifications work without authentication. For email/Slack/webhook channels, [authentication must be enabled](./authentication).
+:::
 
 ### Email
 
@@ -53,7 +62,7 @@ A subscription controls *what* is delivered and *how*:
 - **Events** — one or more of the events above.
 - **Scope** — all projects, or a single project.
 - **Filters** — by branch, status, or a numeric threshold (e.g. only notify on flakiness above N%).
-- **Mode** — `realtime` (dispatched as events happen) or `digest` (batched, sent at a configured time).
+- **Mode** — `realtime` (dispatched as events happen) or `digest` (batched, sent at a configured time). Browser channels only support `realtime`.
 - **Mute** — silence a subscription until a chosen time without deleting it.
 
 ## SMTP configuration
@@ -75,6 +84,6 @@ Send a test email from **Settings → Notifications** to confirm delivery.
 
 ## See also
 
-- [Authentication](./authentication) — required for notifications
+- [Authentication](./authentication) — required for non-browser notifications
 - [Configuration reference](./configuration) — all environment variables
-- [AI diagnosis & failure clustering](./ai-diagnosis) — what triggers `cluster.new`
+- [AI diagnosis & failure clustering](./ai-diagnosis) — what triggers `cluster.new` and `diagnosis.completed`
