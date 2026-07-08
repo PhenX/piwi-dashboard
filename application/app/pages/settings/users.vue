@@ -392,7 +392,7 @@ async function handleInviteUser(user: UserDetails) {
       </template>
 
       <TableScroller min-width="44rem" :bleed="false">
-      <UTable :data="users" :columns="columns">
+      <UTable :data="users" :columns="columns" sticky class="max-h-[32rem]">
         <template #username-cell="{ row }">
           {{ row.original.username }}
         </template>

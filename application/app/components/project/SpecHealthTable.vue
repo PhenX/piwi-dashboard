@@ -82,7 +82,7 @@ const columns: TableColumn<SpecHealth>[] = [
     />
 
     <TableScroller v-else min-width="46rem" :bleed="false">
-    <UTable :data="specs" :columns="columns">
+    <UTable :data="specs" :columns="columns" sticky class="max-h-[32rem]">
       <template #prefix-cell="{ row }">
         <NuxtLink
           :to="`/projects/${projectId}/test-cases?file=${encodeURIComponent(row.original.prefix)}`"

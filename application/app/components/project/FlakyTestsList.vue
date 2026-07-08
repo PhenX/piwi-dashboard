@@ -106,7 +106,7 @@ const columns: TableColumn<FlakyTest>[] = [
     </template>
 
     <TableScroller min-width="52rem" :bleed="false">
-    <UTable :data="filteredTests" :columns="columns" :loading="loading">
+    <UTable :data="filteredTests" :columns="columns" :loading="loading" sticky class="max-h-[32rem]">
       <template #actions-header>
         <div class="text-right">Actions</div>
       </template>
