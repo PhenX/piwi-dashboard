@@ -20,6 +20,7 @@
     "test": "vitest run && playwright test",
     "app:test": "playwright test",
     "app:test:unit": "vitest run",
+    "app:test:unit:coverage": "vitest run --coverage",
     "app:test:ui": "playwright test --ui",
     "app:test:report": "playwright show-report",
     "db:generate": "drizzle-kit generate",

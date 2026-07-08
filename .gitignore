@@ -32,6 +32,7 @@ test-results/
 playwright-report/
 monocart-report/
 blob-report/
+coverage/
 
 .test-temp/
 .test-temp-zstd/

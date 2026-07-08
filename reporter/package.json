@@ -41,6 +41,7 @@
     "reporter:lint": "oxlint --config oxlint.config.mts .",
     "reporter:lint:fix": "oxlint --config oxlint.config.mts . --fix",
     "reporter:test": "vitest run",
+    "reporter:test:coverage": "vitest run --coverage",
     "reporter:test:watch": "vitest",
     "test": "npm run reporter:test",
     "prepublishOnly": "npm run reporter:build"
