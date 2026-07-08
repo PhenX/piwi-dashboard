@@ -186,16 +186,9 @@ const columns: TableColumn<Row>[] = [
 
     <!-- Below md : one card per project (no horizontal scroll) -->
     <div class="space-y-2 md:hidden">
-      <div
-        v-for="row in sortedProjects"
-        :key="row.id"
-        class="rounded-lg border border-default p-3 space-y-2"
-      >
+      <div v-for="row in sortedProjects" :key="row.id" class="rounded-lg border border-default p-3 space-y-2">
         <div class="flex items-start justify-between gap-2">
-          <NuxtLink
-            :to="`/projects/${row.id}`"
-            class="font-medium text-primary hover:underline truncate"
-          >
+          <NuxtLink :to="`/projects/${row.id}`" class="font-medium text-primary hover:underline truncate">
             {{ row.label || row.name }}
           </NuxtLink>
           <span

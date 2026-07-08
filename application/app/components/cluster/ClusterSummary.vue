@@ -159,7 +159,6 @@ const triageStatusOptions = [
           </div>
         </div>
       </SectionCard>
-
     </div>
   </FoldableSummary>
 </template>

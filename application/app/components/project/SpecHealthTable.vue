@@ -82,42 +82,42 @@ const columns: TableColumn<SpecHealth>[] = [
     />
 
     <TableScroller v-else min-width="46rem" :bleed="false">
-    <UTable :data="specs" :columns="columns" sticky class="max-h-[32rem]">
-      <template #prefix-cell="{ row }">
-        <NuxtLink
-          :to="`/projects/${projectId}/test-cases?file=${encodeURIComponent(row.original.prefix)}`"
-          class="flex items-center gap-2 min-w-0 text-primary hover:underline"
-          :title="row.original.prefix"
-        >
-          <span class="inline-block size-3 rounded shrink-0" :class="passRateColor(row.original.passRate)" />
-          <span class="truncate font-mono text-xs">{{ row.original.prefix }}</span>
-        </NuxtLink>
-      </template>
+      <UTable :data="specs" :columns="columns" sticky class="max-h-[32rem]">
+        <template #prefix-cell="{ row }">
+          <NuxtLink
+            :to="`/projects/${projectId}/test-cases?file=${encodeURIComponent(row.original.prefix)}`"
+            class="flex items-center gap-2 min-w-0 text-primary hover:underline"
+            :title="row.original.prefix"
+          >
+            <span class="inline-block size-3 rounded shrink-0" :class="passRateColor(row.original.passRate)" />
+            <span class="truncate font-mono text-xs">{{ row.original.prefix }}</span>
+          </NuxtLink>
+        </template>
 
-      <template #passRate-cell="{ row }">
-        <span class="font-medium tabular-nums" :class="passRateTextColor(row.original.passRate)">
-          {{ passRateLabel(row.original.passRate) }}
-        </span>
-      </template>
+        <template #passRate-cell="{ row }">
+          <span class="font-medium tabular-nums" :class="passRateTextColor(row.original.passRate)">
+            {{ passRateLabel(row.original.passRate) }}
+          </span>
+        </template>
 
-      <template #flakyRate-cell="{ row }">
-        <span class="tabular-nums">{{ Math.round(row.original.flakyRate * 100) }}%</span>
-      </template>
+        <template #flakyRate-cell="{ row }">
+          <span class="tabular-nums">{{ Math.round(row.original.flakyRate * 100) }}%</span>
+        </template>
 
-      <template #failureCount-cell="{ row }">
-        <span class="tabular-nums" :class="row.original.failureCount > 0 ? 'text-red-600 dark:text-red-400' : ''">
-          {{ row.original.failureCount }}
-        </span>
-      </template>
+        <template #failureCount-cell="{ row }">
+          <span class="tabular-nums" :class="row.original.failureCount > 0 ? 'text-red-600 dark:text-red-400' : ''">
+            {{ row.original.failureCount }}
+          </span>
+        </template>
 
-      <template #testCount-cell="{ row }">
-        <span class="tabular-nums text-gray-500">{{ row.original.testCount }}</span>
-      </template>
+        <template #testCount-cell="{ row }">
+          <span class="tabular-nums text-gray-500">{{ row.original.testCount }}</span>
+        </template>
 
-      <template #avgDuration-cell="{ row }">
-        <span class="tabular-nums text-gray-500">{{ formatMs(row.original.avgDuration) }}</span>
-      </template>
-    </UTable>
+        <template #avgDuration-cell="{ row }">
+          <span class="tabular-nums text-gray-500">{{ formatMs(row.original.avgDuration) }}</span>
+        </template>
+      </UTable>
     </TableScroller>
   </UCard>
 </template>

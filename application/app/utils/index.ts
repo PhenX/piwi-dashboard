@@ -244,8 +244,8 @@ export function getFileApiPath(filePath: string): string {
   return filePath.replace(storagePath, '');
 }
 
-export function getTraceViewerUrl(filePath: string, origin: string): string {
-  return `/trace-viewer/?trace=${encodeURIComponent(`${origin}/api/files/${getFileApiPath(filePath)}`)}`;
+export function getTraceViewerUrl(filePath: string): string {
+  return `/trace-viewer/?trace=${encodeURIComponent(`${location.origin}/api/files/${getFileApiPath(filePath)}`)}`;
 }
 
 /**

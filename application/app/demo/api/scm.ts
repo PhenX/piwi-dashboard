@@ -13,12 +13,7 @@
 import { eq } from 'drizzle-orm';
 import { failureClusters } from '../../../server/database/schema';
 import type { DrizzleDB } from '#shared/handlers/db';
-import {
-  getDemoScmProject,
-  listDemoCommits,
-  getDemoCommitDiff,
-  getDemoAggregate,
-} from '../demo-scm';
+import { getDemoScmProject, listDemoCommits, getDemoCommitDiff, getDemoAggregate } from '../demo-scm';
 
 async function clusterProjectId(db: DrizzleDB, clusterId: number): Promise<number | null> {
   const [cluster] = await db
