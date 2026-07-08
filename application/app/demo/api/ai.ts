@@ -13,7 +13,12 @@
  */
 
 import { eq } from 'drizzle-orm';
-import { failureDiagnoses, failureDiagnosisVersions, testRunsCases } from '../../../server/database/schema';
+import {
+  failureDiagnoses,
+  failureDiagnosisVersions,
+  testRunsCases,
+  failureClusters,
+} from '../../../server/database/schema';
 import type { FailureDiagnosis } from '../../../server/database/schema';
 import { getDemoDb } from '../db.client';
 import { CONTEXT_LIMIT_FIELDS, DEFAULT_CONTEXT_LIMITS } from '#shared/ai-context-limits';
@@ -22,6 +27,7 @@ import { buildDiagnosisVersionValues } from '#shared/handlers/diagnosis-versions
 import { collectClusterEvidence } from './diagnosis-context';
 import type { ClusterEvidence } from './diagnosis-context';
 import { getDemoScmProject, DEMO_FIX_PATCHES } from '../demo-scm';
+import { publishDemoNotificationEvent } from '../run-events';
 
 const DEMO_MODEL = 'demo-simulated';
 
@@ -543,6 +549,24 @@ async function persistDiagnosis(
       updatedAt: now,
     })
     .returning();
+
+  // Look up project for the notification event
+  const [cluster] = await db
+    .select({ projectId: failureClusters.projectId })
+    .from(failureClusters)
+    .where(eq(failureClusters.id, clusterId))
+    .limit(1);
+
+  publishDemoNotificationEvent({
+    type: 'diagnosis-completed',
+    clusterId,
+    projectId: cluster?.projectId ?? 0,
+    summary: gen.row.summary,
+    rootCause: gen.row.rootCause,
+    category: gen.row.category,
+    confidence: gen.row.confidence,
+  });
+
   return saved!;
 }
 

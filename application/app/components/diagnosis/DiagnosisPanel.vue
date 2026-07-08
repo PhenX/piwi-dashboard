@@ -34,6 +34,13 @@ const { aiStatus } = useAiStatus();
 const toast = useToast();
 
 const {
+  permission: notifPermission,
+  active: notifActive,
+  requestPermission,
+  toggleEnabled,
+} = useDiagnosisNotification();
+
+const {
   thinkingText: streamThinkingText,
   stage: streamStage,
   status: streamStatus,
@@ -215,6 +222,28 @@ function showResult() {
           </UButton>
         </div>
       </div>
+    </div>
+
+    <!-- Browser notification permission prompt -->
+    <div
+      v-if="notifPermission === 'granted' && aiStatus?.configured"
+      class="flex items-center gap-2 px-3 py-2 rounded-lg bg-elevated/50 border border-default text-xs"
+    >
+      <UIcon name="i-lucide-bell" class="size-3.5 shrink-0" :class="notifActive ? 'text-primary' : 'text-gray-400'" />
+      <span class="text-gray-500">{{
+        notifActive ? 'Diagnosis notifications on' : 'Diagnosis notifications off'
+      }}</span>
+      <UButton size="xs" :color="notifActive ? 'neutral' : 'primary'" variant="outline" @click="toggleEnabled">
+        {{ notifActive ? 'Disable' : 'Enable' }}
+      </UButton>
+    </div>
+    <div
+      v-else-if="notifPermission === 'default' && aiStatus?.configured"
+      class="flex items-center gap-2 px-3 py-2 rounded-lg bg-elevated/50 border border-default text-xs"
+    >
+      <UIcon name="i-lucide-bell" class="size-3.5 text-gray-400 shrink-0" />
+      <span class="text-gray-500">Notify when diagnosis completes?</span>
+      <UButton size="xs" color="neutral" variant="outline" @click="requestPermission">Enable</UButton>
     </div>
 
     <!-- Context coverage preview: what evidence will be sent, without opening the modal -->

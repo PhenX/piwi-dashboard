@@ -29,7 +29,8 @@ export interface DemoGlobalEvent {
 
 export type DemoEventMessage =
   | { scope: 'run'; runId: number; event: DemoRunEvent }
-  | { scope: 'global'; event: DemoGlobalEvent };
+  | { scope: 'global'; event: DemoGlobalEvent }
+  | { scope: 'notification'; event: Record<string, unknown> };
 
 // ── Publishing (service worker side) ───────────────────────────────────────
 
@@ -48,6 +49,10 @@ export function publishDemoRunEvent(runId: number, event: DemoRunEvent): void {
 
 export function publishDemoGlobalEvent(event: DemoGlobalEvent): void {
   getPublishChannel().postMessage({ scope: 'global', event } satisfies DemoEventMessage);
+}
+
+export function publishDemoNotificationEvent(event: Record<string, unknown>): void {
+  getPublishChannel().postMessage({ scope: 'notification', event } satisfies DemoEventMessage);
 }
 
 // ── Subscribing (window side) ──────────────────────────────────────────────
