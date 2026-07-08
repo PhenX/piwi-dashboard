@@ -85,7 +85,7 @@ test.describe.serial('Projects Overview API Tests', () => {
     // A "flaky-looking" project: oldest run failed, most recent run passed.
     const failedRun = await request.post('/api/test-runs/submit', {
       data: {
-        projectName: PROJECT.PROJECTS_OVERVIEW,
+        projectName: PROJECT.DASHBOARD_OVERVIEW,
         status: 'failed',
         startTime: new Date(Date.now() - 60_000).toISOString(),
         duration: 1000,
@@ -102,7 +102,7 @@ test.describe.serial('Projects Overview API Tests', () => {
 
     const passedRun = await request.post('/api/test-runs/submit', {
       data: {
-        projectName: PROJECT.PROJECTS_OVERVIEW,
+        projectName: PROJECT.DASHBOARD_OVERVIEW,
         status: 'passed',
         startTime: new Date().toISOString(),
         duration: 1200,
@@ -132,7 +132,7 @@ test.describe.serial('Projects Overview API Tests', () => {
 
     const project = projects.find((p) => p.id === projectId);
     expect(project).toBeDefined();
-    expect(project!.name).toBe(PROJECT.PROJECTS_OVERVIEW);
+    expect(project!.name).toBe(PROJECT.DASHBOARD_OVERVIEW);
     expect(project!.label).toBeNull();
     expect(project!.tags).toEqual([]);
     expect(project!.totalFullRuns).toBe(2);

@@ -24,6 +24,12 @@ export const PROJECT = {
   CLUSTER_NAMING: 'cluster-naming-test',
   CLUSTER_PAGE_LAYOUT: 'cluster-page-layout-test',
   CLUSTER_SUGGEST: 'cluster-suggest-test',
+  // Deliberately does not contain "projects" (case-insensitive substring) — the
+  // sidebar's static "Projects" nav link is matched with getByRole('link', {
+  // name: 'Projects' }) (no exact:true) elsewhere in the suite, which matches
+  // accessible names by substring and would pick up a project literally named
+  // "...projects...", causing a strict-mode violation in unrelated tests.
+  DASHBOARD_OVERVIEW: 'dashboard-overview-test',
   DASHBOARD_PERF: 'dashboard-perf-tracking',
   DEFAULT_PROJECT: 'default-project',
   DELETE_TEST: 'delete-test-project',
@@ -74,7 +80,6 @@ export const PROJECT = {
   PG_CONCURRENT: 'pg-concurrent-project',
   PG_TEST: 'pg-test-project',
   PROJECT_MEMBERS: 'project-members-test',
-  PROJECTS_OVERVIEW: 'projects-overview-test',
   REGRESSION_CONTEXT: 'regression-context-test',
   REPORTER_API_KEY_E2E: 'reporter-api-key-e2e-test',
   REPORTER_API_KEY_LIB: 'reporter-api-key-lib-test',
