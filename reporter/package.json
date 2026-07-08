@@ -43,6 +43,7 @@
     "reporter:test": "vitest run",
     "reporter:test:coverage": "vitest run --coverage",
     "reporter:test:watch": "vitest",
+    "reporter:test:integration": "npm run reporter:build && playwright test --config=tests/integration/playwright.config.ts",
     "test": "npm run reporter:test",
     "prepublishOnly": "npm run reporter:build"
   },
