@@ -23,6 +23,11 @@ async function buildArchive(files: Array<{ path: string; content: Buffer }>): Pr
 }
 
 test.describe('Gzip Compression Tests', () => {
+  // fullyParallel can schedule these tests across multiple workers; beforeAll
+  // is scoped per-worker, so without serial mode multiple workers could race
+  // to write the same fixture files under tempDir.
+  test.describe.configure({ mode: 'serial' });
+
   const tempDir = join(process.cwd(), '.test-temp-gzip');
 
   test.beforeAll(async () => {

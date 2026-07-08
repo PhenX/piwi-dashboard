@@ -120,6 +120,10 @@ async function expectNoHorizontalOverflow(page: Page, label: string) {
 }
 
 test.describe('Mobile responsiveness', () => {
+  // fullyParallel can schedule these tests across multiple workers; beforeAll
+  // is scoped per-worker, so without serial mode two workers could each submit
+  // the seed run, doubling the shared data these tests assert against.
+  test.describe.configure({ mode: 'serial' });
   test.setTimeout(120000);
 
   test.beforeAll(async ({ request }) => {

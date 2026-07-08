@@ -62,6 +62,10 @@ async function seedCluster(request: APIRequestContext) {
 }
 
 test.describe('Failure cluster page layout', () => {
+  // fullyParallel can schedule these tests across multiple workers; beforeAll
+  // is scoped per-worker, so without serial mode two workers could each seed
+  // their own cluster, doubling the shared data these tests assert against.
+  test.describe.configure({ mode: 'serial' });
   test.setTimeout(90000);
 
   test.beforeAll(async ({ request }) => {
