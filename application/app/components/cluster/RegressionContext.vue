@@ -144,34 +144,34 @@ function copyCommand() {
             What changed between runs
           </div>
           <div class="overflow-x-auto">
-          <table class="w-full min-w-[36rem] text-sm">
-            <thead>
-              <tr class="text-xs text-gray-500 uppercase tracking-wider border-b border-default">
-                <th class="text-left px-4 py-2 font-medium w-32">Field</th>
-                <th class="text-left px-4 py-2 font-medium">Last passing</th>
-                <th class="text-left px-4 py-2 font-medium">This run</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="entry in context.metadataDiff"
-                :key="entry.key"
-                class="border-b last:border-b-0 border-default"
-              >
-                <td class="px-4 py-2 text-gray-500">
-                  {{ entry.label }}
-                </td>
-                <td class="px-4 py-2 font-mono text-xs">
-                  <span v-if="entry.before" class="text-green-700 dark:text-green-400">{{ entry.before }}</span>
-                  <span v-else class="text-gray-400">—</span>
-                </td>
-                <td class="px-4 py-2 font-mono text-xs">
-                  <span v-if="entry.after" class="text-red-700 dark:text-red-400">{{ entry.after }}</span>
-                  <span v-else class="text-gray-400">—</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+            <table class="w-full min-w-[36rem] text-sm">
+              <thead>
+                <tr class="text-xs text-gray-500 uppercase tracking-wider border-b border-default">
+                  <th class="text-left px-4 py-2 font-medium w-32">Field</th>
+                  <th class="text-left px-4 py-2 font-medium">Last passing</th>
+                  <th class="text-left px-4 py-2 font-medium">This run</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="entry in context.metadataDiff"
+                  :key="entry.key"
+                  class="border-b last:border-b-0 border-default"
+                >
+                  <td class="px-4 py-2 text-gray-500">
+                    {{ entry.label }}
+                  </td>
+                  <td class="px-4 py-2 font-mono text-xs">
+                    <span v-if="entry.before" class="text-green-700 dark:text-green-400">{{ entry.before }}</span>
+                    <span v-else class="text-gray-400">—</span>
+                  </td>
+                  <td class="px-4 py-2 font-mono text-xs">
+                    <span v-if="entry.after" class="text-red-700 dark:text-red-400">{{ entry.after }}</span>
+                    <span v-else class="text-gray-400">—</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </UCard>
       </div>

@@ -100,7 +100,8 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence): DiagnosisScript 
           {
             category: 'infrastructure',
             likelihood: 82,
-            rootCause: 'Slow CI runner renders the form too late; the click exceeds the timeout before the element is interactive.',
+            rootCause:
+              'Slow CI runner renders the form too late; the click exceeds the timeout before the element is interactive.',
             evidence: [
               `Failure rate correlates with CI load — ${runs} [recurrenceFlakiness]`,
               'Element present in the DOM but not interactive at click time [steps]',
@@ -127,7 +128,8 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence): DiagnosisScript 
           'Add a CI-aware timeout multiplier for critical interactions',
         ],
         suggestedFix: {
-          description: 'Wait for the network to settle before clicking, so the click no longer races the third-party form render.',
+          description:
+            'Wait for the network to settle before clicking, so the click no longer races the third-party form render.',
           file: DEMO_FIX_PATCHES.checkoutWait.file,
           code: null,
           patch: DEMO_FIX_PATCHES.checkoutWait.patch,
@@ -207,7 +209,8 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence): DiagnosisScript 
           {
             category: 'app-bug',
             likelihood: 90,
-            rootCause: 'The login handler dereferences a null user after the auth refactor, throwing and returning 500.',
+            rootCause:
+              'The login handler dereferences a null user after the auth refactor, throwing and returning 500.',
             evidence: [
               'Expected vs Received shows a 500 where 200 was expected [executionError]',
               'Backend logs show an unhandled exception on the request [serverLogs]',
@@ -229,7 +232,8 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence): DiagnosisScript 
           'Add error monitoring on 5xx responses for the auth route',
         ],
         suggestedFix: {
-          description: 'Restore the missing-user guard the refactor dropped, so the handler returns 401 instead of dereferencing null.',
+          description:
+            'Restore the missing-user guard the refactor dropped, so the handler returns 401 instead of dereferencing null.',
           file: DEMO_FIX_PATCHES.authGuard.file,
           code: null,
           patch: DEMO_FIX_PATCHES.authGuard.patch,
@@ -255,7 +259,8 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence): DiagnosisScript 
           {
             category: 'test-bug',
             likelihood: 66,
-            rootCause: "getByRole('button') matches multiple button variants; the locator must be scoped by name or container.",
+            rootCause:
+              "getByRole('button') matches multiple button variants; the locator must be scoped by name or container.",
             evidence: [
               'Strict-mode violation resolving to multiple elements [executionError]',
               'The ARIA snapshot shows several button nodes on the page [ariaSnapshot]',
@@ -304,7 +309,10 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence): DiagnosisScript 
             category: 'app-bug',
             likelihood: 64,
             rootCause: 'The cart state is not updated before the assertion reads it — a state/data bug.',
-            evidence: [`Received 0 where a positive value was expected [executionError]`, `Recurs in ${runs} [recurrenceFlakiness]`],
+            evidence: [
+              `Received 0 where a positive value was expected [executionError]`,
+              `Recurs in ${runs} [recurrenceFlakiness]`,
+            ],
           },
           {
             category: 'test-bug',
@@ -323,9 +331,10 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence): DiagnosisScript 
         ],
         preventionTips: ['Await the state mutation (or poll) before asserting derived counts'],
         suggestedFix: {
-          description: 'Poll for the expected cart count before asserting, so an async update cannot race the assertion.',
+          description:
+            'Poll for the expected cart count before asserting, so an async update cannot race the assertion.',
           file: 'tests/checkout/cart.spec.ts',
-          code: "await expect.poll(() => cart.itemCount()).toBeGreaterThan(0);",
+          code: 'await expect.poll(() => cart.itemCount()).toBeGreaterThan(0);',
           patch: null,
         },
         thinkingChunks: [
@@ -358,11 +367,18 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence): DiagnosisScript 
             evidence: ['No wait for the field precedes the fill [steps]'],
           },
         ],
-        evidence: [`Element not found on fill across ${tests} test(s) [executionError]`, `Recurs in ${runs} [recurrenceFlakiness]`],
-        investigationSteps: ['Confirm the field still exists with the expected selector', 'Check whether the field mounts asynchronously'],
+        evidence: [
+          `Element not found on fill across ${tests} test(s) [executionError]`,
+          `Recurs in ${runs} [recurrenceFlakiness]`,
+        ],
+        investigationSteps: [
+          'Confirm the field still exists with the expected selector',
+          'Check whether the field mounts asynchronously',
+        ],
         preventionTips: ['Prefer role/label locators over brittle selectors', 'Await the field before filling'],
         suggestedFix: {
-          description: 'Wait for the field to be attached before filling, and verify its current locator via locator healing.',
+          description:
+            'Wait for the field to be attached before filling, and verify its current locator via locator healing.',
           file: 'tests/mobile/forms.spec.ts',
           code: "await page.getByLabel('Email').waitFor();\nawait page.getByLabel('Email').fill('user@example.com');",
           patch: null,
@@ -382,7 +398,8 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence): DiagnosisScript 
         severity: 'medium',
         affectedArea: ev.rep?.filePath ?? 'unknown',
         summary: `${firstTest(ev)} fails, but the available evidence is not conclusive about the root cause.`,
-        rootCause: 'The failure signature does not match a known pattern with high confidence. More evidence (trace, server logs, or a baseline diff) would narrow it down.',
+        rootCause:
+          'The failure signature does not match a known pattern with high confidence. More evidence (trace, server logs, or a baseline diff) would narrow it down.',
         hypotheses: [
           {
             category: 'unknown',
@@ -392,9 +409,17 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence): DiagnosisScript 
           },
         ],
         evidence: [`Failure recurs in ${runs} [recurrenceFlakiness]`, 'Error signature is unmatched [executionError]'],
-        investigationSteps: ['Enable trace recording to capture the failing action', 'Pin a baseline commit to fetch the SCM diff'],
+        investigationSteps: [
+          'Enable trace recording to capture the failing action',
+          'Pin a baseline commit to fetch the SCM diff',
+        ],
         preventionTips: ['Capture traces and server logs on failure for richer diagnosis'],
-        suggestedFix: { description: 'Gather a trace and re-run diagnosis with a pinned baseline.', file: null, code: null, patch: null },
+        suggestedFix: {
+          description: 'Gather a trace and re-run diagnosis with a pinned baseline.',
+          file: null,
+          code: null,
+          patch: null,
+        },
         thinkingChunks: [
           'The error signature does not match a known template cleanly.\n\n',
           `Recurrence is ${runs}. Without a trace or a baseline diff I cannot assign high confidence.\n\n`,
@@ -405,7 +430,10 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence): DiagnosisScript 
 }
 
 /** Build a full diagnosis details payload + top-level fields from a cluster's evidence. */
-async function generateDiagnosis(clusterId: number, opts: { additionalContext?: string | null; selectedCommitShas?: string[] | null }) {
+async function generateDiagnosis(
+  clusterId: number,
+  opts: { additionalContext?: string | null; selectedCommitShas?: string[] | null },
+) {
   const db = await getDemoDb();
   const ev = await collectClusterEvidence(db, clusterId);
   if (!ev) throw new Error(`Cluster ${clusterId} not found`);
@@ -532,7 +560,10 @@ export async function apiDiagnoseCluster(clusterId: number, body?: Record<string
 }
 
 /** POST /api/test-run-cases/:id/diagnose (execution scope) */
-export async function apiDiagnoseExecution(testRunsCaseId: number, body?: Record<string, unknown>): Promise<FailureDiagnosis> {
+export async function apiDiagnoseExecution(
+  testRunsCaseId: number,
+  body?: Record<string, unknown>,
+): Promise<FailureDiagnosis> {
   const db = await getDemoDb();
   const [trc] = await db
     .select({ clusterId: testRunsCases.failureClusterId })
@@ -588,7 +619,11 @@ export async function apiStreamDiagnoseCluster(
     await snapshotAndClear(db, clusterId);
   } else {
     // If a completed diagnosis already exists, replay it immediately.
-    const [existing] = await db.select().from(failureDiagnoses).where(eq(failureDiagnoses.clusterId, clusterId)).limit(1);
+    const [existing] = await db
+      .select()
+      .from(failureDiagnoses)
+      .where(eq(failureDiagnoses.clusterId, clusterId))
+      .limit(1);
     if (existing?.status === 'completed') {
       const data = JSON.stringify(existing);
       return sse(
@@ -658,7 +693,12 @@ export async function apiPutAiSettings(_body: unknown) {
 
 /** POST /api/settings/ai/test */
 export async function apiTestAiSettings() {
-  return { success: true as const, provider: 'demo', model: DEMO_MODEL, note: 'Demo provider — diagnoses are simulated from seeded evidence.' };
+  return {
+    success: true as const,
+    provider: 'demo',
+    model: DEMO_MODEL,
+    note: 'Demo provider — diagnoses are simulated from seeded evidence.',
+  };
 }
 
 /** GET /api/settings/ai/limits */
@@ -689,9 +729,7 @@ export async function apiGetAiUsage() {
     inputTokens += r.inputTokens ?? 0;
     outputTokens += r.outputTokens ?? 0;
   }
-  const byModel = rows.length
-    ? [{ model: DEMO_MODEL, diagnoses: rows.length, inputTokens, outputTokens }]
-    : [];
+  const byModel = rows.length ? [{ model: DEMO_MODEL, diagnoses: rows.length, inputTokens, outputTokens }] : [];
   return {
     days: 30,
     totals: { diagnoses: rows.length, inputTokens, outputTokens },

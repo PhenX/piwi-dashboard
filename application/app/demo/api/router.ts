@@ -410,8 +410,7 @@ const routes: RouteEntry[] = [
   {
     method: 'POST',
     pattern: /^\/api\/test-run-cases\/(\d+)\/diagnose$/,
-    handler: async (m, body) =>
-      apiDiagnoseExecution(+m[1]!, body as Record<string, unknown> | undefined),
+    handler: async (m, body) => apiDiagnoseExecution(+m[1]!, body as Record<string, unknown> | undefined),
   },
   {
     method: 'GET',

@@ -110,9 +110,11 @@ function copyCluster() {
 const errorPeek = computed(() => {
   const raw = cluster.value?.sampleError;
   if (!raw) return '';
-  return stripAnsi(raw)
-    .split('\n')
-    .find((l) => l.trim()) ?? '';
+  return (
+    stripAnsi(raw)
+      .split('\n')
+      .find((l) => l.trim()) ?? ''
+  );
 });
 
 const { scmStatus } = useScmStatusSummary(clusterDiagnosis.coverage);

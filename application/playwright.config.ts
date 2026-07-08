@@ -82,6 +82,10 @@ const baseConfig = defineConfig({
               PIWI_STORAGE_PATH: join(process.cwd(), '.test-temp', 'auth-test-storage'),
               NITRO_PORT: '3099',
               PIWI_BUILD_DIR: join(process.cwd(), '.test-temp', 'nuxt-build-auth'),
+              // Pin to isolated SQLite + local storage so the CI storage/db matrix
+              // (inherited via process.env) can't repoint this server's backend.
+              PIWI_DATABASE_URL: '',
+              PIWI_STORAGE_TYPE: 'local',
             },
             reuseExistingServer: false,
             timeout: 90 * 1000,
@@ -98,6 +102,10 @@ const baseConfig = defineConfig({
               PIWI_STORAGE_PATH: join(process.cwd(), '.test-temp', 'notif-test-storage'),
               NITRO_PORT: '3097',
               PIWI_BUILD_DIR: join(process.cwd(), '.test-temp', 'nuxt-build-notif'),
+              // Pin to isolated SQLite + local storage so the CI storage/db matrix
+              // (inherited via process.env) can't repoint this server's backend.
+              PIWI_DATABASE_URL: '',
+              PIWI_STORAGE_TYPE: 'local',
             },
             reuseExistingServer: false,
             timeout: 90 * 1000,
@@ -125,6 +133,10 @@ const baseConfig = defineConfig({
               PIWI_SMTP_PASS: 'test',
               PIWI_SMTP_FROM: 'noreply@piwi.test',
               PIWI_SMTP_FROM_NAME: 'Piwi Test',
+              // Pin to isolated SQLite + local storage so the CI storage/db matrix
+              // (inherited via process.env) can't repoint this server's backend.
+              PIWI_DATABASE_URL: '',
+              PIWI_STORAGE_TYPE: 'local',
             },
             reuseExistingServer: !process.env.CI,
             timeout: 90 * 1000,
@@ -142,6 +154,9 @@ const baseConfig = defineConfig({
               PIWI_DATABASE_URL: process.env.PIWI_POSTGRES_TEST_URL,
               PIWI_STORAGE_PATH: join(process.cwd(), '.test-temp', 'pg-test-storage'),
               NITRO_PORT: '3101',
+              // Keep this server on local storage regardless of the CI storage
+              // matrix; it exists to exercise the PostgreSQL backend in isolation.
+              PIWI_STORAGE_TYPE: 'local',
             },
             reuseExistingServer: false,
             timeout: 90 * 1000,

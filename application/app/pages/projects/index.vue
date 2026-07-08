@@ -298,7 +298,7 @@ const columns: TableColumn<ProjectWithStats>[] = [
             </div>
           </template>
         </UTable>
-        </TableScroller>
+      </TableScroller>
 
       <div v-else-if="projects && projects.length > 0" class="text-center py-12 text-gray-500">
         <p class="text-lg mb-2">No projects match your search</p>

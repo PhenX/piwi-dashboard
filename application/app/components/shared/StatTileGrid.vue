@@ -14,10 +14,7 @@ withDefaults(
 </script>
 
 <template>
-  <div
-    class="grid gap-3"
-    :style="{ gridTemplateColumns: `repeat(auto-fit, minmax(min(${minTileWidth}, 100%), 1fr))` }"
-  >
+  <div class="grid gap-3" :style="{ gridTemplateColumns: `repeat(auto-fit, minmax(min(${minTileWidth}, 100%), 1fr))` }">
     <slot />
   </div>
 </template>

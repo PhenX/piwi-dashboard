@@ -106,91 +106,91 @@ const columns: TableColumn<FlakyTest>[] = [
     </template>
 
     <TableScroller min-width="52rem" :bleed="false">
-    <UTable :data="filteredTests" :columns="columns" :loading="loading" sticky class="max-h-[32rem]">
-      <template #actions-header>
-        <div class="text-right">Actions</div>
-      </template>
+      <UTable :data="filteredTests" :columns="columns" :loading="loading" sticky class="max-h-[32rem]">
+        <template #actions-header>
+          <div class="text-right">Actions</div>
+        </template>
 
-      <template #title-cell="{ row }">
-        <div class="min-w-0 space-y-0.5">
-          <NuxtLink
-            :to="`/test-run-cases/${row.original.latestRunsCaseId}`"
-            class="text-sm font-medium text-primary hover:underline truncate block"
-            :title="row.original.title"
-          >
-            {{ row.original.title }}
-          </NuxtLink>
-          <span class="text-xs text-gray-400 font-mono truncate block">{{ row.original.filePath }}</span>
-        </div>
-      </template>
+        <template #title-cell="{ row }">
+          <div class="min-w-0 space-y-0.5">
+            <NuxtLink
+              :to="`/test-run-cases/${row.original.latestRunsCaseId}`"
+              class="text-sm font-medium text-primary hover:underline truncate block"
+              :title="row.original.title"
+            >
+              {{ row.original.title }}
+            </NuxtLink>
+            <span class="text-xs text-gray-400 font-mono truncate block">{{ row.original.filePath }}</span>
+          </div>
+        </template>
 
-      <template #impact-cell="{ row }">
-        <div class="flex items-center gap-2">
-          <span
-            class="inline-block w-2 h-2 rounded-full shrink-0"
-            :class="{
-              'bg-red-500': row.original.wastedCiMinutes >= 30,
-              'bg-amber-500': row.original.wastedCiMinutes >= 5 && row.original.wastedCiMinutes < 30,
-              'bg-green-500': row.original.wastedCiMinutes >= 0 && row.original.wastedCiMinutes < 5,
-            }"
+        <template #impact-cell="{ row }">
+          <div class="flex items-center gap-2">
+            <span
+              class="inline-block w-2 h-2 rounded-full shrink-0"
+              :class="{
+                'bg-red-500': row.original.wastedCiMinutes >= 30,
+                'bg-amber-500': row.original.wastedCiMinutes >= 5 && row.original.wastedCiMinutes < 30,
+                'bg-green-500': row.original.wastedCiMinutes >= 0 && row.original.wastedCiMinutes < 5,
+              }"
+            />
+            <span class="text-sm tabular-nums">{{ Math.round(row.original.wastedCiMinutes) }} min wasted</span>
+          </div>
+        </template>
+
+        <template #score-cell="{ row }">
+          <UBadge :color="scoreColor(row.original.score)" variant="subtle" size="sm">
+            {{ row.original.score }}
+          </UBadge>
+        </template>
+
+        <template #failureRate-cell="{ row }">
+          <span class="text-sm tabular-nums">{{ Math.round(row.original.failureRate * 100) }}%</span>
+        </template>
+
+        <template #retryPassRuns-cell="{ row }">
+          <UBadge v-if="row.original.retryPassRuns" color="warning" variant="outline" size="sm">
+            {{ row.original.retryPassRuns }} run{{ row.original.retryPassRuns === 1 ? '' : 's' }}
+          </UBadge>
+          <span v-else class="text-gray-400 text-xs">—</span>
+        </template>
+
+        <template #alternations-cell="{ row }">
+          <UBadge v-if="row.original.alternations >= 2" color="neutral" variant="outline" size="sm">
+            {{ row.original.alternations }}
+          </UBadge>
+          <span v-else class="text-gray-400 text-xs">—</span>
+        </template>
+
+        <template #rootCause-cell="{ row }">
+          <TagBadge
+            v-if="row.original.rootCause"
+            :text="row.original.rootCause"
+            :color="rootCauseColor(row.original.rootCause)"
           />
-          <span class="text-sm tabular-nums">{{ Math.round(row.original.wastedCiMinutes) }} min wasted</span>
-        </div>
-      </template>
+          <span v-else class="text-gray-400 text-xs">—</span>
+        </template>
 
-      <template #score-cell="{ row }">
-        <UBadge :color="scoreColor(row.original.score)" variant="subtle" size="sm">
-          {{ row.original.score }}
-        </UBadge>
-      </template>
+        <template #lastFlakeAt-cell="{ row }">
+          <span v-if="row.original.lastFlakeAt" class="text-sm text-gray-500">
+            {{ formatRelativeTime(row.original.lastFlakeAt) }}
+          </span>
+          <span v-else class="text-gray-400 text-xs">—</span>
+        </template>
 
-      <template #failureRate-cell="{ row }">
-        <span class="text-sm tabular-nums">{{ Math.round(row.original.failureRate * 100) }}%</span>
-      </template>
-
-      <template #retryPassRuns-cell="{ row }">
-        <UBadge v-if="row.original.retryPassRuns" color="warning" variant="outline" size="sm">
-          {{ row.original.retryPassRuns }} run{{ row.original.retryPassRuns === 1 ? '' : 's' }}
-        </UBadge>
-        <span v-else class="text-gray-400 text-xs">—</span>
-      </template>
-
-      <template #alternations-cell="{ row }">
-        <UBadge v-if="row.original.alternations >= 2" color="neutral" variant="outline" size="sm">
-          {{ row.original.alternations }}
-        </UBadge>
-        <span v-else class="text-gray-400 text-xs">—</span>
-      </template>
-
-      <template #rootCause-cell="{ row }">
-        <TagBadge
-          v-if="row.original.rootCause"
-          :text="row.original.rootCause"
-          :color="rootCauseColor(row.original.rootCause)"
-        />
-        <span v-else class="text-gray-400 text-xs">—</span>
-      </template>
-
-      <template #lastFlakeAt-cell="{ row }">
-        <span v-if="row.original.lastFlakeAt" class="text-sm text-gray-500">
-          {{ formatRelativeTime(row.original.lastFlakeAt) }}
-        </span>
-        <span v-else class="text-gray-400 text-xs">—</span>
-      </template>
-
-      <template #actions-cell="{ row }">
-        <div class="flex justify-end">
-          <UButton
-            :to="`/test-run-cases/${row.original.latestRunsCaseId}`"
-            size="sm"
-            variant="outline"
-            trailing-icon="i-lucide-arrow-right"
-          >
-            View
-          </UButton>
-        </div>
-      </template>
-    </UTable>
+        <template #actions-cell="{ row }">
+          <div class="flex justify-end">
+            <UButton
+              :to="`/test-run-cases/${row.original.latestRunsCaseId}`"
+              size="sm"
+              variant="outline"
+              trailing-icon="i-lucide-arrow-right"
+            >
+              View
+            </UButton>
+          </div>
+        </template>
+      </UTable>
     </TableScroller>
 
     <p v-if="!loading && filteredTests.length === 0" class="text-sm text-gray-500 py-4 text-center">

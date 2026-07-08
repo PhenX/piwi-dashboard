@@ -5,13 +5,6 @@ defineProps<{
   traces: TraceInfo[];
 }>();
 
-const origin = computed(() => {
-  if (import.meta.client) {
-    return window.location.origin;
-  }
-  return useRequestURL().origin;
-});
-
 function downloadUrl(path: string): string {
   return `/api/files/${getFileApiPath(path)}`;
 }
@@ -38,7 +31,7 @@ function downloadUrl(path: string): string {
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
           <UButton
-            :to="getTraceViewerUrl(trace.filePath, origin)"
+            :to="getTraceViewerUrl(trace.filePath)"
             target="_blank"
             icon="i-lucide-bug-play"
             size="xs"

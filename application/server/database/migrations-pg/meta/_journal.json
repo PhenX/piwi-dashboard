@@ -176,6 +176,13 @@
       "when": 1783094696344,
       "tag": "0024_naive_black_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1783526746891,
+      "tag": "0025_groovy_guardsmen",
+      "breakpoints": true
     }
   ]
 }

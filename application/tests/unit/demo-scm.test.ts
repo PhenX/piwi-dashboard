@@ -20,7 +20,10 @@ describe('demo SCM history', () => {
       expect(proj.commits.length, `project ${id} commits`).toBeGreaterThan(0);
       const suspect = proj.commits.find((c) => c.sha === proj.suspectShas[0]);
       expect(suspect, `project ${id} suspect commit exists`).toBeTruthy();
-      expect(suspect!.files.some((f) => f.patch), `project ${id} suspect has a patch`).toBe(true);
+      expect(
+        suspect!.files.some((f) => f.patch),
+        `project ${id} suspect has a patch`,
+      ).toBe(true);
     }
   });
 

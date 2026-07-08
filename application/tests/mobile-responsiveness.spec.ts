@@ -111,7 +111,10 @@ async function expectNoHorizontalOverflow(page: Page, label: string) {
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,
   }));
-  expect(scrollWidth, `${label}: page scrolls horizontally (scrollWidth ${scrollWidth} > clientWidth ${clientWidth})`).toBeLessThanOrEqual(
+  expect(
+    scrollWidth,
+    `${label}: page scrolls horizontally (scrollWidth ${scrollWidth} > clientWidth ${clientWidth})`,
+  ).toBeLessThanOrEqual(
     clientWidth + 1, // 1px tolerance for subpixel rounding
   );
 }

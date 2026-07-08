@@ -404,44 +404,44 @@ function copyFailure() {
         <template #tab-steps>
           <div v-if="steps.length > 0">
             <TableScroller min-width="34rem" :bleed="false">
-            <UTable
-              :data="steps"
-              :columns="stepColumns"
-              :ui="{
-                base: 'table-fixed border-separate border-spacing-0 min-w-[34rem]',
-                thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-                tbody: '[&>tr]:last:[&>td]:border-b-0',
-                th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-                td: 'border-b border-default',
-              }"
-            >
-              <template #status-cell="{ row }">
-                <span
-                  v-if="row.original.failed"
-                  class="inline-flex items-center justify-center size-5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs leading-none"
-                  title="Step failed"
-                  >✗</span
-                >
-              </template>
-              <template #category-cell="{ row }">
-                <UBadge :color="stepCategoryColor[row.original.category] || 'neutral'" variant="soft" size="xs">
-                  {{ row.original.category }}
-                </UBadge>
-              </template>
-              <template #duration-cell="{ row }">
-                <span
-                  :class="`text-sm tabular-nums ${
-                    row.original.duration > 2000
-                      ? 'text-red-600 font-medium'
-                      : row.original.duration > 500
-                        ? 'text-orange-500'
-                        : 'text-gray-500'
-                  }`"
-                >
-                  {{ formatDuration(row.original.duration) }}
-                </span>
-              </template>
-            </UTable>
+              <UTable
+                :data="steps"
+                :columns="stepColumns"
+                :ui="{
+                  base: 'table-fixed border-separate border-spacing-0 min-w-[34rem]',
+                  thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
+                  tbody: '[&>tr]:last:[&>td]:border-b-0',
+                  th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
+                  td: 'border-b border-default',
+                }"
+              >
+                <template #status-cell="{ row }">
+                  <span
+                    v-if="row.original.failed"
+                    class="inline-flex items-center justify-center size-5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs leading-none"
+                    title="Step failed"
+                    >✗</span
+                  >
+                </template>
+                <template #category-cell="{ row }">
+                  <UBadge :color="stepCategoryColor[row.original.category] || 'neutral'" variant="soft" size="xs">
+                    {{ row.original.category }}
+                  </UBadge>
+                </template>
+                <template #duration-cell="{ row }">
+                  <span
+                    :class="`text-sm tabular-nums ${
+                      row.original.duration > 2000
+                        ? 'text-red-600 font-medium'
+                        : row.original.duration > 500
+                          ? 'text-orange-500'
+                          : 'text-gray-500'
+                    }`"
+                  >
+                    {{ formatDuration(row.original.duration) }}
+                  </span>
+                </template>
+              </UTable>
             </TableScroller>
           </div>
         </template>
@@ -617,56 +617,61 @@ function copyFailure() {
               <div class="space-y-4">
                 <TestCaseHistoryChart :data="historyData" :height="200" />
                 <TableScroller min-width="44rem" :bleed="false">
-                <UTable
-                  :data="historyData"
-                  :columns="historyColumns"
-                  :ui="{
-                    base: 'table-fixed border-separate border-spacing-0 min-w-[44rem]',
-                    thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-                    tbody: '[&>tr]:last:[&>td]:border-b-0',
-                    th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-                    td: 'border-b border-default',
-                  }"
-                >
-                  <template #startTime-cell="{ row }">
-                    <span class="text-xs whitespace-nowrap">
-                      <span class="text-gray-500">{{
-                        new Date(row.original.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                      }}</span>
-                      <span class="text-gray-400 ml-1">{{
-                        new Date(row.original.startTime).toLocaleTimeString('en-US', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      }}</span>
-                    </span>
-                  </template>
-                  <template #status-cell="{ row }">
-                    <UBadge :color="getStatusColor(row.original.status)" class="capitalize">{{
-                      row.original.status
-                    }}</UBadge>
-                  </template>
-                  <template #duration-cell="{ row }">
-                    <span v-if="row.original.duration !== null">{{ formatDuration(row.original.duration) }}</span>
-                    <span v-else class="text-gray-400">&mdash;</span>
-                  </template>
-                  <template #runId-cell="{ row }">
-                    <NuxtLink :to="`/test-runs/${row.original.runId}`" class="text-primary hover:underline">
-                      #{{ row.original.runId }}
-                    </NuxtLink>
-                  </template>
-                  <template #error-cell="{ row }">
-                    <span
-                      v-if="row.original.error"
-                      class="text-red-600 text-xs truncate max-w-xs block"
-                      :title="row.original.error"
-                    >
-                      {{
-                        row.original.error.length > 80 ? `${row.original.error.substring(0, 80)}…` : row.original.error
-                      }}
-                    </span>
-                  </template>
-                </UTable>
+                  <UTable
+                    :data="historyData"
+                    :columns="historyColumns"
+                    :ui="{
+                      base: 'table-fixed border-separate border-spacing-0 min-w-[44rem]',
+                      thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
+                      tbody: '[&>tr]:last:[&>td]:border-b-0',
+                      th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
+                      td: 'border-b border-default',
+                    }"
+                  >
+                    <template #startTime-cell="{ row }">
+                      <span class="text-xs whitespace-nowrap">
+                        <span class="text-gray-500">{{
+                          new Date(row.original.startTime).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                          })
+                        }}</span>
+                        <span class="text-gray-400 ml-1">{{
+                          new Date(row.original.startTime).toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        }}</span>
+                      </span>
+                    </template>
+                    <template #status-cell="{ row }">
+                      <UBadge :color="getStatusColor(row.original.status)" class="capitalize">{{
+                        row.original.status
+                      }}</UBadge>
+                    </template>
+                    <template #duration-cell="{ row }">
+                      <span v-if="row.original.duration !== null">{{ formatDuration(row.original.duration) }}</span>
+                      <span v-else class="text-gray-400">&mdash;</span>
+                    </template>
+                    <template #runId-cell="{ row }">
+                      <NuxtLink :to="`/test-runs/${row.original.runId}`" class="text-primary hover:underline">
+                        #{{ row.original.runId }}
+                      </NuxtLink>
+                    </template>
+                    <template #error-cell="{ row }">
+                      <span
+                        v-if="row.original.error"
+                        class="text-red-600 text-xs truncate max-w-xs block"
+                        :title="row.original.error"
+                      >
+                        {{
+                          row.original.error.length > 80
+                            ? `${row.original.error.substring(0, 80)}…`
+                            : row.original.error
+                        }}
+                      </span>
+                    </template>
+                  </UTable>
                 </TableScroller>
               </div>
             </div>

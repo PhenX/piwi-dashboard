@@ -622,7 +622,12 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                     },
                   ]
                 : []),
-              { label: 'Edit', icon: 'i-lucide-pencil', variant: 'outline' as const, to: `/projects/${projectId}/edit` },
+              {
+                label: 'Edit',
+                icon: 'i-lucide-pencil',
+                variant: 'outline' as const,
+                to: `/projects/${projectId}/edit`,
+              },
               { label: 'Refresh', icon: 'i-lucide-refresh-cw', variant: 'outline' as const, onClick: () => refresh() },
             ]"
           >

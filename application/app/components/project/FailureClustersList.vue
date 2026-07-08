@@ -52,91 +52,91 @@ const columns: TableColumn<ProjectFailureCluster>[] = [
     </template>
 
     <TableScroller min-width="48rem" :bleed="false">
-    <UTable :data="clusters ?? []" :columns="columns" :loading="loading">
-      <template #actions-header>
-        <div class="text-right">Actions</div>
-      </template>
+      <UTable :data="clusters ?? []" :columns="columns" :loading="loading">
+        <template #actions-header>
+          <div class="text-right">Actions</div>
+        </template>
 
-      <template #signature-cell="{ row }">
-        <div class="min-w-0 space-y-0.5">
-          <NuxtLink
-            :to="`/failure-clusters/${row.original.id}`"
-            class="text-sm text-primary hover:underline truncate block"
-            :class="row.original.title ? '' : 'font-mono'"
-            :title="row.original.signature"
-          >
-            {{ row.original.title || row.original.signature }}
-          </NuxtLink>
-          <p v-if="row.original.triageNote" class="text-xs text-gray-500 italic truncate">
-            {{ row.original.triageNote }}
-          </p>
-        </div>
-      </template>
+        <template #signature-cell="{ row }">
+          <div class="min-w-0 space-y-0.5">
+            <NuxtLink
+              :to="`/failure-clusters/${row.original.id}`"
+              class="text-sm text-primary hover:underline truncate block"
+              :class="row.original.title ? '' : 'font-mono'"
+              :title="row.original.signature"
+            >
+              {{ row.original.title || row.original.signature }}
+            </NuxtLink>
+            <p v-if="row.original.triageNote" class="text-xs text-gray-500 italic truncate">
+              {{ row.original.triageNote }}
+            </p>
+          </div>
+        </template>
 
-      <template #errorType-cell="{ row }">
-        <UBadge
-          v-if="row.original.errorType"
-          :color="clusterErrorTypeColor(row.original.errorType)"
-          variant="subtle"
-          size="sm"
-        >
-          {{ row.original.errorType }}
-        </UBadge>
-        <span v-else class="text-gray-400 text-xs">—</span>
-      </template>
-
-      <template #status-cell="{ row }">
-        <UBadge :color="clusterStatusColor(row.original.status)" variant="subtle" size="sm">
-          {{ row.original.status }}
-        </UBadge>
-      </template>
-
-      <template #affectedTests-cell="{ row }">
-        <span class="text-sm tabular-nums">{{ row.original.affectedTests }}</span>
-      </template>
-
-      <template #occurrences-cell="{ row }">
-        <span class="text-sm tabular-nums">{{ row.original.occurrences }}</span>
-      </template>
-
-      <template #diagnosis-cell="{ row }">
-        <UBadge
-          v-if="row.original.diagnosis?.status === 'completed' && row.original.diagnosis.category"
-          color="neutral"
-          variant="subtle"
-          size="sm"
-          class="gap-1"
-        >
-          <UIcon name="i-lucide-sparkles" class="size-3" />
-          {{ row.original.diagnosis.category }}
-        </UBadge>
-        <span v-else class="text-gray-400 text-xs">—</span>
-      </template>
-
-      <template #lastSeenAt-cell="{ row }">
-        <div class="text-sm text-gray-500 whitespace-nowrap">
-          <NuxtLink :to="`/test-runs/${row.original.lastSeenRunId}`" class="text-primary hover:underline">
-            run #{{ row.original.lastSeenRunId }}
-          </NuxtLink>
-          <span v-if="row.original.lastSeenAt" class="ml-1 text-xs text-gray-400">
-            ({{ formatRelativeTime(row.original.lastSeenAt) }})
-          </span>
-        </div>
-      </template>
-
-      <template #actions-cell="{ row }">
-        <div class="flex justify-end">
-          <UButton
-            :to="`/failure-clusters/${row.original.id}`"
+        <template #errorType-cell="{ row }">
+          <UBadge
+            v-if="row.original.errorType"
+            :color="clusterErrorTypeColor(row.original.errorType)"
+            variant="subtle"
             size="sm"
-            variant="outline"
-            trailing-icon="i-lucide-arrow-right"
           >
-            View
-          </UButton>
-        </div>
-      </template>
-    </UTable>
+            {{ row.original.errorType }}
+          </UBadge>
+          <span v-else class="text-gray-400 text-xs">—</span>
+        </template>
+
+        <template #status-cell="{ row }">
+          <UBadge :color="clusterStatusColor(row.original.status)" variant="subtle" size="sm">
+            {{ row.original.status }}
+          </UBadge>
+        </template>
+
+        <template #affectedTests-cell="{ row }">
+          <span class="text-sm tabular-nums">{{ row.original.affectedTests }}</span>
+        </template>
+
+        <template #occurrences-cell="{ row }">
+          <span class="text-sm tabular-nums">{{ row.original.occurrences }}</span>
+        </template>
+
+        <template #diagnosis-cell="{ row }">
+          <UBadge
+            v-if="row.original.diagnosis?.status === 'completed' && row.original.diagnosis.category"
+            color="neutral"
+            variant="subtle"
+            size="sm"
+            class="gap-1"
+          >
+            <UIcon name="i-lucide-sparkles" class="size-3" />
+            {{ row.original.diagnosis.category }}
+          </UBadge>
+          <span v-else class="text-gray-400 text-xs">—</span>
+        </template>
+
+        <template #lastSeenAt-cell="{ row }">
+          <div class="text-sm text-gray-500 whitespace-nowrap">
+            <NuxtLink :to="`/test-runs/${row.original.lastSeenRunId}`" class="text-primary hover:underline">
+              run #{{ row.original.lastSeenRunId }}
+            </NuxtLink>
+            <span v-if="row.original.lastSeenAt" class="ml-1 text-xs text-gray-400">
+              ({{ formatRelativeTime(row.original.lastSeenAt) }})
+            </span>
+          </div>
+        </template>
+
+        <template #actions-cell="{ row }">
+          <div class="flex justify-end">
+            <UButton
+              :to="`/failure-clusters/${row.original.id}`"
+              size="sm"
+              variant="outline"
+              trailing-icon="i-lucide-arrow-right"
+            >
+              View
+            </UButton>
+          </div>
+        </template>
+      </UTable>
     </TableScroller>
 
     <EmptyState

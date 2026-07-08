@@ -392,82 +392,82 @@ async function handleInviteUser(user: UserDetails) {
       </template>
 
       <TableScroller min-width="44rem" :bleed="false">
-      <UTable :data="users" :columns="columns" sticky class="max-h-[32rem]">
-        <template #username-cell="{ row }">
-          {{ row.original.username }}
-        </template>
+        <UTable :data="users" :columns="columns" sticky class="max-h-[32rem]">
+          <template #username-cell="{ row }">
+            {{ row.original.username }}
+          </template>
 
-        <template #name-cell="{ row }">
-          <span class="text-muted">{{ row.original.name || '-' }}</span>
-        </template>
+          <template #name-cell="{ row }">
+            <span class="text-muted">{{ row.original.name || '-' }}</span>
+          </template>
 
-        <template #email-cell="{ row }">
-          <span v-if="row.original.email" class="flex items-center gap-1 text-sm">
-            {{ row.original.email }}
-            <UIcon
-              v-if="row.original.emailVerified"
-              name="i-lucide-circle-check-big"
-              class="size-3.5 text-success-500"
-              title="Email verified"
-            />
-          </span>
-          <span v-else class="text-muted">—</span>
-        </template>
+          <template #email-cell="{ row }">
+            <span v-if="row.original.email" class="flex items-center gap-1 text-sm">
+              {{ row.original.email }}
+              <UIcon
+                v-if="row.original.emailVerified"
+                name="i-lucide-circle-check-big"
+                class="size-3.5 text-success-500"
+                title="Email verified"
+              />
+            </span>
+            <span v-else class="text-muted">—</span>
+          </template>
 
-        <template #role-cell="{ row }">
-          <UBadge :color="getRoleBadgeColor(row.original.role)" variant="subtle">
-            {{ row.original.role }}
-          </UBadge>
-        </template>
+          <template #role-cell="{ row }">
+            <UBadge :color="getRoleBadgeColor(row.original.role)" variant="subtle">
+              {{ row.original.role }}
+            </UBadge>
+          </template>
 
-        <template #createdAt-cell="{ row }">
-          <span class="text-sm text-muted">
-            {{ prettyDateFormat(row.original.createdAt, { dateOnly: true }) }}
-          </span>
-        </template>
+          <template #createdAt-cell="{ row }">
+            <span class="text-sm text-muted">
+              {{ prettyDateFormat(row.original.createdAt, { dateOnly: true }) }}
+            </span>
+          </template>
 
-        <template #actions-cell="{ row }">
-          <div class="flex items-center gap-1 justify-end">
-            <UButton
-              v-if="isAdmin && row.original.email && !row.original.oauthProvider"
-              icon="i-lucide-send"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              title="Send invite email"
-              :loading="invitingUserId === row.original.id"
-              @click="handleInviteUser(row.original)"
-            />
-            <UButton
-              v-if="isAdmin && row.original.role !== 'administrator'"
-              icon="i-lucide-folder-lock"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              title="Project access"
-              @click="openProjectAccessModal(row.original)"
-            />
-            <UButton
-              v-if="canManageApiKeys(row.original)"
-              icon="i-lucide-key"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              title="Manage API keys"
-              @click="openApiKeysModal(row.original)"
-            />
-            <UButton
-              v-if="isAdmin"
-              icon="i-lucide-trash-2"
-              color="error"
-              variant="ghost"
-              size="sm"
-              title="Delete user"
-              @click="handleDeleteUser(row.original)"
-            />
-          </div>
-        </template>
-      </UTable>
+          <template #actions-cell="{ row }">
+            <div class="flex items-center gap-1 justify-end">
+              <UButton
+                v-if="isAdmin && row.original.email && !row.original.oauthProvider"
+                icon="i-lucide-send"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                title="Send invite email"
+                :loading="invitingUserId === row.original.id"
+                @click="handleInviteUser(row.original)"
+              />
+              <UButton
+                v-if="isAdmin && row.original.role !== 'administrator'"
+                icon="i-lucide-folder-lock"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                title="Project access"
+                @click="openProjectAccessModal(row.original)"
+              />
+              <UButton
+                v-if="canManageApiKeys(row.original)"
+                icon="i-lucide-key"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                title="Manage API keys"
+                @click="openApiKeysModal(row.original)"
+              />
+              <UButton
+                v-if="isAdmin"
+                icon="i-lucide-trash-2"
+                color="error"
+                variant="ghost"
+                size="sm"
+                title="Delete user"
+                @click="handleDeleteUser(row.original)"
+              />
+            </div>
+          </template>
+        </UTable>
       </TableScroller>
     </SectionCard>
 
@@ -498,7 +498,12 @@ async function handleInviteUser(user: UserDetails) {
             name="password"
             description="Leave blank to let the user set their own password via invite email"
           >
-            <UInput v-model="newUser.password" type="password" placeholder="Leave blank to send invite" class="w-full" />
+            <UInput
+              v-model="newUser.password"
+              type="password"
+              placeholder="Leave blank to send invite"
+              class="w-full"
+            />
           </UFormField>
 
           <UFormField label="Display name" name="name">

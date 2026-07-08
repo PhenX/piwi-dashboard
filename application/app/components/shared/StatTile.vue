@@ -26,10 +26,7 @@ withDefaults(
     <p class="text-xs font-medium text-gray-500 uppercase tracking-wider inline-flex items-center gap-1 max-w-full">
       <slot name="label">{{ label }}</slot>
     </p>
-    <p
-      class="mt-0.5 break-words"
-      :class="[size === 'lg' ? 'text-xl font-bold' : 'text-sm font-semibold', valueClass]"
-    >
+    <p class="mt-0.5 break-words" :class="[size === 'lg' ? 'text-xl font-bold' : 'text-sm font-semibold', valueClass]">
       <slot>{{ value ?? '—' }}</slot>
     </p>
     <p v-if="hint" class="text-xs text-gray-400 mt-1">{{ hint }}</p>
