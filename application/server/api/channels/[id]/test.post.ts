@@ -71,6 +71,8 @@ export default eventHandler(async (event) => {
       }
       const res = await fetch(url, { method: 'POST', headers, body });
       if (!res.ok) throw new Error(`Webhook returned ${res.status}`);
+    } else if (channel.type === 'browser') {
+      return { success: true };
     }
     return { success: true };
   } catch (err) {

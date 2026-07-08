@@ -163,6 +163,26 @@ class RunEventBus {
       this.globalEmitter.off('global', listener);
     };
   }
+
+  /**
+   * Publish a browser-notification event to all notification-stream subscribers.
+   * Separate from the global run-lifecycle bus — these events are delivered
+   * without debounce and the connection stays open even when the tab is hidden.
+   */
+  publishNotification(event: Record<string, unknown>): void {
+    this.emitter.emit('notification', event);
+  }
+
+  /**
+   * Subscribe to browser-notification events.
+   * Returns an unsubscribe function.
+   */
+  subscribeNotifications(listener: (event: Record<string, unknown>) => void): () => void {
+    this.emitter.on('notification', listener);
+    return () => {
+      this.emitter.off('notification', listener);
+    };
+  }
 }
 
 // Singleton instance

@@ -6,6 +6,7 @@ export const NOTIFICATION_EVENTS = [
   'cluster.new',
   'flakiness.spike',
   'perf.regression',
+  'diagnosis.completed',
 ] as const;
 
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
@@ -32,7 +33,16 @@ export interface ClusterNewPayload {
   runId: number;
 }
 
-export type NotificationPayload = RunFinishedPayload | ClusterNewPayload;
+export interface DiagnosisCompletedPayload {
+  clusterId: number;
+  projectId: number;
+  summary?: string | null;
+  rootCause?: string | null;
+  category?: string | null;
+  confidence?: string | null;
+}
+
+export type NotificationPayload = RunFinishedPayload | ClusterNewPayload | DiagnosisCompletedPayload;
 
 /** Subject / title line for each event type. */
 export function renderEventSubject(event: NotificationEvent, payload: NotificationPayload): string {
@@ -54,6 +64,9 @@ export function renderEventSubject(event: NotificationEvent, payload: Notificati
     case 'perf.regression': {
       const p = payload as RunFinishedPayload;
       return `Performance regression — ${p.projectName}`;
+    }
+    case 'diagnosis.completed': {
+      return 'Diagnosis complete';
     }
   }
 }

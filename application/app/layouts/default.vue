@@ -64,6 +64,7 @@ const { data: projects, refresh: refreshProjects } = await useFetch<ProjectWithS
 });
 
 useRunStream(refreshProjects);
+useNotificationStream();
 
 // Extract current project ID from route (if viewing a project page)
 const currentProjectId = computed(() => {

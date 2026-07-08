@@ -57,7 +57,7 @@ SQLite database auto-initializes on first API call.
 - `locator_snapshots`: one row per locator call site (`test_case_id` + `location`), upserted each run with the latest element attributes + pre-computed ranked alternative locators; powers locator healing. `last_seen_run_id` FK `ON DELETE set null`. Unique index on `(test_case_id, location)`
 - `users` has `email` (unique, nullable) and `emailVerified` (boolean) columns added
 - `account_tokens`: single-use SHA-256-hashed tokens for reset/invite/verify; purpose enum; TTL enforced at query time
-- `notification_channels`: email/slack/webhook destinations; webhook secrets AES-256-GCM encrypted via `crypto.ts`
+- `notification_channels`: email/slack/webhook/browser destinations; webhook secrets AES-256-GCM encrypted via `crypto.ts`
 - `subscriptions`: links a user to a channel + optional project; `events` JSON array; `filters` JSON; `mode` realtime/digest; `mutedUntil` timestamp; `active` boolean
 - `notification_deliveries`: outbox table; `dedupeKey` unique constraint for idempotency; `status` pending/sent/failed/skipped; `attempts` + `scheduledFor` for progressive retry (1/5/15/60/240 min backoff)
 - **Audit**: See `plans/` for schema audit plans with findings and recommended changes
@@ -107,6 +107,7 @@ Nuxt file-based routing:
 - `POST /api/subscriptions` — Authenticated; `{ channelId, projectId?, events[], filters?, mode, digestAt? }`
 - `PATCH /api/subscriptions/[id]` — Authenticated; update events/filters/mode/digestAt/mutedUntil/active
 - `DELETE /api/subscriptions/[id]` — Authenticated; owner or admin
+- `GET /api/notifications/stream` — Authenticated; SSE stream for browser-channel notification deliveries (connection stays open even on hidden tabs)
 
 ### Frontend (app/)
 - **Pages** (`app/pages/`):

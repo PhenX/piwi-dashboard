@@ -21,6 +21,7 @@ import { reconcileNewClusters } from './cluster-reconcile';
 import { nameNewClusters } from './cluster-naming';
 import { RESEARCH_SYSTEM_PROMPT, RESEARCH_JSON_SCHEMA, parseResearchJson, formatResearchBlock } from './ai-research';
 import { buildDiagnosisVersionValues } from '#shared/handlers/diagnosis-versions';
+import { emitNotification } from './notifications/emit';
 
 type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
 
@@ -386,7 +387,18 @@ async function persistCompletedDiagnosis(
     .where(diagnosisWhere(cluster, opts))
     .returning();
 
-  return updated[0]!;
+  const completed = updated[0]!;
+
+  emitNotification(db, 'diagnosis.completed', {
+    clusterId: cluster.id,
+    projectId: cluster.projectId,
+    summary: diagnosis.summary,
+    rootCause: diagnosis.rootCause,
+    category: diagnosis.category,
+    confidence: diagnosis.confidence,
+  });
+
+  return completed;
 }
 
 /** Persist the failed diagnosis row and return it. */

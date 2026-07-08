@@ -136,7 +136,9 @@ export async function sweepOutbox(db: LibSQLDatabase<any>): Promise<{ sent: numb
       } else if (c.type === 'email') await sendToEmail(config, event, payload);
       else if (c.type === 'slack') await sendToSlack(config, event, payload);
       else if (c.type === 'webhook') await sendToWebhook(config, event, payload);
-      else throw new Error(`Unknown channel type: ${c.type}`);
+      else if (c.type === 'browser') {
+        /* Delivered via SSE — the notification/stream endpoint handles this channel type */
+      } else throw new Error(`Unknown channel type: ${c.type}`);
 
       await db
         .update(notificationDeliveries)

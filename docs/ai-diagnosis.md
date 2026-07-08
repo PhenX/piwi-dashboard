@@ -224,5 +224,5 @@ API keys are encrypted at rest with [`PIWI_SECRET_KEY`](./configuration#general)
 ## See also
 
 - [Configuration reference](./configuration) — all environment variables
-- [Notifications](./notifications) — get alerted with `cluster.new` when a new cluster appears
+- [Notifications](./notifications) — subscribe to `cluster.new` and `diagnosis.completed` to get alerted when a new cluster appears or a diagnosis completes (browser, email, Slack, or webhook)
 - [MCP server](./mcp) — let AI agents query clusters and diagnoses directly

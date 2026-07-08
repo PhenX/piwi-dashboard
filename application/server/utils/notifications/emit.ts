@@ -1,13 +1,18 @@
 import { isAuthEnabled } from '../auth';
 import { matchAndEnqueue } from './match';
 import { sweepOutbox } from './dispatch';
+import { runEventBus } from '../run-events';
 import type { NotificationEvent, NotificationPayload } from '#shared/notification-events';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 
 /**
- * Entry point: match subscriptions for an event, enqueue deliveries, then
- * kick the outbox sweeper to deliver realtime deliveries immediately.
- * Gated on auth being enabled (subscriptions require a real user identity).
+ * Entry point: publish to the SSE notification bus for any open browser tabs,
+ * then match subscriptions for the event, enqueue outbox deliveries, and
+ * kick the sweeper for realtime deliveries (email/Slack/webhook).
+ *
+ * Browser notifications via SSE work regardless of auth being enabled;
+ * the SSE endpoint handles its own authentication. The outbox path
+ * (email/Slack/webhook) requires auth.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function emitNotification(
@@ -15,7 +20,11 @@ export async function emitNotification(
   event: NotificationEvent,
   payload: NotificationPayload,
 ): Promise<void> {
-  if (!isAuthEnabled()) return; // notifications require auth
+  // Browser notification via SSE — always publish so any open dashboard tab
+  // (even in the background) can fire a native OS notification.
+  runEventBus.publishNotification({ type: event, ...payload });
+
+  if (!isAuthEnabled()) return; // outbox path requires auth for user identity
 
   try {
     const enqueued = await matchAndEnqueue(db, event, payload);
