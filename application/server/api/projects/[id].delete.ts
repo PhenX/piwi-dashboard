@@ -3,7 +3,7 @@ import { projects } from '../../database/schema';
 import { eq } from 'drizzle-orm';
 import { requireProjectAccess, requireRouteId } from '../../utils/project-access';
 import { Role } from '#shared/types';
-import { deleteProject } from '#shared/handlers/projects';
+import { deleteProject } from '../../utils/delete-project';
 
 const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 

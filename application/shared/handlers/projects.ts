@@ -13,9 +13,6 @@ import { desc, eq, sql, and, inArray, gte, lte, isNotNull, count } from 'drizzle
 import type { BrowserConfig } from '../types';
 
 import type { DrizzleDB } from './db';
-import { getDatabase } from '../../server/database';
-import { getStorage } from '../../server/storage';
-import { testCaseCache } from '../../server/utils/test-case-cache';
 
 type ProjectScope = 'all' | Set<number>;
 
@@ -323,7 +320,14 @@ export async function updateProject(
 }
 
 // ─── deleteProjectData ───────────────────────────────────────────
-// Cascading delete — no storage operations (server-only concern)
+// Cascading DB-only delete — no storage operations, so it's safe to call from
+// both the server (via server/utils/delete-project.ts, which also clears
+// storage) and demo mode (directly, against the in-browser DB). The
+// storage-touching `deleteProject` wrapper lives in server/utils/ instead of
+// here so this shared module never imports server/storage — that module's
+// LocalStorageAdapter does synchronous fs/util promisify() calls at import
+// time, which crashes when bundled into the demo service worker (no Node
+// fs/util in a Worker global scope).
 
 export async function deleteProjectData(db: DrizzleDB, projectId: number) {
   // Get all run IDs to cascade-delete dependent rows that lack DB-level cascade
@@ -351,26 +355,6 @@ export async function deleteProjectData(db: DrizzleDB, projectId: number) {
   // Deleting the project row cascades to: projectTags, failureClusters,
   // failureDiagnoses, traceBlobs, traceResources
   await db.delete(projects).where(eq(projects.id, projectId));
-}
-
-/**
- * Permanently delete a project and all its associated data.
- *
- * Deletes storage first (entire project-{id}/ directory), then clears DB rows
- * in FK order. Tables with onDelete: cascade (projectTags, failureClusters,
- * failureDiagnoses, traceBlobs, traceResources) are handled automatically when
- * the project row is removed.
- */
-export async function deleteProject(projectId: number): Promise<void> {
-  const db = await getDatabase();
-  const storage = getStorage();
-
-  // Delete all project files in one shot — covers reports, blobs, trace-resources
-  await storage.deleteDirectory(`project-${projectId}`);
-
-  await deleteProjectData(db, projectId);
-
-  testCaseCache.invalidate(projectId);
 }
 
 // ─── getProjectMenu ──────────────────────────────────────────────

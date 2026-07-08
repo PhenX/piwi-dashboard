@@ -4,7 +4,7 @@ import { eq, inArray, like } from 'drizzle-orm';
 import { requireAuth } from '../../utils/auth';
 import { Role } from '#shared/types';
 import { TEST_PROJECT_NAMES } from '#shared/test-project-names';
-import { deleteProject } from '#shared/handlers/projects';
+import { deleteProject } from '../../utils/delete-project';
 
 const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
