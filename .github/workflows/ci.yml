@@ -65,8 +65,10 @@ jobs:
             -e POSTGRES_PASSWORD=postgres \
             -e POSTGRES_DB=playwright_test \
             postgres:16-alpine
-          # Wait up to 30 s for PostgreSQL to become healthy
-          timeout 30 bash -c 'until docker exec postgres pg_isready -U postgres; do sleep 1; done'
+          # Wait for the real server to accept queries. The alpine image starts a
+          # temporary init server first (which pg_isready briefly reports as ready)
+          # and then restarts, so poll an actual query rather than pg_isready.
+          timeout 30 bash -c 'until docker exec postgres psql -U postgres -c "SELECT 1" >/dev/null 2>&1; do sleep 1; done'
           # Separate database for the main app server so it never races the
           # dedicated postgresql.spec.ts server (which owns playwright_test).
           docker exec postgres psql -U postgres -c 'CREATE DATABASE playwright_main;'
