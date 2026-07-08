@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures';
 import { waitForHydration } from './utils';
+import { PROJECT } from '#shared/test-project-names';
 
 test.describe.serial('User Management Page Tests', () => {
   // Clean up test users before running tests to ensure idempotency
@@ -156,5 +157,99 @@ test.describe.serial('User Management Page Tests', () => {
       // Check for success message
       await expect(page.getByText('User deleted')).toBeVisible({ timeout: 5000 });
     }
+  });
+});
+
+// ── Project members API (GET /api/projects/:id/members, PUT /api/projects/:id/members) ──
+//
+// `PUT` is authorization-sensitive (administrator-only) — see
+// `server/utils/project-access.ts` for the scope model. Auth is disabled for the
+// dev/test server these tests run against, so `requireAuth` always returns a
+// synthetic system-admin user and a real 403 can't be observed here; the
+// administrator-only enforcement (and a genuine assign-then-verify round trip) is
+// covered instead in `tests/reporter-with-auth.spec.ts`, which runs against a real
+// auth-enabled server.
+test.describe.serial('Project Members API Tests', () => {
+  let projectId: number;
+
+  test.beforeAll(async ({ request }) => {
+    const response = await request.post('/api/test-runs/submit', {
+      data: {
+        projectName: PROJECT.PROJECT_MEMBERS,
+        status: 'passed',
+        startTime: new Date().toISOString(),
+        duration: 1000,
+        totalTests: 1,
+        passedTests: 1,
+        failedTests: 0,
+        skippedTests: 0,
+        testCases: [],
+      },
+    });
+    expect(response.ok()).toBeTruthy();
+    const data = await response.json();
+    projectId = data.projectId;
+  });
+
+  test('GET /api/projects/:id/members returns implicit administrators with global access', async ({ request }) => {
+    const response = await request.get(`/api/projects/${projectId}/members`);
+    expect(response.ok()).toBeTruthy();
+    const body = (await response.json()) as {
+      users: Array<{ id: number; username: string; role: string; global: boolean }>;
+    };
+
+    expect(Array.isArray(body.users)).toBe(true);
+    // Every administrator has implicit, global access to every project even
+    // without an explicit `project_assignments` row.
+    for (const user of body.users) {
+      if (user.role === 'administrator') {
+        expect(user.global).toBe(true);
+      }
+    }
+  });
+
+  test('GET /api/projects/:id/members returns 404 for an unknown project', async ({ request }) => {
+    const response = await request.get('/api/projects/999999/members');
+    expect(response.status()).toBe(404);
+  });
+
+  test('GET /api/projects/:id/members returns 400 for a non-numeric project id', async ({ request }) => {
+    const response = await request.get('/api/projects/not-a-number/members');
+    expect(response.status()).toBe(400);
+  });
+
+  test('PUT /api/projects/:id/members rejects unknown user ids with 400', async ({ request }) => {
+    const response = await request.put(`/api/projects/${projectId}/members`, {
+      data: { userIds: [999999] },
+    });
+    expect(response.status()).toBe(400);
+    const body = await response.json();
+    expect(body.message).toContain('User(s) not found');
+  });
+
+  test('PUT /api/projects/:id/members rejects a malformed body with 400', async ({ request }) => {
+    const response = await request.put(`/api/projects/${projectId}/members`, {
+      data: {},
+    });
+    expect(response.status()).toBe(400);
+  });
+
+  test('PUT /api/projects/:id/members with an empty list clears explicit assignments', async ({ request }) => {
+    // An empty array takes the delete-only code path in `setProjectMembers` — it
+    // never touches `createdBy`, so it's safe to exercise on the auth-disabled
+    // server (see the file-level note above about why a real assignment can't be).
+    const response = await request.put(`/api/projects/${projectId}/members`, {
+      data: { userIds: [] },
+    });
+    expect(response.ok()).toBeTruthy();
+    const body = await response.json();
+    expect(body).toEqual({ success: true });
+  });
+
+  test('PUT /api/projects/:id/members returns 404 for an unknown project', async ({ request }) => {
+    const response = await request.put('/api/projects/999999/members', {
+      data: { userIds: [] },
+    });
+    expect(response.status()).toBe(404);
   });
 });

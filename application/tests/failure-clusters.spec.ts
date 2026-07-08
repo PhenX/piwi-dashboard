@@ -367,3 +367,115 @@ test.describe.serial('Failure clustering', () => {
     expect(groups[0].triageNote).toBe('Investigated — flaky test infrastructure');
   });
 });
+
+// ── Extract cases from a cluster ─────────────────────────────────────────────
+
+test.describe.serial('Extract cases from failure cluster', () => {
+  const sharedError =
+    "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByTestId('x')";
+
+  let clusterId: number;
+  let extractableTestCaseId: number;
+  let remainingTestCaseId: number;
+
+  test.beforeAll(async ({ request }) => {
+    const response = await request.post('/api/test-runs/submit', {
+      data: {
+        projectName: PROJECT.EXTRACT_CASES,
+        status: 'failed',
+        startTime: new Date().toISOString(),
+        duration: 3000,
+        totalTests: 2,
+        passedTests: 0,
+        failedTests: 2,
+        skippedTests: 0,
+        testCases: [
+          { title: 'case1', status: 'failed', duration: 500, location: 'tests/x.spec.ts:1:1', error: sharedError },
+          { title: 'case2', status: 'failed', duration: 600, location: 'tests/x.spec.ts:2:1', error: sharedError },
+        ],
+      },
+    });
+    expect(response.ok()).toBeTruthy();
+    const { testRunId } = await response.json();
+
+    const clusterRes = await request.get(`/api/test-runs/${testRunId}`);
+    const run = (await clusterRes.json()) as { testCases: Array<{ status: string; failureClusterId: number }> };
+    const failed = run.testCases.filter((c) => c.status === 'failed');
+    expect(failed).toHaveLength(2);
+    clusterId = failed[0]!.failureClusterId;
+    expect(clusterId).toEqual(expect.any(Number));
+    expect(failed[1]!.failureClusterId).toBe(clusterId);
+
+    // extract-cases keys off the underlying test case id (`testCases.id`, exposed
+    // as `affectedTestCases[].testCaseId`), not the per-run-case id.
+    const detailRes = await request.get(`/api/failure-clusters/${clusterId}`);
+    const detail = (await detailRes.json()) as {
+      occurrences: number;
+      affectedTestCases: Array<{ testCaseId: number; title: string }>;
+    };
+    expect(detail.occurrences).toBe(2);
+    extractableTestCaseId = detail.affectedTestCases.find((t) => t.title === 'case1')!.testCaseId;
+    remainingTestCaseId = detail.affectedTestCases.find((t) => t.title === 'case2')!.testCaseId;
+    expect(extractableTestCaseId).toEqual(expect.any(Number));
+    expect(remainingTestCaseId).toEqual(expect.any(Number));
+  });
+
+  test('POST /extract-cases returns 400 for an empty testCaseIds array', async ({ request }) => {
+    const res = await request.post(`/api/failure-clusters/${clusterId}/extract-cases`, {
+      data: { testCaseIds: [] },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test('POST /extract-cases returns 400 when testCaseIds is missing', async ({ request }) => {
+    const res = await request.post(`/api/failure-clusters/${clusterId}/extract-cases`, {
+      data: {},
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test('POST /extract-cases returns 404 for an unknown cluster', async ({ request }) => {
+    const res = await request.post('/api/failure-clusters/999999/extract-cases', {
+      data: { testCaseIds: [extractableTestCaseId] },
+    });
+    expect(res.status()).toBe(404);
+  });
+
+  test('POST /extract-cases unlinks the given case and updates the triage note', async ({ request }) => {
+    const res = await request.post(`/api/failure-clusters/${clusterId}/extract-cases`, {
+      data: { testCaseIds: [extractableTestCaseId], triageNote: 'extracted the flaky one' },
+    });
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body).toEqual({ success: true, extractedCount: 1, remainingOccurrences: 1 });
+
+    const detailRes = await request.get(`/api/failure-clusters/${clusterId}`);
+    const detail = (await detailRes.json()) as {
+      occurrences: number;
+      triageNote: string | null;
+      affectedTestCases: Array<{ testCaseId: number }>;
+    };
+    expect(detail.occurrences).toBe(1);
+    expect(detail.triageNote).toBe('extracted the flaky one');
+    expect(detail.affectedTestCases.map((t) => t.testCaseId)).toEqual([remainingTestCaseId]);
+    expect(detail.affectedTestCases.map((t) => t.testCaseId)).not.toContain(extractableTestCaseId);
+  });
+
+  test('extracted case no longer references the cluster on the run detail page', async ({ request }) => {
+    const projectsRes = await request.get('/api/projects/menu');
+    const projects = (await projectsRes.json()) as Array<{ id: number; name: string }>;
+    const project = projects.find((p) => p.name === PROJECT.EXTRACT_CASES)!;
+    const projectDetail = (await (await request.get(`/api/projects/${project.id}`)).json()) as {
+      testRuns: Array<{ id: number }>;
+    };
+    const runId = projectDetail.testRuns[0]!.id;
+
+    const run = (await (await request.get(`/api/test-runs/${runId}`)).json()) as {
+      testCases: Array<{ title: string; failureClusterId: number | null }>;
+    };
+    const extracted = run.testCases.find((c) => c.title === 'case1')!;
+    const remaining = run.testCases.find((c) => c.title === 'case2')!;
+    expect(extracted.failureClusterId).toBeNull();
+    expect(remaining.failureClusterId).toBe(clusterId);
+  });
+});

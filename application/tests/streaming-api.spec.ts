@@ -277,3 +277,149 @@ test.describe.serial('Streaming API Tests', () => {
     expect(details.duration).toBe(0);
   });
 });
+
+// ── /heartbeat ────────────────────────────────────────────────────────────────
+
+test.describe.serial('Heartbeat API Tests', () => {
+  let runId: number;
+  let streamToken: string;
+
+  test.beforeAll(async ({ request }) => {
+    const startResp = await request.post('/api/test-runs/start', {
+      data: { projectName: PROJECT.HEARTBEAT_TEST, startTime: new Date().toISOString() },
+    });
+    expect(startResp.ok()).toBeTruthy();
+    const data = await startResp.json();
+    runId = data.runId;
+    streamToken = data.streamToken;
+  });
+
+  test('POST /api/test-runs/:id/heartbeat with a valid token bumps updatedAt and returns success', async ({
+    request,
+  }) => {
+    const before = await (await request.get(`/api/test-runs/${runId}`)).json();
+
+    // Ensure a measurable clock tick between the two updatedAt values.
+    await new Promise((r) => setTimeout(r, 1100));
+
+    const response = await request.post(`/api/test-runs/${runId}/heartbeat`, {
+      data: { streamToken },
+    });
+    expect(response.ok()).toBeTruthy();
+    const data = await response.json();
+    expect(data).toEqual({ success: true });
+
+    const after = await (await request.get(`/api/test-runs/${runId}`)).json();
+    expect(new Date(after.updatedAt).getTime()).toBeGreaterThan(new Date(before.updatedAt).getTime());
+    // The run itself is left untouched otherwise (still running).
+    expect(after.status).toBe('running');
+  });
+
+  test('POST /api/test-runs/:id/heartbeat rejects a missing stream token with 401', async ({ request }) => {
+    const response = await request.post(`/api/test-runs/${runId}/heartbeat`, {
+      data: {},
+    });
+    expect(response.status()).toBe(401);
+    const data = await response.json();
+    expect(data.message).toContain('Missing stream token');
+  });
+
+  test('POST /api/test-runs/:id/heartbeat rejects a wrong stream token with 403', async ({ request }) => {
+    const response = await request.post(`/api/test-runs/${runId}/heartbeat`, {
+      data: { streamToken: 'not-the-right-token' },
+    });
+    expect(response.status()).toBe(403);
+    const data = await response.json();
+    expect(data.message).toContain('Invalid stream token');
+  });
+
+  test('POST /api/test-runs/:id/heartbeat returns 404 for a non-existent run', async ({ request }) => {
+    const response = await request.post('/api/test-runs/999999/heartbeat', {
+      data: { streamToken: 'anything' },
+    });
+    expect(response.status()).toBe(404);
+  });
+
+  test('POST /api/test-runs/:id/heartbeat returns 400 for a non-numeric run id', async ({ request }) => {
+    const response = await request.post('/api/test-runs/not-a-number/heartbeat', {
+      data: { streamToken: 'anything' },
+    });
+    expect(response.status()).toBe(400);
+  });
+});
+
+// ── /summary ─────────────────────────────────────────────────────────────────
+
+test.describe.serial('Test Run Summary API Tests', () => {
+  let runId: number;
+
+  test.beforeAll(async ({ request }) => {
+    const response = await request.post('/api/test-runs/submit', {
+      data: {
+        projectName: PROJECT.RUN_SUMMARY_TEST,
+        status: 'failed',
+        startTime: new Date().toISOString(),
+        duration: 3000,
+        totalTests: 2,
+        passedTests: 1,
+        failedTests: 1,
+        skippedTests: 0,
+        testCases: [
+          { title: 'case A', status: 'passed', duration: 500, location: 'tests/a.spec.ts:10:5' },
+          { title: 'case B', status: 'failed', duration: 700, location: 'tests/b.spec.ts:20:3', error: 'boom' },
+        ],
+      },
+    });
+    expect(response.ok()).toBeTruthy();
+    const data = await response.json();
+    runId = data.testRunId;
+  });
+
+  test('GET /api/test-runs/:id/summary returns run metadata without the stream token', async ({ request }) => {
+    const response = await request.get(`/api/test-runs/${runId}/summary`);
+    expect(response.ok()).toBeTruthy();
+    const summary = await response.json();
+
+    expect(summary.id).toBe(runId);
+    expect(summary.status).toBe('failed');
+    expect(summary.totalTests).toBe(2);
+    expect(summary.passedTests).toBe(1);
+    expect(summary.failedTests).toBe(1);
+    expect(summary.avgTestDuration).toBe(600);
+    expect(summary.streamToken).toBeUndefined();
+  });
+
+  test('GET /api/test-runs/:id/summary includes lightweight per-case info', async ({ request }) => {
+    const response = await request.get(`/api/test-runs/${runId}/summary`);
+    const summary = await response.json();
+
+    expect(Array.isArray(summary.testCases)).toBe(true);
+    expect(summary.testCases).toHaveLength(2);
+
+    const byTitle = Object.fromEntries(summary.testCases.map((tc: { title: string }) => [tc.title, tc]));
+    expect(byTitle['case A']).toMatchObject({
+      title: 'case A',
+      status: 'passed',
+      duration: 500,
+      location: 'tests/a.spec.ts:10:5',
+    });
+    expect(byTitle['case B']).toMatchObject({
+      title: 'case B',
+      status: 'failed',
+      duration: 700,
+      location: 'tests/b.spec.ts:20:3',
+    });
+    // The summary is intentionally lightweight — no error text, no clustering info.
+    expect(byTitle['case B'].error).toBeUndefined();
+  });
+
+  test('GET /api/test-runs/:id/summary returns 404 for a non-existent run', async ({ request }) => {
+    const response = await request.get('/api/test-runs/999999/summary');
+    expect(response.status()).toBe(404);
+  });
+
+  test('GET /api/test-runs/:id/summary returns 400 for a non-numeric run id', async ({ request }) => {
+    const response = await request.get('/api/test-runs/not-a-number/summary');
+    expect(response.status()).toBe(400);
+  });
+});

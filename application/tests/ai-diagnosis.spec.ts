@@ -371,6 +371,57 @@ test.describe.serial('AI diagnosis — unconfigured error cases', () => {
     const diagnoseRes = await request.post(`/api/failure-clusters/${cId}/diagnose`);
     expect(diagnoseRes.status()).toBe(503);
   });
+
+  test('POST /diagnose/stream returns 404 for an unknown cluster', async ({ request }) => {
+    const res = await request.post('/api/failure-clusters/999999/diagnose/stream');
+    expect(res.status()).toBe(404);
+    const body = await res.json();
+    expect(body.message).toContain('Failure cluster not found');
+  });
+
+  test('POST /diagnose/stream returns 503 when AI is not configured', async ({ request }) => {
+    if (isEnvManaged) {
+      test.skip();
+      return;
+    }
+    // Submit a run to get a fresh cluster ID
+    const res = await request.post('/api/test-runs/submit', {
+      data: {
+        projectName: PROJECT.DIAGNOSE_STREAM,
+        status: 'failed',
+        startTime: new Date().toISOString(),
+        duration: 5000,
+        totalTests: 1,
+        passedTests: 0,
+        failedTests: 1,
+        skippedTests: 0,
+        testCases: [
+          {
+            title: 'unconfigured stream test',
+            status: 'failed',
+            duration: 1000,
+            location: 'tests/stream.spec.ts:1:1',
+            error: 'expect(received).toBe(expected)\nExpected: true\nReceived: false',
+          },
+        ],
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const { testRunId } = await res.json();
+
+    const run = (await (await request.get(`/api/test-runs/${testRunId}`)).json()) as {
+      testCases: Array<{ status: string; failureClusterId?: number }>;
+    };
+    const failedCase = run.testCases.find((c) => c.status === 'failed');
+    const cId = failedCase?.failureClusterId;
+
+    if (!cId) return; // no cluster → skip
+
+    const streamRes = await request.post(`/api/failure-clusters/${cId}/diagnose/stream`);
+    expect(streamRes.status()).toBe(503);
+    const body = await streamRes.json();
+    expect(body.message).toContain('AI diagnosis is not configured');
+  });
 });
 
 // ── Cluster reconciliation, merge suggestions & naming (Phases 2–3) ──────────
