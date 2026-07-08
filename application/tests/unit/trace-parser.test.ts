@@ -1,6 +1,13 @@
 import { describe, test, expect } from 'vitest';
-import { formatFailingActionSection } from '../../server/utils/trace-parser';
+import { formatFailingActionSection, parseTraceEvents } from '../../server/utils/trace-parser';
 import type { ParsedTraceData, TraceAction } from '../../server/utils/trace-parser';
+import { buildZip } from '../../server/utils/trace-zip';
+
+/** Build a slim trace ZIP containing a `trace.trace` file made of the given JSONL lines. */
+function buildTraceZip(events: unknown[], extraLines: string[] = []): Buffer {
+  const lines = [...events.map((e) => JSON.stringify(e)), ...extraLines];
+  return buildZip([{ name: 'trace.trace', data: Buffer.from(lines.join('\n'), 'utf8') }]);
+}
 
 // Large limits so nothing truncates in these tests.
 const MAX_TRACE_ACTIONS = 10;
@@ -99,5 +106,162 @@ describe('formatFailingActionSection — non-fallback duration (unchanged)', () 
     // Duration comes from endTime, not traceEndTime.
     expect(out).toContain('- Duration: 250ms');
     expect(out).not.toContain('ran ≥');
+  });
+});
+
+describe('formatFailingActionSection — additional rendering branches', () => {
+  test('renders selector, URL, and values from action params', () => {
+    const action = makeAction({ params: { selector: 'button.submit', url: 'https://x.test', values: ['a', 'b'] } });
+    const out = formatFailingActionSection(makeData({ failingAction: action }), MAX_TRACE_ACTIONS, TRACE_DOM_CHARS);
+    expect(out).toContain('- Selector: `button.submit`');
+    expect(out).toContain('- URL: https://x.test');
+    expect(out).toContain('- Values: a, b');
+  });
+
+  test('renders the error message and truncates the stack to 5 frames', () => {
+    const stack = Array.from({ length: 8 }, (_, i) => `    at frame${i} (/app/x.ts:${i}:1)`).join('\n');
+    const action = makeAction({ error: { message: 'locator not found', stack } });
+    const out = formatFailingActionSection(makeData({ failingAction: action }), MAX_TRACE_ACTIONS, TRACE_DOM_CHARS);
+    expect(out).toContain('- Error: locator not found');
+    expect(out).toContain('frame0');
+    expect(out).toContain('frame4');
+    expect(out).not.toContain('frame5');
+  });
+
+  test('lists nearby actions with a FAILED marker on the failing one, bounded by maxTraceActions', () => {
+    const failing = makeAction({ callId: 'call@3', apiName: 'locator.click' });
+    const actions = [
+      makeAction({ callId: 'call@1', apiName: 'page.goto' }),
+      makeAction({ callId: 'call@2', apiName: 'locator.fill' }),
+      failing,
+    ];
+    const out = formatFailingActionSection(
+      makeData({ actions, failingAction: failing, failingActionIndex: 2 }),
+      1, // only 1 action of lookback → drops page.goto
+      TRACE_DOM_CHARS,
+    );
+    expect(out).toContain('### Actions Leading to Failure');
+    expect(out).not.toContain('page.goto');
+    expect(out).toContain('- locator.fill');
+    expect(out).toContain('- locator.click ← FAILED');
+  });
+
+  test('includes console entries within the failure time window, and drops ones outside it', () => {
+    const action = makeAction({ startTime: 10_000, endTime: 10_500 });
+    const data = makeData({
+      failingAction: action,
+      consoleEntries: [
+        { type: 'error', text: 'inside window', timestamp: 10_200 },
+        { type: 'log', text: 'way before', timestamp: 0 },
+      ],
+    });
+    const out = formatFailingActionSection(data, MAX_TRACE_ACTIONS, TRACE_DOM_CHARS);
+    expect(out).toContain('### Console Around Failure');
+    expect(out).toContain('[error] inside window');
+    expect(out).not.toContain('way before');
+  });
+
+  test('includes network requests within the failure time window with status and duration', () => {
+    const action = makeAction({ startTime: 10_000, endTime: 10_500 });
+    const data = makeData({
+      failingAction: action,
+      networkRequests: [
+        { url: 'https://api.test/x', method: 'GET', statusCode: 500, startTime: 10_100, endTime: 10_300 },
+        { url: 'https://api.test/far', method: 'GET', startTime: 0, endTime: 0 },
+      ],
+    });
+    const out = formatFailingActionSection(data, MAX_TRACE_ACTIONS, TRACE_DOM_CHARS);
+    expect(out).toContain('### Network Requests Around Failure');
+    expect(out).toContain('GET https://api.test/x → 500 (200ms)');
+    expect(out).not.toContain('/far');
+  });
+
+  test('shows the log tail (not head) for a timeout fallback, truncated per-line by traceDomChars', () => {
+    const log = Array.from({ length: 12 }, (_, i) => `entry ${i}`);
+    const action = makeAction({ log });
+    const out = formatFailingActionSection(
+      makeData({ failingAction: action, timeoutFallback: true }),
+      MAX_TRACE_ACTIONS,
+      4, // cap each log line to 4 chars
+    );
+    expect(out).toContain('### Action Log — tail (12 entries total)');
+    expect(out).toContain('entr…'); // truncated
+    expect(out).not.toContain('entry 0\n'); // head entries dropped for tail view
+  });
+});
+
+describe('parseTraceEvents', () => {
+  test('returns null for a non-zip buffer', async () => {
+    expect(await parseTraceEvents(Buffer.from('not a zip file'))).toBeNull();
+  });
+
+  test('returns null when there is no trace.trace entry', async () => {
+    const zip = buildZip([{ name: 'resources/other.txt', data: Buffer.from('x') }]);
+    expect(await parseTraceEvents(zip)).toBeNull();
+  });
+
+  test('parses action events and skips malformed/blank lines without throwing', async () => {
+    const zip = buildTraceZip(
+      [
+        { type: 'action', callId: 'c1', apiName: 'locator.click', startTime: 1000, endTime: 1100 },
+        { type: 'action', callId: 'c2', apiName: 'locator.fill', startTime: 1200, endTime: 1300 },
+      ],
+      ['{not valid json', ''],
+    );
+    const data = await parseTraceEvents(zip);
+    expect(data).not.toBeNull();
+    expect(data!.actions).toHaveLength(2);
+    expect(data!.actions[0]!.apiName).toBe('locator.click');
+    expect(data!.eventCount).toBe(2);
+  });
+
+  test('selects the error-bearing action even when a later action has no error', async () => {
+    const zip = buildTraceZip([
+      { type: 'action', callId: 'c1', apiName: 'locator.click', startTime: 1000, error: { message: 'boom' } },
+      { type: 'action', callId: 'c2', apiName: 'locator.fill', startTime: 1200 },
+    ]);
+    const data = await parseTraceEvents(zip);
+    expect(data!.timeoutFallback).toBe(false);
+    expect(data!.failingAction?.apiName).toBe('locator.click');
+    expect(data!.failingAction?.error?.message).toBe('boom');
+  });
+
+  test('falls back to the last incomplete, error-free action when nothing errored', async () => {
+    const zip = buildTraceZip([
+      { type: 'action', callId: 'c1', apiName: 'page.goto', startTime: 1000, endTime: 1100 },
+      { type: 'action', callId: 'c2', apiName: 'locator.click', startTime: 1200 }, // no endTime — the killed action
+      { type: 'action', callId: 'c3', apiName: 'locator.fill', startTime: 1300, endTime: 1400 },
+    ]);
+    const data = await parseTraceEvents(zip);
+    expect(data!.timeoutFallback).toBe(true);
+    expect(data!.failingAction?.apiName).toBe('locator.click');
+  });
+
+  test('tracks traceEndTime as the largest timestamp seen across all events', async () => {
+    const zip = buildTraceZip([
+      { type: 'action', callId: 'c1', apiName: 'locator.click', startTime: 1000, endTime: 1500 },
+      { type: 'event', method: 'console', time: 9999, event: { text: 'late log' } },
+    ]);
+    const data = await parseTraceEvents(zip);
+    expect(data!.traceEndTime).toBe(9999);
+  });
+
+  test('extracts console events and pairs network create/update events into a single request', async () => {
+    const zip = buildTraceZip([
+      { type: 'event', method: 'console', time: 100, event: { type: 'error', text: 'console boom' } },
+      { type: 'event', method: '__create__', time: 200, event: { url: 'https://api.test/y', method: 'POST' } },
+      {
+        type: 'event',
+        method: '__update__',
+        time: 300,
+        event: { url: 'https://api.test/y', method: 'POST', response: { status: 201 } },
+      },
+    ]);
+    const data = await parseTraceEvents(zip);
+    expect(data!.consoleEntries).toEqual([
+      { type: 'error', text: 'console boom', timestamp: 100, location: undefined },
+    ]);
+    expect(data!.networkRequests).toHaveLength(1);
+    expect(data!.networkRequests[0]).toMatchObject({ url: 'https://api.test/y', method: 'POST', statusCode: 201 });
   });
 });
