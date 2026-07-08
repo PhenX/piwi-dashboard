@@ -22,11 +22,7 @@ export async function computeRegressionSignals(db: DB, runId: number): Promise<v
     .select({ id: testRuns.id })
     .from(testRuns)
     .where(
-      and(
-        eq(testRuns.projectId, run.projectId),
-        eq(testRuns.status, 'passed'),
-        lt(testRuns.startTime, run.startTime),
-      ),
+      and(eq(testRuns.projectId, run.projectId), eq(testRuns.status, 'passed'), lt(testRuns.startTime, run.startTime)),
     )
     .orderBy(desc(testRuns.startTime))
     .limit(1);

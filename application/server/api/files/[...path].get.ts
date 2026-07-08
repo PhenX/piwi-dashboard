@@ -139,8 +139,8 @@ export default eventHandler(async (event) => {
   setResponseHeader(event, 'X-Content-Type-Options', 'nosniff');
   setResponseHeader(event, 'Cache-Control', 'no-store');
 
-  // Trace archives are fetched cross-origin by the hosted Playwright trace
-  // viewer (trace.playwright.dev) from the user's browser
+  // Trace archives are fetched cross-origin by the Playwright trace viewer
+  // (local /trace-viewer/ or hosted trace.playwright.dev) from the user's browser
   if (path.endsWith('.zip')) {
     setResponseHeader(event, 'Access-Control-Allow-Origin', '*');
   }

@@ -43,8 +43,7 @@ const otherFailingCount = computed(() => Math.max(0, props.cluster.sameRunCaseCo
 
         <p class="text-xs text-gray-500 dark:text-gray-400">
           <template v-if="otherFailingCount > 0">
-            Matches {{ otherFailingCount }} other failing
-            {{ otherFailingCount === 1 ? 'test' : 'tests' }} in this run.
+            Matches {{ otherFailingCount }} other failing {{ otherFailingCount === 1 ? 'test' : 'tests' }} in this run.
           </template>
           <template v-if="!cluster.isNew">
             Known failure — first seen in
@@ -55,7 +54,11 @@ const otherFailingCount = computed(() => Math.max(0, props.cluster.sameRunCaseCo
           </template>
         </p>
 
-        <p v-if="cluster.triageNote" class="text-xs italic text-gray-500 dark:text-gray-400" :title="cluster.triageNote">
+        <p
+          v-if="cluster.triageNote"
+          class="text-xs italic text-gray-500 dark:text-gray-400"
+          :title="cluster.triageNote"
+        >
           “{{ cluster.triageNote }}”
         </p>
 

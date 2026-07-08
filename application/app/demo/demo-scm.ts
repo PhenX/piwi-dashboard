@@ -172,9 +172,7 @@ export const DEMO_SCM_PROJECTS: Record<number, DemoScmProject> = {
         author: 'Bob Smith',
         date: '2025-04-23T09:30:00Z',
         branch: 'main',
-        files: [
-          { filename: 'package.json', status: 'modified', additions: 1, deletions: 1 },
-        ],
+        files: [{ filename: 'package.json', status: 'modified', additions: 1, deletions: 1 }],
       },
       {
         sha: 'c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6',
@@ -182,9 +180,7 @@ export const DEMO_SCM_PROJECTS: Record<number, DemoScmProject> = {
         author: 'Carol White',
         date: '2025-04-22T16:05:00Z',
         branch: 'main',
-        files: [
-          { filename: 'src/lib/cart.ts', status: 'modified', additions: 4, deletions: 2 },
-        ],
+        files: [{ filename: 'src/lib/cart.ts', status: 'modified', additions: 4, deletions: 2 }],
       },
       {
         sha: 'd4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f607',
@@ -192,9 +188,7 @@ export const DEMO_SCM_PROJECTS: Record<number, DemoScmProject> = {
         author: 'Alice Chen',
         date: '2025-04-21T11:20:00Z',
         branch: 'main',
-        files: [
-          { filename: 'tests/checkout/checkout.spec.ts', status: 'modified', additions: 18, deletions: 0 },
-        ],
+        files: [{ filename: 'tests/checkout/checkout.spec.ts', status: 'modified', additions: 18, deletions: 0 }],
       },
       {
         sha: 'e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718',
@@ -213,7 +207,11 @@ export const DEMO_SCM_PROJECTS: Record<number, DemoScmProject> = {
     branches: ['main', 'develop'],
     suspectShas: ['f1e2d3c4b5a6079887766554433221100ffeeddc'],
     sourceFiles: [
-      { path: 'tests/api/auth.spec.ts', content: 'import { test, expect } from \'@playwright/test\';\n\ntest(\'POST /auth/login returns 200 with valid credentials\', async ({ request }) => {\n  const res = await request.post(\'/auth/login\', {\n    data: { email: \'user@example.com\', password: \'correct-horse\' },\n  });\n  expect(res.status()).toBe(200);\n});\n' },
+      {
+        path: 'tests/api/auth.spec.ts',
+        content:
+          "import { test, expect } from '@playwright/test';\n\ntest('POST /auth/login returns 200 with valid credentials', async ({ request }) => {\n  const res = await request.post('/auth/login', {\n    data: { email: 'user@example.com', password: 'correct-horse' },\n  });\n  expect(res.status()).toBe(200);\n});\n",
+      },
       { path: 'src/routes/auth.ts', content: AUTH_HANDLER },
     ],
     commits: [

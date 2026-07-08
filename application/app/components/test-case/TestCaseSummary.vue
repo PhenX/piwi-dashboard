@@ -51,17 +51,6 @@ const { summaryColSpanClass, blockColSpanClass } = useDetailGrid(() => {
   return count;
 });
 
-const origin = computed(() => {
-  if (import.meta.client) {
-    return window.location.origin;
-  }
-  return useRequestURL().origin;
-});
-
-function viewerUrl(path: string): string {
-  return `https://trace.playwright.dev/?trace=${encodeURIComponent(`${origin.value}/api/files/${getFileApiPath(path)}`)}`;
-}
-
 function downloadUrl(path: string): string {
   return `/api/files/${getFileApiPath(path)}`;
 }
@@ -275,7 +264,7 @@ function fileName(path: string): string {
             </div>
             <div class="flex items-center gap-1 shrink-0">
               <UButton
-                :to="viewerUrl(trace.filePath)"
+                :to="getTraceViewerUrl(trace.filePath)"
                 target="_blank"
                 icon="i-lucide-bug-play"
                 size="xs"

@@ -390,7 +390,12 @@ function recurrenceMd(ev: ClusterEvidence): string {
 
 async function serverLogsMd(db: DrizzleDB, repId: number): Promise<string | null> {
   const rows = await db
-    .select({ url: networkRequests.url, method: networkRequests.method, status: networkRequests.status, serverLogs: networkRequests.serverLogs })
+    .select({
+      url: networkRequests.url,
+      method: networkRequests.method,
+      status: networkRequests.status,
+      serverLogs: networkRequests.serverLogs,
+    })
     .from(networkRequests)
     .where(eq(networkRequests.testRunsCaseId, repId));
   const withLogs = rows.filter((r) => Array.isArray(r.serverLogs) && (r.serverLogs as unknown[]).length > 0);
@@ -408,7 +413,12 @@ async function serverLogsMd(db: DrizzleDB, repId: number): Promise<string | null
 
 async function networkMd(db: DrizzleDB, repId: number): Promise<{ md: string | null; items: number }> {
   const rows = await db
-    .select({ method: networkRequests.method, url: networkRequests.url, status: networkRequests.status, duration: networkRequests.duration })
+    .select({
+      method: networkRequests.method,
+      url: networkRequests.url,
+      status: networkRequests.status,
+      duration: networkRequests.duration,
+    })
     .from(networkRequests)
     .where(eq(networkRequests.testRunsCaseId, repId));
   if (!rows.length) return { md: null, items: 0 };
@@ -463,11 +473,7 @@ async function locatorHealingMd(
 
 // ── SCM sections (canned) ────────────────────────────────────────────────────
 
-function scmChangesFor(
-  projectId: number,
-  baseCommit: string | null,
-  selectedShas: string[],
-): ScmChanges | null {
+function scmChangesFor(projectId: number, baseCommit: string | null, selectedShas: string[]): ScmChanges | null {
   if (selectedShas.length) return getDemoChangesForShas(projectId, selectedShas);
   // Default baseline: the oldest known commit, so every newer commit (including the
   // suspect) appears as "what changed since the last green run".
@@ -687,7 +693,14 @@ function parseScmQuery(query?: URLSearchParams): { baseCommit: string | null; se
 export async function getClusterContext(db: DrizzleDB, clusterId: number, query?: URLSearchParams) {
   const ev = await collectClusterEvidence(db, clusterId);
   if (!ev) {
-    return { text: '', sections: [], coverage: { scm: null }, scmChanges: null, tokenEstimate: 0, imageTokenEstimate: 0 };
+    return {
+      text: '',
+      sections: [],
+      coverage: { scm: null },
+      scmChanges: null,
+      tokenEstimate: 0,
+      imageTokenEstimate: 0,
+    };
   }
   const { baseCommit, selectedShas } = parseScmQuery(query);
   const effectiveBase = baseCommit || ev.cluster.manualBaseCommit || null;
@@ -698,7 +711,14 @@ export async function getClusterContext(db: DrizzleDB, clusterId: number, query?
 export async function getExecutionContext(db: DrizzleDB, testRunsCaseId: number, query?: URLSearchParams) {
   const rep = await loadExecutionRep(db, testRunsCaseId);
   if (!rep) {
-    return { text: '', sections: [], coverage: { scm: null }, scmChanges: null, tokenEstimate: 0, imageTokenEstimate: 0 };
+    return {
+      text: '',
+      sections: [],
+      coverage: { scm: null },
+      scmChanges: null,
+      tokenEstimate: 0,
+      imageTokenEstimate: 0,
+    };
   }
   const [trc] = await db
     .select({ clusterId: testRunsCases.failureClusterId })

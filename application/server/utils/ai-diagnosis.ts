@@ -1,5 +1,11 @@
 import { eq, and, desc, inArray, isNotNull } from 'drizzle-orm';
-import { failureDiagnoses, failureDiagnosisVersions, failureClusters, projects, testRunsCases } from '../database/schema';
+import {
+  failureDiagnoses,
+  failureDiagnosisVersions,
+  failureClusters,
+  projects,
+  testRunsCases,
+} from '../database/schema';
 import type { FailureDiagnosis, FailureCluster } from '../database/schema';
 import { DIAGNOSIS_JSON_SCHEMA, parseDiagnosisJson } from '#shared/ai-diagnosis';
 import { validatePatch } from '#shared/patch';
@@ -325,9 +331,7 @@ async function prepareDiagnosisInputs(
   // cost ~3× more tokens on current models without helping diagnosis.
   const allImages = [...(ctx.images ?? []), ...(opts.images ?? [])];
   const images =
-    allImages.length > 0
-      ? await downscaleImages(allImages, (await resolveContextLimits(db)).imageMaxEdge)
-      : undefined;
+    allImages.length > 0 ? await downscaleImages(allImages, (await resolveContextLimits(db)).imageMaxEdge) : undefined;
 
   return { ctx, userContent, images };
 }
@@ -337,7 +341,13 @@ async function persistCompletedDiagnosis(
   db: DbClient,
   cluster: FailureCluster,
   opts: DiagnosisRunOpts,
-  args: { diagnosis: ReturnType<typeof parseDiagnosisJson>; ctx: BuiltDiagnosisContext; pipeline: PipelineStage[]; model: string; t0: number },
+  args: {
+    diagnosis: ReturnType<typeof parseDiagnosisJson>;
+    ctx: BuiltDiagnosisContext;
+    pipeline: PipelineStage[];
+    model: string;
+    t0: number;
+  },
 ): Promise<FailureDiagnosis> {
   const { diagnosis, ctx, pipeline, model, t0 } = args;
   const sumTokens = (k: 'inputTokens' | 'outputTokens') => pipeline.reduce((acc, s) => acc + (s[k] ?? 0), 0) || null;
@@ -550,7 +560,6 @@ export async function streamClusterDiagnosis(
     running.delete(mutexKey);
   }
 }
-
 
 export async function autoDiagnoseRun(db: DbClient, projectId: number, runId: number): Promise<void> {
   const config = await resolveAiConfig(db);

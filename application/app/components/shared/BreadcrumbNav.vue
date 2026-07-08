@@ -34,11 +34,7 @@ const hasAncestors = computed(() => ancestorItems.value.length > 0);
 
   <!-- Mobile: ancestor dropdown + current page. -->
   <div class="flex min-w-0 items-center gap-1 sm:hidden">
-    <UDropdownMenu
-      v-if="hasAncestors"
-      :items="ancestorItems"
-      :content="{ align: 'start', collisionPadding: 12 }"
-    >
+    <UDropdownMenu v-if="hasAncestors" :items="ancestorItems" :content="{ align: 'start', collisionPadding: 12 }">
       <UButton
         :icon="items[0]?.icon || 'i-lucide-ellipsis'"
         trailing-icon="i-lucide-chevron-down"

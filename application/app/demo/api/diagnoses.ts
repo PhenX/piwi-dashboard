@@ -38,11 +38,7 @@ export async function listClusterDiagnosisVersions(db: DrizzleDB, clusterId: num
 }
 
 /** PATCH /api/failure-diagnoses/:id/feedback */
-export async function apiSubmitDiagnosisFeedback(
-  db: DrizzleDB,
-  diagnosisId: number,
-  body?: Record<string, unknown>,
-) {
+export async function apiSubmitDiagnosisFeedback(db: DrizzleDB, diagnosisId: number, body?: Record<string, unknown>) {
   const feedbackRaw = (body?.feedback ?? null) as string | null;
   const feedback = feedbackRaw === 'up' || feedbackRaw === 'down' ? feedbackRaw : null;
   const feedbackNote =

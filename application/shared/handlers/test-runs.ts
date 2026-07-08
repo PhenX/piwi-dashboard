@@ -655,11 +655,7 @@ export async function computeRegressionContextForRun(db: DrizzleDB, runId: numbe
     })
     .from(testRuns)
     .where(
-      and(
-        eq(testRuns.projectId, run.projectId),
-        eq(testRuns.status, 'passed'),
-        lt(testRuns.startTime, run.startTime),
-      ),
+      and(eq(testRuns.projectId, run.projectId), eq(testRuns.status, 'passed'), lt(testRuns.startTime, run.startTime)),
     )
     .orderBy(desc(testRuns.startTime))
     .limit(1);
