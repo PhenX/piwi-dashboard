@@ -90,6 +90,72 @@ function startMockAiServer(port: number): http.Server {
   return server;
 }
 
+/**
+ * Like `startMockAiServer`, but also answers `stream: true` requests as a real
+ * OpenAI-compatible SSE stream (`data: {"choices":[{"delta":{"content": "..."}}]}`
+ * chunks, terminated by a final chunk carrying `usage` and a `data: [DONE]` line)
+ * so `POST /diagnose/stream`'s real streaming path can be exercised end to end.
+ */
+function startStreamingMockAiServer(port: number): http.Server {
+  const server = http.createServer((req, res) => {
+    if (req.method === 'POST' && req.url?.includes('/chat/completions')) {
+      let body = '';
+      req.on('data', (c) => (body += c));
+      req.on('end', () => {
+        let parsed: { stream?: boolean } = {};
+        try {
+          parsed = JSON.parse(body || '{}');
+        } catch {
+          /* ignore */
+        }
+
+        const diagResult = buildMockAiResponse();
+        const responseContent = JSON.stringify(diagResult);
+
+        if (!parsed.stream) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              id: 'chatcmpl-test',
+              object: 'chat.completion',
+              choices: [{ index: 0, message: { role: 'assistant', content: responseContent }, finish_reason: 'stop' }],
+              usage: { prompt_tokens: 100, completion_tokens: 80, total_tokens: 180 },
+            }),
+          );
+          return;
+        }
+
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        });
+
+        // Split the JSON payload into a handful of delta chunks to exercise the
+        // "text" chunk path, not just a single chunk.
+        const chunkSize = Math.max(1, Math.ceil(responseContent.length / 4));
+        for (let i = 0; i < responseContent.length; i += chunkSize) {
+          const piece = responseContent.slice(i, i + chunkSize);
+          res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: piece } }] })}\n\n`);
+        }
+        res.write(
+          `data: ${JSON.stringify({
+            choices: [{ delta: {}, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 100, completion_tokens: 80, total_tokens: 180 },
+          })}\n\n`,
+        );
+        res.write('data: [DONE]\n\n');
+        res.end();
+      });
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found' }));
+    }
+  });
+  server.listen(port, '127.0.0.1');
+  return server;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function submitRun(request: APIRequestContext, cases: Array<{ status: string; [key: string]: unknown }>) {
@@ -421,6 +487,105 @@ test.describe.serial('AI diagnosis — unconfigured error cases', () => {
     expect(streamRes.status()).toBe(503);
     const body = await streamRes.json();
     expect(body.message).toContain('AI diagnosis is not configured');
+  });
+});
+
+// ── /diagnose/stream success path (real SSE) ─────────────────────────────────
+
+test.describe.serial('AI diagnosis — streaming success path', () => {
+  let mockServer: http.Server;
+  let mockPort: number;
+  let isEnvManaged = false;
+
+  test.beforeAll(async ({ request }) => {
+    const statusRes = await request.get('/api/ai/status');
+    if (statusRes.ok()) {
+      const s = (await statusRes.json()) as { source?: string };
+      isEnvManaged = s.source === 'env';
+    }
+    mockPort = await getFreePort();
+    mockServer = startStreamingMockAiServer(mockPort);
+  });
+
+  test.beforeEach(async () => {
+    if (isEnvManaged) test.skip();
+  });
+
+  test.afterAll(async ({ request }) => {
+    if (!isEnvManaged) await request.put('/api/settings/ai', { data: { roles: null } });
+    mockServer.close();
+  });
+
+  test('POST /diagnose/stream streams thinking chunks then a completed result event', async ({ request, baseURL }) => {
+    const put = await request.put('/api/settings/ai', {
+      data: {
+        roles: {
+          diagnosis: { provider: 'openai', model: 'gpt-test', baseUrl: `http://127.0.0.1:${mockPort}/v1` },
+        },
+        autoDiagnose: false,
+      },
+    });
+    expect(put.ok()).toBeTruthy();
+
+    // A distinct selector (not just a distinct timestamp) is required so this
+    // gets its own failure cluster: the fingerprint deliberately does NOT hash
+    // the stack frame file (see `shared/error-fingerprint.ts`), so an error with
+    // no selector would otherwise collide with the plain-timeout clusters created
+    // earlier in this same file (e.g. `freshClusterError` above).
+    const uniqueError = `TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByTestId('stream-success-${Date.now()}')`;
+    const { testRunId } = await submitRun(request, [
+      {
+        title: 'streaming diagnosis test',
+        status: 'failed',
+        duration: 1000,
+        location: 'tests/stream-success.spec.ts:5:3',
+        error: uniqueError,
+      },
+    ]);
+
+    const run = (await (await request.get(`/api/test-runs/${testRunId}`)).json()) as {
+      testCases: Array<{ status: string; failureClusterId?: number }>;
+    };
+    const failedCase = run.testCases.find((c) => c.status === 'failed');
+    const clusterId = failedCase?.failureClusterId;
+    expect(clusterId).toBeTruthy();
+
+    // Read the SSE response with raw fetch (Playwright's `request` fixture buffers
+    // the whole body, which would hang until the stream closes on its own).
+    // `force=true` guarantees the real streaming path runs rather than the
+    // immediate single-event replay of a pre-existing completed diagnosis.
+    const response = await fetch(`${baseURL}/api/failure-clusters/${clusterId}/diagnose/stream?force=true`, {
+      method: 'POST',
+    });
+    expect(response.ok).toBeTruthy();
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      if (text.includes('event: result')) break;
+    }
+    reader.releaseLock();
+
+    // At least one "thinking" chunk arrived before the final result.
+    expect(text).toContain('event: thinking');
+
+    const resultIdx = text.indexOf('event: result');
+    expect(resultIdx).toBeGreaterThan(-1);
+    const afterResult = text.slice(resultIdx);
+    const dataLine = afterResult.split('\n').find((l) => l.startsWith('data:'));
+    expect(dataLine).toBeDefined();
+
+    const diagnosis = JSON.parse(dataLine!.slice('data:'.length).trim());
+    expect(diagnosis.status).toBe('completed');
+    expect(diagnosis.clusterId).toBe(clusterId);
+    expect(diagnosis.category).toBe('app-bug');
+    expect(diagnosis.confidence).toBe('high');
+    expect(diagnosis.details.confidenceScore).toBe(88);
   });
 });
 

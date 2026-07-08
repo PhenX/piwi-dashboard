@@ -638,4 +638,202 @@ test.describe.serial('Reporter with authentication enabled', () => {
     });
     expect(res.status()).toBe(401);
   });
+
+  // ---------------------------------------------------------------------------
+  // Project members API — administrator-only authorization
+  //
+  // These checks need a real authenticated non-admin session (a "user" role
+  // request must actually be rejected), which only exists on this auth-enabled
+  // server — with auth disabled (the default dev/test server) `requireAuth`
+  // always returns a synthetic system-admin user and no 403 can ever be
+  // observed. See `tests/user-management.spec.ts` for the GET/PUT shape and
+  // validation tests that run against the auth-disabled server instead.
+  // ---------------------------------------------------------------------------
+
+  let membersProjectId: number;
+  let ciUserId: number;
+  let ciReporterId: number;
+
+  test('create a dedicated "user"-role account for authorization checks', async ({ request }) => {
+    const loginRes = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'admin', password: 'adminpassword123' },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+
+    const res = await request.post(`${AUTH_SERVER_URL}/api/users`, {
+      data: { username: 'ci-user', password: 'userpassword123', role: 'user', name: 'CI User' },
+    });
+    expect(res.ok()).toBeTruthy();
+    const data = await res.json();
+    expect(data.user.role).toBe('user');
+    ciUserId = data.user.id;
+
+    const usersRes = await request.get(`${AUTH_SERVER_URL}/api/users`);
+    const usersData = await usersRes.json();
+    ciReporterId = usersData.users.find((u: { username: string }) => u.username === 'ci-reporter').id;
+  });
+
+  test('admin creates a project for the members checks', async ({ request }) => {
+    const loginRes = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'admin', password: 'adminpassword123' },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+
+    const res = await request.post(`${AUTH_SERVER_URL}/api/test-runs/submit`, {
+      data: {
+        projectName: PROJECT.AUTH_ROLE_CHECKS,
+        status: 'passed',
+        startTime: new Date().toISOString(),
+        duration: 1000,
+        totalTests: 1,
+        passedTests: 1,
+        failedTests: 0,
+        skippedTests: 0,
+        testCases: [],
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+    const data = await res.json();
+    membersProjectId = data.projectId;
+  });
+
+  test('GET /api/projects/:id/members is rejected for non-admin roles', async ({ request }) => {
+    // ci-reporter (role: reporter) has global project access but is not an admin.
+    let loginRes = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'ci-reporter', password: 'reporterpassword123' },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+    let res = await request.get(`${AUTH_SERVER_URL}/api/projects/${membersProjectId}/members`);
+    expect(res.status()).toBe(403);
+
+    // ci-user (role: user, and not yet assigned to any project) is rejected too.
+    loginRes = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'ci-user', password: 'userpassword123' },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+    res = await request.get(`${AUTH_SERVER_URL}/api/projects/${membersProjectId}/members`);
+    expect(res.status()).toBe(403);
+  });
+
+  test('PUT /api/projects/:id/members is rejected for non-admin roles', async ({ request }) => {
+    const loginRes = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'ci-reporter', password: 'reporterpassword123' },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+
+    const res = await request.put(`${AUTH_SERVER_URL}/api/projects/${membersProjectId}/members`, {
+      data: { userIds: [ciReporterId] },
+    });
+    expect(res.status()).toBe(403);
+  });
+
+  test('admin can GET then PUT project members, assigning ci-user and ci-reporter', async ({ request }) => {
+    const loginRes = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'admin', password: 'adminpassword123' },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+
+    const before = await request.get(`${AUTH_SERVER_URL}/api/projects/${membersProjectId}/members`);
+    expect(before.ok()).toBeTruthy();
+    const beforeBody = (await before.json()) as { users: Array<{ username: string }> };
+    // Only the implicit admin has access before any explicit assignment.
+    expect(beforeBody.users.some((u) => u.username === 'ci-user')).toBe(false);
+    expect(beforeBody.users.some((u) => u.username === 'ci-reporter')).toBe(false);
+
+    const put = await request.put(`${AUTH_SERVER_URL}/api/projects/${membersProjectId}/members`, {
+      data: { userIds: [ciUserId, ciReporterId] },
+    });
+    expect(put.ok()).toBeTruthy();
+    expect(await put.json()).toEqual({ success: true });
+
+    const after = await request.get(`${AUTH_SERVER_URL}/api/projects/${membersProjectId}/members`);
+    const afterBody = (await after.json()) as { users: Array<{ username: string; global: boolean }> };
+    const ciUserEntry = afterBody.users.find((u) => u.username === 'ci-user');
+    const ciReporterEntry = afterBody.users.find((u) => u.username === 'ci-reporter');
+    expect(ciUserEntry).toMatchObject({ username: 'ci-user', global: false });
+    expect(ciReporterEntry).toMatchObject({ username: 'ci-reporter', global: false });
+  });
+
+  test('being assigned as a member does not itself grant access to manage members', async ({ request }) => {
+    // ci-user is now an explicit (non-global) member of the project, but members
+    // management stays administrator-only — assignment grants data access
+    // elsewhere, not membership-management rights.
+    const loginRes = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'ci-user', password: 'userpassword123' },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+
+    const res = await request.get(`${AUTH_SERVER_URL}/api/projects/${membersProjectId}/members`);
+    expect(res.status()).toBe(403);
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /api/failure-clusters/:id/diagnose/stream — required-role check
+  //
+  // SUSPECTED SOURCE BUG (not fixed, per task instructions): both
+  // `diagnose.post.ts` and `diagnose/stream.post.ts` declare
+  // `x-required-roles: [ADMINISTRATOR, REPORTER]` in their OpenAPI metadata,
+  // but neither actually passes that `REQUIRED_ROLES` array into
+  // `requireResolvedProjectAccess(...)` (contrast with `extract-cases.post.ts`,
+  // which does pass it as the 5th argument). Because the `roles` parameter is
+  // therefore `undefined`, `requireAuth`'s role check
+  // (`if (allowedRoles && !hasRole(...))`) never fires, so a "user"-role caller
+  // who otherwise has access to the project is NOT rejected with 403 as
+  // documented — the request proceeds to the cluster-lookup/AI-config checks
+  // just like an administrator or reporter would. The test below documents the
+  // CURRENT (buggy) behavior; it is not asserting that a 503 here is correct.
+  // ---------------------------------------------------------------------------
+
+  test('BUG: a "user"-role caller with project access is not blocked from diagnose/stream', async ({ request }) => {
+    // Give ci-user project access via a run + failing test case so we have a cluster.
+    const adminLogin = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'admin', password: 'adminpassword123' },
+    });
+    expect(adminLogin.ok()).toBeTruthy();
+
+    const submitRes = await request.post(`${AUTH_SERVER_URL}/api/test-runs/submit`, {
+      data: {
+        projectName: PROJECT.AUTH_ROLE_CHECKS,
+        status: 'failed',
+        startTime: new Date().toISOString(),
+        duration: 1000,
+        totalTests: 1,
+        passedTests: 0,
+        failedTests: 1,
+        skippedTests: 0,
+        testCases: [
+          {
+            title: 'role check test',
+            status: 'failed',
+            duration: 500,
+            location: 'tests/role-check.spec.ts:1:1',
+            error:
+              "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByTestId('role-check')",
+          },
+        ],
+      },
+    });
+    expect(submitRes.ok()).toBeTruthy();
+    const { testRunId } = await submitRes.json();
+
+    const run = (await (await request.get(`${AUTH_SERVER_URL}/api/test-runs/${testRunId}`)).json()) as {
+      testCases: Array<{ status: string; failureClusterId?: number }>;
+    };
+    const clusterId = run.testCases.find((c) => c.status === 'failed')?.failureClusterId;
+    expect(clusterId).toBeTruthy();
+
+    // ci-user was already made an explicit member of PROJECT.AUTH_ROLE_CHECKS
+    // above, so project-scope access is not in question here — only the role.
+    const userLogin = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'ci-user', password: 'userpassword123' },
+    });
+    expect(userLogin.ok()).toBeTruthy();
+
+    const streamRes = await request.post(`${AUTH_SERVER_URL}/api/failure-clusters/${clusterId}/diagnose/stream`);
+    // Documented behavior would be 403 (role not in [ADMINISTRATOR, REPORTER]).
+    // Actual behavior: the request is let through to the AI-config check, which
+    // 503s because this server has no AI provider configured — the same
+    // response an administrator or reporter would get. See the bug note above.
+    expect(streamRes.status()).toBe(503);
+  });
 });
