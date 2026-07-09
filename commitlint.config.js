@@ -9,7 +9,9 @@ export default {
     'scope-enum': [
       2,
       'always',
-      ['app', 'reporter', 'db', 'ui', 'demo', 'ci', 'docs', 'deps', 'auth', 'ai', 'notifications', 'release'],
+      // 'main' is not a codebase area — it's release-please's own release PR
+      // scope (its title/commit is always "chore(<target-branch>): release X.Y.Z").
+      ['app', 'reporter', 'db', 'ui', 'demo', 'ci', 'docs', 'deps', 'auth', 'ai', 'notifications', 'release', 'main'],
     ],
     'scope-empty': [1, 'never'],
     'subject-case': [2, 'never', ['sentence-case', 'start-case', 'pascal-case', 'upper-case']],
