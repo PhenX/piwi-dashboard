@@ -21,6 +21,7 @@ export interface SendEmailOptions {
 }
 
 let _transport: Transporter | null = null;
+let _warnedMissingSiteUrl = false;
 
 export function getSmtpConfig(): SmtpConfig {
   const host = process.env.PIWI_SMTP_HOST || '';
@@ -59,6 +60,13 @@ export async function sendEmail(opts: SendEmailOptions): Promise<void> {
   if (!cfg.configured) {
     console.warn('[email] SMTP not configured — skipping send to', opts.to);
     return;
+  }
+  if (!process.env.PIWI_SITE_URL && !_warnedMissingSiteUrl) {
+    _warnedMissingSiteUrl = true;
+    console.warn(
+      '[email] PIWI_SITE_URL is not set — links in outgoing emails will point at http://localhost:3000. ' +
+        'Set PIWI_SITE_URL to the public URL of this dashboard.',
+    );
   }
   const transport = getTransport();
   const from = cfg.fromName ? `"${cfg.fromName}" <${cfg.from}>` : cfg.from;
