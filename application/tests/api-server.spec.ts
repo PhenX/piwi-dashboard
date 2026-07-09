@@ -13,6 +13,8 @@ test.describe.serial('API Server Tests', () => {
         passedTests: 9,
         failedTests: 1,
         skippedTests: 0,
+        playwrightVersion: '1.51.0',
+        reporterVersion: '0.5.0',
         testCases: [
           {
             title: 'should login successfully',
@@ -93,6 +95,8 @@ test.describe.serial('API Server Tests', () => {
     expect(testRunDetails.testCases).toBeDefined();
     expect(Array.isArray(testRunDetails.testCases)).toBe(true);
     expect(testRunDetails.testCases.length).toBe(2);
+    expect(testRunDetails.playwrightVersion).toBe('1.51.0');
+    expect(testRunDetails.reporterVersion).toBe('0.5.0');
   });
 
   test('should get test case details (stable identity)', async ({ request }) => {

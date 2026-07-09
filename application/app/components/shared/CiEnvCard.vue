@@ -10,6 +10,8 @@ interface CiInfo {
 defineProps<{
   ci?: CiInfo | null;
   environment?: string | null;
+  playwrightVersion?: string | null;
+  reporterVersion?: string | null;
   class?: string;
 }>();
 </script>
@@ -40,6 +42,14 @@ defineProps<{
       <div v-if="ci?.buildUrl" class="flex items-center gap-1.5">
         <UIcon name="i-lucide-external-link" class="w-3.5 h-3.5 text-gray-400 shrink-0" />
         <a :href="ci.buildUrl" target="_blank" class="text-primary hover:underline text-xs">View build</a>
+      </div>
+      <div v-if="playwrightVersion" class="flex items-center gap-1.5">
+        <UIcon name="i-lucide-tag" class="w-3.5 h-3.5 text-gray-400 shrink-0" />
+        <span>Playwright v{{ playwrightVersion }}</span>
+      </div>
+      <div v-if="reporterVersion" class="flex items-center gap-1.5">
+        <UIcon name="i-lucide-tag" class="w-3.5 h-3.5 text-gray-400 shrink-0" />
+        <span>Piwi reporter v{{ reporterVersion }}</span>
       </div>
     </div>
   </BlockCard>

@@ -102,6 +102,7 @@ export function serializeRun(payload: RunPayload, opts: SerializeRunOptions): Re
     metadata: payload.metadata,
     instanceId: payload.instanceId,
     playwrightVersion: payload.playwrightVersion,
+    reporterVersion: payload.reporterVersion,
     shardIndex: payload.shardIndex,
     shardTotal: payload.shardTotal,
     isFullRun: payload.isFullRun ?? true,

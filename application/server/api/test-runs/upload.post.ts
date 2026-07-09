@@ -376,6 +376,7 @@ export default eventHandler(async (event) => {
         metadata: sanitizeMetadata((testRunData.metadata || null) as Record<string, unknown> | null),
         instanceId: (testRunData.instanceId as string | null | undefined) || null,
         playwrightVersion: (testRunData.playwrightVersion as string | null | undefined) || null,
+        reporterVersion: (testRunData.reporterVersion as string | null | undefined) || null,
         isFullRun: testRunData.isFullRun !== false ? 1 : 0,
         filterDetails: (testRunData.filterDetails as Record<string, unknown> | null | undefined) || null,
       })

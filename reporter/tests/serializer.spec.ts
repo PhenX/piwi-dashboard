@@ -203,6 +203,7 @@ describe('serializeRun', () => {
       instanceId: 'inst-1',
       testCases,
       playwrightVersion: '1.50.0',
+      reporterVersion: '0.5.0',
       shardIndex: 1,
       shardTotal: 3,
     };
@@ -224,6 +225,7 @@ describe('serializeRun', () => {
       'playwrightVersion',
       'projectDescription',
       'projectName',
+      'reporterVersion',
       'shardIndex',
       'shardTotal',
       'skippedTests',

@@ -68,6 +68,11 @@ export const PIWI_ENV_VARS = {
     category: 'build',
     runtimeOnly: true,
   },
+  PIWI_BUILD_SHA: {
+    description: 'Commit SHA baked into the build for provenance. Shown on Settings → About. Set as a build-time arg.',
+    category: 'build',
+    runtimeOnly: true,
+  },
 
   // ── Database ─────────────────────────────────────────────────────────────
   PIWI_DATABASE_PATH: {

@@ -18,7 +18,15 @@ import { Role } from '#shared/types';
 import type { PiwiEnvVarName } from '#shared/piwi-env-vars';
 import { helpEnvVars, type HelpTopicKey } from './help-content';
 
-export type SettingsPageId = 'account' | 'users' | 'notifications' | 'tags' | 'storage' | 'wasted-time' | 'ai';
+export type SettingsPageId =
+  | 'account'
+  | 'users'
+  | 'notifications'
+  | 'tags'
+  | 'storage'
+  | 'wasted-time'
+  | 'ai'
+  | 'about';
 
 export interface SettingFieldMeta {
   /** Stable field id, e.g. `ai.diagnosis.provider`. */
@@ -128,6 +136,13 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
       { id: 'ai.scm-token', label: 'Repository access token', help: 'project.scm-token' },
       { id: 'ai.privacy', label: 'Privacy notice', help: 'settings.privacy' },
     ],
+  },
+  {
+    id: 'about',
+    label: 'About',
+    icon: 'i-lucide-info',
+    to: '/settings/about',
+    fields: [],
   },
 ];
 

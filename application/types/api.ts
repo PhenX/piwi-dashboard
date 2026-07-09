@@ -260,6 +260,8 @@ export interface TestRunDetails {
   setupSteps?: TestStepEvent[] | null;
   environment?: string | null;
   label?: string | null;
+  playwrightVersion?: string | null;
+  reporterVersion?: string | null;
   createdAt: Date;
   project?: {
     id: number;

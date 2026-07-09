@@ -156,6 +156,7 @@ export async function getProject(db: DrizzleDB, id: number) {
       label: testRuns.label,
       instanceId: testRuns.instanceId,
       playwrightVersion: testRuns.playwrightVersion,
+      reporterVersion: testRuns.reporterVersion,
       isFullRun: testRuns.isFullRun,
       filterDetails: testRuns.filterDetails,
       metadata: testRuns.metadata,

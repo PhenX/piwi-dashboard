@@ -17,10 +17,6 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
-      - run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          npm version "$VERSION" --no-git-tag-version
-        working-directory: integrations/nitro
       - run: npm run build
         working-directory: integrations/nitro
       - run: npm publish --access public --provenance

@@ -1,0 +1,1 @@
+ALTER TABLE `test_runs` ADD `reporter_version` text;

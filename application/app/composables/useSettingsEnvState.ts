@@ -35,6 +35,7 @@ export function useSettingsEnvState() {
     storage: false,
     'wasted-time': false,
     ai: false,
+    about: false,
   });
 
   async function refresh() {

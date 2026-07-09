@@ -206,6 +206,7 @@ const RECENT_FIELDS = {
   avgTestDuration: testRuns.avgTestDuration,
   p90TestDuration: testRuns.p90TestDuration,
   playwrightVersion: testRuns.playwrightVersion,
+  reporterVersion: testRuns.reporterVersion,
   isFullRun: testRuns.isFullRun,
   environment: testRuns.environment,
 };

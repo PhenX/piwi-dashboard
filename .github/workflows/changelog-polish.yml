@@ -1,0 +1,57 @@
+name: Polish release notes (GitHub Models)
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write   # edit the release body
+  models: read      # call GitHub Models inference
+
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # Idempotency: skip if these notes were already polished (re-runs, edited releases).
+      - name: Skip if already polished
+        id: guard
+        env:
+          BODY: ${{ github.event.release.body }}
+        run: |
+          if printf '%s' "$BODY" | grep -q '<!-- ai-polished -->'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate polished notes
+        if: steps.guard.outputs.skip == 'false'
+        id: ai
+        uses: actions/ai-inference@v1
+        continue-on-error: true
+        with:
+          model: openai/gpt-4o                 # swappable: any GitHub Models catalog id
+          system-prompt-file: .github/prompts/changelog-system-prompt.md
+          prompt: ${{ github.event.release.body }}
+          max-completion-tokens: 1200
+          temperature: 0.2
+          # token: ${{ github.token }}         # default; shown for clarity
+
+      - name: Update the release body
+        if: steps.guard.outputs.skip == 'false' && steps.ai.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          POLISHED: ${{ steps.ai.outputs.response }}
+          RAW: ${{ github.event.release.body }}
+        run: |
+          {
+            printf '%s\n\n' "$POLISHED"
+            printf '<details><summary>Raw changelog (auto-generated)</summary>\n\n'
+            printf '%s\n\n' "$RAW"
+            printf '</details>\n'
+            printf '<!-- ai-polished -->\n'
+          } > notes.md
+          gh release edit "$TAG" --notes-file notes.md
