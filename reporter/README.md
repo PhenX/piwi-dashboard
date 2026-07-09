@@ -200,7 +200,7 @@ When `collectCiInfo` is enabled (default), the reporter auto-detects:
 
 ## Requirements
 
-- Node.js 18 or higher
+- Node.js 18 or higher (the reporter runs inside your test project — the dashboard *server* itself targets Node 24+, or use its Docker image)
 - Playwright Test 1.40 or higher
 - Running Piwi Dashboard server
 
@@ -217,9 +217,9 @@ npm run reporter:dev     # watch mode — auto-recompile on changes
 
 ### Source layout
 
-The package keeps its **public API** (`src/index.ts`, `src/fixtures.ts`, `src/public/`) separate from internal plumbing (`src/internal/<domain>/`) and the type model (`src/types/`). See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full map — the public/internal split, the collect-and-submit data flow, the fallback ladder, and the conventions.
+The package keeps its **public API** (`src/index.ts`, `src/public/`) separate from internal plumbing (`src/internal/<domain>/`) and the type model (`src/types/`). See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full map — the public/internal split, the collect-and-submit data flow, the fallback ladder, and the conventions.
 
-The `package.json` `exports` field maps the main entry and `./fixtures` to their `dist/` counterparts.
+Everything public — the reporter, config helpers, and the capture fixtures — is exported from the package's single entry point (`@piwitests/reporter`).
 
 ## Troubleshooting
 

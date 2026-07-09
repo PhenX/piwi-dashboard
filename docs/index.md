@@ -17,7 +17,7 @@ hero:
       link: https://piwitests.github.io/demo/
     - theme: alt
       text: GitHub
-      link: https://github.com/piwitests/platform
+      link: https://github.com/PiwiTests/platform
 
 features:
   - icon: 📊
@@ -106,7 +106,7 @@ features:
   <p>Self-hosted in one Docker command — your data, your infrastructure, nothing vanishes when CI finishes.</p>
   <div class="cta-footer-actions">
     <a class="cta-btn cta-btn-brand" href="/getting-started">Get started</a>
-    <a class="cta-btn cta-btn-alt" href="https://github.com/piwitests/platform">View on GitHub</a>
+    <a class="cta-btn cta-btn-alt" href="https://github.com/PiwiTests/platform">View on GitHub</a>
   </div>
 </div>
 

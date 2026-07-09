@@ -156,8 +156,8 @@ Best practices:
 ## Available Tags
 
 - `latest` — Latest stable release
-- `0.8.0` — Specific version (semver)
-- `0.8` — Latest patch of a minor version
+- `0.9.0` — Specific version (semver)
+- `0.9` — Latest patch of a minor version
 - `0` — Latest release of the major version
 
 ## Troubleshooting

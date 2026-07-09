@@ -23,7 +23,7 @@ if (isDemo) {
     demoDataVersion = versionInfo.hash;
   } catch {
     console.warn(
-      '[Config] public/demo/seed.version.json not found or invalid. Run `npm run seed:demo` before building.',
+      '[Config] public/demo/seed.version.json not found or invalid. Run `npm run app:seed:demo` before building.',
     );
   }
 }
@@ -310,7 +310,7 @@ export default defineNuxtConfig({
         }
         const seedSrc = resolve(__dirname, 'public/demo/seed.sql');
         if (!existsSync(seedSrc)) {
-          console.warn('[Build] WARNING: public/demo/seed.sql not found. Run `npm run seed:demo` before building.');
+          console.warn('[Build] WARNING: public/demo/seed.sql not found. Run `npm run app:seed:demo` before building.');
         }
       }
     },

@@ -30,8 +30,8 @@ The dashboard will be available at `http://localhost:3000`.
 | Tag | Description |
 |-----|-------------|
 | `latest` | Latest stable release |
-| `0.8.0` | Specific version (semver) |
-| `0.8` | Latest patch of a minor version |
+| `0.9.0` | Specific version (semver) |
+| `0.9` | Latest patch of a minor version |
 | `0` | Latest release of the major version |
 
 Pin a specific version in production; [tags on Docker Hub](https://hub.docker.com/r/phenx/piwitests-server/tags).

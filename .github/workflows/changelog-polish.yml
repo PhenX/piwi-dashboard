@@ -39,6 +39,15 @@ jobs:
           temperature: 0.2
           # token: ${{ github.token }}         # default; shown for clarity
 
+      # Surface AI failures instead of silently leaving raw notes on the release.
+      - name: Fail visibly when polish did not run
+        if: steps.guard.outputs.skip == 'false' && steps.ai.outcome != 'success'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          echo "::error::AI polish failed — release notes for ${TAG} were left unpolished. Re-run this workflow or edit the release manually."
+          exit 1
+
       - name: Update the release body
         if: steps.guard.outputs.skip == 'false' && steps.ai.outcome == 'success'
         env:

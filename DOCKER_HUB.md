@@ -2,7 +2,7 @@
 
 **Self-hosted Playwright test results dashboard.** Collect, store, and visualize your end-to-end test results over time — failures, performance trends, flaky tests, and live run streaming — without sending data to any third party.
 
-📖 [Full documentation](https://piwitests.github.io) · 🎮 [Live demo](https://piwitests.github.io/demo/) · 💬 [GitHub](https://github.com/piwitests/platform)
+📖 [Full documentation](https://piwitests.github.io) · 🎮 [Live demo](https://piwitests.github.io/demo/) · 💬 [GitHub](https://github.com/PiwiTests/platform)
 
 > **Disclaimer:** Piwi Dashboard is not affiliated with, endorsed by, or connected to Microsoft Corporation.
 
@@ -47,8 +47,8 @@ Open `http://localhost:3000`. The SQLite database and file storage are created a
 | Tag       | Description                            |
 |-----------|----------------------------------------|
 | `latest`  | Latest stable release                  |
-| `0.8.0`   | Exact version (pinned, recommended)    |
-| `0.8`     | Latest patch for a minor version       |
+| `0.9.0`   | Exact version (pinned, recommended)    |
+| `0.9`     | Latest patch for a minor version       |
 | `0`       | Latest release for a major version     |
 
 ---
@@ -376,4 +376,4 @@ docker logs piwi-dashboard
 
 ## License
 
-MIT — [source code on GitHub](https://github.com/piwitests/platform)
+MIT — [source code on GitHub](https://github.com/PiwiTests/platform)

@@ -40,7 +40,7 @@ body:
     attributes:
       label: Version
       description: Dashboard version (Settings → About, or `GET /api/version`) and reporter version if relevant.
-      placeholder: "dashboard 0.8.0, reporter 0.8.0"
+      placeholder: "dashboard 0.9.0, reporter 0.9.0"
     validations:
       required: true
   - type: input
