@@ -34,16 +34,16 @@ The dashboard will be available at `http://localhost:3000`.
 
 ## Building the Image Locally
 
+Run `docker build` from the **repository root** — the Dockerfile's `COPY` instructions are relative to it.
+
 ```bash
 # Linux / macOS
-cd application
 docker build -t piwi-dashboard:local .
 docker run -p 3000:3000 -v $(pwd)/.data:/app/.data piwi-dashboard:local
 ```
 
 ```powershell
 # Windows (PowerShell)
-cd application
 docker build -t piwi-dashboard:local .
 docker run -p 3000:3000 -v ${PWD}/.data:/app/.data piwi-dashboard:local
 ```
@@ -51,6 +51,8 @@ docker run -p 3000:3000 -v ${PWD}/.data:/app/.data piwi-dashboard:local
 The Dockerfile uses a two-stage build:
 1. **Builder stage**: Installs all dependencies and builds the application
 2. **Production stage**: Installs only production dependencies and copies the build artifacts
+
+Pass `--build-arg PIWI_BUILD_SHA=$(git rev-parse HEAD)` to stamp the image with a commit SHA, shown on the dashboard's Settings → About page and returned by `GET /api/version`. The published `phenx/piwitests-server` image sets this automatically from CI; it's optional for local builds.
 
 ## Configuration
 

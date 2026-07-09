@@ -27,7 +27,9 @@ COPY application/ ./application/
 COPY integrations/ ./integrations/
 
 # Build the application
+ARG PIWI_BUILD_SHA
 ENV NITRO_PRESET=node-server
+ENV PIWI_BUILD_SHA=${PIWI_BUILD_SHA}
 RUN npm run app:build --workspace=application && \
     rm -rf application/.output/server/node_modules/@img/sharp-libvips-linux-x64 && \
     rm -rf application/.output/server/node_modules/@img/sharp-linux-x64 && \
