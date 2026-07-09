@@ -10,7 +10,7 @@ export default defineNitroPlugin(() => {
         '   Secrets saved in the dashboard (AI API keys, SCM tokens, webhook secrets) are encrypted\n' +
         '   with this default, so anyone with database access can decrypt them.\n' +
         '   Set PIWI_SECRET_KEY to a long random string. Generate one with:\n' +
-        '   node -e "console.log(require(\'node:crypto\').randomBytes(32).toString(\'hex\'))"\n',
+        "   node -e \"console.log(require('node:crypto').randomBytes(32).toString('hex'))\"\n",
     );
   }
 });
