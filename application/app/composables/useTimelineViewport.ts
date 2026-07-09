@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted, nextTick, watchEffect, type Ref, type ComputedRef } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, type Ref, type ComputedRef } from 'vue';
 import { TIMELINE_LAYOUT, formatTimelineTime } from '~/utils/timeline';
 
 interface BarGeometry {
@@ -15,6 +15,18 @@ interface TimelineViewportOptions {
   /** Getter for the run's live state — panning/zoom are disabled while live. */
   live: () => boolean | undefined;
 }
+
+/** Multiplier applied per wheel notch — multiplicative so zooming feels uniform at every level. */
+const WHEEL_ZOOM_FACTOR = 1.12;
+const MAX_ZOOM = 10;
+
+/** Tick spacing aims for roughly this many pixels between axis labels. */
+const TICK_TARGET_PX = 100;
+/** Nice tick steps (ms): 10ms up to 1h, roughly 1-2-5 per decade. */
+const TICK_STEPS_MS = [
+  10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000, 900000, 1800000,
+  3600000,
+];
 
 /**
  * Owns the timeline viewport: zoom level, horizontal pan, fit-to-width, the
@@ -70,9 +82,23 @@ export function useTimelineViewport(opts: TimelineViewportOptions) {
     return Math.max(cw - contentWidth.value, Math.min(0, raw));
   }
 
+  /** Zoom around a fixed x position (px within the container), clamped to [fit, MAX_ZOOM]. */
+  function zoomAround(newZoomRaw: number, anchorX: number): void {
+    const newZoom = Math.max(computeFitZoom(), Math.min(MAX_ZOOM, newZoomRaw));
+    const scale = newZoom / zoom.value;
+    zoom.value = newZoom;
+    panX.value = clampPanX(anchorX - (anchorX - panX.value) * scale);
+  }
+
   const tickMarks = computed<{ ms: number; x: number; label: string }[]>(() => {
+    // Smallest nice step that keeps ticks at least TICK_TARGET_PX apart...
+    const idealStep = TICK_TARGET_PX / pxPerMs.value;
+    let step = TICK_STEPS_MS.find((s) => s >= idealStep) ?? TICK_STEPS_MS[TICK_STEPS_MS.length - 1]!;
+    // ...with a hard cap on tick count so extreme zoom×duration combinations
+    // can't flood the SVG with thousands of nodes.
+    while (maxTime.value / step > 1000) step *= 2;
+
     const ticks: { ms: number; x: number; label: string }[] = [];
-    const step = zoom.value < 0.5 ? 10000 : zoom.value < 1 ? 5000 : zoom.value < 2 ? 2000 : 1000;
     for (let ms = 0; ms <= maxTime.value; ms += step) {
       ticks.push({ ms, x: ms * pxPerMs.value + labelWidth, label: formatTimelineTime(ms) });
     }
@@ -81,50 +107,30 @@ export function useTimelineViewport(opts: TimelineViewportOptions) {
 
   function onWheel(event: WheelEvent): void {
     if (live()) return;
-    event.preventDefault();
-    const delta = event.deltaY > 0 ? -0.02 : 0.02;
-    const fitZoom = computeFitZoom();
-    const newZoom = Math.max(fitZoom, Math.min(10, zoom.value + delta));
-
-    if (containerRef.value) {
-      const rect = containerRef.value.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      const scale = newZoom / zoom.value;
-      panX.value = clampPanX(mouseX - (mouseX - panX.value) * scale);
-    }
-
-    zoom.value = newZoom;
-  }
-
-  function onMouseDown(event: MouseEvent): void {
-    if (live()) return;
-    if (event.button !== 0) return;
-    isPanning.value = true;
-    panStartX.value = event.clientX;
-    panStartOffsetX.value = panX.value;
-    event.preventDefault();
-  }
-
-  function onMouseMove(event: MouseEvent): void {
-    if (!isPanning.value) return;
-    panX.value = clampPanX(panStartOffsetX.value + (event.clientX - panStartX.value));
-  }
-
-  function onMouseUp(): void {
-    isPanning.value = false;
+    const factor = event.deltaY > 0 ? 1 / WHEEL_ZOOM_FACTOR : WHEEL_ZOOM_FACTOR;
+    const rect = containerRef.value?.getBoundingClientRect();
+    zoomAround(zoom.value * factor, rect ? event.clientX - rect.left : 0);
   }
 
   // ── Pointer / touch interaction ──────────────────────────────────────────────
-  // Pointer events unify mouse + touch + pen: one finger pans, two fingers
-  // pinch-zoom. `touch-action: pan-y` on the container (set in the template)
-  // lets vertical page scroll pass through while we own horizontal drag + pinch.
+  // Pointer events unify mouse + touch + pen: one finger (or the primary mouse
+  // button) pans, two fingers pinch-zoom. `touch-action: pan-y` on the container
+  // (set in the template) lets vertical page scroll pass through while we own
+  // horizontal drag + pinch.
+  //
+  // Capturing the pointer retargets the eventual `click` to the container, which
+  // would swallow the bars' click-to-select. So a press only *arms* a pan; the
+  // capture + pan engage once the pointer actually travels, and a motionless
+  // press-release stays a plain click on the bar underneath.
+  const DRAG_THRESHOLD_PX = 4;
   const activePointers = new Map<number, { x: number; y: number }>();
+  let armedPanPointerId: number | null = null;
   let pinchStartDist = 0;
   let pinchStartZoom = 1;
   let pinchCenterX = 0;
 
-  function beginPanFrom(clientX: number): void {
-    isPanning.value = true;
+  function armPanFrom(pointerId: number, clientX: number): void {
+    armedPanPointerId = pointerId;
     panStartX.value = clientX;
     panStartOffsetX.value = panX.value;
   }
@@ -132,13 +138,16 @@ export function useTimelineViewport(opts: TimelineViewportOptions) {
   function onPointerDown(event: PointerEvent): void {
     if (live()) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
-    containerRef.value?.setPointerCapture?.(event.pointerId);
     activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     if (activePointers.size === 1) {
-      beginPanFrom(event.clientX);
+      armPanFrom(event.pointerId, event.clientX);
     } else if (activePointers.size === 2) {
+      // A second finger switches to pinch-zoom — that gesture can never be a
+      // click, so capture both pointers right away.
+      armedPanPointerId = null;
       isPanning.value = false;
+      for (const id of activePointers.keys()) containerRef.value?.setPointerCapture?.(id);
       const [a, b] = [...activePointers.values()];
       pinchStartDist = Math.hypot(a!.x - b!.x, a!.y - b!.y) || 1;
       pinchStartZoom = zoom.value;
@@ -155,23 +164,29 @@ export function useTimelineViewport(opts: TimelineViewportOptions) {
     if (activePointers.size >= 2) {
       const [a, b] = [...activePointers.values()];
       const dist = Math.hypot(a!.x - b!.x, a!.y - b!.y) || 1;
-      const fitZoom = computeFitZoom();
-      const newZoom = Math.max(fitZoom, Math.min(10, pinchStartZoom * (dist / pinchStartDist)));
-      const scale = newZoom / zoom.value;
-      panX.value = clampPanX(pinchCenterX - (pinchCenterX - panX.value) * scale);
-      zoom.value = newZoom;
-    } else if (isPanning.value) {
+      zoomAround(pinchStartZoom * (dist / pinchStartDist), pinchCenterX);
+      return;
+    }
+
+    if (isPanning.value) {
+      panX.value = clampPanX(panStartOffsetX.value + (event.clientX - panStartX.value));
+    } else if (armedPanPointerId === event.pointerId && Math.abs(event.clientX - panStartX.value) > DRAG_THRESHOLD_PX) {
+      // Enough travel — this is a drag, not a click. Engage the pan and let the
+      // container own the pointer for the rest of the gesture.
+      containerRef.value?.setPointerCapture?.(event.pointerId);
+      isPanning.value = true;
       panX.value = clampPanX(panStartOffsetX.value + (event.clientX - panStartX.value));
     }
   }
 
   function onPointerUp(event: PointerEvent): void {
     activePointers.delete(event.pointerId);
+    if (armedPanPointerId === event.pointerId) armedPanPointerId = null;
     containerRef.value?.releasePointerCapture?.(event.pointerId);
     if (activePointers.size === 1) {
-      // Dropped from pinch to a single finger — resume panning from it.
-      const [p] = [...activePointers.values()];
-      beginPanFrom(p!.x);
+      // Dropped from pinch to a single finger — re-arm panning from it.
+      const [remaining] = [...activePointers.entries()];
+      armPanFrom(remaining![0], remaining![1].x);
     } else if (activePointers.size === 0) {
       isPanning.value = false;
     }
@@ -194,15 +209,17 @@ export function useTimelineViewport(opts: TimelineViewportOptions) {
     resizeObserver?.disconnect();
   });
 
-  // While live, re-fit as new rows stream in so the run stays framed.
-  watchEffect(() => {
-    if (live() && hasData.value) {
-      nextTick(applyFitZoom);
-    }
-  });
+  // While live, re-fit whenever the data extents grow so the run stays framed
+  // (the time span can grow without the row count — and thus the container
+  // size — changing, so the ResizeObserver alone isn't enough).
+  watch(
+    () => [live(), hasData.value, maxTime.value, rowCount.value] as const,
+    ([isLive, has]) => {
+      if (isLive && has) nextTick(applyFitZoom);
+    },
+  );
 
   return {
-    zoom,
     panX,
     isPanning,
     pxPerMs,
@@ -213,9 +230,6 @@ export function useTimelineViewport(opts: TimelineViewportOptions) {
     getBarTop,
     tickMarks,
     onWheel,
-    onMouseDown,
-    onMouseMove,
-    onMouseUp,
     onPointerDown,
     onPointerMove,
     onPointerUp,

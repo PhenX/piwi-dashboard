@@ -29,20 +29,29 @@ const STATUS_HEX: Record<string, string> = {
   flaky: '#ca8a04',
 };
 
+/**
+ * Amber palette for wasted-wait bars, shared by the bar renderer and the
+ * tooltip swatch.
+ */
+export const TIMELINE_WAIT_COLORS = {
+  fill: '#facc15',
+  stroke: '#ca8a04',
+  swatch: '#f59e0b',
+} as const;
+
 /** Bar fill color for a test-case status (falls back to neutral gray). */
 export function timelineStatusHex(status: string): string {
   return STATUS_HEX[status] || '#a1a1aa';
 }
 
-/** Fill for a bar: hooks are drawn at 40% alpha over the status color. */
-export function timelineHookFill(status: string, isHook: boolean): string {
-  const base = timelineStatusHex(status);
-  return isHook ? base + '66' : base;
+/** Fill for a hook/fixture bar: the status color at 40% alpha. */
+export function timelineHookFill(status: string): string {
+  return timelineStatusHex(status) + '66';
 }
 
-/** Stroke for a bar: only hooks get a dashed outline in the status color. */
-export function timelineHookStroke(status: string, isHook: boolean): string {
-  return isHook ? timelineStatusHex(status) : 'none';
+/** Stroke for a hook/fixture bar's dashed outline: the full status color. */
+export function timelineHookStroke(status: string): string {
+  return timelineStatusHex(status);
 }
 
 /** Human-readable duration used for timeline ticks, bar labels and tooltips. */

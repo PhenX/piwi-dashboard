@@ -1,22 +1,24 @@
 import { computed, type ComputedRef } from 'vue';
-import type { TestCaseResult, TestStepEvent } from '~~/types/api';
+import type { TestCaseResult, TestStepEvent, SetupStepEvent } from '~~/types/api';
 import { isWastedWait, DEFAULT_WASTED_WAIT_PATTERNS } from '#shared/utils/wasted-waits';
 
-/** A single drawable element on the timeline: a test bar, hook/fixture, or wait. */
+/** What a timeline bar represents; drives rendering, filtering and header counts. */
+export type TimelineItemKind = 'test' | 'setup' | 'hook' | 'fixture' | 'wait';
+
+/** A single drawable element on the timeline: a test bar, hook/fixture segment, suite setup step, or wasted wait. */
 export interface TimelineItem {
-  id: number;
+  /** Unique, stable identity — the v-for key and the hover-dimming comparand. */
+  key: string;
+  kind: TimelineItemKind;
+  /** DB id of the owning test case (click-through target); null for suite-level setup steps. */
+  testCaseId: number | null;
   title: string;
   status: string;
   workerIndex: number;
-  shardIndex: number | null;
   start: number;
   duration: number;
   rowIndex: number;
-  isHook: boolean;
-  isWait: boolean;
-  /** Suite-level setup step (beforeAll/afterAll), rendered with a `[Setup]` prefix. */
-  isSetup?: boolean;
-  category?: string;
+  /** Title of the test the segment belongs to (hooks/fixtures/waits only). */
   parentTitle?: string | null;
 }
 
@@ -30,22 +32,44 @@ export interface ShardGroup {
 /** Inputs the model derives its rows from (a subset of the component props). */
 export interface TimelineModelInput {
   testCases: TestCaseResult[];
-  setupSteps?: TestStepEvent[] | null;
+  setupSteps?: SetupStepEvent[] | null;
   /** Allowlist of glob patterns classifying which waits count as wasted time. */
   wastedPatterns?: string[] | null;
 }
 
-/**
- * Group test cases by (shardIndex, workerIndex) — two shards may have
- * overlapping worker indices (e.g. both Shard 1 and Shard 2 have Worker 0).
- * Falls back to workerIndex-only grouping when no shard info is present.
- */
-type WorkerKey = string; // "shardIndex|workerIndex" or "null|workerIndex"
+/** One worker lane: its identity plus the cases that ran on it. */
+interface WorkerGroup {
+  shardIndex: number | null;
+  workerIndex: number;
+  cases: TestCaseResult[];
+}
 
-function workerKey(tc: TestCaseResult): WorkerKey | null {
-  const w = tc.workerIndex;
-  if (w == null || w < 0) return null;
-  return `${tc.shardIndex ?? 'null'}|${w}`;
+/**
+ * Group test cases into worker lanes keyed by (shardIndex, workerIndex) — two
+ * shards may have overlapping worker indices (e.g. both Shard 1 and Shard 2
+ * have a Worker 0). Cases without a usable worker index are skipped. Lanes are
+ * ordered by shardIndex (shardless last), then workerIndex.
+ */
+function groupByWorker(testCases: TestCaseResult[]): WorkerGroup[] {
+  const byKey = new Map<string, WorkerGroup>();
+  for (const tc of testCases) {
+    const workerIndex = tc.workerIndex;
+    if (workerIndex == null || workerIndex < 0) continue;
+    const shardIndex = tc.shardIndex ?? null;
+    const key = `${shardIndex ?? 'null'}|${workerIndex}`;
+    let group = byKey.get(key);
+    if (!group) {
+      group = { shardIndex, workerIndex, cases: [] };
+      byKey.set(key, group);
+    }
+    group.cases.push(tc);
+  }
+  return [...byKey.values()].sort((a, b) => {
+    const aShard = a.shardIndex ?? Infinity;
+    const bShard = b.shardIndex ?? Infinity;
+    if (aShard !== bShard) return aShard - bShard;
+    return a.workerIndex - b.workerIndex;
+  });
 }
 
 /**
@@ -64,6 +88,18 @@ function toMs(v: unknown): number | null {
 }
 
 /**
+ * Map a step event to the timeline kind it renders as, or null when it should
+ * not be drawn: non-wasted waits are framework noise already covered by the
+ * test bar, and other categories (test.step/expect) are never rendered as
+ * segments.
+ */
+function stepKind(step: TestStepEvent, patterns: readonly string[]): 'hook' | 'fixture' | 'wait' | null {
+  if (step.category === 'wait') return isWastedWait(step, patterns) ? 'wait' : null;
+  if (step.category === 'hook' || step.category === 'fixture') return step.category;
+  return null;
+}
+
+/**
  * Derive the timeline's row model from the run's test cases. Returns the
  * drawable items, the ordered worker rows, the shard groupings, and the total
  * time span. Pure and free of DOM/viewport concerns so it can be unit-tested.
@@ -79,233 +115,132 @@ export function useTimelineModel(props: TimelineModelInput): {
     props.wastedPatterns && props.wastedPatterns.length > 0 ? props.wastedPatterns : DEFAULT_WASTED_WAIT_PATTERNS,
   );
 
+  const workerGroups = computed(() => groupByWorker(props.testCases));
+
   const timelineData = computed<TimelineItem[]>(() => {
-    const byWorker = new Map<WorkerKey, TestCaseResult[]>();
+    const workers = workerGroups.value;
+    const patterns = wastedPatterns.value;
 
-    for (const tc of props.testCases) {
-      const key = workerKey(tc);
-      if (!key) continue;
-      if (!byWorker.has(key)) byWorker.set(key, []);
-      byWorker.get(key)!.push(tc);
-    }
-
-    // Sort workers: first by shardIndex (null last), then by workerIndex
-    const sortedWorkers = [...byWorker.entries()].sort(([a], [b]) => {
-      const [aShard, aWorker] = a.split('|');
-      const [bShard, bWorker] = b.split('|');
-      const aS = aShard === 'null' ? Infinity : Number(aShard);
-      const bS = bShard === 'null' ? Infinity : Number(bShard);
-      if (aS !== bS) return aS - bS;
-      return Number(aWorker) - Number(bWorker);
-    });
-
+    // Anchor for absolute positioning: the earliest startedAt in the run. When
+    // no case carries a usable timestamp, fall back to packing each worker's
+    // cases sequentially.
     let minStartedAt = Infinity;
-    let hasStartedAt = false;
-    for (const [, cases] of sortedWorkers) {
-      for (const tc of cases) {
+    for (const worker of workers) {
+      for (const tc of worker.cases) {
         const sa = toMs(tc.startedAt);
-        if (sa != null && sa > 0) {
-          minStartedAt = Math.min(minStartedAt, sa);
-          hasStartedAt = true;
-        }
+        if (sa != null && sa > 0) minStartedAt = Math.min(minStartedAt, sa);
       }
     }
+    const hasStartedAt = Number.isFinite(minStartedAt);
+    const absoluteStart = (startedAt: unknown) => Math.max(0, (toMs(startedAt) ?? minStartedAt) - minStartedAt);
 
     const result: TimelineItem[] = [];
-    // Per-worker end cursor, used by the sequential fallback to append setup
-    // steps after each worker's test cases.
+    // Per-worker end cursor; positions items in fallback mode and marks where
+    // setup steps get appended.
     const rowEndByWorker = new Map<number, number>();
-    if (hasStartedAt) {
-      for (let ri = 0; ri < sortedWorkers.length; ri++) {
-        const [key, cases] = sortedWorkers[ri]!;
-        const shardIdx = key.split('|')[0];
-        const shardIndex = shardIdx === 'null' ? null : Number(shardIdx);
 
-        // (shard group boundaries are derived from workerRows below)
+    workers.forEach((worker, rowIndex) => {
+      const rowItems: TimelineItem[] = [];
+      // Fallback mode packs cases in start order; absolute mode keeps the
+      // incoming order and sorts the finished row by start instead.
+      const cases = hasStartedAt
+        ? worker.cases
+        : [...worker.cases].sort((a, b) => (toMs(a.startedAt) ?? 0) - (toMs(b.startedAt) ?? 0));
+      let cursor = 0;
 
-        // Collect all discrete items (tests + their hook steps) for this worker
-        const workerItems: TimelineItem[] = [];
+      for (const tc of cases) {
+        const duration = tc.duration ?? 1000;
+        const start = hasStartedAt ? absoluteStart(tc.startedAt) : cursor;
+        rowItems.push({
+          key: `t${tc.id}`,
+          kind: 'test',
+          testCaseId: tc.id,
+          title: tc.title,
+          status: tc.status,
+          workerIndex: worker.workerIndex,
+          start,
+          duration,
+          rowIndex,
+        });
+        cursor = start + duration;
 
-        for (const tc of cases) {
-          const dur = tc.duration ?? 1000;
-          workerItems.push({
-            id: tc.id,
-            title: tc.title,
-            status: tc.status,
-            workerIndex: tc.workerIndex ?? 0,
-            shardIndex,
-            start: Math.max(0, (toMs(tc.startedAt) ?? minStartedAt) - minStartedAt),
-            duration: dur,
-            rowIndex: ri,
-            isHook: false,
-            isWait: false,
-          });
-
-          // Add hook/fixture segments for this test
-          const steps = tc.stepEvents as TestStepEvent[] | null | undefined;
-          if (steps && steps.length > 0) {
-            for (const step of steps) {
-              const isWaitStep = step.category === 'wait';
-              // Non-wasted waits are framework noise already covered by the test
-              // bar — only render waits the configured allowlist flags as wasted.
-              if (isWaitStep && !isWastedWait(step, wastedPatterns.value)) continue;
-              const stepStart = Math.max(0, (toMs(step.startedAt) ?? minStartedAt) - minStartedAt);
-              workerItems.push({
-                id: -tc.id - steps.indexOf(step) - 1,
-                title: step.title,
-                status: step.status || 'passed',
-                workerIndex: tc.workerIndex ?? 0,
-                shardIndex,
-                start: stepStart,
-                duration: step.duration || 0,
-                rowIndex: ri,
-                isHook: !isWaitStep,
-                isWait: isWaitStep,
-                category: step.category,
-                parentTitle: tc.title,
-              });
-            }
-          }
-        }
-
-        workerItems.sort((a, b) => a.start - b.start);
-        result.push(...workerItems);
-      }
-
-      // Add suite-level setup steps (beforeAll/afterAll). Setup steps carry only a
-      // `workerIndex` (no `shardIndex`), so place them on the first shard's worker
-      // row for that index. `sortedWorkers` is ordered by shardIndex then
-      // workerIndex, so the first match is shard 0 (or the null shard).
-      const setupRowIndexByWorker = new Map<number, number>();
-      for (let ri = 0; ri < sortedWorkers.length; ri++) {
-        const wIdx = Number(sortedWorkers[ri]![0].split('|')[1]);
-        if (!setupRowIndexByWorker.has(wIdx)) setupRowIndexByWorker.set(wIdx, ri);
-      }
-
-      if (props.setupSteps && props.setupSteps.length > 0) {
-        for (const step of props.setupSteps) {
-          const workerIdx = (step as any).workerIndex;
-          if (workerIdx == null || workerIdx < 0) continue;
-          const ri = setupRowIndexByWorker.get(workerIdx);
-          if (ri == null) continue;
-
-          const stepStart = Math.max(0, (toMs(step.startedAt) ?? minStartedAt) - minStartedAt);
-          result.push({
-            id: -999 - result.length,
-            title: `[Setup] ${step.title}`,
+        const steps = (tc.stepEvents ?? []) as TestStepEvent[];
+        steps.forEach((step, stepIndex) => {
+          const kind = stepKind(step, patterns);
+          if (!kind) return;
+          const stepDuration = step.duration || 0;
+          const stepStart = hasStartedAt ? absoluteStart(step.startedAt) : cursor;
+          rowItems.push({
+            key: `s${tc.id}:${stepIndex}`,
+            kind,
+            testCaseId: tc.id,
+            title: step.title,
             status: step.status || 'passed',
-            workerIndex: workerIdx,
-            shardIndex: null,
+            workerIndex: worker.workerIndex,
             start: stepStart,
-            duration: step.duration || 0,
-            rowIndex: ri,
-            isHook: true,
-            isWait: false,
-            isSetup: true,
-            category: step.category,
-            parentTitle: null,
+            duration: stepDuration,
+            rowIndex,
+            parentTitle: tc.title,
           });
-        }
-      }
-    } else {
-      const setupRowIndexByWorkerFallback = new Map<number, number>();
-      for (let ri = 0; ri < sortedWorkers.length; ri++) {
-        const [key, rawCases] = sortedWorkers[ri]!;
-        const wIdx = Number(key.split('|')[1]);
-        if (!setupRowIndexByWorkerFallback.has(wIdx)) setupRowIndexByWorkerFallback.set(wIdx, ri);
-        const shardIdx = key.split('|')[0];
-        const shardIndex = shardIdx === 'null' ? null : Number(shardIdx);
-        const sortedCases = [...rawCases].sort((a, b) => (toMs(a.startedAt) ?? 0) - (toMs(b.startedAt) ?? 0));
-        let cursor = 0;
-        for (const tc of sortedCases) {
-          const dur = tc.duration ?? 1000;
-          result.push({
-            id: tc.id,
-            title: tc.title,
-            status: tc.status,
-            workerIndex: tc.workerIndex ?? 0,
-            shardIndex,
-            start: cursor,
-            duration: dur,
-            rowIndex: ri,
-            isHook: false,
-            isWait: false,
-          });
-          cursor += dur;
-
-          const steps = tc.stepEvents as TestStepEvent[] | null | undefined;
-          if (steps && steps.length > 0) {
-            for (const step of steps) {
-              const isWaitStep = step.category === 'wait';
-              if (isWaitStep && !isWastedWait(step, wastedPatterns.value)) continue;
-              result.push({
-                id: -tc.id - steps.indexOf(step) - 1,
-                title: step.title,
-                status: step.status || 'passed',
-                workerIndex: tc.workerIndex ?? 0,
-                shardIndex,
-                start: cursor,
-                duration: step.duration || 0,
-                rowIndex: ri,
-                isHook: !isWaitStep,
-                isWait: isWaitStep,
-                category: step.category,
-                parentTitle: tc.title,
-              });
-              cursor += step.duration || 0;
-            }
-          }
-        }
-        // Remember this worker row's end cursor for appending setup steps.
-        rowEndByWorker.set(wIdx, cursor);
+          cursor = stepStart + stepDuration;
+        });
       }
 
-      // Add suite-level setup steps in the sequential fallback too (appended
-      // after each worker's test cases, since without startedAt we can't
-      // interleave them accurately).
-      if (props.setupSteps && props.setupSteps.length > 0) {
-        for (const step of props.setupSteps) {
-          const workerIdx = (step as any).workerIndex;
-          if (workerIdx == null || workerIdx < 0) continue;
-          const ri = setupRowIndexByWorkerFallback.get(workerIdx);
-          if (ri == null) continue;
-          const start = rowEndByWorker.get(workerIdx) ?? 0;
-          rowEndByWorker.set(workerIdx, start + (step.duration || 0));
-          result.push({
-            id: -999 - result.length,
-            title: `[Setup] ${step.title}`,
-            status: step.status || 'passed',
-            workerIndex: workerIdx,
-            shardIndex: null,
-            start,
-            duration: step.duration || 0,
-            rowIndex: ri,
-            isHook: true,
-            isWait: false,
-            isSetup: true,
-            category: step.category,
-            parentTitle: null,
-          });
+      rowItems.sort((a, b) => a.start - b.start);
+      result.push(...rowItems);
+      // First shard wins, matching the setup-step row placement below.
+      if (!rowEndByWorker.has(worker.workerIndex)) rowEndByWorker.set(worker.workerIndex, cursor);
+    });
+
+    // Suite-level setup steps (beforeAll/afterAll) carry only a workerIndex
+    // (no shard), so place each on the first row with that worker index —
+    // `workers` is ordered by shardIndex then workerIndex, so that's the first
+    // shard (or the shardless lane). In absolute mode they sit at their own
+    // startedAt; in fallback mode they're appended after the worker's cases,
+    // since without timestamps we can't interleave them accurately.
+    if (props.setupSteps && props.setupSteps.length > 0) {
+      const rowIndexByWorker = new Map<number, number>();
+      workers.forEach((worker, rowIndex) => {
+        if (!rowIndexByWorker.has(worker.workerIndex)) rowIndexByWorker.set(worker.workerIndex, rowIndex);
+      });
+
+      props.setupSteps.forEach((step, setupIndex) => {
+        const workerIndex = step.workerIndex;
+        if (workerIndex == null || workerIndex < 0) return;
+        const rowIndex = rowIndexByWorker.get(workerIndex);
+        if (rowIndex == null) return;
+
+        const duration = step.duration || 0;
+        let start: number;
+        if (hasStartedAt) {
+          start = absoluteStart(step.startedAt);
+        } else {
+          start = rowEndByWorker.get(workerIndex) ?? 0;
+          rowEndByWorker.set(workerIndex, start + duration);
         }
-      }
+
+        result.push({
+          key: `setup${workerIndex}:${setupIndex}`,
+          kind: 'setup',
+          testCaseId: null,
+          title: `[Setup] ${step.title}`,
+          status: step.status || 'passed',
+          workerIndex,
+          start,
+          duration,
+          rowIndex,
+          parentTitle: null,
+        });
+      });
     }
 
     return result;
   });
 
-  /** Ordered list of (shardIndex, workerIndex) pairs for row rendering */
-  const workerRows = computed(() => {
-    const seen = new Set<string>();
-    const rows: Array<{ shardIndex: number | null; workerIndex: number }> = [];
-    for (const item of timelineData.value) {
-      const key = `${item.shardIndex ?? 'null'}|${item.workerIndex}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        rows.push({ shardIndex: item.shardIndex, workerIndex: item.workerIndex });
-      }
-    }
-    return rows;
-  });
+  /** Ordered worker lanes; items with rowIndex i render on workerRows[i]. */
+  const workerRows = computed(() =>
+    workerGroups.value.map((worker) => ({ shardIndex: worker.shardIndex, workerIndex: worker.workerIndex })),
+  );
 
   /** Shard group boundaries derived from workerRows */
   const shardGroups = computed<ShardGroup[]>(() => {

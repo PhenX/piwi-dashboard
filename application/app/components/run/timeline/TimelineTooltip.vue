@@ -1,11 +1,44 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { TimelineItem } from '~/composables/useTimelineModel';
-import { timelineStatusHex, timelineHookFill, timelineHookStroke, formatTimelineTime } from '~/utils/timeline';
+import {
+  TIMELINE_WAIT_COLORS,
+  timelineStatusHex,
+  timelineHookFill,
+  timelineHookStroke,
+  formatTimelineTime,
+} from '~/utils/timeline';
 
-defineProps<{
+const props = defineProps<{
   item: TimelineItem | null;
   pos: { x: number; y: number };
 }>();
+
+const swatchStyle = computed(() => {
+  const item = props.item;
+  if (!item) return {};
+  if (item.kind === 'test') return { backgroundColor: timelineStatusHex(item.status) };
+  if (item.kind === 'wait') {
+    return { backgroundColor: TIMELINE_WAIT_COLORS.swatch + '66', borderColor: TIMELINE_WAIT_COLORS.swatch };
+  }
+  return { backgroundColor: timelineHookFill(item.status), borderColor: timelineHookStroke(item.status) };
+});
+
+// Anchor right/bottom of the cursor by default, flipping near the viewport
+// edges so the tooltip never overflows off-screen.
+const TOOLTIP_MAX_WIDTH = 340;
+const positionStyle = computed(() => {
+  const { x, y } = props.pos;
+  if (typeof window === 'undefined') return { left: `${x + 12}px`, top: `${y - 10}px` };
+  const flipX = x + 12 + TOOLTIP_MAX_WIDTH > window.innerWidth;
+  const flipY = y + 90 > window.innerHeight;
+  return {
+    left: flipX ? undefined : `${x + 12}px`,
+    right: flipX ? `${window.innerWidth - x + 12}px` : undefined,
+    top: flipY ? undefined : `${y - 10}px`,
+    bottom: flipY ? `${window.innerHeight - y + 10}px` : undefined,
+  };
+});
 </script>
 
 <template>
@@ -13,43 +46,30 @@ defineProps<{
     <div
       v-if="item"
       class="fixed z-[9999] pointer-events-none rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-xs shadow-lg"
-      :style="{ left: pos.x + 12 + 'px', top: pos.y - 10 + 'px' }"
+      :style="positionStyle"
     >
       <div class="flex items-center gap-2 mb-1">
         <span
-          v-if="!item.isHook && !item.isWait"
           class="inline-block size-2.5 rounded-full shrink-0"
-          :style="{ backgroundColor: timelineStatusHex(item.status) }"
-        />
-        <span
-          v-else
-          class="inline-block size-2.5 rounded-full shrink-0 border border-dashed"
-          :style="{
-            backgroundColor: item.isWait ? '#f59e0b66' : timelineHookFill(item.status, item.isHook),
-            borderColor: item.isWait ? '#f59e0b' : timelineHookStroke(item.status, item.isHook),
-          }"
+          :class="{ 'border border-dashed': item.kind !== 'test' }"
+          :style="swatchStyle"
         />
         <span class="font-medium text-gray-900 dark:text-white max-w-64 truncate">
-          <template v-if="item.isHook">
-            <span class="uppercase text-[10px] tracking-wider text-gray-500 mr-1">{{ item.category }}</span>
-            {{ item.title }}
-          </template>
-          <template v-else-if="item.isWait">
-            <span class="uppercase text-[10px] tracking-wider text-amber-500 mr-1">{{ item.category }}</span>
-            {{ item.title }}
-          </template>
-          <template v-else>
-            {{ item.title }}
-          </template>
+          <span
+            v-if="item.kind !== 'test'"
+            class="uppercase text-[10px] tracking-wider mr-1"
+            :class="item.kind === 'wait' ? 'text-amber-500' : 'text-gray-500'"
+          >
+            {{ item.kind }}
+          </span>
+          {{ item.title }}
         </span>
       </div>
       <div class="flex items-center gap-3 text-gray-500">
         <span class="capitalize">{{ item.status }}</span>
         <span>{{ formatTimelineTime(item.duration) }}</span>
         <span>Worker {{ item.workerIndex }}</span>
-        <span v-if="item.isHook && item.parentTitle" class="italic truncate max-w-48">
-          for {{ item.parentTitle }}
-        </span>
+        <span v-if="item.parentTitle" class="italic truncate max-w-48"> for {{ item.parentTitle }} </span>
       </div>
     </div>
   </Teleport>
