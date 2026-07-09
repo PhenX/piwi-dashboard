@@ -9,7 +9,8 @@ export default defineConfig({
     exclude: ['**/node_modules/**', 'tests/integration/**'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html'],
+      // json-summary + json feed the PR coverage comment (see .github/workflows/ci.yml).
+      reporter: ['text', 'html', 'json-summary', 'json'],
       include: ['src/**/*.ts'],
     },
   },

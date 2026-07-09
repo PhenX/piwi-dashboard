@@ -9,7 +9,8 @@ export default defineConfig({
     include: ['tests/unit/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html'],
+      // json-summary + json feed the PR coverage comment (see .github/workflows/ci.yml).
+      reporter: ['text', 'html', 'json-summary', 'json'],
       // Scoped to the unit-testable pure-logic layers — app/ Vue components and
       // server/api/ route handlers are exercised by the Playwright E2E suite
       // instead, so including them here would just report accurate zeroes.

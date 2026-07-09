@@ -18,6 +18,11 @@ jobs:
     name: CI (storage=${{ matrix.storage }}, db=${{ matrix.database }})
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      # Lets the coverage-report steps below post/update a sticky PR comment.
+      pull-requests: write
+
     strategy:
       # Run every cell to completion so one backend failing doesn't mask the others.
       fail-fast: false
@@ -108,11 +113,27 @@ jobs:
       - name: Test reporter
         if: matrix.storage == 'local' && matrix.database == 'sqlite'
         working-directory: ./reporter
-        run: npm run reporter:test
+        run: npm run reporter:test:coverage
+
+      - name: Report reporter coverage on the PR
+        if: matrix.storage == 'local' && matrix.database == 'sqlite' && github.event_name == 'pull_request'
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          working-directory: ./reporter
+          name: Reporter
+          file-coverage-mode: changes
 
       - name: Test application unit tests
         if: matrix.storage == 'local' && matrix.database == 'sqlite'
-        run: npm run app:test:unit
+        run: npm run app:test:unit:coverage
+
+      - name: Report application coverage on the PR
+        if: matrix.storage == 'local' && matrix.database == 'sqlite' && github.event_name == 'pull_request'
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          working-directory: ./application
+          name: Application
+          file-coverage-mode: changes
 
       - name: Install Playwright Browsers
         run: npx playwright install chromium firefox --with-deps --only-shell
