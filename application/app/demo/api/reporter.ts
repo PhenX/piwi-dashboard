@@ -123,6 +123,7 @@ export async function apiSetupTestRun(body: TestRunStartPayload) {
         metadata: { shardTokens: [setupToken] } as Record<string, unknown>,
         instanceId,
         playwrightVersion: body.playwrightVersion || null,
+        reporterVersion: body.reporterVersion || null,
         streamToken: setupToken,
         shardTotal,
         shardsFinished: 0,
@@ -157,6 +158,7 @@ export async function apiSetupTestRun(body: TestRunStartPayload) {
       metadata: null,
       instanceId,
       playwrightVersion: body.playwrightVersion || null,
+      reporterVersion: body.reporterVersion || null,
       streamToken: setupToken,
       isFullRun: body.isFullRun !== false ? 1 : 0,
       filterDetails: body.filterDetails ?? null,
@@ -181,6 +183,7 @@ export async function apiBeginTestRun(
     totalTests?: number;
     metadata?: Record<string, unknown> | null;
     playwrightVersion?: string | null;
+    reporterVersion?: string | null;
     shardIndex?: number;
     shardTotal?: number;
     isFullRun?: boolean;
@@ -220,6 +223,7 @@ export async function apiBeginTestRun(
         totalTests: body.totalTests || 0,
         metadata: sanitizeMetadata(body.metadata || (testRun.metadata as Record<string, unknown> | null)),
         playwrightVersion: body.playwrightVersion || (testRun.playwrightVersion as string | null),
+        reporterVersion: body.reporterVersion || (testRun.reporterVersion as string | null),
         isFullRun: body.isFullRun !== false ? 1 : 0,
         filterDetails: body.filterDetails ?? (testRun.filterDetails as Record<string, unknown> | null),
       })
@@ -674,6 +678,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
       ...(body.metadata && { metadata: sanitizeMetadata(body.metadata) }),
       ...(body.label !== undefined && { label: body.label }),
       ...(body.playwrightVersion && { playwrightVersion: body.playwrightVersion }),
+      ...(body.reporterVersion && { reporterVersion: body.reporterVersion }),
       ...(body.isFullRun !== undefined && { isFullRun: body.isFullRun !== false ? 1 : 0 }),
       ...(body.filterDetails !== undefined && { filterDetails: body.filterDetails ?? null }),
     })

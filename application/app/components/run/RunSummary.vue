@@ -459,11 +459,13 @@ function onLabelKeydown(e: KeyboardEvent) {
         </UCard>
       </div>
 
-      <!-- Block 1: CI + Environment -->
+      <!-- Block 1: CI + Environment + Tooling versions -->
       <CiEnvCard
-        v-if="testRun?.metadata?.ci || testRun?.environment"
+        v-if="testRun?.metadata?.ci || testRun?.environment || testRun?.playwrightVersion || testRun?.reporterVersion"
         :ci="testRun?.metadata?.ci"
         :environment="testRun?.environment"
+        :playwright-version="testRun?.playwrightVersion"
+        :reporter-version="testRun?.reporterVersion"
         :class="blockColSpanClass"
       />
 

@@ -561,6 +561,24 @@ const routes: RouteEntry[] = [
     handler: async (_, __, q, ctx) => searchProjectsTestRunsCases(await getDemoDb(), q?.get('q') || '', ctx?.scope),
   },
 
+  // Version — demo runs entirely client-side (sql.js in the browser, no Node
+  // server), so `node`/`dbBackend` describe that rather than a real backend.
+  // `appVersion`/`buildSha`/`buildTime` are already available via
+  // `config.public` in the demo build; this mirrors the server shape for
+  // parity with any caller that hits the endpoint directly.
+  {
+    method: 'GET',
+    pattern: /^\/api\/version$/,
+    handler: () =>
+      Promise.resolve({
+        appVersion: null,
+        buildSha: null,
+        buildTime: null,
+        node: 'N/A (browser demo)',
+        dbBackend: 'sql.js (in-browser)',
+      }),
+  },
+
   // Admin
   { method: 'GET', pattern: /^\/api\/admin\/stats$/, handler: () => apiGetAdminStats() },
   {

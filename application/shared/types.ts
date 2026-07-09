@@ -141,6 +141,7 @@ export interface TestRunSubmitPayload {
   metadata?: Record<string, unknown> | null;
   instanceId?: string | null;
   playwrightVersion?: string;
+  reporterVersion?: string;
   testCases?: TestCasePayload[];
   shardIndex?: number;
   shardTotal?: number;
@@ -213,6 +214,7 @@ export interface TestRunFinishPayload {
   label?: string | null;
   metadata?: Record<string, unknown>;
   playwrightVersion?: string;
+  reporterVersion?: string;
   shardIndex?: number;
   shardTotal?: number;
   isFullRun?: boolean;
@@ -230,6 +232,7 @@ export interface TestRunStartPayload {
   metadata?: Record<string, unknown>;
   instanceId?: string;
   playwrightVersion?: string;
+  reporterVersion?: string;
   shardIndex?: number;
   shardTotal?: number;
   isFullRun?: boolean;

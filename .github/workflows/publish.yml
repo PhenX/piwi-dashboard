@@ -32,12 +32,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Set package version from tag
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          npm version "$VERSION" --no-git-tag-version
-        working-directory: reporter
-
       - name: Build reporter
         working-directory: reporter
         run: npm run reporter:build
@@ -131,6 +125,8 @@ jobs:
           push: true
           tags: ${{ steps.tags.outputs.all }}
           labels: ${{ steps.meta-ghcr.outputs.labels }}
+          build-args: |
+            PIWI_BUILD_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64

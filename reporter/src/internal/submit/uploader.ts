@@ -39,6 +39,8 @@ export interface RunPayload {
   testCases: CollectedTestCase[];
   /** Playwright framework version used for this run */
   playwrightVersion?: string;
+  /** Piwi reporter package version that produced this run */
+  reporterVersion?: string;
   /** 1-based shard index (e.g. 1, 2, 3) */
   shardIndex?: number;
   /** Total number of shards (e.g. 3) */

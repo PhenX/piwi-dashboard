@@ -8,6 +8,11 @@ const __dirname = dirname(__filename);
 
 const isDemo = process.env.PIWI_DEMO_MODE === 'true';
 
+// The dashboard version is authoritative in `application/package.json`
+// (kept in sync across the monorepo by release-please) — read it once at
+// config-eval time so the running app can report what it is.
+const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'));
+
 // Read the demo seed version hash at build time so it can be injected into
 // runtimeConfig for staleness detection in the browser.
 let demoDataVersion = '';
@@ -109,6 +114,13 @@ export default defineNuxtConfig({
       authEnabled: process.env.PIWI_AUTH_ENABLED === 'true' || isDemo,
       demoMode: process.env.PIWI_DEMO_MODE === 'true',
       demoDataVersion,
+      // Authoritative dashboard version — read from the committed package.json
+      // (release-please-maintained), so it works even in the static demo build
+      // with no server round-trip.
+      appVersion: pkg.version as string,
+      buildSha: process.env.PIWI_BUILD_SHA || '',
+      buildTime: new Date().toISOString(),
+      nodeVersion: process.version,
       oauthProviders: [
         ...(process.env.PIWI_OAUTH_GOOGLE_CLIENT_ID && process.env.PIWI_OAUTH_GOOGLE_CLIENT_SECRET
           ? (['google'] as const)
@@ -180,7 +192,7 @@ export default defineNuxtConfig({
         title: 'Piwi Dashboard API',
         description:
           'REST API for storing and querying Playwright test results, traces, failure diagnoses, and project statistics.',
-        version: '1.0.0',
+        version: pkg.version as string,
         // Security scheme definitions for endpoint-level `security` annotations.
         // See docs/development.md for conventions.
         components: {

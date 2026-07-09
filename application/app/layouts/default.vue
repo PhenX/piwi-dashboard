@@ -300,6 +300,7 @@ const groups = computed<CommandPaletteGroup[]>(() => {
 
 const isDemo = config.public.demoMode;
 const demoDataVersion = config.public.demoDataVersion as string;
+const appVersion = config.public.appVersion as string;
 
 onMounted(async () => {
   // ── Demo data staleness ──
@@ -366,7 +367,17 @@ onMounted(async () => {
       </template>
 
       <template #footer="{ collapsed }">
-        <UserMenu :collapsed="collapsed" />
+        <div class="flex flex-col gap-1 w-full">
+          <UserMenu :collapsed="collapsed" />
+          <ULink
+            v-if="!collapsed"
+            to="/settings/about"
+            class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-center"
+            title="View version and build info"
+          >
+            v{{ appVersion }}
+          </ULink>
+        </div>
       </template>
     </UDashboardSidebar>
 

@@ -12,6 +12,7 @@ import { MetadataCollector } from '../internal/collect/metadata-collector.js';
 import { StreamManager } from '../internal/streaming/stream-manager.js';
 import { collectStepMetrics, extractTestStepEvents, extractWaitEvents } from '../internal/collect/step-analyzer.js';
 import { computeInstanceId } from '../internal/support/instance-id.js';
+import { getReporterVersion } from '../internal/support/reporter-version.js';
 import { extractFailingLine, readSourceSnippet } from '../internal/support/source-snippet.js';
 import { detectCiRunLabel } from '../internal/support/ci.js';
 import { workerIndexOf } from '../internal/support/worker-index.js';
@@ -48,6 +49,7 @@ export class PiwiDashboardReporter {
   private testCases: CollectedTestCase[] = [];
   private startTime: string | null = null;
   private playwrightVersion: string | null = null;
+  private readonly reporterVersion = getReporterVersion();
   private totalTests = 0;
   private passedTests = 0;
   private failedTests = 0;
@@ -161,6 +163,7 @@ export class PiwiDashboardReporter {
       this.metadata,
       this.instanceId,
       this.playwrightVersion,
+      this.reporterVersion,
       this.shardInfo,
       this.isFullRun,
       this.filterDetails,
@@ -382,6 +385,7 @@ export class PiwiDashboardReporter {
         testCases: this.testCases,
         startTime: this.startTime,
         playwrightVersion: this.playwrightVersion,
+        reporterVersion: this.reporterVersion,
         totalTests: this.totalTests,
         passedTests: this.passedTests,
         failedTests: this.failedTests,

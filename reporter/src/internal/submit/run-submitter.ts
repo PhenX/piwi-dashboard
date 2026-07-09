@@ -21,6 +21,7 @@ export interface CollectedRun {
   testCases: CollectedTestCase[];
   startTime: string | null;
   playwrightVersion: string | null;
+  reporterVersion: string | null;
   totalTests: number;
   passedTests: number;
   failedTests: number;
@@ -137,6 +138,7 @@ export class RunSubmitter {
       metadata: run.metadata,
       instanceId: run.instanceId,
       playwrightVersion: run.playwrightVersion ?? undefined,
+      reporterVersion: run.reporterVersion ?? undefined,
       testCases: run.testCases,
       shardIndex: run.shardInfo?.current,
       shardTotal: run.shardInfo?.total,
@@ -174,6 +176,7 @@ export class RunSubmitter {
         metadata: run.metadata,
         hasPendingUploads: this.hasReports(run),
         playwrightVersion: run.playwrightVersion ?? undefined,
+        reporterVersion: run.reporterVersion ?? undefined,
         setupSteps: run.setupSteps.length > 0 ? run.setupSteps : undefined,
         isFullRun: run.isFullRun,
         filterDetails: run.filterDetails ?? null,

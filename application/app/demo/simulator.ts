@@ -907,6 +907,7 @@ async function runSingleSimulation(
       label: scenario.runLabel || null,
       instanceId,
       playwrightVersion: '1.51.0',
+      reporterVersion: '0.5.0',
       shardIndex: shardOverride?.shardIndex,
       shardTotal: shardOverride?.shardTotal,
     },
@@ -930,6 +931,7 @@ async function runSingleSimulation(
       totalTests: 0,
       metadata,
       playwrightVersion: '1.51.0',
+      reporterVersion: '0.5.0',
       shardIndex: shardOverride?.shardIndex,
       shardTotal: shardOverride?.shardTotal,
     },
@@ -1060,6 +1062,7 @@ async function runSingleSimulation(
       durations,
       metadata,
       playwrightVersion: '1.51.0',
+      reporterVersion: '0.5.0',
       ...(shardOverride ? { shardIndex: shardOverride.shardIndex, shardTotal: shardOverride.shardTotal } : {}),
     },
   });

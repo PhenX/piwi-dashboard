@@ -236,6 +236,7 @@ export default eventHandler(async (event) => {
       metadata: sanitizeMetadata(body.metadata || null),
       instanceId,
       playwrightVersion: body.playwrightVersion || null,
+      reporterVersion: body.reporterVersion || null,
       shardTotal: isSharded ? shardTotal : null,
       shardsFinished: isSharded ? 0 : undefined,
       isFullRun: body.isFullRun !== false ? 1 : 0,

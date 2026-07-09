@@ -380,6 +380,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         label: testRuns.label,
         metadata: testRuns.metadata,
         playwrightVersion: testRuns.playwrightVersion,
+        reporterVersion: testRuns.reporterVersion,
       })
       .from(testRuns)
       .innerJoin(projects, eq(testRuns.projectId, projects.id))
@@ -455,6 +456,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       branch: meta?.scm?.branch || null,
       commit: meta?.scm?.commit?.slice(0, 8) || null,
       playwrightVersion: run.playwrightVersion || null,
+      reporterVersion: run.reporterVersion || null,
       cases: paged.items,
       nextCursor: paged.nextCursor,
       filter: statusFilter,
