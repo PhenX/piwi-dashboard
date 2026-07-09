@@ -1,0 +1,57 @@
+name: Bug report
+description: Something isn't working as expected
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! A few details help us fix it quickly.
+        For security vulnerabilities, please use [private reporting](https://github.com/PiwiTests/platform/security/advisories/new) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead? Screenshots welcome.
+      placeholder: |
+        1. Submit a run with …
+        2. Open the test run page
+        3. Expected …, but saw …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Dashboard (web UI)
+        - Server / API
+        - Reporter (@piwitests/reporter)
+        - AI diagnosis
+        - Notifications
+        - Auth / permissions
+        - Docker / deployment
+        - Docs
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Dashboard version (Settings → About, or `GET /api/version`) and reporter version if relevant.
+      placeholder: "dashboard 0.8.0, reporter 0.8.0"
+    validations:
+      required: true
+  - type: input
+    id: deployment
+    attributes:
+      label: Deployment
+      description: How you run it — Docker / source, SQLite / PostgreSQL, local / S3 storage, auth on/off.
+      placeholder: "Docker, SQLite, local storage, auth enabled"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Server logs or browser console output around the failure. Will be formatted as code automatically.
+      render: shell

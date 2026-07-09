@@ -1,6 +1,41 @@
 # Contributing
 
-See [AGENTS.md](AGENTS.md) for architecture, conventions, and the full development guide. This file covers commit and PR conventions.
+Thanks for your interest in improving Piwi Dashboard! This file covers dev setup, tests, and commit/PR conventions. See [AGENTS.md](AGENTS.md) for architecture, project structure, and the full development guide.
+
+## Getting set up
+
+Prerequisites: **Node.js 24+**, npm, Git.
+
+```bash
+git clone https://github.com/PiwiTests/platform.git
+cd platform/application
+npm install
+npm run app:dev      # dashboard at http://localhost:3000
+```
+
+The SQLite database and `.data/` storage are created automatically on first API call — no configuration needed. To hack on the reporter package instead, work in `reporter/` (`npm run reporter:build`, or `npm run reporter:dev` for watch mode).
+
+## Quality checks & tests
+
+Run from `application/` unless noted:
+
+| Command | What it does |
+|---|---|
+| `npm run app:lint` | Lint (oxlint) |
+| `npm run app:typecheck` | TypeScript check |
+| `npm run app:format:check` | Formatting (oxfmt) |
+| `npm run app:test:unit` | Unit tests (Vitest) |
+| `npm run app:test` | E2E tests (Playwright — needs browsers: `npx playwright install chromium`) |
+| `npm test` | Everything (unit first, then E2E) |
+| `npm run reporter:test` | Reporter unit tests (from `reporter/`) |
+
+If an E2E test creates a project, use a static name registered in `application/shared/test-project-names.ts` (see the conventions in [AGENTS.md](AGENTS.md)).
+
+## What to work on
+
+- Check [open issues](https://github.com/PiwiTests/platform/issues) and the [roadmap](ROADMAP.md).
+- For anything non-trivial, open an issue or a [Discussion](https://github.com/PiwiTests/platform/discussions) first so we can agree on the approach before you invest time.
+- Security problems: follow [SECURITY.md](SECURITY.md) — please don't open public issues for those.
 
 ## Commit messages & PR titles
 
