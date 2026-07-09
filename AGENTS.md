@@ -64,6 +64,7 @@ SQLite database auto-initializes on first API call.
 
 ### Backend (server/api/)
 Nuxt file-based routing:
+- `GET /api/health` — Public health/readiness probe; verifies DB connectivity (200 ok / 503)
 - `GET /_openapi.json` — Auto-generated OpenAPI 3.1 spec (enabled via `nitro.experimental.openAPI`)
 - `GET /docs` — Interactive API reference UI (Scalar) generated from the OpenAPI spec
 - `POST /api/test-runs/submit` — Submit JSON test results
@@ -330,7 +331,7 @@ All endpoints MUST call `requireAuth(event)` or `requireAuth(event, [roles])` at
 | `[Role.ADMINISTRATOR, Role.REPORTER, Role.USER]` | All roles | Self-service API key management |
 
 - **Streaming protocol** endpoints (`begin`, `events`, `finish`, `case-files`) use **stream token** auth (not `requireAuth`) — the token is validated against the stored run's `streamToken`.
-- **Public endpoints** (no auth required): `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `POST /api/auth/setup`, OAuth flow endpoints, `GET /api/ai/status`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`, `GET /api/auth/verify-email`.
+- **Public endpoints** (no auth required): `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `POST /api/auth/setup`, OAuth flow endpoints, `GET /api/ai/status`, `GET /api/health`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`, `GET /api/auth/verify-email`.
 
 ### Implementing Auth on a New Endpoint
 

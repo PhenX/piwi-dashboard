@@ -30,9 +30,11 @@ The dashboard will be available at `http://localhost:3000`.
 | Tag | Description |
 |-----|-------------|
 | `latest` | Latest stable release |
-| `v1.0.0` | Specific version (semver) |
-| `v1.0` | Major.minor version |
-| `v1` | Major version |
+| `0.9.0` | Specific version (semver) |
+| `0.9` | Latest patch of a minor version |
+| `0` | Latest release of the major version |
+
+Pin a specific version in production; [tags on Docker Hub](https://hub.docker.com/r/phenx/piwitests-server/tags).
 
 ### Image details
 
@@ -75,16 +77,16 @@ The `.data` directory contains:
 
 ## Building locally
 
+Build from the repository root (the `Dockerfile` lives there):
+
 ::: code-group
 
 ```bash [Linux / macOS]
-cd application
 docker build -t piwi-dashboard:local .
 docker run -p 3000:3000 -v $(pwd)/.data:/app/.data piwi-dashboard:local
 ```
 
 ```powershell [Windows (PowerShell)]
-cd application
 docker build -t piwi-dashboard:local .
 docker run -p 3000:3000 -v ${PWD}/.data:/app/.data piwi-dashboard:local
 ```
@@ -93,7 +95,7 @@ docker run -p 3000:3000 -v ${PWD}/.data:/app/.data piwi-dashboard:local
 
 ## Docker Compose
 
-Create a `docker-compose.yml`:
+The repository ships a ready-to-use [`docker-compose.yml`](https://github.com/PiwiTests/platform/blob/main/docker-compose.yml) with commented options (secret key, auth, PostgreSQL). Minimal version:
 
 ```yaml
 services:
@@ -102,16 +104,14 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/.data
-    environment:
-      - NODE_ENV=production
+      - ./.data:/app/.data
     restart: unless-stopped
 ```
 
 Run with:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Docker Compose with PostgreSQL
@@ -121,11 +121,11 @@ For production deployments requiring a robust relational database:
 ```yaml
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
-      POSTGRES_USER: playwright
-      POSTGRES_PASSWORD: playwright
-      POSTGRES_DB: piwi_dashboard
+      POSTGRES_USER: piwi
+      POSTGRES_PASSWORD: change-me
+      POSTGRES_DB: piwi
     volumes:
       - pg-data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -135,10 +135,9 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./storage:/app/.data/storage
+      - ./.data:/app/.data   # still used for report/trace file storage
     environment:
-      - NODE_ENV=production
-      - PIWI_DATABASE_URL=postgresql://playwright:playwright@postgres:5432/piwi_dashboard
+      - PIWI_DATABASE_URL=postgresql://piwi:change-me@postgres:5432/piwi
     depends_on:
       - postgres
     restart: unless-stopped
@@ -150,7 +149,7 @@ volumes:
 Run with:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Kubernetes
@@ -177,6 +176,18 @@ spec:
         image: phenx/piwitests-server:latest
         ports:
         - containerPort: 3000
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 20
+          periodSeconds: 30
         volumeMounts:
         - name: data
           mountPath: /app/.data
@@ -206,6 +217,87 @@ npm install
 npm run app:build
 npm run app:preview  # preview the production build locally
 ```
+
+## Health checks
+
+`GET /api/health` verifies database connectivity and returns `200 {"status":"ok"}` when healthy, `503` otherwise — use it for load-balancer targets, uptime monitors, and container orchestration. The Docker image ships a built-in `HEALTHCHECK` against it, so `docker ps` shows `healthy`/`unhealthy` out of the box. `GET /api/version` additionally reports the running version and database backend.
+
+## Reverse proxy (HTTPS)
+
+Always put a TLS-terminating reverse proxy in front of the dashboard for anything beyond localhost. Two working examples — mind the **upload size** (trace/report uploads can reach hundreds of MB) and **SSE streaming** (live runs and browser notifications use long-lived `text/event-stream` responses that must not be buffered).
+
+**Caddy** (automatic HTTPS):
+
+```text
+piwi.example.com {
+    reverse_proxy localhost:3000
+}
+```
+
+**nginx:**
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name piwi.example.com;
+
+    # ssl_certificate     /etc/letsencrypt/live/piwi.example.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/piwi.example.com/privkey.pem;
+
+    client_max_body_size 500m;   # trace + report uploads
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Live streaming + notifications use Server-Sent Events:
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+    }
+}
+```
+
+When auth is enabled, set `PIWI_SITE_URL` to the public HTTPS URL so email links and OAuth callbacks point at the right origin.
+
+## Backups
+
+Everything lives in two places — back both up:
+
+1. **The database** — SQLite file `.data/piwi.db` (default) or your PostgreSQL database (`pg_dump`).
+2. **File storage** — `.data/storage/` (HTML reports, traces, attachments), unless you use [S3 storage](/storage).
+
+With the default SQLite + local storage setup, a consistent backup is simply a copy of `.data/` while the container is stopped — or use SQLite's online backup to avoid downtime:
+
+::: code-group
+
+```bash [Linux / macOS]
+# Online, consistent SQLite backup + storage copy
+sqlite3 .data/piwi.db ".backup '.data/piwi-backup.db'"
+tar czf piwi-backup.tar.gz -C .data piwi-backup.db storage
+```
+
+```powershell [Windows (PowerShell)]
+# Stop the container first for a consistent copy, then:
+Compress-Archive -Path .data -DestinationPath piwi-backup.zip
+```
+
+:::
+
+With PostgreSQL: `pg_dump` the database and copy `.data/storage/` (or rely on your S3 bucket's own durability/versioning).
+
+## Resource requirements
+
+Piwi is a single Node.js process and runs comfortably on small machines:
+
+| Deployment | Guideline |
+|---|---|
+| RAM | ~300 MB idle; 1 GB is comfortable headroom for large uploads and AI diagnosis |
+| CPU | 1 vCPU is enough for a team; ingest is I/O-bound |
+| Disk | The real variable — traces and HTML reports dominate. Budget by retention: e.g. ~50–200 MB per run with traces enabled. Prune old runs from **Settings → Storage** |
+| Scaling | Run a single replica. SQLite requires it; with PostgreSQL the SSE event bus is still in-process, so keep one instance |
 
 ## Security
 

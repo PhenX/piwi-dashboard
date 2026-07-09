@@ -2,7 +2,7 @@
 
 **Self-hosted Playwright test results dashboard.** Collect, store, and visualize your end-to-end test results over time — failures, performance trends, flaky tests, and live run streaming — without sending data to any third party.
 
-📖 [Full documentation](https://piwitests.github.io) · 🎮 [Live demo](https://piwitests.github.io/demo/) · 💬 [GitHub](https://github.com/piwitests/platform)
+📖 [Full documentation](https://piwitests.github.io) · 🎮 [Live demo](https://piwitests.github.io/demo/) · 💬 [GitHub](https://github.com/PiwiTests/platform)
 
 > **Disclaimer:** Piwi Dashboard is not affiliated with, endorsed by, or connected to Microsoft Corporation.
 
@@ -47,9 +47,9 @@ Open `http://localhost:3000`. The SQLite database and file storage are created a
 | Tag       | Description                            |
 |-----------|----------------------------------------|
 | `latest`  | Latest stable release                  |
-| `v1.2.3`  | Exact version (pinned, recommended)    |
-| `v1.2`    | Latest patch for a minor version       |
-| `v1`      | Latest release for a major version     |
+| `0.9.0`   | Exact version (pinned, recommended)    |
+| `0.9`     | Latest patch for a minor version       |
+| `0`       | Latest release for a major version     |
 
 ---
 
@@ -140,7 +140,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/.data
+      - ./.data:/app/.data
     restart: unless-stopped
 ```
 
@@ -153,7 +153,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/.data
+      - ./.data:/app/.data
     environment:
       PIWI_SECRET_KEY: "replace-with-openssl-rand-hex-32-output"
       PIWI_AUTH_ENABLED: "true"
@@ -170,7 +170,7 @@ services:
     environment:
       POSTGRES_USER: piwi
       POSTGRES_PASSWORD: piwi
-      POSTGRES_DB: piwi_dashboard
+      POSTGRES_DB: piwi
     volumes:
       - pg-data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -180,7 +180,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      PIWI_DATABASE_URL: postgresql://piwi:piwi@postgres:5432/piwi_dashboard
+      PIWI_DATABASE_URL: postgresql://piwi:piwi@postgres:5432/piwi
       PIWI_STORAGE_TYPE: s3
       PIWI_S3_BUCKET: my-piwi-bucket
       PIWI_S3_REGION: us-east-1
@@ -216,7 +216,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/.data
+      - ./.data:/app/.data
     environment:
       PIWI_STORAGE_TYPE: s3
       PIWI_S3_ENDPOINT: http://minio:9000
@@ -376,4 +376,4 @@ docker logs piwi-dashboard
 
 ## License
 
-MIT — [source code on GitHub](https://github.com/piwitests/platform)
+MIT — [source code on GitHub](https://github.com/PiwiTests/platform)

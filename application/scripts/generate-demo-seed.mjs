@@ -13,7 +13,7 @@
  * the generated SQL content.  The Nuxt build reads this hash and exposes it
  * as runtime config so the demo SPA can detect stale IndexedDB data.
  *
- * The generated files are committed to the repository so `npm run generate:demo`
+ * The generated files are committed to the repository so `npm run app:generate:demo`
  * does not need a running server.
  */
 
@@ -1940,7 +1940,7 @@ const lines = [
 // Compute the hash from all lines *excluding* the timestamp comment so that
 // identical data produces the same hash even across regenerations.  Without
 // this, the "New demo data" staleness indicator always appears because every
-// `seed:demo` run changes the timestamp comment.
+// `app:seed:demo` run changes the timestamp comment.
 const hashLines = lines.filter((l) => !l.startsWith('-- Generated at:'));
 const content = hashLines.join('\n');
 const hash = createHash('sha256').update(content, 'utf-8').digest('hex');

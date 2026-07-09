@@ -84,5 +84,9 @@ COPY --chown=nodejs:nodejs --from=builder /app/application/.output ./application
 
 EXPOSE ${PORT}
 
+# Readiness for compose/k8s/monitors — /api/health verifies DB connectivity
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO /dev/null "http://127.0.0.1:${NITRO_PORT}/api/health" || exit 1
+
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "application/.output/server/index.mjs"]

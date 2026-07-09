@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest an idea or improvement
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a look at the [roadmap](https://github.com/PiwiTests/platform/blob/main/ROADMAP.md) and
+        [existing issues](https://github.com/PiwiTests/platform/issues?q=is%3Aissue) first — your idea may already be tracked.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation where you miss this feature — the "why" matters more than the "how".
+      placeholder: "When triaging a failed nightly run, I can't …"
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to happen?
+      description: A rough sketch of the behavior or UI you have in mind. Alternatives you considered are welcome too.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Dashboard (web UI)
+        - Server / API
+        - Reporter (@piwitests/reporter)
+        - AI diagnosis
+        - Notifications
+        - Auth / permissions
+        - Docker / deployment
+        - Docs
+        - Other

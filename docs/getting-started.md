@@ -50,7 +50,7 @@ See [Deployment](./deployment) for detailed Docker, Docker Compose, PostgreSQL, 
 
 ```bash
 # Clone the repository
-git clone https://github.com/piwitests/platform.git
+git clone https://github.com/PiwiTests/platform.git
 cd platform/application
 
 # Install dependencies
@@ -163,6 +163,47 @@ npx playwright test
 ```
 
 See the [Reporter](./reporter) page for the full configuration reference, including live streaming, multiple report types, performance metrics, and authentication.
+
+## Running in CI
+
+Nothing Piwi-specific is required in CI — the reporter runs inside `npx playwright test` and pushes results to your dashboard. Point the reporter at your deployed instance (via the `PIWI_DASHBOARD_URL` env var or the `serverUrl` option) and pass an API key if [authentication](./authentication) is enabled. CI metadata (workflow, branch, commit, run URL) and [shard merging](./reporter#sharding) are detected automatically on GitHub Actions, GitLab CI, Jenkins, CircleCI, Azure DevOps, and more.
+
+**GitHub Actions:**
+
+```yaml
+name: e2e
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps
+      - run: npx playwright test
+        env:
+          PIWI_DASHBOARD_URL: https://piwi.example.com
+          PIWI_API_KEY: ${{ secrets.PIWI_API_KEY }}
+```
+
+**GitLab CI:**
+
+```yaml
+e2e:
+  image: mcr.microsoft.com/playwright:v1.54.0-noble
+  script:
+    - npm ci
+    - npx playwright test
+  variables:
+    PIWI_DASHBOARD_URL: https://piwi.example.com
+    PIWI_API_KEY: $PIWI_API_KEY
+```
+
+With live streaming enabled you can watch the run progress in the dashboard while CI is still executing — see [Reporter → Streaming](./reporter#live-streaming).
 
 ## Dashboard navigation
 

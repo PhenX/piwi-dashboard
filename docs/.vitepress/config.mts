@@ -51,6 +51,7 @@ export default defineConfig({
 
     sidebar: [
       { text: 'Getting started', link: '/getting-started' },
+      { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
       { text: 'UI overview', link: '/ui-overview' },
       { text: 'Reporter', link: '/reporter' },
       {
@@ -81,7 +82,7 @@ export default defineConfig({
     ],
 
     editLink: {
-      pattern: 'https://github.com/piwitests/platform/edit/main/docs/:path',
+      pattern: 'https://github.com/PiwiTests/platform/edit/main/docs/:path',
       text: 'Edit this page on GitHub',
     },
 
@@ -94,13 +95,14 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/piwitests/platform' },
+      { icon: 'github', link: 'https://github.com/PiwiTests/platform' },
     ],
 
     externalLinkIcon: true,
 
     footer: {
-      message: 'Released under the MIT License.',
+      message:
+        'Released under the MIT License. Zero telemetry — Piwi never phones home.<br>Piwi Dashboard is not affiliated with, endorsed by, or connected to Microsoft Corporation. Playwright is a trademark of Microsoft.',
       copyright: 'Copyright © 2025-present Fabien Ménager',
     },
   },
