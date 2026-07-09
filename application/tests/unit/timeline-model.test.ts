@@ -40,14 +40,15 @@ describe('useTimelineModel', () => {
     const items = timelineData.value;
     // Two test bars, one hook, one wasted wait. The non-wasted "load state"
     // wait is dropped.
-    expect(items.filter((d) => !d.isHook && !d.isWait)).toHaveLength(2);
-    expect(items.filter((d) => d.isHook)).toHaveLength(1);
-    expect(items.filter((d) => d.isWait)).toHaveLength(1);
+    expect(items.filter((d) => d.kind === 'test')).toHaveLength(2);
+    expect(items.filter((d) => d.kind === 'hook')).toHaveLength(1);
+    expect(items.filter((d) => d.kind === 'wait')).toHaveLength(1);
     expect(items.some((d) => d.title === 'Wait for load state')).toBe(false);
 
-    const aBar = items.find((d) => d.id === 1)!;
+    const aBar = items.find((d) => d.key === 't1')!;
     expect(aBar.start).toBe(0); // anchored to the run's min startedAt
-    const wasted = items.find((d) => d.isWait)!;
+    expect(aBar.testCaseId).toBe(1);
+    const wasted = items.find((d) => d.kind === 'wait')!;
     expect(wasted.start).toBe(200); // 1200 - 1000
     expect(wasted.duration).toBe(200);
 
@@ -68,8 +69,8 @@ describe('useTimelineModel', () => {
     ]);
 
     const items = timelineData.value;
-    const bar = items.find((d) => !d.isWait)!;
-    const wait = items.find((d) => d.isWait)!;
+    const bar = items.find((d) => d.kind === 'test')!;
+    const wait = items.find((d) => d.kind === 'wait')!;
     expect(bar.start).toBe(0);
     expect(wait.start).toBe(300); // appended right after the test bar
     expect(maxTime.value).toBe(400);
@@ -96,7 +97,7 @@ describe('useTimelineModel', () => {
     expect(workerRows.value).toHaveLength(0);
   });
 
-  test('flags suite setup steps and keeps the fixture category distinct', () => {
+  test('flags suite setup steps and keeps the fixture kind distinct', () => {
     const { timelineData } = model(
       [
         {
@@ -120,12 +121,12 @@ describe('useTimelineModel', () => {
     );
 
     const items = timelineData.value;
-    const setup = items.find((d) => d.isSetup);
+    const setup = items.find((d) => d.kind === 'setup');
     expect(setup?.title).toContain('[Setup]');
-    const fixture = items.find((d) => d.category === 'fixture');
-    expect(fixture?.isHook).toBe(true);
-    expect(fixture?.isSetup).toBeFalsy();
-    const hook = items.find((d) => d.category === 'hook' && !d.isSetup);
+    expect(setup?.testCaseId).toBeNull();
+    const fixture = items.find((d) => d.kind === 'fixture');
+    expect(fixture?.title).toBe('fixture: page');
+    const hook = items.find((d) => d.kind === 'hook');
     expect(hook?.title).toBe('Before Hooks');
   });
 
@@ -146,6 +147,92 @@ describe('useTimelineModel', () => {
       ],
       { wastedPatterns: ['Wait for response*'] },
     );
-    expect(timelineData.value.filter((d) => d.isWait)).toHaveLength(1);
+    expect(timelineData.value.filter((d) => d.kind === 'wait')).toHaveLength(1);
+  });
+
+  // Regression: step ids used to be derived as `-tc.id - stepIndex - 1`, so
+  // adjacent test-case ids produced colliding ids (test 101 step 1 === test
+  // 102 step 0). Colliding ids broke hover dimming (bars sharing the hovered
+  // id stayed highlighted) and duplicated v-for keys.
+  test('assigns a unique key to every item across tests with adjacent ids', () => {
+    const steps: StepLike[] = [
+      { title: 'Before Hooks', category: 'hook', startedAt: 1000, duration: 40, status: 'passed' },
+      { title: 'Wait for timeout', category: 'wait', startedAt: 1100, duration: 100, status: 'wasted' },
+      { title: 'After Hooks', category: 'hook', startedAt: 1300, duration: 30, status: 'passed' },
+    ];
+    const { timelineData } = model([
+      { id: 101, title: 'A', status: 'passed', workerIndex: 0, startedAt: 1000, duration: 500, stepEvents: steps },
+      { id: 102, title: 'B', status: 'passed', workerIndex: 0, startedAt: 1600, duration: 500, stepEvents: steps },
+      { id: 103, title: 'C', status: 'passed', workerIndex: 1, startedAt: 1000, duration: 500, stepEvents: steps },
+    ]);
+
+    const items = timelineData.value;
+    expect(items).toHaveLength(12); // 3 tests × (1 bar + 2 hooks + 1 wait)
+    const keys = items.map((d) => d.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  test('hook and wait segments carry their owning test case id', () => {
+    const { timelineData } = model([
+      {
+        id: 7,
+        title: 'A',
+        status: 'passed',
+        workerIndex: 0,
+        startedAt: 1000,
+        duration: 500,
+        stepEvents: [
+          { title: 'Before Hooks', category: 'hook', startedAt: 1000, duration: 40, status: 'passed' },
+          { title: 'Wait for timeout', category: 'wait', startedAt: 1100, duration: 100, status: 'wasted' },
+        ],
+      },
+    ]);
+
+    for (const segment of timelineData.value.filter((d) => d.kind !== 'test')) {
+      expect(segment.testCaseId).toBe(7);
+      expect(segment.parentTitle).toBe('A');
+    }
+  });
+
+  // Regression: setup items used to carry shardIndex null while sitting on a
+  // real shard's row, which made the row list (then re-derived from items)
+  // grow a phantom empty row per setup worker on sharded runs.
+  test('sharded runs with setup steps do not grow phantom rows', () => {
+    const { timelineData, workerRows, shardGroups } = model(
+      [
+        { id: 1, title: 'A', status: 'passed', workerIndex: 0, shardIndex: 1, startedAt: 1000, duration: 100 },
+        { id: 2, title: 'B', status: 'passed', workerIndex: 0, shardIndex: 2, startedAt: 1000, duration: 100 },
+      ],
+      {
+        setupSteps: [
+          { title: 'beforeAll', category: 'hook', workerIndex: 0, startedAt: 1000, duration: 50, status: 'passed' },
+        ] as unknown as TimelineModelInput['setupSteps'],
+      },
+    );
+
+    expect(workerRows.value).toHaveLength(2);
+    expect(shardGroups.value).toHaveLength(2);
+    // The setup step lands on the first shard's row for that worker.
+    expect(timelineData.value.find((d) => d.kind === 'setup')?.rowIndex).toBe(0);
+  });
+
+  test('ignores step categories that are not hooks, fixtures or waits', () => {
+    const { timelineData } = model([
+      {
+        id: 1,
+        title: 'A',
+        status: 'passed',
+        workerIndex: 0,
+        startedAt: 1000,
+        duration: 300,
+        stepEvents: [
+          { title: 'expect.toBe', category: 'expect', startedAt: 1010, duration: 5, status: 'passed' },
+          { title: 'my step', category: 'test.step', startedAt: 1020, duration: 50, status: 'passed' },
+        ],
+      },
+    ]);
+
+    expect(timelineData.value).toHaveLength(1);
+    expect(timelineData.value[0]!.kind).toBe('test');
   });
 });

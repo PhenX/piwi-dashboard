@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import type { TestCaseResult, TestStepEvent } from '~~/types/api';
-import { useTimelineModel, type TimelineItem } from '~/composables/useTimelineModel';
+import { ref, computed, watch } from 'vue';
+import type { TestCaseResult, SetupStepEvent } from '~~/types/api';
+import { useTimelineModel, type TimelineItem, type TimelineItemKind } from '~/composables/useTimelineModel';
 import { useTimelineViewport } from '~/composables/useTimelineViewport';
 
 const props = defineProps<{
   testCases: TestCaseResult[];
-  setupSteps?: TestStepEvent[] | null;
+  setupSteps?: SetupStepEvent[] | null;
   shardTotal?: number | null;
   live?: boolean;
   /** Allowlist of glob patterns classifying which waits count as wasted time. */
@@ -26,7 +26,6 @@ const hasData = computed(() => timelineData.value.length > 0);
 const {
   panX,
   isPanning,
-  pxPerMs,
   contentWidth,
   contentHeight,
   getBarX,
@@ -40,16 +39,15 @@ const {
   resetView,
 } = useTimelineViewport({ containerRef, maxTime, rowCount, hasData, live: () => props.live });
 
-// Header counts (tests vs. hook/fixture segments vs. wasted waits).
-const testCount = computed(() => timelineData.value.filter((d) => !d.isHook && !d.isWait).length);
-const hookCount = computed(() => timelineData.value.filter((d) => d.isHook).length);
-const waitCount = computed(() => timelineData.value.filter((d) => d.isWait).length);
+// Header counts (tests vs. hook/fixture/setup segments vs. wasted waits).
+const testCount = computed(() => timelineData.value.filter((d) => d.kind === 'test').length);
+const hookCount = computed(() => timelineData.value.filter((d) => d.kind !== 'test' && d.kind !== 'wait').length);
+const waitCount = computed(() => timelineData.value.filter((d) => d.kind === 'wait').length);
 
-// Span types the timeline can draw, toggled from the header dropdown. Only the
+// Span kinds the timeline can draw, toggled from the header dropdown. Only the
 // kinds actually present in the run are offered.
-type SpanKind = 'test' | 'setup' | 'hook' | 'fixture' | 'wait';
-const SPAN_KIND_ORDER: SpanKind[] = ['test', 'setup', 'hook', 'fixture', 'wait'];
-const SPAN_KIND_LABELS: Record<SpanKind, string> = {
+const SPAN_KIND_ORDER: TimelineItemKind[] = ['test', 'setup', 'hook', 'fixture', 'wait'];
+const SPAN_KIND_LABELS: Record<TimelineItemKind, string> = {
   test: 'Tests',
   setup: 'Setup (beforeAll/afterAll)',
   hook: 'Hooks',
@@ -57,19 +55,12 @@ const SPAN_KIND_LABELS: Record<SpanKind, string> = {
   wait: 'Wasted waits',
 };
 
-function spanKind(item: TimelineItem): SpanKind {
-  if (item.isWait) return 'wait';
-  if (item.isSetup) return 'setup';
-  if (item.isHook) return item.category === 'fixture' ? 'fixture' : 'hook';
-  return 'test';
-}
-
 // Stores only the kinds explicitly hidden; everything defaults to visible.
-const hiddenKinds = ref<Partial<Record<SpanKind, boolean>>>({});
-const visibleItems = computed(() => timelineData.value.filter((item) => !hiddenKinds.value[spanKind(item)]));
+const hiddenKinds = ref<Partial<Record<TimelineItemKind, boolean>>>({});
+const visibleItems = computed(() => timelineData.value.filter((item) => !hiddenKinds.value[item.kind]));
 
 const spanTypeItems = computed(() => {
-  const present = new Set(timelineData.value.map(spanKind));
+  const present = new Set(timelineData.value.map((item) => item.kind));
   return SPAN_KIND_ORDER.filter((k) => present.has(k)).map((k) => ({
     key: k,
     label: SPAN_KIND_LABELS[k],
@@ -84,6 +75,15 @@ function toggleSpanKind(key: string, visible: boolean) {
 // Tooltip state — driven by hover events from the bars.
 const hoveredItem = ref<TimelineItem | null>(null);
 const tooltipPos = ref({ x: 0, y: 0 });
+
+// Re-resolve the hovered item by key when the data changes: a removed bar
+// fires no mouseleave (span-type toggled off, live update dropped it), which
+// would otherwise strand the tooltip; a replaced bar carries fresh data the
+// tooltip should reflect.
+watch(visibleItems, (items) => {
+  if (!hoveredItem.value) return;
+  hoveredItem.value = items.find((item) => item.key === hoveredItem.value!.key) ?? null;
+});
 
 function onBarEnter(item: TimelineItem, event: MouseEvent) {
   hoveredItem.value = item;
@@ -151,13 +151,12 @@ function onBarLeave() {
 
         <TimelineBar
           v-for="item in visibleItems"
-          :key="item.id"
+          :key="item.key"
           :item="item"
           :x="getBarX(item)"
           :y="getBarTop(item)"
           :width="getBarWidth(item)"
-          :px-per-ms="pxPerMs"
-          :dimmed="!!hoveredItem && hoveredItem.id !== item.id"
+          :dimmed="!!hoveredItem && hoveredItem.key !== item.key"
           @select="emit('selectTestCase', $event)"
           @hover="onBarEnter"
           @move="onBarMove"

@@ -22,8 +22,7 @@ const { barHeight, rowGap, axisHeight, rowHeight } = TIMELINE_LAYOUT;
       :y="i * rowHeight + axisHeight"
       :width="contentWidth"
       :height="rowHeight"
-      :fill="i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.03)'"
-      class="dark:fill-white/[0.03]"
+      :class="i % 2 === 1 ? 'fill-black/[0.03] dark:fill-white/[0.03]' : 'fill-transparent'"
     />
 
     <!-- Shard group separator lines -->

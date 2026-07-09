@@ -1,24 +1,25 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { TimelineItem } from '~/composables/useTimelineModel';
 import {
   TIMELINE_LAYOUT,
+  TIMELINE_WAIT_COLORS,
   timelineStatusHex,
   timelineHookFill,
   timelineHookStroke,
   formatTimelineTime,
 } from '~/utils/timeline';
 
-defineProps<{
+const props = defineProps<{
   item: TimelineItem;
   x: number;
   y: number;
   width: number;
-  pxPerMs: number;
   /** True when another bar is hovered, so this one dims. */
   dimmed: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   select: [id: number];
   hover: [item: TimelineItem, event: MouseEvent];
   move: [event: MouseEvent];
@@ -26,11 +27,22 @@ defineEmits<{
 }>();
 
 const { barHeight } = TIMELINE_LAYOUT;
+
+/** Setup steps render like hooks; they just aren't tied to a test case. */
+const isHookLike = computed(() => ['setup', 'hook', 'fixture'].includes(props.item.kind));
+
+/** Every bar with an owning test case clicks through to it (suite setup has none). */
+const clickable = computed(() => props.item.testCaseId != null);
+const cursorClass = computed(() => (clickable.value ? 'cursor-pointer' : 'cursor-default'));
+
+function onClick(): void {
+  if (props.item.testCaseId != null) emit('select', props.item.testCaseId);
+}
 </script>
 
 <template>
-  <g @mouseenter="$emit('hover', item, $event)" @mousemove="$emit('move', $event)" @mouseleave="$emit('leave')">
-    <template v-if="item.isHook">
+  <g @mouseenter="emit('hover', item, $event)" @mousemove="emit('move', $event)" @mouseleave="emit('leave')">
+    <template v-if="isHookLike">
       <rect
         :x="x"
         :y="y"
@@ -38,12 +50,13 @@ const { barHeight } = TIMELINE_LAYOUT;
         :height="barHeight"
         :rx="3"
         :ry="3"
-        :fill="timelineHookFill(item.status, item.isHook)"
-        :stroke="timelineHookStroke(item.status, item.isHook)"
+        :fill="timelineHookFill(item.status)"
+        :stroke="timelineHookStroke(item.status)"
         stroke-width="1"
         stroke-dasharray="3,2"
-        class="transition-opacity duration-100 cursor-default"
-        :class="dimmed ? 'opacity-40' : 'opacity-80'"
+        class="transition-opacity duration-100"
+        :class="[dimmed ? 'opacity-40' : 'opacity-80', cursorClass]"
+        @click="onClick"
       />
       <text
         v-if="width > 60"
@@ -54,7 +67,7 @@ const { barHeight } = TIMELINE_LAYOUT;
         {{ item.title }}
       </text>
     </template>
-    <template v-else-if="item.isWait">
+    <template v-else-if="item.kind === 'wait'">
       <!-- slightly taller bar, offset into the row gap above/below -->
       <rect
         :x="x"
@@ -63,12 +76,13 @@ const { barHeight } = TIMELINE_LAYOUT;
         :height="barHeight + 6"
         :rx="2"
         :ry="2"
-        fill="#facc15"
+        :fill="TIMELINE_WAIT_COLORS.fill"
         fill-opacity="0.28"
-        stroke="#ca8a04"
+        :stroke="TIMELINE_WAIT_COLORS.stroke"
         stroke-width="1.5"
-        class="transition-opacity duration-100 cursor-default"
-        :class="dimmed ? 'opacity-40' : 'opacity-90'"
+        class="transition-opacity duration-100"
+        :class="[dimmed ? 'opacity-40' : 'opacity-90', cursorClass]"
+        @click="onClick"
       />
       <line
         v-if="width > 4"
@@ -76,9 +90,10 @@ const { barHeight } = TIMELINE_LAYOUT;
         :y1="y - 3"
         :x2="x + width - 1"
         :y2="y + barHeight + 3"
-        stroke="#ca8a04"
+        :stroke="TIMELINE_WAIT_COLORS.stroke"
         stroke-width="1"
         stroke-opacity="0.25"
+        class="pointer-events-none"
       />
       <line
         v-if="width > 4"
@@ -86,9 +101,10 @@ const { barHeight } = TIMELINE_LAYOUT;
         :y1="y - 3"
         :x2="x + 1"
         :y2="y + barHeight + 3"
-        stroke="#ca8a04"
+        :stroke="TIMELINE_WAIT_COLORS.stroke"
         stroke-width="1"
         stroke-opacity="0.25"
+        class="pointer-events-none"
       />
       <text
         v-if="width > 50"
@@ -101,17 +117,17 @@ const { barHeight } = TIMELINE_LAYOUT;
     </template>
     <template v-else-if="item.status === 'running'">
       <circle
-        :cx="x + 300 * pxPerMs"
+        :cx="x + 6"
         :cy="y + barHeight / 2"
         r="3"
         fill="#2563eb"
         filter="url(#glow)"
         class="cursor-pointer"
         :class="dimmed ? 'opacity-40' : 'opacity-90'"
-        @click="$emit('select', item.id)"
+        @click="onClick"
       />
       <circle
-        :cx="x + 300 * pxPerMs"
+        :cx="x + 6"
         :cy="y + barHeight / 2"
         r="5"
         fill="none"
@@ -121,7 +137,7 @@ const { barHeight } = TIMELINE_LAYOUT;
         filter="url(#glow)"
         class="cursor-pointer"
         :class="dimmed ? 'opacity-40' : 'opacity-90'"
-        @click="$emit('select', item.id)"
+        @click="onClick"
       />
     </template>
     <template v-else>
@@ -135,7 +151,7 @@ const { barHeight } = TIMELINE_LAYOUT;
         :fill="timelineStatusHex(item.status)"
         class="transition-opacity duration-100 cursor-pointer"
         :class="dimmed ? 'opacity-40' : 'opacity-90'"
-        @click="$emit('select', item.id)"
+        @click="onClick"
       />
       <text
         v-if="width > 40"

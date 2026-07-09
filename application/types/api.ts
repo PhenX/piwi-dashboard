@@ -257,7 +257,7 @@ export interface TestRunDetails {
   filterDetails?: FilterDetails | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: any | null;
-  setupSteps?: TestStepEvent[] | null;
+  setupSteps?: SetupStepEvent[] | null;
   environment?: string | null;
   label?: string | null;
   playwrightVersion?: string | null;
@@ -352,6 +352,15 @@ export interface TestStepEvent {
   duration: number;
   status: string;
   location?: string | null;
+}
+
+/**
+ * A suite-level setup step (beforeAll/afterAll) attached to a test run. Unlike
+ * per-test step events it is not tied to a test case, so the reporter records
+ * which worker it ran on.
+ */
+export interface SetupStepEvent extends TestStepEvent {
+  workerIndex?: number | null;
 }
 
 export interface ServerLogEntry {
