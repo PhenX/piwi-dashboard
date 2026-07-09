@@ -1,0 +1,47 @@
+# Piwi Dashboard — minimal Docker Compose setup.
+#   docker compose up -d        → dashboard at http://localhost:3000
+# SQLite + local file storage by default; everything persists in ./.data.
+# Full options: https://piwitests.github.io/deployment
+
+services:
+  piwi:
+    image: phenx/piwitests-server:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      # On Linux hosts the container runs as uid 1001 — make the folder writable first:
+      #   mkdir -p .data && sudo chown -R 1001:1001 .data
+      # (Docker Desktop on Windows/macOS handles permissions automatically.)
+      - ./.data:/app/.data
+    environment:
+      # Recommended: encrypts credentials stored in the dashboard (AI API keys, SCM
+      # tokens, webhook secrets). Generate a value with:
+      #   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+      # PIWI_SECRET_KEY: "<random-hex>"
+
+      # Enable authentication (create the first admin via POST /api/auth/setup —
+      # see https://piwitests.github.io/authentication):
+      # PIWI_AUTH_ENABLED: "true"
+      # PIWI_AUTH_SECRET: "<random-hex>"
+
+      # Public URL used in email links and OAuth callbacks:
+      # PIWI_SITE_URL: "https://piwi.example.com"
+
+      # PostgreSQL instead of SQLite (uncomment the db service below too):
+      # PIWI_DATABASE_URL: "postgres://piwi:piwi@db:5432/piwi"
+      {}
+    restart: unless-stopped
+
+  # ── PostgreSQL variant ──────────────────────────────────────────────────────
+  # db:
+  #   image: postgres:17-alpine
+  #   environment:
+  #     POSTGRES_USER: piwi
+  #     POSTGRES_PASSWORD: change-me
+  #     POSTGRES_DB: piwi
+  #   volumes:
+  #     - piwi-pg:/var/lib/postgresql/data
+  #   restart: unless-stopped
+
+# volumes:
+#   piwi-pg:
