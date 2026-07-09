@@ -6,6 +6,9 @@ on:
       - 'v*'
     branches:
       - main
+  # Manual escape hatch: run against an existing tag (e.g. one release-please
+  # created that didn't auto-trigger this workflow — see release-please.yml).
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
