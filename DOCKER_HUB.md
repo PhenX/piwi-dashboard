@@ -47,9 +47,9 @@ Open `http://localhost:3000`. The SQLite database and file storage are created a
 | Tag       | Description                            |
 |-----------|----------------------------------------|
 | `latest`  | Latest stable release                  |
-| `v1.2.3`  | Exact version (pinned, recommended)    |
-| `v1.2`    | Latest patch for a minor version       |
-| `v1`      | Latest release for a major version     |
+| `0.8.0`   | Exact version (pinned, recommended)    |
+| `0.8`     | Latest patch for a minor version       |
+| `0`       | Latest release for a major version     |
 
 ---
 
@@ -140,7 +140,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/.data
+      - ./.data:/app/.data
     restart: unless-stopped
 ```
 
@@ -153,7 +153,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/.data
+      - ./.data:/app/.data
     environment:
       PIWI_SECRET_KEY: "replace-with-openssl-rand-hex-32-output"
       PIWI_AUTH_ENABLED: "true"
@@ -170,7 +170,7 @@ services:
     environment:
       POSTGRES_USER: piwi
       POSTGRES_PASSWORD: piwi
-      POSTGRES_DB: piwi_dashboard
+      POSTGRES_DB: piwi
     volumes:
       - pg-data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -180,7 +180,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      PIWI_DATABASE_URL: postgresql://piwi:piwi@postgres:5432/piwi_dashboard
+      PIWI_DATABASE_URL: postgresql://piwi:piwi@postgres:5432/piwi
       PIWI_STORAGE_TYPE: s3
       PIWI_S3_BUCKET: my-piwi-bucket
       PIWI_S3_REGION: us-east-1
@@ -216,7 +216,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/.data
+      - ./.data:/app/.data
     environment:
       PIWI_STORAGE_TYPE: s3
       PIWI_S3_ENDPOINT: http://minio:9000

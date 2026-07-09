@@ -100,7 +100,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/.data
+      - ./.data:/app/.data
     environment:
       - NODE_ENV=production
     restart: unless-stopped
@@ -113,9 +113,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: playwright
-      POSTGRES_PASSWORD: playwright
-      POSTGRES_DB: piwi_dashboard
+      POSTGRES_USER: piwi
+      POSTGRES_PASSWORD: change-me
+      POSTGRES_DB: piwi
     volumes:
       - pg-data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -128,7 +128,7 @@ services:
       - ./storage:/app/.data/storage
     environment:
       - NODE_ENV=production
-      - PIWI_DATABASE_URL=postgresql://playwright:playwright@postgres:5432/piwi_dashboard
+      - PIWI_DATABASE_URL=postgresql://piwi:change-me@postgres:5432/piwi
     depends_on:
       - postgres
     restart: unless-stopped
@@ -140,7 +140,7 @@ volumes:
 Run with:
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ## Security
@@ -156,9 +156,9 @@ Best practices:
 ## Available Tags
 
 - `latest` — Latest stable release
-- `v1.0.0` — Specific version (semver)
-- `v1.0` — Major.minor version
-- `v1` — Major version
+- `0.8.0` — Specific version (semver)
+- `0.8` — Latest patch of a minor version
+- `0` — Latest release of the major version
 
 ## Troubleshooting
 
