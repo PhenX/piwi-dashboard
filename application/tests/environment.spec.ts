@@ -245,6 +245,11 @@ test.describe('Environment API Tests', () => {
 });
 
 test.describe('Environment UI Tests', () => {
+  // fullyParallel can schedule these tests across multiple workers; beforeAll
+  // is scoped per-worker, so without serial mode two workers could each submit
+  // the seed runs, doubling the shared data these tests assert against.
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeAll(async ({ request }) => {
     // Create runs with different environments
     for (const env of ['production', 'staging', 'development']) {

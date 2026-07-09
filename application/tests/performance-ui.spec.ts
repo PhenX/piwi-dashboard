@@ -2,6 +2,12 @@ import { test, expect } from './fixtures';
 import { PROJECT } from '#shared/test-project-names';
 
 test.describe('Performance UI Tests', () => {
+  // fullyParallel can schedule this describe's tests across multiple workers;
+  // beforeAll is scoped per-worker, so without serial mode two workers can each
+  // run it once, double-submitting the run (see e.g. ai-diagnosis.spec.ts /
+  // email-notifications.spec.ts / notifications.spec.ts for the same guard).
+  test.describe.configure({ mode: 'serial' });
+
   let projectId: number;
 
   test.beforeAll(async ({ request }) => {

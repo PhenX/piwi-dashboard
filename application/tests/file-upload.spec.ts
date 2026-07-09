@@ -5,6 +5,11 @@ import FormData from 'form-data';
 import { PROJECT } from '#shared/test-project-names';
 
 test.describe('File Upload API Tests', () => {
+  // fullyParallel can schedule these tests across multiple workers; beforeAll
+  // is scoped per-worker, so without serial mode multiple workers could race
+  // to write the same fixture files under tempDir.
+  test.describe.configure({ mode: 'serial' });
+
   const tempDir = join(process.cwd(), '.test-temp');
 
   test.beforeAll(() => {
