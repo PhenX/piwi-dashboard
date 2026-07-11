@@ -85,6 +85,16 @@ For a failed test the page opens on the **Failure** tab, which leads with the ra
   <figcaption>The test case detail page — pass rate and duration stats, a duration trend, a status-history strip, and every recent execution of this one test.</figcaption>
 </figure>
 
+## Trace viewer
+
+Every trace shows a **View trace** button that opens the full Playwright trace viewer — the same UI as `npx playwright show-trace`, with the DOM snapshot timeline, action log, network, console, and source.
+
+The viewer is **served by the dashboard itself** (the `playwright-core` viewer assets are bundled and served at `/trace-viewer/`), so traces are never uploaded to a third party — unlike sending a colleague to `trace.playwright.dev`, the bytes stay on your server. Traces are stored efficiently: each archive is split into a slim events ZIP plus a project-wide, hash-deduplicated resource pool, and reconstructed on download (see [Storage](./storage)). Trace blobs are content-addressed, so the browser caches them and re-opening a trace is instant.
+
+::: tip Authentication caveat
+The bundled `/trace-viewer/` is same-origin, so it works whether or not [authentication](./authentication) is enabled. The hosted `trace.playwright.dev` viewer is a different origin and cannot send your session cookie, so it only works against a dashboard with auth disabled — use the built-in **View trace** button, which always works.
+:::
+
 ## Failure cluster detail
 
 Each cluster (`/failure-clusters/:id`) opens on a summary — signature, affected tests, and **Triage** (set status open/resolved/ignored and write a note) — above a two-column body. The left column collapses each investigation section to a header with an at-a-glance peek (click to expand, and the state is remembered): the raw **error message**, an **alternative-locators** panel for broken locators, **test evidence** (one tab per affected case, each linking through to its test-run case, with screenshots, traces, failing steps, console/network signals and source), and **what changed** (the SCM diff since the last green run, with a baseline-commit picker and commit browser). The right column holds the **AI diagnosis** — an SCM-grounded LLM analysis whose cited evidence links back to the matching left-column section. Full detail: [AI diagnosis & clustering](./ai-diagnosis).
