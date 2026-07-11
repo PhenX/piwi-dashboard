@@ -39,6 +39,19 @@ Run your tests — results are uploaded automatically:
 npx playwright test
 ```
 
+**Recommended: enable the [capture fixtures](#capture-fixtures)** — one small file unlocks the dashboard's richest features (locator healing, slow-endpoint analysis, Web Vitals, console capture, failure-time ARIA snapshots):
+
+```typescript
+// tests/fixtures.ts
+import { test as base, expect } from '@playwright/test'
+import { dashboardFixtures } from '@piwitests/reporter'
+
+export const test = base.extend(dashboardFixtures)
+export { expect }
+```
+
+Import `test` from this file in your specs instead of `@playwright/test` — see [Capture fixtures](#capture-fixtures) below.
+
 Prefer to wire it up by hand? Add the reporter to the `reporter` array instead:
 
 ```typescript
@@ -123,9 +136,9 @@ export default defineConfig({
 })
 ```
 
-## Performance Metrics & Web Vitals
+## Capture fixtures
 
-To capture network request timing and browser Web Vitals, use the provided fixtures:
+The reporter works without any test-code changes, but the **capture fixtures** observe your tests from the inside and unlock the dashboard's richest features. Extend your `test` with them:
 
 ```typescript
 // tests/fixtures.ts
@@ -146,12 +159,19 @@ export const test = extendDashboardFixtures(base)
 export { expect } from '@playwright/test'
 ```
 
+Then import `test` from your fixtures file in every spec — a spec that imports `test` from `@playwright/test` directly still runs and reports fine, it just isn't captured.
+
 ### What gets captured
 
-- **Network requests** — method, URL, status, duration, resource type. Aggregated on the dashboard into a *Slow API Endpoints* table grouped by `METHOD + normalized route`.
+- **Network requests** — method, URL, status, duration, resource type (API/document traffic only). Aggregated on the dashboard into a *Slow API Endpoints* table grouped by `METHOD + normalized route`.
+- **Console entries** — `warning`, `error`, and `assert` messages with their source location.
 - **Browser Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint — displayed with color-coded thresholds.
+- **ARIA snapshot** — captured automatically when a test fails, shown as failure evidence and fed to the AI diagnosis.
+- **Locator snapshots** — for each acted-on element, its attributes plus ranked alternative locators, stamped with the call site. These power locator healing; when a failing locator matches nothing, a fresh suggestion is attached as a Playwright annotation.
 
-Both are only collected when `collectPerformanceMetrics` is `true` (the default).
+Capture works for the `page` fixture, `browser.newPage()`, `browser.newContext().newPage()`, and popups. Everything is only collected when `collectPerformanceMetrics` is `true` (the default); locator snapshots can be disabled separately with `captureLocators: false`.
+
+Without the fixtures you still get full run history, statuses, errors, traces, reports, streaming, and clustering — the fixtures add the slow-endpoint, Web Vitals, console, ARIA, and locator-healing layers. See the [capture fixtures guide](https://piwitests.github.io/capture-fixtures) for the full feature matrix and composition patterns.
 
 ## Authentication
 
@@ -195,7 +215,7 @@ When `collectCiInfo` is enabled (default), the reporter auto-detects:
 2. As tests complete, results are streamed in batches to the server
 3. After all tests finish, HTML reports are compressed and uploaded
 4. Trace files from test attachments are uploaded
-5. Network request and web vitals data (from fixtures) are included per test case
+5. Data from the capture fixtures (network requests, console entries, web vitals, ARIA snapshots, locator snapshots) is included per test case
 6. The server stores everything and makes it available in the dashboard UI
 
 ## Requirements
@@ -229,10 +249,10 @@ Everything public — the reporter, config helpers, and the capture fixtures —
 - Ensure traces are enabled: `use: { trace: 'retain-on-failure' }`
 - Check the dashboard server is running and accessible at `serverUrl`
 
-### Network/Web Vitals not appearing
+### Fixture data not appearing (network, Web Vitals, console, ARIA, locator healing)
 
-- Extend your `test` with `dashboardFixtures` / `extendDashboardFixtures` from `@piwitests/reporter`
-- Verify `collectPerformanceMetrics` is not set to `false`
+- Extend your `test` with `dashboardFixtures` / `extendDashboardFixtures` from `@piwitests/reporter`, and import `test` from your fixtures file in every spec — not from `@playwright/test` directly
+- Verify `collectPerformanceMetrics` is not set to `false` (and `captureLocators` for locator healing)
 - Ensure tests navigate to at least one page (`await page.goto(...)`)
 
 ### Connection errors
