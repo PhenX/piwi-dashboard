@@ -47,8 +47,8 @@ Open `http://localhost:3000`. The SQLite database and file storage are created a
 | Tag       | Description                            |
 |-----------|----------------------------------------|
 | `latest`  | Latest stable release                  |
-| `0.9.0`   | Exact version (pinned, recommended)    |
-| `0.9`     | Latest patch for a minor version       |
+| `0.11.0`  | Exact version (pinned, recommended)    |
+| `0.11`    | Latest patch for a minor version       |
 | `0`       | Latest release for a major version     |
 
 ---
