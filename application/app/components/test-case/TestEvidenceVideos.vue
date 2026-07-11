@@ -6,15 +6,7 @@ const props = defineProps<{
   attachments: AttachmentInfo[];
 }>();
 
-function getExt(path: string): string {
-  return '.' + (path.toLowerCase().split('.').pop() || '');
-}
-
-function fileUrl(path: string, contentType?: string | null): string {
-  let url = `/api/files/${getFileApiPath(path)}`;
-  if (contentType && getExt(path) === '.') url += `?contentType=${encodeURIComponent(contentType)}`;
-  return url;
-}
+const config = useRuntimeConfig();
 
 function fileName(path: string): string {
   return path.split('/').pop() || path;
@@ -24,7 +16,7 @@ const videos = computed(() =>
   props.attachments
     .filter((att) => isVideoFile(att.path, att.contentType))
     .map((att) => ({
-      src: fileUrl(att.path, att.contentType),
+      src: fileApiUrl(att.path, att.contentType, config.app?.baseURL),
       name: att.name || fileName(att.path),
     })),
 );

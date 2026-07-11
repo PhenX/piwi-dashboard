@@ -14,9 +14,18 @@ const props = withDefaults(
 const config = useRuntimeConfig();
 const base = computed(() => (config.app?.baseURL ?? '/').replace(/\/$/, ''));
 
+// Demo mode: the sample trace is a committed static asset. The trace viewer
+// fetches through its own service worker (bypassing the demo's API-emulating
+// one), so it must be pointed at the static URL, not /api/files/.
+const isDemoStaticAsset = computed(() => !!config.public.demoMode && props.trace.filePath.startsWith('demo/'));
+
 const name = computed(() => props.trace.filePath.split('/').pop() || props.trace.filePath);
-const viewUrl = computed(() => getTraceViewerUrl(props.trace.filePath, config.app?.baseURL));
-const downloadUrl = computed(() => `${base.value}/api/files/${getFileApiPath(props.trace.filePath)}`);
+const viewUrl = computed(() => getTraceViewerUrl(props.trace.filePath, config.app?.baseURL, isDemoStaticAsset.value));
+const downloadUrl = computed(() =>
+  isDemoStaticAsset.value
+    ? `${base.value}/${props.trace.filePath}`
+    : `${base.value}/api/files/${getFileApiPath(props.trace.filePath)}`,
+);
 </script>
 
 <template>

@@ -138,6 +138,13 @@ describe('file path helpers', () => {
     expect(url).toBe(`/trace-viewer/?trace=${encodeURIComponent('/api/files/t.zip')}`);
     vi.unstubAllGlobals();
   });
+
+  test('getTraceViewerUrl points at the static asset URL when staticAsset is set (demo mode)', () => {
+    vi.stubGlobal('location', { origin: 'http://localhost:3000' });
+    const url = getTraceViewerUrl('demo/traces/t.zip', '/demo/', true);
+    expect(url).toBe(`/demo/trace-viewer/?trace=${encodeURIComponent('http://localhost:3000/demo/demo/traces/t.zip')}`);
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('errorMessage (fetch error unwrapping)', () => {
