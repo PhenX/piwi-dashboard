@@ -385,21 +385,6 @@ async function handleDeleteRun() {
 
 const showCustomData = ref(false);
 
-const { summaryColSpanClass, blockColSpanClass } = useDetailGrid(() => {
-  let count = 0;
-  if (testRun.value?.metadata?.ci || testRun.value?.environment) count++;
-  if (testRun.value?.metadata?.scm) count++;
-  if ((testRun.value?.storageStats && testRun.value.storageStats.totalFiles > 0) || isFinalizing.value) count++;
-  if (
-    testRun.value?.metadata?.tags?.length ||
-    testRun.value?.metadata?.projectDescription ||
-    testRun.value?.metadata?.relatedIssue ||
-    testRun.value?.metadata?.customData
-  )
-    count++;
-  return count;
-});
-
 // Test-cases filter state — lifted here so it survives tab switches
 const testCaseSearch = ref('');
 const testCaseActiveStatuses = ref<string[]>([]);
@@ -601,8 +586,6 @@ function handleSelectCluster(clusterId: number) {
             :display-progress="displayProgress"
             :all-reports="allReports"
             :show-custom-data="showCustomData"
-            :summary-col-span-class="summaryColSpanClass"
-            :block-col-span-class="blockColSpanClass"
             :finalizing="isFinalizing"
             :active-filter="statusFilterForSummary"
             :total-wasted-time="totalWastedTime"

@@ -8,8 +8,6 @@ const props = defineProps<{
   displayProgress: { totalTests: number; passedTests: number; failedTests: number; skippedTests: number } | null;
   allReports: ReportInfo[];
   showCustomData: boolean;
-  summaryColSpanClass: string;
-  blockColSpanClass: string;
   finalizing?: boolean;
   activeFilter?: string;
   totalWastedTime?: number;
@@ -23,6 +21,35 @@ const emit = defineEmits<{
 
 const toast = useToast();
 const storageStats = computed(() => props.testRun?.storageStats);
+
+// Visibility of each metadata block, defined once and referenced by both the
+// block count (below) and the template `v-if`, so the two can never drift and
+// leave the grid spanning more than 12 columns (which would wrap a block).
+const showCiEnv = computed(
+  () =>
+    !!(
+      props.testRun?.metadata?.ci ||
+      props.testRun?.environment ||
+      props.testRun?.playwrightVersion ||
+      props.testRun?.reporterVersion
+    ),
+);
+const showSource = computed(() => !!props.testRun?.metadata?.scm);
+const showStorage = computed(() => !!(storageStats.value?.totalFiles || props.finalizing));
+const showOther = computed(
+  () =>
+    !!(
+      props.testRun?.metadata?.tags?.length ||
+      props.testRun?.metadata?.projectDescription ||
+      props.testRun?.metadata?.relatedIssue ||
+      props.testRun?.metadata?.customData ||
+      props.testRun?.links?.length
+    ),
+);
+
+const { summaryColSpanClass, blockColSpanClass } = useDetailGrid(
+  () => [showCiEnv, showSource, showStorage, showOther].filter((b) => b.value).length,
+);
 
 const { copy, copied } = useCopy();
 const retryMode = ref<RetryMode>('file-line');
@@ -461,7 +488,7 @@ function onLabelKeydown(e: KeyboardEvent) {
 
       <!-- Block 1: CI + Environment + Tooling versions -->
       <CiEnvCard
-        v-if="testRun?.metadata?.ci || testRun?.environment || testRun?.playwrightVersion || testRun?.reporterVersion"
+        v-if="showCiEnv"
         :ci="testRun?.metadata?.ci"
         :environment="testRun?.environment"
         :playwright-version="testRun?.playwrightVersion"
@@ -470,11 +497,11 @@ function onLabelKeydown(e: KeyboardEvent) {
       />
 
       <!-- Block 2: Source control -->
-      <SourceInfoCard v-if="testRun?.metadata?.scm" :scm="testRun.metadata.scm" :class="blockColSpanClass" />
+      <SourceInfoCard v-if="showSource" :scm="testRun.metadata.scm" :class="blockColSpanClass" />
 
       <!-- Block 3: Storage stats -->
       <BlockCard
-        v-if="storageStats?.totalFiles || finalizing"
+        v-if="showStorage"
         :class="blockColSpanClass"
         title="Storage"
         icon="i-lucide-database"
@@ -522,19 +549,7 @@ function onLabelKeydown(e: KeyboardEvent) {
       </BlockCard>
 
       <!-- Block 4: Tags / Details / Custom data -->
-      <BlockCard
-        v-if="
-          testRun?.metadata?.tags?.length ||
-          testRun?.metadata?.projectDescription ||
-          testRun?.metadata?.relatedIssue ||
-          testRun?.metadata?.customData ||
-          testRun?.links?.length
-        "
-        :class="blockColSpanClass"
-        title="Other"
-        icon="i-lucide-tags"
-        help="run.metadata"
-      >
+      <BlockCard v-if="showOther" :class="blockColSpanClass" title="Other" icon="i-lucide-tags" help="run.metadata">
         <div class="space-y-3 text-sm">
           <div v-if="testRun.metadata.tags && testRun.metadata.tags.length > 0">
             <div class="flex flex-wrap gap-1.5">
