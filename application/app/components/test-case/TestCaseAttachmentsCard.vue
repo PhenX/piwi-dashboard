@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AttachmentInfo } from '~~/types/api';
+import { isImageFile, isVideoFile } from '~/utils/text-format';
 
 const props = defineProps<{
   attachments: AttachmentInfo[];
@@ -9,7 +10,7 @@ const currentImageIndex = ref<number | null>(null);
 
 const imageAttachments = computed(() =>
   props.attachments
-    .filter((att) => isImage(att.path, att.contentType))
+    .filter((att) => isImageFile(att.path, att.contentType))
     .map((att) => ({
       src: fileUrl(att.path, att.contentType),
       name: att.name || fileName(att.path),
@@ -20,27 +21,11 @@ function openLightbox(index: number) {
   currentImageIndex.value = index;
 }
 
-const imageExts = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp']);
-const videoExts = new Set(['.webm', '.mp4', '.ogg', '.mov']);
 const markdownExts = new Set(['.md', '.mdx', '.markdown']);
-const imageMimes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'image/webp']);
-const videoMimes = new Set(['video/webm', 'video/mp4', 'video/ogg', 'video/quicktime']);
 const markdownMimes = new Set(['text/markdown', 'text/x-markdown']);
 
 function getExt(path: string): string {
   return path.toLowerCase().split('.').pop() || '';
-}
-
-function isImage(path: string, contentType?: string | null): boolean {
-  if (imageExts.has(getExt(path))) return true;
-  if (contentType && imageMimes.has(contentType.toLowerCase())) return true;
-  return false;
-}
-
-function isVideo(path: string, contentType?: string | null): boolean {
-  if (videoExts.has(getExt(path))) return true;
-  if (contentType && videoMimes.has(contentType.toLowerCase())) return true;
-  return false;
 }
 
 function isMarkdown(path: string, contentType?: string | null): boolean {
@@ -110,9 +95,9 @@ function togglePreview(attId: number, att: AttachmentInfo) {
           <div class="flex items-center gap-2 min-w-0">
             <UIcon
               :name="
-                isImage(att.path, att.contentType)
+                isImageFile(att.path, att.contentType)
                   ? 'i-lucide-image'
-                  : isVideo(att.path, att.contentType)
+                  : isVideoFile(att.path, att.contentType)
                     ? 'i-lucide-video'
                     : isMarkdown(att.path, att.contentType)
                       ? 'i-lucide-file-text'
@@ -145,7 +130,7 @@ function togglePreview(attId: number, att: AttachmentInfo) {
           </div>
         </div>
 
-        <div v-if="isImage(att.path, att.contentType)" class="bg-gray-100 dark:bg-gray-900">
+        <div v-if="isImageFile(att.path, att.contentType)" class="bg-gray-100 dark:bg-gray-900">
           <img
             :src="fileUrl(att.path, att.contentType)"
             :alt="att.name || 'Screenshot'"
@@ -155,15 +140,8 @@ function togglePreview(attId: number, att: AttachmentInfo) {
           />
         </div>
 
-        <div v-else-if="isVideo(att.path, att.contentType)" class="bg-black">
-          <video
-            :src="fileUrl(att.path, att.contentType)"
-            controls
-            preload="metadata"
-            class="max-w-full max-h-96 mx-auto"
-          >
-            Your browser does not support the video tag.
-          </video>
+        <div v-else-if="isVideoFile(att.path, att.contentType)" class="bg-black">
+          <VideoPlayer :src="fileUrl(att.path, att.contentType)" />
         </div>
 
         <div

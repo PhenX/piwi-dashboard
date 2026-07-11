@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TraceInfo, AttachmentInfo } from '~~/types/api';
-import { isImageFile } from '~/utils/text-format';
+import { isImageFile, isVideoFile } from '~/utils/text-format';
 
 interface AffectedCase {
   testCaseId: number;
@@ -107,6 +107,7 @@ const evidenceChips = computed(() => {
   const d = caseDetail.value;
   if (!d) return [];
   const screenshots = d.attachments.filter((a) => isImageFile(a.path, a.contentType)).length;
+  const videos = d.attachments.filter((a) => isVideoFile(a.path, a.contentType)).length;
   const consoleCount = Array.isArray(d.consoleLogs)
     ? (d.consoleLogs as Array<{ type?: string }>).filter((l) => l.type === 'error' || l.type === 'warning').length
     : 0;
@@ -115,6 +116,7 @@ const evidenceChips = computed(() => {
     : 0;
   return [
     { icon: 'i-lucide-image', label: 'screenshots', count: screenshots },
+    { icon: 'i-lucide-video', label: 'videos', count: videos },
     { icon: 'i-lucide-bug-play', label: 'traces', count: traces.value.length },
     { icon: 'i-lucide-list-checks', label: 'failing steps', count: failingSteps.value.length },
     { icon: 'i-lucide-triangle-alert', label: 'signals', count: consoleCount + failedRequests },
@@ -184,6 +186,9 @@ const evidenceChips = computed(() => {
 
       <!-- Screenshots -->
       <TestEvidenceScreenshots :attachments="caseDetail.attachments" />
+
+      <!-- Videos -->
+      <TestEvidenceVideos :attachments="caseDetail.attachments" />
 
       <!-- Traces -->
       <TestEvidenceTraces :traces="traces" :loading="tracesLoading" />
