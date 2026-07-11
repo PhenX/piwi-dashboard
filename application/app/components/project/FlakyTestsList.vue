@@ -4,14 +4,19 @@ import type { FlakyTest } from '~~/types/api';
 
 const props = defineProps<{
   projectId: string | number;
+  environment?: string | null;
 }>();
 
 const runsWindow = ref(50);
 const rootCauseFilter = ref<string[]>([]);
 
 const { data: tests, pending: loading } = await useFetch<FlakyTest[]>(
-  () => `/api/projects/${props.projectId}/flaky-tests?runs=${runsWindow.value}`,
-  { lazy: true, server: false, watch: [runsWindow] },
+  () => {
+    const params = new URLSearchParams({ runs: String(runsWindow.value) });
+    if (props.environment) params.set('environment', props.environment);
+    return `/api/projects/${props.projectId}/flaky-tests?${params.toString()}`;
+  },
+  { lazy: true, server: false, watch: [runsWindow, () => props.environment] },
 );
 
 const filteredTests = computed(() => {
@@ -79,6 +84,10 @@ const columns: TableColumn<FlakyTest>[] = [
             Tests that fail intermittently — detected by retry passes and status alternations
             <HelpHint topic="project.flaky-tests" />
           </p>
+          <UBadge v-if="environment" color="neutral" variant="subtle" size="sm" class="gap-1">
+            <UIcon name="i-lucide-layers" class="size-3" />
+            {{ environment }}
+          </UBadge>
           <div class="flex items-center gap-1.5">
             <UButton
               v-for="opt in ROOT_CAUSE_OPTIONS"
