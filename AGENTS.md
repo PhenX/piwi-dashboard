@@ -164,7 +164,7 @@ Nuxt file-based routing:
 > **Layout & conventions:** see **`reporter/ARCHITECTURE.md`** for the full map (public/internal split, two-process collect-and-submit data flow, fallback ladder, conventions). The package is `strict`-mode TypeScript; Node built-ins are `import * as x from 'node:x'`; classes use `private readonly` constructor parameter-property DI; HTTP failures throw `HttpError` (carrying `status`); `catch (error)` is `unknown` (narrow with `instanceof`, format with `errorMessage`).
 
 - **Public API** — only what these expose is the supported surface:
-  - `reporter/src/index.ts` — the package's single public entry (`.`): re-exports the reporter, `wrapConfig`, `createGlobalSetup`, `dashboardFixtures`, `extendDashboardFixtures`, and the public types (there is no `./fixtures` subpath — fixtures import from `@piwitests/reporter`)
+  - `reporter/src/index.ts` — the package's single public entry (`.`): re-exports the reporter, `wrapConfig`, `createGlobalSetup`, `piwiFixtures`, `extendPiwiFixtures`, and the public types incl. `PiwiFixtures` (there is no `./fixtures` subpath — fixtures import from `@piwitests/reporter`)
   - `reporter/src/public/reporter.ts` — `PiwiDashboardReporter` (Playwright hooks + running counters; hands off to `RunSubmitter`)
   - `reporter/src/public/options.ts` — `PiwiDashboardOptions` interface + `PlaywrightTestConfig` re-export
   - `reporter/src/public/config-wrapper.ts` — `wrapConfig`; `reporter/src/public/global-setup.ts` — `createGlobalSetup`

@@ -84,6 +84,8 @@ Toggle filters on the run's test-case list to show only new regressions or new f
 - **Network analysis** — slow API calls grouped by method and normalized route (e.g. `/api/users/:id`).
 - **Browser Web Vitals** — TTFB, DOMContentLoaded, FCP and more, with color-coded thresholds.
 
+Network analysis and Web Vitals require the [capture fixtures](./capture-fixtures) in your test setup.
+
 <figure>
   <img src="/screenshots/performance-trends.png" alt="Performance tab showing the duration trend chart and slowest-tests table">
   <figcaption>The Performance tab — average and P90 duration trends over time, followed by a ranked table of the slowest tests.</figcaption>
@@ -96,5 +98,6 @@ A project-level overview groups test cases by spec file and colors each by pass 
 ## See also
 
 - [UI overview](./ui-overview) — where each of these views lives in the dashboard
-- [Reporter](./reporter) — how retries, traces, network, and Web Vitals get captured
+- [Reporter](./reporter) — how retries, traces, and run metadata get captured
+- [Capture fixtures](./capture-fixtures) — the test-side setup behind network analysis and Web Vitals
 - [AI diagnosis & failure clustering](./ai-diagnosis) — explain the failures behind the trends

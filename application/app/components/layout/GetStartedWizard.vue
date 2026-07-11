@@ -44,9 +44,9 @@ export default PiwiDashboard.wrapConfig(
 
 const fixturesExtendCode = `// tests/fixtures.ts
 import { test as base, expect } from '@playwright/test'
-import { dashboardFixtures } from '@piwitests/reporter'
+import { piwiFixtures } from '@piwitests/reporter'
 
-export const test = base.extend(dashboardFixtures)
+export const test = base.extend(piwiFixtures)
 export { expect }`;
 
 const fixturesUseCode = `// your test file
@@ -60,9 +60,9 @@ test('homepage loads', async ({ page }) => {
 
 const fixturesDropInCode = `// tests/fixtures.ts
 import { test as base } from '@playwright/test'
-import { extendDashboardFixtures } from '@piwitests/reporter'
+import { extendPiwiFixtures } from '@piwitests/reporter'
 
-export const test = extendDashboardFixtures(base)
+export const test = extendPiwiFixtures(base)
 export { expect } from '@playwright/test'`;
 
 const steps = computed(() => [
@@ -159,7 +159,7 @@ const goFurtherOpen = ref(false);
             class="size-4 transition-transform duration-200"
             :class="goFurtherOpen ? 'rotate-90' : ''"
           />
-          Go further — simpler config &amp; performance metrics
+          Go further — simpler config &amp; capture fixtures
         </button>
 
         <div v-if="goFurtherOpen" class="mt-4 space-y-6">
@@ -179,17 +179,21 @@ const goFurtherOpen = ref(false);
             <CodeBlock :code="wrapConfigCode" lang="typescript" />
           </div>
 
-          <!-- dashboardFixtures -->
+          <!-- piwiFixtures -->
           <div>
             <h4 class="font-medium text-sm mb-1">
-              Network requests, Web Vitals &amp; console with
-              <code class="text-primary text-xs">dashboardFixtures</code>
+              Capture fixtures — network, Web Vitals, console &amp; locator healing with
+              <code class="text-primary text-xs">piwiFixtures</code>
             </h4>
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
               Extend your Playwright
               <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">test</code> with
-              <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">dashboardFixtures</code> to
-              automatically capture network timing, browser Web Vitals, console errors, and ARIA snapshots on failure.
+              <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">piwiFixtures</code> to
+              automatically capture network timing, browser Web Vitals, console errors, ARIA snapshots on failure, and
+              the locator snapshots that power locator healing. See the
+              <DocLink to="capture-fixtures" no-icon class="text-primary hover:underline"
+                >capture fixtures guide</DocLink
+              >.
             </p>
 
             <p class="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">

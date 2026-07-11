@@ -31,12 +31,14 @@ describe('package metadata', () => {
 });
 
 describe('public export surface', () => {
-  it('exposes exactly one entry (".") with no ./fixtures subpath', () => {
+  it('exposes one code entry (".") with no ./fixtures subpath', () => {
     // Fixtures are imported from '@piwitests/reporter', not a subpath — the
-    // package intentionally has a single public entry.
-    expect(Object.keys(pkg.exports)).toEqual(['.']);
+    // package intentionally has a single public code entry. "./package.json"
+    // is metadata for tooling (bundlers, license scanners), not an API.
+    expect(Object.keys(pkg.exports)).toEqual(['.', './package.json']);
     expect(pkg.exports['.'].types).toBe('./dist/index.d.ts');
     expect(pkg.exports['.'].import).toBe('./dist/index.js');
+    expect(pkg.exports['./package.json']).toBe('./package.json');
   });
 });
 
@@ -46,7 +48,7 @@ describe('public export surface', () => {
 describe.runIf(existsSync(dist('index.js')))('built entry (requires a build)', () => {
   it('re-exports the capture fixtures from the single entry', () => {
     const source = readFileSync(dist('index.js'), 'utf-8');
-    expect(source).toContain('dashboardFixtures');
-    expect(source).toContain('extendDashboardFixtures');
+    expect(source).toContain('piwiFixtures');
+    expect(source).toContain('extendPiwiFixtures');
   });
 });

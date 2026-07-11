@@ -131,6 +131,13 @@ describe('file path helpers', () => {
     expect(url).toBe(`/demo/trace-viewer/?trace=${encodeURIComponent('http://localhost:3000/demo/api/files/t.zip')}`);
     vi.unstubAllGlobals();
   });
+
+  test('getTraceViewerUrl falls back to a relative trace URL when location is absent (SSR)', () => {
+    vi.stubGlobal('location', undefined);
+    const url = getTraceViewerUrl('t.zip');
+    expect(url).toBe(`/trace-viewer/?trace=${encodeURIComponent('/api/files/t.zip')}`);
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('errorMessage (fetch error unwrapping)', () => {

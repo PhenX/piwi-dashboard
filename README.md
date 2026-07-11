@@ -102,6 +102,19 @@ export default defineConfig({
 
 **3. Run your tests** — `npx playwright test`. Results appear automatically; the project is created on first submission.
 
+**4. Add the capture fixtures** *(recommended)* — one small file unlocks the richest features: locator healing, slow-endpoint analysis, Web Vitals, console capture, and failure-time ARIA snapshots.
+
+```typescript
+// tests/fixtures.ts
+import { test as base, expect } from '@playwright/test'
+import { piwiFixtures } from '@piwitests/reporter'
+
+export const test = base.extend(piwiFixtures)
+export { expect }
+```
+
+Import `test` from this file in your specs instead of `@playwright/test` — that's it. Full details in the **[capture fixtures guide](https://piwitests.github.io/capture-fixtures)**; a runnable example lives in [`examples/playwright-fixtures`](./examples/playwright-fixtures).
+
 ➡️ Full setup, configuration, and CI integration in the **[Getting started guide](https://piwitests.github.io/getting-started)**.
 
 ## How is this different from…?
@@ -126,6 +139,7 @@ Every tool in that table is good at what it targets — the honest version with 
 | Getting started | [piwitests.github.io/getting-started](https://piwitests.github.io/getting-started) |
 | Comparison & FAQ | [piwitests.github.io/comparison](https://piwitests.github.io/comparison) |
 | Playwright reporter | [piwitests.github.io/reporter](https://piwitests.github.io/reporter) |
+| Capture fixtures | [piwitests.github.io/capture-fixtures](https://piwitests.github.io/capture-fixtures) |
 | UI overview | [piwitests.github.io/ui-overview](https://piwitests.github.io/ui-overview) |
 | AI diagnosis & clustering | [piwitests.github.io/ai-diagnosis](https://piwitests.github.io/ai-diagnosis) |
 | Flaky tests & analytics | [piwitests.github.io/flaky-tests](https://piwitests.github.io/flaky-tests) |

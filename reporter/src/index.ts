@@ -17,7 +17,8 @@ export { wrapConfig } from './public/config-wrapper.js';
 export { createGlobalSetup } from './public/global-setup.js';
 
 // ── Capture fixtures ─────────────────────────────────────────────────────────
-export { dashboardFixtures, extendDashboardFixtures } from './internal/capture/capture-fixtures.js';
+export { piwiFixtures, extendPiwiFixtures } from './internal/capture/capture-fixtures.js';
 
 // ── Public types ─────────────────────────────────────────────────────────────
+export type { PiwiFixtures } from './internal/capture/capture-fixtures.js';
 export type { PiwiDashboardOptions, PlaywrightTestConfig } from './public/options.js';

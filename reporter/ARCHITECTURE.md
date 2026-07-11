@@ -14,8 +14,8 @@ change. Everything under **`src/internal/`** is private plumbing — change it f
 | `PiwiDashboardReporter` (default + named) | `public/reporter.ts` | the Playwright reporter |
 | `wrapConfig` | `public/config-wrapper.ts` | injects reporter + global setup into a PW config |
 | `createGlobalSetup` | `public/global-setup.ts` | registers the run before `globalSetup` |
-| `PiwiDashboardOptions`, `PlaywrightTestConfig` | `public/options.ts` | the config contract (types) |
-| `dashboardFixtures`, `extendDashboardFixtures` | `internal/capture/capture-fixtures.ts` → re-exported by `index.ts` | capture fixtures (imported from `@piwitests/reporter`) |
+| `PiwiDashboardOptions`, `PlaywrightTestConfig`, `PiwiFixtures` | `public/options.ts` / `internal/capture/capture-fixtures.ts` | the config contract + capture fixtures type (types) |
+| `piwiFixtures`, `extendPiwiFixtures` | `internal/capture/capture-fixtures.ts` → re-exported by `index.ts` | capture fixtures (imported from `@piwitests/reporter`) |
 
 Two **external contracts** beyond the npm API:
 - **Wire types** (`types/wire.ts`) — the JSON sent to / received from the server.
