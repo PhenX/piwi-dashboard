@@ -244,8 +244,17 @@ export function getFileApiPath(filePath: string): string {
   return filePath.replace(storagePath, '');
 }
 
-export function getTraceViewerUrl(filePath: string): string {
-  return `/trace-viewer/?trace=${encodeURIComponent(`${location.origin}/api/files/${getFileApiPath(filePath)}`)}`;
+/**
+ * Build a URL that opens a stored trace in the bundled Playwright trace viewer.
+ *
+ * `baseURL` is the app's base path (`useRuntimeConfig().app.baseURL`). It must be
+ * applied to both the viewer path and the trace file URL so links keep working
+ * when the app is served from a sub-path (e.g. the demo at `/demo/`).
+ */
+export function getTraceViewerUrl(filePath: string, baseURL: string = '/'): string {
+  const base = (baseURL || '/').replace(/\/$/, '');
+  const traceUrl = `${location.origin}${base}/api/files/${getFileApiPath(filePath)}`;
+  return `${base}/trace-viewer/?trace=${encodeURIComponent(traceUrl)}`;
 }
 
 /**

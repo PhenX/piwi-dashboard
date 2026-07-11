@@ -124,6 +124,13 @@ describe('file path helpers', () => {
     expect(url).toBe(`/trace-viewer/?trace=${encodeURIComponent('http://localhost:3000/api/files/t.zip')}`);
     vi.unstubAllGlobals();
   });
+
+  test('getTraceViewerUrl prefixes the base path for both the viewer and the trace URL', () => {
+    vi.stubGlobal('location', { origin: 'http://localhost:3000' });
+    const url = getTraceViewerUrl('.data/storage/t.zip', '/demo/');
+    expect(url).toBe(`/demo/trace-viewer/?trace=${encodeURIComponent('http://localhost:3000/demo/api/files/t.zip')}`);
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('errorMessage (fetch error unwrapping)', () => {

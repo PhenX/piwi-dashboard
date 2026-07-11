@@ -11,11 +11,12 @@ const props = withDefaults(
   },
 );
 
-const name = computed(() => props.trace.filePath.split('/').pop() || props.trace.filePath);
+const config = useRuntimeConfig();
+const base = computed(() => (config.app?.baseURL ?? '/').replace(/\/$/, ''));
 
-function downloadUrl(path: string): string {
-  return `/api/files/${getFileApiPath(path)}`;
-}
+const name = computed(() => props.trace.filePath.split('/').pop() || props.trace.filePath);
+const viewUrl = computed(() => getTraceViewerUrl(props.trace.filePath, config.app?.baseURL));
+const downloadUrl = computed(() => `${base.value}/api/files/${getFileApiPath(props.trace.filePath)}`);
 </script>
 
 <template>
@@ -27,15 +28,9 @@ function downloadUrl(path: string): string {
       <span v-if="showTime" class="text-xs text-gray-400 shrink-0">{{ formatRelativeTime(trace.createdAt) }}</span>
     </div>
     <div class="flex items-center gap-1.5 shrink-0">
+      <UButton :to="viewUrl" target="_blank" icon="i-lucide-bug-play" size="xs" label="View trace" />
       <UButton
-        :to="getTraceViewerUrl(trace.filePath)"
-        target="_blank"
-        icon="i-lucide-bug-play"
-        size="xs"
-        label="View trace"
-      />
-      <UButton
-        :to="downloadUrl(trace.filePath)"
+        :to="downloadUrl"
         target="_blank"
         icon="i-lucide-download"
         size="xs"
