@@ -32,6 +32,7 @@ async function sendToEmail(config: Record<string, unknown>, event: NotificationE
       totalTests: p.totalTests,
       failedTests: p.failedTests,
       branch: p.branch,
+      topFailures: p.topFailures,
     }));
   } else if (event === 'cluster.new') {
     const p = payload as ClusterNewPayload;
@@ -39,6 +40,8 @@ async function sendToEmail(config: Record<string, unknown>, event: NotificationE
       projectName: p.projectName,
       clusterId: p.clusterId,
       signature: p.signature,
+      sampleErrorExcerpt: p.sampleErrorExcerpt,
+      affectedCases: p.affectedCases,
     }));
   } else {
     const subject = renderEventSubject(event, payload);
@@ -60,15 +63,29 @@ async function sendToSlack(config: Record<string, unknown>, event: NotificationE
   else if (event === 'cluster.new') emoji = ':bug:';
   else if (event === 'flakiness.spike') emoji = ':game_die:';
 
-  const body = {
-    text: `${emoji} *${text}*`,
-    blocks: [
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: `${emoji} *${text}*` },
-      },
-    ],
-  };
+  const base = process.env.PIWI_SITE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+  // Slack section text is capped at 3000 chars; keep excerpts short.
+  const slackExcerpt = (s: string) => (s.length > 600 ? s.slice(0, 600) + '…' : s);
+
+  const blocks: Record<string, unknown>[] = [{ type: 'section', text: { type: 'mrkdwn', text: `${emoji} *${text}*` } }];
+
+  if (event.startsWith('run.')) {
+    const p = payload as RunFinishedPayload;
+    for (const f of p.topFailures ?? []) {
+      const link = f.testCaseId ? `<${base}/test-cases/${f.testCaseId}|${f.title}>` : f.title;
+      const excerpt = f.errorExcerpt ? `\n\`\`\`${slackExcerpt(f.errorExcerpt)}\`\`\`` : '';
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `• *${link}*${excerpt}` } });
+    }
+  } else if (event === 'cluster.new') {
+    const p = payload as ClusterNewPayload;
+    const parts: string[] = [];
+    if (p.affectedCases) parts.push(`${p.affectedCases} affected test${p.affectedCases === 1 ? '' : 's'}`);
+    if (p.sampleErrorExcerpt) parts.push(`\`\`\`${slackExcerpt(p.sampleErrorExcerpt)}\`\`\``);
+    parts.push(`<${base}/failure-clusters/${p.clusterId}|View cluster>`);
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: parts.join('\n') } });
+  }
+
+  const body = { text: `${emoji} *${text}*`, blocks };
 
   const res = await fetch(webhookUrl, {
     method: 'POST',
