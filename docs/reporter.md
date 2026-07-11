@@ -416,6 +416,8 @@ export default defineConfig({
 5. If `dashboardFixtures` are active, network request and web vitals attachments are included per test case.
 6. The server decompresses the report and makes it available for viewing, with fully functional HTML reports.
 
+Uploaded traces open in the dashboard's **built-in, self-hosted trace viewer** — the bytes never leave your server. See [Trace viewer](./ui-overview#trace-viewer).
+
 ## Troubleshooting
 
 ### Reporter not uploading files

@@ -40,6 +40,8 @@ Native Playwright HTML reports are great for local debugging — but they're eph
 - 🔗 **Failure clustering** — failures sharing a root cause are auto-grouped by error fingerprint.
 - 📈 **Performance & flaky tracking** — P90 duration trends, slowest tests, composite flakiness scores.
 - 🩹 **Locator healing** — when a locator breaks, ranked replacement locators captured from prior passing runs, with a recommended fix.
+- 🎬 **Self-hosted trace viewer** — open the full Playwright trace viewer from any failure; the trace stays on your server.
+- 🔔 **Notifications** — email, Slack, webhook, and in-browser alerts for failed runs and new failure clusters.
 - 🔌 **Built for automation** — drop-in reporter, REST API, OpenAPI docs, and an MCP server for agent integrations.
 - ☁️ **Zero lock-in** — self-hosted with Docker; your data in SQLite/PostgreSQL and local/S3 storage.
 - 🔒 **Private by design** — zero telemetry, no phone-home. The only outbound calls are the ones you configure (your AI provider, SMTP, S3).

@@ -757,6 +757,7 @@ export interface TraceInfo {
   id: number;
   filePath: string;
   createdAt: Date;
+  size?: number | null;
 }
 
 /**

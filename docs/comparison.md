@@ -15,23 +15,26 @@ Every tool below is good at what it targets. The honest differences:
 - **Allure Report** — a mature, multi-framework report generator producing a rich static report. History across builds requires wiring previous results into each build, and there's no server, live view, or cross-run analytics in the open-source generator (that's the commercial TestOps product).
 - **ReportPortal** — a mature, framework-agnostic, self-hosted test-ops platform with ML-based failure triage. It's built for organizations aggregating many frameworks, and its self-hosted footprint matches that ambition: a multi-service stack (API services, PostgreSQL, RabbitMQ, OpenSearch). Piwi trades that breadth for Playwright-native depth in a single container.
 - **Currents** — a polished commercial SaaS for Playwright and Cypress: run history, flake detection, CI orchestration. It's managed and maintained for you; in exchange it's paid and your test data lives on their infrastructure.
+- **Fault0** — the closest peer to Piwi: a newer, free, self-hosted, Playwright-only results dashboard with a one-line reporter, centralized run history, trace/screenshot/video debugging, notifications, and flaky-test trends. It targets the same "give your Playwright results a home" job. Where Piwi differs today is the depth of the analysis layer on top of that shared core — failure clustering, flaky **scoring** with CI-cost impact, locator healing, an MCP server for AI agents, and optional git-grounded AI diagnosis — so the honest split is *seeing* failures (both) versus *resolving* them (Piwi's focus). We've based this on Fault0's public docs and homepage; corrections welcome.
 
 ## Feature comparison
 
-| | **Piwi** | Playwright HTML report | Allure Report | ReportPortal | Currents |
-|---|---|---|---|---|---|
-| Run history across builds | ✅ | ❌ per-run | ➖ manual wiring | ✅ | ✅ |
-| Self-hosted | ✅ single container | — | ➖ static files | ✅ multi-service stack | ❌ SaaS |
-| Live run streaming | ✅ SSE, per-test | ❌ | ❌ | ➖ | ✅ |
-| Playwright traces, first-class | ✅ stored + viewer links | ✅ | ➖ attachments | ➖ attachments | ✅ |
-| Flaky detection & scoring | ✅ composite score, root-cause classes, CI-cost impact | ❌ | ❌ | ✅ | ✅ |
-| Failure clustering | ✅ error fingerprinting | ❌ | ❌ | ✅ ML-based | ✅ |
-| AI failure diagnosis | ✅ optional, grounded in your git diff, patches validated server-side | ❌ | ❌ | ➖ ML triage | ➖ |
-| Locator healing suggestions | ✅ from prior passing runs | ❌ | ❌ | ❌ | ❌ |
-| Web vitals & network capture | ✅ | ➖ in traces | ❌ | ❌ | ✅ |
-| MCP server for AI agents | ✅ 38 tools | ❌ | ❌ | ❌ | ✅ |
-| Framework support | Playwright only (by design) | Playwright | Many | Many | Playwright, Cypress, Jest… |
-| Price | Free, MIT | Free | Free | Free (self-host) / paid SaaS | Paid |
+| | **Piwi** | Playwright HTML report | Allure Report | ReportPortal | Currents | Fault0 |
+|---|---|---|---|---|---|---|
+| Run history across builds | ✅ | ❌ per-run | ➖ manual wiring | ✅ | ✅ | ✅ |
+| Self-hosted | ✅ single container | — | ➖ static files | ✅ multi-service stack | ❌ SaaS | ✅ |
+| Live run streaming | ✅ SSE, per-test | ❌ | ❌ | ➖ | ✅ | ➖ real-time status |
+| Playwright traces, first-class | ✅ stored + viewer links | ✅ | ➖ attachments | ➖ attachments | ✅ | ✅ |
+| Flaky detection & scoring | ✅ composite score, root-cause classes, CI-cost impact | ❌ | ❌ | ✅ | ✅ | ➖ detection |
+| Failure clustering | ✅ error fingerprinting | ❌ | ❌ | ✅ ML-based | ✅ | ➖ |
+| AI failure diagnosis | ✅ optional, grounded in your git diff, patches validated server-side | ❌ | ❌ | ➖ ML triage | ➖ | ➖ |
+| Locator healing suggestions | ✅ from prior passing runs | ❌ | ❌ | ❌ | ❌ | ➖ |
+| Web vitals & network capture | ✅ | ➖ in traces | ❌ | ❌ | ✅ | ➖ |
+| MCP server for AI agents | ✅ 38 tools | ❌ | ❌ | ❌ | ✅ | ➖ |
+| Framework support | Playwright only (by design) | Playwright | Many | Many | Playwright, Cypress, Jest… | Playwright only |
+| Price | Free, MIT | Free | Free | Free (self-host) / paid SaaS | Paid | Free, OSS |
+
+In the **Fault0** column, ➖ marks a capability we did not find in its public docs at the time of writing (not necessarily a confirmed absence) — the two products share the core results-dashboard experience and differ mainly in Piwi's analysis depth. Corrections welcome.
 
 ## When Piwi is *not* the right choice
 
@@ -75,4 +78,4 @@ Modest — see [resource requirements](/deployment#resource-requirements). Disk 
 
 ---
 
-<sub>Product names are used for identification only. Piwi Dashboard is an independent project, not affiliated with, endorsed by, or connected to Microsoft Corporation (Playwright), Qameta Software (Allure), EPAM Systems (ReportPortal), or Currents Software. Details about third-party products reflect their publicly documented open-source/free tiers and may change — corrections welcome.</sub>
+<sub>Product names are used for identification only. Piwi Dashboard is an independent project, not affiliated with, endorsed by, or connected to Microsoft Corporation (Playwright), Qameta Software (Allure), EPAM Systems (ReportPortal), Currents Software, or Fault0. Details about third-party products reflect their publicly documented open-source/free tiers and may change — corrections welcome.</sub>

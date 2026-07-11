@@ -187,8 +187,8 @@ export const HELP_TOPICS = {
   },
   'case.traces': {
     title: 'Traces',
-    text: 'Playwright trace files for this execution. Open one in the trace viewer to step through actions, snapshots and network.',
-    doc: 'ui-overview#test-case-detail',
+    text: 'Playwright trace files for this execution. "View trace" opens them in the dashboard\'s own trace viewer — the trace stays on your server, it is never sent to a third party.',
+    doc: 'ui-overview#trace-viewer',
   },
   'case.console': {
     title: 'Console output',
