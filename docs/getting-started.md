@@ -164,6 +164,27 @@ npx playwright test
 
 See the [Reporter](./reporter) page for the full configuration reference, including live streaming, multiple report types, performance metrics, and authentication.
 
+### Recommended: capture fixtures
+
+One small file unlocks the dashboard's richest features — locator healing, the slow-endpoints table, Web Vitals, console capture, and failure-time ARIA snapshots:
+
+```typescript
+// tests/fixtures.ts
+import { test as base, expect } from '@playwright/test'
+import { dashboardFixtures } from '@piwitests/reporter'
+
+export const test = base.extend(dashboardFixtures)
+export { expect }
+```
+
+Then import `test` from this file in your specs instead of `@playwright/test`:
+
+```typescript
+import { test, expect } from './fixtures'
+```
+
+The reporter works fine without this — see the [capture fixtures guide](./capture-fixtures) for exactly what the fixtures add, composition patterns, and troubleshooting.
+
 ## Running in CI
 
 Nothing Piwi-specific is required in CI — the reporter runs inside `npx playwright test` and pushes results to your dashboard. Point the reporter at your deployed instance (via the `PIWI_DASHBOARD_URL` env var or the `serverUrl` option) and pass an API key if [authentication](./authentication) is enabled. CI metadata (workflow, branch, commit, run URL) and [shard merging](./reporter#sharding) are detected automatically on GitHub Actions, GitLab CI, Jenkins, CircleCI, Azure DevOps, and more.

@@ -70,7 +70,7 @@ The right panel is tabbed:
 - **Regression** *(shown when a baseline exists)* — the regression delta for this run at a glance.
 - **Timeline** — a horizontal per-worker timeline of test execution, with a span-type filter to isolate test phases (setup, actual test, wasted waits, teardown); click a bar to jump to that test case.
 - **Compare** — pick a baseline run for a side-by-side delta (improved / regressed / unchanged).
-- **Slow endpoints** — network requests grouped by method + normalized route, with avg/p90/max duration and error rate.
+- **Slow endpoints** — network requests grouped by method + normalized route, with avg/p90/max duration and error rate. Requires the [capture fixtures](./capture-fixtures).
 
 Administrators can **delete** the entire run and its files from the header.
 
@@ -78,7 +78,7 @@ Administrators can **delete** the entire run and its files from the header.
 
 Everything about a single test execution: a **status card** (id, title, copyable location, duration, worker, retries, slowest step, duration-vs-average), **run context** (environment, CI, branch, commit, author, browser), a link into the specific test in the HTML report, and attached **traces** (open in the Playwright viewer or download; they stream in live while the parent run is in progress).
 
-For a failed test the page opens on the **Failure** tab, which leads with the raw **error** (copyable), then — when the failure belongs to a cluster — a banner linking to the [failure cluster](#failure-cluster-detail) where the full investigation lives (cross-test evidence, what changed since the last green run, and AI diagnosis); below that, **alternative locators** when a locator broke, with ranked replacements and a recommended fix (see [locator healing](./reporter#locator-healing)), and the failure-time **ARIA snapshot**. The other tabs cover **performance hints**, execution **steps**, **Web Vitals** with color-coded thresholds, **network requests** with inline backend server logs (see [Backend logs](./backend-logs)), and a **history** chart of this test's status and duration over time.
+For a failed test the page opens on the **Failure** tab, which leads with the raw **error** (copyable), then — when the failure belongs to a cluster — a banner linking to the [failure cluster](#failure-cluster-detail) where the full investigation lives (cross-test evidence, what changed since the last green run, and AI diagnosis); below that, **alternative locators** when a locator broke, with ranked replacements and a recommended fix (see [locator healing](./reporter#locator-healing)), and the failure-time **ARIA snapshot**. The other tabs cover **performance hints**, execution **steps**, **Web Vitals** with color-coded thresholds, **network requests** with inline backend server logs (see [Backend logs](./backend-logs)), and a **history** chart of this test's status and duration over time. The Web Vitals, network, console, ARIA-snapshot, and alternative-locators data all come from the [capture fixtures](./capture-fixtures).
 
 <figure>
   <img src="/screenshots/test-case-detail.png" alt="Test case detail page with summary stats, duration trend, status history, and recent executions">

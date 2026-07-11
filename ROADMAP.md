@@ -23,6 +23,7 @@ Piwi Dashboard is under active development (pre-1.0). This page shows direction,
 - Deeper CI feedback (PR annotations / status summaries).
 - More backend-log instrumentation packages beyond ASP.NET Core and Nitro.
 - Import of existing Playwright JSON reports for teams with history to migrate.
+- First-class typed capture fixtures — a published `PiwiFixtures` type (making the reserved `piwiDashboardCapture` name a compile-time collision) and a dual ESM/CJS reporter build.
 
 ## Non-goals
 

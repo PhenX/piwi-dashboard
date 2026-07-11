@@ -54,6 +54,7 @@ export default defineConfig({
       { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
       { text: 'UI overview', link: '/ui-overview' },
       { text: 'Reporter', link: '/reporter' },
+      { text: 'Capture fixtures', link: '/capture-fixtures' },
       {
         text: 'Features',
         items: [

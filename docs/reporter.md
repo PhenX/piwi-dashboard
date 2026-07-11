@@ -34,6 +34,54 @@ export default defineConfig({
 })
 ```
 
+<a id="performance-metrics-web-vitals"></a>
+
+## Capture fixtures
+
+The reporter works without any test-code changes, but adding the **capture fixtures** to your test setup unlocks the dashboard's richest features — network timing and the *Slow API endpoints* table, browser Web Vitals, console capture, failure-time ARIA snapshots, and [locator healing](#locator-healing). See the [capture fixtures guide](./capture-fixtures) for the full with/without feature matrix, composition patterns, and troubleshooting.
+
+**Option A – extend your existing fixtures:**
+
+```typescript
+// tests/fixtures.ts
+import { test as base, expect } from '@playwright/test'
+import { dashboardFixtures } from '@piwitests/reporter'
+
+export const test = base.extend(dashboardFixtures)
+export { expect }
+```
+
+Then import `test` from your fixture file in every test:
+
+```typescript
+import { test, expect } from './fixtures'
+
+test('homepage loads', async ({ page }) => {
+  await page.goto('/')
+  // network requests & web vitals are captured automatically
+})
+```
+
+**Option B – one-line extend with `extendDashboardFixtures`:**
+
+```typescript
+import { test as base } from '@playwright/test'
+import { extendDashboardFixtures } from '@piwitests/reporter'
+
+export const test = extendDashboardFixtures(base)
+export { expect } from '@playwright/test'
+```
+
+### What gets captured
+
+- **Network requests** — method, URL, status code, duration, resource type. Aggregated on the dashboard into a *Slow API endpoints* table grouped by `METHOD + normalized route` (e.g. `/api/users/:id`).
+- **Console entries** — `warning`, `error`, and `assert` messages with their source location, shown on the test case page and included in the AI diagnosis evidence.
+- **Browser Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint — displayed with color-coded thresholds.
+- **ARIA snapshot** — Captured automatically on failed/timed-out tests via `page.locator(':root').ariaSnapshot()`. Included in both the debug prompt (`/test-cases/:id`) and the cluster AI diagnosis context.
+- **Locator snapshots** — For each acted-on element (click, fill, etc.) the fixtures record the element's attributes and a ranked list of alternative locators, stamped with the call site. These power [locator healing](#locator-healing) when a locator later breaks. Gated by `captureLocators` (default on).
+
+These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).
+
 ## Configuration options
 
 | Option                      | Type     | Default                   | Description                                                                                 |
@@ -246,56 +294,11 @@ Built-in report types with auto-detected directories:
 
 Any other type is also accepted; the directory must be provided via `dir`.
 
-## Performance metrics & Web Vitals
-
-To automatically capture network request timing and browser Web Vitals, use the `dashboardFixtures` in your test setup.
-
-**Option A – extend your existing fixtures:**
-
-```typescript
-// tests/fixtures.ts
-import { test as base, expect } from '@playwright/test'
-import { dashboardFixtures } from '@piwitests/reporter'
-
-export const test = base.extend(dashboardFixtures)
-export { expect }
-```
-
-Then import `test` from your fixture file in every test:
-
-```typescript
-import { test, expect } from './fixtures'
-
-test('homepage loads', async ({ page }) => {
-  await page.goto('/')
-  // network requests & web vitals are captured automatically
-})
-```
-
-**Option B – one-line extend with `extendDashboardFixtures`:**
-
-```typescript
-import { test as base } from '@playwright/test'
-import { extendDashboardFixtures } from '@piwitests/reporter'
-
-export const test = extendDashboardFixtures(base)
-export { expect } from '@playwright/test'
-```
-
-### What gets captured
-
-- **Network requests** — method, URL, status code, duration, resource type. Aggregated on the dashboard into a *Slow API endpoints* table grouped by `METHOD + normalized route` (e.g. `/api/users/:id`).
-- **Browser Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint — displayed with color-coded thresholds.
-- **ARIA snapshot** — Captured automatically on failed/timed-out tests via `page.locator(':root').ariaSnapshot()`. Included in both the debug prompt (`/test-cases/:id`) and the cluster AI diagnosis context.
-- **Locator snapshots** — For each acted-on element (click, fill, etc.) the fixtures record the element's attributes and a ranked list of alternative locators, stamped with the call site. These power [locator healing](#locator-healing) when a locator later breaks. Gated by `captureLocators` (default on).
-
-These are only collected when `collectPerformanceMetrics` is `true` (the default). If the ARIA snapshot does not appear in the dashboard, the most likely cause is that your test files do not import `test` from the package's fixtures subpath (see options A/B above).
-
 ## Locator healing
 
 When a locator stops matching — a button was renamed, an element moved, a hashed class changed — Piwi suggests concrete, ranked replacements instead of leaving you to guess.
 
-While tests run, the fixtures wrap Playwright's locator methods (`getByRole`, `getByTestId`, `locator`, …) and, after each successful action, record the target element's attributes plus a list of alternative locators ranked by a stability score (`data-testid` = 100, role + accessible name ≈ 90, semantic CSS ≈ 35–40, hash-suffixed ≈ 10). Each candidate selector is probed against the live page for uniqueness — alternatives that would match several elements (strict-mode violations) are dropped at capture time. Live input *values* are never captured, so filled-in secrets can't leak into snapshots. One row per call site is upserted into the `locator_snapshots` table, so the latest known-good snapshot for every locator is always available.
+While tests run, the [capture fixtures](./capture-fixtures) wrap Playwright's locator methods (`getByRole`, `getByTestId`, `locator`, …) and, after each successful action, record the target element's attributes plus a list of alternative locators ranked by a stability score (`data-testid` = 100, role + accessible name ≈ 90, semantic CSS ≈ 35–40, hash-suffixed ≈ 10). Each candidate selector is probed against the live page for uniqueness — alternatives that would match several elements (strict-mode violations) are dropped at capture time. Live input *values* are never captured, so filled-in secrets can't leak into snapshots. One row per call site is upserted into the `locator_snapshots` table, so the latest known-good snapshot for every locator is always available.
 
 When a locator later fails, the server resolves replacements through a ladder, most-trustworthy first:
 
@@ -413,7 +416,7 @@ export default defineConfig({
 2. After all tests complete, it uploads results to the dashboard.
 3. If `uploadReport` is enabled, the entire `playwright-report/` directory is compressed with gzip and uploaded.
 4. If `uploadTraces` is enabled, all trace files found in test attachments are uploaded.
-5. If `dashboardFixtures` are active, network request and web vitals attachments are included per test case.
+5. If the [capture fixtures](./capture-fixtures) are active, network requests, console entries, Web Vitals, failure-time ARIA snapshots, and locator snapshots are included per test case.
 6. The server decompresses the report and makes it available for viewing, with fully functional HTML reports.
 
 ## Troubleshooting
@@ -424,11 +427,12 @@ export default defineConfig({
 - Make sure traces are enabled: `use: { trace: 'retain-on-failure' }`
 - Check the dashboard server is running and accessible at `serverUrl`
 
-### Network/Web Vitals not appearing
+### Fixture data not appearing (network, Web Vitals, console, ARIA snapshot, locator healing)
 
-- Extend your `test` with `dashboardFixtures` / `extendDashboardFixtures` from `@piwitests/reporter`
-- Verify `collectPerformanceMetrics` is not set to `false`
+- Extend your `test` with `dashboardFixtures` / `extendDashboardFixtures` from `@piwitests/reporter`, and make sure every spec imports `test` from your fixtures file — not from `@playwright/test` directly
+- Verify `collectPerformanceMetrics` is not set to `false` (and `captureLocators` for locator healing)
 - Ensure tests navigate to at least one page (`await page.goto(...)`)
+- See the [capture fixtures guide](./capture-fixtures) for details
 
 ### Connection errors
 
@@ -495,7 +499,7 @@ The compiled output is what Playwright loads at runtime. The package has a singl
 
 ### Source layout
 
-The package separates its **public API** (`src/index.ts`, `src/fixtures.ts`, and `src/public/`) from internal plumbing (`src/internal/<domain>/` — `submit`, `transport`, `streaming`, `collect`, `files`, `capture`, `config`, `support`) and the type model (`src/types/`, where `wire.ts` is the server contract and `collected.ts` the in-process model).
+The package separates its **public API** (`src/index.ts` and `src/public/`) from internal plumbing (`src/internal/<domain>/` — `submit`, `transport`, `streaming`, `collect`, `files`, `capture`, `config`, `support`) and the type model (`src/types/`, where `wire.ts` is the server contract and `collected.ts` the in-process model).
 
 See **`reporter/ARCHITECTURE.md`** in the repository for the full map: the public/internal split, the two-process collect-and-submit data flow, the fallback ladder, and the package conventions.
 

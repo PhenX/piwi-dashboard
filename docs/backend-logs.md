@@ -80,7 +80,7 @@ export const test = base.extend(dashboardFixtures)
 export { expect }
 ```
 
-See [Reporter → Performance metrics & Web Vitals](/reporter#performance-metrics-web-vitals) for details.
+See the [capture fixtures guide](/capture-fixtures) for details.
 
 ## Log entry format
 
