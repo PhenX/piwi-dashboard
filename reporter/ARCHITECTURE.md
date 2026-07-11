@@ -15,7 +15,7 @@ change. Everything under **`src/internal/`** is private plumbing — change it f
 | `wrapConfig` | `public/config-wrapper.ts` | injects reporter + global setup into a PW config |
 | `createGlobalSetup` | `public/global-setup.ts` | registers the run before `globalSetup` |
 | `PiwiDashboardOptions`, `PlaywrightTestConfig`, `PiwiFixtures` | `public/options.ts` / `internal/capture/capture-fixtures.ts` | the config contract + capture fixtures type (types) |
-| `piwiFixtures`, `extendPiwiFixtures` (+ deprecated `dashboardFixtures`, `extendDashboardFixtures` aliases) | `internal/capture/capture-fixtures.ts` → re-exported by `index.ts` | capture fixtures (imported from `@piwitests/reporter`) |
+| `piwiFixtures`, `extendPiwiFixtures` | `internal/capture/capture-fixtures.ts` → re-exported by `index.ts` | capture fixtures (imported from `@piwitests/reporter`) |
 
 Two **external contracts** beyond the npm API:
 - **Wire types** (`types/wire.ts`) — the JSON sent to / received from the server.

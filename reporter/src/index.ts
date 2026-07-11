@@ -17,14 +17,7 @@ export { wrapConfig } from './public/config-wrapper.js';
 export { createGlobalSetup } from './public/global-setup.js';
 
 // ── Capture fixtures ─────────────────────────────────────────────────────────
-// `dashboardFixtures` / `extendDashboardFixtures` are deprecated aliases kept
-// for 0.9.x compatibility — prefer `piwiFixtures` / `extendPiwiFixtures`.
-export {
-  piwiFixtures,
-  extendPiwiFixtures,
-  dashboardFixtures,
-  extendDashboardFixtures,
-} from './internal/capture/capture-fixtures.js';
+export { piwiFixtures, extendPiwiFixtures } from './internal/capture/capture-fixtures.js';
 
 // ── Public types ─────────────────────────────────────────────────────────────
 export type { PiwiFixtures } from './internal/capture/capture-fixtures.js';

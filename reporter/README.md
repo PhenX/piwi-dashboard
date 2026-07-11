@@ -161,8 +161,6 @@ export { expect } from '@playwright/test'
 
 Then import `test` from your fixtures file in every spec — a spec that imports `test` from `@playwright/test` directly still runs and reports fine, it just isn't captured.
 
-> `piwiFixtures` / `extendPiwiFixtures` were named `dashboardFixtures` / `extendDashboardFixtures` in `0.9.x`. The old names still work as deprecated aliases.
-
 ### What gets captured
 
 - **Network requests** — method, URL, status, duration, resource type (API/document traffic only). Aggregated on the dashboard into a *Slow API Endpoints* table grouped by `METHOD + normalized route`.

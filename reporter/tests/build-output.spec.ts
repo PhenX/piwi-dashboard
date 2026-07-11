@@ -50,8 +50,5 @@ describe.runIf(existsSync(dist('index.js')))('built entry (requires a build)', (
     const source = readFileSync(dist('index.js'), 'utf-8');
     expect(source).toContain('piwiFixtures');
     expect(source).toContain('extendPiwiFixtures');
-    // Deprecated 0.9.x aliases stay exported for backward compatibility.
-    expect(source).toContain('dashboardFixtures');
-    expect(source).toContain('extendDashboardFixtures');
   });
 });

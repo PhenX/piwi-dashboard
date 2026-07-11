@@ -73,8 +73,6 @@ export const test = extendPiwiFixtures(base)
 export { expect } from '@playwright/test'
 ```
 
-> `piwiFixtures` / `extendPiwiFixtures` were named `dashboardFixtures` / `extendDashboardFixtures` in `0.9.x`; the old names still work as deprecated aliases.
-
 ### What gets captured
 
 - **Network requests** — method, URL, status code, duration, resource type. Aggregated on the dashboard into a *Slow API endpoints* table grouped by `METHOD + normalized route` (e.g. `/api/users/:id`).

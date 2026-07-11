@@ -831,17 +831,3 @@ export function extendPiwiFixtures<TestArgs extends FixtureArgs, WorkerArgs exte
     test as unknown as { extend: (f: typeof piwiFixtures) => TestType<TestArgs & PiwiFixtures, WorkerArgs> }
   ).extend(piwiFixtures);
 }
-
-/**
- * @deprecated Renamed to {@link piwiFixtures}. This alias is kept for
- * `@piwitests/reporter@0.9.x` compatibility and will be removed in a future
- * release — prefer `piwiFixtures`.
- */
-export const dashboardFixtures = piwiFixtures;
-
-/**
- * @deprecated Renamed to {@link extendPiwiFixtures}. This alias is kept for
- * `@piwitests/reporter@0.9.x` compatibility and will be removed in a future
- * release — prefer `extendPiwiFixtures`.
- */
-export const extendDashboardFixtures = extendPiwiFixtures;

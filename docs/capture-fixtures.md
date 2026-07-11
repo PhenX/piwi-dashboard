@@ -46,10 +46,6 @@ test('homepage loads', async ({ page }) => {
 
 That's the entire setup — there is nothing to start, wrap, or await inside your tests.
 
-::: tip Renamed in a later release
-`piwiFixtures` / `extendPiwiFixtures` were named `dashboardFixtures` / `extendDashboardFixtures` in `@piwitests/reporter@0.9.x`. The old names remain exported as deprecated aliases, so existing setups keep working — new code should use `piwiFixtures`.
-:::
-
 ## What gets captured
 
 | Data | Captured | Powers |
