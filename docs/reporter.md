@@ -30,9 +30,12 @@ export default defineConfig({
   ],
   use: {
     trace: 'retain-on-failure',
+    video: 'retain-on-failure',
   },
 })
 ```
+
+Any attachments Playwright records — including **videos** (`video: 'retain-on-failure'`) and screenshots — are uploaded automatically and shown as first-class evidence on the test-case and failure-cluster pages, alongside traces. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
 
 ## Configuration options
 
