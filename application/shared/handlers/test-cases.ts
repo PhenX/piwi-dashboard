@@ -295,6 +295,7 @@ export async function getTestRunCaseTraces(db: DrizzleDB, id: number) {
     id: t.id,
     filePath: t.path,
     createdAt: t.createdAt,
+    size: t.size ?? null,
   }));
 }
 

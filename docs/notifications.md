@@ -53,6 +53,34 @@ Create an [incoming webhook](https://api.slack.com/messaging/webhooks) in Slack 
 
 Piwi `POST`s a JSON payload to your URL. Each request is signed with an HMAC-SHA256 `X-Piwi-Signature` header derived from the channel's secret, so you can verify authenticity. Webhook secrets are encrypted at rest.
 
+The body is `{ "event": "run.failed", "payload": { … }, "timestamp": "…" }`. For run events the payload includes up to three failing tests so you can act without a round-trip to the dashboard:
+
+```json
+{
+  "event": "run.failed",
+  "payload": {
+    "runId": 42,
+    "projectName": "checkout",
+    "status": "failed",
+    "totalTests": 120,
+    "failedTests": 3,
+    "branch": "main",
+    "topFailures": [
+      {
+        "title": "applies discount code",
+        "filePath": "tests/checkout.spec.ts",
+        "errorExcerpt": "TimeoutError: locator.click: Timeout 30000ms exceeded",
+        "testCaseId": 815,
+        "executionId": 9001
+      }
+    ]
+  },
+  "timestamp": "2026-07-11T10:00:00.000Z"
+}
+```
+
+`cluster.new` payloads similarly carry `sampleErrorExcerpt` and `affectedCases`. These fields are **additive** — existing consumers keep working, but if you re-serialize the payload to re-check the HMAC, sign the exact bytes you received.
+
 Admins can mark a channel **global** so it is available to all users.
 
 ## Subscriptions

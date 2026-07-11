@@ -244,12 +244,20 @@ export function getFileApiPath(filePath: string): string {
   return filePath.replace(storagePath, '');
 }
 
-export function getTraceViewerUrl(filePath: string): string {
-  // `location` only exists in the browser; during SSR render the href with a
-  // relative trace URL — the client re-render fills the origin in before the
-  // link can be clicked.
+/**
+ * Build a URL that opens a stored trace in the bundled Playwright trace viewer.
+ *
+ * `baseURL` is the app's base path (`useRuntimeConfig().app.baseURL`). It must be
+ * applied to both the viewer path and the trace file URL so links keep working
+ * when the app is served from a sub-path (e.g. the demo at `/demo/`).
+ */
+export function getTraceViewerUrl(filePath: string, baseURL: string = '/'): string {
+  const base = (baseURL || '/').replace(/\/$/, '');
+  // `location` only exists in the browser; during SSR render a relative trace
+  // URL — the client re-render fills the origin in before the link is clickable.
   const origin = typeof location === 'undefined' ? '' : location.origin;
-  return `/trace-viewer/?trace=${encodeURIComponent(`${origin}/api/files/${getFileApiPath(filePath)}`)}`;
+  const traceUrl = `${origin}${base}/api/files/${getFileApiPath(filePath)}`;
+  return `${base}/trace-viewer/?trace=${encodeURIComponent(traceUrl)}`;
 }
 
 /**

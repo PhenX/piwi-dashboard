@@ -20,6 +20,8 @@ interface NotificationEventData {
   rootCause?: string | null;
   category?: string | null;
   confidence?: string | null;
+  topFailures?: { title: string }[];
+  affectedCases?: number;
 }
 
 function renderBody(data: NotificationEventData): string {
@@ -40,6 +42,10 @@ function renderBody(data: NotificationEventData): string {
       else if (data.type === 'flakiness.spike') lines.push(`${name}: flakiness spike detected`);
       else if (data.type === 'perf.regression') lines.push(`${name}: performance regression detected`);
       if (data.failedTests) lines.push(`${data.failedTests} failed, ${data.totalTests} total`);
+      if (data.topFailures?.length) {
+        const [first, ...rest] = data.topFailures;
+        lines.push(rest.length ? `${first!.title} +${rest.length} more` : first!.title);
+      }
       break;
     }
     case 'cluster.new':

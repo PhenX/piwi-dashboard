@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { stripAnsi, isImageFile } from '../../app/utils/text-format';
+import { stripAnsi, isImageFile, isVideoFile } from '../../app/utils/text-format';
 
 const ESC = String.fromCharCode(27); // ANSI escape
 
@@ -27,5 +27,19 @@ describe('isImageFile', () => {
   test('detects by content type when the extension is absent', () => {
     expect(isImageFile('attachment', 'image/png')).toBe(true);
     expect(isImageFile('attachment', 'application/zip')).toBe(false);
+  });
+});
+
+describe('isVideoFile', () => {
+  test('detects by extension (case-insensitive)', () => {
+    expect(isVideoFile('run.WEBM')).toBe(true);
+    expect(isVideoFile('a/b/clip.mp4')).toBe(true);
+    expect(isVideoFile('shot.png')).toBe(false);
+    expect(isVideoFile('trace.zip')).toBe(false);
+  });
+
+  test('detects by content type when the extension is absent', () => {
+    expect(isVideoFile('attachment', 'video/webm')).toBe(true);
+    expect(isVideoFile('attachment', 'image/png')).toBe(false);
   });
 });

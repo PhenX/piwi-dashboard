@@ -30,6 +30,7 @@ export default defineConfig({
   ],
   use: {
     trace: 'retain-on-failure',
+    video: 'retain-on-failure',
   },
 })
 ```
@@ -83,6 +84,8 @@ export { expect } from '@playwright/test'
 - **Locator snapshots** — For each acted-on element (click, fill, etc.) the fixtures record the element's attributes and a ranked list of alternative locators, stamped with the call site. These power [locator healing](#locator-healing) when a locator later breaks. Gated by `captureLocators` (default on).
 
 These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).
+
+Any attachments Playwright records — including **videos** (`video: 'retain-on-failure'`) and screenshots — are uploaded automatically and shown as first-class evidence on the test-case and failure-cluster pages, alongside traces. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
 
 ## Configuration options
 
@@ -420,6 +423,8 @@ export default defineConfig({
 4. If `uploadTraces` is enabled, all trace files found in test attachments are uploaded.
 5. If the [capture fixtures](./capture-fixtures) are active, network requests, console entries, Web Vitals, failure-time ARIA snapshots, and locator snapshots are included per test case.
 6. The server decompresses the report and makes it available for viewing, with fully functional HTML reports.
+
+Uploaded traces open in the dashboard's **built-in, self-hosted trace viewer** — the bytes never leave your server. See [Trace viewer](./ui-overview#trace-viewer).
 
 ## Troubleshooting
 

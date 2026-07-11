@@ -125,6 +125,13 @@ describe('file path helpers', () => {
     vi.unstubAllGlobals();
   });
 
+  test('getTraceViewerUrl prefixes the base path for both the viewer and the trace URL', () => {
+    vi.stubGlobal('location', { origin: 'http://localhost:3000' });
+    const url = getTraceViewerUrl('.data/storage/t.zip', '/demo/');
+    expect(url).toBe(`/demo/trace-viewer/?trace=${encodeURIComponent('http://localhost:3000/demo/api/files/t.zip')}`);
+    vi.unstubAllGlobals();
+  });
+
   test('getTraceViewerUrl falls back to a relative trace URL when location is absent (SSR)', () => {
     vi.stubGlobal('location', undefined);
     const url = getTraceViewerUrl('t.zip');

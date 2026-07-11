@@ -51,10 +51,6 @@ const { summaryColSpanClass, blockColSpanClass } = useDetailGrid(() => {
   return count;
 });
 
-function downloadUrl(path: string): string {
-  return `/api/files/${getFileApiPath(path)}`;
-}
-
 function attFileUrl(path: string, contentType?: string | null): string {
   let url = `/api/files/${getFileApiPath(path)}`;
   const ext = path.toLowerCase().split('.').pop() || '';
@@ -75,10 +71,7 @@ function isImage(path: string, contentType?: string | null): boolean {
 
 function totalStorageSize(traces?: TraceInfo[], attachments?: AttachmentInfo[]): number {
   let total = 0;
-  if (traces)
-    for (const t of traces)
-      if ((t as unknown as Record<string, unknown>).size as number)
-        total += (t as unknown as Record<string, unknown>).size as number;
+  if (traces) for (const t of traces) if (t.size) total += t.size;
   if (attachments) for (const a of attachments) if (a.size) total += a.size;
   return total;
 }
@@ -257,30 +250,7 @@ function fileName(path: string): string {
       >
         <div class="space-y-2">
           <!-- Traces -->
-          <div v-for="trace in traces" :key="trace.id" class="flex items-center justify-between gap-2 py-1.5">
-            <div class="flex items-center gap-2 min-w-0">
-              <UIcon name="i-lucide-file-archive" class="size-4 text-gray-400 shrink-0" />
-              <span class="text-xs truncate">{{ trace.filePath.split('/').pop() }}</span>
-            </div>
-            <div class="flex items-center gap-1 shrink-0">
-              <UButton
-                :to="getTraceViewerUrl(trace.filePath)"
-                target="_blank"
-                icon="i-lucide-bug-play"
-                size="xs"
-                label="View trace"
-              />
-              <UButton
-                :to="downloadUrl(trace.filePath)"
-                target="_blank"
-                icon="i-lucide-download"
-                size="xs"
-                color="neutral"
-                variant="soft"
-                label="Download"
-              />
-            </div>
-          </div>
+          <TraceListItem v-for="trace in traces" :key="trace.id" :trace="trace" :show-time="false" class="py-1.5" />
 
           <!-- Attachments summary -->
           <div v-if="(attachments?.length ?? 0) > 0" class="space-y-1">

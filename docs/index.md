@@ -5,7 +5,7 @@ layout: home
 hero:
   name: "Piwi Dashboard"
   text: "Self-hosted Playwright observability"
-  tagline: "Live dashboards, failure clustering, and flaky-test tracking for your whole team. Nothing vanishes when CI finishes — no SaaS, no lock-in."
+  tagline: "Understand and fix failures — don't just watch them. Failure clustering, flaky-test scoring, locator healing, and optional AI diagnosis on top of your Playwright results. Self-hosted, no SaaS, no lock-in."
   image: /logo-wide.svg
 
   actions:
@@ -20,39 +20,42 @@ hero:
       link: https://github.com/PiwiTests/platform
 
 features:
-  - icon: 📊
-    title: Test results storage
-    details: Store complete Playwright test run data — status, duration, retries, errors, and more — in a lightweight SQLite database.
-  - icon: 🎯
-    title: Project organization
-    details: Tests are organized by project. Unknown projects are automatically created when results are submitted via API.
+  - icon: 🧩
+    title: Failure clustering
+    details: Identical failures are grouped across specs by an error fingerprint, so one root cause is one thing to triage — not fifty scattered red tests.
+  - icon: 🤖
+    title: AI failure diagnosis
+    details: Optional, opt-in analysis grounded in your actual git diff since the last green run — with suggested-fix patches validated server-side. Runs against your own provider (or a local model); nothing leaves your server unless you configure it.
+  - icon: 📉
+    title: Flaky-test analytics
+    details: Composite flakiness score with root-cause classes (timing, network, assertion…) and CI-cost impact ranking, so you fix the flakes that actually waste the most CI minutes first.
+  - icon: 🩹
+    title: Locator healing
+    details: When a locator breaks, get ranked replacement locators captured from prior passing runs — with a convention-preserving recommended fix and a data-testid nudge when nothing is stable.
+  - icon: 🎬
+    title: Self-hosted trace viewer
+    details: Open the full Playwright trace viewer straight from a failure — bundled and served by the dashboard, so traces never leave your server.
+  - icon: 🔔
+    title: Notifications & alerts
+    details: Email, Slack, webhook, and in-browser notifications for failed runs and new failure clusters, with per-project subscriptions, filters, and digest mode.
+  - icon: ⚡
+    title: Live run streaming
+    details: Watch a run update in real time over SSE as each test finishes — no polling, no waiting on CI to upload an artifact.
   - icon: 📈
     title: Performance tracking
     details: Step-level timing, avg/P90 duration trends, slowest-tests analysis, and side-by-side run comparison.
   - icon: 🌐
-    title: Network request analysis
-    details: Find slow API endpoints grouped by HTTP method and normalized route (e.g. `/api/users/:id`).
-  - icon: 📖
-    title: Interactive API docs
-    details: Auto-generated OpenAPI 3.1 specification with a Scalar-powered reference UI at /docs — browse endpoints, schemas, and execute requests directly from the browser.
-  - icon: 🔬
-    title: Browser Web Vitals
-    details: Capture TTFB, DOMContentLoaded, FCP and more via the Performance API, displayed with color-coded thresholds.
-  - icon: 🩹
-    title: Locator healing
-    details: When a locator breaks, get ranked replacement locators captured from prior passing runs — with a convention-preserving recommended fix and a data-testid nudge when nothing is stable.
+    title: Network & Web Vitals
+    details: Slow API endpoints grouped by method and normalized route, plus Core Web Vitals (TTFB, FCP, CLS…) with color-coded thresholds.
   - icon: 🔌
-    title: Playwright reporter
-    details: Drop-in custom reporter that automatically uploads results, HTML reports, and trace files after each run.
-  - icon: 🔐
-    title: Authentication
-    details: Optional role-based access control with administrator, reporter, and user roles.
-  - icon: ☁️
-    title: Flexible storage
-    details: Local file storage by default, or S3-compatible storage (AWS S3, MinIO, DigitalOcean Spaces, Cloudflare R2).
+    title: Drop-in reporter
+    details: Add one reporter to your Playwright config and results, HTML reports, and traces upload automatically after each run.
+  - icon: 🤝
+    title: MCP server for AI agents
+    details: Query runs, failures, clusters, and flaky tests from Claude Code or any MCP client — bring test health into your coding agent.
   - icon: 🐳
-    title: Docker support
-    details: Pre-built multi-platform container images (~400 MB) available on Docker Hub.
+    title: Self-hosted, your data
+    details: One ~400 MB Docker image, SQLite or PostgreSQL, local or S3-compatible storage, optional role-based auth. Zero telemetry — nothing phones home.
 ---
 
 <div class="screenshots">

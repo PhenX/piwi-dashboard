@@ -26,7 +26,7 @@ function buildScenarios(projectLabel: string, events: string[]): Scenario[] {
       event: 'run.failed',
       scenario: {
         title: `Test run failed — ${projectLabel}`,
-        description: '3 of 12 tests failed on main',
+        description: '3 of 12 tests failed on main — checkout › applies discount code +2 more',
         icon: 'i-lucide-circle-x',
         color: 'error',
       },
@@ -35,7 +35,7 @@ function buildScenarios(projectLabel: string, events: string[]): Scenario[] {
       event: 'run.failed.default_branch',
       scenario: {
         title: `Test run failed on main — ${projectLabel}`,
-        description: '2 of 12 tests failed · branch: main',
+        description: '2 of 12 tests failed · main — auth › logs in with valid credentials +1 more',
         icon: 'i-lucide-circle-x',
         color: 'error',
       },

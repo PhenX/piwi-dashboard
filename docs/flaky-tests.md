@@ -17,6 +17,8 @@ A test is flaky when its result isn't deterministic. Piwi computes a **composite
 
 Each project has a dedicated **Flaky tests** tab with a **configurable lookback window** so you can focus on recent behavior or a longer baseline.
 
+**Per-environment scoping** — select a single environment in the project's environment filter and the flaky analysis is scoped to runs from that environment, so you can compare stability across `staging`, `production`, and `development` instead of blending them. (Set the environment via the reporter's `environment` option / `PIWI_ENVIRONMENT`; see the [reporter](./reporter) docs.)
+
 <figure>
   <img src="/screenshots/flaky-detection.png" alt="Flaky tests tab listing tests with composite score, failure rate, retry passes, and flip counts">
   <figcaption>The Flaky tests tab — each intermittent test scored by retry passes, status flips, and failure rate, ranked by impact and filterable by root-cause category.</figcaption>

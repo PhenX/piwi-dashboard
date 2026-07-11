@@ -73,10 +73,16 @@ async function reconstructTraceZip(
     // Parse slim ZIP to recover event entries
     const slimEntries = await parseZip(slimZipData);
 
-    // Fetch all shared resources in parallel; skip any that are missing
-    const resourceEntries = (
-      await Promise.all(
-        resourceNames.map(async (name) => {
+    // Fetch shared resources in bounded batches rather than all at once, so a
+    // trace with hundreds of resources doesn't open hundreds of simultaneous
+    // storage reads (which pressures S3 connection/rate limits); missing
+    // resources are skipped.
+    const resourceEntries: { name: string; data: Buffer }[] = [];
+    const RESOURCE_FETCH_CONCURRENCY = 16;
+    for (let i = 0; i < resourceNames.length; i += RESOURCE_FETCH_CONCURRENCY) {
+      const batch = resourceNames.slice(i, i + RESOURCE_FETCH_CONCURRENCY);
+      const settled = await Promise.all(
+        batch.map(async (name) => {
           const resourcePath = `${projectPrefix}trace-resources/${name}`;
           try {
             const data = await storage.readFile(resourcePath);
@@ -86,8 +92,9 @@ async function reconstructTraceZip(
             return null;
           }
         }),
-      )
-    ).filter((e): e is NonNullable<typeof e> => e !== null);
+      );
+      for (const entry of settled) if (entry) resourceEntries.push(entry);
+    }
 
     return buildZip([...slimEntries, ...resourceEntries]);
   } catch (err) {
@@ -137,10 +144,30 @@ export default eventHandler(async (event) => {
 
   // Security headers applied to all file responses
   setResponseHeader(event, 'X-Content-Type-Options', 'nosniff');
-  setResponseHeader(event, 'Cache-Control', 'no-store');
 
-  // Trace archives are fetched cross-origin by the Playwright trace viewer
-  // (local /trace-viewer/ or hosted trace.playwright.dev) from the user's browser
+  // Trace blobs live under /blobs/ and are content-addressed by hash, so their
+  // bytes never change — cache them aggressively and answer conditional requests
+  // with 304 instead of re-downloading and re-reconstructing the full ZIP on
+  // every trace-viewer open. Every other path (reports, attachments) is
+  // path-stable but content-mutable, so it keeps no-store.
+  const isBlobPath = path.includes('/blobs/');
+  if (isBlobPath) {
+    const etag = `"${path.split('/blobs/')[1]}"`;
+    setResponseHeader(event, 'ETag', etag);
+    setResponseHeader(event, 'Cache-Control', 'private, max-age=31536000, immutable');
+    if (getRequestHeader(event, 'if-none-match') === etag) {
+      setResponseStatus(event, 304);
+      return null;
+    }
+  } else {
+    setResponseHeader(event, 'Cache-Control', 'no-store');
+  }
+
+  // Trace archives are fetched by the Playwright trace viewer from the user's
+  // browser. The bundled local viewer (/trace-viewer/) is same-origin, so it
+  // works with auth on; the hosted trace.playwright.dev viewer is cross-origin
+  // and cannot send the session cookie, so it only works when auth is disabled.
+  // The wildcard is safe because responses carry no credentials cross-origin.
   if (path.endsWith('.zip')) {
     setResponseHeader(event, 'Access-Control-Allow-Origin', '*');
   }
