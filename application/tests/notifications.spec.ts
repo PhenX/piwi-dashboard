@@ -355,7 +355,17 @@ test.describe.serial('Subscribe Bell UI', () => {
 
   test('bell is not visible when not authenticated', async ({ page }) => {
     skip();
-    await page.goto(`${BASE}/projects/${projectId}`);
+    // Unauthenticated visits to a protected page are bounced to /login by the
+    // global auth middleware, so the bell is never reachable. The flake was the
+    // navigation, not the assertion: this is the first hit to /projects/[id] on
+    // the auth-enabled dev server, and the cold Vite route-compile under shared
+    // CI CPU can push page.goto past the 30 s test budget (hence the ~33 s
+    // timeouts). Allow slow-test headroom, resolve on DOMContentLoaded (a
+    // redirect can keep a subresource in flight and delay the `load` event), and
+    // wait for the redirect to settle before asserting.
+    test.slow();
+    await page.goto(`${BASE}/projects/${projectId}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForURL('**/login', { timeout: 30000 });
     await expect(page.getByTitle('Notification subscriptions for this project')).not.toBeVisible();
   });
 
