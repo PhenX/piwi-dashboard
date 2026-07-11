@@ -183,7 +183,7 @@ export const HELP_TOPICS = {
   'case.web-vitals': {
     title: 'Web Vitals',
     text: 'Core Web Vitals (LCP, CLS, etc.) captured during the test, measuring real loading and responsiveness of the page under test.',
-    doc: 'reporter#performance-metrics-web-vitals',
+    doc: 'capture-fixtures',
   },
   'case.traces': {
     title: 'Traces',
@@ -193,12 +193,12 @@ export const HELP_TOPICS = {
   'case.console': {
     title: 'Console output',
     text: 'Browser console messages logged while this test ran — often the first clue for a JavaScript error behind a failure.',
-    doc: 'reporter#performance-metrics-web-vitals',
+    doc: 'capture-fixtures',
   },
   'case.network': {
     title: 'Network requests',
     text: 'HTTP requests the page made during the test, with timing and status — useful for spotting failed or slow calls.',
-    doc: 'reporter#performance-metrics-web-vitals',
+    doc: 'capture-fixtures',
   },
   'case.backend-logs': {
     title: 'Backend server logs',
