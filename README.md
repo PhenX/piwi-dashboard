@@ -105,9 +105,9 @@ export default defineConfig({
 ```typescript
 // tests/fixtures.ts
 import { test as base, expect } from '@playwright/test'
-import { dashboardFixtures } from '@piwitests/reporter'
+import { piwiFixtures } from '@piwitests/reporter'
 
-export const test = base.extend(dashboardFixtures)
+export const test = base.extend(piwiFixtures)
 export { expect }
 ```
 

@@ -16,20 +16,20 @@ If you do one thing beyond installing the reporter, do this.
 ```typescript
 // tests/fixtures.ts
 import { test as base, expect } from '@playwright/test'
-import { dashboardFixtures } from '@piwitests/reporter'
+import { piwiFixtures } from '@piwitests/reporter'
 
-export const test = base.extend(dashboardFixtures)
+export const test = base.extend(piwiFixtures)
 export { expect }
 ```
 
-**Option B — one-line extend with `extendDashboardFixtures`:**
+**Option B — one-line extend with `extendPiwiFixtures`:**
 
 ```typescript
 // tests/fixtures.ts
 import { test as base } from '@playwright/test'
-import { extendDashboardFixtures } from '@piwitests/reporter'
+import { extendPiwiFixtures } from '@piwitests/reporter'
 
-export const test = extendDashboardFixtures(base)
+export const test = extendPiwiFixtures(base)
 export { expect } from '@playwright/test'
 ```
 
@@ -45,6 +45,10 @@ test('homepage loads', async ({ page }) => {
 ```
 
 That's the entire setup — there is nothing to start, wrap, or await inside your tests.
+
+::: tip Renamed in a later release
+`piwiFixtures` / `extendPiwiFixtures` were named `dashboardFixtures` / `extendDashboardFixtures` in `@piwitests/reporter@0.9.x`. The old names remain exported as deprecated aliases, so existing setups keep working — new code should use `piwiFixtures`.
+:::
 
 ## What gets captured
 
@@ -89,26 +93,26 @@ Semantics worth knowing:
 
 ## Composing with your own fixtures
 
-`dashboardFixtures` is a plain Playwright fixtures object, so it composes with your own fixtures in any order:
+`piwiFixtures` is a plain Playwright fixtures object, so it composes with your own fixtures in any order:
 
 ```typescript
 import { test as base, mergeTests } from '@playwright/test'
-import { dashboardFixtures, extendDashboardFixtures } from '@piwitests/reporter'
+import { piwiFixtures, extendPiwiFixtures } from '@piwitests/reporter'
 
 // Your fixtures first, capture second
-export const test = base.extend<MyFixtures>({ /* ... */ }).extend(dashboardFixtures)
+export const test = base.extend<MyFixtures>({ /* ... */ }).extend(piwiFixtures)
 
 // Capture first, your fixtures second
-export const test = extendDashboardFixtures(base).extend<MyFixtures>({ /* ... */ })
+export const test = extendPiwiFixtures(base).extend<MyFixtures>({ /* ... */ })
 
 // Or merge two independent test objects
-export const test = mergeTests(myTest, extendDashboardFixtures(base))
+export const test = mergeTests(myTest, extendPiwiFixtures(base))
 ```
 
 Two rules:
 
-- The fixture name **`piwiDashboardCapture` is reserved** — defining your own fixture with that name replaces the capture teardown and silently disables the attachments.
-- If you **override `browser` or `page` yourself**, extend with `dashboardFixtures` *after* your override so the capture wrapping still applies.
+- The fixture name **`piwiCapture` is reserved** — defining your own fixture with that name replaces the capture teardown and silently disables the attachments. `piwiFixtures` types it, so a redefinition with an incompatible type is a compile error; a same-typed (`void`) one still compiles, so avoid the name entirely.
+- If you **override `browser` or `page` yourself**, extend with `piwiFixtures` *after* your override so the capture wrapping still applies.
 
 ## Cost & opt-outs
 

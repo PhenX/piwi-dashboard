@@ -180,7 +180,7 @@ When the failure is a broken locator, the context includes an **Alternative Loca
   <figcaption>The Alternative locators panel — the broken locator, ranked replacements scored for stability, and a single recommended fix that preserves your locator style.</figcaption>
 </figure>
 
-This evidence is generated from the locator snapshots recorded by the [capture fixtures](./capture-fixtures) while tests run — make sure your specs import `test` from a fixtures file that extends `dashboardFixtures`. Capture is gated by the default-on `captureLocators` reporter option. The same data drives the standalone **Alternative locators** panel on the test-case and cluster pages.
+This evidence is generated from the locator snapshots recorded by the [capture fixtures](./capture-fixtures) while tests run — make sure your specs import `test` from a fixtures file that extends `piwiFixtures`. Capture is gated by the default-on `captureLocators` reporter option. The same data drives the standalone **Alternative locators** panel on the test-case and cluster pages.
 
 ## Custom instructions
 

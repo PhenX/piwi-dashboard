@@ -69,14 +69,14 @@ The plugin is auto-loaded by Nitro. It captures `consola` Warning/Error entries 
 
 On the Playwright side, the reporter reads `X-Piwi-Logs` automatically from every captured network response. No additional configuration is needed beyond having the fixtures active.
 
-Make sure your test files import `test` from the Piwi Dashboard fixtures (or extend with `dashboardFixtures`) so network requests are captured:
+Make sure your test files import `test` from the Piwi Dashboard fixtures (or extend with `piwiFixtures`) so network requests are captured:
 
 ```typescript
 // tests/fixtures.ts
 import { test as base, expect } from '@playwright/test'
-import { dashboardFixtures } from '@piwitests/reporter'
+import { piwiFixtures } from '@piwitests/reporter'
 
-export const test = base.extend(dashboardFixtures)
+export const test = base.extend(piwiFixtures)
 export { expect }
 ```
 

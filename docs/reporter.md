@@ -45,9 +45,9 @@ The reporter works without any test-code changes, but adding the **capture fixtu
 ```typescript
 // tests/fixtures.ts
 import { test as base, expect } from '@playwright/test'
-import { dashboardFixtures } from '@piwitests/reporter'
+import { piwiFixtures } from '@piwitests/reporter'
 
-export const test = base.extend(dashboardFixtures)
+export const test = base.extend(piwiFixtures)
 export { expect }
 ```
 
@@ -62,15 +62,17 @@ test('homepage loads', async ({ page }) => {
 })
 ```
 
-**Option B – one-line extend with `extendDashboardFixtures`:**
+**Option B – one-line extend with `extendPiwiFixtures`:**
 
 ```typescript
 import { test as base } from '@playwright/test'
-import { extendDashboardFixtures } from '@piwitests/reporter'
+import { extendPiwiFixtures } from '@piwitests/reporter'
 
-export const test = extendDashboardFixtures(base)
+export const test = extendPiwiFixtures(base)
 export { expect } from '@playwright/test'
 ```
+
+> `piwiFixtures` / `extendPiwiFixtures` were named `dashboardFixtures` / `extendDashboardFixtures` in `0.9.x`; the old names still work as deprecated aliases.
 
 ### What gets captured
 
@@ -429,7 +431,7 @@ export default defineConfig({
 
 ### Fixture data not appearing (network, Web Vitals, console, ARIA snapshot, locator healing)
 
-- Extend your `test` with `dashboardFixtures` / `extendDashboardFixtures` from `@piwitests/reporter`, and make sure every spec imports `test` from your fixtures file — not from `@playwright/test` directly
+- Extend your `test` with `piwiFixtures` / `extendPiwiFixtures` from `@piwitests/reporter`, and make sure every spec imports `test` from your fixtures file — not from `@playwright/test` directly
 - Verify `collectPerformanceMetrics` is not set to `false` (and `captureLocators` for locator healing)
 - Ensure tests navigate to at least one page (`await page.goto(...)`)
 - See the [capture fixtures guide](./capture-fixtures) for details

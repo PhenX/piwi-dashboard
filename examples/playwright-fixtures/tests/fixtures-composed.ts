@@ -1,10 +1,10 @@
 /**
- * Option B + composition — `extendDashboardFixtures` wraps the base `test`,
+ * Option B + composition — `extendPiwiFixtures` wraps the base `test`,
  * then regular `.extend()` layers project-specific fixtures on top.
  * Capture and custom fixtures work together; the custom fixture types flow through.
  */
 import { test as base, expect, type Page } from '@playwright/test';
-import { extendDashboardFixtures } from '@piwitests/reporter';
+import { extendPiwiFixtures } from '@piwitests/reporter';
 
 class FormPage {
   constructor(readonly page: Page) {}
@@ -18,7 +18,7 @@ class FormPage {
   }
 }
 
-export const test = extendDashboardFixtures(base).extend<{ formPage: FormPage }>({
+export const test = extendPiwiFixtures(base).extend<{ formPage: FormPage }>({
   formPage: async ({ page }, use) => {
     await use(new FormPage(page));
   },

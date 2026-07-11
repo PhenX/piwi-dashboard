@@ -37,8 +37,8 @@ Results appear at `http://localhost:3000` under the `playwright-fixtures-example
 
 ## The two setup options
 
-- `tests/fixtures.ts` — **Option A**: `base.extend(dashboardFixtures)`
-- `tests/fixtures-composed.ts` — **Option B + composition**: `extendDashboardFixtures(base).extend<MyFixtures>({ … })`
+- `tests/fixtures.ts` — **Option A**: `base.extend(piwiFixtures)`
+- `tests/fixtures-composed.ts` — **Option B + composition**: `extendPiwiFixtures(base).extend<MyFixtures>({ … })`
 
 Every spec imports `test` from one of these files — never from `@playwright/test` directly. That import is what switches capture on.
 
