@@ -6,6 +6,8 @@ const props = defineProps<{
   attachments: AttachmentInfo[];
 }>();
 
+const config = useRuntimeConfig();
+
 const currentImageIndex = ref<number | null>(null);
 
 const imageAttachments = computed(() =>
@@ -35,11 +37,7 @@ function isMarkdown(path: string, contentType?: string | null): boolean {
 }
 
 function fileUrl(path: string, contentType?: string | null): string {
-  let url = `/api/files/${getFileApiPath(path)}`;
-  if (contentType && getExt(path) === '') {
-    url += `?contentType=${encodeURIComponent(contentType)}`;
-  }
-  return url;
+  return fileApiUrl(path, contentType, config.app?.baseURL);
 }
 
 function fileName(path: string): string {

@@ -127,6 +127,15 @@ export function configureDemoDb(baseUrl: string): void {
   demoDbBaseUrl = baseUrl;
 }
 
+/**
+ * The configured demo base URL (see `configureDemoDb`). Used by demo API
+ * handlers that fetch static assets (e.g. committed screenshots/traces), which
+ * live under the same base as the WASM binary and seed SQL.
+ */
+export function getDemoDbBaseUrl(): string {
+  return demoDbBaseUrl;
+}
+
 async function doPersist(): Promise<void> {
   if (!sqliteDb) {
     console.warn('[Demo DB] doPersist called but db not ready – skipping');

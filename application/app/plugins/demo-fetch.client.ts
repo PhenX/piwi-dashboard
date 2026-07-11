@@ -43,6 +43,18 @@ export default defineNuxtPlugin(() => {
   const base = (config.app?.baseURL ?? '/').replace(/\/$/, '');
   configureDemoDb(base);
 
+  // Pre-register the bundled trace viewer's own service worker. Without this,
+  // the first "View trace" navigation is controlled by the demo API service
+  // worker (scope covers the whole app), which cannot answer the viewer's
+  // virtual snapshot URLs — the viewer would hang until a manual reload. With
+  // the viewer SW registered up front, its more specific scope takes the page
+  // immediately.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker
+      .register(`${base}/trace-viewer/sw.bundle.js`, { scope: `${base}/trace-viewer/` })
+      .catch(() => {});
+  }
+
   // ── Wait for service worker to claim this page ───────────────────────
   // Without this, rewritten /api/ calls hit the real server → 404.
   const swReady =

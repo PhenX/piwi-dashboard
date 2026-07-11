@@ -499,6 +499,10 @@ Demo screenshots live in `application/public/demo/screenshots/*.png` and are com
 
 5. **Commit the new PNGs** — they are committed to the repo so the demo SPA can serve them.
 
+### Demo trace + video (committed binary evidence)
+
+The demo's sample Playwright trace ZIP (`application/public/demo/traces/`) and failure video (`application/public/demo/videos/`) are real artifacts recorded by **`scripts/record-demo-media.mjs`** against a tiny self-contained checkout page on a throwaway local HTTP server — never a real app (traces embed full page snapshots). Regenerate with `node scripts/record-demo-media.mjs` (from `application/`) and commit the binaries. The seed generator wires them to the **highest trc id** of failure cluster 1 — this must match how `shared/handlers/failure-clusters.ts` picks `recentTestRunsCaseId` (`max(test_runs_cases.id)` per test case). In demo mode, trace-viewer links point at the **static asset URL** (not `/api/files/`) because the viewer's own service worker bypasses the demo API SW; the demo plugin pre-registers the viewer SW so the first "View trace" click works without a reload. DOM-loaded evidence (img/video) must build URLs via `fileApiUrl(path, contentType, baseURL)` so requests stay inside the demo SW's `/demo/` scope.
+
 **Important caveats:**
 - **Do not use `PIWI_DEMO_MODE=true`** for screenshot capture. The demo service worker does not install reliably in headless Chromium (cloud environment), so `#__nuxt` stays blank — you'll get empty pages.
 - **Run IDs ≥ 21** have test cases. Runs #1–20 have 0 cases (the seed's `INSERT INTO __new_test_runs_cases` statements target a migration-only table that doesn't exist in the dev schema).

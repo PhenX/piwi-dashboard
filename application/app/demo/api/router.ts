@@ -771,9 +771,12 @@ routes.push(
 // Global SSE stream – no-op in demo mode (useRunStream skips it)
 routes.push({ method: 'GET', pattern: /^\/api\/stream$/, handler: () => Promise.resolve({ ok: true }) });
 
-// Files – serves demo screenshot images by fetching public/ assets,
-// plus a fallback for report/trace links that don't exist in demo mode.
-routes.push({ method: 'GET', pattern: /^\/api\/files\//, handler: (m) => apiGetDemoFile(m[0]) });
+// Files – serves the demo's committed binary assets (screenshots, traces,
+// videos under public/demo/) plus a graceful "not available" fallback for
+// report links that don't exist in demo mode. The pattern must consume the
+// whole path: the handler receives the regex match, and `m[0]` is only the
+// matched substring.
+routes.push({ method: 'GET', pattern: /^\/api\/files\/.+/, handler: (m) => apiGetDemoFile(m[0]) });
 
 // OAuth – demo mode does not support OAuth; redirect to login
 const DEMO_LOGIN_REDIRECT = Promise.resolve({ url: '/login', status: 302 });

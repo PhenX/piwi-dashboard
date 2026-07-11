@@ -51,13 +51,10 @@ const { summaryColSpanClass, blockColSpanClass } = useDetailGrid(() => {
   return count;
 });
 
+const config = useRuntimeConfig();
+
 function attFileUrl(path: string, contentType?: string | null): string {
-  let url = `/api/files/${getFileApiPath(path)}`;
-  const ext = path.toLowerCase().split('.').pop() || '';
-  if (contentType && ext === '') {
-    url += `?contentType=${encodeURIComponent(contentType)}`;
-  }
-  return url;
+  return fileApiUrl(path, contentType, config.app?.baseURL);
 }
 
 const imageExts = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp']);

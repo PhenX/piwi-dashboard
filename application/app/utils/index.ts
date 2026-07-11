@@ -245,18 +245,43 @@ export function getFileApiPath(filePath: string): string {
 }
 
 /**
+ * Build the URL that serves a stored file through the file API, prefixed with
+ * the app's base path so DOM-loaded resources (img/video/a) resolve correctly
+ * when the app runs under a sub-path (e.g. the demo at /demo/, where the
+ * service worker only intercepts requests inside its scope).
+ *
+ * `baseURL` is the app's base path (`useRuntimeConfig().app.baseURL`) — read
+ * it once in setup and pass it in. Pass `contentType` for extension-less
+ * attachment paths — it is forwarded as a query param so the server can set
+ * the right Content-Type.
+ */
+export function fileApiUrl(filePath: string, contentType?: string | null, baseURL: string = '/'): string {
+  const base = (baseURL || '/').replace(/\/$/, '');
+  let url = `${base}/api/files/${getFileApiPath(filePath)}`;
+  const hasExt = /\.[a-z0-9]+$/i.test(filePath);
+  if (contentType && !hasExt) url += `?contentType=${encodeURIComponent(contentType)}`;
+  return url;
+}
+
+/**
  * Build a URL that opens a stored trace in the bundled Playwright trace viewer.
  *
  * `baseURL` is the app's base path (`useRuntimeConfig().app.baseURL`). It must be
  * applied to both the viewer path and the trace file URL so links keep working
  * when the app is served from a sub-path (e.g. the demo at `/demo/`).
+ *
+ * `staticAsset` points the viewer at the file's static URL instead of the
+ * `/api/files/` endpoint. Demo mode needs this for its committed sample traces:
+ * the trace viewer fetches through its own service worker, which bypasses the
+ * demo's API-emulating service worker, so only a real static URL is reachable.
  */
-export function getTraceViewerUrl(filePath: string, baseURL: string = '/'): string {
+export function getTraceViewerUrl(filePath: string, baseURL: string = '/', staticAsset: boolean = false): string {
   const base = (baseURL || '/').replace(/\/$/, '');
   // `location` only exists in the browser; during SSR render a relative trace
   // URL — the client re-render fills the origin in before the link is clickable.
   const origin = typeof location === 'undefined' ? '' : location.origin;
-  const traceUrl = `${origin}${base}/api/files/${getFileApiPath(filePath)}`;
+  const filePrefix = staticAsset ? '' : 'api/files/';
+  const traceUrl = `${origin}${base}/${filePrefix}${getFileApiPath(filePath)}`;
   return `${base}/trace-viewer/?trace=${encodeURIComponent(traceUrl)}`;
 }
 

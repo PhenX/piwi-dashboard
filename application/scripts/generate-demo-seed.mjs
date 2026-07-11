@@ -17,7 +17,7 @@
  * does not need a running server.
  */
 
-import { writeFileSync, mkdirSync, readFileSync } from 'fs';
+import { writeFileSync, mkdirSync, readFileSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
@@ -888,6 +888,61 @@ for (let idx = 0; idx < SCREENSHOT_NAMES.length; idx++) {
     size: 0,
     created_at: ts('2025-04-25T08:30:00'),
   });
+}
+
+// ── Demo trace + video ─────────────────────────────────────────────────────
+// A real (tiny) Playwright trace ZIP and failure video live in
+// public/demo/traces/ and public/demo/videos/ (committed to repo; regenerate
+// with scripts/record-demo-media.mjs). Wire them to the most recent failing
+// case of the checkout "Pay" timeout cluster (cluster 1), so the cluster
+// evidence tab and the test-case page have a working "View trace" and a
+// playable video. "Most recent" must match how the cluster detail handler
+// selects its evidence row — max(test_runs_cases.id) per test case
+// (shared/handlers/failure-clusters.ts) — so pick the highest trc id.
+const DEMO_MEDIA_CLUSTER_ID = 1;
+let latestClusterTrc = null;
+for (const trc of TEST_RUNS_CASES) {
+  if (trc.failure_cluster_id !== DEMO_MEDIA_CLUSTER_ID) continue;
+  if (!latestClusterTrc || trc.id > latestClusterTrc.id) {
+    latestClusterTrc = trc;
+  }
+}
+
+if (latestClusterTrc) {
+  const mediaCreatedAt = Math.floor((latestClusterTrc.started_at ?? Date.now()) / 1000);
+  const mediaFiles = [
+    {
+      type: 'trace',
+      subtype: 'trace',
+      label: 'trace',
+      relPath: 'demo/traces/checkout-pay-timeout.zip',
+    },
+    {
+      type: 'attachment',
+      subtype: 'video',
+      label: 'video/webm',
+      relPath: 'demo/videos/checkout-pay-timeout.webm',
+    },
+  ];
+  for (const media of mediaFiles) {
+    let size = 0;
+    try {
+      size = statSync(new URL(`../public/${media.relPath}`, import.meta.url)).size;
+    } catch {
+      console.warn(`⚠ Missing ${media.relPath} — run scripts/record-demo-media.mjs to regenerate it.`);
+    }
+    ATTACHMENTS.push({
+      id: attachmentId++,
+      test_runs_case_id: latestClusterTrc.id,
+      test_run_id: latestClusterTrc.test_run_id,
+      type: media.type,
+      subtype: media.subtype,
+      label: media.label,
+      path: media.relPath,
+      size,
+      created_at: mediaCreatedAt,
+    });
+  }
 }
 
 // ── Build failure_clusters rows ────────────────────────────────────────────
