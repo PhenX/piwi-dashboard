@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Locator } from '@playwright/test';
-import { ariaSnapshotBestEffort, dashboardFixtures, probeElementAttrs } from '../src/internal/capture/capture-fixtures.js';
+import { ariaSnapshotBestEffort, piwiFixtures, probeElementAttrs } from '../src/internal/capture/capture-fixtures.js';
 import { ATTACHMENT_NAMES } from '../src/internal/capture/attachments.js';
 
 /** A minimal fake Locator exposing only what ariaSnapshotBestEffort touches. */
@@ -230,11 +230,11 @@ describe('locator capture teardown race', () => {
     };
     const testInfo = { status: 'passed', attach: vi.fn(async () => {}), annotations: [] };
 
-    const pageFixture = dashboardFixtures.page as unknown as (
+    const pageFixture = piwiFixtures.page as unknown as (
       args: { page: unknown },
       use: (page: typeof fakePage) => Promise<void>,
     ) => Promise<void>;
-    const [captureFixture] = dashboardFixtures.piwiDashboardCapture as unknown as [
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
       (args: object, use: () => Promise<void>, testInfo: unknown) => Promise<void>,
     ];
 

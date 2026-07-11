@@ -7,9 +7,12 @@ import type {
   Locator,
   Page,
   PlaywrightTestArgs,
+  PlaywrightTestOptions,
   PlaywrightWorkerArgs,
+  PlaywrightWorkerOptions,
   Request,
   TestInfo,
+  TestType,
 } from '@playwright/test';
 import {
   generateAlternatives,
@@ -31,6 +34,12 @@ import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from './attachments.j
 
 /** A Playwright fixture's `use` callback — hands the fixture value to the test. */
 type UseFn<T> = (value: T) => Promise<void>;
+
+// Playwright constrains `TestType`'s args to its internal `KeyValue`
+// (`{ [key: string]: any }`) — mirror it so real `test` objects satisfy the
+// bound (their args are index-signature-free interfaces) while a non-test
+// argument is still rejected by the `TestType` parameter type.
+type FixtureArgs = { [key: string]: any };
 
 /** Shape returned by the in-page element probe (see `wrapLocator`). */
 interface CapturedAttrs {
@@ -736,6 +745,18 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
 }
 
 /**
+ * The fixtures `piwiFixtures` / `extendPiwiFixtures` contribute. The single
+ * added fixture is `piwiCapture`: an auto, test-scoped teardown hook that
+ * attaches the collected `piwi-*` data. Its name is **reserved** — a user
+ * fixture of the same name replaces the capture teardown and silently disables
+ * all capture. Exported so `piwiFixtures` and the extended `test` carry it in
+ * their types (and a collision surfaces to the type checker).
+ */
+export interface PiwiFixtures {
+  piwiCapture: void;
+}
+
+/**
  * Playwright fixtures that collect network requests, console entries,
  * web vitals, ARIA snapshots, and locator interaction data during a test.
  *
@@ -744,7 +765,12 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
  * `browser.newContext()`. Collected data is attached as `piwi-*`
  * test-info attachments which the Piwi Dashboard reporter parses on `onTestEnd`.
  */
-export const dashboardFixtures: Fixtures = {
+export const piwiFixtures: Fixtures<
+  PiwiFixtures,
+  {},
+  PlaywrightTestArgs & PlaywrightTestOptions,
+  PlaywrightWorkerArgs & PlaywrightWorkerOptions
+> = {
   // Worker-scoped: patch the shared browser so every page/context created from
   // it — including by user fixtures that take `browser` directly — is captured.
   browser: [
@@ -766,7 +792,7 @@ export const dashboardFixtures: Fixtures = {
   // Auto, test-scoped: open a capture sink for the running test and flush it
   // (attach the collected data) at teardown. Runs for every test without being
   // requested, so suites that never destructure `page` are still captured.
-  piwiDashboardCapture: [
+  piwiCapture: [
     async ({}, use: UseFn<void>, testInfo: TestInfo) => {
       const sink = createSink();
       sink.testInfo = testInfo;
@@ -783,7 +809,8 @@ export const dashboardFixtures: Fixtures = {
 };
 
 /**
- * Extend a Playwright `test` object with Piwi Dashboard fixtures.
+ * Extend a Playwright `test` object with the Piwi capture fixtures. The
+ * returned `test` carries the existing fixtures plus {@link PiwiFixtures}.
  *
  * Use this instead of importing `@playwright/test` directly from this package
  * to avoid the "Requiring @playwright/test second time" error caused by
@@ -792,11 +819,29 @@ export const dashboardFixtures: Fixtures = {
  * @example
  * ```ts
  * import { test as base } from '@playwright/test';
- * import { extendDashboardFixtures } from '@piwitests/reporter';
+ * import { extendPiwiFixtures } from '@piwitests/reporter';
  *
- * export const test = extendDashboardFixtures(base);
+ * export const test = extendPiwiFixtures(base);
  * ```
  */
-export function extendDashboardFixtures<T extends { extend(fixtures: Fixtures): unknown }>(test: T): T {
-  return (test as any).extend(dashboardFixtures);
+export function extendPiwiFixtures<TestArgs extends FixtureArgs, WorkerArgs extends FixtureArgs>(
+  test: TestType<TestArgs, WorkerArgs>,
+): TestType<TestArgs & PiwiFixtures, WorkerArgs> {
+  return (
+    test as unknown as { extend: (f: typeof piwiFixtures) => TestType<TestArgs & PiwiFixtures, WorkerArgs> }
+  ).extend(piwiFixtures);
 }
+
+/**
+ * @deprecated Renamed to {@link piwiFixtures}. This alias is kept for
+ * `@piwitests/reporter@0.9.x` compatibility and will be removed in a future
+ * release — prefer `piwiFixtures`.
+ */
+export const dashboardFixtures = piwiFixtures;
+
+/**
+ * @deprecated Renamed to {@link extendPiwiFixtures}. This alias is kept for
+ * `@piwitests/reporter@0.9.x` compatibility and will be removed in a future
+ * release — prefer `extendPiwiFixtures`.
+ */
+export const extendDashboardFixtures = extendPiwiFixtures;

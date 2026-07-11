@@ -44,9 +44,9 @@ npx playwright test
 ```typescript
 // tests/fixtures.ts
 import { test as base, expect } from '@playwright/test'
-import { dashboardFixtures } from '@piwitests/reporter'
+import { piwiFixtures } from '@piwitests/reporter'
 
-export const test = base.extend(dashboardFixtures)
+export const test = base.extend(piwiFixtures)
 export { expect }
 ```
 
@@ -143,23 +143,25 @@ The reporter works without any test-code changes, but the **capture fixtures** o
 ```typescript
 // tests/fixtures.ts
 import { test as base, expect } from '@playwright/test'
-import { dashboardFixtures } from '@piwitests/reporter'
+import { piwiFixtures } from '@piwitests/reporter'
 
-export const test = base.extend(dashboardFixtures)
+export const test = base.extend(piwiFixtures)
 export { expect }
 ```
 
-Or extend the base `test` in one line with `extendDashboardFixtures`:
+Or extend the base `test` in one line with `extendPiwiFixtures`:
 
 ```typescript
 import { test as base } from '@playwright/test'
-import { extendDashboardFixtures } from '@piwitests/reporter'
+import { extendPiwiFixtures } from '@piwitests/reporter'
 
-export const test = extendDashboardFixtures(base)
+export const test = extendPiwiFixtures(base)
 export { expect } from '@playwright/test'
 ```
 
 Then import `test` from your fixtures file in every spec — a spec that imports `test` from `@playwright/test` directly still runs and reports fine, it just isn't captured.
+
+> `piwiFixtures` / `extendPiwiFixtures` were named `dashboardFixtures` / `extendDashboardFixtures` in `0.9.x`. The old names still work as deprecated aliases.
 
 ### What gets captured
 
@@ -251,7 +253,7 @@ Everything public — the reporter, config helpers, and the capture fixtures —
 
 ### Fixture data not appearing (network, Web Vitals, console, ARIA, locator healing)
 
-- Extend your `test` with `dashboardFixtures` / `extendDashboardFixtures` from `@piwitests/reporter`, and import `test` from your fixtures file in every spec — not from `@playwright/test` directly
+- Extend your `test` with `piwiFixtures` / `extendPiwiFixtures` from `@piwitests/reporter`, and import `test` from your fixtures file in every spec — not from `@playwright/test` directly
 - Verify `collectPerformanceMetrics` is not set to `false` (and `captureLocators` for locator healing)
 - Ensure tests navigate to at least one page (`await page.goto(...)`)
 

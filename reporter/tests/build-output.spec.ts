@@ -48,6 +48,9 @@ describe('public export surface', () => {
 describe.runIf(existsSync(dist('index.js')))('built entry (requires a build)', () => {
   it('re-exports the capture fixtures from the single entry', () => {
     const source = readFileSync(dist('index.js'), 'utf-8');
+    expect(source).toContain('piwiFixtures');
+    expect(source).toContain('extendPiwiFixtures');
+    // Deprecated 0.9.x aliases stay exported for backward compatibility.
     expect(source).toContain('dashboardFixtures');
     expect(source).toContain('extendDashboardFixtures');
   });
