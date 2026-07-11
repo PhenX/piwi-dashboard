@@ -1,0 +1,18 @@
+{
+  "name": "piwi-example-playwright-fixtures",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Runnable example: a small web app + Playwright tests wired to Piwi Dashboard with the capture fixtures",
+  "type": "module",
+  "scripts": {
+    "start": "node app/server.mjs",
+    "test": "playwright test",
+    "test:manual-reporter": "playwright test --config=playwright.manual-reporter.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@piwitests/reporter": "^0.9.1",
+    "@playwright/test": "^1.56.1",
+    "typescript": "^5.9.3"
+  }
+}

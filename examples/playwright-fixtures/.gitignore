@@ -1,0 +1,5 @@
+node_modules/
+test-results/
+playwright-report/
+# The example floats on the latest published @piwitests/reporter — no lockfile.
+package-lock.json
