@@ -79,6 +79,14 @@ interface CaptureSink {
   // Most-recently-touched instrumented page — used at teardown for the failure
   // ARIA snapshot and web-vitals read when a test drives several pages.
   lastActivePage: Page | null;
+  // The running test's info, so close wrappers can see its status mid-teardown.
+  testInfo: TestInfo | null;
+  // Page-dependent teardown reads, taken by the close wrappers while the page
+  // was still open. The auto capture fixture tears down AFTER the built-in
+  // page/context fixtures, so by the time flushSink runs the standard test
+  // page is already closed and can no longer be read live.
+  stashedWebVitals: WebVitals | null;
+  stashedAria: string | null;
 }
 
 function createSink(): CaptureSink {
@@ -90,6 +98,9 @@ function createSink(): CaptureSink {
     capturePromises: [],
     failedLocators: [],
     lastActivePage: null,
+    testInfo: null,
+    stashedWebVitals: null,
+    stashedAria: null,
   };
 }
 
@@ -100,6 +111,102 @@ function createSink(): CaptureSink {
  * test (auth setup, teardown) is intentionally not captured.
  */
 let currentSink: CaptureSink | null = null;
+
+/**
+ * Element probes whose protocol call is still in flight. Closing a page,
+ * context, or browser while a probe is mid-flight makes Playwright's
+ * connection dispatcher throw a global "Object with guid handle@… was not
+ * bound in the connection" error, which fails whichever test happens to be
+ * running. The close wrappers drain this set (bounded) before closing.
+ */
+const PENDING_PROBES = new Set<Promise<unknown>>();
+
+async function drainPendingProbes(capMs: number): Promise<void> {
+  if (PENDING_PROBES.size === 0) return;
+  let cap: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    Promise.allSettled(PENDING_PROBES),
+    new Promise((resolve) => {
+      cap = setTimeout(resolve, capMs);
+    }),
+  ]);
+  clearTimeout(cap);
+}
+
+function isPageClosed(page: Page): boolean {
+  try {
+    return typeof page.isClosed === 'function' ? page.isClosed() : false;
+  } catch {
+    return false;
+  }
+}
+
+function pageContext(page: Page): BrowserContext | null {
+  try {
+    return typeof page.context === 'function' ? page.context() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Read navigation/paint timings from a page — null when unavailable or the page is gone. */
+async function readWebVitals(page: Page): Promise<WebVitals | null> {
+  try {
+    // Runs in the browser, so the perf-entry reads stay `any` (no DOM lib);
+    // the callback return type pins the result to WebVitals.
+    return await page.evaluate((): WebVitals | null => {
+      const navEntries = performance.getEntriesByType('navigation' as any);
+      const paintEntries = performance.getEntriesByType('paint' as any);
+      const nav = navEntries[0] as any;
+      const navigation = nav
+        ? {
+            url: nav.name,
+            ttfb: Math.round(nav.responseStart - nav.fetchStart),
+            domInteractive: Math.round(nav.domInteractive - nav.fetchStart),
+            domContentLoaded: Math.round(nav.domContentLoadedEventEnd - nav.fetchStart),
+            loadComplete: Math.round(nav.loadEventEnd - nav.fetchStart),
+            transferSize: nav.transferSize || 0,
+            encodedBodySize: nav.encodedBodySize || 0,
+            decodedBodySize: nav.decodedBodySize || 0,
+          }
+        : null;
+
+      const paint: Record<string, number> = {};
+      for (const entry of paintEntries) {
+        const key = (entry as any).name.replace(/-([a-z])/g, (_: string, l: string) => l.toUpperCase());
+        paint[key] = Math.round((entry as any).startTime);
+      }
+
+      if (!navigation && Object.keys(paint).length === 0) return null;
+      return { navigation, paint };
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Take the page-dependent teardown reads (web vitals; ARIA snapshot when the
+ * test failed) while the last active page is still open. Called by the close
+ * wrappers just before a close that would take that page with it — flushSink
+ * runs too late for a live read on the standard test page.
+ */
+async function stashPageState(sink: CaptureSink, closing: { page?: Page; context?: BrowserContext }): Promise<void> {
+  const page = sink.lastActivePage;
+  if (!page || isPageClosed(page)) return;
+  const belongsToClosing =
+    closing.page === page || (closing.context !== undefined && pageContext(page) === closing.context);
+  if (!belongsToClosing) return;
+
+  const vitals = await readWebVitals(page);
+  if (vitals) sink.stashedWebVitals = vitals;
+
+  const status = sink.testInfo?.status;
+  if (status === 'failed' || status === 'timedOut' || status === 'interrupted') {
+    const aria = await ariaSnapshotBestEffort(page.locator(':root'), 1000);
+    if (aria) sink.stashedAria = aria;
+  }
+}
 
 // Idempotency guards: a page/context/browser can be reached through several
 // paths (browser patch, context patch, the `page` fixture, popup events), and
@@ -279,14 +386,27 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
           throw error;
         }
 
-        // Fire-and-forget: capture element data without blocking the test.
-        // evaluate() can hang when page navigates (element detaches), so
-        // race it against a 500ms deadline and never throw.
+        // Fire-and-forget: capture element data without blocking the test. The
+        // snapshot wait below is bounded by a 500ms deadline (evaluate can hang
+        // when the page navigates), but the probe's underlying protocol call is
+        // tracked in PENDING_PROBES so the close wrappers can drain it — and in
+        // capturePromises so flushSink outwaits it — even when the deadline
+        // abandons it. An evaluate still in flight when its page closes crashes
+        // the connection dispatcher with a global "not bound" error.
+        const probe = target.evaluate(probeElementAttrs, CAPTURED_ATTRS_ARG);
+        const settledProbe = probe.then(
+          () => undefined,
+          () => undefined,
+        );
+        PENDING_PROBES.add(settledProbe);
+        settledProbe.then(() => PENDING_PROBES.delete(settledProbe));
+        sink.capturePromises.push(settledProbe);
+
         const resolveAttrs = (async () => {
           let deadline: ReturnType<typeof setTimeout> | undefined;
           try {
             const attrs = await Promise.race([
-              target.evaluate(probeElementAttrs, CAPTURED_ATTRS_ARG),
+              probe,
               new Promise<never>((_, reject) => {
                 deadline = setTimeout(() => reject(new Error('locator capture timeout')), 500);
               }),
@@ -344,6 +464,24 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
 function instrumentPage(page: Page): void {
   if (!page || INSTRUMENTED_PAGES.has(page)) return;
   INSTRUMENTED_PAGES.add(page);
+
+  // A page reached through the `page` fixture safety net may live in a context
+  // the browser patch never saw — instrument it so its close is wrapped too.
+  const ctx = pageContext(page);
+  if (ctx) instrumentContext(ctx);
+
+  // Drain in-flight probes before a user-initiated close (the guard tolerates
+  // page-like test fakes without a close method), and preserve the
+  // page-dependent teardown reads while the page can still serve them.
+  if (typeof page.close === 'function') {
+    const originalClose = page.close.bind(page);
+    page.close = async (...args: Parameters<Page['close']>): Promise<void> => {
+      await drainPendingProbes(1000);
+      const sink = currentSink;
+      if (sink) await stashPageState(sink, { page });
+      return originalClose(...args);
+    };
+  }
 
   // Opt-out: skipped when PIWI_CAPTURE_LOCATORS=false (set automatically when
   // the reporter's collectPerformanceMetrics / captureLocators is disabled),
@@ -445,6 +583,21 @@ function instrumentContext(context: BrowserContext): void {
     return page;
   };
 
+  // The built-in context fixture closes here at test teardown — BEFORE the
+  // auto capture fixture flushes. Drain in-flight probes (an evaluate crossing
+  // the close crashes the connection with a global "not bound" error) and take
+  // the page-dependent reads (web vitals, failure ARIA snapshot) while the
+  // test's page is still open.
+  if (typeof context.close === 'function') {
+    const originalClose = context.close.bind(context);
+    context.close = async (...args: Parameters<BrowserContext['close']>): Promise<void> => {
+      await drainPendingProbes(1000);
+      const sink = currentSink;
+      if (sink) await stashPageState(sink, { context });
+      return originalClose(...args);
+    };
+  }
+
   // Popups and pages the context opens on its own (idempotent with the above).
   context.on('page', (page: Page) => instrumentPage(page));
 }
@@ -473,6 +626,16 @@ function patchBrowser(browser: Browser): void {
     instrumentContext(context);
     return context;
   };
+
+  // Worker shutdown closes the browser; a probe still in flight would crash
+  // the connection dispatcher.
+  if (typeof browser.close === 'function') {
+    const originalClose = browser.close.bind(browser);
+    browser.close = async (...args: Parameters<Browser['close']>): Promise<void> => {
+      await drainPendingProbes(1000);
+      return originalClose(...args);
+    };
+  }
 }
 
 /**
@@ -510,10 +673,14 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
   }
 
   const page = sink.lastActivePage;
+  const pageReadable = page !== null && !isPageClosed(page);
 
-  if (page && testInfo.status !== 'passed' && testInfo.status !== 'skipped') {
+  if (testInfo.status !== 'passed' && testInfo.status !== 'skipped') {
     try {
-      const snapshot = await ariaSnapshotBestEffort(page.locator(':root'));
+      // Prefer a live read; fall back to the snapshot the close wrappers
+      // stashed — the standard test page is already closed when this auto
+      // fixture tears down.
+      const snapshot = (pageReadable ? await ariaSnapshotBestEffort(page.locator(':root')) : null) ?? sink.stashedAria;
       if (snapshot) {
         await testInfo.attach(ATTACHMENT_NAMES.ariaSnapshot, {
           contentType: 'text/plain',
@@ -557,46 +724,14 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
     });
   }
 
-  if (page) {
-    try {
-      // Runs in the browser, so the perf-entry reads stay `any` (no DOM lib);
-      // the callback return type pins `webVitals` to WebVitals.
-      const webVitals = await page.evaluate((): WebVitals | null => {
-        const navEntries = performance.getEntriesByType('navigation' as any);
-        const paintEntries = performance.getEntriesByType('paint' as any);
-        const nav = navEntries[0] as any;
-        const navigation = nav
-          ? {
-              url: nav.name,
-              ttfb: Math.round(nav.responseStart - nav.fetchStart),
-              domInteractive: Math.round(nav.domInteractive - nav.fetchStart),
-              domContentLoaded: Math.round(nav.domContentLoadedEventEnd - nav.fetchStart),
-              loadComplete: Math.round(nav.loadEventEnd - nav.fetchStart),
-              transferSize: nav.transferSize || 0,
-              encodedBodySize: nav.encodedBodySize || 0,
-              decodedBodySize: nav.decodedBodySize || 0,
-            }
-          : null;
-
-        const paint: Record<string, number> = {};
-        for (const entry of paintEntries) {
-          const key = (entry as any).name.replace(/-([a-z])/g, (_: string, l: string) => l.toUpperCase());
-          paint[key] = Math.round((entry as any).startTime);
-        }
-
-        if (!navigation && Object.keys(paint).length === 0) return null;
-        return { navigation, paint };
-      });
-
-      if (webVitals) {
-        await testInfo.attach(ATTACHMENT_NAMES.webVitals, {
-          contentType: 'application/json',
-          body: Buffer.from(JSON.stringify(webVitals)),
-        });
-      }
-    } catch {
-      /* ignore */
-    }
+  // Live read when the page still exists (e.g. a browser.newPage the test left
+  // open); otherwise the vitals the close wrappers stashed before the page went.
+  const webVitals = (pageReadable ? await readWebVitals(page) : null) ?? sink.stashedWebVitals;
+  if (webVitals) {
+    await testInfo.attach(ATTACHMENT_NAMES.webVitals, {
+      contentType: 'application/json',
+      body: Buffer.from(JSON.stringify(webVitals)),
+    });
   }
 }
 
@@ -634,6 +769,7 @@ export const dashboardFixtures: Fixtures = {
   piwiDashboardCapture: [
     async ({}, use: UseFn<void>, testInfo: TestInfo) => {
       const sink = createSink();
+      sink.testInfo = testInfo;
       currentSink = sink;
       try {
         await use();
@@ -661,6 +797,6 @@ export const dashboardFixtures: Fixtures = {
  * export const test = extendDashboardFixtures(base);
  * ```
  */
-export function extendDashboardFixtures<T>(test: T): T {
+export function extendDashboardFixtures<T extends { extend(fixtures: Fixtures): unknown }>(test: T): T {
   return (test as any).extend(dashboardFixtures);
 }

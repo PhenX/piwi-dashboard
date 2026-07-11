@@ -31,12 +31,14 @@ describe('package metadata', () => {
 });
 
 describe('public export surface', () => {
-  it('exposes exactly one entry (".") with no ./fixtures subpath', () => {
+  it('exposes one code entry (".") with no ./fixtures subpath', () => {
     // Fixtures are imported from '@piwitests/reporter', not a subpath — the
-    // package intentionally has a single public entry.
-    expect(Object.keys(pkg.exports)).toEqual(['.']);
+    // package intentionally has a single public code entry. "./package.json"
+    // is metadata for tooling (bundlers, license scanners), not an API.
+    expect(Object.keys(pkg.exports)).toEqual(['.', './package.json']);
     expect(pkg.exports['.'].types).toBe('./dist/index.d.ts');
     expect(pkg.exports['.'].import).toBe('./dist/index.js');
+    expect(pkg.exports['./package.json']).toBe('./package.json');
   });
 });
 

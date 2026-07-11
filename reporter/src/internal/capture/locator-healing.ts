@@ -90,8 +90,9 @@ export function dedupeSnapshotsByLocation(snaps: LocatorSnapshot[]): LocatorSnap
 
 /**
  * Page-level locator-building methods wrapped by the capture proxy. Imported by
- * both `reporter/src/fixtures.ts` and the dogfooding `application/tests/fixtures.ts`
- * so the two stay in sync (a prior drift missed `scrollIntoViewIfNeeded`).
+ * both the capture fixtures (`capture-fixtures.ts`) and the dogfooding
+ * `application/tests/fixtures.ts` so the two stay in sync (a prior drift missed
+ * `scrollIntoViewIfNeeded`).
  */
 export const LOCATOR_METHODS: string[] = [
   'getByRole',

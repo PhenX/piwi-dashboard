@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Locator } from '@playwright/test';
-import { ariaSnapshotBestEffort, probeElementAttrs } from '../src/internal/capture/capture-fixtures.js';
+import { ariaSnapshotBestEffort, dashboardFixtures, probeElementAttrs } from '../src/internal/capture/capture-fixtures.js';
+import { ATTACHMENT_NAMES } from '../src/internal/capture/attachments.js';
 
 /** A minimal fake Locator exposing only what ariaSnapshotBestEffort touches. */
 function fakeLocator(ariaSnapshot?: (opts?: unknown) => Promise<string>): Locator {
@@ -194,5 +195,76 @@ describe('probeElementAttrs', () => {
     });
     const out = probeElementAttrs(el, ['class']);
     expect(Object.keys(out.selectorCounts.classes ?? {})).toHaveLength(10);
+  });
+});
+
+describe('locator capture teardown race', () => {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it('keeps a probe rejection after the capture deadline from becoming an unhandled rejection', async () => {
+    // The element probe (locator.evaluate) never settles during the test and
+    // rejects only after teardown — simulating a page that closes while the
+    // probe is still in flight. The 500ms capture deadline wins the race; the
+    // probe's late rejection must be observed, or Playwright would fail
+    // whichever test is running when it surfaces as an unhandled rejection.
+    let rejectProbe: ((reason: Error) => void) | undefined;
+    const fakeLocator = {
+      click: async () => {},
+      evaluate: () =>
+        new Promise((_, reject) => {
+          rejectProbe = reject;
+        }),
+    };
+    const locatorFactory = () => fakeLocator;
+    const fakePage = {
+      getByRole: locatorFactory,
+      getByTestId: locatorFactory,
+      getByText: locatorFactory,
+      getByLabel: locatorFactory,
+      getByPlaceholder: locatorFactory,
+      getByAltText: locatorFactory,
+      getByTitle: locatorFactory,
+      locator: locatorFactory,
+      on: () => {},
+      evaluate: async () => null, // web-vitals read at teardown
+    };
+    const testInfo = { status: 'passed', attach: vi.fn(async () => {}), annotations: [] };
+
+    const pageFixture = dashboardFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = dashboardFixtures.piwiDashboardCapture as unknown as [
+      (args: object, use: () => Promise<void>, testInfo: unknown) => Promise<void>,
+    ];
+
+    const unhandled: unknown[] = [];
+    const priorListeners = process.listeners('unhandledRejection');
+    process.removeAllListeners('unhandledRejection');
+    process.on('unhandledRejection', (reason) => unhandled.push(reason));
+
+    try {
+      await captureFixture(
+        {},
+        () =>
+          pageFixture({ page: fakePage }, async (page) => {
+            await (page.getByTestId('save') as unknown as { click: () => Promise<void> }).click();
+            // Let the 500ms probe deadline win the race before the test ends.
+            await sleep(600);
+          }),
+        testInfo,
+      );
+
+      // The page "closes" after teardown; the in-flight probe now rejects.
+      rejectProbe?.(new Error('page closed at teardown'));
+      await sleep(20);
+
+      expect(unhandled).toEqual([]);
+      // The action was still captured (as a placeholder snapshot) and attached.
+      expect(testInfo.attach).toHaveBeenCalledWith(ATTACHMENT_NAMES.locators, expect.anything());
+    } finally {
+      process.removeAllListeners('unhandledRejection');
+      for (const listener of priorListeners) process.on('unhandledRejection', listener);
+    }
   });
 });
