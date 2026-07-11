@@ -245,7 +245,11 @@ export function getFileApiPath(filePath: string): string {
 }
 
 export function getTraceViewerUrl(filePath: string): string {
-  return `/trace-viewer/?trace=${encodeURIComponent(`${location.origin}/api/files/${getFileApiPath(filePath)}`)}`;
+  // `location` only exists in the browser; during SSR render the href with a
+  // relative trace URL — the client re-render fills the origin in before the
+  // link can be clicked.
+  const origin = typeof location === 'undefined' ? '' : location.origin;
+  return `/trace-viewer/?trace=${encodeURIComponent(`${origin}/api/files/${getFileApiPath(filePath)}`)}`;
 }
 
 /**
