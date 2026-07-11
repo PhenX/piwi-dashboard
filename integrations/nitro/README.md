@@ -55,7 +55,7 @@ Playwright test
                                 └─ visible in test-case detail + AI diagnosis
 ```
 
-The plugin uses two mechanisms:
+The plugin uses three mechanisms:
 
 1. **`event.context._piwiLogs`** — a plain array attached to the H3 event, readable by both the request and `beforeResponse` hooks via the same event object (no async-context propagation needed).
 2. **`AsyncLocalStorage`** — seeded in the `request` hook so that `consola` reporters can append to the per-request buffer from within synchronous route-handler code.

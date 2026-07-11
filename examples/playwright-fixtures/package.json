@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@piwitests/reporter": "^0.9.1",
+    "@piwitests/reporter": "^0.11.0",
     "@playwright/test": "^1.56.1",
     "typescript": "^5.9.3"
   }

@@ -3,7 +3,7 @@ import { waitForHydration, retryPost } from './utils';
 import { PROJECT } from '#shared/test-project-names';
 
 /**
- * Mobile responsiveness regression suite (Phase 6 of docs/mobile-responsiveness-plan.md).
+ * Mobile responsiveness regression suite.
  *
  * Guards the fixes made across the audit: no page should ever scroll
  * horizontally, wide tables must scroll in place instead of stretching the
