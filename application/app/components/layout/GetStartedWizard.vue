@@ -44,9 +44,9 @@ export default PiwiDashboard.wrapConfig(
 
 const fixturesExtendCode = `// tests/fixtures.ts
 import { test as base, expect } from '@playwright/test'
-import { dashboardFixtures } from '@piwitests/reporter'
+import { piwiFixtures } from '@piwitests/reporter'
 
-export const test = base.extend(dashboardFixtures)
+export const test = base.extend(piwiFixtures)
 export { expect }`;
 
 const fixturesUseCode = `// your test file
@@ -60,9 +60,9 @@ test('homepage loads', async ({ page }) => {
 
 const fixturesDropInCode = `// tests/fixtures.ts
 import { test as base } from '@playwright/test'
-import { extendDashboardFixtures } from '@piwitests/reporter'
+import { extendPiwiFixtures } from '@piwitests/reporter'
 
-export const test = extendDashboardFixtures(base)
+export const test = extendPiwiFixtures(base)
 export { expect } from '@playwright/test'`;
 
 const steps = computed(() => [
@@ -179,16 +179,16 @@ const goFurtherOpen = ref(false);
             <CodeBlock :code="wrapConfigCode" lang="typescript" />
           </div>
 
-          <!-- dashboardFixtures -->
+          <!-- piwiFixtures -->
           <div>
             <h4 class="font-medium text-sm mb-1">
               Capture fixtures — network, Web Vitals, console &amp; locator healing with
-              <code class="text-primary text-xs">dashboardFixtures</code>
+              <code class="text-primary text-xs">piwiFixtures</code>
             </h4>
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
               Extend your Playwright
               <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">test</code> with
-              <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">dashboardFixtures</code> to
+              <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">piwiFixtures</code> to
               automatically capture network timing, browser Web Vitals, console errors, ARIA snapshots on failure, and
               the locator snapshots that power locator healing. See the
               <DocLink to="capture-fixtures" no-icon class="text-primary hover:underline"
