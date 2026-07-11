@@ -4,10 +4,6 @@ import type { TraceInfo } from '~~/types/api';
 defineProps<{
   traces: TraceInfo[];
 }>();
-
-function downloadUrl(path: string): string {
-  return `/api/files/${getFileApiPath(path)}`;
-}
 </script>
 
 <template>
@@ -19,35 +15,7 @@ function downloadUrl(path: string): string {
     help="case.traces"
   >
     <div class="space-y-2">
-      <div
-        v-for="trace in traces"
-        :key="trace.id"
-        class="flex items-center justify-between py-2 px-3 rounded-lg border"
-      >
-        <div class="flex items-center gap-2 min-w-0">
-          <UIcon name="i-lucide-file-archive" class="size-4 text-gray-400 shrink-0" />
-          <span class="text-sm truncate">{{ trace.filePath.split('/').pop() || trace.filePath }}</span>
-          <span class="text-xs text-gray-400">{{ formatRelativeTime(trace.createdAt) }}</span>
-        </div>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <UButton
-            :to="getTraceViewerUrl(trace.filePath)"
-            target="_blank"
-            icon="i-lucide-bug-play"
-            size="xs"
-            label="View trace"
-          />
-          <UButton
-            :to="downloadUrl(trace.filePath)"
-            target="_blank"
-            icon="i-lucide-download"
-            size="xs"
-            color="neutral"
-            variant="soft"
-            label="Download"
-          />
-        </div>
-      </div>
+      <TraceListItem v-for="trace in traces" :key="trace.id" :trace="trace" class="py-2 px-3 rounded-lg border" />
     </div>
   </SectionCard>
 </template>
