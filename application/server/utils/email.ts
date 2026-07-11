@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import type { TopFailure } from '#shared/notification-events';
 
 export interface SmtpConfig {
   host: string;
@@ -77,6 +78,16 @@ export async function sendEmail(opts: SendEmailOptions): Promise<void> {
 // ── Email templates ───────────────────────────────────────────────────────────
 
 const siteUrl = () => process.env.PIWI_SITE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+
+/** Escape user-controlled text (test titles, error messages) for HTML emails. */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function emailLayout(title: string, body: string): { html: string; text: string } {
   const html = `<!DOCTYPE html>
@@ -158,12 +169,41 @@ export function renderRunNotificationEmail(opts: {
   totalTests: number;
   failedTests: number;
   branch?: string;
+  topFailures?: TopFailure[];
 }): { html: string; text: string } {
   const url = `${siteUrl()}/test-runs/${opts.runId}`;
   const statusColor = opts.status === 'passed' ? '#22c55e' : '#ef4444';
+
+  const failures = opts.topFailures ?? [];
+  let failuresHtml = '';
+  let failuresText = '';
+  if (failures.length > 0) {
+    const rows = failures
+      .map((f) => {
+        const caseUrl = f.testCaseId ? `${siteUrl()}/test-cases/${f.testCaseId}` : url;
+        const title = escapeHtml(f.title);
+        const titleHtml = `<a href="${caseUrl}" style="color:#18181b;font-weight:600;text-decoration:none;">${title}</a>`;
+        const loc = f.filePath ? `<div style="color:#a1a1aa;font-size:12px;">${escapeHtml(f.filePath)}</div>` : '';
+        const excerpt = f.errorExcerpt
+          ? `<pre style="margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;color:#52525b;background:#fafafa;padding:8px;border-radius:4px;">${escapeHtml(f.errorExcerpt)}</pre>`
+          : '';
+        return `<li style="margin-bottom:12px;list-style:none;">${titleHtml}${loc}${excerpt}</li>`;
+      })
+      .join('');
+    failuresHtml = `<ul style="margin:0 0 24px;padding:0;">${rows}</ul>`;
+    failuresText = failures
+      .map((f) => {
+        const caseUrl = f.testCaseId ? `${siteUrl()}/test-cases/${f.testCaseId}` : url;
+        const loc = f.filePath ? ` (${f.filePath})` : '';
+        const excerpt = f.errorExcerpt ? `\n    ${f.errorExcerpt.replace(/\n/g, '\n    ')}` : '';
+        return `- ${f.title}${loc}\n  ${caseUrl}${excerpt}`;
+      })
+      .join('\n');
+  }
+
   const body = `
     <h2 style="margin:0 0 8px;font-size:20px;color:#18181b;">Test run ${opts.status}</h2>
-    <p style="margin:0 0 24px;color:#52525b;font-size:14px;">${opts.projectName}${opts.branch ? ` · ${opts.branch}` : ''}</p>
+    <p style="margin:0 0 24px;color:#52525b;font-size:14px;">${escapeHtml(opts.projectName)}${opts.branch ? ` · ${escapeHtml(opts.branch)}` : ''}</p>
     <table cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
       <tr>
         <td style="padding:8px 16px;background:#f4f4f5;border-radius:6px;font-size:14px;">
@@ -173,23 +213,39 @@ export function renderRunNotificationEmail(opts: {
         </td>
       </tr>
     </table>
+    ${failuresHtml}
     <a href="${url}" style="display:inline-block;background:#18181b;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">View run</a>`;
   const { html } = emailLayout(`Test run ${opts.status} — ${opts.projectName}`, body);
-  const text = `Test run ${opts.status}: ${opts.projectName}${opts.branch ? ` (${opts.branch})` : ''}\n${opts.totalTests} tests${opts.failedTests > 0 ? `, ${opts.failedTests} failed` : ''}\n\nView run: ${url}`;
+  const text = `Test run ${opts.status}: ${opts.projectName}${opts.branch ? ` (${opts.branch})` : ''}\n${opts.totalTests} tests${opts.failedTests > 0 ? `, ${opts.failedTests} failed` : ''}${failuresText ? `\n\n${failuresText}` : ''}\n\nView run: ${url}`;
   return { html, text };
 }
 
-export function renderNewClusterEmail(opts: { projectName: string; clusterId: number; signature: string }): {
+export function renderNewClusterEmail(opts: {
+  projectName: string;
+  clusterId: number;
+  signature: string;
+  sampleErrorExcerpt?: string;
+  affectedCases?: number;
+}): {
   html: string;
   text: string;
 } {
   const url = `${siteUrl()}/failure-clusters/${opts.clusterId}`;
+  const affected =
+    opts.affectedCases && opts.affectedCases > 0
+      ? `<p style="margin:0 0 16px;color:#52525b;font-size:13px;">${opts.affectedCases} affected test${opts.affectedCases === 1 ? '' : 's'} in this run</p>`
+      : '';
+  const excerpt = opts.sampleErrorExcerpt
+    ? `<pre style="margin:0 0 24px;white-space:pre-wrap;word-break:break-word;font-size:12px;color:#52525b;background:#fafafa;padding:12px;border-radius:6px;">${escapeHtml(opts.sampleErrorExcerpt)}</pre>`
+    : '';
   const body = `
     <h2 style="margin:0 0 8px;font-size:20px;color:#18181b;">New failure cluster</h2>
-    <p style="margin:0 0 24px;color:#52525b;font-size:14px;">${opts.projectName}</p>
-    <p style="margin:0 0 24px;font-family:monospace;font-size:13px;background:#f4f4f5;padding:12px;border-radius:6px;overflow:auto;">${opts.signature}</p>
+    <p style="margin:0 0 24px;color:#52525b;font-size:14px;">${escapeHtml(opts.projectName)}</p>
+    <p style="margin:0 0 16px;font-family:monospace;font-size:13px;background:#f4f4f5;padding:12px;border-radius:6px;overflow:auto;">${escapeHtml(opts.signature)}</p>
+    ${affected}
+    ${excerpt}
     <a href="${url}" style="display:inline-block;background:#18181b;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">View cluster</a>`;
   const { html } = emailLayout(`New failure cluster — ${opts.projectName}`, body);
-  const text = `New failure cluster in ${opts.projectName}\n\n${opts.signature}\n\nView: ${url}`;
+  const text = `New failure cluster in ${opts.projectName}${opts.affectedCases ? ` (${opts.affectedCases} affected)` : ''}\n\n${opts.signature}${opts.sampleErrorExcerpt ? `\n\n${opts.sampleErrorExcerpt}` : ''}\n\nView: ${url}`;
   return { html, text };
 }
