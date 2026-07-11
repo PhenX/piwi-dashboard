@@ -279,6 +279,12 @@ const filteredRuns = computed(() => {
   return runs.filter((r) => r.environment && selectedEnvironments.value.includes(r.environment));
 });
 
+// When exactly one environment is selected, scope the (server-side) flaky
+// analysis to it so staging vs production stability can be compared.
+const flakyEnvironment = computed(() =>
+  selectedEnvironments.value.length === 1 ? selectedEnvironments.value[0] : undefined,
+);
+
 const chartRuns = computed(() => {
   const runs = project.value?.testRuns || [];
   if (fullRunsOnly.value) {
@@ -880,7 +886,11 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
 
           <!-- FLAKY TESTS TAB -->
           <template #flaky-tests>
-            <FlakyTestsList v-if="activeTab === 'flaky-tests'" :project-id="String(projectId)" />
+            <FlakyTestsList
+              v-if="activeTab === 'flaky-tests'"
+              :project-id="String(projectId)"
+              :environment="flakyEnvironment"
+            />
           </template>
 
           <!-- PERFORMANCE TAB -->
