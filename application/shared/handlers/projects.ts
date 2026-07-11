@@ -762,18 +762,27 @@ export async function getProjectFailureClusters(db: DrizzleDB, projectId: number
 
 const TERMINAL_STATUSES = ['passed', 'failed', 'timedout', 'interrupted'];
 
-export async function getProjectFlakyTests(db: DrizzleDB, projectId: number, runsLimit: number) {
+export async function getProjectFlakyTests(
+  db: DrizzleDB,
+  projectId: number,
+  runsLimit: number,
+  environment?: string | null,
+) {
   const projectResults: any[] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId));
   const project = projectResults[0];
   if (!project) throw new Error('Project not found');
 
   const effectiveLimit = Math.min(200, Math.max(1, runsLimit));
 
-  // Step 1: Last N terminal runs
+  // Step 1: Last N terminal runs (optionally scoped to one environment so
+  // stability can be compared per environment, e.g. staging vs production)
+  const runsWhere = environment
+    ? and(eq(testRuns.projectId, projectId), eq(testRuns.environment, environment))
+    : eq(testRuns.projectId, projectId);
   const recentRuns: any[] = await db
     .select({ id: testRuns.id, startTime: testRuns.startTime })
     .from(testRuns)
-    .where(eq(testRuns.projectId, projectId))
+    .where(runsWhere)
     .orderBy(desc(testRuns.startTime))
     .limit(effectiveLimit);
 

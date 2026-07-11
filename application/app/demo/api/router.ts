@@ -198,7 +198,8 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/projects\/(\d+)\/flaky-tests$/,
     handler: async (m, _, q) => {
       const limit = q ? Number(q.get('runs')) || 50 : 50;
-      return getProjectFlakyTests(await getDemoDb(), +m[1]!, limit);
+      const environment = q?.get('environment') || undefined;
+      return getProjectFlakyTests(await getDemoDb(), +m[1]!, limit, environment);
     },
   },
 
