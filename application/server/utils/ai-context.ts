@@ -499,8 +499,9 @@ function relativeDays(d: Date): string {
 function compareVitals(fail: WebVitals | null, pass: WebVitals | null): string[] {
   if (!fail || !pass) return [];
   const pairs: Array<[string, number | null | undefined, number | null | undefined]> = [
-    ['LCP', fail.paint?.LCP, pass.paint?.LCP],
-    ['FCP', fail.paint?.FCP, pass.paint?.FCP],
+    ['LCP', fail.vitals?.lcp, pass.vitals?.lcp],
+    ['INP', fail.vitals?.inp, pass.vitals?.inp],
+    ['FCP', fail.paint?.firstContentfulPaint, pass.paint?.firstContentfulPaint],
     ['DOMContentLoaded', fail.navigation?.domContentLoaded, pass.navigation?.domContentLoaded],
   ];
   const out: string[] = [];
@@ -511,6 +512,13 @@ function compareVitals(fail: WebVitals | null, pass: WebVitals | null): string[]
         `- ${name}: failing ${Math.round(f)}ms vs passing ${Math.round(p)}ms (${delta >= 0 ? '+' : ''}${delta}ms)`,
       );
     }
+  }
+  // CLS is unitless — compared separately from the ms-based pairs.
+  const failCls = fail.vitals?.cls;
+  const passCls = pass.vitals?.cls;
+  if (typeof failCls === 'number' && typeof passCls === 'number' && failCls !== passCls) {
+    const delta = Math.round((failCls - passCls) * 10000) / 10000;
+    out.push(`- CLS: failing ${failCls} vs passing ${passCls} (${delta >= 0 ? '+' : ''}${delta})`);
   }
   return out;
 }
@@ -1515,14 +1523,17 @@ export function representativeExecutionSections(
 
   // Web vitals
   const webVitals = rep.webVitals as WebVitals | null;
-  if (webVitals && (webVitals.navigation || webVitals.paint)) {
+  if (webVitals && (webVitals.navigation || webVitals.paint || webVitals.vitals)) {
     const lines: string[] = [];
     const nav = webVitals.navigation;
     const paint = webVitals.paint;
+    const vitals = webVitals.vitals;
     if (nav?.domContentLoaded != null) lines.push(`- DOMContentLoaded: ${nav.domContentLoaded}ms`);
     if (nav?.loadComplete != null) lines.push(`- Load complete: ${nav.loadComplete}ms`);
-    if (paint?.FCP != null) lines.push(`- FCP: ${paint.FCP}ms`);
-    if (paint?.LCP != null) lines.push(`- LCP: ${paint.LCP}ms`);
+    if (paint?.firstContentfulPaint != null) lines.push(`- FCP: ${paint.firstContentfulPaint}ms`);
+    if (vitals?.lcp != null) lines.push(`- LCP: ${vitals.lcp}ms`);
+    if (vitals?.cls != null) lines.push(`- CLS: ${vitals.cls}`);
+    if (vitals?.inp != null) lines.push(`- INP: ${vitals.inp}ms`);
     if (lines.length > 0) out.push({ id: 'webVitals', markdown: `### Web Vitals\n${lines.join('\n')}` });
   }
 

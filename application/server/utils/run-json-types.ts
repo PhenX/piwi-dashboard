@@ -44,7 +44,8 @@ export interface NetworkRequestEntry {
 
 export interface WebVitals {
   navigation?: { domContentLoaded?: number | null; loadComplete?: number | null } | null;
-  paint?: { FCP?: number | null; LCP?: number | null } | null;
+  paint?: { firstPaint?: number | null; firstContentfulPaint?: number | null } | null;
+  vitals?: { lcp?: number | null; cls?: number | null; inp?: number | null } | null;
 }
 
 /** SCM block of `test_runs.metadata`. */
