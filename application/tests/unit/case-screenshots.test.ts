@@ -12,9 +12,7 @@ describe('isScreenshotFileRow', () => {
   });
 
   test('accepts attachment rows with an image content-type label', () => {
-    expect(isScreenshotFileRow({ type: 'attachment', subtype: 'my-shot', label: 'image/png', path: 'x/a' })).toBe(
-      true,
-    );
+    expect(isScreenshotFileRow({ type: 'attachment', subtype: 'my-shot', label: 'image/png', path: 'x/a' })).toBe(true);
   });
 
   test('accepts attachment rows with an image file extension', () => {

@@ -1,9 +1,22 @@
 import { subscribeDemoEvents } from '~/demo/run-events';
 import { useDiagnosisNotification } from './useDiagnosisNotification';
+import { useBrowserNotificationCookie } from './useBrowserNotificationCookie';
 
 let sharedSource: EventSource | null = null;
 let _demoUnsubscribe: (() => void) | null = null;
 let started = false;
+let _windowFocused = true;
+
+if (import.meta.client) {
+  window.addEventListener('focus', () => {
+    _windowFocused = true;
+  });
+  window.addEventListener('blur', () => {
+    _windowFocused = false;
+  });
+  _windowFocused = document.hasFocus();
+}
+let _cookie: ReturnType<typeof useBrowserNotificationCookie> | null = null;
 
 interface NotificationEventData {
   type: string;
@@ -72,13 +85,27 @@ let _diagnosisActive: ReturnType<typeof useDiagnosisNotification>['active'] | nu
 
 function handleEvent(data: NotificationEventData) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (document.visibilityState === 'visible' && _windowFocused) return;
 
   if (
     (data.type === 'diagnosis.completed' || data.type === 'diagnosis-completed') &&
     _diagnosisActive &&
     !_diagnosisActive.value
-  )
+  ) {
     return;
+  }
+
+  if (_cookie && data.projectId != null) {
+    const subbed = _cookie.isEventSubscribed(data.projectId, data.type);
+    console.log('[notify-stream] GATE: cookie filter', {
+      projectId: data.projectId,
+      type: data.type,
+      subscribed: subbed,
+      cookieProjects: Object.keys(_cookie.stored.value.projects),
+      matchingEvents: _cookie.stored.value.projects[data.projectId]?.events ?? [],
+    });
+    if (!subbed) return;
+  }
 
   const body = renderBody(data);
   if (!body) return;
@@ -90,8 +117,9 @@ function handleEvent(data: NotificationEventData) {
   const notification = new Notification('Piwi Dashboard', {
     body,
     tag,
-    icon: '/favicon.ico',
+    icon: '/logo.svg',
   });
+  console.log('[notify-stream] notification fired', { type: data.type, projectId: data.projectId });
 
   const link = getLink(data);
   if (link) {
@@ -116,10 +144,20 @@ async function checkBrowserSubscriptions(): Promise<boolean> {
     const res = await $fetch<{ channels: Array<{ type: string }> }>('/api/channels');
     return res.channels.some((c) => c.type === 'browser');
   } catch {
-    // Auth likely disabled — channels endpoint returns 400 without auth.
-    // In that case allow notifications as long as permission is granted.
-    return true;
+    return false;
   }
+}
+
+async function shouldConnect(): Promise<boolean> {
+  const config = useRuntimeConfig();
+
+  if (config.public.demoMode) return true;
+
+  if (config.public.authEnabled) {
+    return checkBrowserSubscriptions();
+  }
+
+  return true;
 }
 
 function connectDemo() {
@@ -150,13 +188,18 @@ function connectLive() {
 export function useNotificationStream() {
   if (!import.meta.client || started) return;
   started = true;
+  started = true;
 
   const { active } = useDiagnosisNotification();
   _diagnosisActive = active;
 
   const config = useRuntimeConfig();
 
-  checkBrowserSubscriptions().then((subscribed) => {
+  if (!config.public.authEnabled) {
+    _cookie = useBrowserNotificationCookie();
+  }
+
+  shouldConnect().then((subscribed) => {
     if (!subscribed) return;
 
     if (config.public.demoMode) {

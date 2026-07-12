@@ -855,7 +855,9 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
           cookies: [
             ...(isFailedCase
               ? []
-              : [{ name: 'sid', domain: '.app.example.com', path: '/', httpOnly: true, secure: true, sameSite: 'Lax' }]),
+              : [
+                  { name: 'sid', domain: '.app.example.com', path: '/', httpOnly: true, secure: true, sameSite: 'Lax' },
+                ]),
             { name: 'ab_variant', domain: '.app.example.com', path: '/', httpOnly: false, secure: true },
           ],
         },

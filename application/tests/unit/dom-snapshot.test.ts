@@ -16,7 +16,13 @@ describe('renderSnapshotHtml', () => {
           html: [
             'HTML',
             { lang: 'en' },
-            ['BODY', {}, ['H1', {}, 'Checkout'], ['INPUT', { id: 'email', type: 'email' }], ['DIV', { class: 'x' }, 'a < b']],
+            [
+              'BODY',
+              {},
+              ['H1', {}, 'Checkout'],
+              ['INPUT', { id: 'email', type: 'email' }],
+              ['DIV', { class: 'x' }, 'a < b'],
+            ],
           ],
         }),
       ],
@@ -44,7 +50,7 @@ describe('renderSnapshotHtml', () => {
 
   test('drops script bodies but keeps the tag as a marker', () => {
     const html = renderSnapshotHtml(
-      [snap({ snapshotName: 's1', html: ['HTML', {}, ['SCRIPT', {}, 'window.secret = "abc";'] ] })],
+      [snap({ snapshotName: 's1', html: ['HTML', {}, ['SCRIPT', {}, 'window.secret = "abc";']] })],
       's1',
     );
     expect(html).toBe('<html><script></script></html>');
@@ -75,10 +81,7 @@ describe('renderSnapshotHtml', () => {
   });
 
   test('emits a placeholder for unresolvable references instead of failing', () => {
-    const html = renderSnapshotHtml(
-      [snap({ snapshotName: 's1', html: ['HTML', {}, ['BODY', {}, [[5, 99]]]] })],
-      's1',
-    );
+    const html = renderSnapshotHtml([snap({ snapshotName: 's1', html: ['HTML', {}, ['BODY', {}, [[5, 99]]]] })], 's1');
     expect(html).toBe('<html><body><!-- [unresolved snapshot reference] --></body></html>');
   });
 

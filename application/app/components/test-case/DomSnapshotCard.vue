@@ -85,7 +85,9 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
       <CodeBlock :code="excerpt" lang="xml" />
     </div>
     <p v-if="capped || snapshot.truncated" class="mt-2 text-xs text-gray-400 dark:text-gray-500">
-      <template v-if="capped">Showing the first {{ Math.round(DISPLAY_CAP / 1000) }}k characters — use Copy for the full document.</template>
+      <template v-if="capped"
+        >Showing the first {{ Math.round(DISPLAY_CAP / 1000) }}k characters — use Copy for the full document.</template
+      >
       <template v-else>The snapshot was truncated to its size cap.</template>
     </p>
   </component>
