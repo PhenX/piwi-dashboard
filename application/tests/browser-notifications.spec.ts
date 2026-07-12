@@ -2,6 +2,41 @@ import { test, expect } from './fixtures';
 import { PROJECT } from '#shared/test-project-names';
 import { waitForHydration } from './utils';
 
+function parseSseText(text: string): Record<string, unknown>[] {
+  return text
+    .split('\n')
+    .filter((l) => l.startsWith('data:'))
+    .map((l) => {
+      try {
+        return JSON.parse(l.slice('data:'.length).trim());
+      } catch {
+        return null;
+      }
+    })
+    .filter((e): e is Record<string, unknown> => e !== null);
+}
+
+async function readSseUntil(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  predicate: (events: Record<string, unknown>[]) => boolean,
+  timeoutMs = 5000,
+): Promise<Record<string, unknown>[]> {
+  const decoder = new TextDecoder();
+  let text = '';
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) text += decoder.decode(value, { stream: true });
+
+    const events = parseSseText(text);
+    if (predicate(events)) return events;
+  }
+
+  return parseSseText(text);
+}
+
 test.describe.serial('Browser Notifications (Cookie Mode)', () => {
   let projectId: number;
 
@@ -138,7 +173,6 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
   });
 
   test('SSE stream delivers run.finished and run.failed on test run submit', async ({ baseURL, request }) => {
-    // Open SSE stream first
     const controller = new AbortController();
     const sseRes = await fetch(`${baseURL}/api/notifications/stream`, {
       signal: controller.signal,
@@ -146,7 +180,6 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
     expect(sseRes.ok).toBeTruthy();
     expect(sseRes.headers.get('content-type')).toContain('text/event-stream');
 
-    // Submit a failing run — should trigger run.finished + run.failed notifications
     const submitRes = await request.post('/api/test-runs/submit', {
       data: {
         projectName: PROJECT.BROWSER_NOTIFY,
@@ -167,35 +200,18 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
     });
     expect(submitRes.ok()).toBeTruthy();
 
-    // Read SSE stream until we see both notification types
     const reader = sseRes.body!.getReader();
-    const decoder = new TextDecoder();
-    let text = '';
 
-    const pidStr = String(projectId);
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        text += decoder.decode(value, { stream: true });
-        const hasRunFinished = text.includes('"type":"run.finished"') && text.includes(`"projectId":${pidStr}`);
-        const hasRunFailed = text.includes('"type":"run.failed"') && text.includes(`"projectId":${pidStr}`);
-        if (hasRunFinished && hasRunFailed) break;
-      }
-    } finally {
-      reader.releaseLock();
-      controller.abort();
-    }
+    const events = await readSseUntil(reader, (es) => {
+      const hasFinished = es.some((e) => e.type === 'run.finished' && e.projectId === projectId);
+      const hasFailed = es.some((e) => e.type === 'run.failed' && e.projectId === projectId);
+      return hasFinished && hasFailed;
+    });
 
-    // Parse SSE data lines
-    const dataLines = text
-      .split('\n')
-      .filter((l) => l.startsWith('data:'))
-      .map((l) => l.slice('data:'.length).trim());
+    reader.releaseLock();
+    controller.abort();
 
-    expect(dataLines.length).toBeGreaterThanOrEqual(1);
-
-    const events = dataLines.map((l) => JSON.parse(l));
+    expect(events.length).toBeGreaterThanOrEqual(1);
 
     const runFinished = events.find(
       (e: Record<string, unknown>) => e.type === 'run.finished' && e.projectId === projectId,
@@ -209,7 +225,6 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
     expect(runFailed).toBeDefined();
     expect(runFailed.failedTests).toBe(2);
 
-    // run.failed should have topFailures with the failing test cases
     expect(runFailed.topFailures).toBeDefined();
     expect(runFailed.topFailures.length).toBeGreaterThanOrEqual(1);
     expect(runFailed.topFailures[0].title).toBe('fails');
@@ -222,8 +237,7 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
     });
     expect(sseRes.ok).toBeTruthy();
 
-    // Submit a run with a unique error to create a new failure cluster
-    const uniqueError = `Unique error for cluster test ${Date.now()}`;
+    const uniqueError = `Unique cluster test ${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const submitRes = await request.post('/api/test-runs/submit', {
       data: {
         projectName: PROJECT.BROWSER_NOTIFY,
@@ -244,28 +258,14 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
     expect(submitRes.ok()).toBeTruthy();
 
     const reader = sseRes.body!.getReader();
-    const decoder = new TextDecoder();
-    let text = '';
 
-    const pidStr2 = String(projectId);
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        text += decoder.decode(value, { stream: true });
-        if (text.includes('"type":"cluster.new"') && text.includes(`"projectId":${pidStr2}`)) break;
-      }
-    } finally {
-      reader.releaseLock();
-      controller.abort();
-    }
+    const events = await readSseUntil(reader, (es) =>
+      es.some((e) => e.type === 'cluster.new' && e.projectId === projectId),
+    );
 
-    const dataLines = text
-      .split('\n')
-      .filter((l) => l.startsWith('data:'))
-      .map((l) => l.slice('data:'.length).trim());
+    reader.releaseLock();
+    controller.abort();
 
-    const events = dataLines.map((l) => JSON.parse(l));
     const clusterEvent = events.find(
       (e: Record<string, unknown>) => e.type === 'cluster.new' && e.projectId === projectId,
     );
