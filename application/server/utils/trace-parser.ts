@@ -120,10 +120,29 @@ export interface TraceNetworkRequest {
   endTime?: number;
 }
 
+/**
+ * One `frame-snapshot` event from the trace: the serialized DOM Playwright
+ * captured before/after an action. `html` is the internal node-array format
+ * (`[TAG, {attrs}, ...children]`, back-references as `[[snapshotsAgo, nodeIndex]]`)
+ * rendered by `renderSnapshotHtml` (dom-snapshot.ts).
+ */
+export interface TraceFrameSnapshot {
+  callId?: string;
+  snapshotName?: string;
+  pageId?: string;
+  frameId?: string;
+  frameUrl?: string;
+  doctype?: string;
+  html: unknown;
+  isMainFrame?: boolean;
+}
+
 export interface ParsedTraceData {
   actions: TraceAction[];
   consoleEntries: TraceConsoleEntry[];
   networkRequests: TraceNetworkRequest[];
+  /** DOM snapshots in trace order (back-references resolve against earlier ones). */
+  frameSnapshots: TraceFrameSnapshot[];
   /** The action that had an error, if any. */
   failingAction: TraceAction | null;
   /** Failing action index in `actions` array for nearby context. */
@@ -167,6 +186,7 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
   const actions: TraceAction[] = [];
   const consoleEntries: TraceConsoleEntry[] = [];
   const networkRequests: TraceNetworkRequest[] = [];
+  const frameSnapshots: TraceFrameSnapshot[] = [];
 
   // Map callId → beforeSnapshot/afterSnapshot from before/after events
   const beforeSnapshots = new Map<string, string>();
@@ -193,6 +213,10 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
         const pointers = evt.pointers as Record<string, string>;
         if (pointers.beforeSnapshot) beforeSnapshots.set(callId, pointers.beforeSnapshot);
       }
+    }
+
+    if (type === 'frame-snapshot' && evt.snapshot && typeof evt.snapshot === 'object') {
+      frameSnapshots.push(evt.snapshot as TraceFrameSnapshot);
     }
 
     if (type === 'action') {
@@ -291,6 +315,7 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
     actions,
     consoleEntries,
     networkRequests,
+    frameSnapshots,
     failingAction,
     failingActionIndex: failingAction ? failingIndex : -1,
     eventCount: events.length,
