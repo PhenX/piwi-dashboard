@@ -55,7 +55,8 @@ export type SectionId =
   | 'failingAction'
   | 'locatorHealing'
   | 'environmentDiff'
-  | 'visualDiff';
+  | 'visualDiff'
+  | 'domSnapshot';
 
 export interface ContextSection {
   id: SectionId;

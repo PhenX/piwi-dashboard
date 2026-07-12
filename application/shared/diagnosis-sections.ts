@@ -30,6 +30,7 @@ export const DIAGNOSIS_SECTIONS: DiagnosisSectionMeta[] = [
   { id: 'serverLogs', label: 'Backend server logs', short: 'Server logs' },
   { id: 'webVitals', label: 'Web vitals', short: 'Web vitals' },
   { id: 'ariaSnapshot', label: 'ARIA snapshot', short: 'ARIA' },
+  { id: 'domSnapshot', label: 'DOM snapshot from trace (failure time)', short: 'DOM' },
   { id: 'screenshots', label: 'Screenshots (attached as images)', short: 'Screenshots' },
   { id: 'visualDiff', label: 'Visual diff vs last passing screenshot', short: 'Visual diff' },
   { id: 'browserDistribution', label: 'Browser distribution', short: 'Browsers' },

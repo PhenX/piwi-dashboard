@@ -30,6 +30,7 @@ import type {
 import { resolveContextLimits } from './ai-context-limits';
 import type { ContextLimits } from '#shared/ai-context-limits';
 import { getTraceFailingActionSection } from './trace-parser';
+import { getTraceDomSnapshot } from './dom-snapshot';
 import { getLocatorHealing } from './locator-healing';
 import { getEnvironmentDiff } from './environment-diff';
 import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
@@ -112,6 +113,7 @@ const SECTION_ORDER: SectionId[] = [
   'failingSteps',
   'steps',
   'ariaSnapshot',
+  'domSnapshot',
   'screenshots',
   'visualDiff',
   'nearestAriaNames',
@@ -749,17 +751,46 @@ async function failingActionSection(
 ): Promise<string | null> {
   if (limits.maxTraceActions <= 0) return null;
 
-  const traceFiles = await db
-    .select({ path: files.path })
-    .from(files)
-    .where(and(eq(files.testRunsCaseId, rep.id), eq(files.type, 'trace')))
-    .limit(1);
-
-  if (traceFiles.length === 0) return null;
-  const blobPath = traceFiles[0]!.path;
+  const blobPath = await resolveTraceBlobPath(db, rep.id);
   if (!blobPath) return null;
 
   return getTraceFailingActionSection(db, blobPath, limits);
+}
+
+/** Path of the execution's stored (slim) trace blob, or null when no trace was uploaded. */
+async function resolveTraceBlobPath(db: DbClient, testRunsCaseId: number): Promise<string | null> {
+  const traceFiles = await db
+    .select({ path: files.path })
+    .from(files)
+    .where(and(eq(files.testRunsCaseId, testRunsCaseId), eq(files.type, 'trace')))
+    .limit(1);
+  return traceFiles[0]?.path || null;
+}
+
+/**
+ * Failure-time DOM snapshot rendered from the stored trace ZIP — richer than
+ * the flat ARIA snapshot (real tags, ids, classes, hidden elements) at zero
+ * capture cost. Returns coverage alongside the section.
+ */
+async function domSnapshotSection(
+  db: DbClient,
+  rep: RepresentativeRow,
+  limits: ContextLimits,
+): Promise<{ section: string | null; coverage: DiagnosisContextCoverage['domSnapshot'] }> {
+  if (limits.domSnapshotChars <= 0) return { section: null, coverage: null };
+
+  const blobPath = await resolveTraceBlobPath(db, rep.id);
+  if (!blobPath) return { section: null, coverage: null };
+
+  const result = await getTraceDomSnapshot(blobPath, limits.domSnapshotChars);
+  if (result.status !== 'ok' || !result.html) return { section: null, coverage: null };
+
+  const origin = result.snapshotName ? ` (trace snapshot \`${result.snapshotName}\`)` : '';
+  const markdown = `## DOM Snapshot (failure time, from trace)\nSanitized HTML of the page as Playwright recorded it around the failing action${origin} — input values, handlers and script bodies removed:\n\`\`\`html\n${result.html}${result.truncated ? '\n[truncated]' : ''}\n\`\`\``;
+  return {
+    section: markdown,
+    coverage: { chars: result.html.length, ...(result.snapshotName ? { snapshotName: result.snapshotName } : {}) },
+  };
 }
 
 function formatFileSize(n: number | null): string {
@@ -2448,6 +2479,11 @@ export async function buildDiagnosisContext(
     // B1: Failing action from trace parsing
     push(section('failingAction', 'Failing Action (from Trace)', await failingActionSection(db, rep, limits)));
 
+    // Failure-time DOM snapshot rendered from the same trace blob
+    const domSnapResult = await domSnapshotSection(db, rep, limits);
+    push(section('domSnapshot', 'DOM Snapshot (from Trace)', domSnapResult.section));
+    coverage = { ...coverage, domSnapshot: domSnapResult.coverage };
+
     // Alternative locators from prior success / ARIA snapshot (computed above,
     // before the nearest-ARIA hint)
     push(section('locatorHealing', 'Alternative Locators (Locator Healing)', healing.section));
@@ -2576,6 +2612,10 @@ export async function buildDiagnosisContext(
   if (!sectionIds.has('visualDiff')) {
     absentReasons.visualDiff =
       'no comparable screenshots — requires a screenshot on both the failing execution and a passing baseline run';
+  }
+  if (!sectionIds.has('domSnapshot')) {
+    absentReasons.domSnapshot =
+      'no DOM snapshot — requires an uploaded trace containing frame snapshots (enable trace recording and uploadTraces)';
   }
 
   const coverageBlock = buildCoverageBlock(contextSections, {

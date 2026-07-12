@@ -896,6 +896,11 @@ export interface DiagnosisContextCoverage {
     changedPixelRatio: number;
     dimensionMismatch: boolean;
   } | null;
+  /** Failure-time DOM snapshot rendered from the stored trace. null when no trace or no snapshot. */
+  domSnapshot?: {
+    chars: number;
+    snapshotName?: string;
+  } | null;
   /** Sections where data is not applicable (with reason), keyed by section id. Absent in coverage means "no data". */
   notApplicable?: Record<string, string>;
 }
