@@ -403,6 +403,12 @@ export interface WebVitals {
     firstPaint?: number;
     firstContentfulPaint?: number;
   } | null;
+  /** Core Web Vitals (Chromium-only; null per metric when unavailable). */
+  vitals?: {
+    lcp?: number | null;
+    cls?: number | null;
+    inp?: number | null;
+  } | null;
 }
 
 /**

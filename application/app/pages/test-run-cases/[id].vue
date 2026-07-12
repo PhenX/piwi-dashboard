@@ -579,6 +579,50 @@ function copyFailure() {
                 />
               </StatTileGrid>
 
+              <!-- Core Web Vitals — Google rating bands; missing values render "n/a"
+                   without alarm colors (INP is often absent in short tests). -->
+              <StatTileGrid v-if="webVitals.vitals" min-tile-width="10rem" class="pt-2 border-t">
+                <StatTile
+                  label="Largest Contentful Paint (LCP)"
+                  :value="webVitals.vitals.lcp != null ? formatDuration(webVitals.vitals.lcp) : 'n/a'"
+                  :value-class="
+                    webVitals.vitals.lcp == null
+                      ? 'text-gray-400'
+                      : webVitals.vitals.lcp > 4000
+                        ? 'text-red-600'
+                        : webVitals.vitals.lcp > 2500
+                          ? 'text-orange-500'
+                          : 'text-green-600'
+                  "
+                />
+                <StatTile
+                  label="Cumulative Layout Shift (CLS)"
+                  :value="webVitals.vitals.cls != null ? String(webVitals.vitals.cls) : 'n/a'"
+                  :value-class="
+                    webVitals.vitals.cls == null
+                      ? 'text-gray-400'
+                      : webVitals.vitals.cls > 0.25
+                        ? 'text-red-600'
+                        : webVitals.vitals.cls > 0.1
+                          ? 'text-orange-500'
+                          : 'text-green-600'
+                  "
+                />
+                <StatTile
+                  label="Interaction to Next Paint (INP)"
+                  :value="webVitals.vitals.inp != null ? formatDuration(webVitals.vitals.inp) : 'n/a'"
+                  :value-class="
+                    webVitals.vitals.inp == null
+                      ? 'text-gray-400'
+                      : webVitals.vitals.inp > 500
+                        ? 'text-red-600'
+                        : webVitals.vitals.inp > 200
+                          ? 'text-orange-500'
+                          : 'text-green-600'
+                  "
+                />
+              </StatTileGrid>
+
               <div v-if="webVitals.navigation?.url" class="text-xs text-gray-400 pt-1">
                 Page: <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">{{ webVitals.navigation.url }}</code>
               </div>
