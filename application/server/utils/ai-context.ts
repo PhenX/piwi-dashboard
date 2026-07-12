@@ -31,6 +31,8 @@ import { resolveContextLimits } from './ai-context-limits';
 import type { ContextLimits } from '#shared/ai-context-limits';
 import { getTraceFailingActionSection } from './trace-parser';
 import { getLocatorHealing } from './locator-healing';
+import { getEnvironmentDiff } from './environment-diff';
+import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
 import { parseAriaCandidates, textSimilarity } from '#shared/locator-fingerprint';
 import type {
   BuildContextOptions,
@@ -117,6 +119,7 @@ const SECTION_ORDER: SectionId[] = [
   'webVitals',
   'retryProgression',
   'baselineComparison',
+  'environmentDiff',
   'recurrenceFlakiness',
   'browserDistribution',
   'affectedTests',
@@ -587,6 +590,28 @@ async function baselineComparisonSection(
   return {
     section: `## Compared to Last Pass\nSame test, failing execution vs its recent passing runs:\n${lines.join('\n')}`,
     alreadyGreen,
+  };
+}
+
+/**
+ * Environment diff vs the last passing execution: whitelisted run/browser
+ * metadata keys that changed between the failing execution and the same
+ * test's most recent pass. "No differences" is positive evidence (rules out
+ * environment drift), so the section still renders with zero changed keys.
+ */
+async function environmentDiffSection(
+  db: DbClient,
+  rep: RepresentativeRow,
+): Promise<{ section: string | null; coverage: DiagnosisContextCoverage['environmentDiff'] }> {
+  const result = await getEnvironmentDiff(db, rep.id);
+  const markdown = renderEnvironmentDiffMarkdown(result);
+  if (!markdown || !result.baseline) return { section: null, coverage: null };
+  return {
+    section: markdown,
+    coverage: {
+      changedKeys: (result.entries ?? []).filter((e) => !e.informational).length,
+      baselineRunId: result.baseline.runId,
+    },
   };
 }
 
@@ -2368,6 +2393,11 @@ export async function buildDiagnosisContext(
       coverage = { ...coverage, alreadyGreen: true };
     }
 
+    // Environment diff vs last pass (whitelisted run/browser metadata keys)
+    const envDiffResult = await environmentDiffSection(db, rep);
+    push(section('environmentDiff', 'Environment Diff vs Last Pass', envDiffResult.section));
+    coverage = { ...coverage, environmentDiff: envDiffResult.coverage };
+
     // Retry progression (per-attempt error evolution)
     push(section('retryProgression', 'Retry Progression', await retryProgressionSection(db, rep)));
 
@@ -2485,6 +2515,9 @@ export async function buildDiagnosisContext(
   if (!sectionIds.has('networkRequests')) {
     absentReasons.networkRequests =
       'no network data captured — collectPerformanceMetrics may be disabled in reporter options';
+  }
+  if (!sectionIds.has('environmentDiff')) {
+    absentReasons.environmentDiff = 'no passing baseline execution recorded for this test to compare against';
   }
 
   const coverageBlock = buildCoverageBlock(contextSections, {

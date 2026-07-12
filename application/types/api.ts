@@ -880,6 +880,11 @@ export interface DiagnosisContextCoverage {
     /** true when at least one file was truncated to the size cap. */
     truncated: boolean;
   } | null;
+  /** Environment diff vs the last passing execution. null when no passing baseline exists. */
+  environmentDiff?: {
+    changedKeys: number;
+    baselineRunId: number | null;
+  } | null;
   /** Sections where data is not applicable (with reason), keyed by section id. Absent in coverage means "no data". */
   notApplicable?: Record<string, string>;
 }

@@ -53,7 +53,8 @@ export type SectionId =
   | 'alreadyGreen'
   | 'topSuspectedCommit'
   | 'failingAction'
-  | 'locatorHealing';
+  | 'locatorHealing'
+  | 'environmentDiff';
 
 export interface ContextSection {
   id: SectionId;
