@@ -1,7 +1,7 @@
 import { testCases, testRunsCases, testSuites, networkRequests } from '../database/schema';
 import { eq } from 'drizzle-orm';
 import { buildNetworkRequestItems, buildNetworkRequestInsertValues } from './network-request-helpers';
-import { sanitizeWebVitals, sanitizeConsoleLogs } from './sanitize';
+import { sanitizeWebVitals, sanitizeConsoleLogs, sanitizePageState } from './sanitize';
 import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fingerprint';
 import { testCaseCache } from './test-case-cache';
 import { testSuiteCache } from './test-suite-cache';
@@ -37,6 +37,7 @@ export interface RunCaseInput {
   wastedTimeMs?: number | null;
   networkRequests?: unknown;
   webVitals?: unknown;
+  pageState?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: string | null;
   testSource?: string | null;
@@ -265,6 +266,7 @@ export async function persistRunCases(
       slowestStepDuration: c.slowestStepDuration ?? null,
       wastedTimeMs: c.wastedTimeMs ?? null,
       webVitals: sanitizeWebVitals(c.webVitals as Record<string, unknown> | null | undefined) ?? null,
+      pageState: sanitizePageState(c.pageState),
       consoleLogs: sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined) ?? null,
       ariaSnapshot: c.ariaSnapshot ?? null,
       testSource: c.testSource ?? null,

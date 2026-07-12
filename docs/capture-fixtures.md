@@ -122,6 +122,7 @@ Capture is designed to never fail or noticeably slow down a test:
 |--------|--------|
 | `collectPerformanceMetrics: false` | Master switch — disables all fixture capture |
 | `captureLocators: false` (or `PIWI_CAPTURE_LOCATORS=false`) | Disables only the per-action locator snapshots; network, console, and Web Vitals stay on |
+| `capturePageState: false` (or `PIWI_CAPTURE_PAGE_STATE=false`) | Disables only the test-end app-state capture (URL, storage key names, cookie flags — values are never captured) |
 
 ## Troubleshooting
 

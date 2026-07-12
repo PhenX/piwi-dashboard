@@ -27,6 +27,7 @@ export interface ParsedCompleteEvent {
   wastedTimeMs?: number | null;
   networkRequests?: unknown;
   webVitals?: unknown;
+  pageState?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
   testSource?: string | null;
@@ -68,6 +69,7 @@ export function mapCompleteEventToRunCase(tc: ParsedCompleteEvent): RunCaseInput
     wastedTimeMs: tc.wastedTimeMs ?? null,
     networkRequests: tc.networkRequests,
     webVitals: tc.webVitals,
+    pageState: tc.pageState,
     consoleLogs: tc.consoleLogs,
     ariaSnapshot: (tc.ariaSnapshot as string | null | undefined) ?? null,
     testSource: tc.testSource ?? null,

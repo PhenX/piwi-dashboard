@@ -31,6 +31,8 @@ import { resolveContextLimits } from './ai-context-limits';
 import type { ContextLimits } from '#shared/ai-context-limits';
 import { getTraceFailingActionSection } from './trace-parser';
 import { getTraceDomSnapshot } from './dom-snapshot';
+import { renderAppStateMarkdown, type PageStateLike } from '#shared/page-state';
+import { getLastPassPageState } from '#shared/handlers/test-cases';
 import { getLocatorHealing } from './locator-healing';
 import { getEnvironmentDiff } from './environment-diff';
 import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
@@ -122,6 +124,7 @@ const SECTION_ORDER: SectionId[] = [
   'networkRequests',
   'serverLogs',
   'webVitals',
+  'appState',
   'retryProgression',
   'baselineComparison',
   'environmentDiff',
@@ -353,6 +356,7 @@ async function loadExecutionRow(db: DbClient, where: SQL) {
       ariaSnapshot: testRunsCases.ariaSnapshot,
       testSource: testRunsCases.testSource,
       webVitals: testRunsCases.webVitals,
+      pageState: testRunsCases.pageState,
       testAnnotations: testRunsCases.testAnnotations,
       workerIndex: testRunsCases.workerIndex,
       shardIndex: testRunsCases.shardIndex,
@@ -604,6 +608,32 @@ async function baselineComparisonSection(
     section: `## Compared to Last Pass\nSame test, failing execution vs its recent passing runs:\n${lines.join('\n')}`,
     alreadyGreen,
   };
+}
+
+/**
+ * App state at test end (URL, storage keys, cookie flags — never values),
+ * with a diff against the last passing execution's captured state when one
+ * exists. A vanished auth cookie or a missing storage key is a classic
+ * "logged-out mid-test" smoking gun.
+ */
+async function appStateSection(
+  db: DbClient,
+  rep: RepresentativeRow,
+): Promise<{ section: string | null; coverage: DiagnosisContextCoverage['appState'] }> {
+  const failing = rep.pageState as PageStateLike | null;
+  if (!failing) return { section: null, coverage: null };
+
+  const baseline =
+    rep.testCaseId != null
+      ? ((await getLastPassPageState(db, {
+          testCaseId: rep.testCaseId,
+          browserName: rep.browserName,
+        })) as PageStateLike | null)
+      : null;
+
+  const markdown = renderAppStateMarkdown(failing, baseline);
+  if (!markdown) return { section: null, coverage: null };
+  return { section: markdown, coverage: { hasBaseline: baseline != null } };
 }
 
 /**
@@ -2451,6 +2481,11 @@ export async function buildDiagnosisContext(
       coverage = { ...coverage, alreadyGreen: true };
     }
 
+    // App state at test end (+ diff vs the last pass when captured there too)
+    const appStateResult = await appStateSection(db, rep);
+    push(section('appState', 'App State', appStateResult.section));
+    coverage = { ...coverage, appState: appStateResult.coverage };
+
     // Environment diff vs last pass (whitelisted run/browser metadata keys)
     const envDiffResult = await environmentDiffSection(db, rep);
     push(section('environmentDiff', 'Environment Diff vs Last Pass', envDiffResult.section));
@@ -2616,6 +2651,10 @@ export async function buildDiagnosisContext(
   if (!sectionIds.has('domSnapshot')) {
     absentReasons.domSnapshot =
       'no DOM snapshot — requires an uploaded trace containing frame snapshots (enable trace recording and uploadTraces)';
+  }
+  if (!sectionIds.has('appState')) {
+    absentReasons.appState =
+      'no page state captured — capturePageState may be disabled or the reporter predates it';
   }
 
   const coverageBlock = buildCoverageBlock(contextSections, {

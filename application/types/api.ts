@@ -412,6 +412,28 @@ export interface WebVitals {
 }
 
 /**
+ * Page state captured at test end by the reporter fixtures. Storage values and
+ * cookie values are never captured — key names, lengths and flags only.
+ */
+export interface PageState {
+  url: string;
+  hash: string | null;
+  /** `history.state` as JSON, capped and token-masked. */
+  historyState: string | null;
+  localStorage: Array<{ key: string; length: number }>;
+  sessionStorage: Array<{ key: string; length: number }>;
+  cookies: Array<{
+    name: string;
+    domain: string;
+    path: string;
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite?: string;
+    expires?: number;
+  }>;
+}
+
+/**
  * A single console message captured during test execution (via dashboard fixture)
  */
 export interface ConsoleEntry {
@@ -900,6 +922,10 @@ export interface DiagnosisContextCoverage {
   domSnapshot?: {
     chars: number;
     snapshotName?: string;
+  } | null;
+  /** App state (URL/storage keys/cookie flags) at test end. null when not captured. */
+  appState?: {
+    hasBaseline: boolean;
   } | null;
   /** Sections where data is not applicable (with reason), keyed by section id. Absent in coverage means "no data". */
   notApplicable?: Record<string, string>;

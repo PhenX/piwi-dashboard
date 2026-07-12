@@ -92,6 +92,55 @@ export function sanitizeMetadata(metadata: Record<string, unknown> | null | unde
   return meta;
 }
 
+/**
+ * Defensive shape-validation of the reporter's page-state payload before it is
+ * persisted. The reporter already never captures storage/cookie values — this
+ * server-side pass enforces the same contract against arbitrary submitters:
+ * only whitelisted fields survive, counts and string lengths are capped.
+ */
+export function sanitizePageState(state: unknown): Record<string, unknown> | null {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return null;
+  const s = state as Record<string, unknown>;
+
+  const str = (v: unknown, cap: number): string | null => (typeof v === 'string' ? v.slice(0, cap) : null);
+  const storage = (v: unknown): Array<{ key: string; length: number }> =>
+    Array.isArray(v)
+      ? v
+          .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object')
+          .slice(0, 50)
+          .map((e) => ({
+            key: typeof e.key === 'string' ? e.key.slice(0, 200) : '',
+            length: typeof e.length === 'number' ? e.length : 0,
+          }))
+      : [];
+  const cookies = Array.isArray(s.cookies)
+    ? s.cookies
+        .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object')
+        .slice(0, 30)
+        .map((c) => ({
+          name: typeof c.name === 'string' ? c.name.slice(0, 200) : '',
+          domain: typeof c.domain === 'string' ? c.domain.slice(0, 200) : '',
+          path: typeof c.path === 'string' ? c.path.slice(0, 200) : '',
+          httpOnly: Boolean(c.httpOnly),
+          secure: Boolean(c.secure),
+          ...(typeof c.sameSite === 'string' ? { sameSite: c.sameSite.slice(0, 20) } : {}),
+          ...(typeof c.expires === 'number' ? { expires: c.expires } : {}),
+        }))
+    : [];
+
+  const url = str(s.url, 2000);
+  if (!url) return null;
+
+  return {
+    url: sanitizeUrl(url),
+    hash: str(s.hash, 500),
+    historyState: str(s.historyState, 2100),
+    localStorage: storage(s.localStorage),
+    sessionStorage: storage(s.sessionStorage),
+    cookies,
+  };
+}
+
 export function sanitizeConsoleLogs(
   logs: Array<Record<string, unknown>> | null | undefined,
 ): Array<Record<string, unknown>> | null {

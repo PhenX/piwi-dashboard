@@ -85,6 +85,7 @@ export interface TestCasePayload {
   wastedTimeMs?: number | null;
   networkRequests?: unknown;
   webVitals?: unknown;
+  pageState?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
   workerIndex?: number | null;
@@ -184,6 +185,7 @@ export interface StreamEventPayload {
   wastedTimeMs?: number | null;
   networkRequests?: unknown;
   webVitals?: unknown;
+  pageState?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
   projectName?: string | null;
