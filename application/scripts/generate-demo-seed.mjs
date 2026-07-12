@@ -954,6 +954,85 @@ if (latestClusterTrc) {
   }
 }
 
+// ── Demo visual diff ───────────────────────────────────────────────────────
+// A real pixelmatch overlay comparing the checkout failure screenshot with a
+// passing-state screenshot, generated here (same code path as the server) and
+// written to public/demo/screenshots/. The metrics ride the files.metadata
+// column so the demo router can serve the visual-diff endpoint data-driven.
+if (latestClusterTrc) {
+  const failingRel = 'demo/screenshots/checkout-error.png';
+  const baselineRel = 'demo/screenshots/checkout-order-confirmed.png';
+  const overlayRel = 'demo/screenshots/visual-diff-checkout.png';
+  try {
+    const { default: sharp } = await import('sharp');
+    const { default: pixelmatch } = await import('pixelmatch');
+
+    const loadRaw = async (rel) => {
+      const abs = new URL(`../public/${rel}`, import.meta.url);
+      const { data, info } = await sharp(readFileSync(abs)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      return { data: new Uint8Array(data), width: info.width, height: info.height };
+    };
+    const failing = await loadRaw(failingRel);
+    const baseline = await loadRaw(baselineRel);
+
+    const width = Math.max(failing.width, baseline.width);
+    const height = Math.max(failing.height, baseline.height);
+    const pad = (img) => {
+      if (img.width === width && img.height === height) return img.data;
+      const out = new Uint8Array(width * height * 4);
+      for (let y = 0; y < img.height; y++) {
+        out.set(img.data.subarray(y * img.width * 4, (y + 1) * img.width * 4), y * width * 4);
+      }
+      return out;
+    };
+    const overlay = new Uint8Array(width * height * 4);
+    const changedPixels = pixelmatch(pad(failing), pad(baseline), overlay, width, height, {
+      threshold: 0.1,
+      includeAA: false,
+    });
+    const overlayPng = await sharp(Buffer.from(overlay), { raw: { width, height, channels: 4 } })
+      .png()
+      .toBuffer();
+    writeFileSync(new URL(`../public/${overlayRel}`, import.meta.url), overlayPng);
+
+    ATTACHMENTS.push({
+      id: attachmentId++,
+      test_runs_case_id: latestClusterTrc.id,
+      test_run_id: latestClusterTrc.test_run_id,
+      type: 'attachment',
+      subtype: 'screenshot',
+      label: 'image/png',
+      path: failingRel,
+      size: 0,
+      created_at: Math.floor((latestClusterTrc.started_at ?? Date.now()) / 1000),
+    });
+    ATTACHMENTS.push({
+      id: attachmentId++,
+      test_runs_case_id: latestClusterTrc.id,
+      test_run_id: latestClusterTrc.test_run_id,
+      type: 'visual-diff',
+      subtype: 'overlay',
+      label: 'Visual diff vs last pass',
+      path: overlayRel,
+      size: overlayPng.length,
+      metadata: {
+        changedPixels,
+        changedPixelRatio: Math.round((changedPixels / (width * height)) * 10000) / 10000,
+        width,
+        height,
+        dimensionMismatch: failing.width !== baseline.width || failing.height !== baseline.height,
+        baselineTestRunsCaseId: 2,
+        baselineRunId: 2,
+        failingPath: failingRel,
+        baselinePath: baselineRel,
+      },
+      created_at: Math.floor((latestClusterTrc.started_at ?? Date.now()) / 1000),
+    });
+  } catch (error) {
+    console.warn(`⚠ Could not generate the demo visual diff: ${error}`);
+  }
+}
+
 // ── Build failure_clusters rows ────────────────────────────────────────────
 // Ensure all clusters have valid first/last run IDs. Use any run from the
 // project as fallback (no FK constraint on failure_clusters → test_runs).

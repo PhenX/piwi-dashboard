@@ -73,6 +73,7 @@ const SECTION_ORDER = [
   'steps',
   'ariaSnapshot',
   'screenshots',
+  'visualDiff',
   'locatorHealing',
   'console',
   'networkRequests',
@@ -612,6 +613,35 @@ async function assemble(
           changedKeys: (envDiff.entries ?? []).filter((e) => !e.informational).length,
           baselineRunId: envDiff.baseline.runId,
         },
+      };
+    }
+
+    // Visual diff vs last pass — served from the seed-generated overlay row
+    const vdRows = await db
+      .select({ metadata: files.metadata })
+      .from(files)
+      .where(and(eq(files.testRunsCaseId, rep.id), eq(files.type, 'visual-diff')))
+      .limit(1);
+    const vd = vdRows[0]?.metadata as {
+      changedPixels: number;
+      changedPixelRatio: number;
+      width: number;
+      height: number;
+      dimensionMismatch: boolean;
+      baselineRunId: number;
+    } | null;
+    if (vd) {
+      const pct = (vd.changedPixelRatio * 100).toFixed(2);
+      push(
+        section(
+          'visualDiff',
+          'Visual Diff vs Last Pass',
+          `## Visual Diff vs Last Pass\nPixel comparison of the failing screenshot against the same test's last passing screenshot (run #${vd.baselineRunId}):\n- Changed pixels: ${vd.changedPixels} of ${vd.width * vd.height} (${pct}%)\n- The diff overlay (red = changed pixels) is attached as image "visual-diff".`,
+        ),
+      );
+      coverage = {
+        ...coverage,
+        visualDiff: { changedPixelRatio: vd.changedPixelRatio, dimensionMismatch: vd.dimensionMismatch },
       };
     }
   }
