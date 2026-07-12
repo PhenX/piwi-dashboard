@@ -204,6 +204,13 @@
       "when": 1783839038134,
       "tag": "0028_grey_dark_phoenix",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1783855124439,
+      "tag": "0029_rapid_spiral",
+      "breakpoints": true
     }
   ]
 }

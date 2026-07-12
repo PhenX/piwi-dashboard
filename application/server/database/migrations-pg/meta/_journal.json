@@ -197,6 +197,13 @@
       "when": 1783839039285,
       "tag": "0027_watery_wild_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1783855125216,
+      "tag": "0028_right_magneto",
+      "breakpoints": true
     }
   ]
 }
