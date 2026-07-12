@@ -46,6 +46,45 @@ export interface SelectorCounts {
   classes?: Record<string, number>;
 }
 
+/**
+ * The element's position among same-role elements in the document at capture
+ * time — a name-independent structural identity used to re-find a renamed
+ * element on the failing page.
+ */
+export interface RolePosition {
+  role: string;
+  /** How many elements resolved to this role, document-wide. */
+  count: number;
+  /** The captured element's 0-based index among them, in document order. */
+  index: number;
+  /** For headings: how many same-role elements share this element's level. */
+  levelCount?: number;
+}
+
+/**
+ * An anchor-worthy ancestor of the captured element — one carrying a stable
+ * hook (test id, id, explicit role, aria-label, or a landmark tag) that a
+ * scoped alternative locator can chain from. Nearest ancestors first.
+ */
+export interface AncestorAnchor {
+  tag: string;
+  /** Hops from the element (1 = direct parent). */
+  depth: number;
+  testId: string | null;
+  id: string | null;
+  /** Explicit role attribute, if any. */
+  role: string | null;
+  ariaLabel: string | null;
+  /** Same-role matches for the captured element within this ancestor. */
+  scopedRoleCount?: number;
+  /** Document-wide match count for this ancestor's own data-testid. */
+  testIdCount?: number;
+  /** Document-wide match count for this ancestor's own id. */
+  idCount?: number;
+  /** Document-wide count of elements resolving to this ancestor's landmark/explicit role. */
+  roleCount?: number;
+}
+
 /** Raw element attributes captured after a successful action. */
 export interface ElementAttributes {
   tagName: string;
@@ -60,6 +99,10 @@ export interface ElementAttributes {
   hasLabel?: boolean;
   /** Live-page uniqueness probe results for candidate selectors. */
   selectorCounts?: SelectorCounts;
+  /** Position among same-role elements — powers name-free and renamed-element healing. */
+  rolePosition?: RolePosition | null;
+  /** Anchor-worthy ancestors, nearest first — power ancestor-scoped alternatives. */
+  ancestors?: AncestorAnchor[];
 }
 
 /** One captured element interaction (per locator call site). */
@@ -81,6 +124,10 @@ export interface LocatorSnapshot {
     textContent: string | null;
     accessibleName: string | null;
     center: { x: number; y: number } | null;
+    /** Position among same-role elements at capture time (newer reporters only). */
+    rolePosition?: RolePosition | null;
+    /** Anchor-worthy ancestors, nearest first (newer reporters only). */
+    ancestors?: AncestorAnchor[];
   } | null;
   /** Computed alternative locators, ranked by stability score (max 10). */
   alternatives: RankedLocator[];
@@ -128,4 +175,13 @@ export interface LocatorHealingResult {
    * lets consumers judge freshness. Null otherwise.
    */
   capturedAt: string | null;
+  /**
+   * True when the stored element's accessible name is provably gone from the
+   * failing page's ARIA snapshot but no confident rename match was found: the
+   * name-derived alternatives in `fromPriorSuccess` (and the failing locator
+   * itself) most likely no longer match. The recommendation already excludes
+   * them; `fromAriaSnapshot` carries supplementary candidates from the failing
+   * page.
+   */
+  priorNameMayBeStale?: boolean;
 }

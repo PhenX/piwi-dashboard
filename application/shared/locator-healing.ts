@@ -166,6 +166,34 @@ export function locatorExpressionStrings(expr: string): string[] {
   return out;
 }
 
+/**
+ * True when two locators target the same element identity — same method and
+ * the same string literals (order-insensitive: option-object key order differs
+ * between capture-side args and expression-parsed args). Used to keep the
+ * locator that just failed out of the recommendation pool.
+ */
+export function locatorIdentityEquals(
+  aMethod: string | null | undefined,
+  aArgs: unknown,
+  bMethod: string | null | undefined,
+  bArgs: unknown,
+): boolean {
+  if (!aMethod || !bMethod || aMethod !== bMethod) return false;
+  const strings = (args: unknown): string => JSON.stringify(locatorArgStrings([args]).sort());
+  return strings(aArgs) === strings(bArgs);
+}
+
+/**
+ * True when an alternative's identity depends on the given accessible name —
+ * one of its string literals matches it (case-insensitive). Such alternatives
+ * break together with the name when the element is relabeled.
+ */
+export function alternativeUsesName(alt: RankedLocator, name: string): boolean {
+  const needle = name.trim().toLowerCase();
+  if (!needle) return false;
+  return locatorArgStrings([alt.args]).some((s) => s.trim().toLowerCase() === needle);
+}
+
 /** Stable signature for a captured locator (method + ordered string literals). */
 export async function locatorSignature(method: string, args: unknown[]): Promise<string> {
   return sha256Hex(`${method} ${JSON.stringify(locatorArgStrings(args))}`);

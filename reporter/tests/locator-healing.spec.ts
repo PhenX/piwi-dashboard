@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  captureCallerLocation,
   generateAlternatives,
   classifyCssStability,
   dedupeSnapshotsByLocation,
@@ -9,6 +10,7 @@ import {
   resolveAriaRole,
   suggestLocatorsFromAria,
   CAPTURED_ATTRIBUTES,
+  type AncestorAnchor,
   type ElementAttributes,
   type LocatorSnapshot,
 } from '../src/internal/capture/locator-healing.js';
@@ -26,6 +28,7 @@ function makeAttrs(overrides: Partial<ElementAttributes & { attrs: Record<string
       alt: a.alt ?? null,
       title: a.title ?? null,
       'aria-label': a['aria-label'] ?? null,
+      'aria-level': a['aria-level'] ?? null,
       role: a.role ?? null,
       type: a.type ?? null,
       href: a.href ?? null,
@@ -36,6 +39,22 @@ function makeAttrs(overrides: Partial<ElementAttributes & { attrs: Record<string
     center: overrides.center ?? null,
     ...(overrides.hasLabel !== undefined ? { hasLabel: overrides.hasLabel } : {}),
     ...(overrides.selectorCounts !== undefined ? { selectorCounts: overrides.selectorCounts } : {}),
+    ...(overrides.rolePosition !== undefined ? { rolePosition: overrides.rolePosition } : {}),
+    ...(overrides.ancestors !== undefined ? { ancestors: overrides.ancestors } : {}),
+  };
+}
+
+/** An anchor-worthy ancestor with sensible defaults for the structural tests. */
+function makeAnchor(overrides: Partial<AncestorAnchor> = {}) {
+  return {
+    tag: 'form',
+    depth: 1,
+    testId: null,
+    id: null,
+    role: null,
+    ariaLabel: null,
+    scopedRoleCount: 1,
+    ...overrides,
   };
 }
 
@@ -359,6 +378,139 @@ describe('generateAlternatives', () => {
   });
 });
 
+describe('generateAlternatives — structural (rename-proof) alternatives', () => {
+  it('emits a heading getByRole with its level in name-derived alternatives', () => {
+    const attrs = makeAttrs({ tagName: 'h1', accessibleName: 'Dashboard' });
+    const roleAlt = generateAlternatives(attrs).find((a) => a.method === 'getByRole' && a.score === 90);
+    expect(roleAlt!.locator).toBe("getByRole('heading', { name: 'Dashboard', level: 1 })");
+    expect(roleAlt!.args).toEqual({ role: 'heading', name: 'Dashboard', level: 1 });
+  });
+
+  it('reads the heading level from aria-level for explicit role="heading"', () => {
+    const attrs = makeAttrs({ tagName: 'div', attrs: { role: 'heading', 'aria-level': '3' }, accessibleName: 'Hi' });
+    const roleAlt = generateAlternatives(attrs).find((a) => a.method === 'getByRole' && a.score === 90);
+    expect(roleAlt!.args).toEqual({ role: 'heading', name: 'Hi', level: 3 });
+  });
+
+  it('anchors to a data-testid ancestor when the leaf role is unique inside it (72)', () => {
+    const attrs = makeAttrs({
+      tagName: 'input',
+      attrs: { type: 'email' },
+      accessibleName: 'Email',
+      hasLabel: true,
+      ancestors: [makeAnchor({ testId: 'signup-form', testIdCount: 1 })],
+    });
+    const alt = generateAlternatives(attrs).find((a) => a.score === 72);
+    expect(alt!.locator).toBe("getByTestId('signup-form').getByRole('textbox')");
+    expect(alt!.method).toBe('getByRole');
+    expect(alt!.args).toEqual({ role: 'textbox', anchorTestId: 'signup-form' });
+  });
+
+  it('anchors to an id ancestor (64) and a unique landmark ancestor (55)', () => {
+    const attrs = makeAttrs({
+      tagName: 'a',
+      attrs: { href: '/docs' },
+      accessibleName: 'Docs',
+      ancestors: [
+        makeAnchor({ tag: 'div', id: 'sidebar', idCount: 1 }),
+        makeAnchor({ tag: 'nav', depth: 2, roleCount: 1 }),
+      ],
+    });
+    const alts = generateAlternatives(attrs);
+    const idAlt = alts.find((a) => a.score === 64);
+    expect(idAlt!.locator).toBe("locator('#sidebar').getByRole('link')");
+    expect(idAlt!.args).toEqual({ role: 'link', anchorSelector: '#sidebar' });
+    const roleAlt = alts.find((a) => a.score === 55);
+    expect(roleAlt!.locator).toBe("getByRole('navigation').getByRole('link')");
+    expect(roleAlt!.args).toEqual({ role: 'link', anchorRole: 'navigation' });
+  });
+
+  it('takes the nearest qualifying anchor of each kind', () => {
+    const attrs = makeAttrs({
+      tagName: 'input',
+      ancestors: [
+        makeAnchor({ testId: 'inner-card', testIdCount: 1 }),
+        makeAnchor({ depth: 2, testId: 'outer-card', testIdCount: 1 }),
+      ],
+    });
+    const chains = generateAlternatives(attrs).filter((a) => a.args.anchorTestId);
+    expect(chains).toHaveLength(1);
+    expect(chains[0]!.args.anchorTestId).toBe('inner-card');
+  });
+
+  it('skips anchors that are ambiguous or contain several leaf-role matches', () => {
+    const attrs = makeAttrs({
+      tagName: 'input',
+      ancestors: [
+        makeAnchor({ testId: 'dup', testIdCount: 2 }),
+        makeAnchor({ depth: 2, testId: 'busy-form', testIdCount: 1, scopedRoleCount: 3 }),
+        makeAnchor({ depth: 3, id: 'field-123', idCount: 1 }),
+        makeAnchor({ depth: 4, scopedRoleCount: undefined, testId: 'unprobed', testIdCount: 1 }),
+      ],
+    });
+    // dup: ambiguous testid; busy-form: 3 textboxes inside; field-123:
+    // auto-generated id; unprobed: unknown scoped count — none may chain.
+    expect(generateAlternatives(attrs).some((a) => a.args.anchorTestId || a.args.anchorSelector)).toBe(false);
+  });
+
+  it('skips all structural alternatives when the element has its own unique testid', () => {
+    const attrs = makeAttrs({
+      tagName: 'input',
+      attrs: { 'data-testid': 'email-input' },
+      rolePosition: { role: 'textbox', count: 1, index: 0 },
+      ancestors: [makeAnchor({ testId: 'signup-form', testIdCount: 1 })],
+    });
+    const alts = generateAlternatives(attrs);
+    expect(alts.some((a) => a.args.anchorTestId)).toBe(false);
+    expect(alts.some((a) => a.method === 'getByRole' && !('name' in a.args))).toBe(false);
+  });
+
+  it('emits a name-free getByRole for the sole element of its role (58)', () => {
+    const attrs = makeAttrs({
+      tagName: 'input',
+      attrs: { type: 'search' },
+      rolePosition: { role: 'searchbox', count: 1, index: 0 },
+    });
+    const alt = generateAlternatives(attrs).find((a) => a.score === 58);
+    expect(alt!.locator).toBe("getByRole('searchbox')");
+    expect(alt!.args).toEqual({ role: 'searchbox' });
+  });
+
+  it('emits a level-scoped name-free getByRole for the sole heading at its level', () => {
+    const attrs = makeAttrs({
+      tagName: 'h1',
+      accessibleName: 'Dashboard',
+      rolePosition: { role: 'heading', count: 4, index: 0, levelCount: 1 },
+    });
+    const alt = generateAlternatives(attrs).find((a) => a.score === 58);
+    expect(alt!.locator).toBe("getByRole('heading', { level: 1 })");
+    expect(alt!.args).toEqual({ role: 'heading', level: 1 });
+  });
+
+  it('does not emit a name-free getByRole when the role is ambiguous on the page', () => {
+    const attrs = makeAttrs({
+      tagName: 'h2',
+      accessibleName: 'Stats',
+      rolePosition: { role: 'heading', count: 4, index: 2, levelCount: 3 },
+    });
+    expect(generateAlternatives(attrs).some((a) => a.score === 58)).toBe(false);
+  });
+
+  it('structural alternatives sort below name-derived ones', () => {
+    const attrs = makeAttrs({
+      tagName: 'input',
+      accessibleName: 'Email',
+      hasLabel: true,
+      rolePosition: { role: 'textbox', count: 1, index: 0 },
+      ancestors: [makeAnchor({ testId: 'signup-form', testIdCount: 1 })],
+    });
+    const alts = generateAlternatives(attrs);
+    const scores = alts.map((a) => a.score);
+    expect(scores).toEqual([...scores].sort((x, y) => y - x));
+    expect(alts[0]!.score).toBe(90);
+  });
+});
+
 describe('dedupeSnapshotsByLocation', () => {
   const snap = (location: string | null, hasElement: boolean): LocatorSnapshot => ({
     location,
@@ -591,5 +743,65 @@ describe('suggestLocatorsFromAria', () => {
     const aria = '- textbox "Email address"';
     const s = suggestLocatorsFromAria({ method: 'getByLabel', args: ['Email'] }, aria);
     expect(s!.suggestions[0]).toBe("getByLabel('Email address')");
+  });
+});
+
+describe('suggestLocatorsFromAria — heading level narrowing', () => {
+  const aria = ['- heading "Overview" [level=1]', '- heading "Pricing" [level=2]', '- heading "Contact" [level=2]'].join(
+    '\n',
+  );
+
+  it('a totally renamed lone h1 among h2s is suggested via its level', () => {
+    const s = suggestLocatorsFromAria({ method: 'getByRole', args: ['heading', { name: 'Dashboard', level: 1 }] }, aria);
+    expect(s).not.toBeNull();
+    expect(s!.suggestions[0]).toBe("getByRole('heading', { name: 'Overview', level: 1 })");
+  });
+
+  it('without a level the multi-heading total rename stays ambiguous', () => {
+    const s = suggestLocatorsFromAria({ method: 'getByRole', args: ['heading', { name: 'Dashboard' }] }, aria);
+    expect(s).toBeNull();
+  });
+
+  it('falls back to all same-role candidates when no candidate shares the level', () => {
+    const s = suggestLocatorsFromAria(
+      { method: 'getByRole', args: ['heading', { name: 'Pricing plans', level: 4 }] },
+      aria,
+    );
+    expect(s).not.toBeNull();
+    expect(s!.suggestions[0]).toContain("name: 'Pricing'");
+  });
+});
+
+describe('captureCallerLocation', () => {
+  const frame = (file: string, line = 10) => `    at something (${file}:${line}:5)`;
+
+  it('skips the packaged capture-fixtures proxy frame and returns the spec frame', () => {
+    const stack = [
+      'Error',
+      frame('/pkg/node_modules/@piwitests/reporter/dist/internal/capture/locator-healing.js', 801),
+      frame('/pkg/node_modules/@piwitests/reporter/dist/internal/capture/capture-fixtures.js', 457),
+      frame(`${process.cwd()}/tests/heal.spec.ts`, 9),
+    ].join('\n');
+    expect(captureCallerLocation(stack)).toBe('tests/heal.spec.ts:9:5');
+  });
+
+  it('skips the dogfood fixtures.ts proxy frame', () => {
+    const stack = [
+      'Error',
+      frame('/repo/reporter/dist/internal/capture/locator-healing.js', 801),
+      frame(`${process.cwd()}/tests/fixtures.ts`, 200),
+      frame(`${process.cwd()}/tests/checkout.spec.ts`, 42),
+    ].join('\n');
+    expect(captureCallerLocation(stack)).toBe('tests/checkout.spec.ts:42:5');
+  });
+
+  it("keeps a user's own fixtures file when it does not follow the capture module", () => {
+    const stack = [
+      'Error',
+      frame('/pkg/node_modules/@piwitests/reporter/dist/internal/capture/locator-healing.js', 801),
+      frame('/pkg/node_modules/@piwitests/reporter/dist/internal/capture/capture-fixtures.js', 457),
+      frame(`${process.cwd()}/tests/fixtures.ts`, 88),
+    ].join('\n');
+    expect(captureCallerLocation(stack)).toBe('tests/fixtures.ts:88:5');
   });
 });

@@ -321,7 +321,15 @@ const CLUSTER_DEFS = [
     errorText: `TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Pay' })\n    at tests/checkout/checkout.spec.ts:42:18`,
     caseIndices: [0, 1],
   },
-  { projectId: 1, errorText: 'expect(received).toBe(expected)\n\nExpected: 3\nReceived: 0', caseIndices: [2] },
+  {
+    // Renamed-label failure: the checkout email field's label was changed, so
+    // `getByLabel('Email address')` no longer matches. Showcases stale-aware
+    // locator healing (the name-based alternatives are flagged and the
+    // ancestor-scoped alternative is recommended instead).
+    projectId: 1,
+    errorText: `TimeoutError: locator.fill: Timeout 10000ms exceeded.\nCall log:\n  - waiting for getByLabel('Email address')\n    at tests/checkout/checkout.spec.ts:23:10`,
+    caseIndices: [2],
+  },
   { projectId: 2, errorText: 'expect(received).toBe(expected)\n\nExpected: 200\nReceived: 500', caseIndices: [0, 1] },
   {
     projectId: 2,
@@ -377,6 +385,16 @@ function ariaSnapshotForCluster(clusterDef) {
   }
   if (/page\.goto/.test(e)) {
     return '- document:\n  - navigation "Loading…"\n  - img "Hero"';
+  }
+  if (/getByLabel\('Email address'\)/.test(e)) {
+    // The checkout email step was restructured — the "Email address" textbox is
+    // gone (replaced by a contact-method combobox), so the failing page has a
+    // different set of same-role fields and no confident rename match: the
+    // stored name-based locators are stale.
+    return (
+      '- document:\n  - form "Checkout":\n    - combobox "Contact method"\n    - textbox "Card number"\n' +
+      '    - textbox "Expiry date"\n    - textbox "CVV"\n    - button "Pay"'
+    );
   }
   if (clusterDef.projectId === 1) {
     return (
@@ -1605,6 +1623,28 @@ const ALT_CHECKOUT_EMAIL = [
   { locator: "locator('#checkout-email')", method: 'locator', args: { selector: '#checkout-email' }, score: 65 },
 ];
 
+// Alternatives for the email field that later fails on a label rename (cluster
+// #2's showcase). Unlike ALT_CHECKOUT_EMAIL this field has NO data-testid of its
+// own — so capture generates an ancestor-scoped alternative (72) from the
+// per-field `email-field` wrapper. When the label changes, the two name-based
+// alternatives (90/85) go stale and healing recommends the anchored one.
+const ALT_CHECKOUT_EMAIL_RENAMED = [
+  {
+    locator: "getByRole('textbox', { name: 'Email address' })",
+    method: 'getByRole',
+    args: { role: 'textbox', name: 'Email address' },
+    score: 90,
+  },
+  { locator: "getByLabel('Email address')", method: 'getByLabel', args: { label: 'Email address' }, score: 85 },
+  {
+    locator: "getByTestId('email-field').getByRole('textbox')",
+    method: 'getByRole',
+    args: { role: 'textbox', anchorTestId: 'email-field' },
+    score: 72,
+  },
+  { locator: "locator('#checkout-email')", method: 'locator', args: { selector: '#checkout-email' }, score: 65 },
+];
+
 const ALT_CARD_NUMBER = [
   { locator: "getByTestId('card-number')", method: 'getByTestId', args: { testId: 'card-number' }, score: 100 },
   { locator: "getByLabel('Card number')", method: 'getByLabel', args: { label: 'Card number' }, score: 85 },
@@ -1731,6 +1771,56 @@ const LOCATOR_SNAPSHOTS = [
     last_seen_at: ts('2025-05-20') * 1000,
   })),
 
+  // ── Cluster #2: renamed email label (test_case_id 3) ──────────────────────
+  // The last passing run captured the email field at its call site; the field
+  // has an id and sits inside a per-field `email-field` wrapper (so an
+  // ancestor-scoped locator is unique) but no data-testid of its own. When the
+  // label later changes, healing flags the name-based alternatives as stale and
+  // recommends the surviving `getByTestId('email-field').getByRole('textbox')`.
+  {
+    id: lsId++,
+    test_case_id: 3,
+    location: 'tests/checkout/checkout.spec.ts:23:10',
+    used_method: 'getByLabel',
+    used_args: ['Email address'],
+    used_args_fp: locatorSig('getByLabel', ['Email address']),
+    element_tag: 'input',
+    element_attrs: {
+      type: 'email',
+      id: 'checkout-email',
+      accessibleName: 'Email address',
+      center: { x: 640, y: 300 },
+      // Captured when the checkout step had four form fields; at failure time
+      // the step is restructured (email replaced), so the same-role count no
+      // longer matches and no confident rename is possible → stale.
+      rolePosition: { role: 'textbox', count: 4, index: 0 },
+      ancestors: [
+        {
+          tag: 'div',
+          depth: 1,
+          testId: 'email-field',
+          role: null,
+          ariaLabel: null,
+          scopedRoleCount: 1,
+          testIdCount: 1,
+        },
+        {
+          tag: 'form',
+          depth: 2,
+          testId: 'checkout-form',
+          role: null,
+          ariaLabel: null,
+          scopedRoleCount: 4,
+          testIdCount: 1,
+        },
+      ],
+    },
+    element_text: '',
+    alternatives: ALT_CHECKOUT_EMAIL_RENAMED,
+    last_seen_run_id: null,
+    last_seen_at: ts('2025-05-20') * 1000,
+  },
+
   // ── Additional captures from the credit-card checkout flow (test_case_id 1) ─
   // Shows that the reporter captures every locator action in a passing run,
   // not just the one that later fails — these populate the test-case detail page.
@@ -1768,7 +1858,25 @@ const LOCATOR_SNAPSHOTS = [
       'data-testid': 'email-input',
       placeholder: 'your@email.com',
       autocomplete: 'email',
+      accessibleName: 'Email address',
       center: { x: 640, y: 540 },
+      // Structural context captured by newer reporters — powers the
+      // renamed-element positional match at heal time.
+      rolePosition: { role: 'textbox', count: 5, index: 0 },
+      ancestors: [
+        {
+          tag: 'form',
+          depth: 2,
+          testId: 'checkout-form',
+          id: 'checkout',
+          role: null,
+          ariaLabel: null,
+          scopedRoleCount: 5,
+          testIdCount: 1,
+          idCount: 1,
+          roleCount: 1,
+        },
+      ],
     },
     element_text: '',
     alternatives: ALT_CHECKOUT_EMAIL,

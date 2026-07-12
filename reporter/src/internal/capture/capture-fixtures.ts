@@ -27,6 +27,8 @@ import {
   ACTION_METHODS,
   LOCATOR_CREATING_CHAINS,
   CAPTURED_ATTRIBUTES,
+  TAG_TO_ROLE,
+  INPUT_TYPE_TO_ROLE,
   type LocatorSnapshot,
   type FailedLocatorInfo,
 } from './locator-healing.js';
@@ -56,6 +58,21 @@ interface CapturedAttrs {
     name?: number;
     classes?: Record<string, number>;
   };
+  /** Position among same-role elements, document-wide (null when the element has no role). */
+  rolePosition: { role: string; count: number; index: number; levelCount?: number } | null;
+  /** Anchor-worthy ancestors, nearest first (empty when none found or probing failed). */
+  ancestors: Array<{
+    tag: string;
+    depth: number;
+    testId: string | null;
+    id: string | null;
+    role: string | null;
+    ariaLabel: string | null;
+    scopedRoleCount?: number;
+    testIdCount?: number;
+    idCount?: number;
+    roleCount?: number;
+  }>;
 }
 
 /** Shape returned by the in-page web-vitals probe (see `flushSink`). */
@@ -367,9 +384,31 @@ const PATCHED_BROWSERS = new WeakSet<Browser>();
 const CHAIN_METHOD_SET = new Set(CHAIN_METHODS);
 const ACTION_METHOD_SET = new Set(ACTION_METHODS);
 const FORM_FIELD_TAGS = new Set(['input', 'select', 'textarea']);
-// CAPTURED_ATTRIBUTES is passed verbatim into evaluate() on every action — copy
-// it once instead of spreading a fresh array per call.
-const CAPTURED_ATTRS_ARG: string[] = [...CAPTURED_ATTRIBUTES];
+
+/**
+ * Everything the in-page probe needs, serialized into the browser on every
+ * action. `tagRoles`/`inputRoles` are the shared role maps (single source of
+ * truth in `locator-healing.ts`), and `roleSources` is the CSS selector for
+ * every element the probe can resolve a role for — all derived from the map so
+ * nothing is hand-maintained twice. Exported so the dogfood mirror
+ * (`application/tests/fixtures.ts`) reuses the same assembled object.
+ */
+export interface ProbeArg {
+  keep: string[];
+  tagRoles: Record<string, string>;
+  inputRoles: Record<string, string>;
+  roleSources: string;
+}
+
+/** Built once — passed verbatim into evaluate() on every action. */
+export const CAPTURED_ATTRS_ARG: ProbeArg = {
+  keep: [...CAPTURED_ATTRIBUTES],
+  tagRoles: TAG_TO_ROLE,
+  inputRoles: INPUT_TYPE_TO_ROLE,
+  // '[role]' plus every tag the maps can resolve (input/select are handled by
+  // special-cased logic in the probe, so add them explicitly).
+  roleSources: [...new Set(['[role]', 'input', 'select', ...Object.keys(TAG_TO_ROLE)])].join(','),
+};
 
 /**
  * ARIA snapshot that tolerates every Playwright version the reporter supports,
@@ -413,7 +452,8 @@ export async function ariaSnapshotBestEffort(target: Locator, timeout?: number):
  * `el` is browser-context (no DOM lib in this Node package), hence `any`.
  * Exported for unit testing; still passed directly to `evaluate()` below.
  */
-export function probeElementAttrs(el: any, keep: string[]): CapturedAttrs {
+export function probeElementAttrs(el: any, arg: ProbeArg): CapturedAttrs {
+  const { keep, tagRoles, inputRoles, roleSources } = arg;
   const attrMap: Record<string, string | null> = {};
   for (const key of keep) {
     const v = el.getAttribute(key) ?? el[key];
@@ -455,6 +495,122 @@ export function probeElementAttrs(el: any, keep: string[]): CapturedAttrs {
   } catch {
     // Uniqueness probing is best-effort — never fail the capture.
   }
+  // Structural probe: the element's position among same-role elements plus
+  // anchor-worthy ancestors — powers name-free and ancestor-scoped
+  // alternatives that survive accessible-name renames. Role resolution reuses
+  // the shared maps passed in via `arg` (see roleOf below).
+  let rolePosition: CapturedAttrs['rolePosition'] = null;
+  const ancestors: CapturedAttrs['ancestors'] = [];
+  try {
+    const doc = el.ownerDocument;
+    const cssEsc = (s: string): string => doc.defaultView.CSS.escape(s);
+    const count = (sel: string): number | undefined => {
+      try {
+        return doc.querySelectorAll(sel).length;
+      } catch {
+        return undefined;
+      }
+    };
+    // Role resolution on live DOM nodes, mirroring the Node-side resolveAriaRole
+    // branching. The role maps are passed in (arg.tagRoles/inputRoles) so this
+    // serialized-into-page function shares the single source of truth in
+    // locator-healing.ts rather than re-declaring it.
+    const roleOf = (n: any): string | null => {
+      const explicit = n.getAttribute('role');
+      if (explicit) return explicit;
+      const tag = (n.tagName || '').toLowerCase();
+      if (tag === 'input') return inputRoles[(n.getAttribute('type') || 'text').toLowerCase()] ?? 'textbox';
+      if (tag === 'select') return n.getAttribute('multiple') != null ? 'listbox' : 'combobox';
+      if (tag === 'a') return n.getAttribute('href') != null ? 'link' : null;
+      return tagRoles[tag] ?? null;
+    };
+    const levelOf = (n: any): number | null => {
+      const m = /^h([1-6])$/.exec((n.tagName || '').toLowerCase());
+      if (m) return Number(m[1]);
+      const al = n.getAttribute('aria-level');
+      return al && /^\d+$/.test(al) ? Number(al) : null;
+    };
+    const targetRole = roleOf(el);
+    const targetLevel = targetRole === 'heading' ? levelOf(el) : null;
+
+    if (targetRole) {
+      const nodes = doc.querySelectorAll(roleSources);
+      // A truncated scan would produce wrong counts/indexes — skip instead.
+      if (nodes.length <= 4000) {
+        let roleCountAll = 0;
+        let index = -1;
+        let levelCount = 0;
+        for (let i = 0; i < nodes.length; i++) {
+          const n = nodes[i];
+          if (roleOf(n) !== targetRole) continue;
+          if (n === el) index = roleCountAll;
+          roleCountAll++;
+          if (targetLevel != null && levelOf(n) === targetLevel) levelCount++;
+        }
+        if (index !== -1) {
+          rolePosition = {
+            role: targetRole,
+            count: roleCountAll,
+            index,
+            ...(targetLevel != null ? { levelCount } : {}),
+          };
+        }
+
+        // Anchor-worthy ancestors: a stable hook (test id, id, explicit role,
+        // aria-label) or a container/landmark tag, nearest first. Counts are
+        // computed here so alternative generation never guesses uniqueness.
+        const CONTAINER_TAGS = ['form', 'nav', 'main', 'article', 'section', 'dialog', 'table'];
+        const docRoleCount = (role: string): number => {
+          let c = 0;
+          for (let i = 0; i < nodes.length; i++) if (roleOf(nodes[i]) === role) c++;
+          return c;
+        };
+        let node = el.parentElement;
+        let depth = 0;
+        while (node && depth < 12 && ancestors.length < 4) {
+          depth++;
+          const tag = (node.tagName || '').toLowerCase();
+          if (tag === 'body' || tag === 'html') break;
+          const testId = node.getAttribute('data-testid');
+          const id = node.getAttribute('id');
+          const explicitRole = node.getAttribute('role');
+          const ariaLabel = node.getAttribute('aria-label');
+          const anchorRole = explicitRole || (CONTAINER_TAGS.includes(tag) ? tagRoles[tag] : null) || null;
+          if (testId || id || anchorRole || ariaLabel) {
+            // The leaf-role match count within this ancestor (level-scoped for
+            // headings — the emitted chained locator is level-scoped too).
+            const scoped = node.querySelectorAll(roleSources);
+            let scopedRoleCount = 0;
+            if (scoped.length <= 2000) {
+              for (let i = 0; i < scoped.length; i++) {
+                const n = scoped[i];
+                if (roleOf(n) !== targetRole) continue;
+                if (targetLevel != null && levelOf(n) !== targetLevel) continue;
+                scopedRoleCount++;
+              }
+            } else {
+              scopedRoleCount = -1; // truncated — unusable
+            }
+            ancestors.push({
+              tag,
+              depth,
+              testId: testId || null,
+              id: id || null,
+              role: explicitRole || null,
+              ariaLabel: ariaLabel || null,
+              ...(scopedRoleCount >= 0 ? { scopedRoleCount } : {}),
+              ...(testId ? { testIdCount: count(`[data-testid=${JSON.stringify(testId)}]`) } : {}),
+              ...(id ? { idCount: count(`#${cssEsc(id)}`) } : {}),
+              ...(anchorRole ? { roleCount: docRoleCount(anchorRole) } : {}),
+            });
+          }
+          node = node.parentElement;
+        }
+      }
+    }
+  } catch {
+    // Structural probing is best-effort — never fail the capture.
+  }
   return {
     tagName: el.tagName?.toLowerCase?.() ?? 'unknown',
     attributes: attrMap,
@@ -467,6 +623,8 @@ export function probeElementAttrs(el: any, keep: string[]): CapturedAttrs {
     },
     hasLabel: !!(el.labels && el.labels.length > 0),
     selectorCounts,
+    rolePosition,
+    ancestors,
   };
 }
 
@@ -577,13 +735,17 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
               location: callerLocation,
               used,
               // hasLabel/selectorCounts inform alternative generation only —
-              // keep the stored element to the wire shape.
+              // keep the stored element to the wire shape. rolePosition and
+              // ancestors ARE wire fields: the server's renamed-element match
+              // uses them at heal time.
               element: {
                 tagName: attrs.tagName,
                 attributes: attrs.attributes,
                 textContent: attrs.textContent,
                 accessibleName,
                 center: attrs.center,
+                ...(attrs.rolePosition ? { rolePosition: attrs.rolePosition } : {}),
+                ...(attrs.ancestors && attrs.ancestors.length > 0 ? { ancestors: attrs.ancestors } : {}),
               },
               alternatives: generateAlternatives({ ...attrs, accessibleName }),
             };

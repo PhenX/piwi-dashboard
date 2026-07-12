@@ -715,6 +715,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
               })
             : null,
           alternativesCount: (h.fromPriorSuccess?.length ?? 0) + (h.fromElementMatch?.length ?? 0),
+          ...(h.priorNameMayBeStale ? { priorNameMayBeStale: true } : {}),
         };
       })
       .filter((e: any) => e != null);
@@ -1268,6 +1269,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       fromPriorSuccess: rankedList(h.fromPriorSuccess),
       fromElementMatch: rankedList(h.fromElementMatch),
       fromAriaSnapshot: rankedList(h.fromAriaSnapshot),
+      priorNameMayBeStale: h.priorNameMayBeStale || null,
     });
   },
 

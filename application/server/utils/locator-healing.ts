@@ -14,9 +14,11 @@ import {
   locatorExpressionMethod,
   locatorSignature,
   recommendLocatorFix,
+  locatorIdentityEquals,
+  alternativeUsesName,
 } from '#shared/locator-healing';
 import {
-  elementMatchAlternatives,
+  elementMatchOutcome,
   parseAriaCandidates,
   TEXT_CONTENT_ROLES,
   type ElementFingerprint,
@@ -228,7 +230,7 @@ function generateFromAriaSnapshot(
   const totalCandidates = candidates.length;
 
   for (let idx = 0; idx < candidates.length; idx++) {
-    const { role, name } = candidates[idx]!;
+    const { role, name, level } = candidates[idx]!;
     if (!name) continue;
 
     // Score: 40 base + text-overlap bonus (Jaccard similarity, 0–25)
@@ -249,12 +251,21 @@ function generateFromAriaSnapshot(
       score += Math.round((idx / (totalCandidates - 1)) * 10);
     }
 
-    add({
-      locator: `getByRole('${role}', { name: '${esc(name)}' })`,
-      method: 'getByRole',
-      args: { role, name },
-      score,
-    });
+    add(
+      level != null
+        ? {
+            locator: `getByRole('${role}', { name: '${esc(name)}', level: ${level} })`,
+            method: 'getByRole',
+            args: { role, name, level },
+            score,
+          }
+        : {
+            locator: `getByRole('${role}', { name: '${esc(name)}' })`,
+            method: 'getByRole',
+            args: { role, name },
+            score,
+          },
+    );
 
     // getByText for roles whose visible text `getByText` inspects
     if (TEXT_CONTENT_ROLES.has(role)) {
@@ -318,9 +329,14 @@ function buildHealingResult(
   source: LocatorHealingResult['source'],
   fromElementMatch: RankedLocator[] | null = null,
   capturedAt: Date | null = null,
+  opts: { recommendFrom?: RankedLocator[]; priorNameMayBeStale?: boolean } = {},
 ): LocatorHealingResult {
   const alternatives = fromElementMatch ?? fromPriorSuccess ?? fromAriaSnapshot ?? [];
-  const recommendation = alternatives.length ? recommendLocatorFix(failingLocator?.method, alternatives) : null;
+  // The recommendation may be picked from a filtered pool (stale name-derived
+  // entries excluded) while the full list stays visible. An empty pool means
+  // nothing trustworthy remains — recommendation: null, never a stale pick.
+  const pool = opts.recommendFrom ?? alternatives;
+  const recommendation = pool.length ? recommendLocatorFix(failingLocator?.method, pool) : null;
   // "Everything is fragile — add a data-testid" only makes sense when the
   // scores are stability scores. ARIA-fallback scores measure text-overlap
   // relevance and element-match scores are a fixed band, so a low score there
@@ -336,6 +352,7 @@ function buildHealingResult(
     source,
     recommendation,
     capturedAt: capturedAt ? capturedAt.toISOString() : null,
+    ...(opts.priorNameMayBeStale ? { priorNameMayBeStale: true } : {}),
   };
 }
 
@@ -355,7 +372,32 @@ function fingerprintFromSnapshot(priorAlts: RankedLocator[] | null, row: Locator
     role = implicitRoleForTag(row.elementTag);
   }
   const name = typeof roleAlt?.args?.name === 'string' ? roleAlt.args.name : (row.elementText ?? null);
-  return { role, name };
+
+  // Structural identity — heading level and same-role position — narrows the
+  // renamed-element match. Level: captured getByRole args, then the h1-h6 tag,
+  // then a stored aria-level attribute. rolePosition: newer captures only.
+  let attrs: Record<string, unknown> = {};
+  try {
+    attrs = JSON.parse(row.elementAttrs) as Record<string, unknown>;
+  } catch {
+    // Legacy/malformed attrs — the fingerprint stays role+name only.
+  }
+  let level = typeof roleAlt?.args?.level === 'number' ? roleAlt.args.level : null;
+  if (level == null && row.elementTag) {
+    const tagMatch = row.elementTag.match(/^h([1-6])$/i);
+    if (tagMatch) level = Number(tagMatch[1]);
+  }
+  const ariaLevel = attrs['aria-level'];
+  if (level == null && typeof ariaLevel === 'string' && /^\d+$/.test(ariaLevel)) {
+    level = Number(ariaLevel);
+  }
+  const rp = attrs['rolePosition'] as { role?: unknown; count?: unknown; index?: unknown } | null | undefined;
+  const rolePosition =
+    rp && typeof rp.role === 'string' && typeof rp.count === 'number' && typeof rp.index === 'number'
+      ? { role: rp.role, count: rp.count, index: rp.index }
+      : null;
+
+  return { role, name, level, rolePosition };
 }
 
 /**
@@ -409,6 +451,15 @@ function implicitRoleForTag(tag: string): string | null {
  * return fresh locators generated from the element it became (`element-match`);
  * otherwise the pre-captured alternatives still describe it (`prior-run` /
  * `fingerprint`).
+ *
+ * When the stored accessible name is provably gone from the failing page but
+ * no rename match was confident (`no-match`), the name-derived alternatives —
+ * including the failing locator itself, which capture legitimately recorded —
+ * almost certainly no longer match. They stay visible for context, but the
+ * recommendation is picked only from the survivors (structural/attribute
+ * alternatives), and failure-page ARIA candidates ride along as a supplement.
+ * A flaky failure on an unchanged page (`unchanged`) keeps the full pool: the
+ * original locator is still the right one there.
  */
 function resolveStoredHit(
   failingLocator: LocatorHealingResult['failingLocator'],
@@ -418,10 +469,25 @@ function resolveStoredHit(
 ): LocatorHealingResult {
   const priorAlts = parseAlternativesColumn(hit);
   const fingerprint = fingerprintFromSnapshot(priorAlts, hit);
-  const fresh = elementMatchAlternatives(fingerprint, ariaSnapshot);
-  if (fresh) {
-    return buildHealingResult(failingLocator, null, null, 'element-match', fresh);
+  const outcome = elementMatchOutcome(fingerprint, ariaSnapshot);
+  if (outcome.status === 'matched') {
+    return buildHealingResult(failingLocator, null, null, 'element-match', outcome.fresh);
   }
+
+  if (outcome.status === 'no-match' && fingerprint.name) {
+    const staleName = fingerprint.name;
+    const survivors = (priorAlts ?? []).filter(
+      (a) =>
+        !alternativeUsesName(a, staleName) &&
+        !(failingLocator && locatorIdentityEquals(a.method, a.args, failingLocator.method, failingLocator.args)),
+    );
+    const supplement = generateFromAriaSnapshot(ariaSnapshot, failingLocator);
+    return buildHealingResult(failingLocator, priorAlts, supplement, priorSource, null, hit.lastSeenAt ?? null, {
+      recommendFrom: survivors,
+      priorNameMayBeStale: true,
+    });
+  }
+
   return buildHealingResult(failingLocator, priorAlts, null, priorSource, null, hit.lastSeenAt ?? null);
 }
 
@@ -714,10 +780,14 @@ export async function upsertLocatorSnapshots(
         usedArgs: JSON.stringify(snap.used.args),
         usedArgsFp: fps[idx]!,
         elementTag: snap.element!.tagName,
+        // rolePosition/ancestors must be folded in explicitly — this object is
+        // the storage whitelist, so anything omitted here is silently dropped.
         elementAttrs: JSON.stringify({
           ...snap.element!.attributes,
           accessibleName: snap.element!.accessibleName,
           center: snap.element!.center,
+          ...(snap.element!.rolePosition ? { rolePosition: snap.element!.rolePosition } : {}),
+          ...(snap.element!.ancestors?.length ? { ancestors: snap.element!.ancestors } : {}),
         }),
         elementText: snap.element!.textContent,
         alternatives: JSON.stringify(snap.alternatives.slice(0, 10)),

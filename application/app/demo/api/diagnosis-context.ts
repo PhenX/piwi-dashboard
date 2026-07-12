@@ -473,6 +473,9 @@ async function locatorHealingMd(
   const list = healing.fromPriorSuccess ?? healing.fromAriaSnapshot ?? healing.fromElementMatch ?? alts;
   if (!list.length) return { md: null, coverage: null };
   const lines = ['## Alternative Locators (Locator Healing)', `- Source: ${healing.source}`, ''];
+  if (healing.priorNameMayBeStale) {
+    lines.push("CAUTION: the element's captured name changed — name-based alternatives probably no longer match.", '');
+  }
   for (const a of list.slice(0, 5)) lines.push(`- \`${a.locator}\` (stability ${a.score})`);
   if (healing.recommendation?.recommended) {
     lines.push('', `**Recommended fix:** \`${healing.recommendation.recommended.locator}\``);

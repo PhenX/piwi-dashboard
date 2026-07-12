@@ -1222,7 +1222,9 @@ function nearestAriaNamesSection(rep: RepresentativeRow): string | null {
   const locator = parseLocatorFromError(error);
   if (!locator) return null;
 
-  const entries = parseAriaCandidates(snapshot).filter((e): e is { role: string; name: string } => e.name != null);
+  const entries = parseAriaCandidates(snapshot).filter(
+    (e): e is { role: string; name: string; level: number | null } => e.name != null,
+  );
   if (entries.length === 0) return null;
 
   // Filter entries matching the locator's role
@@ -1310,6 +1312,13 @@ async function locatorHealingSection(
   if (healing.capturedAt) {
     lines.push(`Captured: ${healing.capturedAt}`);
   }
+  if (healing.priorNameMayBeStale) {
+    lines.push(
+      "CAUTION: the element's captured accessible name no longer appears on the failing page. " +
+        'Name-based alternatives below (and the failing locator itself) probably no longer match — ' +
+        'do NOT suggest reusing the failing locator; prefer structural/attribute alternatives or the failing-page candidates.',
+    );
+  }
 
   // Surface the single convention-preserving recommendation so the model picks
   // the same minimal, idiomatic fix the dashboard highlights — not just the
@@ -1339,6 +1348,15 @@ async function locatorHealingSection(
   lines.push('Top alternatives, ranked by stability score:');
   for (const alt of alternatives.slice(0, 5)) {
     lines.push(`- \`${alt.locator}\` (score ${alt.score})`);
+  }
+
+  // In the stale case the ARIA supplement rides alongside the stored list —
+  // these are the elements actually present on the failing page.
+  if (healing.priorNameMayBeStale && healing.fromPriorSuccess?.length && healing.fromAriaSnapshot?.length) {
+    lines.push('Candidates from the failing page (ARIA snapshot):');
+    for (const alt of healing.fromAriaSnapshot.slice(0, 3)) {
+      lines.push(`- \`${alt.locator}\``);
+    }
   }
 
   return {

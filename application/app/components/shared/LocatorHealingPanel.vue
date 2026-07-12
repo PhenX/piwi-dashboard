@@ -47,12 +47,23 @@ const alternatives = computed<RankedLocator[]>(() => {
 });
 
 // The single recommended fix — convention-preserving where possible. Computed
-// server-side; fall back to the shared picker for payloads that lack it.
+// server-side; fall back to the shared picker for payloads that lack it —
+// EXCEPT when the server deliberately withheld it because every stored
+// alternative looks stale (recomputing here would resurrect a broken pick).
 const recommendation = computed<LocatorFixRecommendation | null>(() => {
   if (healing.value?.recommendation) return healing.value.recommendation;
+  if (healing.value?.priorNameMayBeStale) return null;
   if (!alternatives.value.length) return null;
   return recommendLocatorFix(healing.value?.failingLocator?.method, alternatives.value);
 });
+
+// Failing-page candidates shown alongside a stale stored list — the server
+// populates fromAriaSnapshot next to fromPriorSuccess only in that case.
+const supplement = computed<RankedLocator[]>(() =>
+  healing.value?.priorNameMayBeStale && healing.value.fromPriorSuccess?.length
+    ? (healing.value.fromAriaSnapshot ?? [])
+    : [],
+);
 
 const recommendationNote = computed(() => {
   const r = recommendation.value;
@@ -63,10 +74,13 @@ const recommendationNote = computed(() => {
 });
 
 const sourceNote = computed(() => {
+  const stale = healing.value?.priorNameMayBeStale;
   const note = (() => {
     switch (healing.value?.source) {
       case 'prior-run':
-        return 'Pre-captured from the last passing run — highest confidence';
+        return stale
+          ? 'Pre-captured from the last passing run — the element looks changed since'
+          : 'Pre-captured from the last passing run — highest confidence';
       case 'element-match':
         return 'The element looks renamed or moved — these are fresh locators for its current identity on the failing page';
       case 'fingerprint':
@@ -85,8 +99,10 @@ const sourceNote = computed(() => {
 });
 
 // Subtitle color: green for pre-captured (high confidence), primary for a
-// fresh current-page match, amber for the limited ARIA-only fallback.
+// fresh current-page match, amber for the limited ARIA-only fallback — and for
+// a stored list whose element looks changed since capture.
 const sourceClass = computed(() => {
+  if (healing.value?.priorNameMayBeStale) return 'text-warning-600 dark:text-warning-400';
   switch (healing.value?.source) {
     case 'prior-run':
     case 'fingerprint':
@@ -121,20 +137,13 @@ onBeforeUnmount(() => {
   if (copiedTimer) clearTimeout(copiedTimer);
 });
 
-function scoreColor(score: number): 'success' | 'warning' | 'error' {
-  if (score >= 80) return 'success';
-  if (score >= 50) return 'warning';
-  return 'error';
-}
-
-function scoreBgClass(score: number): string {
-  if (score >= 80) return 'bg-success/10';
-  if (score >= 50) return 'bg-warning/10';
-  return 'bg-error/10';
-}
-
-function locatorNote(method: string, score: number): string {
+function locatorNote(alt: RankedLocator): string {
+  const { method, score, args } = alt;
+  if (args && (args.anchorTestId || args.anchorSelector || args.anchorRole)) {
+    return 'scoped to a stable ancestor — survives renames';
+  }
   if (score >= 100) return 'most stable — purpose-built for testing';
+  if (method === 'getByRole' && args && !('name' in args)) return 'name-free role — survives renames';
   if (method === 'getByRole') return 'browser ARIA tree — semantic and stable';
   if (method === 'getByLabel') return 'associated <label> element';
   if (method === 'getByPlaceholder') return 'input placeholder';
@@ -186,28 +195,41 @@ function locatorNote(method: string, score: number): string {
       />
     </div>
 
+    <!-- The stored accessible name is gone from the failing page — name-based
+         alternatives below probably broke together with the failing locator -->
+    <UAlert
+      v-if="healing?.priorNameMayBeStale"
+      class="mb-3"
+      color="warning"
+      icon="i-lucide-alert-triangle"
+      variant="subtle"
+      title="The element's name looks changed"
+      description="The captured accessible name no longer appears on the failing page, so name-based alternatives (and the failing locator itself) probably no longer match. Prefer the structural options, or the failing-page candidates below."
+    />
+
     <!-- Ranked alternatives -->
     <div class="space-y-2">
-      <div
+      <LocatorAlternativeRow
         v-for="(alt, i) in alternatives"
         :key="i"
-        class="flex items-center gap-3 rounded-lg p-3 border border-default"
-        :class="scoreBgClass(alt.score)"
-      >
-        <UBadge size="sm" :color="scoreColor(alt.score)" variant="subtle" class="shrink-0 w-12 text-center font-mono">
-          {{ alt.score }}/100
-        </UBadge>
-        <div class="flex-1 min-w-0">
-          <code class="text-sm font-mono block truncate">{{ alt.locator }}</code>
-          <p class="text-xs text-gray-500 mt-0.5">{{ locatorNote(alt.method, alt.score) }}</p>
-        </div>
-        <UButton
-          size="xs"
-          variant="outline"
-          color="neutral"
-          :icon="copiedKey === `alt-${i}` ? 'i-lucide-check' : 'i-lucide-copy'"
-          :title="copiedKey === `alt-${i}` ? 'Copied!' : 'Copy'"
-          @click="copyLocator(alt.locator, `alt-${i}`)"
+        :alt="alt"
+        :note="locatorNote(alt)"
+        :copied="copiedKey === `alt-${i}`"
+        @copy="copyLocator(alt.locator, `alt-${i}`)"
+      />
+    </div>
+
+    <!-- Failing-page candidates (stale stored list only) -->
+    <div v-if="supplement.length" class="mt-3">
+      <p class="text-xs font-medium text-gray-500 mb-2">From the failing page</p>
+      <div class="space-y-2">
+        <LocatorAlternativeRow
+          v-for="(alt, i) in supplement"
+          :key="i"
+          :alt="alt"
+          note="candidate from the failure-time ARIA snapshot"
+          :copied="copiedKey === `supp-${i}`"
+          @copy="copyLocator(alt.locator, `supp-${i}`)"
         />
       </div>
     </div>
