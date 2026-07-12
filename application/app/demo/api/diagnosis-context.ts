@@ -33,6 +33,8 @@ import {
 import type { DrizzleDB } from '#shared/handlers/db';
 import { DIAGNOSIS_SECTIONS } from '#shared/diagnosis-sections';
 import { getLocatorHealing } from '~~/server/utils/locator-healing';
+import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
+import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
 import type { DiagnosisContextCoverage, ScmChanges } from '~~/types/api';
 import { getDemoScmProject, getDemoChangesSince, getDemoChangesForShas } from '../demo-scm';
 
@@ -76,6 +78,7 @@ const SECTION_ORDER = [
   'networkRequests',
   'serverLogs',
   'webVitals',
+  'environmentDiff',
   'recurrenceFlakiness',
   'browserDistribution',
   'affectedTests',
@@ -589,6 +592,20 @@ async function assemble(
     const heal = await locatorHealingMd(db, rep.id);
     push(section('locatorHealing', 'Alternative Locators (Locator Healing)', heal.md));
     if (heal.coverage) coverage = { ...coverage, locatorHealing: heal.coverage };
+
+    // Environment diff vs last pass — same shared loader + renderer as the server
+    const envDiff = await getEnvironmentDiff(db, rep.id);
+    const envDiffMd = renderEnvironmentDiffMarkdown(envDiff);
+    push(section('environmentDiff', 'Environment Diff vs Last Pass', envDiffMd));
+    if (envDiffMd && envDiff.baseline) {
+      coverage = {
+        ...coverage,
+        environmentDiff: {
+          changedKeys: (envDiff.entries ?? []).filter((e) => !e.informational).length,
+          baselineRunId: envDiff.baseline.runId,
+        },
+      };
+    }
   }
 
   push(section('priorDiagnosis', 'Prior Assessment', await priorDiagnosisMd(db, cluster.id)));

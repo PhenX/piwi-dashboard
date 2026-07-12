@@ -682,7 +682,10 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
       metadata,
       stream_token: null,
       instance_id: null,
-      playwright_version: '1.51.0',
+      // Newest runs are on a newer Playwright than older ones so the
+      // environment-diff card has a real version drift to show for failures
+      // whose last pass predates the bump.
+      playwright_version: i < 2 ? '1.52.0' : '1.51.0',
       reporter_version: '0.7.0',
       is_full_run: i % 5 !== 4 ? 1 : 0,
       filter_details: i % 5 === 4 ? JSON.stringify({ grep: 'login|checkout' }) : null,
