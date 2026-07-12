@@ -137,10 +137,12 @@ const { copy: copyRetry, copied: retryCopied } = useCopy();
 const errorSection = ref<{ reveal: () => void } | null>(null);
 const evidenceSection = ref<{ reveal: () => void } | null>(null);
 const scmSection = ref<{ reveal: () => void } | null>(null);
+const envDiffSection = ref<{ reveal: () => void } | null>(null);
 
 const sectionToCard: Record<string, () => { reveal: () => void } | null> = {
   sampleError: () => errorSection.value,
   executionError: () => errorSection.value,
+  environmentDiff: () => envDiffSection.value,
   scmInvestigation: () => scmSection.value,
   selectedCommits: () => scmSection.value,
   topSuspectedCommit: () => scmSection.value,
@@ -247,6 +249,15 @@ const breadcrumbItems = computed(() => [
               v-if="cluster.affectedTestCases?.length && cluster.affectedTestCases[0]?.recentTestRunsCaseId"
               ref="locatorSection"
               storage-key="cluster-locators"
+              :run-id="cluster.lastSeenRunId"
+              :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
+            />
+
+            <!-- Environment drift since the last pass of the representative case -->
+            <EnvironmentDiffCard
+              v-if="cluster.affectedTestCases?.length && cluster.affectedTestCases[0]?.recentTestRunsCaseId"
+              ref="envDiffSection"
+              storage-key="cluster-env-diff"
               :run-id="cluster.lastSeenRunId"
               :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
             />

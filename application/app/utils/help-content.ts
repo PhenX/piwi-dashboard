@@ -517,6 +517,12 @@ export const HELP_TOPICS = {
     text: 'When a locator breaks after a UI change, Piwi suggests pre-captured alternatives from the last passing run — or from another test in the project that uses the same locator. Each alternative is ranked by stability score — prefer data-testid (100) over CSS classes (10–40).',
     doc: 'reporter#locator-healing',
   },
+
+  // ── Environment diff ────────────────────────────────────────────────────
+  'environment-diff': {
+    title: 'Environment diff',
+    text: 'Compares this execution’s environment (Playwright version, browser config, locale, viewport, CI provider, …) against the same test’s last passing run on the same browser. Only changed keys are shown — an empty diff rules out environment drift as the cause.',
+  },
 } as const satisfies Record<string, HelpTopic>;
 
 export type HelpTopicKey = keyof typeof HELP_TOPICS;
