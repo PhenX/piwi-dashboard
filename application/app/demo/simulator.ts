@@ -305,6 +305,11 @@ function buildWebVitals(slow = false): Record<string, unknown> {
       firstPaint: vary(680 * factor),
       firstContentfulPaint: vary(890 * factor),
     },
+    vitals: {
+      lcp: vary(1450 * factor),
+      cls: Math.round((slow ? 0.18 : 0.04) * (0.8 + Math.random() * 0.4) * 10000) / 10000,
+      inp: vary(140 * factor),
+    },
   };
 }
 

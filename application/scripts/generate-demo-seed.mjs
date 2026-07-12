@@ -816,6 +816,12 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
             firstPaint: 600 + Math.floor(Math.random() * 400),
             firstContentfulPaint: 800 + Math.floor(Math.random() * 500),
           },
+          vitals: {
+            lcp: 1200 + Math.floor(Math.random() * 1400),
+            cls: Math.round(Math.random() * 0.2 * 10000) / 10000,
+            // INP is frequently absent in short tests — mirror that in the seed.
+            inp: Math.random() < 0.6 ? 80 + Math.floor(Math.random() * 250) : null,
+          },
         },
         console_logs: isFailedCase
           ? [

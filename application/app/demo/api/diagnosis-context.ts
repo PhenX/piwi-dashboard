@@ -100,7 +100,11 @@ interface RepRow {
   error: string | null;
   steps: Array<{ title: string; duration: number; category: string }> | null;
   consoleLogs: Array<{ type: string; text: string }> | null;
-  webVitals: { navigation?: Record<string, number>; paint?: Record<string, number> } | null;
+  webVitals: {
+    navigation?: Record<string, number>;
+    paint?: Record<string, number>;
+    vitals?: Record<string, number | null>;
+  } | null;
   ariaSnapshot: string | null;
   browser: { projectName?: string; browserName?: string } | null;
   testAnnotations: Array<{ type: string; description?: string }> | null;
@@ -350,11 +354,15 @@ function webVitalsMd(rep: RepRow): string | null {
   if (!v) return null;
   const nav = v.navigation ?? {};
   const paint = v.paint ?? {};
+  const vitals = v.vitals ?? {};
   const lines = ['## Web Vitals', ''];
   if (nav.ttfb != null) lines.push(`- TTFB: ${nav.ttfb}ms`);
   if (nav.domContentLoaded != null) lines.push(`- DOM content loaded: ${nav.domContentLoaded}ms`);
   if (nav.loadComplete != null) lines.push(`- Load complete: ${nav.loadComplete}ms`);
   if (paint.firstContentfulPaint != null) lines.push(`- First contentful paint: ${paint.firstContentfulPaint}ms`);
+  if (vitals.lcp != null) lines.push(`- LCP: ${vitals.lcp}ms`);
+  if (vitals.cls != null) lines.push(`- CLS: ${vitals.cls}`);
+  if (vitals.inp != null) lines.push(`- INP: ${vitals.inp}ms`);
   return lines.length > 2 ? lines.join('\n') : null;
 }
 
