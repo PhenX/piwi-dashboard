@@ -172,12 +172,15 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
     const decoder = new TextDecoder();
     let text = '';
 
+    const pidStr = String(projectId);
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         text += decoder.decode(value, { stream: true });
-        if (text.includes('"type":"run.finished"') && text.includes('"type":"run.failed"')) break;
+        const hasRunFinished = text.includes('"type":"run.finished"') && text.includes(`"projectId":${pidStr}`);
+        const hasRunFailed = text.includes('"type":"run.failed"') && text.includes(`"projectId":${pidStr}`);
+        if (hasRunFinished && hasRunFailed) break;
       }
     } finally {
       reader.releaseLock();
@@ -194,14 +197,15 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
 
     const events = dataLines.map((l) => JSON.parse(l));
 
-    const runFinished = events.find((e: Record<string, unknown>) => e.type === 'run.finished');
+    const runFinished = events.find(
+      (e: Record<string, unknown>) => e.type === 'run.finished' && e.projectId === projectId,
+    );
     expect(runFinished).toBeDefined();
-    expect(runFinished.projectId).toBe(projectId);
     expect(runFinished.projectName).toBe(PROJECT.BROWSER_NOTIFY);
     expect(runFinished.status).toBe('failed');
     expect(runFinished.totalTests).toBe(3);
 
-    const runFailed = events.find((e: Record<string, unknown>) => e.type === 'run.failed');
+    const runFailed = events.find((e: Record<string, unknown>) => e.type === 'run.failed' && e.projectId === projectId);
     expect(runFailed).toBeDefined();
     expect(runFailed.failedTests).toBe(2);
 
@@ -243,12 +247,13 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
     const decoder = new TextDecoder();
     let text = '';
 
+    const pidStr2 = String(projectId);
     try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         text += decoder.decode(value, { stream: true });
-        if (text.includes('"type":"cluster.new"')) break;
+        if (text.includes('"type":"cluster.new"') && text.includes(`"projectId":${pidStr2}`)) break;
       }
     } finally {
       reader.releaseLock();
@@ -261,9 +266,10 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
       .map((l) => l.slice('data:'.length).trim());
 
     const events = dataLines.map((l) => JSON.parse(l));
-    const clusterEvent = events.find((e: Record<string, unknown>) => e.type === 'cluster.new');
+    const clusterEvent = events.find(
+      (e: Record<string, unknown>) => e.type === 'cluster.new' && e.projectId === projectId,
+    );
     expect(clusterEvent).toBeDefined();
-    expect(clusterEvent.projectId).toBe(projectId);
     expect(clusterEvent.signature).toBeDefined();
     expect(clusterEvent.affectedCases).toBe(2);
   });
