@@ -42,6 +42,7 @@ import type {
 import type { RunMetadata, BrowserConfig } from '../run-json-types';
 import { getStorage } from '../../storage';
 import { getLocatorHealingBatch, getLocatorHealing } from '../locator-healing';
+import { selectCaseScreenshots } from '../case-screenshots';
 import { createScmProvider } from '../scm';
 import { resolveAiConfig } from '../ai-provider';
 import { runClusterDiagnosis, isDiagnosisRunning } from '../ai-diagnosis';
@@ -852,11 +853,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return [];
     const withContent = params.content === true || params.content === 'true';
 
-    const screenshotRows = await db
-      .select({ path: files.path, label: files.label })
-      .from(files)
-      .where(and(eq(files.testRunsCaseId, id), eq(files.type, 'screenshot')))
-      .limit(3);
+    const screenshotRows = await selectCaseScreenshots(db, id, 3);
     if (screenshotRows.length === 0) return [];
 
     const storage = getStorage();
@@ -1441,10 +1438,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
     const [healing, screenshotRows, diagContext] = await Promise.all([
       getLocatorHealing(db, id).catch(() => null),
-      db
-        .select({ id: files.id })
-        .from(files)
-        .where(and(eq(files.testRunsCaseId, id), eq(files.type, 'screenshot'))),
+      selectCaseScreenshots(db, id),
       row.failureClusterId
         ? buildDiagnosisContext(db, {
             kind: 'execution',

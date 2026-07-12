@@ -33,6 +33,7 @@ import { getTraceFailingActionSection } from './trace-parser';
 import { getLocatorHealing } from './locator-healing';
 import { getEnvironmentDiff } from './environment-diff';
 import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
+import { selectCaseScreenshots } from './case-screenshots';
 import { parseAriaCandidates, textSimilarity } from '#shared/locator-fingerprint';
 import type {
   BuildContextOptions,
@@ -843,13 +844,8 @@ async function resolveScreenshots(
   limits: ContextLimits,
 ): Promise<AiAttachedImage[]> {
   if (limits.maxImages <= 0) return [];
-  // Order by id DESC so the most recently captured screenshot (usually the on-failure one) comes first.
-  const screenshotRows = await db
-    .select({ path: files.path, label: files.label })
-    .from(files)
-    .where(and(eq(files.testRunsCaseId, rep.id), eq(files.type, 'screenshot')))
-    .orderBy(desc(files.id))
-    .limit(limits.maxImages);
+  // Newest first, so the most recently captured screenshot (usually the on-failure one) comes first.
+  const screenshotRows = await selectCaseScreenshots(db, rep.id, limits.maxImages);
 
   if (screenshotRows.length === 0) return [];
 
