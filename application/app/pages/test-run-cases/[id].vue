@@ -414,6 +414,14 @@ function copyFailure() {
               <code class="rounded bg-gray-100 px-1 dark:bg-gray-800">test</code>
               from the piwi-dashboard fixtures.
             </p>
+
+            <!-- Failure-time HTML extracted from the uploaded trace — folded by default -->
+            <DomSnapshotCard
+              v-if="testCase?.error && testCase.testRun?.id"
+              storage-key="case-dom-snapshot"
+              :run-id="testCase.testRun.id"
+              :test-runs-case-id="Number(testCaseId)"
+            />
           </div>
         </template>
 
@@ -642,6 +650,11 @@ function copyFailure() {
           <div class="space-y-4 pt-4">
             <TestCaseTracesCard :traces="(traceData as any[]) || []" />
             <TestCaseAttachmentsCard :attachments="(testCase as any)?.attachments ?? []" />
+            <PageStateCard
+              v-if="(testCase as any)?.pageState"
+              storage-key="case-page-state"
+              :page-state="(testCase as any).pageState"
+            />
             <TestCaseConsoleCard
               v-if="(testCase as any)?.consoleLogs?.length"
               :entries="(testCase as any)?.consoleLogs ?? []"

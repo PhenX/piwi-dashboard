@@ -529,6 +529,19 @@ export const HELP_TOPICS = {
     title: 'Visual diff',
     text: 'Pixel-compares the failing screenshot against the same test’s last passing screenshot (same browser). Red pixels in the overlay mark what changed. When the two screenshots have different dimensions the ratio is flagged as unreliable.',
   },
+
+  // ── DOM snapshot ─────────────────────────────────────────────────────────
+  'dom-snapshot': {
+    title: 'DOM snapshot',
+    text: 'The page’s HTML around the failing action, rendered from the uploaded Playwright trace — nothing extra is captured. Input values, inline handlers and script bodies are removed; token-shaped strings are masked.',
+  },
+
+  // ── Page state ───────────────────────────────────────────────────────────
+  'page-state': {
+    title: 'App state at test end',
+    text: 'URL, history state, storage key names + value lengths, and cookie names + flags captured when the test ended. Values are never captured. Disable with the reporter’s capturePageState option.',
+    doc: 'capture-fixtures',
+  },
 } as const satisfies Record<string, HelpTopic>;
 
 export type HelpTopicKey = keyof typeof HELP_TOPICS;

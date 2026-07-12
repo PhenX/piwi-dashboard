@@ -139,12 +139,14 @@ const evidenceSection = ref<{ reveal: () => void } | null>(null);
 const scmSection = ref<{ reveal: () => void } | null>(null);
 const envDiffSection = ref<{ reveal: () => void } | null>(null);
 const visualDiffSection = ref<{ reveal: () => void } | null>(null);
+const domSnapshotSection = ref<{ reveal: () => void } | null>(null);
 
 const sectionToCard: Record<string, () => { reveal: () => void } | null> = {
   sampleError: () => errorSection.value,
   executionError: () => errorSection.value,
   environmentDiff: () => envDiffSection.value,
   visualDiff: () => visualDiffSection.value,
+  domSnapshot: () => domSnapshotSection.value,
   scmInvestigation: () => scmSection.value,
   selectedCommits: () => scmSection.value,
   topSuspectedCommit: () => scmSection.value,
@@ -269,6 +271,15 @@ const breadcrumbItems = computed(() => [
               v-if="cluster.affectedTestCases?.length && cluster.affectedTestCases[0]?.recentTestRunsCaseId"
               ref="visualDiffSection"
               storage-key="cluster-visual-diff"
+              :run-id="cluster.lastSeenRunId"
+              :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
+            />
+
+            <!-- Failure-time HTML extracted from the uploaded trace -->
+            <DomSnapshotCard
+              v-if="cluster.affectedTestCases?.length && cluster.affectedTestCases[0]?.recentTestRunsCaseId"
+              ref="domSnapshotSection"
+              storage-key="cluster-dom-snapshot"
               :run-id="cluster.lastSeenRunId"
               :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
             />
