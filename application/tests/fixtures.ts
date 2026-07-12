@@ -31,6 +31,7 @@ import {
 } from '../../reporter/dist/internal/capture/locator-healing.js';
 import {
   ariaSnapshotBestEffort,
+  buildPageState,
   computeCoreVitals,
   probeElementAttrs,
   CAPTURED_ATTRS_ARG,
@@ -191,6 +192,50 @@ async function collectNetworkAndVitals(page: Page, testInfo: TestInfo) {
       }
     } catch {
       // page may already be closed or no navigation happened
+    }
+
+    // Page state at test end (dogfooding: mirrors the reporter fixture's capture)
+    if (process.env.PIWI_CAPTURE_PAGE_STATE !== 'false') {
+      try {
+        const rawState = await page.evaluate(() => {
+          const listStorage = (s: Storage): Array<{ key: string; length: number }> => {
+            const out: Array<{ key: string; length: number }> = [];
+            try {
+              for (let i = 0; i < s.length; i++) {
+                const key = s.key(i);
+                if (key != null) out.push({ key, length: (s.getItem(key) ?? '').length });
+              }
+            } catch {
+              // Storage access can throw in sandboxed pages.
+            }
+            return out;
+          };
+          let historyState: string | null = null;
+          try {
+            historyState = history.state == null ? null : JSON.stringify(history.state);
+          } catch {
+            // Unserializable history state.
+          }
+          return {
+            url: location.href,
+            hash: location.hash || null,
+            historyState,
+            localStorage: listStorage(localStorage),
+            sessionStorage: listStorage(sessionStorage),
+          };
+        });
+        const cookies = await page
+          .context()
+          .cookies()
+          .catch(() => null);
+        const pageState = buildPageState(rawState, cookies as Array<Record<string, unknown>> | null);
+        await testInfo.attach(ATTACHMENT_NAMES.pageState, {
+          contentType: 'application/json',
+          body: Buffer.from(JSON.stringify(pageState)),
+        });
+      } catch {
+        // page may already be closed
+      }
     }
   };
 }

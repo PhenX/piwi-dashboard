@@ -13,6 +13,7 @@ const DEFAULTS: PiwiDashboardOptions = {
   collectCiInfo: true,
   collectPerformanceMetrics: true,
   captureLocators: true,
+  capturePageState: true,
   streaming: true,
   streamingBatchSize: 5,
   streamingBatchDelay: 2000,
@@ -45,6 +46,7 @@ export const PIWI_ENV_KEYS = {
   uploadTraces: 'PIWI_UPLOAD_TRACES',
   uploadReport: 'PIWI_UPLOAD_REPORT',
   captureLocators: 'PIWI_CAPTURE_LOCATORS',
+  capturePageState: 'PIWI_CAPTURE_PAGE_STATE',
 } as const;
 
 function readBool(val: string | undefined): boolean | undefined {
@@ -89,6 +91,7 @@ const ENV_FALLBACK_SPECS: ReadonlyArray<{
   { option: 'uploadTraces', env: PIWI_ENV_KEYS.uploadTraces, kind: 'bool' },
   { option: 'uploadReport', env: PIWI_ENV_KEYS.uploadReport, kind: 'bool' },
   { option: 'captureLocators', env: PIWI_ENV_KEYS.captureLocators, kind: 'bool' },
+  { option: 'capturePageState', env: PIWI_ENV_KEYS.capturePageState, kind: 'bool' },
 ];
 
 /**
@@ -148,4 +151,9 @@ export function applyOptionsToEnv(options: PiwiDashboardOptions): void {
   if (options.captureLocators === false || options.collectPerformanceMetrics === false)
     env[PIWI_ENV_KEYS.captureLocators] = 'false';
   else if (options.captureLocators === true) env[PIWI_ENV_KEYS.captureLocators] = 'true';
+  // Page-state capture follows the same bridge: off when either flag disables
+  // it, explicit true otherwise (unset keeps the fixture's default-on).
+  if (options.capturePageState === false || options.collectPerformanceMetrics === false)
+    env[PIWI_ENV_KEYS.capturePageState] = 'false';
+  else if (options.capturePageState === true) env[PIWI_ENV_KEYS.capturePageState] = 'true';
 }

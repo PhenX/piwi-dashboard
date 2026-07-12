@@ -12,6 +12,7 @@ export const ATTACHMENT_NAMES = {
   network: 'piwi-network',
   webVitals: 'piwi-web-vitals',
   locatorSuggestion: 'piwi-locator-suggestion',
+  pageState: 'piwi-page-state',
 } as const;
 
 /** Set of every internal attachment name — used to skip them when collecting user attachments. */

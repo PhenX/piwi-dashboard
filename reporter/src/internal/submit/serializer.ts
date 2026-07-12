@@ -58,6 +58,7 @@ export function toWireTestCase(tc: CollectedTestCase): WireTestCase {
     wastedTimeMs: rest.performanceMetrics?.waitTotalDuration ?? null,
     networkRequests: rest.networkRequests || null,
     webVitals: rest.webVitals || null,
+    pageState: rest.pageState || null,
     consoleLogs: rest.consoleLogs || null,
     ariaSnapshot: rest.ariaSnapshot || null,
     testSource: rest.testSource || null,

@@ -92,6 +92,7 @@ export interface WireTestCase {
   wastedTimeMs?: number | null;
   networkRequests?: unknown;
   webVitals?: unknown;
+  pageState?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
   testSource?: string | null;
@@ -140,6 +141,7 @@ export interface CompleteStreamEvent {
   slowestStepDuration?: number | null;
   networkRequests?: unknown;
   webVitals?: unknown;
+  pageState?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
   testSource?: string | null;

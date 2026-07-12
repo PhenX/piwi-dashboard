@@ -74,6 +74,7 @@ export interface CollectedTestCase {
   networkRequests?: unknown;
   /** Parsed from `piwi-web-vitals` attachments. */
   webVitals?: unknown;
+  pageState?: unknown;
   /** Parsed from `piwi-console` attachments. */
   consoleLogs?: unknown;
   /** Parsed from `piwi-aria-snapshot` attachment. */

@@ -180,6 +180,7 @@ interface CaptureSink {
   // page/context fixtures, so by the time flushSink runs the standard test
   // page is already closed and can no longer be read live.
   stashedWebVitals: WebVitals | null;
+  stashedPageState: PageState | null;
   stashedAria: string | null;
 }
 
@@ -194,6 +195,7 @@ function createSink(): CaptureSink {
     lastActivePage: null,
     testInfo: null,
     stashedWebVitals: null,
+    stashedPageState: null,
     stashedAria: null,
   };
 }
@@ -348,11 +350,134 @@ async function readWebVitals(page: Page): Promise<WebVitals | null> {
   }
 }
 
+/** Page state captured at test end. Storage values and cookie values are NEVER included. */
+export interface PageState {
+  url: string;
+  hash: string | null;
+  /** `history.state` as JSON, capped and token-masked. */
+  historyState: string | null;
+  /** Key names + value lengths only. */
+  localStorage: Array<{ key: string; length: number }>;
+  sessionStorage: Array<{ key: string; length: number }>;
+  /** Cookie names + flags only (values are never read). */
+  cookies: Array<{
+    name: string;
+    domain: string;
+    path: string;
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite?: string;
+    expires?: number;
+  }>;
+}
+
+/** Raw in-page reads shipped out of the evaluate (see `readPageState`). */
+export interface RawPageState {
+  url: string;
+  hash: string | null;
+  historyState: string | null;
+  localStorage: Array<{ key: string; length: number }>;
+  sessionStorage: Array<{ key: string; length: number }>;
+}
+
+const PAGE_STATE_MAX_STORAGE_KEYS = 50;
+const PAGE_STATE_MAX_COOKIES = 30;
+const PAGE_STATE_HISTORY_CAP = 2048;
+const TOKEN_MASK_RES = [/\beyJ[\w-]{10,}\.[\w-]{5,}\.[\w-]{5,}\b/g, /\b[0-9a-f]{32,}\b/gi];
+
 /**
- * Take the page-dependent teardown reads (web vitals; ARIA snapshot when the
- * test failed) while the last active page is still open. Called by the close
- * wrappers just before a close that would take that page with it — flushSink
- * runs too late for a live read on the standard test page.
+ * Assemble the wire page-state from the in-page reads and the context cookies.
+ * Pure and Node-side so the sanitization (token masking, caps, value-free
+ * cookies) is unit-testable.
+ */
+export function buildPageState(
+  raw: RawPageState,
+  cookies: Array<Record<string, unknown>> | null,
+): PageState {
+  let historyState = raw.historyState;
+  if (historyState) {
+    for (const re of TOKEN_MASK_RES) historyState = historyState.replace(re, '[masked]');
+    if (historyState.length > PAGE_STATE_HISTORY_CAP) {
+      historyState = historyState.slice(0, PAGE_STATE_HISTORY_CAP) + '…';
+    }
+  }
+  const capStorage = (entries: Array<{ key: string; length: number }>) =>
+    (Array.isArray(entries) ? entries : []).slice(0, PAGE_STATE_MAX_STORAGE_KEYS).map((e) => ({
+      key: String(e.key).slice(0, 200),
+      length: typeof e.length === 'number' ? e.length : 0,
+    }));
+
+  return {
+    url: raw.url,
+    hash: raw.hash || null,
+    historyState: historyState || null,
+    localStorage: capStorage(raw.localStorage),
+    sessionStorage: capStorage(raw.sessionStorage),
+    cookies: (cookies ?? []).slice(0, PAGE_STATE_MAX_COOKIES).map((c) => ({
+      name: String(c.name ?? ''),
+      domain: String(c.domain ?? ''),
+      path: String(c.path ?? ''),
+      httpOnly: Boolean(c.httpOnly),
+      secure: Boolean(c.secure),
+      ...(c.sameSite !== undefined ? { sameSite: String(c.sameSite) } : {}),
+      ...(typeof c.expires === 'number' ? { expires: c.expires } : {}),
+    })),
+  };
+}
+
+/** Read the page's state — null when unavailable or the page is gone. */
+async function readPageState(page: Page): Promise<PageState | null> {
+  try {
+    const raw = await page.evaluate((): RawPageState => {
+      // Key names + value lengths only — values never leave the page.
+      const listStorage = (s: any): Array<{ key: string; length: number }> => {
+        const out: Array<{ key: string; length: number }> = [];
+        try {
+          for (let i = 0; i < s.length; i++) {
+            const key = s.key(i);
+            if (key != null) out.push({ key, length: (s.getItem(key) ?? '').length });
+          }
+        } catch {
+          // Storage access can throw in sandboxed/opaque-origin pages.
+        }
+        return out;
+      };
+      const g = globalThis as any;
+      let historyState: string | null = null;
+      try {
+        historyState = g.history?.state == null ? null : JSON.stringify(g.history.state);
+      } catch {
+        // Unserializable history state.
+      }
+      return {
+        url: g.location.href,
+        hash: g.location.hash || null,
+        historyState,
+        localStorage: listStorage((globalThis as any).localStorage),
+        sessionStorage: listStorage((globalThis as any).sessionStorage),
+      };
+    });
+    if (!raw) return null;
+
+    // Cookie flags are only reachable from the context API, never document.cookie.
+    let cookies: Array<Record<string, unknown>> | null = null;
+    try {
+      cookies = ((await pageContext(page)?.cookies()) as Array<Record<string, unknown>> | undefined) ?? null;
+    } catch {
+      cookies = null;
+    }
+
+    return buildPageState(raw, cookies);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Take the page-dependent teardown reads (web vitals; page state; ARIA
+ * snapshot when the test failed) while the last active page is still open.
+ * Called by the close wrappers just before a close that would take that page
+ * with it — flushSink runs too late for a live read on the standard test page.
  */
 async function stashPageState(sink: CaptureSink, closing: { page?: Page; context?: BrowserContext }): Promise<void> {
   const page = sink.lastActivePage;
@@ -363,6 +488,11 @@ async function stashPageState(sink: CaptureSink, closing: { page?: Page; context
 
   const vitals = await readWebVitals(page);
   if (vitals) sink.stashedWebVitals = vitals;
+
+  if (process.env.PIWI_CAPTURE_PAGE_STATE !== 'false') {
+    const pageState = await readPageState(page);
+    if (pageState) sink.stashedPageState = pageState;
+  }
 
   const status = sink.testInfo?.status;
   if (status === 'failed' || status === 'timedOut' || status === 'interrupted') {
@@ -1040,6 +1170,17 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
       contentType: 'application/json',
       body: Buffer.from(JSON.stringify(webVitals)),
     });
+  }
+
+  // Page state at test end (pass AND fail — the pass side is the diff baseline).
+  if (process.env.PIWI_CAPTURE_PAGE_STATE !== 'false') {
+    const pageState = (pageReadable ? await readPageState(page) : null) ?? sink.stashedPageState;
+    if (pageState) {
+      await testInfo.attach(ATTACHMENT_NAMES.pageState, {
+        contentType: 'application/json',
+        body: Buffer.from(JSON.stringify(pageState)),
+      });
+    }
   }
 }
 
