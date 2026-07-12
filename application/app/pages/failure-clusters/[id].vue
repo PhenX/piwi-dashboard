@@ -138,11 +138,13 @@ const errorSection = ref<{ reveal: () => void } | null>(null);
 const evidenceSection = ref<{ reveal: () => void } | null>(null);
 const scmSection = ref<{ reveal: () => void } | null>(null);
 const envDiffSection = ref<{ reveal: () => void } | null>(null);
+const visualDiffSection = ref<{ reveal: () => void } | null>(null);
 
 const sectionToCard: Record<string, () => { reveal: () => void } | null> = {
   sampleError: () => errorSection.value,
   executionError: () => errorSection.value,
   environmentDiff: () => envDiffSection.value,
+  visualDiff: () => visualDiffSection.value,
   scmInvestigation: () => scmSection.value,
   selectedCommits: () => scmSection.value,
   topSuspectedCommit: () => scmSection.value,
@@ -258,6 +260,15 @@ const breadcrumbItems = computed(() => [
               v-if="cluster.affectedTestCases?.length && cluster.affectedTestCases[0]?.recentTestRunsCaseId"
               ref="envDiffSection"
               storage-key="cluster-env-diff"
+              :run-id="cluster.lastSeenRunId"
+              :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
+            />
+
+            <!-- Visual drift: failing screenshot pixel-diffed against the last pass -->
+            <VisualDiffCard
+              v-if="cluster.affectedTestCases?.length && cluster.affectedTestCases[0]?.recentTestRunsCaseId"
+              ref="visualDiffSection"
+              storage-key="cluster-visual-diff"
               :run-id="cluster.lastSeenRunId"
               :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
             />

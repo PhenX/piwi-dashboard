@@ -386,6 +386,14 @@ function copyFailure() {
               :test-runs-case-id="Number(testCaseId)"
             />
 
+            <!-- What changed visually since the last pass — folded to its changed-pixel verdict -->
+            <VisualDiffCard
+              v-if="testCase?.error && testCase.testRun?.id"
+              storage-key="case-visual-diff"
+              :run-id="testCase.testRun.id"
+              :test-runs-case-id="Number(testCaseId)"
+            />
+
             <!-- ARIA snapshot captured at failure time — folded by default -->
             <CollapsibleSectionCard
               v-if="testCase?.ariaSnapshot"

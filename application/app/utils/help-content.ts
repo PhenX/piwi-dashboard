@@ -523,6 +523,12 @@ export const HELP_TOPICS = {
     title: 'Environment diff',
     text: 'Compares this execution’s environment (Playwright version, browser config, locale, viewport, CI provider, …) against the same test’s last passing run on the same browser. Only changed keys are shown — an empty diff rules out environment drift as the cause.',
   },
+
+  // ── Visual diff ──────────────────────────────────────────────────────────
+  'visual-diff': {
+    title: 'Visual diff',
+    text: 'Pixel-compares the failing screenshot against the same test’s last passing screenshot (same browser). Red pixels in the overlay mark what changed. When the two screenshots have different dimensions the ratio is flagged as unreliable.',
+  },
 } as const satisfies Record<string, HelpTopic>;
 
 export type HelpTopicKey = keyof typeof HELP_TOPICS;
