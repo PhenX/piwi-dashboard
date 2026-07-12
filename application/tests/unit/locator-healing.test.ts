@@ -3,6 +3,8 @@ import {
   locatorSignature,
   locatorSignatureFromExpression,
   recommendLocatorFix,
+  locatorIdentityEquals,
+  alternativeUsesName,
   CONVENTION_STABILITY_FLOOR,
 } from '#shared/locator-healing';
 import type { RankedLocator } from '#shared/locator-healing.types';
@@ -200,5 +202,72 @@ describe('recommendLocatorFix (convention-preserving)', () => {
     const rec = recommendLocatorFix('getByText', [alt('getByTestId', 100), alt('getByText', 50)]);
     expect(rec.recommended?.method).toBe('getByText');
     expect(rec.preservesConvention).toBe(true);
+  });
+});
+
+/**
+ * The stale-fallback filters: when a rename is proven, the failing locator and
+ * every old-name-derived alternative are kept out of the recommendation pool.
+ */
+describe('locatorIdentityEquals', () => {
+  test('same method and string identity match across arg-object key order', () => {
+    expect(
+      locatorIdentityEquals('getByRole', { role: 'button', name: 'Submit' }, 'getByRole', {
+        name: 'Submit',
+        role: 'button',
+      }),
+    ).toBe(true);
+  });
+
+  test('the captured getByLabel equals the failing getByLabel parsed from the error', () => {
+    expect(locatorIdentityEquals('getByLabel', { label: 'Email' }, 'getByLabel', { label: 'Email' })).toBe(true);
+  });
+
+  test('different methods never match, even with the same strings', () => {
+    expect(locatorIdentityEquals('getByText', { text: 'Email' }, 'getByLabel', { label: 'Email' })).toBe(false);
+  });
+
+  test('different string literals do not match', () => {
+    expect(locatorIdentityEquals('getByLabel', { label: 'Email' }, 'getByLabel', { label: 'Email address' })).toBe(
+      false,
+    );
+  });
+
+  test('numbers and booleans carry no identity (level/exact ignored)', () => {
+    expect(
+      locatorIdentityEquals('getByRole', { role: 'heading', name: 'Hi', level: 1 }, 'getByRole', {
+        role: 'heading',
+        name: 'Hi',
+      }),
+    ).toBe(true);
+  });
+
+  test('null/missing methods never match', () => {
+    expect(locatorIdentityEquals(null, {}, 'getByText', { text: 'x' })).toBe(false);
+  });
+});
+
+describe('alternativeUsesName', () => {
+  const alt = (method: string, args: Record<string, unknown>): RankedLocator => ({
+    locator: method,
+    method,
+    args,
+    score: 80,
+  });
+
+  test('true when an arg string equals the name (case-insensitive)', () => {
+    expect(alternativeUsesName(alt('getByLabel', { label: 'Email' }), 'email')).toBe(true);
+    expect(alternativeUsesName(alt('getByRole', { role: 'textbox', name: 'Email' }), 'Email')).toBe(true);
+  });
+
+  test('false for structural alternatives that do not carry the name', () => {
+    expect(alternativeUsesName(alt('getByRole', { role: 'textbox', anchorTestId: 'signup-form' }), 'Email')).toBe(
+      false,
+    );
+    expect(alternativeUsesName(alt('getByTestId', { testId: 'email-input' }), 'Email')).toBe(false);
+  });
+
+  test('false for an empty name', () => {
+    expect(alternativeUsesName(alt('getByLabel', { label: 'Email' }), '  ')).toBe(false);
   });
 });

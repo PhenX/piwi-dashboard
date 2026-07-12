@@ -11,12 +11,14 @@
  * same logic. The reporter keeps a small structural mirror for its runtime
  * annotation (see `reporter/src/locator-healing.ts#suggestLocatorsFromAria`).
  */
-import type { RankedLocator } from './locator-healing.types';
+import type { RankedLocator, RolePosition } from './locator-healing.types';
 
 /** One element parsed out of an ariaSnapshot() dump: its role and accessible name. */
 export interface AriaCandidate {
   role: string;
   name: string | null;
+  /** Heading level parsed from a `[level=N]` marker, null when absent. */
+  level: number | null;
 }
 
 /** Identity of a captured element, used to find where it went on the current page. */
@@ -24,6 +26,10 @@ export interface ElementFingerprint {
   role: string | null;
   /** Accessible name / visible text at capture time. */
   name: string | null;
+  /** Heading level of the captured element, when known. */
+  level?: number | null;
+  /** Position among same-role elements at capture time, when known. */
+  rolePosition?: RolePosition | null;
 }
 
 export interface ElementMatch {
@@ -94,7 +100,12 @@ export function parseAriaCandidates(ariaSnapshot: string | null | undefined): Ar
     const name = m[2] != null ? m[2].replace(/\\(.)/g, '$1') : null;
     // Drop nameless structural wrappers — they can't produce a useful locator.
     if (!name && (role === 'generic' || role === 'group' || role === 'list' || role === 'paragraph')) continue;
-    out.push({ role, name });
+    // Heading level rides after the name as `[level=N]` (other bracketed
+    // markers like `[ref=eN]` are ignored). Scan only past the matched part so
+    // brackets inside the quoted name can't fake a level.
+    const levelMatch = line.slice(m[0].length).match(/\[level=(\d+)\]/);
+    const level = levelMatch ? Number(levelMatch[1]) : null;
+    out.push({ role, name, level });
   }
   return out;
 }
@@ -136,11 +147,17 @@ export function fingerprintPresent(fp: ElementFingerprint, candidates: AriaCandi
 /**
  * Find the current-page candidate a renamed element most likely became.
  *
- * Restricts to the same role (the sturdiest cross-rename signal), then:
- *  - a single same-role candidate is a confident match even if the name changed
+ * Restricts to the same role (the sturdiest cross-rename signal), narrows
+ * headings to the captured `[level=N]` when candidates share it, then:
+ *  - a single remaining candidate is a confident match even if the name changed
  *    completely (the canonical "button text changed" case);
  *  - with several, the best name-similarity wins, and must clear a small floor
- *    so we don't emit a noisy guess.
+ *    so we don't emit a noisy guess;
+ *  - on a total rename (no shared tokens), the element at the captured
+ *    document-order index among same-role elements is used as a last resort —
+ *    only when the same-role count is unchanged since capture, so DOM-vs-ARIA
+ *    counting discrepancies (hidden elements, role approximation) disqualify
+ *    the signal instead of mismatching.
  * Returns null when nothing is confident enough.
  */
 export function matchRenamedElement(fp: ElementFingerprint, candidates: AriaCandidate[]): ElementMatch | null {
@@ -149,21 +166,38 @@ export function matchRenamedElement(fp: ElementFingerprint, candidates: AriaCand
   const sameRole = fp.role ? candidates.filter((c) => c.role === fp.role) : candidates;
   if (sameRole.length === 0) return null;
 
-  if (sameRole.length === 1) {
-    return { candidate: sameRole[0]!, confidence: 0.7 };
+  let pool = sameRole;
+  if (fp.level != null) {
+    const sameLevel = sameRole.filter((c) => c.level === fp.level);
+    // Fall back to all same-role candidates when none share the level — the
+    // rename may have changed the level too (h2 → h3).
+    if (sameLevel.length > 0) pool = sameLevel;
+  }
+
+  if (pool.length === 1) {
+    return { candidate: pool[0]!, confidence: 0.7 };
   }
 
   let best: AriaCandidate | null = null;
   let bestScore = -1;
-  for (const c of sameRole) {
+  for (const c of pool) {
     const s = textSimilarity(c.name, fp.name);
     if (s > bestScore) {
       bestScore = s;
       best = c;
     }
   }
-  if (!best || bestScore < MATCH_SIMILARITY) return null;
-  return { candidate: best, confidence: bestScore };
+  if (best && bestScore >= MATCH_SIMILARITY) return { candidate: best, confidence: bestScore };
+
+  // Positional tiebreak over the full same-role pool (rolePosition.count was
+  // measured against all same-role elements, not one heading level).
+  const pos = fp.rolePosition;
+  if (pos && fp.role && pos.role === fp.role && sameRole.length >= 2 && sameRole.length === pos.count) {
+    const byIndex = sameRole[pos.index];
+    if (byIndex) return { candidate: byIndex, confidence: 0.5 };
+  }
+
+  return null;
 }
 
 /**
@@ -176,12 +210,21 @@ export function freshLocatorsFromCandidate(c: AriaCandidate): RankedLocator[] {
   const name = c.name;
   if (!name) return out;
 
-  out.push({
-    locator: `getByRole('${escapeQuote(c.role)}', { name: '${escapeQuote(name)}' })`,
-    method: 'getByRole',
-    args: { role: c.role, name },
-    score: ELEMENT_MATCH_SCORES.role,
-  });
+  out.push(
+    c.level != null
+      ? {
+          locator: `getByRole('${escapeQuote(c.role)}', { name: '${escapeQuote(name)}', level: ${c.level} })`,
+          method: 'getByRole',
+          args: { role: c.role, name, level: c.level },
+          score: ELEMENT_MATCH_SCORES.role,
+        }
+      : {
+          locator: `getByRole('${escapeQuote(c.role)}', { name: '${escapeQuote(name)}' })`,
+          method: 'getByRole',
+          args: { role: c.role, name },
+          score: ELEMENT_MATCH_SCORES.role,
+        },
+  );
 
   if (TEXT_CONTENT_ROLES.has(c.role)) {
     out.push({
@@ -203,25 +246,50 @@ export function freshLocatorsFromCandidate(c: AriaCandidate): RankedLocator[] {
 }
 
 /**
+ * Why an element match did or didn't produce fresh locators. `no-match` with a
+ * named fingerprint is the "provably stale" signal: the old identity is gone
+ * from the failing page but nothing confident replaced it, so the stored
+ * name-derived alternatives are almost certainly broken too.
+ */
+export type ElementMatchStatus = 'no-fingerprint' | 'no-aria' | 'no-candidates' | 'unchanged' | 'matched' | 'no-match';
+
+export interface ElementMatchOutcome {
+  status: ElementMatchStatus;
+  /** Fresh locators for the matched candidate — non-null only for `matched`. */
+  fresh: RankedLocator[] | null;
+}
+
+/**
  * End-to-end element match: given the fingerprint of an element whose locator
- * broke and the current failure-time ARIA snapshot, return fresh locators for
- * the element it became — or null when the element is unchanged (so the failure
- * was timing/flaky, not a rename) or no confident match exists.
+ * broke and the current failure-time ARIA snapshot, report whether the element
+ * is unchanged, was confidently re-found under a new identity (with fresh
+ * locators for it), or is gone without a confident replacement.
+ */
+export function elementMatchOutcome(
+  fp: ElementFingerprint,
+  ariaSnapshot: string | null | undefined,
+): ElementMatchOutcome {
+  if (!fp.role && !fp.name) return { status: 'no-fingerprint', fresh: null };
+  if (!ariaSnapshot) return { status: 'no-aria', fresh: null };
+  const candidates = parseAriaCandidates(ariaSnapshot);
+  if (candidates.length === 0) return { status: 'no-candidates', fresh: null };
+
+  // Element still on the page under the same identity → not a rename.
+  if (fingerprintPresent(fp, candidates)) return { status: 'unchanged', fresh: null };
+
+  const match = matchRenamedElement(fp, candidates);
+  const fresh = match ? freshLocatorsFromCandidate(match.candidate) : [];
+  if (fresh.length > 0) return { status: 'matched', fresh };
+  return { status: 'no-match', fresh: null };
+}
+
+/**
+ * Legacy boolean-shaped wrapper over {@link elementMatchOutcome}: fresh
+ * locators when the element was confidently re-found, null otherwise.
  */
 export function elementMatchAlternatives(
   fp: ElementFingerprint,
   ariaSnapshot: string | null | undefined,
 ): RankedLocator[] | null {
-  if (!fp.role && !fp.name) return null;
-  const candidates = parseAriaCandidates(ariaSnapshot);
-  if (candidates.length === 0) return null;
-
-  // Element still on the page under the same identity → not a rename.
-  if (fingerprintPresent(fp, candidates)) return null;
-
-  const match = matchRenamedElement(fp, candidates);
-  if (!match) return null;
-
-  const fresh = freshLocatorsFromCandidate(match.candidate);
-  return fresh.length > 0 ? fresh : null;
+  return elementMatchOutcome(fp, ariaSnapshot).fresh;
 }

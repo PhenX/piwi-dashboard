@@ -643,4 +643,6 @@ export interface McpLocatorHealingEntry {
   failingLocator?: { method: string; args: Record<string, unknown> };
   recommendation?: unknown; // LocatorFixRecommendation with dropNulls applied
   alternativesCount: number;
+  /** True when the stored name-derived alternatives look broken by a rename (see LocatorHealingResult). */
+  priorNameMayBeStale?: boolean;
 }

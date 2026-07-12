@@ -36,6 +36,9 @@ describe('reporter ↔ shared drift guard', () => {
     '- group\n- paragraph\n- link "Docs \\"quoted\\""',
     '',
     '- button\n- checkbox "Remember me" [checked]',
+    // Heading levels — with ref markers, nameless headings, and bracket text
+    // inside the quoted name that must NOT be read as a level.
+    '- heading "Overview" [level=2] [ref=e7]\n- heading [level=3]\n- heading "Read [level=9] docs" [level=1]',
   ];
 
   test('parseAriaRoleName (reporter) matches parseAriaCandidates (shared) on all fixtures', () => {

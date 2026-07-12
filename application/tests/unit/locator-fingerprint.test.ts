@@ -6,29 +6,38 @@ import {
   matchRenamedElement,
   freshLocatorsFromCandidate,
   elementMatchAlternatives,
+  elementMatchOutcome,
 } from '#shared/locator-fingerprint';
 
 describe('parseAriaCandidates', () => {
-  test('parses role + name lines', () => {
+  test('parses role + name lines, keeping the heading level', () => {
     const aria = ['- button "Open page"', '- heading "Welcome" [level=1]', '- textbox "Email"'].join('\n');
     expect(parseAriaCandidates(aria)).toEqual([
-      { role: 'button', name: 'Open page' },
-      { role: 'heading', name: 'Welcome' },
-      { role: 'textbox', name: 'Email' },
+      { role: 'button', name: 'Open page', level: null },
+      { role: 'heading', name: 'Welcome', level: 1 },
+      { role: 'textbox', name: 'Email', level: null },
     ]);
   });
 
   test('keeps roles without a name but drops structural wrappers', () => {
     const aria = ['- button', '- generic', '- group', '- list', '- link "Home"'].join('\n');
     expect(parseAriaCandidates(aria)).toEqual([
-      { role: 'button', name: null },
-      { role: 'link', name: 'Home' },
+      { role: 'button', name: null, level: null },
+      { role: 'link', name: 'Home', level: null },
     ]);
   });
 
   test('handles indentation, refs, and escaped quotes', () => {
     const aria = ['    - button "Save \\"now\\"" [ref=e5]'].join('\n');
-    expect(parseAriaCandidates(aria)).toEqual([{ role: 'button', name: 'Save "now"' }]);
+    expect(parseAriaCandidates(aria)).toEqual([{ role: 'button', name: 'Save "now"', level: null }]);
+  });
+
+  test('reads level next to a ref marker and ignores brackets inside the name', () => {
+    const aria = ['- heading "Results [level=9] shown" [level=2] [ref=e3]', '- heading [level=3]'].join('\n');
+    expect(parseAriaCandidates(aria)).toEqual([
+      { role: 'heading', name: 'Results [level=9] shown', level: 2 },
+      { role: 'heading', name: null, level: 3 },
+    ]);
   });
 
   test('returns [] for empty input', () => {
@@ -64,8 +73,8 @@ describe('textSimilarity', () => {
 
 describe('fingerprintPresent', () => {
   const candidates = [
-    { role: 'button', name: 'Open page' },
-    { role: 'link', name: 'Home' },
+    { role: 'button', name: 'Open page', level: null },
+    { role: 'link', name: 'Home', level: null },
   ];
 
   test('true when same role keeps a near-identical name', () => {
@@ -83,51 +92,117 @@ describe('fingerprintPresent', () => {
 
 describe('matchRenamedElement', () => {
   test('matches a unique same-role candidate even when the name changed', () => {
-    const m = matchRenamedElement({ role: 'button', name: 'Go to page' }, [{ role: 'button', name: 'Open page' }]);
-    expect(m?.candidate).toEqual({ role: 'button', name: 'Open page' });
+    const m = matchRenamedElement({ role: 'button', name: 'Go to page' }, [
+      { role: 'button', name: 'Open page', level: null },
+    ]);
+    expect(m?.candidate).toEqual({ role: 'button', name: 'Open page', level: null });
     expect(m?.confidence).toBeGreaterThan(0.5);
   });
 
   test('picks the best name-similarity among several same-role candidates', () => {
     const m = matchRenamedElement({ role: 'button', name: 'Go to page' }, [
-      { role: 'button', name: 'Cancel' },
-      { role: 'button', name: 'Open page' },
+      { role: 'button', name: 'Cancel', level: null },
+      { role: 'button', name: 'Open page', level: null },
     ]);
     expect(m?.candidate.name).toBe('Open page');
   });
 
   test('returns null when several candidates and none clears the similarity floor', () => {
     const m = matchRenamedElement({ role: 'button', name: 'Delete' }, [
-      { role: 'button', name: 'Save' },
-      { role: 'button', name: 'Cancel' },
+      { role: 'button', name: 'Save', level: null },
+      { role: 'button', name: 'Cancel', level: null },
     ]);
     expect(m).toBeNull();
   });
 
   test('returns null when no candidate shares the role', () => {
-    expect(matchRenamedElement({ role: 'button', name: 'x' }, [{ role: 'link', name: 'y' }])).toBeNull();
+    expect(matchRenamedElement({ role: 'button', name: 'x' }, [{ role: 'link', name: 'y', level: null }])).toBeNull();
+  });
+
+  describe('heading level narrowing', () => {
+    const headings = [
+      { role: 'heading', name: 'Overview', level: 1 },
+      { role: 'heading', name: 'Stats', level: 2 },
+      { role: 'heading', name: 'History', level: 2 },
+    ];
+
+    test('a totally renamed lone h1 among h2s matches via its level', () => {
+      const m = matchRenamedElement({ role: 'heading', name: 'Dashboard', level: 1 }, headings);
+      expect(m?.candidate.name).toBe('Overview');
+      expect(m?.confidence).toBe(0.7);
+    });
+
+    test('falls back to all same-role candidates when no candidate shares the level', () => {
+      const m = matchRenamedElement({ role: 'heading', name: 'Site stats', level: 3 }, headings);
+      // No level-3 candidates — name similarity over all headings still wins.
+      expect(m?.candidate.name).toBe('Stats');
+    });
+
+    test('several candidates at the same level still need name similarity', () => {
+      const m = matchRenamedElement({ role: 'heading', name: 'Dashboard', level: 2 }, headings);
+      expect(m).toBeNull();
+    });
+  });
+
+  describe('positional tiebreak (rolePosition)', () => {
+    const fields = [
+      { role: 'textbox', name: 'Correo electrónico', level: null },
+      { role: 'textbox', name: 'Nombre completo', level: null },
+    ];
+    const fp = {
+      role: 'textbox',
+      name: 'Email',
+      rolePosition: { role: 'textbox', count: 2, index: 0 },
+    };
+
+    test('a total rename resolves to the candidate at the captured index', () => {
+      const m = matchRenamedElement(fp, fields);
+      expect(m?.candidate.name).toBe('Correo electrónico');
+      expect(m?.confidence).toBe(0.5);
+    });
+
+    test('rejected when the same-role count changed since capture', () => {
+      const m = matchRenamedElement({ ...fp, rolePosition: { role: 'textbox', count: 3, index: 0 } }, fields);
+      expect(m).toBeNull();
+    });
+
+    test('rejected when the stored position is for a different role', () => {
+      const m = matchRenamedElement({ ...fp, rolePosition: { role: 'button', count: 2, index: 0 } }, fields);
+      expect(m).toBeNull();
+    });
+
+    test('name similarity still wins over position when it clears the floor', () => {
+      const m = matchRenamedElement({ ...fp, name: 'Nombre' }, fields);
+      expect(m?.candidate.name).toBe('Nombre completo');
+    });
   });
 });
 
 describe('freshLocatorsFromCandidate', () => {
   test('button yields getByRole + getByText', () => {
-    const alts = freshLocatorsFromCandidate({ role: 'button', name: 'Open page' });
+    const alts = freshLocatorsFromCandidate({ role: 'button', name: 'Open page', level: null });
     expect(alts.map((a) => a.method)).toEqual(['getByRole', 'getByText']);
     expect(alts[1]!.locator).toBe("getByText('Open page')");
   });
 
   test('textbox yields getByRole + getByLabel', () => {
-    const alts = freshLocatorsFromCandidate({ role: 'textbox', name: 'Email' });
+    const alts = freshLocatorsFromCandidate({ role: 'textbox', name: 'Email', level: null });
     expect(alts.map((a) => a.method)).toEqual(['getByRole', 'getByLabel']);
   });
 
+  test('a heading candidate carries its level in the getByRole', () => {
+    const alts = freshLocatorsFromCandidate({ role: 'heading', name: 'Overview', level: 1 });
+    expect(alts[0]!.locator).toBe("getByRole('heading', { name: 'Overview', level: 1 })");
+    expect(alts[0]!.args).toEqual({ role: 'heading', name: 'Overview', level: 1 });
+  });
+
   test('escapes single quotes in the name', () => {
-    const alts = freshLocatorsFromCandidate({ role: 'button', name: "It's here" });
+    const alts = freshLocatorsFromCandidate({ role: 'button', name: "It's here", level: null });
     expect(alts[0]!.locator).toBe("getByRole('button', { name: 'It\\'s here' })");
   });
 
   test('no name yields nothing', () => {
-    expect(freshLocatorsFromCandidate({ role: 'button', name: null })).toEqual([]);
+    expect(freshLocatorsFromCandidate({ role: 'button', name: null, level: null })).toEqual([]);
   });
 });
 
@@ -157,5 +232,38 @@ describe('elementMatchAlternatives', () => {
 
   test('returns null when the fingerprint is empty', () => {
     expect(elementMatchAlternatives({ role: null, name: null }, renamedAria)).toBeNull();
+  });
+});
+
+describe('elementMatchOutcome', () => {
+  const renamedAria = '- button "Open page"';
+
+  test('matched: fresh locators for a confidently renamed element', () => {
+    const o = elementMatchOutcome({ role: 'button', name: 'Go to page' }, renamedAria);
+    expect(o.status).toBe('matched');
+    expect(o.fresh?.length).toBeGreaterThan(0);
+  });
+
+  test('unchanged: the identity is still on the page', () => {
+    const o = elementMatchOutcome({ role: 'button', name: 'Open page' }, renamedAria);
+    expect(o).toEqual({ status: 'unchanged', fresh: null });
+  });
+
+  test('no-match: the name is gone but nothing confident replaced it', () => {
+    const aria = ['- heading "Pricing" [level=2]', '- heading "Contact" [level=2]'].join('\n');
+    const o = elementMatchOutcome({ role: 'heading', name: 'Dashboard', level: 2 }, aria);
+    expect(o).toEqual({ status: 'no-match', fresh: null });
+  });
+
+  test('no-aria / no-candidates / no-fingerprint statuses', () => {
+    expect(elementMatchOutcome({ role: 'button', name: 'x' }, null).status).toBe('no-aria');
+    expect(elementMatchOutcome({ role: 'button', name: 'x' }, 'plain text').status).toBe('no-candidates');
+    expect(elementMatchOutcome({ role: null, name: null }, renamedAria).status).toBe('no-fingerprint');
+  });
+
+  test('a nameless fingerprint can never be unchanged (null-name is not stale evidence)', () => {
+    const o = elementMatchOutcome({ role: 'checkbox', name: null }, '- checkbox "Terms"');
+    // Sole same-role candidate → confidently matched, not a stale signal.
+    expect(o.status).toBe('matched');
   });
 });

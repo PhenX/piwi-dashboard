@@ -28,7 +28,7 @@ The user message contains diagnostic evidence collected from a CI environment. T
 - Error correlates with a change in the SCM diff ⇒ favor app-bug and reference the commit.
 - Strict-mode / "resolved to N elements" / stale locator ⇒ favor test-bug.
 - A test already annotated @fixme/@flaky ⇒ weight that signal, do not re-discover it as novel.
-- When \`locatorHealing\` evidence is present, use its "Recommended fix" in \`suggestedFix.code\` — it keeps the developer's original locator style where that style is stable enough, so the edit stays minimal and idiomatic. Do not fabricate a locator — every suggestion was validated against the actual DOM element. Only diverge to the sturdier alternative if the test context makes the original style unsuitable.
+- When \`locatorHealing\` evidence is present, use its "Recommended fix" in \`suggestedFix.code\` — it keeps the developer's original locator style where that style is stable enough, so the edit stays minimal and idiomatic. Do not fabricate a locator — every suggestion was validated against the actual DOM element. Only diverge to the sturdier alternative if the test context makes the original style unsuitable. If the section carries a CAUTION that the element's name changed, treat name-based alternatives (and the failing locator) as broken and pick from the structural alternatives or the failing-page candidates instead.
 - If the locatorHealing section says all alternatives score below 50, suggest adding a data-testid attribute to the application code as the long-term fix.
 
 ## Output fields

@@ -26,11 +26,14 @@ import {
   CHAIN_METHODS,
   ACTION_METHODS,
   LOCATOR_CREATING_CHAINS,
-  CAPTURED_ATTRIBUTES,
   type LocatorSnapshot,
   type FailedLocatorInfo,
 } from '../../reporter/dist/internal/capture/locator-healing.js';
-import { ariaSnapshotBestEffort } from '../../reporter/dist/internal/capture/capture-fixtures.js';
+import {
+  ariaSnapshotBestEffort,
+  probeElementAttrs,
+  CAPTURED_ATTRS_ARG,
+} from '../../reporter/dist/internal/capture/capture-fixtures.js';
 import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from '../../reporter/dist/internal/capture/attachments.js';
 
 type NetworkRequest = {
@@ -148,9 +151,9 @@ export const test = base.extend<{ page: Page }>({
     const capturePromises: Promise<void>[] = [];
     const failedLocators: FailedLocatorInfo[] = [];
 
-    // Method-surface constants are imported from the reporter so this fixture
-    // stays in lockstep with the reporter's proxy (LOCATOR_METHODS, CHAIN_METHODS,
-    // ACTION_METHODS, CAPTURED_ATTRIBUTES).
+    // Method-surface constants and the in-page probe are imported from the
+    // reporter so this fixture stays in lockstep with the reporter's proxy
+    // (LOCATOR_METHODS, CHAIN_METHODS, ACTION_METHODS, probeElementAttrs).
 
     function wrapLocator(locator: any, originMethod: string, originArgs: unknown[]): any {
       return new Proxy(locator, {
@@ -204,67 +207,7 @@ export const test = base.extend<{ page: Page }>({
               let deadline: ReturnType<typeof setTimeout> | undefined;
               try {
                 const attrs = (await Promise.race([
-                  target.evaluate(
-                    (el: any, keep: string[]) => {
-                      const attrMap: Record<string, string | null> = {};
-                      for (const key of keep) {
-                        const v = el.getAttribute(key) ?? (el as any)[key];
-                        attrMap[key] = typeof v === 'string' ? v.slice(0, 200) : v ? String(v).slice(0, 200) : null;
-                      }
-                      const r = el.getBoundingClientRect();
-                      // Uniqueness probe — mirrors reporter/src/internal/capture/capture-fixtures.ts.
-                      const selectorCounts: {
-                        testId?: number;
-                        id?: number;
-                        name?: number;
-                        classes?: Record<string, number>;
-                      } = {};
-                      try {
-                        const doc = el.ownerDocument;
-                        const cssEsc = (s: string): string => doc.defaultView.CSS.escape(s);
-                        const count = (sel: string): number | undefined => {
-                          try {
-                            return doc.querySelectorAll(sel).length;
-                          } catch {
-                            return undefined;
-                          }
-                        };
-                        if (attrMap['data-testid']) {
-                          selectorCounts.testId = count(`[data-testid=${JSON.stringify(attrMap['data-testid'])}]`);
-                        }
-                        if (attrMap['id']) selectorCounts.id = count(`#${cssEsc(attrMap['id'])}`);
-                        if (attrMap['name']) selectorCounts.name = count(`[name=${JSON.stringify(attrMap['name'])}]`);
-                        const classList = (attrMap['class'] || '')
-                          .split(/\s+/)
-                          .filter((c: string) => c.length > 1)
-                          .slice(0, 10);
-                        if (classList.length > 0) {
-                          const classCounts: Record<string, number> = {};
-                          for (const cls of classList) {
-                            const n = count(`.${cssEsc(cls)}`);
-                            if (n !== undefined) classCounts[cls] = n;
-                          }
-                          selectorCounts.classes = classCounts;
-                        }
-                      } catch {
-                        // Uniqueness probing is best-effort — never fail the capture.
-                      }
-                      return {
-                        tagName: el.tagName?.toLowerCase?.() ?? 'unknown',
-                        attributes: attrMap,
-                        // Collapse whitespace so multi-line text can't produce
-                        // a getByText suggestion with literal newlines in it.
-                        textContent: (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
-                        center: {
-                          x: Math.round(r.x + r.width / 2),
-                          y: Math.round(r.y + r.height / 2),
-                        },
-                        hasLabel: !!(el.labels && el.labels.length > 0),
-                        selectorCounts,
-                      };
-                    },
-                    [...CAPTURED_ATTRIBUTES],
-                  ),
+                  target.evaluate(probeElementAttrs, CAPTURED_ATTRS_ARG),
                   new Promise<null>((_, reject) => {
                     deadline = setTimeout(() => reject(new Error('locator capture timeout')), 500);
                   }),
@@ -286,13 +229,17 @@ export const test = base.extend<{ page: Page }>({
                   location: callerLocation,
                   used,
                   // hasLabel/selectorCounts inform alternative generation only —
-                  // keep the stored element to the wire shape.
+                  // keep the stored element to the wire shape. rolePosition and
+                  // ancestors ARE wire fields: the server's renamed-element
+                  // match uses them at heal time.
                   element: {
                     tagName: attrs.tagName,
                     attributes: attrs.attributes,
                     textContent: attrs.textContent,
                     accessibleName,
                     center: attrs.center,
+                    ...(attrs.rolePosition ? { rolePosition: attrs.rolePosition } : {}),
+                    ...(attrs.ancestors && attrs.ancestors.length > 0 ? { ancestors: attrs.ancestors } : {}),
                   },
                   alternatives: generateAlternatives({ ...attrs, accessibleName }),
                 };
