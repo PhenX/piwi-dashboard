@@ -303,6 +303,10 @@ export const PIWI_ENV_VARS = {
     description: 'Max characters for the trace-derived DOM/ARIA excerpt in failing-action context.',
     category: 'ai-limits',
   },
+  PIWI_AI_MAX_DOM_SNAPSHOT_CHARS: {
+    description: 'Max characters of the failure-time DOM snapshot rendered from the trace (0 disables).',
+    category: 'ai-limits',
+  },
   PIWI_AI_IMAGE_MAX_EDGE: {
     description: 'Screenshots are downscaled to at most this many pixels on the long edge before being sent.',
     category: 'ai-limits',

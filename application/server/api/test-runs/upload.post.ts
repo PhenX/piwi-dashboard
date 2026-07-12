@@ -501,6 +501,7 @@ export default eventHandler(async (event) => {
         wastedTimeMs: testCase.wastedTimeMs as number | null | undefined,
         networkRequests: testCase.networkRequests,
         webVitals: testCase.webVitals,
+        pageState: testCase.pageState,
         consoleLogs: testCase.consoleLogs,
         ariaSnapshot: testCase.ariaSnapshot as string | null | undefined,
         testSource: testCase.testSource as string | null | undefined,

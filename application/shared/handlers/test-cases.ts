@@ -270,6 +270,7 @@ export async function getTestRunCase(
       trc.stepEvents != null ? computeWastedMs(trc.stepEvents as TestStepEvent[], wastedPatterns) : trc.wastedTimeMs,
     networkRequests: networkRequestsData,
     webVitals: trc.webVitals,
+    pageState: trc.pageState,
     consoleLogs: trc.consoleLogs,
     ariaSnapshot: trc.ariaSnapshot,
     workerIndex: trc.workerIndex,
@@ -283,6 +284,31 @@ export async function getTestRunCase(
     links: linksForCaseRun,
     stableLinks: linksForTestCase,
   };
+}
+
+/**
+ * The last passing execution's captured page state for a test case (pinned to
+ * the same browser when known) — the baseline for the app-state diff. Shared
+ * by the server AI-context builder and the demo mirror.
+ */
+export async function getLastPassPageState(
+  db: DrizzleDB,
+  opts: { testCaseId: number; browserName?: string | null },
+): Promise<unknown | null> {
+  const conds = [
+    eq(testRunsCases.testCaseId, opts.testCaseId),
+    eq(testRunsCases.status, 'passed'),
+    sql`${testRunsCases.pageState} IS NOT NULL`,
+  ];
+  if (opts.browserName) conds.push(eq(testRunsCases.browserName, opts.browserName));
+  const rows = await db
+    .select({ pageState: testRunsCases.pageState })
+    .from(testRunsCases)
+    .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
+    .where(and(...conds))
+    .orderBy(desc(testRuns.startTime), desc(testRunsCases.id))
+    .limit(1);
+  return rows[0]?.pageState ?? null;
 }
 
 export async function getTestRunCaseTraces(db: DrizzleDB, id: number) {

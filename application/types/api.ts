@@ -403,6 +403,34 @@ export interface WebVitals {
     firstPaint?: number;
     firstContentfulPaint?: number;
   } | null;
+  /** Core Web Vitals (Chromium-only; null per metric when unavailable). */
+  vitals?: {
+    lcp?: number | null;
+    cls?: number | null;
+    inp?: number | null;
+  } | null;
+}
+
+/**
+ * Page state captured at test end by the reporter fixtures. Storage values and
+ * cookie values are never captured — key names, lengths and flags only.
+ */
+export interface PageState {
+  url: string;
+  hash: string | null;
+  /** `history.state` as JSON, capped and token-masked. */
+  historyState: string | null;
+  localStorage: Array<{ key: string; length: number }>;
+  sessionStorage: Array<{ key: string; length: number }>;
+  cookies: Array<{
+    name: string;
+    domain: string;
+    path: string;
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite?: string;
+    expires?: number;
+  }>;
 }
 
 /**
@@ -879,6 +907,25 @@ export interface DiagnosisContextCoverage {
     paths: string[];
     /** true when at least one file was truncated to the size cap. */
     truncated: boolean;
+  } | null;
+  /** Environment diff vs the last passing execution. null when no passing baseline exists. */
+  environmentDiff?: {
+    changedKeys: number;
+    baselineRunId: number | null;
+  } | null;
+  /** Visual screenshot diff vs the last passing execution. null when no comparable screenshots exist. */
+  visualDiff?: {
+    changedPixelRatio: number;
+    dimensionMismatch: boolean;
+  } | null;
+  /** Failure-time DOM snapshot rendered from the stored trace. null when no trace or no snapshot. */
+  domSnapshot?: {
+    chars: number;
+    snapshotName?: string;
+  } | null;
+  /** App state (URL/storage keys/cookie flags) at test end. null when not captured. */
+  appState?: {
+    hasBaseline: boolean;
   } | null;
   /** Sections where data is not applicable (with reason), keyed by section id. Absent in coverage means "no data". */
   notApplicable?: Record<string, string>;

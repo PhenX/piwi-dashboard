@@ -700,7 +700,10 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
       metadata,
       stream_token: null,
       instance_id: null,
-      playwright_version: '1.51.0',
+      // Newest runs are on a newer Playwright than older ones so the
+      // environment-diff card has a real version drift to show for failures
+      // whose last pass predates the bump.
+      playwright_version: i < 2 ? '1.52.0' : '1.51.0',
       reporter_version: '0.7.0',
       is_full_run: i % 5 !== 4 ? 1 : 0,
       filter_details: i % 5 === 4 ? JSON.stringify({ grep: 'login|checkout' }) : null,
@@ -831,6 +834,30 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
             firstPaint: 600 + Math.floor(Math.random() * 400),
             firstContentfulPaint: 800 + Math.floor(Math.random() * 500),
           },
+          vitals: {
+            lcp: 1200 + Math.floor(Math.random() * 1400),
+            cls: Math.round(Math.random() * 0.2 * 10000) / 10000,
+            // INP is frequently absent in short tests — mirror that in the seed.
+            inp: Math.random() < 0.6 ? 80 + Math.floor(Math.random() * 250) : null,
+          },
+        },
+        // Failing cases are missing the session cookie — the app-state diff's
+        // "logged out mid-test" story. Values are never captured (keys/flags only).
+        page_state: {
+          url: 'https://app.example.com/',
+          hash: null,
+          historyState: null,
+          localStorage: [
+            { key: 'cart', length: 182 },
+            { key: 'theme', length: 5 },
+          ],
+          sessionStorage: [{ key: 'checkout-session', length: 36 }],
+          cookies: [
+            ...(isFailedCase
+              ? []
+              : [{ name: 'sid', domain: '.app.example.com', path: '/', httpOnly: true, secure: true, sameSite: 'Lax' }]),
+            { name: 'ab_variant', domain: '.app.example.com', path: '/', httpOnly: false, secure: true },
+          ],
         },
         console_logs: isFailedCase
           ? [
@@ -960,6 +987,85 @@ if (latestClusterTrc) {
       size,
       created_at: mediaCreatedAt,
     });
+  }
+}
+
+// ── Demo visual diff ───────────────────────────────────────────────────────
+// A real pixelmatch overlay comparing the checkout failure screenshot with a
+// passing-state screenshot, generated here (same code path as the server) and
+// written to public/demo/screenshots/. The metrics ride the files.metadata
+// column so the demo router can serve the visual-diff endpoint data-driven.
+if (latestClusterTrc) {
+  const failingRel = 'demo/screenshots/checkout-error.png';
+  const baselineRel = 'demo/screenshots/checkout-order-confirmed.png';
+  const overlayRel = 'demo/screenshots/visual-diff-checkout.png';
+  try {
+    const { default: sharp } = await import('sharp');
+    const { default: pixelmatch } = await import('pixelmatch');
+
+    const loadRaw = async (rel) => {
+      const abs = new URL(`../public/${rel}`, import.meta.url);
+      const { data, info } = await sharp(readFileSync(abs)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      return { data: new Uint8Array(data), width: info.width, height: info.height };
+    };
+    const failing = await loadRaw(failingRel);
+    const baseline = await loadRaw(baselineRel);
+
+    const width = Math.max(failing.width, baseline.width);
+    const height = Math.max(failing.height, baseline.height);
+    const pad = (img) => {
+      if (img.width === width && img.height === height) return img.data;
+      const out = new Uint8Array(width * height * 4);
+      for (let y = 0; y < img.height; y++) {
+        out.set(img.data.subarray(y * img.width * 4, (y + 1) * img.width * 4), y * width * 4);
+      }
+      return out;
+    };
+    const overlay = new Uint8Array(width * height * 4);
+    const changedPixels = pixelmatch(pad(failing), pad(baseline), overlay, width, height, {
+      threshold: 0.1,
+      includeAA: false,
+    });
+    const overlayPng = await sharp(Buffer.from(overlay), { raw: { width, height, channels: 4 } })
+      .png()
+      .toBuffer();
+    writeFileSync(new URL(`../public/${overlayRel}`, import.meta.url), overlayPng);
+
+    ATTACHMENTS.push({
+      id: attachmentId++,
+      test_runs_case_id: latestClusterTrc.id,
+      test_run_id: latestClusterTrc.test_run_id,
+      type: 'attachment',
+      subtype: 'screenshot',
+      label: 'image/png',
+      path: failingRel,
+      size: 0,
+      created_at: Math.floor((latestClusterTrc.started_at ?? Date.now()) / 1000),
+    });
+    ATTACHMENTS.push({
+      id: attachmentId++,
+      test_runs_case_id: latestClusterTrc.id,
+      test_run_id: latestClusterTrc.test_run_id,
+      type: 'visual-diff',
+      subtype: 'overlay',
+      label: 'Visual diff vs last pass',
+      path: overlayRel,
+      size: overlayPng.length,
+      metadata: {
+        changedPixels,
+        changedPixelRatio: Math.round((changedPixels / (width * height)) * 10000) / 10000,
+        width,
+        height,
+        dimensionMismatch: failing.width !== baseline.width || failing.height !== baseline.height,
+        baselineTestRunsCaseId: 2,
+        baselineRunId: 2,
+        failingPath: failingRel,
+        baselinePath: baselineRel,
+      },
+      created_at: Math.floor((latestClusterTrc.started_at ?? Date.now()) / 1000),
+    });
+  } catch (error) {
+    console.warn(`⚠ Could not generate the demo visual diff: ${error}`);
   }
 }
 

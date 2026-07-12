@@ -6,8 +6,8 @@
  * RegExp patterns – the same routes the Nuxt server exposes.
  */
 
-import { eq } from 'drizzle-orm';
-import { users } from '~~/server/database/schema.sqlite';
+import { and, eq } from 'drizzle-orm';
+import { users, files } from '~~/server/database/schema.sqlite';
 import { Role } from '#shared/types';
 import {
   getUserAssignments,
@@ -17,6 +17,8 @@ import {
 } from '#shared/handlers/project-assignments';
 import { getDemoDb } from '../db.client';
 import { getLocatorHealing } from '~~/server/utils/locator-healing';
+import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
+import { apiGetDemoDomSnapshot } from './dom-snapshot';
 import {
   listProjects,
   getProject,
@@ -420,6 +422,33 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/locator-healing$/,
     handler: async (m) => getLocatorHealing(await getDemoDb(), +m[2]!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/environment-diff$/,
+    handler: async (m) => getEnvironmentDiff(await getDemoDb(), +m[2]!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/dom-snapshot$/,
+    handler: async (m) => apiGetDemoDomSnapshot(+m[2]!),
+  },
+  // The demo cannot pixel-diff in the browser — it serves the overlay the
+  // seed generated with the real diff code, straight from the files row.
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/visual-diff$/,
+    handler: async (m) => {
+      const db = await getDemoDb();
+      const rows = await db
+        .select({ path: files.path, metadata: files.metadata })
+        .from(files)
+        .where(and(eq(files.testRunsCaseId, +m[2]!), eq(files.type, 'visual-diff')))
+        .limit(1);
+      const row = rows[0];
+      if (!row?.metadata) return { status: 'no-baseline' };
+      return { status: 'ok', diff: { path: row.path, ...(row.metadata as Record<string, unknown>) } };
+    },
   },
 
   // Tags

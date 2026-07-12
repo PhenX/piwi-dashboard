@@ -30,7 +30,14 @@ import type {
 import { resolveContextLimits } from './ai-context-limits';
 import type { ContextLimits } from '#shared/ai-context-limits';
 import { getTraceFailingActionSection } from './trace-parser';
+import { getTraceDomSnapshot } from './dom-snapshot';
+import { renderAppStateMarkdown, type PageStateLike } from '#shared/page-state';
+import { getLastPassPageState } from '#shared/handlers/test-cases';
 import { getLocatorHealing } from './locator-healing';
+import { getEnvironmentDiff } from './environment-diff';
+import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
+import { selectCaseScreenshots } from './case-screenshots';
+import { getOrComputeVisualDiff } from './visual-diff';
 import { parseAriaCandidates, textSimilarity } from '#shared/locator-fingerprint';
 import type {
   BuildContextOptions,
@@ -108,15 +115,19 @@ const SECTION_ORDER: SectionId[] = [
   'failingSteps',
   'steps',
   'ariaSnapshot',
+  'domSnapshot',
   'screenshots',
+  'visualDiff',
   'nearestAriaNames',
   'locatorHealing',
   'console',
   'networkRequests',
   'serverLogs',
   'webVitals',
+  'appState',
   'retryProgression',
   'baselineComparison',
+  'environmentDiff',
   'recurrenceFlakiness',
   'browserDistribution',
   'affectedTests',
@@ -345,6 +356,7 @@ async function loadExecutionRow(db: DbClient, where: SQL) {
       ariaSnapshot: testRunsCases.ariaSnapshot,
       testSource: testRunsCases.testSource,
       webVitals: testRunsCases.webVitals,
+      pageState: testRunsCases.pageState,
       testAnnotations: testRunsCases.testAnnotations,
       workerIndex: testRunsCases.workerIndex,
       shardIndex: testRunsCases.shardIndex,
@@ -496,8 +508,9 @@ function relativeDays(d: Date): string {
 function compareVitals(fail: WebVitals | null, pass: WebVitals | null): string[] {
   if (!fail || !pass) return [];
   const pairs: Array<[string, number | null | undefined, number | null | undefined]> = [
-    ['LCP', fail.paint?.LCP, pass.paint?.LCP],
-    ['FCP', fail.paint?.FCP, pass.paint?.FCP],
+    ['LCP', fail.vitals?.lcp, pass.vitals?.lcp],
+    ['INP', fail.vitals?.inp, pass.vitals?.inp],
+    ['FCP', fail.paint?.firstContentfulPaint, pass.paint?.firstContentfulPaint],
     ['DOMContentLoaded', fail.navigation?.domContentLoaded, pass.navigation?.domContentLoaded],
   ];
   const out: string[] = [];
@@ -508,6 +521,13 @@ function compareVitals(fail: WebVitals | null, pass: WebVitals | null): string[]
         `- ${name}: failing ${Math.round(f)}ms vs passing ${Math.round(p)}ms (${delta >= 0 ? '+' : ''}${delta}ms)`,
       );
     }
+  }
+  // CLS is unitless — compared separately from the ms-based pairs.
+  const failCls = fail.vitals?.cls;
+  const passCls = pass.vitals?.cls;
+  if (typeof failCls === 'number' && typeof passCls === 'number' && failCls !== passCls) {
+    const delta = Math.round((failCls - passCls) * 10000) / 10000;
+    out.push(`- CLS: failing ${failCls} vs passing ${passCls} (${delta >= 0 ? '+' : ''}${delta})`);
   }
   return out;
 }
@@ -587,6 +607,54 @@ async function baselineComparisonSection(
   return {
     section: `## Compared to Last Pass\nSame test, failing execution vs its recent passing runs:\n${lines.join('\n')}`,
     alreadyGreen,
+  };
+}
+
+/**
+ * App state at test end (URL, storage keys, cookie flags — never values),
+ * with a diff against the last passing execution's captured state when one
+ * exists. A vanished auth cookie or a missing storage key is a classic
+ * "logged-out mid-test" smoking gun.
+ */
+async function appStateSection(
+  db: DbClient,
+  rep: RepresentativeRow,
+): Promise<{ section: string | null; coverage: DiagnosisContextCoverage['appState'] }> {
+  const failing = rep.pageState as PageStateLike | null;
+  if (!failing) return { section: null, coverage: null };
+
+  const baseline =
+    rep.testCaseId != null
+      ? ((await getLastPassPageState(db, {
+          testCaseId: rep.testCaseId,
+          browserName: rep.browserName,
+        })) as PageStateLike | null)
+      : null;
+
+  const markdown = renderAppStateMarkdown(failing, baseline);
+  if (!markdown) return { section: null, coverage: null };
+  return { section: markdown, coverage: { hasBaseline: baseline != null } };
+}
+
+/**
+ * Environment diff vs the last passing execution: whitelisted run/browser
+ * metadata keys that changed between the failing execution and the same
+ * test's most recent pass. "No differences" is positive evidence (rules out
+ * environment drift), so the section still renders with zero changed keys.
+ */
+async function environmentDiffSection(
+  db: DbClient,
+  rep: RepresentativeRow,
+): Promise<{ section: string | null; coverage: DiagnosisContextCoverage['environmentDiff'] }> {
+  const result = await getEnvironmentDiff(db, rep.id);
+  const markdown = renderEnvironmentDiffMarkdown(result);
+  if (!markdown || !result.baseline) return { section: null, coverage: null };
+  return {
+    section: markdown,
+    coverage: {
+      changedKeys: (result.entries ?? []).filter((e) => !e.informational).length,
+      baselineRunId: result.baseline.runId,
+    },
   };
 }
 
@@ -713,17 +781,46 @@ async function failingActionSection(
 ): Promise<string | null> {
   if (limits.maxTraceActions <= 0) return null;
 
-  const traceFiles = await db
-    .select({ path: files.path })
-    .from(files)
-    .where(and(eq(files.testRunsCaseId, rep.id), eq(files.type, 'trace')))
-    .limit(1);
-
-  if (traceFiles.length === 0) return null;
-  const blobPath = traceFiles[0]!.path;
+  const blobPath = await resolveTraceBlobPath(db, rep.id);
   if (!blobPath) return null;
 
   return getTraceFailingActionSection(db, blobPath, limits);
+}
+
+/** Path of the execution's stored (slim) trace blob, or null when no trace was uploaded. */
+async function resolveTraceBlobPath(db: DbClient, testRunsCaseId: number): Promise<string | null> {
+  const traceFiles = await db
+    .select({ path: files.path })
+    .from(files)
+    .where(and(eq(files.testRunsCaseId, testRunsCaseId), eq(files.type, 'trace')))
+    .limit(1);
+  return traceFiles[0]?.path || null;
+}
+
+/**
+ * Failure-time DOM snapshot rendered from the stored trace ZIP — richer than
+ * the flat ARIA snapshot (real tags, ids, classes, hidden elements) at zero
+ * capture cost. Returns coverage alongside the section.
+ */
+async function domSnapshotSection(
+  db: DbClient,
+  rep: RepresentativeRow,
+  limits: ContextLimits,
+): Promise<{ section: string | null; coverage: DiagnosisContextCoverage['domSnapshot'] }> {
+  if (limits.domSnapshotChars <= 0) return { section: null, coverage: null };
+
+  const blobPath = await resolveTraceBlobPath(db, rep.id);
+  if (!blobPath) return { section: null, coverage: null };
+
+  const result = await getTraceDomSnapshot(blobPath, limits.domSnapshotChars);
+  if (result.status !== 'ok' || !result.html) return { section: null, coverage: null };
+
+  const origin = result.snapshotName ? ` (trace snapshot \`${result.snapshotName}\`)` : '';
+  const markdown = `## DOM Snapshot (failure time, from trace)\nSanitized HTML of the page as Playwright recorded it around the failing action${origin} — input values, handlers and script bodies removed:\n\`\`\`html\n${result.html}${result.truncated ? '\n[truncated]' : ''}\n\`\`\``;
+  return {
+    section: markdown,
+    coverage: { chars: result.html.length, ...(result.snapshotName ? { snapshotName: result.snapshotName } : {}) },
+  };
 }
 
 function formatFileSize(n: number | null): string {
@@ -810,13 +907,8 @@ async function resolveScreenshots(
   limits: ContextLimits,
 ): Promise<AiAttachedImage[]> {
   if (limits.maxImages <= 0) return [];
-  // Order by id DESC so the most recently captured screenshot (usually the on-failure one) comes first.
-  const screenshotRows = await db
-    .select({ path: files.path, label: files.label })
-    .from(files)
-    .where(and(eq(files.testRunsCaseId, rep.id), eq(files.type, 'screenshot')))
-    .orderBy(desc(files.id))
-    .limit(limits.maxImages);
+  // Newest first, so the most recently captured screenshot (usually the on-failure one) comes first.
+  const screenshotRows = await selectCaseScreenshots(db, rep.id, limits.maxImages);
 
   if (screenshotRows.length === 0) return [];
 
@@ -1508,14 +1600,17 @@ export function representativeExecutionSections(
 
   // Web vitals
   const webVitals = rep.webVitals as WebVitals | null;
-  if (webVitals && (webVitals.navigation || webVitals.paint)) {
+  if (webVitals && (webVitals.navigation || webVitals.paint || webVitals.vitals)) {
     const lines: string[] = [];
     const nav = webVitals.navigation;
     const paint = webVitals.paint;
+    const vitals = webVitals.vitals;
     if (nav?.domContentLoaded != null) lines.push(`- DOMContentLoaded: ${nav.domContentLoaded}ms`);
     if (nav?.loadComplete != null) lines.push(`- Load complete: ${nav.loadComplete}ms`);
-    if (paint?.FCP != null) lines.push(`- FCP: ${paint.FCP}ms`);
-    if (paint?.LCP != null) lines.push(`- LCP: ${paint.LCP}ms`);
+    if (paint?.firstContentfulPaint != null) lines.push(`- FCP: ${paint.firstContentfulPaint}ms`);
+    if (vitals?.lcp != null) lines.push(`- LCP: ${vitals.lcp}ms`);
+    if (vitals?.cls != null) lines.push(`- CLS: ${vitals.cls}`);
+    if (vitals?.inp != null) lines.push(`- INP: ${vitals.inp}ms`);
     if (lines.length > 0) out.push({ id: 'webVitals', markdown: `### Web Vitals\n${lines.join('\n')}` });
   }
 
@@ -2386,6 +2481,16 @@ export async function buildDiagnosisContext(
       coverage = { ...coverage, alreadyGreen: true };
     }
 
+    // App state at test end (+ diff vs the last pass when captured there too)
+    const appStateResult = await appStateSection(db, rep);
+    push(section('appState', 'App State', appStateResult.section));
+    coverage = { ...coverage, appState: appStateResult.coverage };
+
+    // Environment diff vs last pass (whitelisted run/browser metadata keys)
+    const envDiffResult = await environmentDiffSection(db, rep);
+    push(section('environmentDiff', 'Environment Diff vs Last Pass', envDiffResult.section));
+    coverage = { ...coverage, environmentDiff: envDiffResult.coverage };
+
     // Retry progression (per-attempt error evolution)
     push(section('retryProgression', 'Retry Progression', await retryProgressionSection(db, rep)));
 
@@ -2408,6 +2513,11 @@ export async function buildDiagnosisContext(
 
     // B1: Failing action from trace parsing
     push(section('failingAction', 'Failing Action (from Trace)', await failingActionSection(db, rep, limits)));
+
+    // Failure-time DOM snapshot rendered from the same trace blob
+    const domSnapResult = await domSnapshotSection(db, rep, limits);
+    push(section('domSnapshot', 'DOM Snapshot (from Trace)', domSnapResult.section));
+    coverage = { ...coverage, domSnapshot: domSnapResult.coverage };
 
     // Alternative locators from prior success / ARIA snapshot (computed above,
     // before the nearest-ARIA hint)
@@ -2432,6 +2542,33 @@ export async function buildDiagnosisContext(
           truncated: false,
           markdown,
         });
+      }
+    }
+
+    // Visual diff vs the last passing screenshot — lazily computed and cached.
+    // Only meaningful for a failing execution with screenshots on both sides.
+    if (rep.error) {
+      const visualDiff = await getOrComputeVisualDiff(db, rep.id).catch(() => ({ status: 'error' as const }));
+      if (visualDiff.status === 'ok' && 'diff' in visualDiff && visualDiff.diff) {
+        const d = visualDiff.diff;
+        const pct = (d.changedPixelRatio * 100).toFixed(2);
+        const mismatchNote = d.dimensionMismatch
+          ? '\n- ⚠️ The screenshots have different dimensions (viewport change?) — compared on a padded union canvas, so the ratio is inflated and unreliable.'
+          : '';
+        const md = `## Visual Diff vs Last Pass\nPixel comparison of the failing screenshot against the same test's last passing screenshot (run #${d.baselineRunId}):\n- Changed pixels: ${d.changedPixels} of ${d.width * d.height} (${pct}%)${mismatchNote}\n- The diff overlay (red = changed pixels) is attached as image "visual-diff".`;
+        push(section('visualDiff', 'Visual Diff vs Last Pass', md));
+        coverage = {
+          ...coverage,
+          visualDiff: { changedPixelRatio: d.changedPixelRatio, dimensionMismatch: d.dimensionMismatch },
+        };
+        if (images.length < limits.maxImages) {
+          try {
+            const overlay = await getStorage().readFile(d.path);
+            images.push({ name: 'visual-diff', mediaType: 'image/png', data: overlay.toString('base64') });
+          } catch {
+            // The metric section stands on its own when the overlay is unreadable.
+          }
+        }
       }
     }
 
@@ -2503,6 +2640,21 @@ export async function buildDiagnosisContext(
   if (!sectionIds.has('networkRequests')) {
     absentReasons.networkRequests =
       'no network data captured — collectPerformanceMetrics may be disabled in reporter options';
+  }
+  if (!sectionIds.has('environmentDiff')) {
+    absentReasons.environmentDiff = 'no passing baseline execution recorded for this test to compare against';
+  }
+  if (!sectionIds.has('visualDiff')) {
+    absentReasons.visualDiff =
+      'no comparable screenshots — requires a screenshot on both the failing execution and a passing baseline run';
+  }
+  if (!sectionIds.has('domSnapshot')) {
+    absentReasons.domSnapshot =
+      'no DOM snapshot — requires an uploaded trace containing frame snapshots (enable trace recording and uploadTraces)';
+  }
+  if (!sectionIds.has('appState')) {
+    absentReasons.appState =
+      'no page state captured — capturePageState may be disabled or the reporter predates it';
   }
 
   const coverageBlock = buildCoverageBlock(contextSections, {

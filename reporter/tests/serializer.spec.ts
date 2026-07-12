@@ -164,6 +164,7 @@ describe('toWireTestCase', () => {
       'location',
       'locatorSnapshots',
       'networkRequests',
+      'pageState',
       'retries',
       'shardIndex',
       'slowestStep',

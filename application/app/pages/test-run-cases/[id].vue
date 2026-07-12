@@ -378,6 +378,22 @@ function copyFailure() {
               :test-runs-case-id="Number(testCaseId)"
             />
 
+            <!-- What changed in the environment since the last pass — folded to its one-line verdict -->
+            <EnvironmentDiffCard
+              v-if="testCase?.error && testCase.testRun?.id"
+              storage-key="case-env-diff"
+              :run-id="testCase.testRun.id"
+              :test-runs-case-id="Number(testCaseId)"
+            />
+
+            <!-- What changed visually since the last pass — folded to its changed-pixel verdict -->
+            <VisualDiffCard
+              v-if="testCase?.error && testCase.testRun?.id"
+              storage-key="case-visual-diff"
+              :run-id="testCase.testRun.id"
+              :test-runs-case-id="Number(testCaseId)"
+            />
+
             <!-- ARIA snapshot captured at failure time — folded by default -->
             <CollapsibleSectionCard
               v-if="testCase?.ariaSnapshot"
@@ -398,6 +414,14 @@ function copyFailure() {
               <code class="rounded bg-gray-100 px-1 dark:bg-gray-800">test</code>
               from the piwi-dashboard fixtures.
             </p>
+
+            <!-- Failure-time HTML extracted from the uploaded trace — folded by default -->
+            <DomSnapshotCard
+              v-if="testCase?.error && testCase.testRun?.id"
+              storage-key="case-dom-snapshot"
+              :run-id="testCase.testRun.id"
+              :test-runs-case-id="Number(testCaseId)"
+            />
           </div>
         </template>
 
@@ -571,6 +595,50 @@ function copyFailure() {
                 />
               </StatTileGrid>
 
+              <!-- Core Web Vitals — Google rating bands; missing values render "n/a"
+                   without alarm colors (INP is often absent in short tests). -->
+              <StatTileGrid v-if="webVitals.vitals" min-tile-width="10rem" class="pt-2 border-t">
+                <StatTile
+                  label="Largest Contentful Paint (LCP)"
+                  :value="webVitals.vitals.lcp != null ? formatDuration(webVitals.vitals.lcp) : 'n/a'"
+                  :value-class="
+                    webVitals.vitals.lcp == null
+                      ? 'text-gray-400'
+                      : webVitals.vitals.lcp > 4000
+                        ? 'text-red-600'
+                        : webVitals.vitals.lcp > 2500
+                          ? 'text-orange-500'
+                          : 'text-green-600'
+                  "
+                />
+                <StatTile
+                  label="Cumulative Layout Shift (CLS)"
+                  :value="webVitals.vitals.cls != null ? String(webVitals.vitals.cls) : 'n/a'"
+                  :value-class="
+                    webVitals.vitals.cls == null
+                      ? 'text-gray-400'
+                      : webVitals.vitals.cls > 0.25
+                        ? 'text-red-600'
+                        : webVitals.vitals.cls > 0.1
+                          ? 'text-orange-500'
+                          : 'text-green-600'
+                  "
+                />
+                <StatTile
+                  label="Interaction to Next Paint (INP)"
+                  :value="webVitals.vitals.inp != null ? formatDuration(webVitals.vitals.inp) : 'n/a'"
+                  :value-class="
+                    webVitals.vitals.inp == null
+                      ? 'text-gray-400'
+                      : webVitals.vitals.inp > 500
+                        ? 'text-red-600'
+                        : webVitals.vitals.inp > 200
+                          ? 'text-orange-500'
+                          : 'text-green-600'
+                  "
+                />
+              </StatTileGrid>
+
               <div v-if="webVitals.navigation?.url" class="text-xs text-gray-400 pt-1">
                 Page: <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">{{ webVitals.navigation.url }}</code>
               </div>
@@ -582,6 +650,11 @@ function copyFailure() {
           <div class="space-y-4 pt-4">
             <TestCaseTracesCard :traces="(traceData as any[]) || []" />
             <TestCaseAttachmentsCard :attachments="(testCase as any)?.attachments ?? []" />
+            <PageStateCard
+              v-if="(testCase as any)?.pageState"
+              storage-key="case-page-state"
+              :page-state="(testCase as any).pageState"
+            />
             <TestCaseConsoleCard
               v-if="(testCase as any)?.consoleLogs?.length"
               :entries="(testCase as any)?.consoleLogs ?? []"

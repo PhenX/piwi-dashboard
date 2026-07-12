@@ -43,6 +43,14 @@ export interface PiwiDashboardOptions extends PlaywrightTestConfig {
    * in that case anyway). Can also be forced off with `PIWI_CAPTURE_LOCATORS=false`.
    */
   captureLocators?: boolean;
+  /**
+   * Capture the page's state at test end (URL, history state, localStorage/
+   * sessionStorage key names + value lengths, cookie names + flags). Values of
+   * storage entries and cookies are never captured. Defaults to `true`;
+   * automatically disabled when `collectPerformanceMetrics` is `false`. Can
+   * also be forced off with `PIWI_CAPTURE_PAGE_STATE=false`.
+   */
+  capturePageState?: boolean;
   /** Enable live streaming of results (falls back to batch if unsupported). Defaults to `true`. */
   streaming?: boolean;
   /** Number of test results to batch before sending during streaming. Defaults to `5`. */

@@ -18,6 +18,7 @@ interface TestCaseDetail {
   networkRequests?: unknown;
   ariaSnapshot?: string | null;
   testSource?: string | null;
+  pageState?: import('~~/types/api').PageState | null;
   attachments: AttachmentInfo[];
 }
 
@@ -37,6 +38,7 @@ const showSteps = ref(false);
 const showSignals = ref(false);
 const showSource = ref(false);
 const showAriaSnapshot = ref(false);
+const showPageState = ref(false);
 
 // Cache each case's detail + traces so switching tabs is instant and doesn't
 // re-fetch. Keyed by the test-run-case id.
@@ -47,6 +49,7 @@ function resetDisclosures() {
   showSignals.value = false;
   showSource.value = false;
   showAriaSnapshot.value = false;
+  showPageState.value = false;
 }
 
 async function loadCase(id: number) {
@@ -241,6 +244,16 @@ const evidenceChips = computed(() => {
         <div class="max-h-64 overflow-auto">
           <MarkdownPreview :text="'```yaml\n' + caseDetail.ariaSnapshot + '\n```'" />
         </div>
+      </TestEvidenceSection>
+
+      <!-- App state at test end (collapsible) -->
+      <TestEvidenceSection
+        v-if="caseDetail.pageState"
+        icon="i-lucide-database"
+        label="App state"
+        v-model:open="showPageState"
+      >
+        <PageStateCard :page-state="caseDetail.pageState" plain />
       </TestEvidenceSection>
     </template>
   </div>

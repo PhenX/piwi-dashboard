@@ -124,6 +124,15 @@ export class FileHandler {
 
     const aria = find(ATTACHMENT_NAMES.ariaSnapshot);
     if (aria?.body) testCase.ariaSnapshot = (aria.body as Buffer).toString();
+
+    const pageState = find(ATTACHMENT_NAMES.pageState);
+    if (pageState?.body) {
+      try {
+        testCase.pageState = JSON.parse((pageState.body as Buffer).toString());
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   /** Compute SHA-256 hash and size for a single test case's trace file. Returns `null` when the case has no trace on disk. */

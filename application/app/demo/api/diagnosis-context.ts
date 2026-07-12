@@ -33,6 +33,11 @@ import {
 import type { DrizzleDB } from '#shared/handlers/db';
 import { DIAGNOSIS_SECTIONS } from '#shared/diagnosis-sections';
 import { getLocatorHealing } from '~~/server/utils/locator-healing';
+import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
+import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
+import { apiGetDemoDomSnapshot } from './dom-snapshot';
+import { renderAppStateMarkdown, type PageStateLike } from '#shared/page-state';
+import { getLastPassPageState } from '#shared/handlers/test-cases';
 import type { DiagnosisContextCoverage, ScmChanges } from '~~/types/api';
 import { getDemoScmProject, getDemoChangesSince, getDemoChangesForShas } from '../demo-scm';
 
@@ -70,12 +75,16 @@ const SECTION_ORDER = [
   'failingSteps',
   'steps',
   'ariaSnapshot',
+  'domSnapshot',
   'screenshots',
+  'visualDiff',
   'locatorHealing',
   'console',
   'networkRequests',
   'serverLogs',
   'webVitals',
+  'appState',
+  'environmentDiff',
   'recurrenceFlakiness',
   'browserDistribution',
   'affectedTests',
@@ -92,12 +101,19 @@ const SECTION_ORDER = [
 interface RepRow {
   id: number;
   runId: number;
+  testCaseId: number | null;
+  browserName: string | null;
   status: string;
   duration: number | null;
   error: string | null;
   steps: Array<{ title: string; duration: number; category: string }> | null;
   consoleLogs: Array<{ type: string; text: string }> | null;
-  webVitals: { navigation?: Record<string, number>; paint?: Record<string, number> } | null;
+  webVitals: {
+    navigation?: Record<string, number>;
+    paint?: Record<string, number>;
+    vitals?: Record<string, number | null>;
+  } | null;
+  pageState: import('#shared/page-state').PageStateLike | null;
   ariaSnapshot: string | null;
   browser: { projectName?: string; browserName?: string } | null;
   testAnnotations: Array<{ type: string; description?: string }> | null;
@@ -119,12 +135,15 @@ async function loadClusterRep(db: DrizzleDB, clusterId: number): Promise<RepRow 
     .select({
       id: testRunsCases.id,
       runId: testRunsCases.testRunId,
+      testCaseId: testRunsCases.testCaseId,
+      browserName: testRunsCases.browserName,
       status: testRunsCases.status,
       duration: testRunsCases.duration,
       error: testRunsCases.error,
       steps: testRunsCases.steps,
       consoleLogs: testRunsCases.consoleLogs,
       webVitals: testRunsCases.webVitals,
+      pageState: testRunsCases.pageState,
       ariaSnapshot: testRunsCases.ariaSnapshot,
       browser: testRunsCases.browser,
       testAnnotations: testRunsCases.testAnnotations,
@@ -153,12 +172,15 @@ async function loadExecutionRep(db: DrizzleDB, testRunsCaseId: number): Promise<
     .select({
       id: testRunsCases.id,
       runId: testRunsCases.testRunId,
+      testCaseId: testRunsCases.testCaseId,
+      browserName: testRunsCases.browserName,
       status: testRunsCases.status,
       duration: testRunsCases.duration,
       error: testRunsCases.error,
       steps: testRunsCases.steps,
       consoleLogs: testRunsCases.consoleLogs,
       webVitals: testRunsCases.webVitals,
+      pageState: testRunsCases.pageState,
       ariaSnapshot: testRunsCases.ariaSnapshot,
       browser: testRunsCases.browser,
       testAnnotations: testRunsCases.testAnnotations,
@@ -347,11 +369,15 @@ function webVitalsMd(rep: RepRow): string | null {
   if (!v) return null;
   const nav = v.navigation ?? {};
   const paint = v.paint ?? {};
+  const vitals = v.vitals ?? {};
   const lines = ['## Web Vitals', ''];
   if (nav.ttfb != null) lines.push(`- TTFB: ${nav.ttfb}ms`);
   if (nav.domContentLoaded != null) lines.push(`- DOM content loaded: ${nav.domContentLoaded}ms`);
   if (nav.loadComplete != null) lines.push(`- Load complete: ${nav.loadComplete}ms`);
   if (paint.firstContentfulPaint != null) lines.push(`- First contentful paint: ${paint.firstContentfulPaint}ms`);
+  if (vitals.lcp != null) lines.push(`- LCP: ${vitals.lcp}ms`);
+  if (vitals.cls != null) lines.push(`- CLS: ${vitals.cls}`);
+  if (vitals.inp != null) lines.push(`- INP: ${vitals.inp}ms`);
   return lines.length > 2 ? lines.join('\n') : null;
 }
 
@@ -592,6 +618,81 @@ async function assemble(
     const heal = await locatorHealingMd(db, rep.id);
     push(section('locatorHealing', 'Alternative Locators (Locator Healing)', heal.md));
     if (heal.coverage) coverage = { ...coverage, locatorHealing: heal.coverage };
+
+    // Environment diff vs last pass — same shared loader + renderer as the server
+    const envDiff = await getEnvironmentDiff(db, rep.id);
+    const envDiffMd = renderEnvironmentDiffMarkdown(envDiff);
+    push(section('environmentDiff', 'Environment Diff vs Last Pass', envDiffMd));
+    if (envDiffMd && envDiff.baseline) {
+      coverage = {
+        ...coverage,
+        environmentDiff: {
+          changedKeys: (envDiff.entries ?? []).filter((e) => !e.informational).length,
+          baselineRunId: envDiff.baseline.runId,
+        },
+      };
+    }
+
+    // App state at test end (+ diff vs last pass) — same shared renderer + baseline loader as the server
+    const appStateBaseline =
+      rep.testCaseId != null
+        ? ((await getLastPassPageState(db, {
+            testCaseId: rep.testCaseId,
+            browserName: rep.browserName,
+          })) as PageStateLike | null)
+        : null;
+    const appStateMd = renderAppStateMarkdown(rep.pageState, appStateBaseline);
+    push(section('appState', 'App State', appStateMd));
+    if (appStateMd) coverage = { ...coverage, appState: { hasBaseline: appStateBaseline != null } };
+
+    // Visual diff vs last pass — served from the seed-generated overlay row
+    const vdRows = await db
+      .select({ metadata: files.metadata })
+      .from(files)
+      .where(and(eq(files.testRunsCaseId, rep.id), eq(files.type, 'visual-diff')))
+      .limit(1);
+    const vd = vdRows[0]?.metadata as {
+      changedPixels: number;
+      changedPixelRatio: number;
+      width: number;
+      height: number;
+      dimensionMismatch: boolean;
+      baselineRunId: number;
+    } | null;
+    if (vd) {
+      const pct = (vd.changedPixelRatio * 100).toFixed(2);
+      push(
+        section(
+          'visualDiff',
+          'Visual Diff vs Last Pass',
+          `## Visual Diff vs Last Pass\nPixel comparison of the failing screenshot against the same test's last passing screenshot (run #${vd.baselineRunId}):\n- Changed pixels: ${vd.changedPixels} of ${vd.width * vd.height} (${pct}%)\n- The diff overlay (red = changed pixels) is attached as image "visual-diff".`,
+        ),
+      );
+      coverage = {
+        ...coverage,
+        visualDiff: { changedPixelRatio: vd.changedPixelRatio, dimensionMismatch: vd.dimensionMismatch },
+      };
+    }
+
+    // DOM snapshot from trace — the canned render of the committed demo trace
+    const domSnap = (await apiGetDemoDomSnapshot(rep.id)) as {
+      status: string;
+      html?: string;
+      snapshotName?: string;
+    };
+    if (domSnap.status === 'ok' && domSnap.html) {
+      push(
+        section(
+          'domSnapshot',
+          'DOM Snapshot (from Trace)',
+          `## DOM Snapshot (failure time, from trace)\nSanitized HTML of the page as Playwright recorded it around the failing action (trace snapshot \`${domSnap.snapshotName}\`) — input values, handlers and script bodies removed:\n\`\`\`html\n${domSnap.html}\n\`\`\``,
+        ),
+      );
+      coverage = {
+        ...coverage,
+        domSnapshot: { chars: domSnap.html.length, snapshotName: domSnap.snapshotName },
+      };
+    }
   }
 
   push(section('priorDiagnosis', 'Prior Assessment', await priorDiagnosisMd(db, cluster.id)));

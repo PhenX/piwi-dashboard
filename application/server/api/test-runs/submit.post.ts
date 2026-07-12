@@ -160,6 +160,7 @@ export default eventHandler(async (event) => {
             wastedTimeMs: testCase.wastedTimeMs,
             networkRequests: testCase.networkRequests,
             webVitals: testCase.webVitals,
+            pageState: testCase.pageState,
             consoleLogs: testCase.consoleLogs,
             ariaSnapshot: testCase.ariaSnapshot as string | null | undefined,
             testSource: testCase.testSource ?? null,
@@ -275,6 +276,7 @@ export default eventHandler(async (event) => {
         wastedTimeMs?: number;
         networkRequests?: unknown;
         webVitals?: unknown;
+        pageState?: unknown;
         consoleLogs?: unknown;
         ariaSnapshot?: unknown;
         testSource?: string | null;
@@ -310,6 +312,7 @@ export default eventHandler(async (event) => {
           wastedTimeMs: testCase.wastedTimeMs,
           networkRequests: testCase.networkRequests,
           webVitals: testCase.webVitals,
+          pageState: testCase.pageState,
           consoleLogs: testCase.consoleLogs,
           ariaSnapshot: testCase.ariaSnapshot as string | null | undefined,
           testSource: testCase.testSource ?? null,

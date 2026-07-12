@@ -331,6 +331,7 @@ export const testRunsCases = sqliteTable(
     slowestStepDuration: integer('slowest_step_duration'), // Duration of the slowest step in ms
     wastedTimeMs: integer('wasted_time_ms'), // Aggregated ms spent in wait steps
     webVitals: text('web_vitals', { mode: 'json' }), // { navigation: {...}, paint: {...} }
+    pageState: text('page_state', { mode: 'json' }), // URL/history/storage-keys/cookie-flags at test end (values never captured)
     consoleLogs: text('console_logs', { mode: 'json' }), // Array of { type, text, timestamp, location } console entries
     ariaSnapshot: text('aria_snapshot'), // ARIA snapshot of the page (YAML-like string from locator.ariaSnapshot())
     testSource: text('test_source'), // Source snippet around the failing assertion (sent by reporter)
@@ -475,6 +476,7 @@ export const files = sqliteTable(
     path: text('path').notNull(), // Relative path in storage
     size: integer('size'), // File/directory size in bytes
     blobId: integer('blob_id').references(() => traceBlobs.id), // Set when the file is a deduplicated trace blob
+    metadata: text('metadata', { mode: 'json' }), // Type-specific extras (e.g. visual-diff metrics)
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),

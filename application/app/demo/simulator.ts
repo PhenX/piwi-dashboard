@@ -60,6 +60,7 @@ interface SimTest {
   wastedTimeMs?: number | null;
   networkRequests: Array<Record<string, unknown>>;
   webVitals: Record<string, unknown>;
+  pageState?: Record<string, unknown> | null;
   browser?: Record<string, unknown> | null;
   suitePath?: string[];
   suiteConfig?: Array<{ mode: string; annotations: Array<{ type: string; description?: string }> }>;
@@ -305,6 +306,28 @@ function buildWebVitals(slow = false): Record<string, unknown> {
       firstPaint: vary(680 * factor),
       firstContentfulPaint: vary(890 * factor),
     },
+    vitals: {
+      lcp: vary(1450 * factor),
+      cls: Math.round((slow ? 0.18 : 0.04) * (0.8 + Math.random() * 0.4) * 10000) / 10000,
+      inp: vary(140 * factor),
+    },
+  };
+}
+
+function buildPageState(): Record<string, unknown> {
+  return {
+    url: 'https://shop.example.com/checkout',
+    hash: null,
+    historyState: '{"step":"payment"}',
+    localStorage: [
+      { key: 'cart', length: 182 },
+      { key: 'theme', length: 5 },
+    ],
+    sessionStorage: [{ key: 'checkout-session', length: 36 }],
+    cookies: [
+      { name: 'sid', domain: '.shop.example.com', path: '/', httpOnly: true, secure: true, sameSite: 'Lax' },
+      { name: 'ab_variant', domain: '.shop.example.com', path: '/', httpOnly: false, secure: true },
+    ],
   };
 }
 
@@ -560,6 +583,7 @@ function baseTests(opts: BaseTestOptions = {}): SimTest[] {
       wastedTimeMs: wastedTimeMs > 0 ? wastedTimeMs : null,
       networkRequests: buildNetworkRequests({ slow: opts.slowNetwork }),
       webVitals: buildWebVitals(opts.slowNetwork),
+      pageState: buildPageState(),
       suitePath: suite?.suitePath,
       suiteConfig: suite?.suiteConfig,
     };
@@ -1010,6 +1034,7 @@ async function runSingleSimulation(
             wastedTimeMs: test.wastedTimeMs ?? null,
             networkRequests: test.networkRequests,
             webVitals: test.webVitals,
+            pageState: test.pageState ?? null,
             consoleLogs: a.consoleLogs ?? null,
             ariaSnapshot: a.ariaSnapshot ?? null,
             browser: test.browser ?? null,

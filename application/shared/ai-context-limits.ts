@@ -31,6 +31,8 @@ export interface ContextLimits {
   maxTraceActions: number;
   /** Max characters for trace-derived DOM/ARIA excerpt. */
   traceDomChars: number;
+  /** Max characters of the trace-derived failure-time DOM snapshot (0 disables the section). */
+  domSnapshotChars: number;
   /** Max backend server log entries (from X-Piwi-Logs header) included. */
   serverLogEntries: number;
   /** Max characters per backend server log entry. */
@@ -67,6 +69,7 @@ export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
   slowRequestMs: 1500,
   maxTraceActions: 10,
   traceDomChars: 6000,
+  domSnapshotChars: 8000,
   imageMaxEdge: 1920,
 };
 
@@ -233,6 +236,14 @@ export const CONTEXT_LIMIT_FIELDS: ContextLimitField[] = [
     description: 'Max characters for the trace-derived DOM/ARIA excerpt in failing-action context.',
     min: 0,
     max: 20000,
+  },
+  {
+    key: 'domSnapshotChars',
+    label: 'DOM snapshot characters',
+    envVar: 'PIWI_AI_MAX_DOM_SNAPSHOT_CHARS',
+    description: 'Max characters of the failure-time DOM snapshot rendered from the trace (0 disables).',
+    min: 0,
+    max: 50000,
   },
   {
     key: 'imageMaxEdge',

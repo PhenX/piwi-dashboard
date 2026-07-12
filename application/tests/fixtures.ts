@@ -31,6 +31,8 @@ import {
 } from '../../reporter/dist/internal/capture/locator-healing.js';
 import {
   ariaSnapshotBestEffort,
+  buildPageState,
+  computeCoreVitals,
   probeElementAttrs,
   CAPTURED_ATTRS_ARG,
 } from '../../reporter/dist/internal/capture/capture-fixtures.js';
@@ -103,7 +105,7 @@ async function collectNetworkAndVitals(page: Page, testInfo: TestInfo) {
     }
 
     try {
-      const webVitals = await page.evaluate(() => {
+      const probe = await page.evaluate(async () => {
         const navEntries = performance.getEntriesByType('navigation');
         const paintEntries = performance.getEntriesByType('paint');
         const nav = navEntries[0] as PerformanceNavigationTiming | undefined;
@@ -127,18 +129,113 @@ async function collectNetworkAndVitals(page: Page, testInfo: TestInfo) {
           paint[key] = Math.round(entry.startTime);
         }
 
-        if (!navigation && Object.keys(paint).length === 0) return null;
-        return { navigation, paint };
+        // Buffered core-vitals entries (Chromium-only; null = type unsupported).
+        // Mirrors the reporter fixture's readWebVitals probe.
+        const readBuffered = (type: string, extra?: Record<string, unknown>): Promise<any[] | null> =>
+          new Promise((resolve) => {
+            try {
+              const PO = (globalThis as any).PerformanceObserver;
+              if (!PO || !(PO.supportedEntryTypes || []).includes(type)) return resolve(null);
+              const out: any[] = [];
+              const po = new PO((list: any) => out.push(...list.getEntries()));
+              po.observe({ type, buffered: true, ...extra });
+              setTimeout(() => {
+                try {
+                  out.push(...po.takeRecords());
+                  po.disconnect();
+                } catch {
+                  // Entries gathered so far still count.
+                }
+                resolve(out);
+              }, 0);
+            } catch {
+              resolve(null);
+            }
+          });
+
+        const [lcpRaw, shiftRaw, eventRaw, firstInputRaw] = await Promise.all([
+          readBuffered('largest-contentful-paint'),
+          readBuffered('layout-shift'),
+          readBuffered('event', { durationThreshold: 40 }),
+          readBuffered('first-input'),
+        ]);
+
+        const project = (entries: any[] | null) =>
+          entries === null
+            ? null
+            : entries.map((e: any) => ({
+                startTime: e.startTime,
+                value: e.value,
+                hadRecentInput: e.hadRecentInput,
+                interactionId: e.interactionId,
+                duration: e.duration,
+              }));
+
+        const interactionEntries =
+          eventRaw === null && firstInputRaw === null ? null : [...(eventRaw ?? []), ...(firstInputRaw ?? [])];
+
+        return {
+          navigation,
+          paint,
+          lcpEntries: project(lcpRaw),
+          shiftEntries: project(shiftRaw),
+          eventEntries: project(interactionEntries),
+        };
       });
 
-      if (webVitals) {
+      const vitals = computeCoreVitals(probe.lcpEntries, probe.shiftEntries, probe.eventEntries);
+      if (probe.navigation || Object.keys(probe.paint).length > 0 || vitals) {
         await testInfo.attach(ATTACHMENT_NAMES.webVitals, {
           contentType: 'application/json',
-          body: Buffer.from(JSON.stringify(webVitals)),
+          body: Buffer.from(JSON.stringify({ navigation: probe.navigation, paint: probe.paint, vitals })),
         });
       }
     } catch {
       // page may already be closed or no navigation happened
+    }
+
+    // Page state at test end (dogfooding: mirrors the reporter fixture's capture)
+    if (process.env.PIWI_CAPTURE_PAGE_STATE !== 'false') {
+      try {
+        const rawState = await page.evaluate(() => {
+          const listStorage = (s: Storage): Array<{ key: string; length: number }> => {
+            const out: Array<{ key: string; length: number }> = [];
+            try {
+              for (let i = 0; i < s.length; i++) {
+                const key = s.key(i);
+                if (key != null) out.push({ key, length: (s.getItem(key) ?? '').length });
+              }
+            } catch {
+              // Storage access can throw in sandboxed pages.
+            }
+            return out;
+          };
+          let historyState: string | null = null;
+          try {
+            historyState = history.state == null ? null : JSON.stringify(history.state);
+          } catch {
+            // Unserializable history state.
+          }
+          return {
+            url: location.href,
+            hash: location.hash || null,
+            historyState,
+            localStorage: listStorage(localStorage),
+            sessionStorage: listStorage(sessionStorage),
+          };
+        });
+        const cookies = await page
+          .context()
+          .cookies()
+          .catch(() => null);
+        const pageState = buildPageState(rawState, cookies as Array<Record<string, unknown>> | null);
+        await testInfo.attach(ATTACHMENT_NAMES.pageState, {
+          contentType: 'application/json',
+          body: Buffer.from(JSON.stringify(pageState)),
+        });
+      } catch {
+        // page may already be closed
+      }
     }
   };
 }

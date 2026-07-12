@@ -88,6 +88,74 @@ interface WebVitals {
     decodedBodySize: number;
   } | null;
   paint: Record<string, number>;
+  /**
+   * Core Web Vitals from buffered PerformanceObserver entries. Chromium-only —
+   * Firefox/WebKit don't expose these entry types, so each value is null there.
+   * `inp` is null when the test produced no interactions (common in short tests).
+   */
+  vitals: {
+    lcp: number | null;
+    cls: number | null;
+    inp: number | null;
+  } | null;
+}
+
+/** Plain-object projection of a performance entry, shipped out of the page. */
+export interface RawVitalEntry {
+  startTime?: number;
+  value?: number;
+  hadRecentInput?: boolean;
+  interactionId?: number;
+  duration?: number;
+}
+
+/**
+ * Aggregate buffered performance entries into LCP/CLS/INP. Pure and Node-side
+ * so it is unit-testable; the in-page evaluate only ships raw entry projections.
+ * A null entry list means the entry type is unsupported (non-Chromium) — the
+ * metric is null rather than 0 so absence is distinguishable from "no shifts".
+ */
+export function computeCoreVitals(
+  lcpEntries: RawVitalEntry[] | null,
+  shiftEntries: RawVitalEntry[] | null,
+  eventEntries: RawVitalEntry[] | null,
+): { lcp: number | null; cls: number | null; inp: number | null } | null {
+  // The last LCP candidate is the final LCP.
+  const lastLcp = lcpEntries && lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1] : null;
+  const lcp = lastLcp && typeof lastLcp.startTime === 'number' ? Math.round(lastLcp.startTime) : null;
+
+  // Simple sum over shifts without recent input. The spec's session-window
+  // grouping matters for long sessions; a test's page lifetime is short enough
+  // that the plain sum tracks it closely.
+  let cls: number | null = null;
+  if (shiftEntries) {
+    const sum = shiftEntries.reduce(
+      (acc, e) => acc + (e.hadRecentInput ? 0 : typeof e.value === 'number' ? e.value : 0),
+      0,
+    );
+    cls = Math.round(sum * 10000) / 10000;
+  }
+
+  // Worst interaction latency: max duration per interactionId, then the p98
+  // interaction when there are many (mirrors the INP definition, simplified).
+  let inp: number | null = null;
+  if (eventEntries && eventEntries.length > 0) {
+    const byInteraction = new Map<number, number>();
+    for (const e of eventEntries) {
+      if (typeof e.interactionId !== 'number' || e.interactionId <= 0) continue;
+      const duration = typeof e.duration === 'number' ? e.duration : 0;
+      const prev = byInteraction.get(e.interactionId) ?? 0;
+      if (duration > prev) byInteraction.set(e.interactionId, duration);
+    }
+    const durations = [...byInteraction.values()].sort((a, b) => a - b);
+    if (durations.length > 0) {
+      const index = durations.length > 50 ? Math.floor(durations.length * 0.98) : durations.length - 1;
+      inp = Math.round(durations[Math.min(index, durations.length - 1)]!);
+    }
+  }
+
+  if (lcp === null && cls === null && inp === null) return null;
+  return { lcp, cls, inp };
 }
 
 /**
@@ -112,6 +180,7 @@ interface CaptureSink {
   // page/context fixtures, so by the time flushSink runs the standard test
   // page is already closed and can no longer be read live.
   stashedWebVitals: WebVitals | null;
+  stashedPageState: PageState | null;
   stashedAria: string | null;
 }
 
@@ -126,6 +195,7 @@ function createSink(): CaptureSink {
     lastActivePage: null,
     testInfo: null,
     stashedWebVitals: null,
+    stashedPageState: null,
     stashedAria: null,
   };
 }
@@ -175,12 +245,22 @@ function pageContext(page: Page): BrowserContext | null {
   }
 }
 
-/** Read navigation/paint timings from a page — null when unavailable or the page is gone. */
+/** The evaluate's raw result: navigation/paint plus raw core-vitals entries. */
+interface WebVitalsProbeResult {
+  navigation: WebVitals['navigation'];
+  paint: Record<string, number>;
+  lcpEntries: RawVitalEntry[] | null;
+  shiftEntries: RawVitalEntry[] | null;
+  eventEntries: RawVitalEntry[] | null;
+}
+
+/** Read navigation/paint timings and core-vitals entries — null when unavailable or the page is gone. */
 async function readWebVitals(page: Page): Promise<WebVitals | null> {
   try {
     // Runs in the browser, so the perf-entry reads stay `any` (no DOM lib);
-    // the callback return type pins the result to WebVitals.
-    return await page.evaluate((): WebVitals | null => {
+    // the callback return type pins the result. Aggregation happens Node-side
+    // in computeCoreVitals so the in-page code stays a thin projection.
+    const probe = await page.evaluate(async (): Promise<WebVitalsProbeResult | null> => {
       const navEntries = performance.getEntriesByType('navigation' as any);
       const paintEntries = performance.getEntriesByType('paint' as any);
       const nav = navEntries[0] as any;
@@ -203,19 +283,201 @@ async function readWebVitals(page: Page): Promise<WebVitals | null> {
         paint[key] = Math.round((entry as any).startTime);
       }
 
-      if (!navigation && Object.keys(paint).length === 0) return null;
-      return { navigation, paint };
+      // Buffered-observer read of an entry type. Returns null when the type is
+      // unsupported (non-Chromium); [] when supported but nothing recorded.
+      // Buffered entries are dispatched in a queued task, so wait one macrotask
+      // before draining with takeRecords().
+      const readBuffered = (type: string, extra?: Record<string, unknown>): Promise<any[] | null> =>
+        new Promise((resolve) => {
+          try {
+            const PO = (globalThis as any).PerformanceObserver;
+            if (!PO || !(PO.supportedEntryTypes || []).includes(type)) return resolve(null);
+            const out: any[] = [];
+            const po = new PO((list: any) => out.push(...list.getEntries()));
+            po.observe({ type, buffered: true, ...extra });
+            setTimeout(() => {
+              try {
+                out.push(...po.takeRecords());
+                po.disconnect();
+              } catch {
+                // Entries gathered so far still count.
+              }
+              resolve(out);
+            }, 0);
+          } catch {
+            resolve(null);
+          }
+        });
+
+      const [lcpRaw, shiftRaw, eventRaw, firstInputRaw] = await Promise.all([
+        readBuffered('largest-contentful-paint'),
+        readBuffered('layout-shift'),
+        // durationThreshold 40 mirrors the web-vitals library — captures every
+        // interaction slow enough to matter without flooding the buffer.
+        readBuffered('event', { durationThreshold: 40 }),
+        readBuffered('first-input'),
+      ]);
+
+      const project = (entries: any[] | null): RawVitalEntry[] | null =>
+        entries === null
+          ? null
+          : entries.map((e: any) => ({
+              startTime: e.startTime,
+              value: e.value,
+              hadRecentInput: e.hadRecentInput,
+              interactionId: e.interactionId,
+              duration: e.duration,
+            }));
+
+      const interactionEntries =
+        eventRaw === null && firstInputRaw === null ? null : [...(eventRaw ?? []), ...(firstInputRaw ?? [])];
+
+      return {
+        navigation,
+        paint,
+        lcpEntries: project(lcpRaw),
+        shiftEntries: project(shiftRaw),
+        eventEntries: project(interactionEntries),
+      };
     });
+
+    if (!probe) return null;
+    const vitals = computeCoreVitals(probe.lcpEntries, probe.shiftEntries, probe.eventEntries);
+    if (!probe.navigation && Object.keys(probe.paint).length === 0 && !vitals) return null;
+    return { navigation: probe.navigation, paint: probe.paint, vitals };
+  } catch {
+    return null;
+  }
+}
+
+/** Page state captured at test end. Storage values and cookie values are NEVER included. */
+export interface PageState {
+  url: string;
+  hash: string | null;
+  /** `history.state` as JSON, capped and token-masked. */
+  historyState: string | null;
+  /** Key names + value lengths only. */
+  localStorage: Array<{ key: string; length: number }>;
+  sessionStorage: Array<{ key: string; length: number }>;
+  /** Cookie names + flags only (values are never read). */
+  cookies: Array<{
+    name: string;
+    domain: string;
+    path: string;
+    httpOnly: boolean;
+    secure: boolean;
+    sameSite?: string;
+    expires?: number;
+  }>;
+}
+
+/** Raw in-page reads shipped out of the evaluate (see `readPageState`). */
+export interface RawPageState {
+  url: string;
+  hash: string | null;
+  historyState: string | null;
+  localStorage: Array<{ key: string; length: number }>;
+  sessionStorage: Array<{ key: string; length: number }>;
+}
+
+const PAGE_STATE_MAX_STORAGE_KEYS = 50;
+const PAGE_STATE_MAX_COOKIES = 30;
+const PAGE_STATE_HISTORY_CAP = 2048;
+const TOKEN_MASK_RES = [/\beyJ[\w-]{10,}\.[\w-]{5,}\.[\w-]{5,}\b/g, /\b[0-9a-f]{32,}\b/gi];
+
+/**
+ * Assemble the wire page-state from the in-page reads and the context cookies.
+ * Pure and Node-side so the sanitization (token masking, caps, value-free
+ * cookies) is unit-testable.
+ */
+export function buildPageState(
+  raw: RawPageState,
+  cookies: Array<Record<string, unknown>> | null,
+): PageState {
+  let historyState = raw.historyState;
+  if (historyState) {
+    for (const re of TOKEN_MASK_RES) historyState = historyState.replace(re, '[masked]');
+    if (historyState.length > PAGE_STATE_HISTORY_CAP) {
+      historyState = historyState.slice(0, PAGE_STATE_HISTORY_CAP) + '…';
+    }
+  }
+  const capStorage = (entries: Array<{ key: string; length: number }>) =>
+    (Array.isArray(entries) ? entries : []).slice(0, PAGE_STATE_MAX_STORAGE_KEYS).map((e) => ({
+      key: String(e.key).slice(0, 200),
+      length: typeof e.length === 'number' ? e.length : 0,
+    }));
+
+  return {
+    url: raw.url,
+    hash: raw.hash || null,
+    historyState: historyState || null,
+    localStorage: capStorage(raw.localStorage),
+    sessionStorage: capStorage(raw.sessionStorage),
+    cookies: (cookies ?? []).slice(0, PAGE_STATE_MAX_COOKIES).map((c) => ({
+      name: String(c.name ?? ''),
+      domain: String(c.domain ?? ''),
+      path: String(c.path ?? ''),
+      httpOnly: Boolean(c.httpOnly),
+      secure: Boolean(c.secure),
+      ...(c.sameSite !== undefined ? { sameSite: String(c.sameSite) } : {}),
+      ...(typeof c.expires === 'number' ? { expires: c.expires } : {}),
+    })),
+  };
+}
+
+/** Read the page's state — null when unavailable or the page is gone. */
+async function readPageState(page: Page): Promise<PageState | null> {
+  try {
+    const raw = await page.evaluate((): RawPageState => {
+      // Key names + value lengths only — values never leave the page.
+      const listStorage = (s: any): Array<{ key: string; length: number }> => {
+        const out: Array<{ key: string; length: number }> = [];
+        try {
+          for (let i = 0; i < s.length; i++) {
+            const key = s.key(i);
+            if (key != null) out.push({ key, length: (s.getItem(key) ?? '').length });
+          }
+        } catch {
+          // Storage access can throw in sandboxed/opaque-origin pages.
+        }
+        return out;
+      };
+      const g = globalThis as any;
+      let historyState: string | null = null;
+      try {
+        historyState = g.history?.state == null ? null : JSON.stringify(g.history.state);
+      } catch {
+        // Unserializable history state.
+      }
+      return {
+        url: g.location.href,
+        hash: g.location.hash || null,
+        historyState,
+        localStorage: listStorage((globalThis as any).localStorage),
+        sessionStorage: listStorage((globalThis as any).sessionStorage),
+      };
+    });
+    if (!raw) return null;
+
+    // Cookie flags are only reachable from the context API, never document.cookie.
+    let cookies: Array<Record<string, unknown>> | null = null;
+    try {
+      cookies = ((await pageContext(page)?.cookies()) as Array<Record<string, unknown>> | undefined) ?? null;
+    } catch {
+      cookies = null;
+    }
+
+    return buildPageState(raw, cookies);
   } catch {
     return null;
   }
 }
 
 /**
- * Take the page-dependent teardown reads (web vitals; ARIA snapshot when the
- * test failed) while the last active page is still open. Called by the close
- * wrappers just before a close that would take that page with it — flushSink
- * runs too late for a live read on the standard test page.
+ * Take the page-dependent teardown reads (web vitals; page state; ARIA
+ * snapshot when the test failed) while the last active page is still open.
+ * Called by the close wrappers just before a close that would take that page
+ * with it — flushSink runs too late for a live read on the standard test page.
  */
 async function stashPageState(sink: CaptureSink, closing: { page?: Page; context?: BrowserContext }): Promise<void> {
   const page = sink.lastActivePage;
@@ -226,6 +488,11 @@ async function stashPageState(sink: CaptureSink, closing: { page?: Page; context
 
   const vitals = await readWebVitals(page);
   if (vitals) sink.stashedWebVitals = vitals;
+
+  if (process.env.PIWI_CAPTURE_PAGE_STATE !== 'false') {
+    const pageState = await readPageState(page);
+    if (pageState) sink.stashedPageState = pageState;
+  }
 
   const status = sink.testInfo?.status;
   if (status === 'failed' || status === 'timedOut' || status === 'interrupted') {
@@ -903,6 +1170,17 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
       contentType: 'application/json',
       body: Buffer.from(JSON.stringify(webVitals)),
     });
+  }
+
+  // Page state at test end (pass AND fail — the pass side is the diff baseline).
+  if (process.env.PIWI_CAPTURE_PAGE_STATE !== 'false') {
+    const pageState = (pageReadable ? await readPageState(page) : null) ?? sink.stashedPageState;
+    if (pageState) {
+      await testInfo.attach(ATTACHMENT_NAMES.pageState, {
+        contentType: 'application/json',
+        body: Buffer.from(JSON.stringify(pageState)),
+      });
+    }
   }
 }
 
