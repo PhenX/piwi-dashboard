@@ -1680,7 +1680,25 @@ const LOCATOR_SNAPSHOTS = [
       'data-testid': 'email-input',
       placeholder: 'your@email.com',
       autocomplete: 'email',
+      accessibleName: 'Email address',
       center: { x: 640, y: 540 },
+      // Structural context captured by newer reporters — powers the
+      // renamed-element positional match at heal time.
+      rolePosition: { role: 'textbox', count: 5, index: 0 },
+      ancestors: [
+        {
+          tag: 'form',
+          depth: 2,
+          testId: 'checkout-form',
+          id: 'checkout',
+          role: null,
+          ariaLabel: null,
+          scopedRoleCount: 5,
+          testIdCount: 1,
+          idCount: 1,
+          roleCount: 1,
+        },
+      ],
     },
     element_text: '',
     alternatives: ALT_CHECKOUT_EMAIL,

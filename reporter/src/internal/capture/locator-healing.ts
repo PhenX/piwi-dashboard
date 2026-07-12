@@ -30,6 +30,42 @@ export interface SelectorCounts {
   classes?: Record<string, number>;
 }
 
+/**
+ * The element's position among same-role elements in the document at capture
+ * time — a name-independent structural identity. `levelCount` additionally
+ * counts same-role elements sharing this element's heading level, so a lone
+ * `h1` among many `h2`s still gets a name-free `getByRole('heading', { level: 1 })`.
+ */
+export interface RolePosition {
+  role: string;
+  count: number;
+  index: number;
+  levelCount?: number;
+}
+
+/**
+ * An anchor-worthy ancestor — one carrying a stable hook (test id, id,
+ * explicit role, aria-label, or a landmark tag) that a scoped alternative can
+ * chain from. Nearest ancestors first.
+ */
+export interface AncestorAnchor {
+  tag: string;
+  /** Hops from the element (1 = direct parent). */
+  depth: number;
+  testId: string | null;
+  id: string | null;
+  role: string | null;
+  ariaLabel: string | null;
+  /** Same-role matches for the captured element within this ancestor. */
+  scopedRoleCount?: number;
+  /** Document-wide match count for this ancestor's own data-testid. */
+  testIdCount?: number;
+  /** Document-wide match count for this ancestor's own id. */
+  idCount?: number;
+  /** Document-wide count of elements resolving to this ancestor's landmark/explicit role. */
+  roleCount?: number;
+}
+
 export interface ElementAttributes {
   tagName: string;
   attributes: Record<string, string | null>;
@@ -45,6 +81,10 @@ export interface ElementAttributes {
   hasLabel?: boolean;
   /** Live-page uniqueness probe results for candidate selectors. */
   selectorCounts?: SelectorCounts;
+  /** Position among same-role elements — powers name-free and renamed-element healing. */
+  rolePosition?: RolePosition | null;
+  /** Anchor-worthy ancestors, nearest first — power ancestor-scoped alternatives. */
+  ancestors?: AncestorAnchor[];
 }
 
 export interface LocatorSnapshot {
@@ -60,6 +100,10 @@ export interface LocatorSnapshot {
     textContent: string | null;
     accessibleName: string | null;
     center: { x: number; y: number } | null;
+    /** Position among same-role elements at capture time. */
+    rolePosition?: RolePosition | null;
+    /** Anchor-worthy ancestors, nearest first. */
+    ancestors?: AncestorAnchor[];
   } | null;
   alternatives: RankedLocator[];
 }
@@ -170,6 +214,9 @@ export const CAPTURED_ATTRIBUTES: string[] = [
   'alt',
   'title',
   'aria-label',
+  // `aria-level` carries the heading level for `role="heading"` elements
+  // (h1-h6 levels come from the tag itself).
+  'aria-level',
   'role',
   'type',
   'href',
@@ -265,6 +312,20 @@ export function resolveAriaRole(attrs: ElementAttributes): string | null {
   return TAG_TO_ROLE[tag] ?? null;
 }
 
+/**
+ * Heading level for a `heading`-role element: h1-h6 from the tag, else an
+ * explicit `aria-level` attribute. Null when unknown (don't guess the ARIA
+ * default) or when the element isn't a heading.
+ */
+export function headingLevel(attrs: ElementAttributes, role: string | null): number | null {
+  if (role !== 'heading') return null;
+  const tagMatch = attrs.tagName.match(/^h([1-6])$/);
+  if (tagMatch) return Number(tagMatch[1]);
+  const ariaLevel = attrs.attributes['aria-level'];
+  if (ariaLevel && /^\d+$/.test(ariaLevel)) return Number(ariaLevel);
+  return null;
+}
+
 // ── Alternative generation ───────────────────────────────────────────────────
 
 const attr = (a: ElementAttributes, key: string): string | null => a.attributes[key] || null;
@@ -314,12 +375,19 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
     });
   }
 
+  // Heading level rides along in every heading getByRole — it survives renames
+  // and disambiguates same-named headings at different levels.
+  const level = headingLevel(attrs, role);
+  const levelPart = level != null ? `, level: ${level}` : '';
+  const withLevel = (base: Record<string, unknown>): Record<string, unknown> =>
+    level != null ? { ...base, level } : base;
+
   // 2. role + accessible name from browser ARIA tree (85-95)
   if (role && accessibleName) {
     add({
-      locator: `getByRole('${role}', { name: '${esc(accessibleName)}' })`,
+      locator: `getByRole('${role}', { name: '${esc(accessibleName)}'${levelPart} })`,
       method: 'getByRole',
-      args: { role, name: accessibleName },
+      args: withLevel({ role, name: accessibleName }),
       score: 90,
     });
   }
@@ -328,9 +396,9 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
   const ariaLabel = attr(attrs, 'aria-label');
   if (role && ariaLabel && ariaLabel !== accessibleName) {
     add({
-      locator: `getByRole('${role}', { name: '${esc(ariaLabel)}' })`,
+      locator: `getByRole('${role}', { name: '${esc(ariaLabel)}'${levelPart} })`,
       method: 'getByRole',
-      args: { role, name: ariaLabel },
+      args: withLevel({ role, name: ariaLabel }),
       score: 85,
     });
   }
@@ -420,6 +488,72 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
       args: { title },
       score: 50,
     });
+  }
+
+  // Structural alternatives (55-72) — name-free, so they survive label/text
+  // renames that break every name-derived locator above. Skipped when the
+  // element has its own unique data-testid (already the top alternative).
+  // Chained alternatives carry the LEAF method with flat args (never a `name`
+  // key) so the recommendation's method-family logic and the server's
+  // fingerprint reader treat them correctly.
+  const hasOwnTestId = !!(testId && isUnique(counts?.testId));
+  if (role && !hasOwnTestId) {
+    const rolePart = level != null ? `'${role}', { level: ${level} }` : `'${role}'`;
+    const leafArgs = withLevel({ role });
+
+    // Ancestor-anchored role locators: nearest anchor of each kind whose own
+    // hook is document-unique and that contains exactly one leaf-role match
+    // (level-scoped for headings — the probe counts accordingly).
+    let testIdAnchorDone = false;
+    let idAnchorDone = false;
+    let roleAnchorDone = false;
+    for (const anc of attrs.ancestors ?? []) {
+      if (anc.scopedRoleCount !== 1) continue;
+
+      if (!testIdAnchorDone && anc.testId && anc.testIdCount === 1) {
+        testIdAnchorDone = true;
+        add({
+          locator: `getByTestId('${esc(anc.testId)}').getByRole(${rolePart})`,
+          method: 'getByRole',
+          args: { ...leafArgs, anchorTestId: anc.testId },
+          score: 72,
+        });
+      }
+
+      if (!idAnchorDone && anc.id && !isAutoGenerated(anc.id) && anc.idCount === 1) {
+        idAnchorDone = true;
+        const anchorSelector = isCssSafeId(anc.id) ? `#${anc.id}` : `[id="${escCssAttrValue(anc.id)}"]`;
+        add({
+          locator: `locator('${esc(anchorSelector)}').getByRole(${rolePart})`,
+          method: 'getByRole',
+          args: { ...leafArgs, anchorSelector },
+          score: 64,
+        });
+      }
+
+      const ancestorRole = anc.role || TAG_TO_ROLE[anc.tag] || null;
+      if (!roleAnchorDone && ancestorRole && ancestorRole !== role && anc.roleCount === 1) {
+        roleAnchorDone = true;
+        add({
+          locator: `getByRole('${esc(ancestorRole)}').getByRole(${rolePart})`,
+          method: 'getByRole',
+          args: { ...leafArgs, anchorRole: ancestorRole },
+          score: 55,
+        });
+      }
+    }
+
+    // Name-free bare role — the sole element of its role on the page, or the
+    // sole heading at its level (a lone h1 among many h2s).
+    const pos = attrs.rolePosition;
+    if (pos && pos.role === role && (pos.count === 1 || (level != null && pos.levelCount === 1))) {
+      add({
+        locator: `getByRole(${rolePart})`,
+        method: 'getByRole',
+        args: leafArgs,
+        score: 58,
+      });
+    }
   }
 
   // 11. CSS class-based locators — capped at 3 most stable classes; classes
@@ -595,15 +729,22 @@ const escAttr = (s: string): string => s.replaceAll('\\', '\\\\').replaceAll("'"
  * `parseAriaCandidates` in application/shared/locator-fingerprint.ts).
  * Exported so the dashboard's drift-guard unit test can compare the two.
  */
-export function parseAriaRoleName(ariaSnapshot: string): Array<{ role: string; name: string | null }> {
-  const out: Array<{ role: string; name: string | null }> = [];
+export function parseAriaRoleName(
+  ariaSnapshot: string,
+): Array<{ role: string; name: string | null; level: number | null }> {
+  const out: Array<{ role: string; name: string | null; level: number | null }> = [];
   for (const line of ariaSnapshot.split('\n')) {
     const m = /^\s*-\s+([a-z]+)(?:\s+"((?:[^"\\]|\\.)*)")?/i.exec(line);
     if (!m) continue;
     const role = m[1];
     const name = m[2] == null ? null : m[2].replace(/\\(.)/g, '$1');
     if (!name && (role === 'generic' || role === 'group' || role === 'list' || role === 'paragraph')) continue;
-    out.push({ role, name });
+    // Heading level rides after the name as `[level=N]` (other bracketed
+    // markers like `[ref=eN]` are ignored). Scan only past the matched part so
+    // brackets inside the quoted name can't fake a level.
+    const levelMatch = /\[level=(\d+)\]/.exec(line.slice(m[0].length));
+    const level = levelMatch ? Number(levelMatch[1]) : null;
+    out.push({ role, name, level });
   }
   return out;
 }
@@ -651,16 +792,21 @@ const SUGG_TEXT_ROLES = new Set([
 ]);
 const SUGG_FIELD_ROLES = new Set(['textbox', 'combobox', 'searchbox', 'spinbutton', 'slider']);
 
-/** Extract the role (for getByRole) and the targeted accessible name from a failed locator's args. */
-function failedNameAndRole(failed: FailedLocatorInfo): { role: string | null; name: string | null } {
+/** Extract the role (for getByRole), targeted accessible name, and heading level from a failed locator's args. */
+function failedNameAndRole(failed: FailedLocatorInfo): {
+  role: string | null;
+  name: string | null;
+  level: number | null;
+} {
   if (failed.method === 'getByRole') {
     const role = typeof failed.args[0] === 'string' ? (failed.args[0] as string) : null;
     const opts = failed.args[1] as Record<string, unknown> | undefined;
     const name = opts && typeof opts.name === 'string' ? (opts.name as string) : null;
-    return { role, name };
+    const level = opts && typeof opts.level === 'number' ? (opts.level as number) : null;
+    return { role, name, level };
   }
   const first = failed.args.find((a) => typeof a === 'string');
-  return { role: null, name: typeof first === 'string' ? (first as string) : null };
+  return { role: null, name: typeof first === 'string' ? (first as string) : null, level: null };
 }
 
 /** Render the failed locator back to source for the annotation message. */
@@ -675,7 +821,10 @@ function renderFailing(failed: FailedLocatorInfo): string {
 }
 
 /** Build fresh locator suggestions for a matched candidate, with the failed method's style first. */
-function freshSuggestions(candidate: { role: string; name: string }, failedMethod: string): string[] {
+function freshSuggestions(
+  candidate: { role: string; name: string; level?: number | null },
+  failedMethod: string,
+): string[] {
   const out: string[] = [];
   const role = candidate.role;
   const name = candidate.name;
@@ -683,7 +832,8 @@ function freshSuggestions(candidate: { role: string; name: string }, failedMetho
     if (!out.includes(s)) out.push(s);
   };
 
-  const roleLoc = `getByRole('${escAttr(role)}', { name: '${escAttr(name)}' })`;
+  const levelPart = candidate.level != null ? `, level: ${candidate.level}` : '';
+  const roleLoc = `getByRole('${escAttr(role)}', { name: '${escAttr(name)}'${levelPart} })`;
   const textLoc = `getByText('${escAttr(name)}')`;
   const labelLoc = `getByLabel('${escAttr(name)}')`;
 
@@ -715,19 +865,27 @@ export function suggestLocatorsFromAria(
 ): LocatorSuggestion | null {
   if (!ariaSnapshot || !NAME_BASED_METHODS.has(failed.method)) return null;
 
-  const { role, name } = failedNameAndRole(failed);
+  const { role, name, level } = failedNameAndRole(failed);
   if (!name) return null;
 
   const candidates = parseAriaRoleName(ariaSnapshot);
   if (candidates.length === 0) return null;
 
   const sameRole = role ? candidates.filter((c) => c.role === role) : [];
-  const pool = sameRole.length > 0 ? sameRole : candidates;
+  let pool = sameRole.length > 0 ? sameRole : candidates;
+
+  // A targeted heading level narrows the pool further — a lone renamed h1
+  // among many h2s becomes the single confident candidate. Fall back to all
+  // same-role candidates when none share the level (it may have changed too).
+  if (level != null && sameRole.length > 0) {
+    const sameLevel = sameRole.filter((c) => c.level === level);
+    if (sameLevel.length > 0) pool = sameLevel;
+  }
 
   // The targeted name is still on the page → not a rename, nothing to suggest.
   if (pool.some((c) => nameSimilarity(c.name, name) >= 0.8)) return null;
 
-  let best: { role: string; name: string | null } | null = null;
+  let best: { role: string; name: string | null; level: number | null } | null = null;
   let bestScore = -1;
   for (const c of pool) {
     const s = nameSimilarity(c.name, name);
@@ -739,7 +897,7 @@ export function suggestLocatorsFromAria(
   if (!best || !best.name) return null;
   if (bestScore < 0.2 && pool.length !== 1) return null;
 
-  const suggestions = freshSuggestions({ role: best.role, name: best.name }, failed.method);
+  const suggestions = freshSuggestions({ role: best.role, name: best.name, level: best.level }, failed.method);
   if (suggestions.length === 0) return null;
 
   return { failing: renderFailing(failed), suggestions };
@@ -761,8 +919,7 @@ export function suggestLocatorsFromAria(
  * Returns null when no user frame can be identified — the snapshot keeps
  * `location: null` and the server falls back to fingerprint / ARIA lookup.
  */
-export function captureCallerLocation(): string | null {
-  const stack = new Error().stack ?? '';
+export function captureCallerLocation(stack: string = new Error().stack ?? ''): string | null {
   const lines = stack.split('\n');
   // The capture machinery's own frames sit at the top of the stack: this module
   // (locator-healing) then the single fixtures-proxy frame that called it. Skip
@@ -795,9 +952,10 @@ export function captureCallerLocation(): string | null {
       prevWasCaptureModule = true;
       continue;
     }
-    // The fixtures proxy that called us — skip only when it directly follows
-    // this module, so a user's own `fixtures.*` deeper down is not dropped.
-    if (prevWasCaptureModule && /[\\/]fixtures\.[a-z]+$/i.test(file)) {
+    // The fixtures proxy that called us — `capture-fixtures.*` in this
+    // package, `fixtures.*` in the dogfood mirror. Skip only when it directly
+    // follows this module, so a user's own `fixtures.*` deeper down is kept.
+    if (prevWasCaptureModule && /[\\/](?:capture-)?fixtures\.[a-z]+$/i.test(file)) {
       prevWasCaptureModule = false;
       continue;
     }

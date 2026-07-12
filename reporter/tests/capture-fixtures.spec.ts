@@ -268,3 +268,136 @@ describe('locator capture teardown race', () => {
     }
   });
 });
+
+/**
+ * Structural-probe fakes: role-source scans need index access over real
+ * node lists, and ancestors need a parentElement chain — richer than the
+ * `{ length }` stubs above.
+ */
+function fakeDomNode(tagName: string, attrs: Record<string, string> = {}): any {
+  return {
+    tagName: tagName.toUpperCase(),
+    getAttribute: (k: string) => (k in attrs ? attrs[k] : null),
+    parentElement: null as any,
+    // Scoped role-source scan inside an anchor; tests assign the contents.
+    scopedNodes: [] as any[],
+    querySelectorAll(_sel: string) {
+      return this.scopedNodes;
+    },
+  };
+}
+
+function fakeStructuralElement(opts: {
+  tagName: string;
+  attrs?: Record<string, string>;
+  /** Nodes returned for the document-wide role-source scan (should include the element itself). */
+  roleNodes?: any[];
+  /** Match counts for plain count selectors (testid/id uniqueness probes). */
+  countMatches?: Record<string, number>;
+  parent?: any;
+}): any {
+  const { tagName, attrs = {}, roleNodes = [], countMatches = {} } = opts;
+  const el = fakeDomNode(tagName, attrs);
+  el.parentElement = opts.parent ?? null;
+  el.getBoundingClientRect = () => ({ x: 0, y: 0, width: 10, height: 10 });
+  el.textContent = '';
+  el.labels = null;
+  el.ownerDocument = {
+    defaultView: { CSS: { escape: (s: string) => s } },
+    querySelectorAll: (sel: string) =>
+      sel.startsWith('[role],') ? roleNodes : Array.from({ length: countMatches[sel] ?? 0 }),
+  };
+  return el;
+}
+
+describe('probeElementAttrs — structural probe (rolePosition + ancestors)', () => {
+  it('records the position among same-role elements, document-wide', () => {
+    const other = fakeDomNode('input', { type: 'text' });
+    const el = fakeStructuralElement({ tagName: 'input', attrs: { type: 'email' } });
+    el.ownerDocument.querySelectorAll = (sel: string) => (sel.startsWith('[role],') ? [other, el] : []);
+    const probed = probeElementAttrs(el, ['type']);
+    expect(probed.rolePosition).toEqual({ role: 'textbox', count: 2, index: 1 });
+  });
+
+  it('counts same-level headings separately (levelCount)', () => {
+    const h1 = fakeDomNode('h1');
+    const h2a = fakeDomNode('h2');
+    const h2b = fakeDomNode('h2');
+    const el = fakeStructuralElement({ tagName: 'h1' });
+    el.ownerDocument.querySelectorAll = (sel: string) => (sel.startsWith('[role],') ? [el, h2a, h1, h2b] : []);
+    const probed = probeElementAttrs(el, []);
+    expect(probed.rolePosition).toEqual({ role: 'heading', count: 4, index: 0, levelCount: 2 });
+  });
+
+  it('collects anchor-worthy ancestors with scoped and document-wide counts', () => {
+    const plainDiv = fakeDomNode('div');
+    const form = fakeDomNode('form', { 'data-testid': 'signup-form', id: 'signup' });
+    plainDiv.parentElement = form;
+    const el = fakeStructuralElement({
+      tagName: 'input',
+      attrs: { type: 'email' },
+      parent: plainDiv,
+      countMatches: { '[data-testid="signup-form"]': 1, '#signup': 1 },
+    });
+    el.ownerDocument.querySelectorAll = (sel: string) =>
+      sel.startsWith('[role],')
+        ? [form, el]
+        : Array.from({ length: ({ '[data-testid="signup-form"]': 1, '#signup': 1 })[sel] ?? 0 });
+    form.scopedNodes = [el];
+    const probed = probeElementAttrs(el, ['type']);
+    // The plain div is not anchor-worthy; the form is, at depth 2.
+    expect(probed.ancestors).toEqual([
+      {
+        tag: 'form',
+        depth: 2,
+        testId: 'signup-form',
+        id: 'signup',
+        role: null,
+        ariaLabel: null,
+        scopedRoleCount: 1,
+        testIdCount: 1,
+        idCount: 1,
+        roleCount: 1,
+      },
+    ]);
+  });
+
+  it('stops at body and caps the number of collected anchors', () => {
+    // el → 5 anchor-worthy divs (ids) → body → html; only 4 nearest collected.
+    let parent: any = fakeDomNode('body');
+    const chain: any[] = [];
+    for (let i = 5; i >= 1; i--) {
+      const anc = fakeDomNode('div', { id: `panel${i}` });
+      anc.parentElement = parent;
+      parent = anc;
+      chain.unshift(anc);
+    }
+    const el = fakeStructuralElement({ tagName: 'button', parent });
+    el.ownerDocument.querySelectorAll = (sel: string) => (sel.startsWith('[role],') ? [el] : []);
+    const probed = probeElementAttrs(el, []);
+    expect(probed.ancestors.map((a: any) => a.id)).toEqual(['panel1', 'panel2', 'panel3', 'panel4']);
+  });
+
+  it('yields no structural data for a role-less element', () => {
+    const el = fakeStructuralElement({ tagName: 'div', parent: fakeDomNode('form', { id: 'f' }) });
+    const probed = probeElementAttrs(el, []);
+    expect(probed.rolePosition).toBeNull();
+    expect(probed.ancestors).toEqual([]);
+  });
+
+  it('drops the position when the element is missing from the scan', () => {
+    const stranger = fakeDomNode('input');
+    const el = fakeStructuralElement({ tagName: 'input', roleNodes: [stranger] });
+    const probed = probeElementAttrs(el, []);
+    expect(probed.rolePosition).toBeNull();
+  });
+
+  it('survives a broken document without failing the capture', () => {
+    const el = fakeStructuralElement({ tagName: 'input' });
+    el.ownerDocument = undefined;
+    const probed = probeElementAttrs(el, []);
+    expect(probed.rolePosition).toBeNull();
+    expect(probed.ancestors).toEqual([]);
+    expect(probed.tagName).toBe('input');
+  });
+});
