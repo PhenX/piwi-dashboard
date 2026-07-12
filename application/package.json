@@ -54,6 +54,7 @@
     "highlight.js": "^11.11.1",
     "nodemailer": "^9.0.3",
     "nuxt": "^4.2.1",
+    "pixelmatch": "^7.2.0",
     "postgres": "^3.4.9",
     "sharp": "^0.35.2",
     "sql.js": "^1.14.1",
