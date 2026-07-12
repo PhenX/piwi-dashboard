@@ -26,11 +26,14 @@ import {
   CHAIN_METHODS,
   ACTION_METHODS,
   LOCATOR_CREATING_CHAINS,
-  CAPTURED_ATTRIBUTES,
   type LocatorSnapshot,
   type FailedLocatorInfo,
 } from '../../reporter/dist/internal/capture/locator-healing.js';
-import { ariaSnapshotBestEffort } from '../../reporter/dist/internal/capture/capture-fixtures.js';
+import {
+  ariaSnapshotBestEffort,
+  probeElementAttrs,
+  CAPTURED_ATTRS_ARG,
+} from '../../reporter/dist/internal/capture/capture-fixtures.js';
 import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from '../../reporter/dist/internal/capture/attachments.js';
 
 type NetworkRequest = {
@@ -148,9 +151,9 @@ export const test = base.extend<{ page: Page }>({
     const capturePromises: Promise<void>[] = [];
     const failedLocators: FailedLocatorInfo[] = [];
 
-    // Method-surface constants are imported from the reporter so this fixture
-    // stays in lockstep with the reporter's proxy (LOCATOR_METHODS, CHAIN_METHODS,
-    // ACTION_METHODS, CAPTURED_ATTRIBUTES).
+    // Method-surface constants and the in-page probe are imported from the
+    // reporter so this fixture stays in lockstep with the reporter's proxy
+    // (LOCATOR_METHODS, CHAIN_METHODS, ACTION_METHODS, probeElementAttrs).
 
     function wrapLocator(locator: any, originMethod: string, originArgs: unknown[]): any {
       return new Proxy(locator, {
@@ -204,239 +207,7 @@ export const test = base.extend<{ page: Page }>({
               let deadline: ReturnType<typeof setTimeout> | undefined;
               try {
                 const attrs = (await Promise.race([
-                  target.evaluate(
-                    (el: any, keep: string[]) => {
-                      const attrMap: Record<string, string | null> = {};
-                      for (const key of keep) {
-                        const v = el.getAttribute(key) ?? (el as any)[key];
-                        attrMap[key] = typeof v === 'string' ? v.slice(0, 200) : v ? String(v).slice(0, 200) : null;
-                      }
-                      const r = el.getBoundingClientRect();
-                      // Uniqueness probe — mirrors reporter/src/internal/capture/capture-fixtures.ts.
-                      const selectorCounts: {
-                        testId?: number;
-                        id?: number;
-                        name?: number;
-                        classes?: Record<string, number>;
-                      } = {};
-                      try {
-                        const doc = el.ownerDocument;
-                        const cssEsc = (s: string): string => doc.defaultView.CSS.escape(s);
-                        const count = (sel: string): number | undefined => {
-                          try {
-                            return doc.querySelectorAll(sel).length;
-                          } catch {
-                            return undefined;
-                          }
-                        };
-                        if (attrMap['data-testid']) {
-                          selectorCounts.testId = count(`[data-testid=${JSON.stringify(attrMap['data-testid'])}]`);
-                        }
-                        if (attrMap['id']) selectorCounts.id = count(`#${cssEsc(attrMap['id'])}`);
-                        if (attrMap['name']) selectorCounts.name = count(`[name=${JSON.stringify(attrMap['name'])}]`);
-                        const classList = (attrMap['class'] || '')
-                          .split(/\s+/)
-                          .filter((c: string) => c.length > 1)
-                          .slice(0, 10);
-                        if (classList.length > 0) {
-                          const classCounts: Record<string, number> = {};
-                          for (const cls of classList) {
-                            const n = count(`.${cssEsc(cls)}`);
-                            if (n !== undefined) classCounts[cls] = n;
-                          }
-                          selectorCounts.classes = classCounts;
-                        }
-                      } catch {
-                        // Uniqueness probing is best-effort — never fail the capture.
-                      }
-                      // Structural probe: the element's position among same-role
-                      // elements plus anchor-worthy ancestors — mirrors
-                      // reporter/src/internal/capture/capture-fixtures.ts.
-                      let rolePosition: { role: string; count: number; index: number; levelCount?: number } | null =
-                        null;
-                      const ancestors: Array<{
-                        tag: string;
-                        depth: number;
-                        testId: string | null;
-                        id: string | null;
-                        role: string | null;
-                        ariaLabel: string | null;
-                        scopedRoleCount?: number;
-                        testIdCount?: number;
-                        idCount?: number;
-                        roleCount?: number;
-                      }> = [];
-                      try {
-                        const doc = el.ownerDocument;
-                        const cssEsc = (s: string): string => doc.defaultView.CSS.escape(s);
-                        const count = (sel: string): number | undefined => {
-                          try {
-                            return doc.querySelectorAll(sel).length;
-                          } catch {
-                            return undefined;
-                          }
-                        };
-                        const TAG_ROLES: Record<string, string> = {
-                          a: 'link',
-                          button: 'button',
-                          nav: 'navigation',
-                          main: 'main',
-                          article: 'article',
-                          section: 'region',
-                          form: 'form',
-                          img: 'img',
-                          figure: 'figure',
-                          figcaption: 'caption',
-                          blockquote: 'blockquote',
-                          table: 'table',
-                          ul: 'list',
-                          ol: 'list',
-                          li: 'listitem',
-                          dialog: 'dialog',
-                          output: 'status',
-                          progress: 'progressbar',
-                          meter: 'meter',
-                          textarea: 'textbox',
-                          h1: 'heading',
-                          h2: 'heading',
-                          h3: 'heading',
-                          h4: 'heading',
-                          h5: 'heading',
-                          h6: 'heading',
-                          details: 'group',
-                          summary: 'button',
-                          search: 'search',
-                        };
-                        const INPUT_ROLES: Record<string, string> = {
-                          button: 'button',
-                          submit: 'button',
-                          reset: 'button',
-                          image: 'button',
-                          checkbox: 'checkbox',
-                          radio: 'radio',
-                          range: 'slider',
-                          search: 'searchbox',
-                          number: 'spinbutton',
-                          text: 'textbox',
-                          email: 'textbox',
-                          tel: 'textbox',
-                          url: 'textbox',
-                          password: 'textbox',
-                        };
-                        const roleOf = (n: any): string | null => {
-                          const explicit = n.getAttribute('role');
-                          if (explicit) return explicit;
-                          const tag = (n.tagName || '').toLowerCase();
-                          if (tag === 'input')
-                            return INPUT_ROLES[(n.getAttribute('type') || 'text').toLowerCase()] ?? 'textbox';
-                          if (tag === 'select') return n.getAttribute('multiple') != null ? 'listbox' : 'combobox';
-                          if (tag === 'a') return n.getAttribute('href') != null ? 'link' : null;
-                          return TAG_ROLES[tag] ?? null;
-                        };
-                        const levelOf = (n: any): number | null => {
-                          const m = /^h([1-6])$/.exec((n.tagName || '').toLowerCase());
-                          if (m) return Number(m[1]);
-                          const al = n.getAttribute('aria-level');
-                          return al && /^\d+$/.test(al) ? Number(al) : null;
-                        };
-                        const ROLE_SOURCES =
-                          '[role],a,button,input,select,textarea,nav,main,article,section,form,img,figure,figcaption,' +
-                          'blockquote,table,ul,ol,li,dialog,output,progress,meter,h1,h2,h3,h4,h5,h6,details,summary,search';
-                        const targetRole = roleOf(el);
-                        const targetLevel = targetRole === 'heading' ? levelOf(el) : null;
-
-                        if (targetRole) {
-                          const nodes = doc.querySelectorAll(ROLE_SOURCES);
-                          // A truncated scan would produce wrong counts/indexes — skip instead.
-                          if (nodes.length <= 4000) {
-                            let roleCountAll = 0;
-                            let index = -1;
-                            let levelCount = 0;
-                            for (let i = 0; i < nodes.length; i++) {
-                              const n = nodes[i];
-                              if (roleOf(n) !== targetRole) continue;
-                              if (n === el) index = roleCountAll;
-                              roleCountAll++;
-                              if (targetLevel != null && levelOf(n) === targetLevel) levelCount++;
-                            }
-                            if (index !== -1) {
-                              rolePosition = {
-                                role: targetRole,
-                                count: roleCountAll,
-                                index,
-                                ...(targetLevel != null ? { levelCount } : {}),
-                              };
-                            }
-
-                            const CONTAINER_TAGS = ['form', 'nav', 'main', 'article', 'section', 'dialog', 'table'];
-                            const docRoleCount = (role: string): number => {
-                              let c = 0;
-                              for (let i = 0; i < nodes.length; i++) if (roleOf(nodes[i]) === role) c++;
-                              return c;
-                            };
-                            let node = el.parentElement;
-                            let depth = 0;
-                            while (node && depth < 12 && ancestors.length < 4) {
-                              depth++;
-                              const tag = (node.tagName || '').toLowerCase();
-                              if (tag === 'body' || tag === 'html') break;
-                              const testId = node.getAttribute('data-testid');
-                              const id = node.getAttribute('id');
-                              const explicitRole = node.getAttribute('role');
-                              const ariaLabel = node.getAttribute('aria-label');
-                              const anchorRole =
-                                explicitRole || (CONTAINER_TAGS.includes(tag) ? TAG_ROLES[tag] : null) || null;
-                              if (testId || id || anchorRole || ariaLabel) {
-                                const scoped = node.querySelectorAll(ROLE_SOURCES);
-                                let scopedRoleCount = 0;
-                                if (scoped.length <= 2000) {
-                                  for (let i = 0; i < scoped.length; i++) {
-                                    const n = scoped[i];
-                                    if (roleOf(n) !== targetRole) continue;
-                                    if (targetLevel != null && levelOf(n) !== targetLevel) continue;
-                                    scopedRoleCount++;
-                                  }
-                                } else {
-                                  scopedRoleCount = -1; // truncated — unusable
-                                }
-                                ancestors.push({
-                                  tag,
-                                  depth,
-                                  testId: testId || null,
-                                  id: id || null,
-                                  role: explicitRole || null,
-                                  ariaLabel: ariaLabel || null,
-                                  ...(scopedRoleCount >= 0 ? { scopedRoleCount } : {}),
-                                  ...(testId ? { testIdCount: count(`[data-testid=${JSON.stringify(testId)}]`) } : {}),
-                                  ...(id ? { idCount: count(`#${cssEsc(id)}`) } : {}),
-                                  ...(anchorRole ? { roleCount: docRoleCount(anchorRole) } : {}),
-                                });
-                              }
-                              node = node.parentElement;
-                            }
-                          }
-                        }
-                      } catch {
-                        // Structural probing is best-effort — never fail the capture.
-                      }
-                      return {
-                        tagName: el.tagName?.toLowerCase?.() ?? 'unknown',
-                        attributes: attrMap,
-                        // Collapse whitespace so multi-line text can't produce
-                        // a getByText suggestion with literal newlines in it.
-                        textContent: (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80),
-                        center: {
-                          x: Math.round(r.x + r.width / 2),
-                          y: Math.round(r.y + r.height / 2),
-                        },
-                        hasLabel: !!(el.labels && el.labels.length > 0),
-                        selectorCounts,
-                        rolePosition,
-                        ancestors,
-                      };
-                    },
-                    [...CAPTURED_ATTRIBUTES],
-                  ),
+                  target.evaluate(probeElementAttrs, CAPTURED_ATTRS_ARG),
                   new Promise<null>((_, reject) => {
                     deadline = setTimeout(() => reject(new Error('locator capture timeout')), 500);
                   }),

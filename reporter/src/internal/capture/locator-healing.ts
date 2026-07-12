@@ -229,8 +229,14 @@ export const CAPTURED_ATTRIBUTES: string[] = [
 
 // ── ARIA role resolution ─────────────────────────────────────────────────────
 
-/** Implicit ARIA role for an HTML tag (when no explicit `role` is set). */
-const TAG_TO_ROLE: Record<string, string> = {
+/**
+ * Implicit ARIA role for an HTML tag (when no explicit `role` is set). Exported
+ * so the in-page probe (`capture-fixtures.ts#probeElementAttrs`) can receive
+ * this same map as an `evaluate` argument instead of re-declaring it — the
+ * probe is serialized into the browser and can't reference this module's
+ * closure, but the map is pure data and rides in as an argument.
+ */
+export const TAG_TO_ROLE: Record<string, string> = {
   a: 'link',
   button: 'button',
   nav: 'navigation',
@@ -262,8 +268,8 @@ const TAG_TO_ROLE: Record<string, string> = {
   search: 'search',
 };
 
-/** Implicit ARIA role for an `<input>` keyed by its `type` attribute. */
-const INPUT_TYPE_TO_ROLE: Record<string, string> = {
+/** Implicit ARIA role for an `<input>` keyed by its `type` attribute. Exported for the probe (see {@link TAG_TO_ROLE}). */
+export const INPUT_TYPE_TO_ROLE: Record<string, string> = {
   button: 'button',
   submit: 'button',
   reset: 'button',

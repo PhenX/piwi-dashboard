@@ -27,6 +27,8 @@ import {
   ACTION_METHODS,
   LOCATOR_CREATING_CHAINS,
   CAPTURED_ATTRIBUTES,
+  TAG_TO_ROLE,
+  INPUT_TYPE_TO_ROLE,
   type LocatorSnapshot,
   type FailedLocatorInfo,
 } from './locator-healing.js';
@@ -245,9 +247,31 @@ const PATCHED_BROWSERS = new WeakSet<Browser>();
 const CHAIN_METHOD_SET = new Set(CHAIN_METHODS);
 const ACTION_METHOD_SET = new Set(ACTION_METHODS);
 const FORM_FIELD_TAGS = new Set(['input', 'select', 'textarea']);
-// CAPTURED_ATTRIBUTES is passed verbatim into evaluate() on every action — copy
-// it once instead of spreading a fresh array per call.
-const CAPTURED_ATTRS_ARG: string[] = [...CAPTURED_ATTRIBUTES];
+
+/**
+ * Everything the in-page probe needs, serialized into the browser on every
+ * action. `tagRoles`/`inputRoles` are the shared role maps (single source of
+ * truth in `locator-healing.ts`), and `roleSources` is the CSS selector for
+ * every element the probe can resolve a role for — all derived from the map so
+ * nothing is hand-maintained twice. Exported so the dogfood mirror
+ * (`application/tests/fixtures.ts`) reuses the same assembled object.
+ */
+export interface ProbeArg {
+  keep: string[];
+  tagRoles: Record<string, string>;
+  inputRoles: Record<string, string>;
+  roleSources: string;
+}
+
+/** Built once — passed verbatim into evaluate() on every action. */
+export const CAPTURED_ATTRS_ARG: ProbeArg = {
+  keep: [...CAPTURED_ATTRIBUTES],
+  tagRoles: TAG_TO_ROLE,
+  inputRoles: INPUT_TYPE_TO_ROLE,
+  // '[role]' plus every tag the maps can resolve (input/select are handled by
+  // special-cased logic in the probe, so add them explicitly).
+  roleSources: [...new Set(['[role]', 'input', 'select', ...Object.keys(TAG_TO_ROLE)])].join(','),
+};
 
 /**
  * ARIA snapshot that tolerates every Playwright version the reporter supports,
@@ -291,7 +315,8 @@ export async function ariaSnapshotBestEffort(target: Locator, timeout?: number):
  * `el` is browser-context (no DOM lib in this Node package), hence `any`.
  * Exported for unit testing; still passed directly to `evaluate()` below.
  */
-export function probeElementAttrs(el: any, keep: string[]): CapturedAttrs {
+export function probeElementAttrs(el: any, arg: ProbeArg): CapturedAttrs {
+  const { keep, tagRoles, inputRoles, roleSources } = arg;
   const attrMap: Record<string, string | null> = {};
   for (const key of keep) {
     const v = el.getAttribute(key) ?? el[key];
@@ -335,8 +360,8 @@ export function probeElementAttrs(el: any, keep: string[]): CapturedAttrs {
   }
   // Structural probe: the element's position among same-role elements plus
   // anchor-worthy ancestors — powers name-free and ancestor-scoped
-  // alternatives that survive accessible-name renames. Mirrors the Node-side
-  // role resolution (resolveAriaRole) — keep the two maps in sync.
+  // alternatives that survive accessible-name renames. Role resolution reuses
+  // the shared maps passed in via `arg` (see roleOf below).
   let rolePosition: CapturedAttrs['rolePosition'] = null;
   const ancestors: CapturedAttrs['ancestors'] = [];
   try {
@@ -349,61 +374,18 @@ export function probeElementAttrs(el: any, keep: string[]): CapturedAttrs {
         return undefined;
       }
     };
-    const TAG_ROLES: Record<string, string> = {
-      a: 'link',
-      button: 'button',
-      nav: 'navigation',
-      main: 'main',
-      article: 'article',
-      section: 'region',
-      form: 'form',
-      img: 'img',
-      figure: 'figure',
-      figcaption: 'caption',
-      blockquote: 'blockquote',
-      table: 'table',
-      ul: 'list',
-      ol: 'list',
-      li: 'listitem',
-      dialog: 'dialog',
-      output: 'status',
-      progress: 'progressbar',
-      meter: 'meter',
-      textarea: 'textbox',
-      h1: 'heading',
-      h2: 'heading',
-      h3: 'heading',
-      h4: 'heading',
-      h5: 'heading',
-      h6: 'heading',
-      details: 'group',
-      summary: 'button',
-      search: 'search',
-    };
-    const INPUT_ROLES: Record<string, string> = {
-      button: 'button',
-      submit: 'button',
-      reset: 'button',
-      image: 'button',
-      checkbox: 'checkbox',
-      radio: 'radio',
-      range: 'slider',
-      search: 'searchbox',
-      number: 'spinbutton',
-      text: 'textbox',
-      email: 'textbox',
-      tel: 'textbox',
-      url: 'textbox',
-      password: 'textbox',
-    };
+    // Role resolution on live DOM nodes, mirroring the Node-side resolveAriaRole
+    // branching. The role maps are passed in (arg.tagRoles/inputRoles) so this
+    // serialized-into-page function shares the single source of truth in
+    // locator-healing.ts rather than re-declaring it.
     const roleOf = (n: any): string | null => {
       const explicit = n.getAttribute('role');
       if (explicit) return explicit;
       const tag = (n.tagName || '').toLowerCase();
-      if (tag === 'input') return INPUT_ROLES[(n.getAttribute('type') || 'text').toLowerCase()] ?? 'textbox';
+      if (tag === 'input') return inputRoles[(n.getAttribute('type') || 'text').toLowerCase()] ?? 'textbox';
       if (tag === 'select') return n.getAttribute('multiple') != null ? 'listbox' : 'combobox';
       if (tag === 'a') return n.getAttribute('href') != null ? 'link' : null;
-      return TAG_ROLES[tag] ?? null;
+      return tagRoles[tag] ?? null;
     };
     const levelOf = (n: any): number | null => {
       const m = /^h([1-6])$/.exec((n.tagName || '').toLowerCase());
@@ -411,15 +393,11 @@ export function probeElementAttrs(el: any, keep: string[]): CapturedAttrs {
       const al = n.getAttribute('aria-level');
       return al && /^\d+$/.test(al) ? Number(al) : null;
     };
-    // Every element source roleOf can resolve — explicit [role] plus mapped tags.
-    const ROLE_SOURCES =
-      '[role],a,button,input,select,textarea,nav,main,article,section,form,img,figure,figcaption,' +
-      'blockquote,table,ul,ol,li,dialog,output,progress,meter,h1,h2,h3,h4,h5,h6,details,summary,search';
     const targetRole = roleOf(el);
     const targetLevel = targetRole === 'heading' ? levelOf(el) : null;
 
     if (targetRole) {
-      const nodes = doc.querySelectorAll(ROLE_SOURCES);
+      const nodes = doc.querySelectorAll(roleSources);
       // A truncated scan would produce wrong counts/indexes — skip instead.
       if (nodes.length <= 4000) {
         let roleCountAll = 0;
@@ -460,11 +438,11 @@ export function probeElementAttrs(el: any, keep: string[]): CapturedAttrs {
           const id = node.getAttribute('id');
           const explicitRole = node.getAttribute('role');
           const ariaLabel = node.getAttribute('aria-label');
-          const anchorRole = explicitRole || (CONTAINER_TAGS.includes(tag) ? TAG_ROLES[tag] : null) || null;
+          const anchorRole = explicitRole || (CONTAINER_TAGS.includes(tag) ? tagRoles[tag] : null) || null;
           if (testId || id || anchorRole || ariaLabel) {
             // The leaf-role match count within this ancestor (level-scoped for
             // headings — the emitted chained locator is level-scoped too).
-            const scoped = node.querySelectorAll(ROLE_SOURCES);
+            const scoped = node.querySelectorAll(roleSources);
             let scopedRoleCount = 0;
             if (scoped.length <= 2000) {
               for (let i = 0; i < scoped.length; i++) {

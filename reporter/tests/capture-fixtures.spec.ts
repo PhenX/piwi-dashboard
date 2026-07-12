@@ -1,7 +1,19 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Locator } from '@playwright/test';
-import { ariaSnapshotBestEffort, piwiFixtures, probeElementAttrs } from '../src/internal/capture/capture-fixtures.js';
+import {
+  ariaSnapshotBestEffort,
+  piwiFixtures,
+  probeElementAttrs,
+  CAPTURED_ATTRS_ARG,
+} from '../src/internal/capture/capture-fixtures.js';
 import { ATTACHMENT_NAMES } from '../src/internal/capture/attachments.js';
+
+/**
+ * Call the probe with the real shared role maps (CAPTURED_ATTRS_ARG) and just
+ * the per-test `keep` list — mirrors how the fixtures invoke it in production,
+ * so the tests exercise the same single-source-of-truth maps.
+ */
+const probe = (el: unknown, keep: string[] = []) => probeElementAttrs(el, { ...CAPTURED_ATTRS_ARG, keep });
 
 /** A minimal fake Locator exposing only what ariaSnapshotBestEffort touches. */
 function fakeLocator(ariaSnapshot?: (opts?: unknown) => Promise<string>): Locator {
@@ -108,7 +120,7 @@ describe('probeElementAttrs', () => {
       attrs: { type: 'submit' },
       rect: { x: 10, y: 20, width: 100, height: 50 },
     });
-    const out = probeElementAttrs(el, ['type']);
+    const out = probe(el, ['type']);
     expect(out.tagName).toBe('button');
     expect(out.attributes).toEqual({ type: 'submit' });
     expect(out.center).toEqual({ x: 60, y: 45 });
@@ -116,34 +128,34 @@ describe('probeElementAttrs', () => {
 
   it('falls back to a direct property when getAttribute returns null', () => {
     const el = fakeElement({ props: { value: 'a direct prop, not an attribute' } });
-    const out = probeElementAttrs(el, ['value']);
+    const out = probe(el, ['value']);
     expect(out.attributes.value).toBe('a direct prop, not an attribute');
   });
 
   it('truncates attribute values to 200 chars and non-string values are stringified', () => {
     const el = fakeElement({ props: { 'aria-level': 3 }, attrs: { title: 'x'.repeat(250) } });
-    const out = probeElementAttrs(el, ['title', 'aria-level']);
+    const out = probe(el, ['title', 'aria-level']);
     expect(out.attributes.title).toHaveLength(200);
     expect(out.attributes['aria-level']).toBe('3');
   });
 
   it('records null for an attribute that is absent entirely', () => {
     const el = fakeElement({});
-    const out = probeElementAttrs(el, ['data-missing']);
+    const out = probe(el, ['data-missing']);
     expect(out.attributes['data-missing']).toBeNull();
   });
 
   it('collapses whitespace and truncates textContent to 80 chars', () => {
     const el = fakeElement({ textContent: `line one\n\n   line   two   ${'z'.repeat(100)}` });
-    const out = probeElementAttrs(el, []);
+    const out = probe(el, []);
     expect(out.textContent).not.toContain('\n');
     expect(out.textContent.length).toBeLessThanOrEqual(80);
     expect(out.textContent.startsWith('line one line two')).toBe(true);
   });
 
   it('sets hasLabel true only when the element has associated <label>s', () => {
-    expect(probeElementAttrs(fakeElement({ labelCount: 1 }), []).hasLabel).toBe(true);
-    expect(probeElementAttrs(fakeElement({ labelCount: 0 }), []).hasLabel).toBe(false);
+    expect(probe(fakeElement({ labelCount: 1 }), []).hasLabel).toBe(true);
+    expect(probe(fakeElement({ labelCount: 0 }), []).hasLabel).toBe(false);
   });
 
   it('computes selectorCounts for data-testid, id, name, and each class', () => {
@@ -157,7 +169,7 @@ describe('probeElementAttrs', () => {
         '.primary': 1,
       },
     });
-    const out = probeElementAttrs(el, ['data-testid', 'id', 'name', 'class']);
+    const out = probe(el, ['data-testid', 'id', 'name', 'class']);
     expect(out.selectorCounts.testId).toBe(1);
     expect(out.selectorCounts.id).toBe(1);
     expect(out.selectorCounts.name).toBe(2);
@@ -166,7 +178,7 @@ describe('probeElementAttrs', () => {
 
   it('omits a selectorCounts key entirely when the element has no such attribute', () => {
     const el = fakeElement({});
-    const out = probeElementAttrs(el, []);
+    const out = probe(el, []);
     expect(out.selectorCounts).toEqual({});
   });
 
@@ -175,14 +187,14 @@ describe('probeElementAttrs', () => {
       attrs: { id: 'weird:id' },
       throwingSelectors: new Set(['#weird:id']),
     });
-    const out = probeElementAttrs(el, ['id']);
+    const out = probe(el, ['id']);
     expect(out.selectorCounts.id).toBeUndefined();
     expect(out.tagName).toBe('div'); // the rest of the probe still completed
   });
 
   it('never fails the whole probe when ownerDocument access itself throws', () => {
     const el = fakeElement({ attrs: { id: 'x' }, brokenDocument: true });
-    const out = probeElementAttrs(el, ['id']);
+    const out = probe(el, ['id']);
     expect(out.selectorCounts).toEqual({});
     expect(out.tagName).toBe('div');
   });
@@ -193,7 +205,7 @@ describe('probeElementAttrs', () => {
       attrs: { class: classes.join(' ') },
       selectorMatches: Object.fromEntries(classes.map((c) => [`.${c}`, 1])),
     });
-    const out = probeElementAttrs(el, ['class']);
+    const out = probe(el, ['class']);
     expect(Object.keys(out.selectorCounts.classes ?? {})).toHaveLength(10);
   });
 });
@@ -315,7 +327,7 @@ describe('probeElementAttrs — structural probe (rolePosition + ancestors)', ()
     const other = fakeDomNode('input', { type: 'text' });
     const el = fakeStructuralElement({ tagName: 'input', attrs: { type: 'email' } });
     el.ownerDocument.querySelectorAll = (sel: string) => (sel.startsWith('[role],') ? [other, el] : []);
-    const probed = probeElementAttrs(el, ['type']);
+    const probed = probe(el, ['type']);
     expect(probed.rolePosition).toEqual({ role: 'textbox', count: 2, index: 1 });
   });
 
@@ -325,7 +337,7 @@ describe('probeElementAttrs — structural probe (rolePosition + ancestors)', ()
     const h2b = fakeDomNode('h2');
     const el = fakeStructuralElement({ tagName: 'h1' });
     el.ownerDocument.querySelectorAll = (sel: string) => (sel.startsWith('[role],') ? [el, h2a, h1, h2b] : []);
-    const probed = probeElementAttrs(el, []);
+    const probed = probe(el, []);
     expect(probed.rolePosition).toEqual({ role: 'heading', count: 4, index: 0, levelCount: 2 });
   });
 
@@ -344,7 +356,7 @@ describe('probeElementAttrs — structural probe (rolePosition + ancestors)', ()
         ? [form, el]
         : Array.from({ length: ({ '[data-testid="signup-form"]': 1, '#signup': 1 })[sel] ?? 0 });
     form.scopedNodes = [el];
-    const probed = probeElementAttrs(el, ['type']);
+    const probed = probe(el, ['type']);
     // The plain div is not anchor-worthy; the form is, at depth 2.
     expect(probed.ancestors).toEqual([
       {
@@ -374,13 +386,13 @@ describe('probeElementAttrs — structural probe (rolePosition + ancestors)', ()
     }
     const el = fakeStructuralElement({ tagName: 'button', parent });
     el.ownerDocument.querySelectorAll = (sel: string) => (sel.startsWith('[role],') ? [el] : []);
-    const probed = probeElementAttrs(el, []);
+    const probed = probe(el, []);
     expect(probed.ancestors.map((a: any) => a.id)).toEqual(['panel1', 'panel2', 'panel3', 'panel4']);
   });
 
   it('yields no structural data for a role-less element', () => {
     const el = fakeStructuralElement({ tagName: 'div', parent: fakeDomNode('form', { id: 'f' }) });
-    const probed = probeElementAttrs(el, []);
+    const probed = probe(el, []);
     expect(probed.rolePosition).toBeNull();
     expect(probed.ancestors).toEqual([]);
   });
@@ -388,14 +400,14 @@ describe('probeElementAttrs — structural probe (rolePosition + ancestors)', ()
   it('drops the position when the element is missing from the scan', () => {
     const stranger = fakeDomNode('input');
     const el = fakeStructuralElement({ tagName: 'input', roleNodes: [stranger] });
-    const probed = probeElementAttrs(el, []);
+    const probed = probe(el, []);
     expect(probed.rolePosition).toBeNull();
   });
 
   it('survives a broken document without failing the capture', () => {
     const el = fakeStructuralElement({ tagName: 'input' });
     el.ownerDocument = undefined;
-    const probed = probeElementAttrs(el, []);
+    const probed = probe(el, []);
     expect(probed.rolePosition).toBeNull();
     expect(probed.ancestors).toEqual([]);
     expect(probed.tagName).toBe('input');
