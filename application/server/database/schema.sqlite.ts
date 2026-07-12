@@ -475,6 +475,7 @@ export const files = sqliteTable(
     path: text('path').notNull(), // Relative path in storage
     size: integer('size'), // File/directory size in bytes
     blobId: integer('blob_id').references(() => traceBlobs.id), // Set when the file is a deduplicated trace blob
+    metadata: text('metadata', { mode: 'json' }), // Type-specific extras (e.g. visual-diff metrics)
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),

@@ -473,6 +473,7 @@ export const files = pgTable(
     path: text('path').notNull(), // Relative path in storage
     size: integer('size'), // File/directory size in bytes
     blobId: integer('blob_id').references(() => traceBlobs.id), // Set when the file is a deduplicated trace blob
+    metadata: jsonb('metadata'), // Type-specific extras (e.g. visual-diff metrics)
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
