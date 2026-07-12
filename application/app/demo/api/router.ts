@@ -18,6 +18,7 @@ import {
 import { getDemoDb } from '../db.client';
 import { getLocatorHealing } from '~~/server/utils/locator-healing';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
+import { apiGetDemoDomSnapshot } from './dom-snapshot';
 import {
   listProjects,
   getProject,
@@ -426,6 +427,11 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/environment-diff$/,
     handler: async (m) => getEnvironmentDiff(await getDemoDb(), +m[2]!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/dom-snapshot$/,
+    handler: async (m) => apiGetDemoDomSnapshot(+m[2]!),
   },
   // The demo cannot pixel-diff in the browser — it serves the overlay the
   // seed generated with the real diff code, straight from the files row.

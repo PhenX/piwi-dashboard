@@ -35,6 +35,9 @@ import { DIAGNOSIS_SECTIONS } from '#shared/diagnosis-sections';
 import { getLocatorHealing } from '~~/server/utils/locator-healing';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
 import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
+import { apiGetDemoDomSnapshot } from './dom-snapshot';
+import { renderAppStateMarkdown, type PageStateLike } from '#shared/page-state';
+import { getLastPassPageState } from '#shared/handlers/test-cases';
 import type { DiagnosisContextCoverage, ScmChanges } from '~~/types/api';
 import { getDemoScmProject, getDemoChangesSince, getDemoChangesForShas } from '../demo-scm';
 
@@ -72,6 +75,7 @@ const SECTION_ORDER = [
   'failingSteps',
   'steps',
   'ariaSnapshot',
+  'domSnapshot',
   'screenshots',
   'visualDiff',
   'locatorHealing',
@@ -79,6 +83,7 @@ const SECTION_ORDER = [
   'networkRequests',
   'serverLogs',
   'webVitals',
+  'appState',
   'environmentDiff',
   'recurrenceFlakiness',
   'browserDistribution',
@@ -96,6 +101,8 @@ const SECTION_ORDER = [
 interface RepRow {
   id: number;
   runId: number;
+  testCaseId: number | null;
+  browserName: string | null;
   status: string;
   duration: number | null;
   error: string | null;
@@ -106,6 +113,7 @@ interface RepRow {
     paint?: Record<string, number>;
     vitals?: Record<string, number | null>;
   } | null;
+  pageState: import('#shared/page-state').PageStateLike | null;
   ariaSnapshot: string | null;
   browser: { projectName?: string; browserName?: string } | null;
   testAnnotations: Array<{ type: string; description?: string }> | null;
@@ -127,12 +135,15 @@ async function loadClusterRep(db: DrizzleDB, clusterId: number): Promise<RepRow 
     .select({
       id: testRunsCases.id,
       runId: testRunsCases.testRunId,
+      testCaseId: testRunsCases.testCaseId,
+      browserName: testRunsCases.browserName,
       status: testRunsCases.status,
       duration: testRunsCases.duration,
       error: testRunsCases.error,
       steps: testRunsCases.steps,
       consoleLogs: testRunsCases.consoleLogs,
       webVitals: testRunsCases.webVitals,
+      pageState: testRunsCases.pageState,
       ariaSnapshot: testRunsCases.ariaSnapshot,
       browser: testRunsCases.browser,
       testAnnotations: testRunsCases.testAnnotations,
@@ -161,12 +172,15 @@ async function loadExecutionRep(db: DrizzleDB, testRunsCaseId: number): Promise<
     .select({
       id: testRunsCases.id,
       runId: testRunsCases.testRunId,
+      testCaseId: testRunsCases.testCaseId,
+      browserName: testRunsCases.browserName,
       status: testRunsCases.status,
       duration: testRunsCases.duration,
       error: testRunsCases.error,
       steps: testRunsCases.steps,
       consoleLogs: testRunsCases.consoleLogs,
       webVitals: testRunsCases.webVitals,
+      pageState: testRunsCases.pageState,
       ariaSnapshot: testRunsCases.ariaSnapshot,
       browser: testRunsCases.browser,
       testAnnotations: testRunsCases.testAnnotations,
@@ -619,6 +633,18 @@ async function assemble(
       };
     }
 
+    // App state at test end (+ diff vs last pass) — same shared renderer + baseline loader as the server
+    const appStateBaseline =
+      rep.testCaseId != null
+        ? ((await getLastPassPageState(db, {
+            testCaseId: rep.testCaseId,
+            browserName: rep.browserName,
+          })) as PageStateLike | null)
+        : null;
+    const appStateMd = renderAppStateMarkdown(rep.pageState, appStateBaseline);
+    push(section('appState', 'App State', appStateMd));
+    if (appStateMd) coverage = { ...coverage, appState: { hasBaseline: appStateBaseline != null } };
+
     // Visual diff vs last pass — served from the seed-generated overlay row
     const vdRows = await db
       .select({ metadata: files.metadata })
@@ -645,6 +671,26 @@ async function assemble(
       coverage = {
         ...coverage,
         visualDiff: { changedPixelRatio: vd.changedPixelRatio, dimensionMismatch: vd.dimensionMismatch },
+      };
+    }
+
+    // DOM snapshot from trace — the canned render of the committed demo trace
+    const domSnap = (await apiGetDemoDomSnapshot(rep.id)) as {
+      status: string;
+      html?: string;
+      snapshotName?: string;
+    };
+    if (domSnap.status === 'ok' && domSnap.html) {
+      push(
+        section(
+          'domSnapshot',
+          'DOM Snapshot (from Trace)',
+          `## DOM Snapshot (failure time, from trace)\nSanitized HTML of the page as Playwright recorded it around the failing action (trace snapshot \`${domSnap.snapshotName}\`) — input values, handlers and script bodies removed:\n\`\`\`html\n${domSnap.html}\n\`\`\``,
+        ),
+      );
+      coverage = {
+        ...coverage,
+        domSnapshot: { chars: domSnap.html.length, snapshotName: domSnap.snapshotName },
       };
     }
   }

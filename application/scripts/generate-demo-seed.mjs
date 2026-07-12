@@ -841,6 +841,24 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
             inp: Math.random() < 0.6 ? 80 + Math.floor(Math.random() * 250) : null,
           },
         },
+        // Failing cases are missing the session cookie — the app-state diff's
+        // "logged out mid-test" story. Values are never captured (keys/flags only).
+        page_state: {
+          url: 'https://app.example.com/',
+          hash: null,
+          historyState: null,
+          localStorage: [
+            { key: 'cart', length: 182 },
+            { key: 'theme', length: 5 },
+          ],
+          sessionStorage: [{ key: 'checkout-session', length: 36 }],
+          cookies: [
+            ...(isFailedCase
+              ? []
+              : [{ name: 'sid', domain: '.app.example.com', path: '/', httpOnly: true, secure: true, sameSite: 'Lax' }]),
+            { name: 'ab_variant', domain: '.app.example.com', path: '/', httpOnly: false, secure: true },
+          ],
+        },
         console_logs: isFailedCase
           ? [
               {

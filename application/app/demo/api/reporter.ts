@@ -18,7 +18,7 @@ import { mapCompleteEventToRunCase } from '~~/server/utils/map-complete-event';
 import { buildNetworkRequestItems, buildNetworkRequestInsertValues } from '~~/server/utils/network-request-helpers';
 import { upsertLocatorSnapshots } from '~~/server/utils/locator-healing';
 import type { LocatorSnapshot } from '#shared/locator-healing.types';
-import { sanitizeMetadata, sanitizeWebVitals, sanitizeConsoleLogs } from '~~/server/utils/sanitize';
+import { sanitizeMetadata, sanitizeWebVitals, sanitizeConsoleLogs, sanitizePageState } from '~~/server/utils/sanitize';
 import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fingerprint';
 import { durationStats } from '#shared/utils/stats';
 import { countFailedFromTally, sumFailedAndTimedOut } from '#shared/utils/test-counts';
@@ -257,6 +257,7 @@ interface RunCaseInput {
   slowestStepDuration?: number | null;
   networkRequests?: unknown;
   webVitals?: unknown;
+  pageState?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: string | null;
   workerIndex?: number | null;
@@ -375,6 +376,7 @@ async function persistRunCases(
       slowestStep: c.slowestStep ?? null,
       slowestStepDuration: c.slowestStepDuration ?? null,
       webVitals: sanitizeWebVitals(c.webVitals as Record<string, unknown> | null | undefined) ?? null,
+      pageState: sanitizePageState(c.pageState),
       consoleLogs: sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined) ?? null,
       ariaSnapshot: c.ariaSnapshot ?? null,
       browser: c.browser ?? null,
