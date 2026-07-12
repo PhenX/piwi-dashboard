@@ -10,9 +10,9 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql';
  * then match subscriptions for the event, enqueue outbox deliveries, and
  * kick the sweeper for realtime deliveries (email/Slack/webhook).
  *
- * Browser notifications via SSE work regardless of auth being enabled;
- * the SSE endpoint handles its own authentication. The outbox path
- * (email/Slack/webhook) requires auth.
+ * The SSE bus publishes regardless of auth — when auth is off, client-side
+ * cookie preferences gate which events trigger browser notifications.
+ * The outbox path (email/Slack/webhook) requires auth.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function emitNotification(
@@ -20,8 +20,6 @@ export async function emitNotification(
   event: NotificationEvent,
   payload: NotificationPayload,
 ): Promise<void> {
-  // Browser notification via SSE — always publish so any open dashboard tab
-  // (even in the background) can fire a native OS notification.
   runEventBus.publishNotification({ type: event, ...payload });
 
   if (!isAuthEnabled()) return; // outbox path requires auth for user identity

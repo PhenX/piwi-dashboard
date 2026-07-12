@@ -62,7 +62,7 @@ export function useDiagnosisNotification() {
     const notification = new Notification('Piwi diagnosis complete', {
       body,
       tag: `diagnosis-${payload.clusterId}`,
-      icon: '/favicon.ico',
+      icon: '/logo.svg',
     });
 
     notification.onclick = () => {

@@ -2653,8 +2653,7 @@ export async function buildDiagnosisContext(
       'no DOM snapshot — requires an uploaded trace containing frame snapshots (enable trace recording and uploadTraces)';
   }
   if (!sectionIds.has('appState')) {
-    absentReasons.appState =
-      'no page state captured — capturePageState may be disabled or the reporter predates it';
+    absentReasons.appState = 'no page state captured — capturePageState may be disabled or the reporter predates it';
   }
 
   const coverageBlock = buildCoverageBlock(contextSections, {

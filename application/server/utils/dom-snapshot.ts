@@ -179,9 +179,7 @@ export function extractDomSnapshot(data: ParsedTraceData, capChars: number): Dom
   if (data.frameSnapshots.length === 0) return { status: 'no-snapshot' };
 
   const fa = data.failingAction;
-  const candidates = [fa?.beforeSnapshot, fa?.snapshotName, fa?.afterSnapshot].filter(
-    (name): name is string => !!name,
-  );
+  const candidates = [fa?.beforeSnapshot, fa?.snapshotName, fa?.afterSnapshot].filter((name): name is string => !!name);
   // Final fallback: the last main-frame snapshot in the trace.
   const mains = data.frameSnapshots.filter((s) => s.isMainFrame !== false && s.snapshotName);
   const last = mains[mains.length - 1];

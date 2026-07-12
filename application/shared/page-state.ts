@@ -58,9 +58,7 @@ export function renderAppStateMarkdown(failing: PageStateLike | null, baseline?:
   lines.push(storageLine('sessionStorage keys', failing.sessionStorage));
   const cookies = failing.cookies ?? [];
   lines.push(
-    cookies.length === 0
-      ? '- Cookies: none'
-      : `- Cookies (${cookies.length}): ${cookies.map(cookieFlags).join(', ')}`,
+    cookies.length === 0 ? '- Cookies: none' : `- Cookies (${cookies.length}): ${cookies.map(cookieFlags).join(', ')}`,
   );
   lines.push('- Storage values and cookie values are never captured — key names, lengths and flags only.');
 

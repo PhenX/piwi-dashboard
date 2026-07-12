@@ -390,10 +390,7 @@ const TOKEN_MASK_RES = [/\beyJ[\w-]{10,}\.[\w-]{5,}\.[\w-]{5,}\b/g, /\b[0-9a-f]{
  * Pure and Node-side so the sanitization (token masking, caps, value-free
  * cookies) is unit-testable.
  */
-export function buildPageState(
-  raw: RawPageState,
-  cookies: Array<Record<string, unknown>> | null,
-): PageState {
+export function buildPageState(raw: RawPageState, cookies: Array<Record<string, unknown>> | null): PageState {
   let historyState = raw.historyState;
   if (historyState) {
     for (const re of TOKEN_MASK_RES) historyState = historyState.replace(re, '[masked]');

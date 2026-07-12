@@ -7,11 +7,7 @@
  */
 import { and, eq, desc } from 'drizzle-orm';
 import { testRuns, testRunsCases } from '../database/schema';
-import {
-  buildEnvironmentSnapshot,
-  computeEnvironmentDiff,
-  type EnvironmentDiffEntry,
-} from '#shared/environment-diff';
+import { buildEnvironmentSnapshot, computeEnvironmentDiff, type EnvironmentDiffEntry } from '#shared/environment-diff';
 import type { BrowserConfig } from '#shared/types';
 import type { DrizzleDB } from '#shared/handlers/db';
 
@@ -82,10 +78,7 @@ export async function getEnvironmentDiff(db: DrizzleDB, testRunsCaseId: number):
   const failing = await loadExecutionEnvironment(db, and(eq(testRunsCases.id, testRunsCaseId)));
   if (!failing || failing.testCaseId == null) return { status: 'not-found' };
 
-  const baselineConds = [
-    eq(testRunsCases.testCaseId, failing.testCaseId),
-    eq(testRunsCases.status, 'passed'),
-  ];
+  const baselineConds = [eq(testRunsCases.testCaseId, failing.testCaseId), eq(testRunsCases.status, 'passed')];
   if (failing.browserName) baselineConds.push(eq(testRunsCases.browserName, failing.browserName));
 
   const baseline = await loadExecutionEnvironment(db, and(...baselineConds));

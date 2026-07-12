@@ -20,14 +20,7 @@ import { searchProjectsTestRunsCases } from '#shared/handlers/search';
 import { listTags } from '#shared/handlers/tags';
 import { listLinks } from '#shared/handlers/links';
 import { getAdminStats } from '#shared/handlers/admin';
-import {
-  projects,
-  testRuns,
-  testRunsCases,
-  testCases,
-  failureClusters,
-  failureDiagnoses,
-} from '../../database/schema';
+import { projects, testRuns, testRunsCases, testCases, failureClusters, failureDiagnoses } from '../../database/schema';
 import { buildDiagnosisContext, buildClusterDiagnosisContext } from '../ai-context';
 import { stripAnsi } from '#shared/error-fingerprint';
 import { MCP_TOOL_DEFS } from '#shared/mcp-tools';

@@ -15,7 +15,34 @@ const open = ref(false);
 
 const demoNotifications = isDemoMode ? useDemoNotifications() : null;
 
-// ── Subscriptions for this project ─────────────────────────────────────────
+const cookie = !authEnabled.value && !isDemoMode ? useBrowserNotificationCookie() : null;
+
+// ── Cookie-based (no auth) ───────────────────────────────────────────────────
+const permission = ref<NotificationPermission>('default');
+const supported = computed(() => import.meta.client && 'Notification' in window);
+
+if (import.meta.client && 'Notification' in window) {
+  permission.value = Notification.permission;
+}
+
+const cookieEvents = computed(() => cookie?.getProject(props.projectId).events ?? []);
+
+const cookieSubscribed = computed(() => cookie?.isSubscribed(props.projectId) ?? false);
+
+async function requestPermission() {
+  if (!supported.value || permission.value !== 'default') return;
+  permission.value = await Notification.requestPermission();
+}
+
+function isCookieEventSelected(evt: NotificationEvent): boolean {
+  return cookieEvents.value.includes(evt);
+}
+
+function toggleCookieEvent(evt: NotificationEvent) {
+  cookie?.toggleEvent(props.projectId, evt);
+}
+
+// ── Auth-based subscriptions ─────────────────────────────────────────────────
 interface Subscription {
   id: number;
   events: string[];
@@ -26,7 +53,6 @@ interface Subscription {
 }
 
 const shouldFetch = isDemoMode || (authEnabled.value && isAuthenticated.value);
-// server: false keeps SSR/prerendering safe in demo mode (SW not active server-side)
 const fetchOpts = isDemoMode ? ({ server: false } as const) : {};
 
 const { data: subsData, refresh: refreshSubs } = await useFetch<{ subscriptions: Subscription[] }>(
@@ -105,7 +131,7 @@ const eventItems = NOTIFICATION_EVENTS.map((e) => ({
 
 watch(open, (val) => {
   if (val) {
-    refreshSubs();
+    if (shouldFetch) refreshSubs();
     if (channels.value.length > 0 && !selectedChannelId.value) {
       selectedChannelId.value = channels.value[0]!.id;
     }
@@ -177,20 +203,61 @@ function channelIcon(type: string) {
   if (type === 'slack') return 'i-lucide-slack';
   return 'i-lucide-webhook';
 }
+
+const showComponent = computed(() => isDemoMode || (authEnabled.value && isAuthenticated.value) || cookie != null);
+const bellSubscribed = computed(() => (isDemoMode || authEnabled.value ? isSubscribed.value : cookieSubscribed.value));
 </script>
 
 <template>
-  <UPopover v-if="isDemoMode || (authEnabled && isAuthenticated)" v-model:open="open" :ui="{ content: 'w-72' }">
+  <UPopover v-if="showComponent" v-model:open="open" :ui="{ content: 'w-72' }">
     <UButton
-      :icon="isSubscribed ? 'i-lucide-bell-ring' : 'i-lucide-bell'"
+      :icon="bellSubscribed ? 'i-lucide-bell-ring' : 'i-lucide-bell'"
       size="sm"
-      :color="isSubscribed ? 'primary' : 'neutral'"
-      :variant="isSubscribed ? 'soft' : 'outline'"
+      :color="bellSubscribed ? 'primary' : 'neutral'"
+      :variant="bellSubscribed ? 'soft' : 'outline'"
       title="Notification subscriptions for this project"
     />
 
     <template #content>
-      <div class="p-3 space-y-3">
+      <!-- Cookie-based UI (no auth) -->
+      <div v-if="cookie" class="p-3 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="font-medium text-sm">Browser notifications</span>
+        </div>
+
+        <p v-if="supported && permission === 'default'" class="text-xs text-gray-500">
+          <UButton variant="link" size="xs" class="p-0" @click="requestPermission"> Allow notifications </UButton>
+          {{ ' ' }}in your browser to get alerts for this project.
+        </p>
+
+        <p v-else-if="supported && permission === 'denied'" class="text-xs text-gray-500">
+          Notifications are blocked. Check your browser settings to allow them.
+        </p>
+
+        <p v-else-if="!supported" class="text-xs text-gray-500">Notifications are not supported in this browser.</p>
+
+        <template v-if="supported && permission === 'granted'">
+          <USeparator />
+          <div class="space-y-1">
+            <label
+              v-for="item in eventItems"
+              :key="item.value"
+              class="flex items-center gap-1.5 text-xs cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                :checked="isCookieEventSelected(item.value as NotificationEvent)"
+                class="accent-primary size-3"
+                @change="toggleCookieEvent(item.value as NotificationEvent)"
+              />
+              {{ item.label }}
+            </label>
+          </div>
+        </template>
+      </div>
+
+      <!-- Auth-based UI -->
+      <div v-else class="p-3 space-y-3">
         <div class="flex items-center justify-between">
           <span class="font-medium text-sm inline-flex items-center gap-1">
             Notifications <HelpHint topic="notifications.subscribe" />

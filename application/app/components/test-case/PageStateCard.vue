@@ -61,7 +61,10 @@ const foldedText = computed(() => {
       </div>
 
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div v-for="(entries, label) in { localStorage: pageState.localStorage, sessionStorage: pageState.sessionStorage }" :key="label">
+        <div
+          v-for="(entries, label) in { localStorage: pageState.localStorage, sessionStorage: pageState.sessionStorage }"
+          :key="label"
+        >
           <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ label }} ({{ entries.length }})</span>
           <p v-if="entries.length === 0" class="text-xs text-gray-400">empty</p>
           <ul v-else class="mt-1 space-y-0.5">
@@ -73,7 +76,9 @@ const foldedText = computed(() => {
       </div>
 
       <div>
-        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Cookies ({{ pageState.cookies.length }})</span>
+        <span class="text-xs font-medium text-gray-500 dark:text-gray-400"
+          >Cookies ({{ pageState.cookies.length }})</span
+        >
         <p v-if="pageState.cookies.length === 0" class="text-xs text-gray-400">none</p>
         <ul v-else class="mt-1 space-y-0.5">
           <li v-for="cookie in pageState.cookies" :key="cookie.name + cookie.domain" class="text-xs font-mono truncate">
