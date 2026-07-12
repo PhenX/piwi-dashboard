@@ -891,6 +891,11 @@ export interface DiagnosisContextCoverage {
     changedKeys: number;
     baselineRunId: number | null;
   } | null;
+  /** Visual screenshot diff vs the last passing execution. null when no comparable screenshots exist. */
+  visualDiff?: {
+    changedPixelRatio: number;
+    dimensionMismatch: boolean;
+  } | null;
   /** Sections where data is not applicable (with reason), keyed by section id. Absent in coverage means "no data". */
   notApplicable?: Record<string, string>;
 }

@@ -34,6 +34,7 @@ import { getLocatorHealing } from './locator-healing';
 import { getEnvironmentDiff } from './environment-diff';
 import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
 import { selectCaseScreenshots } from './case-screenshots';
+import { getOrComputeVisualDiff } from './visual-diff';
 import { parseAriaCandidates, textSimilarity } from '#shared/locator-fingerprint';
 import type {
   BuildContextOptions,
@@ -112,6 +113,7 @@ const SECTION_ORDER: SectionId[] = [
   'steps',
   'ariaSnapshot',
   'screenshots',
+  'visualDiff',
   'nearestAriaNames',
   'locatorHealing',
   'console',
@@ -2454,6 +2456,33 @@ export async function buildDiagnosisContext(
       }
     }
 
+    // Visual diff vs the last passing screenshot — lazily computed and cached.
+    // Only meaningful for a failing execution with screenshots on both sides.
+    if (rep.error) {
+      const visualDiff = await getOrComputeVisualDiff(db, rep.id).catch(() => ({ status: 'error' as const }));
+      if (visualDiff.status === 'ok' && 'diff' in visualDiff && visualDiff.diff) {
+        const d = visualDiff.diff;
+        const pct = (d.changedPixelRatio * 100).toFixed(2);
+        const mismatchNote = d.dimensionMismatch
+          ? '\n- ⚠️ The screenshots have different dimensions (viewport change?) — compared on a padded union canvas, so the ratio is inflated and unreliable.'
+          : '';
+        const md = `## Visual Diff vs Last Pass\nPixel comparison of the failing screenshot against the same test's last passing screenshot (run #${d.baselineRunId}):\n- Changed pixels: ${d.changedPixels} of ${d.width * d.height} (${pct}%)${mismatchNote}\n- The diff overlay (red = changed pixels) is attached as image "visual-diff".`;
+        push(section('visualDiff', 'Visual Diff vs Last Pass', md));
+        coverage = {
+          ...coverage,
+          visualDiff: { changedPixelRatio: d.changedPixelRatio, dimensionMismatch: d.dimensionMismatch },
+        };
+        if (images.length < limits.maxImages) {
+          try {
+            const overlay = await getStorage().readFile(d.path);
+            images.push({ name: 'visual-diff', mediaType: 'image/png', data: overlay.toString('base64') });
+          } catch {
+            // The metric section stands on its own when the overlay is unreadable.
+          }
+        }
+      }
+    }
+
     // SCM investigation (network fetch, cluster-scoped) — skippable for the lean research pass
     if (cluster && !opts.skipScm) {
       const scm = await scmInvestigationSections(db, cluster, opts, limits, {
@@ -2525,6 +2554,10 @@ export async function buildDiagnosisContext(
   }
   if (!sectionIds.has('environmentDiff')) {
     absentReasons.environmentDiff = 'no passing baseline execution recorded for this test to compare against';
+  }
+  if (!sectionIds.has('visualDiff')) {
+    absentReasons.visualDiff =
+      'no comparable screenshots — requires a screenshot on both the failing execution and a passing baseline run';
   }
 
   const coverageBlock = buildCoverageBlock(contextSections, {

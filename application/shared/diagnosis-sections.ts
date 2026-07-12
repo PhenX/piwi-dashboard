@@ -31,6 +31,7 @@ export const DIAGNOSIS_SECTIONS: DiagnosisSectionMeta[] = [
   { id: 'webVitals', label: 'Web vitals', short: 'Web vitals' },
   { id: 'ariaSnapshot', label: 'ARIA snapshot', short: 'ARIA' },
   { id: 'screenshots', label: 'Screenshots (attached as images)', short: 'Screenshots' },
+  { id: 'visualDiff', label: 'Visual diff vs last passing screenshot', short: 'Visual diff' },
   { id: 'browserDistribution', label: 'Browser distribution', short: 'Browsers' },
   { id: 'recurrenceFlakiness', label: 'Recurrence & flakiness', short: 'Flakiness' },
   { id: 'baselineComparison', label: 'Compared to last pass (duration/vitals/steps)', short: 'Baseline' },

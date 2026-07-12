@@ -27,7 +27,6 @@ import {
   testCases,
   failureClusters,
   failureDiagnoses,
-  files,
 } from '../../database/schema';
 import { buildDiagnosisContext, buildClusterDiagnosisContext } from '../ai-context';
 import { stripAnsi } from '#shared/error-fingerprint';
