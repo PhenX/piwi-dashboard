@@ -30,7 +30,7 @@ import {
   type LocatorSnapshot,
   type FailedLocatorInfo,
 } from '../../reporter/dist/internal/capture/locator-healing.js';
-import { ariaSnapshotBestEffort } from '../../reporter/dist/internal/capture/capture-fixtures.js';
+import { ariaSnapshotBestEffort, computeCoreVitals } from '../../reporter/dist/internal/capture/capture-fixtures.js';
 import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from '../../reporter/dist/internal/capture/attachments.js';
 
 type NetworkRequest = {
@@ -100,7 +100,7 @@ async function collectNetworkAndVitals(page: Page, testInfo: TestInfo) {
     }
 
     try {
-      const webVitals = await page.evaluate(() => {
+      const probe = await page.evaluate(async () => {
         const navEntries = performance.getEntriesByType('navigation');
         const paintEntries = performance.getEntriesByType('paint');
         const nav = navEntries[0] as PerformanceNavigationTiming | undefined;
@@ -124,14 +124,65 @@ async function collectNetworkAndVitals(page: Page, testInfo: TestInfo) {
           paint[key] = Math.round(entry.startTime);
         }
 
-        if (!navigation && Object.keys(paint).length === 0) return null;
-        return { navigation, paint };
+        // Buffered core-vitals entries (Chromium-only; null = type unsupported).
+        // Mirrors the reporter fixture's readWebVitals probe.
+        const readBuffered = (type: string, extra?: Record<string, unknown>): Promise<any[] | null> =>
+          new Promise((resolve) => {
+            try {
+              const PO = (globalThis as any).PerformanceObserver;
+              if (!PO || !(PO.supportedEntryTypes || []).includes(type)) return resolve(null);
+              const out: any[] = [];
+              const po = new PO((list: any) => out.push(...list.getEntries()));
+              po.observe({ type, buffered: true, ...extra });
+              setTimeout(() => {
+                try {
+                  out.push(...po.takeRecords());
+                  po.disconnect();
+                } catch {
+                  // Entries gathered so far still count.
+                }
+                resolve(out);
+              }, 0);
+            } catch {
+              resolve(null);
+            }
+          });
+
+        const [lcpRaw, shiftRaw, eventRaw, firstInputRaw] = await Promise.all([
+          readBuffered('largest-contentful-paint'),
+          readBuffered('layout-shift'),
+          readBuffered('event', { durationThreshold: 40 }),
+          readBuffered('first-input'),
+        ]);
+
+        const project = (entries: any[] | null) =>
+          entries === null
+            ? null
+            : entries.map((e: any) => ({
+                startTime: e.startTime,
+                value: e.value,
+                hadRecentInput: e.hadRecentInput,
+                interactionId: e.interactionId,
+                duration: e.duration,
+              }));
+
+        const interactionEntries =
+          eventRaw === null && firstInputRaw === null ? null : [...(eventRaw ?? []), ...(firstInputRaw ?? [])];
+
+        return {
+          navigation,
+          paint,
+          lcpEntries: project(lcpRaw),
+          shiftEntries: project(shiftRaw),
+          eventEntries: project(interactionEntries),
+        };
       });
 
-      if (webVitals) {
+      const vitals = computeCoreVitals(probe.lcpEntries, probe.shiftEntries, probe.eventEntries);
+      if (probe.navigation || Object.keys(probe.paint).length > 0 || vitals) {
         await testInfo.attach(ATTACHMENT_NAMES.webVitals, {
           contentType: 'application/json',
-          body: Buffer.from(JSON.stringify(webVitals)),
+          body: Buffer.from(JSON.stringify({ navigation: probe.navigation, paint: probe.paint, vitals })),
         });
       }
     } catch {

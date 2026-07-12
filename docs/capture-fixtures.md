@@ -52,7 +52,7 @@ That's the entire setup — there is nothing to start, wrap, or await inside you
 |------|----------|--------|
 | **Network requests** — method, URL, status, duration, content type. Only API/document traffic (fetch, XHR, document); static assets are skipped | per request | *Slow API endpoints* table on the [run page](./ui-overview#test-run-detail) with `/api/users/:id`-style route normalization; [backend log correlation](./backend-logs) via the `X-Piwi-Logs` response header |
 | **Console entries** — `warning`, `error`, and `assert` messages with source location (`console.log` noise is not collected) | as they happen | Console card on the [test case page](./ui-overview#test-case-detail); [AI diagnosis](./ai-diagnosis) evidence |
-| **Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint | at test teardown | Web vitals card with color-coded thresholds; [performance trends](./flaky-tests#performance) |
+| **Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint, plus LCP, CLS and INP (Chromium-only) | at test teardown | Web vitals card with color-coded thresholds; [performance trends](./flaky-tests#performance) |
 | **ARIA snapshot** of the final page state | on failure | Failure evidence on the test-case and cluster pages; [AI diagnosis](./ai-diagnosis) context |
 | **Locator snapshots** — element attributes plus ranked alternative locators for each acted-on element, stamped with the call site | after each successful action | [Locator healing](./reporter#locator-healing); when a failing name-based locator (`getByRole`, `getByText`, `getByLabel`, …) matches nothing, a fresh suggestion is attached to the test as a Playwright annotation |
 

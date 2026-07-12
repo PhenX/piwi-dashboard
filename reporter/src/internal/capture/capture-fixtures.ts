@@ -71,6 +71,74 @@ interface WebVitals {
     decodedBodySize: number;
   } | null;
   paint: Record<string, number>;
+  /**
+   * Core Web Vitals from buffered PerformanceObserver entries. Chromium-only —
+   * Firefox/WebKit don't expose these entry types, so each value is null there.
+   * `inp` is null when the test produced no interactions (common in short tests).
+   */
+  vitals: {
+    lcp: number | null;
+    cls: number | null;
+    inp: number | null;
+  } | null;
+}
+
+/** Plain-object projection of a performance entry, shipped out of the page. */
+export interface RawVitalEntry {
+  startTime?: number;
+  value?: number;
+  hadRecentInput?: boolean;
+  interactionId?: number;
+  duration?: number;
+}
+
+/**
+ * Aggregate buffered performance entries into LCP/CLS/INP. Pure and Node-side
+ * so it is unit-testable; the in-page evaluate only ships raw entry projections.
+ * A null entry list means the entry type is unsupported (non-Chromium) — the
+ * metric is null rather than 0 so absence is distinguishable from "no shifts".
+ */
+export function computeCoreVitals(
+  lcpEntries: RawVitalEntry[] | null,
+  shiftEntries: RawVitalEntry[] | null,
+  eventEntries: RawVitalEntry[] | null,
+): { lcp: number | null; cls: number | null; inp: number | null } | null {
+  // The last LCP candidate is the final LCP.
+  const lastLcp = lcpEntries && lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1] : null;
+  const lcp = lastLcp && typeof lastLcp.startTime === 'number' ? Math.round(lastLcp.startTime) : null;
+
+  // Simple sum over shifts without recent input. The spec's session-window
+  // grouping matters for long sessions; a test's page lifetime is short enough
+  // that the plain sum tracks it closely.
+  let cls: number | null = null;
+  if (shiftEntries) {
+    const sum = shiftEntries.reduce(
+      (acc, e) => acc + (e.hadRecentInput ? 0 : typeof e.value === 'number' ? e.value : 0),
+      0,
+    );
+    cls = Math.round(sum * 10000) / 10000;
+  }
+
+  // Worst interaction latency: max duration per interactionId, then the p98
+  // interaction when there are many (mirrors the INP definition, simplified).
+  let inp: number | null = null;
+  if (eventEntries && eventEntries.length > 0) {
+    const byInteraction = new Map<number, number>();
+    for (const e of eventEntries) {
+      if (typeof e.interactionId !== 'number' || e.interactionId <= 0) continue;
+      const duration = typeof e.duration === 'number' ? e.duration : 0;
+      const prev = byInteraction.get(e.interactionId) ?? 0;
+      if (duration > prev) byInteraction.set(e.interactionId, duration);
+    }
+    const durations = [...byInteraction.values()].sort((a, b) => a - b);
+    if (durations.length > 0) {
+      const index = durations.length > 50 ? Math.floor(durations.length * 0.98) : durations.length - 1;
+      inp = Math.round(durations[Math.min(index, durations.length - 1)]!);
+    }
+  }
+
+  if (lcp === null && cls === null && inp === null) return null;
+  return { lcp, cls, inp };
 }
 
 /**
@@ -158,12 +226,22 @@ function pageContext(page: Page): BrowserContext | null {
   }
 }
 
-/** Read navigation/paint timings from a page — null when unavailable or the page is gone. */
+/** The evaluate's raw result: navigation/paint plus raw core-vitals entries. */
+interface WebVitalsProbeResult {
+  navigation: WebVitals['navigation'];
+  paint: Record<string, number>;
+  lcpEntries: RawVitalEntry[] | null;
+  shiftEntries: RawVitalEntry[] | null;
+  eventEntries: RawVitalEntry[] | null;
+}
+
+/** Read navigation/paint timings and core-vitals entries — null when unavailable or the page is gone. */
 async function readWebVitals(page: Page): Promise<WebVitals | null> {
   try {
     // Runs in the browser, so the perf-entry reads stay `any` (no DOM lib);
-    // the callback return type pins the result to WebVitals.
-    return await page.evaluate((): WebVitals | null => {
+    // the callback return type pins the result. Aggregation happens Node-side
+    // in computeCoreVitals so the in-page code stays a thin projection.
+    const probe = await page.evaluate(async (): Promise<WebVitalsProbeResult | null> => {
       const navEntries = performance.getEntriesByType('navigation' as any);
       const paintEntries = performance.getEntriesByType('paint' as any);
       const nav = navEntries[0] as any;
@@ -186,9 +264,68 @@ async function readWebVitals(page: Page): Promise<WebVitals | null> {
         paint[key] = Math.round((entry as any).startTime);
       }
 
-      if (!navigation && Object.keys(paint).length === 0) return null;
-      return { navigation, paint };
+      // Buffered-observer read of an entry type. Returns null when the type is
+      // unsupported (non-Chromium); [] when supported but nothing recorded.
+      // Buffered entries are dispatched in a queued task, so wait one macrotask
+      // before draining with takeRecords().
+      const readBuffered = (type: string, extra?: Record<string, unknown>): Promise<any[] | null> =>
+        new Promise((resolve) => {
+          try {
+            const PO = (globalThis as any).PerformanceObserver;
+            if (!PO || !(PO.supportedEntryTypes || []).includes(type)) return resolve(null);
+            const out: any[] = [];
+            const po = new PO((list: any) => out.push(...list.getEntries()));
+            po.observe({ type, buffered: true, ...extra });
+            setTimeout(() => {
+              try {
+                out.push(...po.takeRecords());
+                po.disconnect();
+              } catch {
+                // Entries gathered so far still count.
+              }
+              resolve(out);
+            }, 0);
+          } catch {
+            resolve(null);
+          }
+        });
+
+      const [lcpRaw, shiftRaw, eventRaw, firstInputRaw] = await Promise.all([
+        readBuffered('largest-contentful-paint'),
+        readBuffered('layout-shift'),
+        // durationThreshold 40 mirrors the web-vitals library — captures every
+        // interaction slow enough to matter without flooding the buffer.
+        readBuffered('event', { durationThreshold: 40 }),
+        readBuffered('first-input'),
+      ]);
+
+      const project = (entries: any[] | null): RawVitalEntry[] | null =>
+        entries === null
+          ? null
+          : entries.map((e: any) => ({
+              startTime: e.startTime,
+              value: e.value,
+              hadRecentInput: e.hadRecentInput,
+              interactionId: e.interactionId,
+              duration: e.duration,
+            }));
+
+      const interactionEntries =
+        eventRaw === null && firstInputRaw === null ? null : [...(eventRaw ?? []), ...(firstInputRaw ?? [])];
+
+      return {
+        navigation,
+        paint,
+        lcpEntries: project(lcpRaw),
+        shiftEntries: project(shiftRaw),
+        eventEntries: project(interactionEntries),
+      };
     });
+
+    if (!probe) return null;
+    const vitals = computeCoreVitals(probe.lcpEntries, probe.shiftEntries, probe.eventEntries);
+    if (!probe.navigation && Object.keys(probe.paint).length === 0 && !vitals) return null;
+    return { navigation: probe.navigation, paint: probe.paint, vitals };
   } catch {
     return null;
   }
