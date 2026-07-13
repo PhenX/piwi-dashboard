@@ -7,6 +7,7 @@
 
 import { recommendLocatorFix } from '#shared/locator-healing';
 import type { RankedLocator, LocatorFixRecommendation, LocatorHealingResult } from '#shared/locator-healing.types';
+import type { TraceInfo } from '~~/types/api';
 import SectionCard from './SectionCard.vue';
 import CollapsibleSectionCard from './CollapsibleSectionCard.vue';
 
@@ -46,6 +47,10 @@ const alternatives = computed<RankedLocator[]>(() => {
   return healing.value.fromElementMatch ?? healing.value.fromPriorSuccess ?? healing.value.fromAriaSnapshot ?? [];
 });
 
+// A locator a human confirmed with the failure-time picker — surfaced as a
+// prominent callout at the top so it never hides in the ranked list.
+const userPick = computed<RankedLocator | null>(() => alternatives.value.find((a) => a.pickedByUser) ?? null);
+
 // The single recommended fix — convention-preserving where possible. Computed
 // server-side; fall back to the shared picker for payloads that lack it —
 // EXCEPT when the server deliberately withheld it because every stored
@@ -68,6 +73,7 @@ const supplement = computed<RankedLocator[]>(() =>
 const recommendationNote = computed(() => {
   const r = recommendation.value;
   if (!r?.recommended) return '';
+  if (r.recommended.pickedByUser) return 'Confirmed with the locator picker on the failing page';
   if (r.preservesConvention) return 'Keeps your original locator style — minimal, idiomatic edit';
   if (r.suggestAddTestId) return 'Most stable available, but still fragile';
   return 'Most stable available — a sturdier style than the original';
@@ -118,6 +124,22 @@ const sourceClass = computed(() => {
 const failingLocatorText = computed(() => {
   const f = healing.value?.failingLocator;
   return f ? `${f.method}(${JSON.stringify(f.args)})` : '';
+});
+
+// The execution's failure trace, when one was uploaded — its recorded page
+// snapshots power the trace viewer's own "Pick locator" tool, so a locator
+// can be picked visually even for CI failures nobody watched live.
+const config = useRuntimeConfig();
+const { data: traces } = useFetch<TraceInfo[]>(() => `/api/test-run-cases/${props.testRunsCaseId}/traces`, {
+  lazy: true,
+});
+const pickTraceUrl = computed(() => {
+  const trace = traces.value?.[0];
+  if (!trace) return null;
+  // Demo mode serves its committed sample trace as a static asset (the
+  // viewer's service worker bypasses the demo API SW).
+  const isDemoStaticAsset = !!config.public.demoMode && trace.filePath.startsWith('demo/');
+  return getTraceViewerUrl(trace.filePath, config.app?.baseURL, isDemoStaticAsset);
 });
 
 const { copy } = useCopy();
@@ -177,6 +199,40 @@ function locatorNote(alt: RankedLocator): string {
         {{ sourceNote }}
       </span>
     </template>
+    <template v-if="pickTraceUrl" #actions>
+      <UButton
+        :to="pickTraceUrl"
+        target="_blank"
+        size="xs"
+        color="neutral"
+        variant="outline"
+        icon="i-lucide-crosshair"
+        title="Open the failure trace in the trace viewer — its Pick locator tool works on the recorded page snapshots"
+      >
+        Pick from trace
+      </UButton>
+    </template>
+
+    <!-- Human-confirmed pick — prominent callout at the very top -->
+    <div v-if="userPick" class="rounded-lg border border-primary/50 bg-primary/10 p-3 mb-3 flex items-center gap-3">
+      <UIcon name="i-lucide-user-check" class="size-5 text-primary shrink-0" />
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-medium text-primary flex items-center gap-1.5">
+          Your pick
+          <UBadge size="sm" color="primary" variant="subtle">confirmed on the failing page</UBadge>
+        </p>
+        <code class="text-sm font-mono block truncate mt-0.5">{{ userPick.locator }}</code>
+      </div>
+      <UButton
+        size="sm"
+        color="primary"
+        variant="solid"
+        :trailing-icon="copiedKey === 'user-pick' ? 'i-lucide-check' : 'i-lucide-copy'"
+        @click="copyLocator(userPick.locator, 'user-pick')"
+      >
+        Copy
+      </UButton>
+    </div>
 
     <!-- Failing locator -->
     <div
@@ -314,6 +370,19 @@ function locatorNote(alt: RankedLocator): string {
   >
     <template v-if="storageKey" #folded>
       <span>No alternatives available</span>
+    </template>
+    <template v-if="pickTraceUrl" #actions>
+      <UButton
+        :to="pickTraceUrl"
+        target="_blank"
+        size="xs"
+        color="neutral"
+        variant="outline"
+        icon="i-lucide-crosshair"
+        title="Open the failure trace in the trace viewer — its Pick locator tool works on the recorded page snapshots"
+      >
+        Pick from trace
+      </UButton>
     </template>
     <UAlert
       color="neutral"

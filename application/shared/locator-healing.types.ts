@@ -14,6 +14,12 @@ export interface RankedLocator {
   args: Record<string, unknown>;
   /** 0-100 stability score. data-testid=100, semantic CSS=35-40, hash-suffixed=10. */
   score: number;
+  /**
+   * True when a human confirmed this alternative in the reporter's
+   * failure-time locator picker (`pickLocatorOnFailure`). A confirmed pick is
+   * surfaced distinctly and preferred as the recommended fix.
+   */
+  pickedByUser?: boolean;
 }
 
 /**

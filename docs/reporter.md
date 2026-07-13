@@ -324,6 +324,8 @@ The result is shown as an **Alternative locators** panel on the test-case and fa
   <figcaption>The Alternative locators panel — replacements ranked by stability score (data-testid ≈ 100, role + name ≈ 90), with a recommended fix and a copy button for each.</figcaption>
 </figure>
 
+When the failing execution has an uploaded trace, the panel offers **Pick from trace**: it opens the trace in the dashboard's bundled [trace viewer](./ui-overview#trace-viewer), whose *Pick locator* tool works on the recorded page snapshots — so a replacement locator can be picked visually even for a CI failure nobody watched live. A replacement confirmed with the reporter's failure-time locator picker (`pickLocatorOnFailure`) shows a **Your pick** badge and becomes the recommended fix.
+
 Capture adds a small per-action cost (one DOM read, sometimes an extra ARIA snapshot) in the test worker. Turn it off with `captureLocators: false` or `PIWI_CAPTURE_LOCATORS=false`; it is also disabled automatically whenever `collectPerformanceMetrics` is `false`.
 
 > Healing is read-only — it never rewrites your test. It surfaces the replacement so you can apply it yourself.

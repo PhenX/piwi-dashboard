@@ -71,14 +71,19 @@ export function recommendLocatorFix(
     (failingMethod ? alternatives.find((a) => a.method === failingMethod && a.score >= floor) : undefined) ??
     (family ? alternatives.find((a) => LOCATOR_FAMILY[a.method] === family && a.score >= floor) : undefined);
 
+  // A human-confirmed pick (the reporter's failure-time locator picker)
+  // outranks the convention ladder — it is the one alternative a person
+  // verified against the intended element on the failing page.
+  const userPick = alternatives.find((a) => a.pickedByUser);
+
   // Escalate to the most stable alternative when nothing in the original family
   // is stable enough to keep.
-  const recommended = conventionPick ?? durable;
+  const recommended = userPick ?? conventionPick ?? durable;
 
   return {
     recommended,
     durable,
-    preservesConvention: !!conventionPick,
+    preservesConvention: !!conventionPick && recommended === conventionPick,
     hasDurableAlternative: recommended.locator !== durable.locator,
     // Even the most stable alternative is fragile — recommend adding a test id.
     suggestAddTestId: durable.score < floor,
