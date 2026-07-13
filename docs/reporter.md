@@ -109,6 +109,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 | `collectPerformanceMetrics` | boolean  | `true`                    | Collect step timings, network requests and web vitals                                       |
 | `captureLocators`           | boolean  | `true`                    | Capture per-action element snapshots that power [locator healing](#locator-healing). Auto-disabled when `collectPerformanceMetrics` is `false` |
 | `inspectOnFailure`          | boolean  | `false`                   | Open the Playwright Inspector on the failing page after a local headed failure (see [Inspect the failing page live](#inspect-the-failing-page-live-local-runs)). Never activates under CI |
+| `pickLocatorOnFailure`      | boolean  | `false`                   | Open Piwi's locator picker on the failing page after a local headed locator failure (see [Pick a replacement locator](#pick-a-replacement-locator-on-the-failing-page-local-runs)). Never activates under CI |
 | `username`                  | string   | —                         | Username for dashboard login (use `apiKey` instead when possible)                           |
 | `password`                  | string   | —                         | Password for dashboard login (used with `username`)                                         |
 | `apiKey`                    | string   | —                         | API key for authentication (preferred over `username`/`password` for CI)                    |
@@ -137,6 +138,7 @@ Every option above can also be set via a `PIWI_*` environment variable. Env vars
 | `PIWI_UPLOAD_REPORT`            | `uploadReport`          | `true`/`false`  |
 | `PIWI_CAPTURE_LOCATORS`         | `captureLocators`       | `true`/`false`  |
 | `PIWI_INSPECT_ON_FAIL`          | `inspectOnFailure`      | `true`/`false`  |
+| `PIWI_PICK_LOCATOR_ON_FAIL`     | `pickLocatorOnFailure`  | `true`/`false`  |
 | `PIWI_VERBOSE`                  | `verbose`               | `true`/`false`  |
 
 `wrapConfig` forwards the same `PIWI_*` vars into the isolated `global-setup` process so the run registration step shares the reporter's server/auth config.
@@ -339,6 +341,26 @@ $env:PIWI_INSPECT_ON_FAIL='true'; npx playwright test --headed
 ```
 
 Inspection is a local debugging aid and is deliberately conservative: it requires a **headed** browser (`--headed` / `headless: false`), never activates under CI (any `CI` env var), skips expected failures (`test.fail()`), and with retries configured it only pauses on the final attempt. While paused the run waits indefinitely (the test timeout is lifted), so prefer `--workers=1` when enabling it.
+
+### Pick a replacement locator on the failing page (local runs)
+
+One step beyond inspection: with `pickLocatorOnFailure: true` (or `PIWI_PICK_LOCATOR_ON_FAIL=true`), a test whose **locator action** failed gets Piwi's own picker injected into the still-open page. Click the element the locator should have matched, and Piwi generates the same ranked, uniqueness-checked replacement locators it captures during healing — pick one to confirm it (or press Esc at any point to skip).
+
+```bash
+# Linux / macOS
+PIWI_PICK_LOCATOR_ON_FAIL=true npx playwright test --headed
+
+# Windows (PowerShell)
+$env:PIWI_PICK_LOCATOR_ON_FAIL='true'; npx playwright test --headed
+```
+
+A confirmed pick is recorded in three places:
+
+- **The run's locator snapshots** — the pick is folded into the failing call site's snapshot (flagged `pickedByUser`, listed first), so after the run uploads, the [Alternative locators](#locator-healing) panel for that failure shows your confirmed choice at the top.
+- **A `piwi-user-pick` attachment** and a report **annotation**, so the choice is visible in the Playwright report and trace.
+- **The terminal**, with the failing call site (`file:line:col`) and the replacement, ready to paste into the test.
+
+The gate is identical to `inspectOnFailure` (headed browser, never under CI, final attempt only), and the picker suppresses the page's own click handlers while active, so picking can't navigate or mutate the failing page. Picking never rewrites your test — it records the choice so you (or the dashboard) can apply it.
 
 ## Automatic metadata collection
 

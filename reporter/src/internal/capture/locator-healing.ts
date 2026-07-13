@@ -15,6 +15,12 @@ export interface RankedLocator {
   args: Record<string, unknown>;
   /** 0-100 stability score. data-testid=100, semantic CSS=35-40, hash-suffixed=10. */
   score: number;
+  /**
+   * True when a human chose this alternative in the failure-time locator
+   * picker. Rides the wire inside the snapshot's alternatives so the dashboard
+   * can surface the confirmed choice.
+   */
+  pickedByUser?: boolean;
 }
 
 /**
@@ -709,6 +715,8 @@ export function approximateAccessibleName(attrs: ElementAttributes): string | nu
 export interface FailedLocatorInfo {
   method: string;
   args: unknown[];
+  /** Test call site (`file:line:col`) of the failed action, when captured. */
+  location?: string | null;
 }
 
 export interface LocatorSuggestion {
@@ -815,8 +823,8 @@ function failedNameAndRole(failed: FailedLocatorInfo): {
   return { role: null, name: typeof first === 'string' ? (first as string) : null, level: null };
 }
 
-/** Render the failed locator back to source for the annotation message. */
-function renderFailing(failed: FailedLocatorInfo): string {
+/** Render the failed locator back to source for annotation/picker messages. */
+export function renderFailing(failed: FailedLocatorInfo): string {
   const { role, name } = failedNameAndRole(failed);
   if (failed.method === 'getByRole') {
     return name

@@ -61,6 +61,17 @@ export interface PiwiDashboardOptions extends PlaywrightTestConfig {
    * enabled with `PIWI_INSPECT_ON_FAIL=true`.
    */
   inspectOnFailure?: boolean;
+  /**
+   * Open Piwi's locator picker on the failing page when a locator action
+   * fails: click the element the locator should have matched, confirm one of
+   * the ranked replacement locators generated for it, and the choice is
+   * recorded — folded into the run's locator snapshots (so the dashboard's
+   * healing panel shows it) and attached as `piwi-user-pick` with a report
+   * annotation. Same gate as `inspectOnFailure`: headed browser only, never
+   * under CI, final attempt only. Defaults to `false`. Can also be enabled
+   * with `PIWI_PICK_LOCATOR_ON_FAIL=true`.
+   */
+  pickLocatorOnFailure?: boolean;
   /** Enable live streaming of results (falls back to batch if unsupported). Defaults to `true`. */
   streaming?: boolean;
   /** Number of test results to batch before sending during streaming. Defaults to `5`. */

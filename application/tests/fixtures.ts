@@ -41,7 +41,16 @@ import {
   pauseForInspection,
   shouldInspectOnFailure,
 } from '../../reporter/dist/internal/capture/inspect-on-failure.js';
-import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from '../../reporter/dist/internal/capture/attachments.js';
+import {
+  applyPickToSnapshots,
+  runLocatorPicker,
+  type UserPickResult,
+} from '../../reporter/dist/internal/capture/pick-on-failure.js';
+import {
+  ATTACHMENT_NAMES,
+  LOCATOR_SUGGESTION_ANNOTATION,
+  USER_PICK_ANNOTATION,
+} from '../../reporter/dist/internal/capture/attachments.js';
 
 type NetworkRequest = {
   method: string;
@@ -301,7 +310,7 @@ export const test = base.extend<{ page: Page }>({
             try {
               result = await original.apply(target, callArgs);
             } catch (err) {
-              failedLocators.push({ method: originMethod, args: originArgs });
+              failedLocators.push({ method: originMethod, args: originArgs, location: callerLocation });
               throw err;
             }
 
@@ -383,6 +392,21 @@ export const test = base.extend<{ page: Page }>({
       }),
     ]);
     clearTimeout(drainDeadline);
+
+    // Failure-time locator picker (dogfooding: mirrors the reporter fixture).
+    // Runs before the snapshots attach — a confirmed pick is folded into them.
+    let userPick: UserPickResult | null = null;
+    if (shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo, process.env.PIWI_PICK_LOCATOR_ON_FAIL))) {
+      const failed = failedLocators[failedLocators.length - 1];
+      if (failed) {
+        userPick = await runLocatorPicker(page, testInfo, failed, {
+          fn: probeElementAttrs,
+          arg: CAPTURED_ATTRS_ARG,
+        });
+        if (userPick) applyPickToSnapshots(capturedLocators, userPick);
+      }
+    }
+
     if (capturedLocators.length > 0) {
       await testInfo.attach(ATTACHMENT_NAMES.locators, {
         contentType: 'application/json',
@@ -432,6 +456,21 @@ export const test = base.extend<{ page: Page }>({
       }
     } catch {
       // aria snapshot may fail if page is already closed
+    }
+
+    // A confirmed picker choice — attach it and surface it in the report
+    // (matches the reporter fixture's flushSink).
+    if (userPick) {
+      testInfo.annotations.push({
+        type: USER_PICK_ANNOTATION,
+        description:
+          `Replacement locator picked on the failing page for ${userPick.failing.rendered}` +
+          `${userPick.failing.location ? ` at ${userPick.failing.location}` : ''}: ${userPick.picked.locator}`,
+      });
+      await testInfo.attach(ATTACHMENT_NAMES.userPick, {
+        contentType: 'application/json',
+        body: Buffer.from(JSON.stringify(userPick)),
+      });
     }
 
     await flush();

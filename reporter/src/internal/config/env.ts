@@ -48,6 +48,7 @@ export const PIWI_ENV_KEYS = {
   captureLocators: 'PIWI_CAPTURE_LOCATORS',
   capturePageState: 'PIWI_CAPTURE_PAGE_STATE',
   inspectOnFailure: 'PIWI_INSPECT_ON_FAIL',
+  pickLocatorOnFailure: 'PIWI_PICK_LOCATOR_ON_FAIL',
 } as const;
 
 function readBool(val: string | undefined): boolean | undefined {
@@ -94,6 +95,7 @@ const ENV_FALLBACK_SPECS: ReadonlyArray<{
   { option: 'captureLocators', env: PIWI_ENV_KEYS.captureLocators, kind: 'bool' },
   { option: 'capturePageState', env: PIWI_ENV_KEYS.capturePageState, kind: 'bool' },
   { option: 'inspectOnFailure', env: PIWI_ENV_KEYS.inspectOnFailure, kind: 'bool' },
+  { option: 'pickLocatorOnFailure', env: PIWI_ENV_KEYS.pickLocatorOnFailure, kind: 'bool' },
 ];
 
 /**
@@ -158,7 +160,10 @@ export function applyOptionsToEnv(options: PiwiDashboardOptions): void {
   if (options.capturePageState === false || options.collectPerformanceMetrics === false)
     env[PIWI_ENV_KEYS.capturePageState] = 'false';
   else if (options.capturePageState === true) env[PIWI_ENV_KEYS.capturePageState] = 'true';
-  // Failure-time inspection runs in the worker fixture, so bridge it into the
-  // env the same way (default-off: only an explicit option value is written).
+  // Failure-time inspection and the locator picker run in the worker fixture,
+  // so bridge them into the env the same way (default-off: only an explicit
+  // option value is written).
   if (options.inspectOnFailure !== undefined) env[PIWI_ENV_KEYS.inspectOnFailure] = String(options.inspectOnFailure);
+  if (options.pickLocatorOnFailure !== undefined)
+    env[PIWI_ENV_KEYS.pickLocatorOnFailure] = String(options.pickLocatorOnFailure);
 }

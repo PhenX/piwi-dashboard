@@ -32,8 +32,9 @@ import {
   type LocatorSnapshot,
   type FailedLocatorInfo,
 } from './locator-healing.js';
-import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from './attachments.js';
+import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION, USER_PICK_ANNOTATION } from './attachments.js';
 import { inspectionGateFromTestInfo, pauseForInspection, shouldInspectOnFailure } from './inspect-on-failure.js';
+import { applyPickToSnapshots, runLocatorPicker, type UserPickResult } from './pick-on-failure.js';
 
 /** A Playwright fixture's `use` callback — hands the fixture value to the test. */
 type UseFn<T> = (value: T) => Promise<void>;
@@ -186,6 +187,10 @@ interface CaptureSink {
   // The failing page was already handed to the Inspector once this test —
   // several close wrappers can fire for the same teardown.
   inspected: boolean;
+  // The locator picker was already offered once this test (same reason).
+  pickOffered: boolean;
+  // A replacement locator the human confirmed in the failure-time picker.
+  userPick: UserPickResult | null;
 }
 
 function createSink(): CaptureSink {
@@ -202,6 +207,8 @@ function createSink(): CaptureSink {
     stashedPageState: null,
     stashedAria: null,
     inspected: false,
+    pickOffered: false,
+    userPick: null,
   };
 }
 
@@ -526,6 +533,36 @@ async function maybeInspectOnFailure(
   await pauseForInspection(page, testInfo);
 }
 
+/**
+ * Offer the failure-time locator picker on the failing page before it closes
+ * (see `pick-on-failure.ts`; gated like inspection, but armed by
+ * `PIWI_PICK_LOCATOR_ON_FAIL` and only when a locator action actually failed).
+ * A confirmed pick is folded into the captured snapshots so it rides the
+ * normal `piwi-locators` attachment; flushSink attaches the pick itself.
+ */
+async function maybePickOnFailure(
+  sink: CaptureSink,
+  closing?: { page?: Page; context?: BrowserContext },
+): Promise<void> {
+  if (sink.pickOffered) return;
+  const page = sink.lastActivePage;
+  const testInfo = sink.testInfo;
+  if (!page || !testInfo || isPageClosed(page)) return;
+  if (closing) {
+    const belongsToClosing =
+      closing.page === page || (closing.context !== undefined && pageContext(page) === closing.context);
+    if (!belongsToClosing) return;
+  }
+  if (!shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo, process.env.PIWI_PICK_LOCATOR_ON_FAIL))) return;
+  const failed = sink.failedLocators[sink.failedLocators.length - 1];
+  if (!failed) return;
+  sink.pickOffered = true;
+  const pick = await runLocatorPicker(page, testInfo, failed, { fn: probeElementAttrs, arg: CAPTURED_ATTRS_ARG });
+  if (!pick) return;
+  sink.userPick = pick;
+  applyPickToSnapshots(sink.capturedLocators, pick);
+}
+
 // Idempotency guards: a page/context/browser can be reached through several
 // paths (browser patch, context patch, the `page` fixture, popup events), and
 // must be wrapped exactly once.
@@ -841,7 +878,7 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
         try {
           result = await fn.apply(target, callArgs);
         } catch (error) {
-          sink.failedLocators.push({ method: originMethod, args: originArgs });
+          sink.failedLocators.push({ method: originMethod, args: originArgs, location: callerLocation });
           throw error;
         }
 
@@ -943,6 +980,7 @@ function instrumentPage(page: Page): void {
       const sink = currentSink;
       if (sink) {
         await stashPageState(sink, { page });
+        await maybePickOnFailure(sink, { page });
         await maybeInspectOnFailure(sink, { page });
       }
       return originalClose(...args);
@@ -1061,6 +1099,7 @@ function instrumentContext(context: BrowserContext): void {
       const sink = currentSink;
       if (sink) {
         await stashPageState(sink, { context });
+        await maybePickOnFailure(sink, { context });
         await maybeInspectOnFailure(sink, { context });
       }
       return originalClose(...args);
@@ -1131,6 +1170,14 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
   ]);
   clearTimeout(drainDeadline);
 
+  const page = sink.lastActivePage;
+  const pageReadable = page !== null && !isPageClosed(page);
+
+  // A page the test left open (e.g. a raw browser.newPage) never passes
+  // through the close wrappers — offer the picker here instead, before the
+  // snapshots are attached (a confirmed pick is folded into them).
+  if (pageReadable) await maybePickOnFailure(sink);
+
   if (sink.capturedLocators.length > 0) {
     await testInfo.attach(ATTACHMENT_NAMES.locators, {
       contentType: 'application/json',
@@ -1140,9 +1187,6 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
       body: Buffer.from(JSON.stringify(dedupeSnapshotsByLocation(sink.capturedLocators))),
     });
   }
-
-  const page = sink.lastActivePage;
-  const pageReadable = page !== null && !isPageClosed(page);
 
   if (testInfo.status !== 'passed' && testInfo.status !== 'skipped') {
     try {
@@ -1183,6 +1227,26 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
     if (pageReadable && !sink.inspected && shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo))) {
       sink.inspected = true;
       await pauseForInspection(page, testInfo);
+    }
+  }
+
+  // A confirmed picker choice — attach it and surface it in the report. The
+  // snapshot write-back already happened at pick time (applyPickToSnapshots).
+  if (sink.userPick) {
+    const pick = sink.userPick;
+    testInfo.annotations.push({
+      type: USER_PICK_ANNOTATION,
+      description:
+        `Replacement locator picked on the failing page for ${pick.failing.rendered}` +
+        `${pick.failing.location ? ` at ${pick.failing.location}` : ''}: ${pick.picked.locator}`,
+    });
+    try {
+      await testInfo.attach(ATTACHMENT_NAMES.userPick, {
+        contentType: 'application/json',
+        body: Buffer.from(JSON.stringify(pick)),
+      });
+    } catch {
+      /* ignore */
     }
   }
 

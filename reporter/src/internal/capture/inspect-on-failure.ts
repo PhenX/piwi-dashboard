@@ -42,11 +42,19 @@ export function shouldInspectOnFailure(gate: InspectionGate): boolean {
   return gate.retry >= gate.retries;
 }
 
-/** Project the live TestInfo + process env into the plain gate shape. */
-export function inspectionGateFromTestInfo(testInfo: TestInfo): InspectionGate {
+/**
+ * Project the live TestInfo + process env into the plain gate shape. The gate
+ * conditions are shared by every failure-time affordance that needs a live
+ * headed page; `enabled` selects which opt-in flag arms this one (defaults to
+ * the Inspector's `PIWI_INSPECT_ON_FAIL`).
+ */
+export function inspectionGateFromTestInfo(
+  testInfo: TestInfo,
+  enabled: string | undefined = process.env.PIWI_INSPECT_ON_FAIL,
+): InspectionGate {
   const use = (testInfo.project?.use ?? {}) as { headless?: unknown };
   return {
-    enabled: process.env.PIWI_INSPECT_ON_FAIL,
+    enabled,
     ci: process.env.CI,
     status: testInfo.status,
     expectedStatus: testInfo.expectedStatus,
