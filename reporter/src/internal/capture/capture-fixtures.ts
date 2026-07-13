@@ -33,7 +33,12 @@ import {
   type FailedLocatorInfo,
 } from './locator-healing.js';
 import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION, USER_PICK_ANNOTATION } from './attachments.js';
-import { inspectionGateFromTestInfo, pauseForInspection, shouldInspectOnFailure } from './inspect-on-failure.js';
+import {
+  environmentalSkipReason,
+  inspectionGateFromTestInfo,
+  pauseForInspection,
+  shouldInspectOnFailure,
+} from './inspect-on-failure.js';
 import { applyPickToSnapshots, runLocatorPicker, type UserPickResult } from './pick-on-failure.js';
 
 /** A Playwright fixture's `use` callback — hands the fixture value to the test. */
@@ -554,9 +559,16 @@ async function maybePickOnFailure(
     if (!belongsToClosing) return;
   }
   if (!shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo, process.env.PIWI_PICK_LOCATOR_ON_FAIL))) return;
-  const failed = sink.failedLocators[sink.failedLocators.length - 1];
-  if (!failed) return;
+  // Gate passed — this is the one shot at the picker for this test.
   sink.pickOffered = true;
+  const failed = sink.failedLocators[sink.failedLocators.length - 1];
+  if (!failed) {
+    console.log(
+      '[piwi] locator picker: this failure was not a locator action (e.g. an `expect(...)` assertion), so there is ' +
+        'no failed locator to replace. Use the trace viewer’s "Pick locator" tool on the dashboard for these.',
+    );
+    return;
+  }
   const pick = await runLocatorPicker(page, testInfo, failed, { fn: probeElementAttrs, arg: CAPTURED_ATTRS_ARG });
   if (!pick) return;
   sink.userPick = pick;
@@ -1248,6 +1260,15 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
     } catch {
       /* ignore */
     }
+  } else if (!sink.inspected) {
+    // Neither tool ran on this failure. If one was *enabled* but the gate
+    // refused for an environmental reason (headless / CI), say so — a silent
+    // no-op after opting in is baffling. The picker's gate wins the message
+    // when both are enabled (it is the more specific tool).
+    const reason =
+      environmentalSkipReason(inspectionGateFromTestInfo(testInfo, process.env.PIWI_PICK_LOCATOR_ON_FAIL)) ??
+      environmentalSkipReason(inspectionGateFromTestInfo(testInfo));
+    if (reason) console.log(`[piwi] failure-time locator tools enabled but skipped: ${reason}`);
   }
 
   if (sink.consoleEntries.length > 0) {

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { shouldInspectOnFailure, type InspectionGate } from '../src/internal/capture/inspect-on-failure.js';
+import {
+  environmentalSkipReason,
+  shouldInspectOnFailure,
+  type InspectionGate,
+} from '../src/internal/capture/inspect-on-failure.js';
 import { resolveOptions, applyOptionsToEnv, PIWI_ENV_KEYS } from '../src/internal/config/env.js';
 
 /** A gate that passes every check — each test flips exactly one field. */
@@ -62,6 +66,37 @@ describe('shouldInspectOnFailure', () => {
     expect(shouldInspectOnFailure(openGate({ retry: 0, retries: 2 }))).toBe(false);
     expect(shouldInspectOnFailure(openGate({ retry: 1, retries: 2 }))).toBe(false);
     expect(shouldInspectOnFailure(openGate({ retry: 2, retries: 2 }))).toBe(true);
+  });
+});
+
+describe('environmentalSkipReason', () => {
+  it('is null when the feature is off (nothing was opted into)', () => {
+    expect(environmentalSkipReason(openGate({ enabled: undefined, headless: true }))).toBeNull();
+  });
+
+  it('is null when the run would actually pass the gate (the feature ran)', () => {
+    expect(environmentalSkipReason(openGate())).toBeNull();
+  });
+
+  it('is null for a non-failure or an expected failure', () => {
+    expect(environmentalSkipReason(openGate({ status: 'passed', headless: true }))).toBeNull();
+    expect(environmentalSkipReason(openGate({ expectedStatus: 'failed', headless: true }))).toBeNull();
+  });
+
+  it('explains a headless skip when enabled on a real failure', () => {
+    const reason = environmentalSkipReason(openGate({ headless: true }));
+    expect(reason).toMatch(/headless/);
+    expect(environmentalSkipReason(openGate({ headless: undefined }))).toMatch(/headless/);
+  });
+
+  it('explains a CI skip, and CI wins over headless', () => {
+    expect(environmentalSkipReason(openGate({ ci: 'true' }))).toMatch(/CI/);
+    expect(environmentalSkipReason(openGate({ ci: 'true', headless: true }))).toMatch(/CI/);
+  });
+
+  it('stays silent when the only reason to skip is a pending retry', () => {
+    // The final attempt will produce the message; a mid-retry skip is expected.
+    expect(environmentalSkipReason(openGate({ retry: 0, retries: 2 }))).toBeNull();
   });
 });
 

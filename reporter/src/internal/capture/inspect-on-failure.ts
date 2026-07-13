@@ -31,15 +31,38 @@ export interface InspectionGate {
   retries: number;
 }
 
+/** True when this raw `CI` env value counts as "running under CI". */
+function isCi(ci: string | undefined): boolean {
+  return ci !== undefined && ci !== '' && ci !== 'false';
+}
+
 /** Decide whether the failing page should be handed to the Inspector. */
 export function shouldInspectOnFailure(gate: InspectionGate): boolean {
   if (gate.enabled !== 'true') return false;
-  if (gate.ci !== undefined && gate.ci !== '' && gate.ci !== 'false') return false;
+  if (isCi(gate.ci)) return false;
   if (gate.headless !== false) return false;
   if (gate.status !== 'failed' && gate.status !== 'timedOut') return false;
   if (gate.status === gate.expectedStatus) return false;
   // Another attempt is coming — inspect the final failure, not each retry.
   return gate.retry >= gate.retries;
+}
+
+/**
+ * When a failure-time feature is *enabled* on a *real* failure but the gate
+ * still refused for an environmental reason (headless / CI), return a
+ * one-line human explanation so "nothing happened" is never a silent mystery.
+ * Returns null when the feature is off, the test didn't really fail, or the
+ * gate would actually pass (the feature ran, so there is nothing to explain).
+ */
+export function environmentalSkipReason(gate: InspectionGate): string | null {
+  if (gate.enabled !== 'true') return null;
+  if (gate.status !== 'failed' && gate.status !== 'timedOut') return null;
+  if (gate.status === gate.expectedStatus) return null;
+  if (isCi(gate.ci)) return 'running under CI — this is a headed, local-only feature';
+  if (gate.headless !== false) {
+    return 'the browser is headless — re-run with --headed (or set use: { headless: false })';
+  }
+  return null;
 }
 
 /**
