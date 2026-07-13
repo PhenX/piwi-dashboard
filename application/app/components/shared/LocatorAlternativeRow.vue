@@ -33,7 +33,20 @@ function scoreBgClass(score: number): string {
       {{ alt.score }}/100
     </UBadge>
     <div class="flex-1 min-w-0">
-      <code class="text-sm font-mono block truncate">{{ alt.locator }}</code>
+      <div class="flex items-center gap-2 min-w-0">
+        <code class="text-sm font-mono truncate">{{ alt.locator }}</code>
+        <UBadge
+          v-if="alt.pickedByUser"
+          size="sm"
+          color="primary"
+          variant="subtle"
+          icon="i-lucide-user-check"
+          class="shrink-0"
+          title="Confirmed with the locator picker on the failing page"
+        >
+          Your pick
+        </UBadge>
+      </div>
       <p v-if="note" class="text-xs text-gray-500 mt-0.5">{{ note }}</p>
     </div>
     <UButton

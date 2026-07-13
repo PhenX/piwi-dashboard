@@ -514,7 +514,7 @@ export const HELP_TOPICS = {
   // ── Locator healing ────────────────────────────────────────────────────
   'locator-healing': {
     title: 'Alternative locators',
-    text: 'When a locator breaks after a UI change, Piwi suggests pre-captured alternatives from the last passing run — or from another test in the project that uses the same locator. Each alternative is ranked by stability score — prefer data-testid (100) over CSS classes (10–40).',
+    text: 'When a locator breaks after a UI change, Piwi suggests pre-captured alternatives from the last passing run — or from another test in the project that uses the same locator. Each alternative is ranked by stability score — prefer data-testid (100) over CSS classes (10–40). A "Your pick" badge marks a replacement confirmed with the reporter’s failure-time locator picker, and "Pick from trace" opens the failure trace in the trace viewer, whose Pick locator tool works on the recorded page snapshots.',
     doc: 'reporter#locator-healing',
   },
 

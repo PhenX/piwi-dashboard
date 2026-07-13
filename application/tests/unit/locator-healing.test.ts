@@ -188,6 +188,31 @@ describe('recommendLocatorFix (convention-preserving)', () => {
     expect(rec.preservesConvention).toBe(false);
   });
 
+  test('a human-confirmed pick outranks the convention ladder', () => {
+    const picked = { ...alt('getByRole', 88), pickedByUser: true };
+    const rec = recommendLocatorFix('getByText', [alt('getByTestId', 100), picked, alt('getByText', 75)]);
+    expect(rec.recommended).toBe(picked);
+    // The convention pick (getByText) was not chosen — no style preservation claim.
+    expect(rec.preservesConvention).toBe(false);
+    expect(rec.hasDurableAlternative).toBe(true);
+    expect(rec.durable?.method).toBe('getByTestId');
+  });
+
+  test('a human-confirmed pick that is also the convention pick preserves convention', () => {
+    const picked = { ...alt('getByText', 75), pickedByUser: true };
+    const rec = recommendLocatorFix('getByText', [alt('getByTestId', 100), picked]);
+    expect(rec.recommended).toBe(picked);
+    expect(rec.preservesConvention).toBe(true);
+  });
+
+  test('a human-confirmed pick wins even below the stability floor', () => {
+    const picked = { ...alt('locator', 30, '.chosen'), pickedByUser: true };
+    const rec = recommendLocatorFix('getByText', [alt('getByTestId', 100), picked]);
+    expect(rec.recommended).toBe(picked);
+    expect(rec.preservesConvention).toBe(false);
+    expect(rec.hasDurableAlternative).toBe(true);
+  });
+
   test('returns nulls for an empty alternative list', () => {
     const rec = recommendLocatorFix('getByRole', []);
     expect(rec.recommended).toBeNull();
