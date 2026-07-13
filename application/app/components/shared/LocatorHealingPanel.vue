@@ -47,6 +47,10 @@ const alternatives = computed<RankedLocator[]>(() => {
   return healing.value.fromElementMatch ?? healing.value.fromPriorSuccess ?? healing.value.fromAriaSnapshot ?? [];
 });
 
+// A locator a human confirmed with the failure-time picker — surfaced as a
+// prominent callout at the top so it never hides in the ranked list.
+const userPick = computed<RankedLocator | null>(() => alternatives.value.find((a) => a.pickedByUser) ?? null);
+
 // The single recommended fix — convention-preserving where possible. Computed
 // server-side; fall back to the shared picker for payloads that lack it —
 // EXCEPT when the server deliberately withheld it because every stored
@@ -208,6 +212,27 @@ function locatorNote(alt: RankedLocator): string {
         Pick from trace
       </UButton>
     </template>
+
+    <!-- Human-confirmed pick — prominent callout at the very top -->
+    <div v-if="userPick" class="rounded-lg border border-primary/50 bg-primary/10 p-3 mb-3 flex items-center gap-3">
+      <UIcon name="i-lucide-user-check" class="size-5 text-primary shrink-0" />
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-medium text-primary flex items-center gap-1.5">
+          Your pick
+          <UBadge size="sm" color="primary" variant="subtle">confirmed on the failing page</UBadge>
+        </p>
+        <code class="text-sm font-mono block truncate mt-0.5">{{ userPick.locator }}</code>
+      </div>
+      <UButton
+        size="sm"
+        color="primary"
+        variant="solid"
+        :trailing-icon="copiedKey === 'user-pick' ? 'i-lucide-check' : 'i-lucide-copy'"
+        @click="copyLocator(userPick.locator, 'user-pick')"
+      >
+        Copy
+      </UButton>
+    </div>
 
     <!-- Failing locator -->
     <div
