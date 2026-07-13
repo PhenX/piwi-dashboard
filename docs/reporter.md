@@ -344,7 +344,11 @@ Inspection is a local debugging aid and is deliberately conservative: it require
 
 ### Pick a replacement locator on the failing page (local runs)
 
-One step beyond inspection: with `pickLocatorOnFailure: true` (or `PIWI_PICK_LOCATOR_ON_FAIL=true`), a test whose **locator action** failed gets Piwi's own picker injected into the still-open page. Click the element the locator should have matched, and Piwi generates the same ranked, uniqueness-checked replacement locators it captures during healing — pick one to confirm it (or press Esc at any point to skip).
+One step beyond inspection: with `pickLocatorOnFailure: true` (or `PIWI_PICK_LOCATOR_ON_FAIL=true`), a test whose **locator action** failed gets Piwi's own picker injected into the still-open page. The flow is guided, in three steps (Esc skips at any point):
+
+1. **Pick the element.** Hovering highlights; the pick snaps to the nearest actionable ancestor (clicking the `<span>` inside a button picks the button), and <kbd>↑</kbd>/<kbd>↓</kbd> walk the DOM tree up/down before you click — the banner shows which element is selected.
+2. **Bless stable parents (optional).** The element's ancestors are listed with their strongest hook (`data-testid`, `#id`, labeled landmark, role). Select one or more to scope the locator to — hovering a row outlines that parent in the page, and a live **"matches N"** count is recomputed against the real failing page on every toggle (exactly 1 = green). Selected parents produce anchor-scoped chains like `getByTestId('signup-form').getByRole('button')` — the rename-proof style — and picking several adds a combined chain when it isolates exactly one element.
+3. **Confirm.** The ranked, uniqueness-checked candidates (standard generation merged with your anchor-scoped chains) are listed; pick one to confirm it.
 
 ```bash
 # Linux / macOS
