@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   applyPickToSnapshots,
+  deriveFailedLocator,
   generateAnchoredAlternatives,
   mergeCandidates,
+  parseLeafLocatorExpression,
   type PickedAnchorInfo,
   type UserPickResult,
 } from '../src/internal/capture/pick-on-failure.js';
@@ -94,10 +96,83 @@ describe('applyPickToSnapshots', () => {
     expect(snaps[0]!.element).toBeNull();
   });
 
-  it('is a no-op when no snapshot matches the failing location', () => {
+  it('appends a snapshot when no placeholder exists (assertion failure)', () => {
+    // An expect(...) failure captured no action, so there is no placeholder —
+    // the pick must still land in a snapshot, keyed to the failing locator.
     const snaps = [placeholder('tests/other.spec.ts:1:1')];
-    expect(applyPickToSnapshots(snaps, pick(LOCATION))).toBe(false);
-    expect(snaps[0]!.element).toBeNull();
+    expect(applyPickToSnapshots(snaps, pick(LOCATION))).toBe(true);
+    expect(snaps).toHaveLength(2);
+    const appended = snaps[1]!;
+    expect(appended.location).toBe(LOCATION);
+    expect(appended.element?.attributes['data-testid']).toBe('pay-now');
+    expect(appended.alternatives[0]!.pickedByUser).toBe(true);
+    // The appended snapshot's `used` is the failing locator (for signature lookup).
+    expect(appended.used.method).toBe('getByText');
+    expect(appended.used.args).toEqual(['Pay now']);
+  });
+});
+
+describe('parseLeafLocatorExpression', () => {
+  it('parses simple name-based and testid locators', () => {
+    expect(parseLeafLocatorExpression(`getByText('Pay now')`)).toEqual({ method: 'getByText', args: ['Pay now'] });
+    expect(parseLeafLocatorExpression(`getByTestId('pay')`)).toEqual({ method: 'getByTestId', args: ['pay'] });
+  });
+
+  it('parses getByRole with an options object (name, level, exact)', () => {
+    expect(parseLeafLocatorExpression(`getByRole('button', { name: 'Pay now', exact: true })`)).toEqual({
+      method: 'getByRole',
+      args: ['button', { name: 'Pay now', exact: true }],
+    });
+    expect(parseLeafLocatorExpression(`getByRole('heading', { name: 'Cart', level: 2 })`)).toEqual({
+      method: 'getByRole',
+      args: ['heading', { name: 'Cart', level: 2 }],
+    });
+  });
+
+  it('takes the leaf of a chained locator', () => {
+    expect(
+      parseLeafLocatorExpression(`getByRole('row', { name: 'Acme' }).getByRole('button', { name: 'Delete' })`),
+    ).toEqual({ method: 'getByRole', args: ['button', { name: 'Delete' }] });
+  });
+
+  it('unescapes quotes inside string args', () => {
+    expect(parseLeafLocatorExpression(`getByText('It\\'s here')`)).toEqual({ method: 'getByText', args: ["It's here"] });
+  });
+
+  it('returns null for non-locator text', () => {
+    expect(parseLeafLocatorExpression('not a locator')).toBeNull();
+  });
+});
+
+describe('deriveFailedLocator', () => {
+  const errText = (locator: string) =>
+    `Error: Timed out 5000ms waiting for expect(locator).toBeVisible()\n\nLocator: ${locator}\nExpected: visible\nReceived: hidden`;
+
+  it('reads the Locator line and the error call site (cwd-relative)', () => {
+    const file = `${process.cwd()}/tests/pay.spec.ts`;
+    const testInfo = {
+      errors: [{ message: errText(`getByRole('button', { name: 'Pay' })`), location: { file, line: 20, column: 34 } }],
+    } as never;
+    expect(deriveFailedLocator(testInfo)).toEqual({
+      method: 'getByRole',
+      args: ['button', { name: 'Pay' }],
+      location: 'tests/pay.spec.ts:20:34',
+    });
+  });
+
+  it('strips ANSI colour codes from the error before matching', () => {
+    const colored = `[2mLocator:[22m getByText('Pay now')`;
+    const testInfo = { errors: [{ message: colored }] } as never;
+    expect(deriveFailedLocator(testInfo)).toEqual({ method: 'getByText', args: ['Pay now'], location: null });
+  });
+
+  it('falls back to testInfo.error and returns null when no Locator line is present', () => {
+    expect(deriveFailedLocator({ error: { message: `Locator: getByTestId('x')` } } as never)).toEqual({
+      method: 'getByTestId',
+      args: ['x'],
+      location: null,
+    });
+    expect(deriveFailedLocator({ errors: [{ message: 'plain assertion failure' }] } as never)).toBeNull();
   });
 });
 

@@ -1,3 +1,4 @@
+import * as path from 'node:path';
 import type { Page, TestInfo } from '@playwright/test';
 import {
   approximateAccessibleName,
@@ -107,6 +108,139 @@ export interface UserPickResult {
   element: NonNullable<LocatorSnapshot['element']>;
   /** Stable parents the human blessed in the anchor step, when any. */
   anchors?: PickedAnchorInfo[];
+}
+
+// ── Deriving the failing locator from an assertion error ─────────────────────
+// A locator *action* that throws is captured with its call site (see the
+// fixture proxy). An `expect(locator).toBeVisible()` assertion is not an action,
+// so nothing is captured — but Playwright's error still names the locator
+// (`Locator: …`) and its call site, which is enough to run the picker.
+
+const ANSI_RE = /\[[0-9;]*m/g;
+
+/** Skip a single- or double-quoted string starting at `start`; returns the closing-quote index. */
+function endOfString(s: string, start: number): number {
+  const q = s[start];
+  for (let i = start + 1; i < s.length; i++) {
+    if (s[i] === '\\') {
+      i++;
+      continue;
+    }
+    if (s[i] === q) return i;
+  }
+  return s.length - 1;
+}
+
+/** Index of the brace matching the `{` at `start`. */
+function matchBrace(s: string, start: number): number {
+  let depth = 0;
+  for (let i = start; i < s.length; i++) {
+    if (s[i] === '{') depth++;
+    else if (s[i] === '}' && --depth === 0) return i;
+  }
+  return s.length - 1;
+}
+
+/** Parse a Playwright option object literal (`{ name: 'x', level: 2, exact: true }`). */
+function parseOptions(src: string): Record<string, unknown> {
+  const obj: Record<string, unknown> = {};
+  const re = /(\w+)\s*:\s*('(?:\\.|[^'])*'|"(?:\\.|[^"])*"|true|false|-?\d+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(src)) !== null) {
+    const key = m[1]!;
+    const raw = m[2]!;
+    if (raw === 'true') obj[key] = true;
+    else if (raw === 'false') obj[key] = false;
+    else if (/^-?\d+$/.test(raw)) obj[key] = Number(raw);
+    else obj[key] = raw.slice(1, -1).replace(/\\(.)/g, '$1');
+  }
+  return obj;
+}
+
+/** Parse the argument list of a single locator call into its ordered args. */
+function parseArgs(inner: string): unknown[] {
+  const args: unknown[] = [];
+  let i = 0;
+  while (i < inner.length) {
+    const c = inner[i]!;
+    if (c === ' ' || c === ',') {
+      i++;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      const end = endOfString(inner, i);
+      args.push(inner.slice(i + 1, end).replace(/\\(.)/g, '$1'));
+      i = end + 1;
+      continue;
+    }
+    if (c === '{') {
+      const end = matchBrace(inner, i);
+      args.push(parseOptions(inner.slice(i, end + 1)));
+      i = end + 1;
+      continue;
+    }
+    i++; // regex or other token — not needed for identity
+  }
+  return args;
+}
+
+/**
+ * The leaf call of a (possibly chained) locator expression — the innermost
+ * call identifies the resolved element, mirroring the server's
+ * `extractLeafSelector`. Splits on top-level `).`, quote-aware.
+ */
+function leafExpression(expr: string): string {
+  let depth = 0;
+  let leafStart = 0;
+  for (let i = 0; i < expr.length - 1; i++) {
+    const c = expr[i]!;
+    if (c === "'" || c === '"') {
+      i = endOfString(expr, i);
+      continue;
+    }
+    if (c === '(') depth++;
+    else if (c === ')') {
+      depth--;
+      if (depth === 0 && expr[i + 1] === '.') leafStart = i + 2;
+    }
+  }
+  return expr.slice(leafStart);
+}
+
+/** Parse a Playwright locator expression into `{ method, args }` (leaf of any chain). Exported for tests. */
+export function parseLeafLocatorExpression(rawExpr: string): { method: string; args: unknown[] } | null {
+  const expr = leafExpression(rawExpr.trim());
+  const m = /^([A-Za-z]+)\((.*)\)$/s.exec(expr);
+  if (!m) return null;
+  return { method: m[1]!, args: parseArgs(m[2]!.trim()) };
+}
+
+/**
+ * Derive the failing locator + call site from a test's error(s) when no locator
+ * action was captured (an `expect(...)` assertion failure). Reads the
+ * `Locator: …` line Playwright prints and the error's own call location,
+ * normalized cwd-relative to match captured snapshot locations. Returns null
+ * when no locator can be identified. Exported for tests.
+ */
+export function deriveFailedLocator(testInfo: TestInfo): FailedLocatorInfo | null {
+  const info = testInfo as unknown as {
+    errors?: Array<{ message?: string; stack?: string; location?: { file: string; line: number; column: number } }>;
+    error?: { message?: string; stack?: string; location?: { file: string; line: number; column: number } };
+  };
+  const errors = info.errors && info.errors.length > 0 ? info.errors : info.error ? [info.error] : [];
+  for (const err of errors) {
+    const text = `${err.message ?? ''}\n${err.stack ?? ''}`.replace(ANSI_RE, '');
+    const line = /^\s*Locator:\s*(.+)$/m.exec(text);
+    if (!line) continue;
+    const parsed = parseLeafLocatorExpression(line[1]!.trim());
+    if (!parsed) continue;
+    const loc = err.location;
+    const location = loc
+      ? `${path.relative(process.cwd(), loc.file).split(path.sep).join('/')}:${loc.line}:${loc.column}`
+      : null;
+    return { method: parsed.method, args: parsed.args, location };
+  }
+  return null;
 }
 
 const escStr = (s: string): string => s.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
@@ -926,8 +1060,14 @@ export async function runLocatorPicker(
  * placeholder (same call site, no element — capture never probes an action
  * that threw) is filled with the picked element and the confirmed-first
  * alternative list, so the pick rides the normal `piwi-locators` attachment
- * into the dashboard's `locator_snapshots` and healing panel. No-op when the
- * failing call site was never captured (no location). Exported for tests.
+ * into the dashboard's `locator_snapshots` and healing panel.
+ *
+ * A failed locator *action* left a placeholder at its call site (same location,
+ * no element) — that placeholder is filled in place. An assertion failure left
+ * no placeholder (no action ran), so a fresh snapshot is appended under the
+ * failing locator's location and signature instead, so the pick still reaches
+ * `locator_snapshots`. No-op only when the failing locator has no location.
+ * Exported for tests.
  */
 export function applyPickToSnapshots(snapshots: LocatorSnapshot[], pick: UserPickResult): boolean {
   if (!pick.failing.location) return false;
@@ -942,5 +1082,17 @@ export function applyPickToSnapshots(snapshots: LocatorSnapshot[], pick: UserPic
     };
     return true;
   }
-  return false;
+  // No placeholder — an assertion failure. Append a snapshot keyed to the
+  // failing locator so the healing lookup finds the pick by location/signature.
+  snapshots.push({
+    location: pick.failing.location,
+    used: {
+      method: pick.failing.method,
+      args: pick.failing.args,
+      raw: `${pick.failing.method}(${JSON.stringify(pick.failing.args)})`,
+    },
+    element: pick.element,
+    alternatives: pick.alternatives.slice(0, 10),
+  });
+  return true;
 }

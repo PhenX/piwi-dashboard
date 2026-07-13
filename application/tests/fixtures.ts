@@ -43,6 +43,7 @@ import {
 } from '../../reporter/dist/internal/capture/inspect-on-failure.js';
 import {
   applyPickToSnapshots,
+  deriveFailedLocator,
   runLocatorPicker,
   type UserPickResult,
 } from '../../reporter/dist/internal/capture/pick-on-failure.js';
@@ -397,7 +398,9 @@ export const test = base.extend<{ page: Page }>({
     // Runs before the snapshots attach — a confirmed pick is folded into them.
     let userPick: UserPickResult | null = null;
     if (shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo, process.env.PIWI_PICK_LOCATOR_ON_FAIL))) {
-      const failed = failedLocators[failedLocators.length - 1];
+      // Captured failed action, else the failing locator derived from an
+      // assertion error (mirrors the reporter fixture).
+      const failed = failedLocators[failedLocators.length - 1] ?? deriveFailedLocator(testInfo);
       if (failed) {
         userPick = await runLocatorPicker(page, testInfo, failed, {
           fn: probeElementAttrs,

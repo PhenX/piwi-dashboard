@@ -39,7 +39,7 @@ import {
   pauseForInspection,
   shouldInspectOnFailure,
 } from './inspect-on-failure.js';
-import { applyPickToSnapshots, runLocatorPicker, type UserPickResult } from './pick-on-failure.js';
+import { applyPickToSnapshots, deriveFailedLocator, runLocatorPicker, type UserPickResult } from './pick-on-failure.js';
 
 /** A Playwright fixture's `use` callback — hands the fixture value to the test. */
 type UseFn<T> = (value: T) => Promise<void>;
@@ -561,12 +561,11 @@ async function maybePickOnFailure(
   if (!shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo, process.env.PIWI_PICK_LOCATOR_ON_FAIL))) return;
   // Gate passed — this is the one shot at the picker for this test.
   sink.pickOffered = true;
-  const failed = sink.failedLocators[sink.failedLocators.length - 1];
+  // A failed locator action was captured with its call site; otherwise (an
+  // `expect(...)` assertion) derive the failing locator from the error text.
+  const failed = sink.failedLocators[sink.failedLocators.length - 1] ?? deriveFailedLocator(testInfo);
   if (!failed) {
-    console.log(
-      '[piwi] locator picker: this failure was not a locator action (e.g. an `expect(...)` assertion), so there is ' +
-        'no failed locator to replace. Use the trace viewer’s "Pick locator" tool on the dashboard for these.',
-    );
+    console.log('[piwi] locator picker: no failing locator could be identified in this failure — nothing to replace.');
     return;
   }
   const pick = await runLocatorPicker(page, testInfo, failed, { fn: probeElementAttrs, arg: CAPTURED_ATTRS_ARG });
