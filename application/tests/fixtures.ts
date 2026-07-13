@@ -36,6 +36,11 @@ import {
   probeElementAttrs,
   CAPTURED_ATTRS_ARG,
 } from '../../reporter/dist/internal/capture/capture-fixtures.js';
+import {
+  inspectionGateFromTestInfo,
+  pauseForInspection,
+  shouldInspectOnFailure,
+} from '../../reporter/dist/internal/capture/inspect-on-failure.js';
 import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from '../../reporter/dist/internal/capture/attachments.js';
 
 type NetworkRequest = {
@@ -430,6 +435,15 @@ export const test = base.extend<{ page: Page }>({
     }
 
     await flush();
+
+    // Failure-time inspection (dogfooding: mirrors the reporter fixture) —
+    // hands the still-open failing page to the Playwright Inspector when
+    // PIWI_INSPECT_ON_FAIL=true and the browser is headed (never in CI). Runs
+    // after all capture so the attached evidence reflects the page as the test
+    // left it, not as the human poked at it.
+    if (shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo))) {
+      await pauseForInspection(page, testInfo);
+    }
   },
 });
 

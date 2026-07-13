@@ -51,6 +51,16 @@ export interface PiwiDashboardOptions extends PlaywrightTestConfig {
    * also be forced off with `PIWI_CAPTURE_PAGE_STATE=false`.
    */
   capturePageState?: boolean;
+  /**
+   * Open the Playwright Inspector on the failing page when a test fails, so a
+   * replacement locator can be picked from the live page ("Pick locator")
+   * before the browser closes. Local debugging aid: only takes effect in a
+   * headed browser (`headless: false` / `--headed`), never under CI, and only
+   * on a test's final attempt when retries are configured. The run stays
+   * paused until the Inspector is resumed. Defaults to `false`. Can also be
+   * enabled with `PIWI_INSPECT_ON_FAIL=true`.
+   */
+  inspectOnFailure?: boolean;
   /** Enable live streaming of results (falls back to batch if unsupported). Defaults to `true`. */
   streaming?: boolean;
   /** Number of test results to batch before sending during streaming. Defaults to `5`. */

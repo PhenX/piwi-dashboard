@@ -33,6 +33,7 @@ import {
   type FailedLocatorInfo,
 } from './locator-healing.js';
 import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from './attachments.js';
+import { inspectionGateFromTestInfo, pauseForInspection, shouldInspectOnFailure } from './inspect-on-failure.js';
 
 /** A Playwright fixture's `use` callback — hands the fixture value to the test. */
 type UseFn<T> = (value: T) => Promise<void>;
@@ -182,6 +183,9 @@ interface CaptureSink {
   stashedWebVitals: WebVitals | null;
   stashedPageState: PageState | null;
   stashedAria: string | null;
+  // The failing page was already handed to the Inspector once this test —
+  // several close wrappers can fire for the same teardown.
+  inspected: boolean;
 }
 
 function createSink(): CaptureSink {
@@ -197,6 +201,7 @@ function createSink(): CaptureSink {
     stashedWebVitals: null,
     stashedPageState: null,
     stashedAria: null,
+    inspected: false,
   };
 }
 
@@ -496,6 +501,29 @@ async function stashPageState(sink: CaptureSink, closing: { page?: Page; context
     const aria = await ariaSnapshotBestEffort(page.locator(':root'), 1000);
     if (aria) sink.stashedAria = aria;
   }
+}
+
+/**
+ * Hand the failing page to the Playwright Inspector before it closes, when
+ * failure-time inspection is enabled (see `inspect-on-failure.ts` for the
+ * gate: opt-in, headed, never in CI, final attempt only). Runs after
+ * `stashPageState` so the captured failure evidence reflects the page as the
+ * test left it, not as the human poked at it.
+ */
+async function maybeInspectOnFailure(
+  sink: CaptureSink,
+  closing: { page?: Page; context?: BrowserContext },
+): Promise<void> {
+  if (sink.inspected) return;
+  const page = sink.lastActivePage;
+  const testInfo = sink.testInfo;
+  if (!page || !testInfo || isPageClosed(page)) return;
+  const belongsToClosing =
+    closing.page === page || (closing.context !== undefined && pageContext(page) === closing.context);
+  if (!belongsToClosing) return;
+  if (!shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo))) return;
+  sink.inspected = true;
+  await pauseForInspection(page, testInfo);
 }
 
 // Idempotency guards: a page/context/browser can be reached through several
@@ -913,7 +941,10 @@ function instrumentPage(page: Page): void {
     page.close = async (...args: Parameters<Page['close']>): Promise<void> => {
       await drainPendingProbes(1000);
       const sink = currentSink;
-      if (sink) await stashPageState(sink, { page });
+      if (sink) {
+        await stashPageState(sink, { page });
+        await maybeInspectOnFailure(sink, { page });
+      }
       return originalClose(...args);
     };
   }
@@ -1028,7 +1059,10 @@ function instrumentContext(context: BrowserContext): void {
     context.close = async (...args: Parameters<BrowserContext['close']>): Promise<void> => {
       await drainPendingProbes(1000);
       const sink = currentSink;
-      if (sink) await stashPageState(sink, { context });
+      if (sink) {
+        await stashPageState(sink, { context });
+        await maybeInspectOnFailure(sink, { context });
+      }
       return originalClose(...args);
     };
   }
@@ -1142,6 +1176,13 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
       }
     } catch {
       /* ignore */
+    }
+
+    // A page the test left open (e.g. a raw browser.newPage) never passes
+    // through the close wrappers — offer it to the Inspector here instead.
+    if (pageReadable && !sink.inspected && shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo))) {
+      sink.inspected = true;
+      await pauseForInspection(page, testInfo);
     }
   }
 
