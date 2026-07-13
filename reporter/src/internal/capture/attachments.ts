@@ -13,6 +13,7 @@ export const ATTACHMENT_NAMES = {
   webVitals: 'piwi-web-vitals',
   locatorSuggestion: 'piwi-locator-suggestion',
   pageState: 'piwi-page-state',
+  userPick: 'piwi-user-pick',
 } as const;
 
 /** Set of every internal attachment name — used to skip them when collecting user attachments. */
@@ -20,3 +21,6 @@ export const INTERNAL_ATTACHMENT_NAMES: ReadonlySet<string> = new Set(Object.val
 
 /** Annotation type that surfaces a locator-healing suggestion in the report/trace. */
 export const LOCATOR_SUGGESTION_ANNOTATION = ATTACHMENT_NAMES.locatorSuggestion;
+
+/** Annotation type that surfaces a human-confirmed replacement locator in the report/trace. */
+export const USER_PICK_ANNOTATION = ATTACHMENT_NAMES.userPick;

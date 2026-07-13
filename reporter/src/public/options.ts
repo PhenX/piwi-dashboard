@@ -52,15 +52,29 @@ export interface PiwiDashboardOptions extends PlaywrightTestConfig {
    */
   capturePageState?: boolean;
   /**
-   * Open the Playwright Inspector on the failing page when a test fails, so a
-   * replacement locator can be picked from the live page ("Pick locator")
-   * before the browser closes. Local debugging aid: only takes effect in a
-   * headed browser (`headless: false` / `--headed`), never under CI, and only
-   * on a test's final attempt when retries are configured. The run stays
-   * paused until the Inspector is resumed. Defaults to `false`. Can also be
-   * enabled with `PIWI_INSPECT_ON_FAIL=true`.
+   * Open Piwi's own failure-time overlay on the failing page — for inspecting
+   * the page and picking a locator for any element (click an element → confirm
+   * a ranked replacement locator). This is Piwi's own in-page overlay, not
+   * Playwright's native inspector, so a confirmed pick flows back into the
+   * dashboard. `pickLocatorOnFailure` opens the same overlay targeted at the
+   * broken locator; this opens it for the whole page. Local debugging aid: only
+   * takes effect in a headed browser (`headless: false` / `--headed`), never
+   * under CI, and only on a test's final attempt when retries are configured.
+   * The run waits until the overlay is resolved. Defaults to `false`. Can also
+   * be enabled with `PIWI_INSPECT_ON_FAIL=true`.
    */
   inspectOnFailure?: boolean;
+  /**
+   * Open Piwi's locator picker on the failing page when a locator action
+   * fails: click the element the locator should have matched, confirm one of
+   * the ranked replacement locators generated for it, and the choice is
+   * recorded — folded into the run's locator snapshots (so the dashboard's
+   * healing panel shows it) and attached as `piwi-user-pick` with a report
+   * annotation. Same gate as `inspectOnFailure`: headed browser only, never
+   * under CI, final attempt only. Defaults to `false`. Can also be enabled
+   * with `PIWI_PICK_LOCATOR_ON_FAIL=true`.
+   */
+  pickLocatorOnFailure?: boolean;
   /** Enable live streaming of results (falls back to batch if unsupported). Defaults to `true`. */
   streaming?: boolean;
   /** Number of test results to batch before sending during streaming. Defaults to `5`. */
