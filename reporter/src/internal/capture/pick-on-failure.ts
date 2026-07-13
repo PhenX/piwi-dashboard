@@ -385,12 +385,36 @@ export function installPickerOverlay(arg: { failing: string | null }): void {
   const banner = doc.createElement('div');
   banner.style.cssText =
     `position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:${Z + 2};` +
-    'background:#111827;color:#f9fafb;font:13px/1.5 system-ui,sans-serif;white-space:pre-line;' +
+    'background:#111827;color:#f9fafb;font:13px/1.5 system-ui,sans-serif;' +
     'padding:10px 16px;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.4);max-width:80vw;';
-  const instruction = arg.failing
-    ? `Piwi locator picker — click the element that should replace ${arg.failing}.\n`
-    : 'Piwi inspector — click any element to generate locators for it.\n';
-  banner.textContent = instruction + '↑ parent · ↓ child · Esc skip';
+  // Syntax-highlight a Playwright locator expression to inline-styled HTML —
+  // method purple, option keys blue, strings green, literals amber, punctuation
+  // muted. Self-contained (this whole function is serialized into the page).
+  const hlLocator = (expr: string): string => {
+    const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const re =
+      /('(?:\\.|[^'])*'|"(?:\\.|[^"])*")|([A-Za-z_$][\w$]*)(?=\s*\()|([A-Za-z_$][\w$]*)(?=\s*:)|(true|false|null|\d+)|([{}(),.])/g;
+    let html = '';
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(expr)) !== null) {
+      if (m.index > last) html += escHtml(expr.slice(last, m.index));
+      const color = m[1] ? '#4ade80' : m[2] ? '#c084fc' : m[3] ? '#93c5fd' : m[4] ? '#fbbf24' : '#9ca3af';
+      html += `<span style="color:${color}">${escHtml(m[0])}</span>`;
+      last = re.lastIndex;
+    }
+    if (last < expr.length) html += escHtml(expr.slice(last));
+    return `<code style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace">${html}</code>`;
+  };
+  const head = doc.createElement('div');
+  head.innerHTML = arg.failing
+    ? `Piwi locator picker — click the element that should replace ${hlLocator(arg.failing)}`
+    : 'Piwi inspector — click any element to generate locators for it';
+  const foot = doc.createElement('div');
+  foot.style.cssText = 'color:#9ca3af;margin-top:3px;';
+  foot.textContent = '↑ parent · ↓ child · Esc skip';
+  banner.appendChild(head);
+  banner.appendChild(foot);
   doc.body.appendChild(highlight);
   doc.body.appendChild(banner);
 
@@ -447,7 +471,7 @@ export function installPickerOverlay(arg: { failing: string | null }): void {
     highlight.style.top = r.top + 'px';
     highlight.style.width = r.width + 'px';
     highlight.style.height = r.height + 'px';
-    banner.textContent = instruction + `${describe(el)} — click to pick · ↑ parent · ↓ child · Esc skip`;
+    foot.textContent = `${describe(el)} — click to pick · ↑ parent · ↓ child · Esc skip`;
   };
 
   const stop = (e: any) => {
@@ -476,7 +500,7 @@ export function installPickerOverlay(arg: { failing: string | null }): void {
     g.__piwiPickState = 'picked';
     removeListeners();
     highlight.style.display = 'none';
-    banner.textContent = 'Piwi locator picker — analyzing element…';
+    foot.textContent = 'Analyzing element…';
   };
   const onKey = (e: any) => {
     if (e.key === 'Escape') {
@@ -862,14 +886,34 @@ export function showPickerChoices(arg: {
   panel.style.cssText =
     'background:#111827;color:#f9fafb;border-radius:10px;padding:20px;' +
     'max-width:640px;width:90vw;max-height:70vh;overflow:auto;box-shadow:0 8px 40px rgba(0,0,0,.5);';
+  // Syntax-highlight a locator expression (self-contained — this whole function
+  // is serialized into the page). Mirrors the highlighter in installPickerOverlay.
+  const hlLocator = (expr: string): string => {
+    const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const re =
+      /('(?:\\.|[^'])*'|"(?:\\.|[^"])*")|([A-Za-z_$][\w$]*)(?=\s*\()|([A-Za-z_$][\w$]*)(?=\s*:)|(true|false|null|\d+)|([{}(),.])/g;
+    let html = '';
+    let last = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(expr)) !== null) {
+      if (m.index > last) html += escHtml(expr.slice(last, m.index));
+      const color = m[1] ? '#4ade80' : m[2] ? '#c084fc' : m[3] ? '#93c5fd' : m[4] ? '#fbbf24' : '#9ca3af';
+      html += `<span style="color:${color}">${escHtml(m[0])}</span>`;
+      last = re.lastIndex;
+    }
+    if (last < expr.length) html += escHtml(expr.slice(last));
+    return html;
+  };
   const title = doc.createElement('div');
   title.style.cssText = 'font-weight:600;margin-bottom:4px;';
   title.textContent = arg.failing ? 'Pick a replacement locator' : 'Pick a locator';
   const sub = doc.createElement('div');
   sub.style.cssText = 'color:#9ca3af;margin-bottom:12px;';
-  sub.textContent = arg.failing
-    ? `Replaces ${arg.failing} — ranked by stability score.`
-    : 'For the element you picked — ranked by stability score.';
+  if (arg.failing) {
+    sub.innerHTML = `Replaces <code style="font-family:ui-monospace,Menlo,monospace">${hlLocator(arg.failing)}</code> — ranked by stability score.`;
+  } else {
+    sub.textContent = 'For the element you picked — ranked by stability score.';
+  }
   panel.appendChild(title);
   panel.appendChild(sub);
 
@@ -892,7 +936,7 @@ export function showPickerChoices(arg: {
       'text-align:left;background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;' +
       'padding:8px 12px;margin:0 0 8px;cursor:pointer;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;';
     const code = doc.createElement('span');
-    code.textContent = c.locator;
+    code.innerHTML = hlLocator(c.locator);
     code.style.cssText = 'word-break:break-all;';
     const score = doc.createElement('span');
     score.textContent = String(c.score);
