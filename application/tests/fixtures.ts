@@ -38,7 +38,6 @@ import {
 } from '../../reporter/dist/internal/capture/capture-fixtures.js';
 import {
   inspectionGateFromTestInfo,
-  pauseForInspection,
   shouldInspectOnFailure,
 } from '../../reporter/dist/internal/capture/inspect-on-failure.js';
 import {
@@ -394,14 +393,20 @@ export const test = base.extend<{ page: Page }>({
     ]);
     clearTimeout(drainDeadline);
 
-    // Failure-time locator picker (dogfooding: mirrors the reporter fixture).
-    // Runs before the snapshots attach — a confirmed pick is folded into them.
+    // Failure-time overlay (dogfooding: mirrors the reporter fixture). Both
+    // PIWI_PICK_LOCATOR_ON_FAIL and PIWI_INSPECT_ON_FAIL open Piwi's own
+    // overlay — never Playwright's native inspector. Runs before the snapshots
+    // attach — a confirmed pick is folded into them.
     let userPick: UserPickResult | null = null;
-    if (shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo, process.env.PIWI_PICK_LOCATOR_ON_FAIL))) {
+    const pickGate = shouldInspectOnFailure(
+      inspectionGateFromTestInfo(testInfo, process.env.PIWI_PICK_LOCATOR_ON_FAIL),
+    );
+    const inspectGate = shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo, process.env.PIWI_INSPECT_ON_FAIL));
+    if (pickGate || inspectGate) {
       // Captured failed action, else the failing locator derived from an
-      // assertion error (mirrors the reporter fixture).
+      // assertion error; inspectOnFailure opens even with no failing locator.
       const failed = failedLocators[failedLocators.length - 1] ?? deriveFailedLocator(testInfo);
-      if (failed) {
+      if (failed || inspectGate) {
         userPick = await runLocatorPicker(page, testInfo, failed, {
           fn: probeElementAttrs,
           arg: CAPTURED_ATTRS_ARG,
@@ -466,9 +471,10 @@ export const test = base.extend<{ page: Page }>({
     if (userPick) {
       testInfo.annotations.push({
         type: USER_PICK_ANNOTATION,
-        description:
-          `Replacement locator picked on the failing page for ${userPick.failing.rendered}` +
-          `${userPick.failing.location ? ` at ${userPick.failing.location}` : ''}: ${userPick.picked.locator}`,
+        description: userPick.failing
+          ? `Replacement locator picked on the failing page for ${userPick.failing.rendered}` +
+            `${userPick.failing.location ? ` at ${userPick.failing.location}` : ''}: ${userPick.picked.locator}`
+          : `Locator picked while inspecting the failing page: ${userPick.picked.locator}`,
       });
       await testInfo.attach(ATTACHMENT_NAMES.userPick, {
         contentType: 'application/json',
@@ -477,15 +483,6 @@ export const test = base.extend<{ page: Page }>({
     }
 
     await flush();
-
-    // Failure-time inspection (dogfooding: mirrors the reporter fixture) —
-    // hands the still-open failing page to the Playwright Inspector when
-    // PIWI_INSPECT_ON_FAIL=true and the browser is headed (never in CI). Runs
-    // after all capture so the attached evidence reflects the page as the test
-    // left it, not as the human poked at it.
-    if (shouldInspectOnFailure(inspectionGateFromTestInfo(testInfo))) {
-      await pauseForInspection(page, testInfo);
-    }
   },
 });
 

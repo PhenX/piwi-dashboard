@@ -1,16 +1,16 @@
-import type { Page, TestInfo } from '@playwright/test';
+import type { TestInfo } from '@playwright/test';
 
 /**
- * Failure-time inspection: when enabled (opt-in via the `inspectOnFailure`
- * reporter option / `PIWI_INSPECT_ON_FAIL`), a failing test's page is handed
- * to the Playwright Inspector (`page.pause()`) just before it would close, so
- * the failing page can be examined live — including the Inspector's
- * "Pick locator" tool to choose a replacement for a broken locator.
+ * Shared gate for Piwi's failure-time overlay. Both `inspectOnFailure`
+ * (`PIWI_INSPECT_ON_FAIL`) and `pickLocatorOnFailure` (`PIWI_PICK_LOCATOR_ON_FAIL`)
+ * open Piwi's own in-page overlay (see `pick-on-failure.ts`) — never
+ * Playwright's native inspector — so the experience is fully ours and a
+ * confirmed pick flows back into the dashboard.
  *
- * Local-only by design: inspection needs a human and a visible browser, so the
+ * Local-only by design: the overlay needs a human and a visible browser, so the
  * gate requires a headed browser and refuses to run under CI regardless of the
  * flag. It also waits for the final attempt when retries are configured — an
- * attempt that is about to be retried closes without pausing.
+ * attempt that is about to be retried closes without opening the overlay.
  */
 
 /** Everything the gate reads, as plain values so it stays unit-testable. */
@@ -85,22 +85,4 @@ export function inspectionGateFromTestInfo(
     retry: testInfo.retry,
     retries: testInfo.project?.retries ?? 0,
   };
-}
-
-/**
- * Open the Playwright Inspector on the failing page and wait for the human to
- * resume. Lifts the test timeout first — the run stays paused indefinitely —
- * and never throws (a broken inspector must not mask the test's own failure).
- */
-export async function pauseForInspection(page: Page, testInfo: TestInfo): Promise<void> {
-  try {
-    testInfo.setTimeout(0);
-    console.log(
-      `\n[piwi] "${testInfo.title}" ${testInfo.status} — opening the Playwright Inspector on the failing page. ` +
-        'Use "Pick locator" to choose a replacement locator, then resume (▶) to finish the run.',
-    );
-    await page.pause();
-  } catch {
-    // Inspection is best-effort — teardown continues either way.
-  }
 }

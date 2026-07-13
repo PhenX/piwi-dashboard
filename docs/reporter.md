@@ -108,7 +108,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 | `collectCiInfo`             | boolean  | `true`                    | Auto-collect CI environment info                                                            |
 | `collectPerformanceMetrics` | boolean  | `true`                    | Collect step timings, network requests and web vitals                                       |
 | `captureLocators`           | boolean  | `true`                    | Capture per-action element snapshots that power [locator healing](#locator-healing). Auto-disabled when `collectPerformanceMetrics` is `false` |
-| `inspectOnFailure`          | boolean  | `false`                   | Open the Playwright Inspector on the failing page after a local headed failure (see [Inspect the failing page live](#inspect-the-failing-page-live-local-runs)). Never activates under CI |
+| `inspectOnFailure`          | boolean  | `false`                   | Open Piwi's own inspector overlay on the failing page after a local headed failure — inspect any element and pick a locator for it (see [Inspect the failing page live](#inspect-the-failing-page-live-local-runs)). Never activates under CI |
 | `pickLocatorOnFailure`      | boolean  | `false`                   | Open Piwi's locator picker on the failing page after a local headed locator failure (see [Pick a replacement locator](#pick-a-replacement-locator-on-the-failing-page-local-runs)). Never activates under CI |
 | `username`                  | string   | —                         | Username for dashboard login (use `apiKey` instead when possible)                           |
 | `password`                  | string   | —                         | Password for dashboard login (used with `username`)                                         |
@@ -330,7 +330,7 @@ Capture adds a small per-action cost (one DOM read, sometimes an extra ARIA snap
 
 ### Inspect the failing page live (local runs)
 
-When a locator breaks while you're developing locally, the fastest fix is often to just look at the page. With `inspectOnFailure: true` (or `PIWI_INSPECT_ON_FAIL=true`), a failing test hands its still-open page to the **Playwright Inspector** right before the browser would close — use the Inspector's *Pick locator* tool to click the element and copy a working locator, then resume (▶) to let the run finish and upload as usual.
+When a locator breaks while you're developing locally, the fastest fix is often to just look at the page. With `inspectOnFailure: true` (or `PIWI_INSPECT_ON_FAIL=true`), a failing test opens **Piwi's own inspector overlay** on its still-open page right before the browser would close — click any element to generate ranked, uniqueness-checked locators for it (with the same guided parent-anchoring described below), confirm one, and it's recorded just like a pick. This is Piwi's own overlay, **not** Playwright's native inspector, so anything you confirm flows back into the dashboard's healing data.
 
 ```bash
 # Linux / macOS
@@ -340,7 +340,7 @@ PIWI_INSPECT_ON_FAIL=true npx playwright test --headed
 $env:PIWI_INSPECT_ON_FAIL='true'; npx playwright test --headed
 ```
 
-Inspection is a local debugging aid and is deliberately conservative: it requires a **headed** browser (`--headed` / `headless: false`), never activates under CI (any `CI` env var), skips expected failures (`test.fail()`), and with retries configured it only pauses on the final attempt. While paused the run waits indefinitely (the test timeout is lifted), so prefer `--workers=1` when enabling it.
+`inspectOnFailure` opens the overlay on **any** failure so you can inspect the whole page; `pickLocatorOnFailure` (below) opens the **same** overlay but targeted at the locator that broke. Both are local debugging aids and deliberately conservative: they require a **headed** browser (`--headed` / `headless: false`), never activate under CI (any `CI` env var), skip expected failures (`test.fail()`), and with retries configured only open on the final attempt. While the overlay is open the run waits (the test timeout is lifted), so prefer `--workers=1` when enabling it.
 
 ### Pick a replacement locator on the failing page (local runs)
 

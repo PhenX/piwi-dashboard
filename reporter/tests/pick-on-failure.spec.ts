@@ -96,6 +96,14 @@ describe('applyPickToSnapshots', () => {
     expect(snaps[0]!.element).toBeNull();
   });
 
+  it('is a no-op for a pure inspect pick (no failing locator)', () => {
+    const snaps = [placeholder(LOCATION)];
+    const inspectPick = { ...pick(LOCATION), failing: null };
+    expect(applyPickToSnapshots(snaps, inspectPick)).toBe(false);
+    expect(snaps).toHaveLength(1);
+    expect(snaps[0]!.element).toBeNull();
+  });
+
   it('appends a snapshot when no placeholder exists (assertion failure)', () => {
     // An expect(...) failure captured no action, so there is no placeholder —
     // the pick must still land in a snapshot, keyed to the failing locator.

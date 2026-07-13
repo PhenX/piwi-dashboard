@@ -92,6 +92,11 @@ export interface PickedLeafInfo {
 
 /** A confirmed pick — everything the fixture records about the human's choice. */
 export interface UserPickResult {
+  /**
+   * The locator this pick replaces. Null when the overlay was opened purely to
+   * inspect (`inspectOnFailure` with no identifiable failing locator) — the
+   * pick still yields alternatives, but there is nothing to write back to.
+   */
   failing: {
     method: string;
     args: unknown[];
@@ -99,7 +104,7 @@ export interface UserPickResult {
     rendered: string;
     /** Test call site (`file:line:col`) of the failed action, when captured. */
     location: string | null;
-  };
+  } | null;
   /** The alternative the human confirmed (also first in `alternatives`). */
   picked: RankedLocator;
   /** Full ranked list for the picked element, the confirmed pick first. */
@@ -364,7 +369,7 @@ export function mergeCandidates(base: RankedLocator[], extra: RankedLocator[]): 
  * picked element is parked in `__piwiPickedElement` for an `evaluateHandle`
  * read. Must stay fully self-contained (no module-closure references).
  */
-export function installPickerOverlay(arg: { failing: string }): void {
+export function installPickerOverlay(arg: { failing: string | null }): void {
   const g = globalThis as any;
   const doc = g.document;
   if (!doc || !doc.body) {
@@ -382,7 +387,9 @@ export function installPickerOverlay(arg: { failing: string }): void {
     `position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:${Z + 2};` +
     'background:#111827;color:#f9fafb;font:13px/1.5 system-ui,sans-serif;white-space:pre-line;' +
     'padding:10px 16px;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.4);max-width:80vw;';
-  const instruction = `Piwi locator picker — click the element that should replace ${arg.failing}.\n`;
+  const instruction = arg.failing
+    ? `Piwi locator picker — click the element that should replace ${arg.failing}.\n`
+    : 'Piwi inspector — click any element to generate locators for it.\n';
   banner.textContent = instruction + '↑ parent · ↓ child · Esc skip';
   doc.body.appendChild(highlight);
   doc.body.appendChild(banner);
@@ -835,7 +842,10 @@ export function showAnchorPicker(arg: {
  * lands in `__piwiPickChoice` (-1 = skipped), polled from Node. Must stay
  * fully self-contained.
  */
-export function showPickerChoices(arg: { failing: string; choices: Array<{ locator: string; score: number }> }): void {
+export function showPickerChoices(arg: {
+  failing: string | null;
+  choices: Array<{ locator: string; score: number }>;
+}): void {
   const g = globalThis as any;
   const doc = g.document;
   if (!doc || !doc.body) {
@@ -854,10 +864,12 @@ export function showPickerChoices(arg: { failing: string; choices: Array<{ locat
     'max-width:640px;width:90vw;max-height:70vh;overflow:auto;box-shadow:0 8px 40px rgba(0,0,0,.5);';
   const title = doc.createElement('div');
   title.style.cssText = 'font-weight:600;margin-bottom:4px;';
-  title.textContent = 'Pick a replacement locator';
+  title.textContent = arg.failing ? 'Pick a replacement locator' : 'Pick a locator';
   const sub = doc.createElement('div');
   sub.style.cssText = 'color:#9ca3af;margin-bottom:12px;';
-  sub.textContent = `Replaces ${arg.failing} — ranked by stability score.`;
+  sub.textContent = arg.failing
+    ? `Replaces ${arg.failing} — ranked by stability score.`
+    : 'For the element you picked — ranked by stability score.';
   panel.appendChild(title);
   panel.appendChild(sub);
 
@@ -943,15 +955,19 @@ async function cleanupPicker(page: Page): Promise<void> {
 export async function runLocatorPicker(
   page: Page,
   testInfo: TestInfo,
-  failed: FailedLocatorInfo,
+  failed: FailedLocatorInfo | null,
   probe: PickerProbe,
 ): Promise<UserPickResult | null> {
   try {
     testInfo.setTimeout(0);
-    const rendered = renderFailing(failed);
+    const rendered = failed ? renderFailing(failed) : null;
     console.log(
-      `\n[piwi] "${testInfo.title}" ${testInfo.status} — locator picker open in the browser: ` +
-        `click the element that should replace ${rendered} (↑/↓ to select a parent/child, Esc to skip).`,
+      `\n[piwi] "${testInfo.title}" ${testInfo.status} — ${rendered ? 'locator picker' : 'inspector'} open in the ` +
+        `browser: ${
+          rendered
+            ? `click the element that should replace ${rendered}`
+            : 'click any element to generate ' + 'locators for it'
+        } (↑/↓ to select a parent/child, Esc to skip).`,
     );
 
     await page.evaluate(installPickerOverlay, { failing: rendered });
@@ -1039,12 +1055,14 @@ export async function runLocatorPicker(
       ...(attrs.ancestors && attrs.ancestors.length > 0 ? { ancestors: attrs.ancestors } : {}),
     };
 
-    const location = failed.location ?? null;
+    const location = failed?.location ?? null;
     console.log(
-      `[piwi] Replacement picked for ${rendered}${location ? ` at ${location}` : ''}:\n[piwi]   ${picked.locator}`,
+      failed
+        ? `[piwi] Replacement picked for ${rendered}${location ? ` at ${location}` : ''}:\n[piwi]   ${picked.locator}`
+        : `[piwi] Locator picked while inspecting:\n[piwi]   ${picked.locator}`,
     );
     return {
-      failing: { method: failed.method, args: failed.args, rendered, location },
+      failing: failed ? { method: failed.method, args: failed.args, rendered: rendered!, location } : null,
       picked,
       alternatives,
       element,
@@ -1070,10 +1088,12 @@ export async function runLocatorPicker(
  * Exported for tests.
  */
 export function applyPickToSnapshots(snapshots: LocatorSnapshot[], pick: UserPickResult): boolean {
-  if (!pick.failing.location) return false;
+  // No failing locator (pure inspect pick) or no call site — nothing to key on.
+  if (!pick.failing?.location) return false;
+  const failing = pick.failing;
   for (let i = snapshots.length - 1; i >= 0; i--) {
     const snap = snapshots[i]!;
-    if (snap.location !== pick.failing.location || snap.element) continue;
+    if (snap.location !== failing.location || snap.element) continue;
     snapshots[i] = {
       location: snap.location,
       used: snap.used,
@@ -1085,11 +1105,11 @@ export function applyPickToSnapshots(snapshots: LocatorSnapshot[], pick: UserPic
   // No placeholder — an assertion failure. Append a snapshot keyed to the
   // failing locator so the healing lookup finds the pick by location/signature.
   snapshots.push({
-    location: pick.failing.location,
+    location: failing.location,
     used: {
-      method: pick.failing.method,
-      args: pick.failing.args,
-      raw: `${pick.failing.method}(${JSON.stringify(pick.failing.args)})`,
+      method: failing.method,
+      args: failing.args,
+      raw: `${failing.method}(${JSON.stringify(failing.args)})`,
     },
     element: pick.element,
     alternatives: pick.alternatives.slice(0, 10),
