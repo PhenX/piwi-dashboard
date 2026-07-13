@@ -108,6 +108,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 | `collectCiInfo`             | boolean  | `true`                    | Auto-collect CI environment info                                                            |
 | `collectPerformanceMetrics` | boolean  | `true`                    | Collect step timings, network requests and web vitals                                       |
 | `captureLocators`           | boolean  | `true`                    | Capture per-action element snapshots that power [locator healing](#locator-healing). Auto-disabled when `collectPerformanceMetrics` is `false` |
+| `inspectOnFailure`          | boolean  | `false`                   | Open the Playwright Inspector on the failing page after a local headed failure (see [Inspect the failing page live](#inspect-the-failing-page-live-local-runs)). Never activates under CI |
 | `username`                  | string   | —                         | Username for dashboard login (use `apiKey` instead when possible)                           |
 | `password`                  | string   | —                         | Password for dashboard login (used with `username`)                                         |
 | `apiKey`                    | string   | —                         | API key for authentication (preferred over `username`/`password` for CI)                    |
@@ -135,6 +136,7 @@ Every option above can also be set via a `PIWI_*` environment variable. Env vars
 | `PIWI_UPLOAD_TRACES`            | `uploadTraces`          | `true`/`false`  |
 | `PIWI_UPLOAD_REPORT`            | `uploadReport`          | `true`/`false`  |
 | `PIWI_CAPTURE_LOCATORS`         | `captureLocators`       | `true`/`false`  |
+| `PIWI_INSPECT_ON_FAIL`          | `inspectOnFailure`      | `true`/`false`  |
 | `PIWI_VERBOSE`                  | `verbose`               | `true`/`false`  |
 
 `wrapConfig` forwards the same `PIWI_*` vars into the isolated `global-setup` process so the run registration step shares the reporter's server/auth config.
@@ -323,6 +325,20 @@ The result is shown as an **Alternative locators** panel on the test-case and fa
 Capture adds a small per-action cost (one DOM read, sometimes an extra ARIA snapshot) in the test worker. Turn it off with `captureLocators: false` or `PIWI_CAPTURE_LOCATORS=false`; it is also disabled automatically whenever `collectPerformanceMetrics` is `false`.
 
 > Healing is read-only — it never rewrites your test. It surfaces the replacement so you can apply it yourself.
+
+### Inspect the failing page live (local runs)
+
+When a locator breaks while you're developing locally, the fastest fix is often to just look at the page. With `inspectOnFailure: true` (or `PIWI_INSPECT_ON_FAIL=true`), a failing test hands its still-open page to the **Playwright Inspector** right before the browser would close — use the Inspector's *Pick locator* tool to click the element and copy a working locator, then resume (▶) to let the run finish and upload as usual.
+
+```bash
+# Linux / macOS
+PIWI_INSPECT_ON_FAIL=true npx playwright test --headed
+
+# Windows (PowerShell)
+$env:PIWI_INSPECT_ON_FAIL='true'; npx playwright test --headed
+```
+
+Inspection is a local debugging aid and is deliberately conservative: it requires a **headed** browser (`--headed` / `headless: false`), never activates under CI (any `CI` env var), skips expected failures (`test.fail()`), and with retries configured it only pauses on the final attempt. While paused the run waits indefinitely (the test timeout is lifted), so prefer `--workers=1` when enabling it.
 
 ## Automatic metadata collection
 
