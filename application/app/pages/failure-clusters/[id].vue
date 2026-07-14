@@ -255,6 +255,7 @@ const breadcrumbItems = computed(() => [
               storage-key="cluster-locators"
               :run-id="cluster.lastSeenRunId"
               :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
+              :affected-count="cluster.affectedTestCases.length"
             />
 
             <!-- Environment drift since the last pass of the representative case -->

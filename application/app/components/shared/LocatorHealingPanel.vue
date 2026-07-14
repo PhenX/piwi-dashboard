@@ -17,6 +17,12 @@ const props = defineProps<{
   testRunsCaseId: number;
   /** When set, the panel folds to a header with a peek (persisted per user). */
   storageKey?: string;
+  /**
+   * Number of tests this failure affects (cluster context). When > 1, the panel
+   * notes that one fix covers them all — a cluster is one masked-locator root
+   * cause, so the recommended locator applies across the group.
+   */
+  affectedCount?: number;
 }>();
 
 // Fold on the cluster page (storageKey set); stay a plain card on the test-case page.
@@ -173,6 +179,14 @@ onBeforeUnmount(() => {
 // ── Suggested edit: rewrite the failing test line with the recommended fix ───
 
 const recommended = computed(() => recommendation.value?.recommended ?? null);
+
+// One recommendation heals every test in the cluster (same masked-locator root
+// cause) — surface the leverage when the panel is shown in cluster context.
+const appliesToNote = computed(() =>
+  props.affectedCount && props.affectedCount > 1 && recommended.value
+    ? `Same break affects ${props.affectedCount} tests in this cluster — one fix`
+    : '',
+);
 
 // Plain-words provenance for the recommendation, echoed in the hero block so it
 // reads even when the source subtitle is folded away (cluster page).
@@ -389,6 +403,9 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
       </template>
 
       <p v-if="recommendationNote" class="text-xs text-gray-500">{{ recommendationNote }}</p>
+      <p v-if="appliesToNote" class="text-xs text-primary/90 flex items-center gap-1">
+        <UIcon name="i-lucide-layers" class="size-3 shrink-0" />{{ appliesToNote }}
+      </p>
 
       <div class="flex items-center gap-2">
         <UButton
