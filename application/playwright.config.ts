@@ -175,6 +175,8 @@ export default process.env.CI
       streaming: true,
       uploadReport: false,
       uploadTraces: true,
+      inspectOnFailure: true,
+      pickLocatorOnFailure: true,
       verbose: true,
       reports: [{ type: 'html' }, { type: 'monocart' }, { type: 'blob', label: 'Blob Archive' }],
     });

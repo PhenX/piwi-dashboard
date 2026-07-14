@@ -196,9 +196,63 @@ describe('parseTraceEvents', () => {
     expect(await parseTraceEvents(Buffer.from('not a zip file'))).toBeNull();
   });
 
-  test('returns null when there is no trace.trace entry', async () => {
+  test('returns null when there is no *.trace entry', async () => {
     const zip = buildZip([{ name: 'resources/other.txt', data: Buffer.from('x') }]);
     expect(await parseTraceEvents(zip)).toBeNull();
+  });
+
+  test('aggregates events across a real multi-file @playwright/test trace layout', async () => {
+    // The runner trace holds the error-bearing action; the per-context file
+    // holds the DOM frame-snapshot. Neither is named `trace.trace`.
+    const jsonl = (events: unknown[]) => Buffer.from(events.map((e) => JSON.stringify(e)).join('\n'), 'utf8');
+    const zip = buildZip([
+      {
+        name: 'test.trace',
+        data: jsonl([
+          { type: 'action', callId: 'c1', apiName: 'locator.click', startTime: 1000, error: { message: 'boom' } },
+        ]),
+      },
+      {
+        name: '0-trace.trace',
+        data: jsonl([
+          {
+            type: 'frame-snapshot',
+            snapshot: {
+              snapshotName: 'after@call@1',
+              frameId: 'frame@1',
+              isMainFrame: true,
+              html: ['HTML', {}, ['BODY', {}, 'hi']],
+            },
+          },
+        ]),
+      },
+    ]);
+    const data = await parseTraceEvents(zip);
+    expect(data).not.toBeNull();
+    // Action came from test.trace…
+    expect(data!.failingAction?.apiName).toBe('locator.click');
+    // …and the DOM snapshot came from 0-trace.trace.
+    expect(data!.frameSnapshots).toHaveLength(1);
+    expect(data!.frameSnapshots[0]!.snapshotName).toBe('after@call@1');
+  });
+
+  test('orders test.trace before numbered context files regardless of ZIP order', async () => {
+    const line = (o: unknown) => Buffer.from(JSON.stringify(o), 'utf8');
+    // Deliberately place context files before the runner file in the ZIP.
+    const zip = buildZip([
+      { name: '1-trace.trace', data: line({ type: 'action', callId: 'ctx1', apiName: 'page.goto', startTime: 500 }) },
+      {
+        name: '0-trace.trace',
+        data: line({ type: 'action', callId: 'ctx0', apiName: 'locator.fill', startTime: 700 }),
+      },
+      {
+        name: 'test.trace',
+        data: line({ type: 'action', callId: 'runner', apiName: 'expect.toBeVisible', startTime: 100 }),
+      },
+    ]);
+    const data = await parseTraceEvents(zip);
+    // Sorted: test.trace (runner), then 0-trace.trace, then 1-trace.trace.
+    expect(data!.actions.map((a) => a.apiName)).toEqual(['expect.toBeVisible', 'locator.fill', 'page.goto']);
   });
 
   test('parses action events and skips malformed/blank lines without throwing', async () => {

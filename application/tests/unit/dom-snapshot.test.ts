@@ -1,9 +1,29 @@
 import { describe, test, expect } from 'vitest';
-import { renderSnapshotHtml, sanitizeDomSnapshot } from '~~/server/utils/dom-snapshot';
-import type { TraceFrameSnapshot } from '~~/server/utils/trace-parser';
+import {
+  renderSnapshotHtml,
+  sanitizeDomSnapshot,
+  extractDomSnapshot,
+  renderAriaSnapshotHtml,
+  resolveCaseDomSnapshot,
+} from '~~/server/utils/dom-snapshot';
+import type { TraceFrameSnapshot, ParsedTraceData } from '~~/server/utils/trace-parser';
 
 function snap(overrides: Partial<TraceFrameSnapshot>): TraceFrameSnapshot {
   return { frameId: 'frame@1', isMainFrame: true, html: ['HTML', {}], ...overrides };
+}
+
+function traceData(frameSnapshots: TraceFrameSnapshot[]): ParsedTraceData {
+  return {
+    actions: [],
+    consoleEntries: [],
+    networkRequests: [],
+    frameSnapshots,
+    failingAction: null,
+    failingActionIndex: -1,
+    eventCount: 0,
+    timeoutFallback: false,
+    traceEndTime: 0,
+  };
 }
 
 describe('renderSnapshotHtml', () => {
@@ -54,6 +74,33 @@ describe('renderSnapshotHtml', () => {
       's1',
     );
     expect(html).toBe('<html><script></script></html>');
+  });
+
+  const styleHeavy = (): Parameters<typeof renderSnapshotHtml>[0] => [
+    snap({
+      snapshotName: 's1',
+      html: [
+        'HTML',
+        {},
+        ['HEAD', {}, ['STYLE', {}, '.a{color:red}'.repeat(500)], ['LINK', { rel: 'stylesheet', href: '/app.css' }]],
+        ['BODY', {}, ['BUTTON', { style: 'color:blue' }, 'Go']],
+      ],
+    }),
+  ];
+
+  test('keeps inline <style> bodies by default (full fidelity)', () => {
+    const html = renderSnapshotHtml(styleHeavy(), 's1');
+    expect(html).toContain('.a{color:red}');
+    expect(html).toContain('<link rel="stylesheet" href="/app.css">');
+    expect(html).toContain('<button style="color:blue">Go</button>');
+  });
+
+  test('drops inline <style> bodies under dropStyles, keeping <link> and inline style attrs', () => {
+    const html = renderSnapshotHtml(styleHeavy(), 's1', { dropStyles: true });
+    expect(html).toContain('<style></style>');
+    expect(html).not.toContain('color:red');
+    expect(html).toContain('<link rel="stylesheet" href="/app.css">');
+    expect(html).toContain('<button style="color:blue">Go</button>');
   });
 
   test('resolves back-references against the earlier snapshot of the same frame', () => {
@@ -121,5 +168,73 @@ describe('sanitizeDomSnapshot', () => {
     expect(truncated).toBe(true);
     expect(html.length).toBeLessThan(150);
     expect(html).toContain('<!-- [truncated] -->');
+  });
+});
+
+describe('renderAriaSnapshotHtml', () => {
+  test('renders a role-colored chip carrying data-role/data-name for each node', () => {
+    const html = renderAriaSnapshotHtml('- button "Submit"\n- heading "Title"');
+    expect(html).toContain('data-role="button"');
+    expect(html).toContain('data-name="Submit"');
+    expect(html).toContain('button "Submit"');
+    expect(html).toContain('data-role="heading"');
+  });
+
+  test('returns null when the ARIA snapshot yields no candidates', () => {
+    expect(renderAriaSnapshotHtml('')).toBeNull();
+    expect(renderAriaSnapshotHtml('not a yaml list at all')).toBeNull();
+  });
+
+  test('escapes the untrusted accessible name in both text and attribute contexts', () => {
+    // `<` would inject markup into the chip text; `"` would break out of data-name.
+    const html = renderAriaSnapshotHtml('- button "a\\"b<img src=x onerror=alert(1)>"')!;
+    expect(html).not.toContain('<img src=x');
+    expect(html).toContain('&lt;img src=x');
+    expect(html).toContain('data-name="a&quot;b'); // quote escaped inside the attribute
+  });
+});
+
+describe('resolveCaseDomSnapshot', () => {
+  test('falls back to the ARIA snapshot when there is no trace', async () => {
+    const res = await resolveCaseDomSnapshot(null, '- button "Go"');
+    expect(res.status).toBe('ok');
+    expect(res.snapshotName).toBe('aria-fallback');
+    expect(res.html).toContain('data-role="button"');
+  });
+
+  test('returns no-trace when neither a trace nor an ARIA snapshot exists', async () => {
+    expect((await resolveCaseDomSnapshot(null, null)).status).toBe('no-trace');
+    expect((await resolveCaseDomSnapshot(null, 'no candidates here')).status).toBe('no-trace');
+  });
+});
+
+describe('extractDomSnapshot — styled/lean two-pass', () => {
+  // A page whose inline <style> dwarfs the body, with the body content last.
+  const bigStyle = '.x{color:red}'.repeat(4000); // ~52k chars
+  const page = (): TraceFrameSnapshot[] => [
+    snap({
+      snapshotName: 'after@call@1',
+      viewport: { width: 1280, height: 720 },
+      html: ['HTML', {}, ['HEAD', {}, ['STYLE', {}, bigStyle]], ['BODY', {}, ['BUTTON', {}, 'Click me']]],
+    }),
+  ];
+
+  test('keeps inline styles when the styled render fits under the cap, and returns the viewport', () => {
+    const res = extractDomSnapshot(traceData(page()), 1_000_000);
+    expect(res.status).toBe('ok');
+    expect(res.truncated).toBe(false);
+    expect(res.html).toContain('.x{color:red}'); // styles preserved
+    expect(res.html).toContain('<button>Click me</button>');
+    expect(res.viewport).toEqual({ width: 1280, height: 720 });
+  });
+
+  test('falls back to a lean render (styles dropped) so the body survives a tiny cap', () => {
+    // Cap smaller than the inline CSS — a styled render would truncate the body away.
+    const res = extractDomSnapshot(traceData(page()), 5_000);
+    expect(res.status).toBe('ok');
+    expect(res.truncated).toBe(false); // lean render fits
+    expect(res.html).toContain('<style></style>'); // CSS dropped
+    expect(res.html).not.toContain('.x{color:red}');
+    expect(res.html).toContain('<button>Click me</button>'); // body preserved
   });
 });

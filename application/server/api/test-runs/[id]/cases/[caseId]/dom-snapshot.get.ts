@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
-import { files } from '../../../../../database/schema';
-import { getTraceDomSnapshot } from '../../../../../utils/dom-snapshot';
+import { files, testRunsCases } from '../../../../../database/schema';
+import { resolveCaseDomSnapshot } from '../../../../../utils/dom-snapshot';
 import { Role } from '#shared/types';
 import {
   requireResolvedProjectAccess,
@@ -10,15 +10,12 @@ import {
 
 const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
-/** Generous UI cap — the AI context applies its own (smaller) configurable limit. */
-const ENDPOINT_CAP_CHARS = 200_000;
-
 defineRouteMeta({
   openAPI: {
     tags: ['Test Runs'],
-    summary: 'Render the failure-time DOM snapshot from the stored trace',
+    summary: 'Render the failure-time DOM snapshot for a test-run case',
     description:
-      'Extracts the DOM snapshot Playwright recorded for the failing action (before-snapshot, with after/last-snapshot fallbacks) from the execution stored trace ZIP and renders it as sanitized HTML. Input values, inline handlers and script bodies are never included; token-shaped strings are masked. Computed on request — nothing extra is captured or stored.',
+      'Extracts the DOM snapshot from the stored trace ZIP, falling back to a simplified render of the captured ARIA snapshot when no trace is available. Input values, inline handlers and script bodies are never included; token-shaped strings are masked.',
     parameters: [
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' }, description: 'Test run id' },
       { name: 'caseId', in: 'path', required: true, schema: { type: 'integer' }, description: 'Test run case id' },
@@ -36,14 +33,14 @@ export default eventHandler(async (event) => {
   // another project (the cluster page may pass a caseId from another run).
   const { db } = await requireResolvedProjectAccess(event, caseId, resolveTestRunCaseProjectId, 'Test run case');
 
-  const traceFiles = await db
-    .select({ path: files.path })
-    .from(files)
-    .where(and(eq(files.testRunsCaseId, caseId), eq(files.type, 'trace')))
-    .limit(1);
+  const [traceRows, caseRows] = await Promise.all([
+    db
+      .select({ path: files.path })
+      .from(files)
+      .where(and(eq(files.testRunsCaseId, caseId), eq(files.type, 'trace')))
+      .limit(1),
+    db.select({ aria: testRunsCases.ariaSnapshot }).from(testRunsCases).where(eq(testRunsCases.id, caseId)).limit(1),
+  ]);
 
-  // Don't 404 — "no trace" is a valid answer
-  if (traceFiles.length === 0 || !traceFiles[0]!.path) return { status: 'no-trace' as const };
-
-  return getTraceDomSnapshot(traceFiles[0]!.path, ENDPOINT_CAP_CHARS);
+  return resolveCaseDomSnapshot(traceRows[0]?.path ?? null, caseRows[0]?.aria ?? null);
 });
