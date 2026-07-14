@@ -135,6 +135,8 @@ export interface TraceFrameSnapshot {
   doctype?: string;
   html: unknown;
   isMainFrame?: boolean;
+  /** The page's viewport size when the snapshot was taken (for scaled rendering). */
+  viewport?: { width: number; height: number };
 }
 
 export interface ParsedTraceData {
@@ -158,15 +160,39 @@ export interface ParsedTraceData {
   traceEndTime: number;
 }
 
-/** Parse trace events from a loaded slim ZIP buffer. Returns null on failure. */
+/**
+ * Order the trace event files: the runner-level `test.trace` first, then the
+ * per-context files (`0-trace.trace`, `1-trace.trace`, …) in numeric order, then
+ * anything else. Keeps the action timeline coherent when several files are
+ * concatenated; snapshot back-references resolve per-frame so cross-file order
+ * never affects DOM rendering.
+ */
+function traceFileRank(name: string): number {
+  if (name === 'test.trace' || name === 'trace.trace') return -1;
+  const m = name.match(/^(\d+)-trace\.trace$/);
+  return m ? Number(m[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * Parse trace events from a loaded slim ZIP buffer. Returns null on failure.
+ *
+ * A `@playwright/test` trace ZIP holds several event streams — the runner's
+ * `test.trace` plus one `{n}-trace.trace` per browser context — and the DOM
+ * `frame-snapshot` events live in the context files, not the runner one. Older
+ * single-context traces use a lone `trace.trace`. We aggregate every `*.trace`
+ * entry so snapshots (and actions) are found regardless of the layout.
+ */
 export async function parseTraceEvents(zipData: Buffer): Promise<ParsedTraceData | null> {
   try {
     const entries = await parseZip(zipData);
-    const traceEntry = entries.find((e) => e.name === 'trace.trace');
-    if (!traceEntry) return null;
+    const traceEntries = entries
+      .filter((e) => e.name.endsWith('.trace'))
+      .sort((a, b) => traceFileRank(a.name) - traceFileRank(b.name));
+    if (traceEntries.length === 0) return null;
 
-    const lines = traceEntry.data.toString('utf8').split('\n').filter(Boolean);
-    const events = lines
+    const events = traceEntries
+      .flatMap((entry) => entry.data.toString('utf8').split('\n'))
+      .filter(Boolean)
       .map((l) => {
         try {
           return JSON.parse(l);

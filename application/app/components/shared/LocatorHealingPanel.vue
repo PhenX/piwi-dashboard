@@ -10,6 +10,7 @@ import type { RankedLocator, LocatorFixRecommendation, LocatorHealingResult } fr
 import type { TraceInfo } from '~~/types/api';
 import SectionCard from './SectionCard.vue';
 import CollapsibleSectionCard from './CollapsibleSectionCard.vue';
+import SnapshotLocatorPicker from './SnapshotLocatorPicker.vue';
 
 const props = defineProps<{
   runId: number;
@@ -142,6 +143,13 @@ const pickTraceUrl = computed(() => {
   return getTraceViewerUrl(trace.filePath, config.app?.baseURL, isDemoStaticAsset);
 });
 
+// Interactive DOM snapshot picker
+const pickerOpen = ref(false);
+
+async function refreshHealing() {
+  await refreshNuxtData(`/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/locator-healing`);
+}
+
 const { copy } = useCopy();
 // Track which row was last copied so only that button shows the check icon —
 // useCopy's `copied` is a single shared ref and would flip every button at once.
@@ -199,18 +207,32 @@ function locatorNote(alt: RankedLocator): string {
         {{ sourceNote }}
       </span>
     </template>
-    <template v-if="pickTraceUrl" #actions>
-      <UButton
-        :to="pickTraceUrl"
-        target="_blank"
-        size="xs"
-        color="neutral"
-        variant="outline"
-        icon="i-lucide-crosshair"
-        title="Open the failure trace in the trace viewer — its Pick locator tool works on the recorded page snapshots"
-      >
-        Pick from trace
-      </UButton>
+    <template v-if="pickTraceUrl || healing?.failingLocator" #actions>
+      <div class="flex items-center gap-1">
+        <UButton
+          v-if="healing?.failingLocator"
+          size="xs"
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-mouse-pointer"
+          title="Open the failure-time DOM snapshot and click the element to pick a locator"
+          @click="pickerOpen = true"
+        >
+          Pick from snapshot
+        </UButton>
+        <UButton
+          v-if="pickTraceUrl"
+          :to="pickTraceUrl"
+          target="_blank"
+          size="xs"
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-crosshair"
+          title="Open the failure trace in the trace viewer — its Pick locator tool works on the recorded page snapshots"
+        >
+          Pick from trace
+        </UButton>
+      </div>
     </template>
 
     <!-- Human-confirmed pick — prominent callout at the very top -->
@@ -371,18 +393,32 @@ function locatorNote(alt: RankedLocator): string {
     <template v-if="storageKey" #folded>
       <span>No alternatives available</span>
     </template>
-    <template v-if="pickTraceUrl" #actions>
-      <UButton
-        :to="pickTraceUrl"
-        target="_blank"
-        size="xs"
-        color="neutral"
-        variant="outline"
-        icon="i-lucide-crosshair"
-        title="Open the failure trace in the trace viewer — its Pick locator tool works on the recorded page snapshots"
-      >
-        Pick from trace
-      </UButton>
+    <template v-if="pickTraceUrl || healing?.failingLocator" #actions>
+      <div class="flex items-center gap-1">
+        <UButton
+          v-if="healing?.failingLocator"
+          size="xs"
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-mouse-pointer"
+          title="Open the failure-time DOM snapshot and click the element to pick a locator"
+          @click="pickerOpen = true"
+        >
+          Pick from snapshot
+        </UButton>
+        <UButton
+          v-if="pickTraceUrl"
+          :to="pickTraceUrl"
+          target="_blank"
+          size="xs"
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-crosshair"
+          title="Open the failure trace in the trace viewer — its Pick locator tool works on the recorded page snapshots"
+        >
+          Pick from trace
+        </UButton>
+      </div>
     </template>
     <UAlert
       color="neutral"
@@ -391,4 +427,15 @@ function locatorNote(alt: RankedLocator): string {
       description="No pre-captured alternatives — this locator has never passed in a previous run. Enable Piwi dashboard fixtures to capture element attributes at test time."
     />
   </component>
+
+  <!-- Interactive DOM snapshot picker modal -->
+  <SnapshotLocatorPicker
+    v-if="healing?.failingLocator"
+    v-model:open="pickerOpen"
+    :run-id="runId"
+    :test-runs-case-id="testRunsCaseId"
+    :failing-locator="healing.failingLocator"
+    @confirmed="refreshHealing"
+    @close="pickerOpen = false"
+  />
 </template>
