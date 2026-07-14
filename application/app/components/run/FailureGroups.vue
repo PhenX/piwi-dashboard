@@ -145,7 +145,12 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
 
             <template #signals-cell="{ row }">
               <div
-                v-if="row.original.isNew || row.original.flaky || row.original.workerCorrelated"
+                v-if="
+                  row.original.isNew ||
+                  row.original.flaky ||
+                  row.original.workerCorrelated ||
+                  row.original.locatorHealing
+                "
                 class="flex flex-wrap gap-1"
               >
                 <UBadge v-if="row.original.isNew" color="warning" variant="subtle" size="sm"> New </UBadge>
@@ -158,6 +163,26 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
                   title="All failures ran on the same worker"
                 >
                   Same worker
+                </UBadge>
+                <UBadge
+                  v-if="row.original.locatorHealing?.healed"
+                  color="success"
+                  variant="subtle"
+                  size="sm"
+                  icon="i-lucide-circle-check"
+                  title="The recommended locator already passes at this call site in a later run"
+                >
+                  Healed
+                </UBadge>
+                <UBadge
+                  v-else-if="row.original.locatorHealing"
+                  color="success"
+                  variant="outline"
+                  size="sm"
+                  icon="i-lucide-bandage"
+                  :title="`Locator fix available: ${row.original.locatorHealing.recommended} — open the cluster to apply it`"
+                >
+                  Locator fix
                 </UBadge>
               </div>
               <span v-else class="text-gray-400 text-xs">—</span>

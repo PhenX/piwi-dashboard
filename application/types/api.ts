@@ -544,6 +544,12 @@ export interface FailureGroup {
   workerCorrelated: boolean;
   cases: FailureGroupCase[];
   diagnosis: DiagnosisCompact | null;
+  /**
+   * Present when this group's representative failure has a healable locator —
+   * the panel on the cluster page can apply it. `healed` when the recommended
+   * locator already passes at that call site in a later run.
+   */
+  locatorHealing?: { recommended: string; source: string; healed: boolean } | null;
 }
 
 /**
