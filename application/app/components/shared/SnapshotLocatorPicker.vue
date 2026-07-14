@@ -6,7 +6,12 @@
  * its attributes, ranked alternative locators are generated client-side, and
  * the user confirms one — which is saved back to the server.
  */
-import { generateAlternatives, type RankedLocator, type ElementAttributes } from '#shared/locator-generation';
+import {
+  generateAlternatives,
+  approximateAccessibleName,
+  type RankedLocator,
+  type ElementAttributes,
+} from '#shared/locator-generation';
 import type { LocatorFixRecommendation } from '#shared/locator-healing.types';
 import { recommendLocatorFix } from '#shared/locator-healing';
 import LocatorAlternativeRow from './LocatorAlternativeRow.vue';
@@ -58,6 +63,11 @@ watch(isOpen, (open) => {
     step.value = 'pick-element';
     contentHeight.value = 0;
     userZoomed.value = false;
+    // A previous session's pick must not leak into this one — Confirm would
+    // otherwise already be enabled with a stale selection.
+    pickedAttrs.value = null;
+    alternatives.value = [];
+    selectedAlt.value = null;
     fetchSnapshot();
   }
 });
@@ -189,12 +199,42 @@ function pickerScript(): string {
       attrs[k] = typeof v === 'string' ? v.slice(0,200) : v ? String(v).slice(0,200) : null;
     }
     var r = el.getBoundingClientRect();
+    // Uniqueness probe: how many elements each candidate selector matches in the
+    // snapshot — a count > 1 marks the alternative ambiguous so the generator
+    // drops it (mirrors the reporter's probeElementAttrs).
+    var counts = {};
+    try {
+      var cssEsc = function (s) { return g.CSS.escape(s); };
+      var countSel = function (sel) {
+        try { return doc.querySelectorAll(sel).length; } catch (err) { return undefined; }
+      };
+      if (attrs['data-testid']) counts.testId = countSel('[data-testid=' + JSON.stringify(attrs['data-testid']) + ']');
+      if (attrs.id) counts.id = countSel('#' + cssEsc(attrs.id));
+      if (attrs.name) counts.name = countSel('[name=' + JSON.stringify(attrs.name) + ']');
+      var classList = (attrs['class'] || '').split(/\\s+/).filter(function (c) { return c.length > 1; }).slice(0, 10);
+      if (classList.length > 0) {
+        var classCounts = {};
+        for (var j = 0; j < classList.length; j++) {
+          var n = countSel('.' + cssEsc(classList[j]));
+          if (n !== undefined) classCounts[classList[j]] = n;
+        }
+        counts.classes = classCounts;
+      }
+    } catch (err) { /* uniqueness probing is best-effort */ }
+    // Associated <label> text — the browser-computed accessible name for
+    // labeled form controls; names getByLabel/getByRole alternatives.
+    var labelText = null;
+    if (el.labels && el.labels.length > 0) {
+      labelText = (el.labels[0].textContent || '').replace(/\\s+/g,' ').trim().slice(0,120) || null;
+    }
     return {
       tagName: (el.tagName||'').toLowerCase(),
       attributes: attrs,
       textContent: (el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,80) || null,
       center: { x: Math.round(r.x+r.width/2), y: Math.round(r.y+r.height/2) },
       hasLabel: !!(el.labels && el.labels.length > 0),
+      labelText: labelText,
+      selectorCounts: counts,
     };
   }
 
@@ -441,8 +481,13 @@ function handleMessage(event: MessageEvent) {
     return;
   }
   if (event.data?.type === 'elementPicked' && event.data.attrs) {
-    pickedAttrs.value = event.data.attrs as ElementAttributes;
+    // The in-page probe can't compute the browser's real accessible name —
+    // derive one (label text first, then aria-label/text/title/placeholder) so
+    // getByRole(name)/getByLabel alternatives are generated for picks too.
+    const { labelText, ...probed } = event.data.attrs as ElementAttributes & { labelText?: string | null };
+    pickedAttrs.value = { ...probed, accessibleName: labelText ?? approximateAccessibleName(probed) };
     alternatives.value = generateAlternatives(pickedAttrs.value);
+    selectedAlt.value = null;
     step.value = 'review';
   }
   if (event.data?.type === 'pickerClosed') {
@@ -490,25 +535,44 @@ const recommendation = computed<LocatorFixRecommendation>(() =>
   recommendLocatorFix(props.failingLocator.method, alternatives.value),
 );
 
+const toast = useToast();
+
 async function confirm() {
   if (!selectedAlt.value) return;
   saving.value = true;
   try {
-    await $fetch(`/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/locator-pick`, {
-      method: 'POST',
-      body: {
-        failingLocator: props.failingLocator,
-        pickedLocator: selectedAlt.value,
-        elementTag: pickedAttrs.value?.tagName ?? 'unknown',
-        elementAttrs: pickedAttrs.value?.attributes ?? {},
+    const result = await $fetch<{ status: string }>(
+      `/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/locator-pick`,
+      {
+        method: 'POST',
+        body: {
+          failingLocator: props.failingLocator,
+          pickedLocator: selectedAlt.value,
+          element: pickedAttrs.value,
+        },
       },
+    );
+    if (result.status === 'ok') {
+      emit('confirmed', selectedAlt.value);
+    } else {
+      // Persisted nowhere — the stored error has no call site or locator
+      // signature to key the pick on. Copy still works from the review list.
+      toast.add({
+        title: 'Pick not saved',
+        description: 'This failure has no call-site or locator signature to attach the pick to.',
+        color: 'warning',
+        icon: 'i-lucide-alert-triangle',
+      });
+    }
+    isOpen.value = false;
+  } catch (err: unknown) {
+    // Keep the modal open so the user can retry, or copy the locator instead.
+    toast.add({
+      title: 'Could not save the pick',
+      description: errorMessage(err),
+      color: 'error',
+      icon: 'i-lucide-alert-triangle',
     });
-    emit('confirmed', selectedAlt.value);
-    isOpen.value = false;
-  } catch {
-    // Save failures are non-blocking — the pick still shows in the panel
-    emit('confirmed', selectedAlt.value);
-    isOpen.value = false;
   } finally {
     saving.value = false;
   }
@@ -533,24 +597,6 @@ function resetPicker() {
     if (iframeBlobUrl.value) URL.revokeObjectURL(iframeBlobUrl.value);
     iframeBlobUrl.value = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
   }
-}
-
-// ── Locator notes (from existing LocatorHealingPanel convention) ────────────
-
-function locatorNote(alt: RankedLocator): string {
-  const { method, score, args } = alt;
-  if (args && (args.anchorTestId || args.anchorSelector || args.anchorRole)) return 'scoped to a stable ancestor';
-  if (score >= 100) return 'most stable';
-  if (method === 'getByRole' && args && !('name' in args)) return 'name-free role — survives renames';
-  if (method === 'getByRole') return 'semantic ARIA locator';
-  if (method === 'getByLabel') return 'associated <label>';
-  if (method === 'getByPlaceholder') return 'input placeholder';
-  if (method === 'getByText') return 'visible text';
-  if (method === 'getByAltText') return 'image alt text';
-  if (method === 'getByTitle') return 'title attribute';
-  if (method === 'locator' && score >= 50) return 'stable selector';
-  if (method === 'locator') return 'CSS class';
-  return '';
 }
 
 // ── Copy ────────────────────────────────────────────────────────────────────
@@ -712,25 +758,29 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Alternatives list -->
-          <div class="space-y-1">
+          <div class="space-y-1" role="radiogroup" aria-label="Alternative locators">
             <LocatorAlternativeRow
               v-for="(alt, i) in alternatives"
               :key="i"
               :alt="alt"
-              :note="locatorNote(alt)"
               :copied="copiedKey === `picked-${i}`"
               :dense="true"
-              :class="selectedAlt?.locator === alt.locator ? 'ring-2 ring-primary/50 rounded' : ''"
-              class="cursor-pointer"
+              :selectable="true"
+              :selected="selectedAlt?.locator === alt.locator"
               @copy="copyLocator(alt.locator, `picked-${i}`)"
-              @click="selectAlternative(alt)"
+              @select="selectAlternative(alt)"
             />
           </div>
 
-          <!-- Recommendation -->
+          <!-- Recommendation — click selects it for Confirm; Copy stays separate -->
           <div
             v-if="recommendation.recommended"
-            class="rounded-lg border border-primary/40 bg-primary/5 p-3 flex items-center gap-3"
+            class="rounded-lg border border-primary/40 bg-primary/5 p-3 flex items-center gap-3 cursor-pointer"
+            role="button"
+            tabindex="0"
+            title="Select this locator for Confirm"
+            @click="selectAlternative(recommendation.recommended)"
+            @keydown.enter.prevent="selectAlternative(recommendation.recommended)"
           >
             <UIcon name="i-lucide-star" class="size-5 text-primary shrink-0" />
             <div class="flex-1 min-w-0">
@@ -744,7 +794,7 @@ onBeforeUnmount(() => {
               color="primary"
               variant="solid"
               :trailing-icon="copiedKey === 'rec' ? 'i-lucide-check' : 'i-lucide-copy'"
-              @click="copyLocator(recommendation.recommended.locator, 'rec')"
+              @click.stop="copyLocator(recommendation.recommended.locator, 'rec')"
             >
               Copy
             </UButton>

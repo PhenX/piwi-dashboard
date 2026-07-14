@@ -166,24 +166,6 @@ function copyLocator(text: string, key: string) {
 onBeforeUnmount(() => {
   if (copiedTimer) clearTimeout(copiedTimer);
 });
-
-function locatorNote(alt: RankedLocator): string {
-  const { method, score, args } = alt;
-  if (args && (args.anchorTestId || args.anchorSelector || args.anchorRole)) {
-    return 'scoped to a stable ancestor — survives renames';
-  }
-  if (score >= 100) return 'most stable — purpose-built for testing';
-  if (method === 'getByRole' && args && !('name' in args)) return 'name-free role — survives renames';
-  if (method === 'getByRole') return 'browser ARIA tree — semantic and stable';
-  if (method === 'getByLabel') return 'associated <label> element';
-  if (method === 'getByPlaceholder') return 'input placeholder';
-  if (method === 'getByText') return 'visible text';
-  if (method === 'getByAltText') return 'image alt text';
-  if (method === 'getByTitle') return 'title attribute';
-  if (method === 'locator' && score >= 50) return 'stable selector';
-  if (method === 'locator') return 'CSS class — may be fragile';
-  return '';
-}
 </script>
 
 <template>
@@ -291,7 +273,6 @@ function locatorNote(alt: RankedLocator): string {
         v-for="(alt, i) in alternatives"
         :key="i"
         :alt="alt"
-        :note="locatorNote(alt)"
         :copied="copiedKey === `alt-${i}`"
         @copy="copyLocator(alt.locator, `alt-${i}`)"
       />
