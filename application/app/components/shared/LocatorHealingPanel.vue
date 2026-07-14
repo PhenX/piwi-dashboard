@@ -286,6 +286,23 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
       </div>
     </template>
 
+    <!-- Closed loop: the recommended locator now passes at this call site -->
+    <UAlert
+      v-if="healing?.healedInRunId"
+      class="mb-3"
+      color="success"
+      icon="i-lucide-circle-check"
+      variant="subtle"
+      title="Locator healed"
+    >
+      <template #description>
+        The recommended locator now passes at this call site &mdash;
+        <NuxtLink :to="`/test-runs/${healing.healedInRunId}`" class="underline font-medium">
+          see run #{{ healing.healedInRunId }}</NuxtLink
+        >.
+      </template>
+    </UAlert>
+
     <!-- Human-confirmed pick — prominent callout at the very top -->
     <div v-if="userPick" class="rounded-lg border border-primary/50 bg-primary/10 p-3 mb-3 flex items-center gap-3">
       <UIcon name="i-lucide-user-check" class="size-5 text-primary shrink-0" />

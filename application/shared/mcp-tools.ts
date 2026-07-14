@@ -645,4 +645,6 @@ export interface McpLocatorHealingEntry {
   alternativesCount: number;
   /** True when the stored name-derived alternatives look broken by a rename (see LocatorHealingResult). */
   priorNameMayBeStale?: boolean;
+  /** When the recommended fix now passes at this call site, that later run's id (see LocatorHealingResult). */
+  healedInRunId?: number;
 }

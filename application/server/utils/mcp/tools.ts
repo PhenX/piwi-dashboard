@@ -709,6 +709,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
             : null,
           alternativesCount: (h.fromPriorSuccess?.length ?? 0) + (h.fromElementMatch?.length ?? 0),
           ...(h.priorNameMayBeStale ? { priorNameMayBeStale: true } : {}),
+          ...(h.healedInRunId ? { healedInRunId: h.healedInRunId } : {}),
         };
       })
       .filter((e: any) => e != null);
@@ -1242,6 +1243,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       // agent can apply the recommended fix without re-deriving either.
       location: h.location ?? null,
       sourceLine: h.sourceLine ? dropNulls({ line: h.sourceLine.line, text: h.sourceLine.text }) : null,
+      healedInRunId: h.healedInRunId ?? null,
       recommendation: h.recommendation
         ? dropNulls({
             recommended: h.recommendation.recommended

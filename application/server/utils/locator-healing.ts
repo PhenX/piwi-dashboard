@@ -537,6 +537,7 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
     .select({
       error: testRunsCases.error,
       testCaseId: testRunsCases.testCaseId,
+      testRunId: testRunsCases.testRunId,
       ariaSnapshot: testRunsCases.ariaSnapshot,
       testSource: testRunsCases.testSource,
     })
@@ -544,29 +545,9 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
     .where(eq(testRunsCases.id, testRunsCaseId));
 
   const row = rows[0];
-  if (!row?.error) {
-    return buildHealingResult(null, null, null, 'none');
-  }
+  if (!row?.error) return buildHealingResult(null, null, null, 'none');
 
-  const error = row.error;
   const testCaseId = row.testCaseId;
-
-  // Parse the failing locator from the error (for display + signature lookup).
-  // Use the chain leaf — the innermost call identifies the resolved element and
-  // is what the capture side recorded, so chained locators match too.
-  const selector = extractLeafSelector(error);
-  const parsedLocator = selector ? parseLocatorExpression(selector) : null;
-  const failingLocator = parsedLocator ? { method: parsedLocator.method, args: parsedLocator.args } : null;
-  const location = extractErrorLocation(error);
-  const sourceLine = parseFailingSourceLine(row.testSource, location);
-
-  // Stamp the failing call site + source line onto whichever result the ladder
-  // returns, so every rung can power the panel's "suggested edit".
-  const attach = (r: LocatorHealingResult): LocatorHealingResult => {
-    r.location = location;
-    r.sourceLine = sourceLine;
-    return r;
-  };
 
   // Load every snapshot for this test case once (indexed by test_case_id). A
   // case has only a handful of locators, so matching in memory is cheaper than
@@ -575,48 +556,114 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
     ? await db.select().from(locatorSnapshots).where(eq(locatorSnapshots.testCaseId, testCaseId))
     : [];
 
-  // Ladder 1: call-site location. Prefer an exact file:line:col match, then
-  // fall back to file:line so a column drift between the runtime capture and
-  // the error location still resolves. This is what disambiguates repeated
-  // identical locators (e.g. two "Delete" buttons on different rows).
+  return resolveHealingForCase(
+    { error: row.error, ariaSnapshot: row.ariaSnapshot, testSource: row.testSource, failingRunId: row.testRunId },
+    snaps,
+    testCaseId ? (sig, method) => findCrossTestSnapshot(db, testCaseId, sig, method) : null,
+  );
+}
+
+/** Per-case healing input — the failing execution's stored fields. */
+export interface HealingCaseInput {
+  error: string | null;
+  ariaSnapshot?: string | null;
+  testSource?: string | null;
+  /** The failing execution's run id — enables healed-run detection. */
+  failingRunId?: number | null;
+}
+
+/**
+ * Resolve locator healing for one failing case from its pre-loaded snapshots.
+ * The single-case and batch entry points share this one ladder; the DB-touching
+ * cross-test lookup is injected as `findCrossTest` (null to skip it) so the core
+ * stays directly unit-testable:
+ *
+ * 1. Call-site location — exact `file:line:col`, then `file:line` (tolerates a
+ *    column drift). Disambiguates repeated identical locators by where they run.
+ * 2. Locator signature — method + ordered string literals; survives line shifts.
+ * 2.5. Cross-test — the same signature captured by another test in the project.
+ * 3. ARIA fallback — generated from the failing run's ARIA snapshot.
+ *
+ * The failing call site, source line, and any healed-run signal are stamped onto
+ * whichever rung wins.
+ */
+export async function resolveHealingForCase(
+  input: HealingCaseInput,
+  snaps: LocatorSnapshotRow[],
+  findCrossTest: ((sig: string, method: string | null) => Promise<LocatorSnapshotRow | null>) | null,
+): Promise<LocatorHealingResult> {
+  if (!input.error) return buildHealingResult(null, null, null, 'none');
+  const error = input.error;
+  const aria = input.ariaSnapshot ?? null;
+
+  // Parse the failing locator from the error (for display + signature lookup).
+  // Use the chain leaf — the innermost call identifies the resolved element and
+  // is what the capture side recorded, so chained locators match too.
+  const selector = extractLeafSelector(error);
+  const parsed = selector ? parseLocatorExpression(selector) : null;
+  const failingLocator = parsed ? { method: parsed.method, args: parsed.args } : null;
+  const location = extractErrorLocation(error);
+  const sourceLine = parseFailingSourceLine(input.testSource, location);
+  // Computed up front so healed detection (below) can compare against it in
+  // every rung, including the location match that doesn't otherwise need it.
+  const failingSig = selector ? await locatorSignatureFromExpression(selector) : null;
+  const method = selector ? locatorExpressionMethod(selector) : null;
+
+  const finish = async (r: LocatorHealingResult): Promise<LocatorHealingResult> => {
+    r.location = location;
+    r.sourceLine = sourceLine;
+    await stampHealedRun(r, snaps, failingSig, input.failingRunId ?? null);
+    return r;
+  };
+
+  // Ladder 1: call-site location.
   if (location && snaps.length > 0) {
     const hit = snaps.find((s) => s.location === location) ?? snaps.find((s) => sameFileLine(s.location, location));
-    if (hit) {
-      return attach(resolveStoredHit(failingLocator, hit, row.ariaSnapshot ?? null, 'prior-run'));
+    if (hit) return finish(resolveStoredHit(failingLocator, hit, aria, 'prior-run'));
+  }
+
+  if (failingSig) {
+    // Ladder 2: locator signature — survives line shifts; returns the first match.
+    const hit = snaps.find((s) => s.usedArgsFp === failingSig && (!method || s.usedMethod === method));
+    if (hit) return finish(resolveStoredHit(failingLocator, hit, aria, 'fingerprint'));
+
+    // Ladder 2.5: cross-test — same signature captured by another test in the
+    // project (freshest wins). Injected so this core needs no DB handle.
+    if (findCrossTest) {
+      const crossHit = await findCrossTest(failingSig, method);
+      if (crossHit) return finish(resolveStoredHit(failingLocator, crossHit, aria, 'cross-test'));
     }
   }
 
-  if (selector) {
-    const sig = await locatorSignatureFromExpression(selector);
-    const method = locatorExpressionMethod(selector);
+  // Ladder 3: ARIA snapshot fallback.
+  const ariaAlts = generateFromAriaSnapshot(aria, failingLocator);
+  if (ariaAlts) return finish(buildHealingResult(failingLocator, null, ariaAlts, 'aria-snapshot'));
+  return finish(buildHealingResult(failingLocator, null, null, 'none'));
+}
 
-    // Ladder 2: locator signature (method + ordered string literals) — survives
-    // line shifts. Cannot tell apart repeated identical locators; returns the
-    // first match.
-    const hit = snaps.find((s) => s.usedArgsFp === sig && (!method || s.usedMethod === method));
-    if (hit) {
-      return attach(resolveStoredHit(failingLocator, hit, row.ariaSnapshot ?? null, 'fingerprint'));
-    }
-
-    // Ladder 2.5: cross-test — the same locator captured by another test in
-    // the same project (assert-only locators are never captured by their own
-    // test, but an action elsewhere frequently touches the same element).
-    // Freshest capture wins.
-    if (testCaseId) {
-      const crossHit = await findCrossTestSnapshot(db, testCaseId, sig, method);
-      if (crossHit) {
-        return attach(resolveStoredHit(failingLocator, crossHit, row.ariaSnapshot ?? null, 'cross-test'));
-      }
-    }
-  }
-
-  // Ladder 3: ARIA snapshot fallback
-  const ariaAlts = generateFromAriaSnapshot(row.ariaSnapshot ?? null, failingLocator);
-  if (ariaAlts) {
-    return attach(buildHealingResult(failingLocator, null, ariaAlts, 'aria-snapshot'));
-  }
-
-  return attach(buildHealingResult(failingLocator, null, null, 'none'));
+/**
+ * Close the loop: when the recommended fix now passes at this call site — one of
+ * the test's snapshots carries the recommendation's locator signature, captured
+ * in a run other than the failing one — stamp that run id so the panel can
+ * confirm "healed in run #N". Uses the already-loaded snapshots (no extra
+ * query). Skipped when the recommendation is the original locator (a flaky pass
+ * — nothing was fixed) or a chained anchor whose re-captured leaf signature we
+ * can't reconstruct from the chain expression.
+ */
+async function stampHealedRun(
+  result: LocatorHealingResult,
+  snaps: LocatorSnapshotRow[],
+  failingSig: string | null,
+  failingRunId: number | null,
+): Promise<void> {
+  const rec = result.recommendation?.recommended;
+  if (!rec) return;
+  const recSig = await locatorSignatureFromExpression(rec.locator);
+  if (!recSig || (failingSig && recSig === failingSig)) return;
+  const healed = snaps.find(
+    (s) => s.usedArgsFp === recSig && s.lastSeenRunId != null && s.lastSeenRunId !== failingRunId,
+  );
+  if (healed) result.healedInRunId = healed.lastSeenRunId;
 }
 
 /**
@@ -666,7 +713,9 @@ export async function getLocatorHealingBatch(
       id: testRunsCases.id,
       error: testRunsCases.error,
       testCaseId: testRunsCases.testCaseId,
+      testRunId: testRunsCases.testRunId,
       ariaSnapshot: testRunsCases.ariaSnapshot,
+      testSource: testRunsCases.testSource,
     })
     .from(testRunsCases)
     .where(inArray(testRunsCases.id, testRunsCaseIds));
@@ -684,57 +733,18 @@ export async function getLocatorHealingBatch(
     else snapsByTc.set(s.testCaseId, [s]);
   }
 
-  // 3. Run the matching ladder for each case
+  // 3. Run the shared ladder for each case (cross-test still queried per case,
+  // but only when the cheaper location/signature rungs miss).
   for (const row of caseRows) {
-    if (!row.error) {
-      results.set(row.id, buildHealingResult(null, null, null, 'none'));
-      continue;
-    }
-
-    const error = row.error;
     const snaps = snapsByTc.get(row.testCaseId) ?? [];
-
-    const selector = extractLeafSelector(error);
-    const parsedLocator = selector ? parseLocatorExpression(selector) : null;
-    const failingLocator = parsedLocator ? { method: parsedLocator.method, args: parsedLocator.args } : null;
-    const location = extractErrorLocation(error);
-
-    // Ladder 1: location
-    if (location && snaps.length > 0) {
-      const hit = snaps.find((s) => s.location === location) ?? snaps.find((s) => sameFileLine(s.location, location));
-      if (hit) {
-        results.set(row.id, resolveStoredHit(failingLocator, hit, row.ariaSnapshot ?? null, 'prior-run'));
-        continue;
-      }
-    }
-
-    // Ladder 2: signature; ladder 2.5: cross-test (same locator captured by
-    // another test in the project)
-    if (selector) {
-      const sig = await locatorSignatureFromExpression(selector);
-      const method = locatorExpressionMethod(selector);
-      const hit = snaps.find((s) => s.usedArgsFp === sig && (!method || s.usedMethod === method));
-      if (hit) {
-        results.set(row.id, resolveStoredHit(failingLocator, hit, row.ariaSnapshot ?? null, 'fingerprint'));
-        continue;
-      }
-      if (row.testCaseId) {
-        const crossHit = await findCrossTestSnapshot(db, row.testCaseId, sig, method);
-        if (crossHit) {
-          results.set(row.id, resolveStoredHit(failingLocator, crossHit, row.ariaSnapshot ?? null, 'cross-test'));
-          continue;
-        }
-      }
-    }
-
-    // Ladder 3: ARIA fallback
-    const ariaAlts = generateFromAriaSnapshot(row.ariaSnapshot ?? null, failingLocator);
-    if (ariaAlts) {
-      results.set(row.id, buildHealingResult(failingLocator, null, ariaAlts, 'aria-snapshot'));
-      continue;
-    }
-
-    results.set(row.id, buildHealingResult(failingLocator, null, null, 'none'));
+    results.set(
+      row.id,
+      await resolveHealingForCase(
+        { error: row.error, ariaSnapshot: row.ariaSnapshot, testSource: row.testSource, failingRunId: row.testRunId },
+        snaps,
+        row.testCaseId ? (sig, method) => findCrossTestSnapshot(db, row.testCaseId, sig, method) : null,
+      ),
+    );
   }
 
   return results;
