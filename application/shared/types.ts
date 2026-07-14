@@ -1,4 +1,15 @@
 import type { LocatorSnapshot } from './locator-healing.types';
+import type {
+  BrowserConfig,
+  FilterDetails,
+  SuiteConfigEntry,
+  TestAnnotation,
+  TestStepEvent,
+} from '@piwitests/core/wire';
+
+// The wire leaf shapes live in @piwitests/core (shared with the reporter);
+// re-export them so `#shared/types` consumers keep importing them from here.
+export type { BrowserConfig, FilterDetails, SuiteConfigEntry, TestAnnotation, TestStepEvent };
 
 // ── Test status types ──────────────────────────────────────────────────────────
 // These mirror the values stored in the test_runs.status column and the
@@ -28,42 +39,6 @@ export enum Role {
   ADMINISTRATOR = 'administrator',
   REPORTER = 'reporter',
   USER = 'user',
-}
-
-// ── Suite hierarchy config ────────────────────────────────────────────────────
-// One entry per level in suitePath (parallel to the array).
-
-export interface SuiteConfigEntry {
-  mode: 'parallel' | 'serial' | 'default';
-  annotations: Array<{ type: string; description?: string }>;
-}
-
-export interface TestAnnotation {
-  type: string;
-  description?: string;
-}
-
-// ── Browser/project config ────────────────────────────────────────────────────
-
-export interface BrowserConfig {
-  projectName?: string;
-  browserName?: string | null;
-  channel?: string | null;
-  viewport?: { width: number; height: number } | null;
-  deviceScaleFactor?: number | null;
-  isMobile?: boolean | null;
-  hasTouch?: boolean | null;
-  locale?: string | null;
-  timezoneId?: string | null;
-  geolocation?: { longitude: number; latitude: number; accuracy?: number } | null;
-  colorScheme?: string | null;
-  reducedMotion?: string | null;
-  forcedColors?: string | null;
-  offline?: boolean | null;
-  bypassCSP?: boolean | null;
-  javaScriptEnabled?: boolean | null;
-  serviceWorkers?: string | null;
-  userAgent?: string | null;
 }
 
 // ── Test case payload ─────────────────────────────────────────────────────────
@@ -117,13 +92,6 @@ export interface TestRunCounters {
 
 export type FlakyRootCause = 'timing' | 'network' | 'assertion' | 'environment' | 'other';
 
-export interface FilterDetails {
-  grep?: string;
-  grepInvert?: string;
-  /** Positional file/path filters from the CLI invocation (e.g. ["tests/login.spec.ts"]). */
-  files?: string[];
-}
-
 export interface TestRunSubmitPayload {
   projectName: string;
   projectDescription?: string;
@@ -148,19 +116,6 @@ export interface TestRunSubmitPayload {
   shardTotal?: number;
   isFullRun?: boolean;
   filterDetails?: FilterDetails | null;
-}
-
-// ── Step / hook events within a test case ─────────────────────────────────────
-// Represents a single step (hook, fixture, or user-defined action) with its
-// absolute start time and duration, used by WorkersTimeline to render segments.
-
-export interface TestStepEvent {
-  title: string;
-  category: 'hook' | 'fixture' | 'test.step' | 'expect' | 'wait';
-  startedAt: number;
-  duration: number;
-  status: string;
-  location?: string | null;
 }
 
 // ── Streaming event payload ───────────────────────────────────────────────────

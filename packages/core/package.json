@@ -8,7 +8,9 @@
     ".": "./src/index.ts",
     "./locator-generation": "./src/locator-generation.ts",
     "./locator-fingerprint": "./src/locator-fingerprint.ts",
-    "./locator-healing-types": "./src/locator-healing-types.ts"
+    "./locator-healing-types": "./src/locator-healing-types.ts",
+    "./locator-methods": "./src/locator-methods.ts",
+    "./wire": "./src/wire.ts"
   },
   "scripts": {
     "core:test": "vitest run",

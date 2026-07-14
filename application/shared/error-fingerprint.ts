@@ -16,6 +16,7 @@
  * everything here must work in Node and service-worker contexts, so hashing
  * uses Web Crypto instead of node:crypto.
  */
+import { LOCATOR_BUILDER_METHODS } from '@piwitests/core/locator-methods';
 
 /**
  * Bump when the normalization algorithm changes. The version is part of the
@@ -162,19 +163,10 @@ export function extractSelector(text: string): string | null {
 
 /**
  * Locator-creating methods whose innermost call identifies the resolved element.
- * Mirrors the reporter's `LOCATOR_CREATING_CHAINS` (`frameLocator` excluded — the
- * capture proxy does not wrap frame locators).
+ * The single source of truth (shared with the reporter's capture proxy) lives in
+ * `@piwitests/core/locator-methods`.
  */
-const LEAF_SELECTOR_METHODS = [
-  'getByRole',
-  'getByTestId',
-  'getByText',
-  'getByLabel',
-  'getByPlaceholder',
-  'getByAltText',
-  'getByTitle',
-  'locator',
-];
+const LEAF_SELECTOR_METHODS = LOCATOR_BUILDER_METHODS;
 
 /**
  * Extract the leaf (innermost) locator call from a chained locator in the error,

@@ -10,3 +10,5 @@
 export * from './locator-healing-types';
 export * from './locator-generation';
 export * from './locator-fingerprint';
+export * from './locator-methods';
+export * from './wire';

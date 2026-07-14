@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { parseAriaCandidates, textSimilarity } from '@piwitests/core/locator-fingerprint';
+import { LOCATOR_BUILDER_METHODS } from '@piwitests/core/locator-methods';
 
 /**
  * Reporter-local locator healing.
@@ -69,16 +70,7 @@ export function dedupeSnapshotsByLocation(snaps: LocatorSnapshot[]): LocatorSnap
  * `application/tests/fixtures.ts` so the two stay in sync (a prior drift missed
  * `scrollIntoViewIfNeeded`).
  */
-export const LOCATOR_METHODS: string[] = [
-  'getByRole',
-  'getByTestId',
-  'getByText',
-  'getByLabel',
-  'getByPlaceholder',
-  'getByAltText',
-  'getByTitle',
-  'locator',
-];
+export const LOCATOR_METHODS: string[] = [...LOCATOR_BUILDER_METHODS];
 
 /**
  * Methods that can be chained onto a wrapped locator. Locator-creating chains
