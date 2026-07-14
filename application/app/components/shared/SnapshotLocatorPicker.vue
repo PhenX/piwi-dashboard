@@ -6,15 +6,24 @@
  * its attributes, ranked alternative locators are generated client-side, and
  * the user confirms one — which is saved back to the server.
  */
-import { generateAlternatives, type RankedLocator, type ElementAttributes } from '#shared/locator-generation';
-import type { LocatorFixRecommendation } from '#shared/locator-healing.types';
+import {
+  generateAlternatives,
+  approximateAccessibleName,
+  CAPTURED_ATTRIBUTES,
+  type RankedLocator,
+  type ElementAttributes,
+} from '#shared/locator-generation';
+import type { LocatorFixRecommendation, LocatorHealingResult } from '#shared/locator-healing.types';
 import { recommendLocatorFix } from '#shared/locator-healing';
+import { buildPickerDocument, deriveHighlightHints } from '~/utils/snapshot-picker-script';
 import LocatorAlternativeRow from './LocatorAlternativeRow.vue';
 
 const props = defineProps<{
   runId: number;
   testRunsCaseId: number;
   failingLocator: { method: string; args: Record<string, unknown> };
+  /** The healing result — its candidate names pre-highlight the likely element. */
+  healing?: LocatorHealingResult | null;
 }>();
 
 const emit = defineEmits<{
@@ -58,6 +67,14 @@ watch(isOpen, (open) => {
     step.value = 'pick-element';
     contentHeight.value = 0;
     userZoomed.value = false;
+    // A previous session's pick must not leak into this one — Confirm would
+    // otherwise already be enabled with a stale selection.
+    pickedAttrs.value = null;
+    alternatives.value = [];
+    selectedAlt.value = null;
+    searchQuery.value = '';
+    searchCount.value = 0;
+    searchIndex.value = -1;
     fetchSnapshot();
   }
 });
@@ -71,231 +88,23 @@ const iframeReady = ref(false);
 const pickedAttrs = ref<ElementAttributes | null>(null);
 const alternatives = ref<RankedLocator[]>([]);
 
-// ── In-iframe picker script (self-contained, serialized into the iframe) ────
+// ── Build iframe content ────────────────────────────────────
 
-function pickerScript(): string {
-  return `
-(function () {
-  if (window.__piwiPickerInstalled) return;
-  window.__piwiPickerInstalled = true;
-  var doc = document;
-  var g = window;
-  var Z = 2147483600;
-
-  // Highlight overlay
-  var highlight = doc.createElement('div');
-  highlight.id = '__piwi_picker_highlight';
-  highlight.style.cssText =
-    'position:fixed;pointer-events:none;z-index:' + Z + ';display:none;box-sizing:border-box;' +
-    'border:2px solid #7c3aed;background:rgba(124,58,237,.12);border-radius:3px;';
-  doc.body.appendChild(highlight);
-
-  // Banner
-  var banner = doc.createElement('div');
-  banner.id = '__piwi_picker_banner';
-  banner.style.cssText =
-    'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:' + (Z + 2) + ';' +
-    'background:#111827;color:#f9fafb;font:13px/1.5 system-ui,sans-serif;' +
-    'padding:10px 16px;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.4);max-width:80vw;';
-  banner.innerHTML = '<div>Click an element to generate locators</div>' +
-    '<div style="color:#9ca3af;margin-top:3px;font-size:11px">\u2191 parent \u00b7 \u2193 child \u00b7 Esc skip</div>';
-  doc.body.appendChild(banner);
-  g.parent.postMessage({ type: 'pickerReady' }, '*');
-
-  function escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  function describe(el) {
-    var tag = (el.tagName || '?').toLowerCase();
-
-    var testId = el.getAttribute && el.getAttribute('data-testid');
-    if (testId) return "getByTestId('" + testId + "')";
-
-    if (el.labels && el.labels.length > 0) {
-      var labelText = (el.labels[0].textContent || '').replace(/\\s+/g,' ').trim().slice(0,80);
-      if (labelText) return "getByLabel('" + labelText + "')";
-    }
-
-    var ariaLabel = el.getAttribute && el.getAttribute('aria-label');
-    if (ariaLabel) return "getByLabel('" + ariaLabel + "')";
-
-    var placeholder = el.getAttribute && el.getAttribute('placeholder');
-    if (placeholder) return "getByPlaceholder('" + placeholder + "')";
-
-    var alt = el.getAttribute && el.getAttribute('alt');
-    if (alt) return "getByAltText('" + alt + "')";
-
-    var titleAttr = el.getAttribute && el.getAttribute('title');
-    if (titleAttr) return "getByTitle('" + titleAttr + "')";
-
-    if (el.id) return "locator('#" + el.id + "')";
-
-    var cls = ((el.getAttribute && el.getAttribute('class')) || '').split(/\\s+/).find(function(c){return c.length>1;});
-    if (cls) return "locator('." + cls + "')";
-
-    return tag;
-  }
-
-  function buildChain(raw) {
-    var chain = [];
-    var node = raw;
-    while (node && chain.length < 15) {
-      var t = (node.tagName || '').toLowerCase();
-      if (t === 'body' || t === 'html') break;
-      chain.push(node);
-      node = node.parentElement;
-    }
-    return chain.length ? chain : [raw];
-  }
-
-  var ACTIONABLE = ['button','a','input','select','textarea','summary','option'];
-  function snapIndex(chain) {
-    for (var i=0;i<Math.min(chain.length,4);i++) {
-      var el = chain[i];
-      var t = (el.tagName||'').toLowerCase();
-      if (ACTIONABLE.indexOf(t) !== -1) return i;
-      if (el.getAttribute&&(el.getAttribute('role')||el.getAttribute('data-testid'))) return i;
-    }
-    return 0;
-  }
-
-  var chain = [];
-  var idx = 0;
-  var lastRaw = null;
-  var PROBED_ATTRS = 'id,class,name,data-testid,placeholder,alt,title,aria-label,aria-level,role,type,href,multiple'.split(',');
-
-  function current() { return chain[idx] || null; }
-
-  function refresh() {
-    var el = current();
-    if (!el) { highlight.style.display='none'; return; }
-    var r = el.getBoundingClientRect();
-    highlight.style.display='block';
-    highlight.style.left=r.left+'px'; highlight.style.top=r.top+'px';
-    highlight.style.width=r.width+'px'; highlight.style.height=r.height+'px';
-    var foot = document.getElementById('__piwi_picker_foot');
-    if (foot) foot.textContent=describe(el) + ' \u2014 click to pick \u00b7 \u2191 parent \u00b7 \u2193 child \u00b7 Esc skip';
-  }
-
-  var foot = banner.querySelector('[style*=margin]');
-  if (foot) foot.id = '__piwi_picker_foot';
-
-  function probe(el) {
-    var attrs = {};
-    for (var i=0;i<PROBED_ATTRS.length;i++) {
-      var k = PROBED_ATTRS[i];
-      var v = el.getAttribute(k) || el[k];
-      attrs[k] = typeof v === 'string' ? v.slice(0,200) : v ? String(v).slice(0,200) : null;
-    }
-    var r = el.getBoundingClientRect();
-    return {
-      tagName: (el.tagName||'').toLowerCase(),
-      attributes: attrs,
-      textContent: (el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,80) || null,
-      center: { x: Math.round(r.x+r.width/2), y: Math.round(r.y+r.height/2) },
-      hasLabel: !!(el.labels && el.labels.length > 0),
-    };
-  }
-
-  function stop(e) { e.preventDefault(); e.stopImmediatePropagation(); }
-
-  function isOwn(el) { return el === banner || el === highlight || (banner.contains && banner.contains(el)); }
-
-  var bannerDocked = 'top';
-  function dockBanner(side) {
-    if (bannerDocked === side) return;
-    bannerDocked = side;
-    if (side === 'bottom') {
-      banner.style.top = 'auto';
-      banner.style.bottom = '12px';
-    } else {
-      banner.style.top = '12px';
-      banner.style.bottom = 'auto';
-    }
-  }
-
-  function onMove(e) {
-    var raw = e.target;
-    if (!raw || isOwn(raw)) { highlight.style.display='none'; return; }
-    if (raw !== lastRaw) { lastRaw=raw; chain=buildChain(raw); idx=snapIndex(chain); }
-    refresh();
-    var el = current();
-    if (el) {
-      var r = el.getBoundingClientRect();
-      var bannerRect = banner.getBoundingClientRect();
-      var margin = 8;
-      if (
-        r.left < bannerRect.right + margin &&
-        r.right > bannerRect.left - margin &&
-        r.top < bannerRect.bottom + margin &&
-        r.bottom > bannerRect.top - margin
-      ) {
-        dockBanner(bannerDocked === 'top' ? 'bottom' : 'top');
-      }
-    }
-  }
-
-  function handleKey(k) {
-    if (k === 'Escape') { doClose(); return; }
-    if (k === 'ArrowUp')   { idx=Math.min(idx+1,chain.length-1); refresh(); }
-    if (k === 'ArrowDown') { idx=Math.max(idx-1,0); refresh(); }
-  }
-  function onKey(e) {
-    if (e.key==='Escape'||e.key==='ArrowUp'||e.key==='ArrowDown') { stop(e); handleKey(e.key); }
-  }
-  // The iframe rarely holds keyboard focus — the modal's focus-trap keeps it in
-  // the parent — so the host forwards arrow/Esc presses here via postMessage.
-  function onParentMsg(e) {
-    var d = e.data;
-    if (d && d.type === 'piwiPickerKey' && typeof d.key === 'string') handleKey(d.key);
-  }
-
-  function onClick(e) {
-    stop(e);
-    var el = current();
-    if (!el || isOwn(e.target)) return;
-    var attrs = probe(el);
-    highlight.style.display='none';
-    banner.innerHTML='<div style="text-align:center;color:#9ca3af;">Analyzing element\u2026</div>';
-    removeListeners();
-    g.parent.postMessage({ type: 'elementPicked', attrs: attrs }, '*');
-  }
-
-  var suppressed = ['mousedown','mouseup','pointerdown','pointerup','auxclick','dblclick'];
-  function removeListeners() {
-    doc.removeEventListener('mousemove', onMove, true);
-    doc.removeEventListener('click', onClick, true);
-    doc.removeEventListener('keydown', onKey, true);
-    g.removeEventListener('message', onParentMsg, false);
-    for (var i=0;i<suppressed.length;i++) doc.removeEventListener(suppressed[i], stop, true);
-  }
-
-  function doClose() {
-    removeListeners();
-    highlight.remove();
-    banner.remove();
-    g.parent.postMessage({ type: 'pickerClosed' }, '*');
-  }
-
-  doc.addEventListener('mousemove', onMove, true);
-  doc.addEventListener('click', onClick, true);
-  doc.addEventListener('keydown', onKey, true);
-  g.addEventListener('message', onParentMsg, false);
-  for (var i=0;i<suppressed.length;i++) doc.addEventListener(suppressed[i], stop, true);
-})();
-`;
-}
-
-// ── Build iframe content ─────────────────────────────────────────────────────
-
-// The snapshot HTML is rendered verbatim into a same-origin blob iframe. The
-// picker script is injected on `load` from the parent (see `onIframeLoad`)
-// rather than baked into the HTML string — the server caps the DOM and may
-// truncate mid-element, leaving no `</body>` to splice before, so string-based
-// injection is unreliable. The picker's overlay/banner carry their own inline
-// styles, so no extra <style> is needed either.
+// The snapshot HTML plus the serialized picker script (appended at the end so a
+// truncated document still runs it) load into a HARDENED blob iframe:
+// sandbox="allow-scripts" with NO allow-same-origin, so the picker runs on an
+// opaque origin and can reach the host only via postMessage. A sanitizer bypass
+// in the snapshot therefore cannot touch the dashboard's cookies/storage/API.
+// The picker's overlay/banner carry their own inline styles, so no extra <style>
+// is needed. <base> is stripped so subresources can't be redirected to the
+// tested app.
 const iframeBlobUrl = ref<string | undefined>(undefined);
+
+function makeBlobUrl(html: string): string {
+  return URL.createObjectURL(
+    new Blob([buildPickerDocument(html, { probedAttrs: CAPTURED_ATTRIBUTES })], { type: 'text/html' }),
+  );
+}
 
 watch(
   () => snapshot.value?.html,
@@ -306,31 +115,10 @@ watch(
       iframeBlobUrl.value = undefined;
     }
     if (!html) return;
-    iframeBlobUrl.value = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    iframeBlobUrl.value = makeBlobUrl(html);
   },
   { immediate: true },
 );
-
-/**
- * Inject the picker script into the iframe once its document has parsed. Runs
- * parent-side against the same-origin blob document, so a truncated or
- * malformed snapshot can't stop the picker from initializing.
- */
-function onIframeLoad() {
-  const el = iframeRef.value;
-  // Ignore the load fired by `cleanupIframe()` navigating to about:blank.
-  if (!el || !el.src.startsWith('blob:')) return;
-  try {
-    const doc = el.contentDocument;
-    if (!doc?.body) return;
-    const script = doc.createElement('script');
-    script.textContent = pickerScript();
-    doc.body.appendChild(script);
-    measureContent();
-  } catch {
-    // Cross-origin or detached document — leave the loading overlay up.
-  }
-}
 
 // ── Viewport-accurate rendering (trace-viewer style) ────────────────────────
 // Size the iframe to the recorded page viewport width and its full content
@@ -389,24 +177,9 @@ watch([fitZoom, viewport], () => {
   if (!userZoomed.value) zoom.value = fitZoom.value;
 });
 
-// Measure the iframe's full content height so the whole page is visible and
-// pickable (not just the recorded viewport slice). Reflow-aware — external CSS
-// and images settle asynchronously.
-let contentObserver: ResizeObserver | null = null;
-function measureContent() {
-  const doc = iframeRef.value?.contentDocument;
-  const root = doc?.documentElement;
-  if (!root) return;
-  const update = () => {
-    const h = Math.max(root.scrollHeight, doc?.body?.scrollHeight ?? 0, viewport.value?.height ?? 0);
-    if (Math.abs(h - contentHeight.value) > 1) contentHeight.value = h;
-  };
-  update();
-  contentObserver?.disconnect();
-  contentObserver = new ResizeObserver(update);
-  contentObserver.observe(root);
-  if (doc?.body) contentObserver.observe(doc.body);
-}
+// The iframe's full content height arrives over postMessage from the in-iframe
+// ResizeObserver (see `piwiContentHeight` in handleMessage) — the opaque-origin
+// sandbox means the host can no longer read the iframe's document to measure it.
 
 // Track the pane width for the fit calculation.
 let stageObserver: ResizeObserver | null = null;
@@ -421,7 +194,6 @@ watch(stageRef, (el) => {
 });
 onBeforeUnmount(() => {
   stageObserver?.disconnect();
-  contentObserver?.disconnect();
 });
 
 // ── Iframe cleanup ───────────────────────────────────────────────────────────
@@ -436,21 +208,77 @@ function handleMessage(event: MessageEvent) {
   // Only trust messages from our own iframe — ignore stray postMessages from
   // other frames, extensions, or the snapshot's own (script-stripped) content.
   if (!iframeRef.value || event.source !== iframeRef.value.contentWindow) return;
-  if (event.data?.type === 'pickerReady') {
+  const data = event.data;
+  if (data?.type === 'pickerReady') {
     iframeReady.value = true;
+    // Pre-highlight the element the failing locator meant to hit, so the user
+    // does not have to hunt for it in a full-page snapshot.
+    postHighlightHints();
     return;
   }
-  if (event.data?.type === 'elementPicked' && event.data.attrs) {
-    pickedAttrs.value = event.data.attrs as ElementAttributes;
+  if (data?.type === 'piwiContentHeight' && typeof data.height === 'number') {
+    contentHeight.value = Math.max(data.height, viewport.value?.height ?? 0);
+    return;
+  }
+  if (data?.type === 'piwiScrollTo' && typeof data.y === 'number') {
+    // The picker found a match; scroll the stage so it's in view (content-space
+    // y → stage-space via the current zoom).
+    const stage = stageRef.value;
+    if (stage) stage.scrollTo({ top: Math.max(0, data.y * zoom.value - 80), behavior: 'smooth' });
+    return;
+  }
+  if (data?.type === 'piwiSearchResult') {
+    searchCount.value = typeof data.count === 'number' ? data.count : 0;
+    searchIndex.value = typeof data.index === 'number' ? data.index : -1;
+    return;
+  }
+  if (data?.type === 'elementPicked' && data.attrs) {
+    // The in-page probe can't compute the browser's real accessible name —
+    // derive one (label text first, then aria-label/text/title/placeholder) so
+    // getByRole(name)/getByLabel alternatives are generated for picks too.
+    const { labelText, ...probed } = data.attrs as ElementAttributes & { labelText?: string | null };
+    pickedAttrs.value = { ...probed, accessibleName: labelText ?? approximateAccessibleName(probed) };
     alternatives.value = generateAlternatives(pickedAttrs.value);
+    selectedAlt.value = null;
     step.value = 'review';
   }
-  if (event.data?.type === 'pickerClosed') {
+  if (data?.type === 'pickerClosed') {
     // Esc inside the iframe tears the picker down — close the whole modal rather
     // than leaving a blank iframe with no way to re-pick.
     close();
   }
 }
+
+function postToPicker(message: Record<string, unknown>) {
+  iframeRef.value?.contentWindow?.postMessage(message, '*');
+}
+
+// ── Guidance: pre-highlight + text search ────────────────────────────────────
+
+function postHighlightHints() {
+  const hints = deriveHighlightHints({
+    failingLocator: props.failingLocator,
+    fromElementMatch: props.healing?.fromElementMatch ?? null,
+    fromAriaSnapshot: props.healing?.fromAriaSnapshot ?? null,
+  });
+  if (hints.length) postToPicker({ type: 'piwiHighlight', hints });
+}
+
+const searchQuery = ref('');
+const searchCount = ref(0);
+const searchIndex = ref(-1);
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+watch(searchQuery, (q) => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => postToPicker({ type: 'piwiSearch', q }), 180);
+});
+function searchNext() {
+  postToPicker({ type: 'piwiSearchNext' });
+}
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer);
+});
 
 // Forward arrow/Esc keys to the picker: the iframe rarely holds focus (the
 // modal's focus-trap keeps it in the host document), so keydown never reaches
@@ -458,6 +286,9 @@ function handleMessage(event: MessageEvent) {
 function forwardKeyToPicker(e: KeyboardEvent) {
   if (!isOpen.value || step.value !== 'pick-element' || !iframeReady.value) return;
   if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+  // Don't hijack arrow keys while the user is typing in the search field.
+  const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return;
   const win = iframeRef.value?.contentWindow;
   if (!win) return;
   e.preventDefault(); // stop the modal/page from scrolling on arrow keys
@@ -490,25 +321,44 @@ const recommendation = computed<LocatorFixRecommendation>(() =>
   recommendLocatorFix(props.failingLocator.method, alternatives.value),
 );
 
+const toast = useToast();
+
 async function confirm() {
   if (!selectedAlt.value) return;
   saving.value = true;
   try {
-    await $fetch(`/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/locator-pick`, {
-      method: 'POST',
-      body: {
-        failingLocator: props.failingLocator,
-        pickedLocator: selectedAlt.value,
-        elementTag: pickedAttrs.value?.tagName ?? 'unknown',
-        elementAttrs: pickedAttrs.value?.attributes ?? {},
+    const result = await $fetch<{ status: string }>(
+      `/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/locator-pick`,
+      {
+        method: 'POST',
+        body: {
+          failingLocator: props.failingLocator,
+          pickedLocator: selectedAlt.value,
+          element: pickedAttrs.value,
+        },
       },
+    );
+    if (result.status === 'ok') {
+      emit('confirmed', selectedAlt.value);
+    } else {
+      // Persisted nowhere — the stored error has no call site or locator
+      // signature to key the pick on. Copy still works from the review list.
+      toast.add({
+        title: 'Pick not saved',
+        description: 'This failure has no call-site or locator signature to attach the pick to.',
+        color: 'warning',
+        icon: 'i-lucide-alert-triangle',
+      });
+    }
+    isOpen.value = false;
+  } catch (err: unknown) {
+    // Keep the modal open so the user can retry, or copy the locator instead.
+    toast.add({
+      title: 'Could not save the pick',
+      description: errorMessage(err),
+      color: 'error',
+      icon: 'i-lucide-alert-triangle',
     });
-    emit('confirmed', selectedAlt.value);
-    isOpen.value = false;
-  } catch {
-    // Save failures are non-blocking — the pick still shows in the panel
-    emit('confirmed', selectedAlt.value);
-    isOpen.value = false;
   } finally {
     saving.value = false;
   }
@@ -525,32 +375,17 @@ function resetPicker() {
   selectedAlt.value = null;
   step.value = 'pick-element';
   iframeReady.value = false;
+  searchQuery.value = '';
+  searchCount.value = 0;
+  searchIndex.value = -1;
   // Reload the iframe to restore the picker. Recreate the blob URL so the src
-  // string actually changes — reassigning the same URL isn't a guaranteed
-  // reload — which fires `@load` and re-injects the picker script.
+  // string actually changes (reassigning the same URL isn't a guaranteed
+  // reload), which reloads the document and re-runs the appended picker script.
   const html = snapshot.value?.html;
   if (html) {
     if (iframeBlobUrl.value) URL.revokeObjectURL(iframeBlobUrl.value);
-    iframeBlobUrl.value = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    iframeBlobUrl.value = makeBlobUrl(html);
   }
-}
-
-// ── Locator notes (from existing LocatorHealingPanel convention) ────────────
-
-function locatorNote(alt: RankedLocator): string {
-  const { method, score, args } = alt;
-  if (args && (args.anchorTestId || args.anchorSelector || args.anchorRole)) return 'scoped to a stable ancestor';
-  if (score >= 100) return 'most stable';
-  if (method === 'getByRole' && args && !('name' in args)) return 'name-free role — survives renames';
-  if (method === 'getByRole') return 'semantic ARIA locator';
-  if (method === 'getByLabel') return 'associated <label>';
-  if (method === 'getByPlaceholder') return 'input placeholder';
-  if (method === 'getByText') return 'visible text';
-  if (method === 'getByAltText') return 'image alt text';
-  if (method === 'getByTitle') return 'title attribute';
-  if (method === 'locator' && score >= 50) return 'stable selector';
-  if (method === 'locator') return 'CSS class';
-  return '';
 }
 
 // ── Copy ────────────────────────────────────────────────────────────────────
@@ -648,6 +483,31 @@ onBeforeUnmount(() => {
           <span class="ml-auto text-gray-400 tabular-nums">{{ viewport.width }}&times;{{ viewport.height }}</span>
         </div>
 
+        <!-- Find-by-text: jump to the element the failing locator meant to hit -->
+        <div v-if="step === 'pick-element'" class="flex items-center gap-2 mb-1.5">
+          <UInput
+            v-model="searchQuery"
+            size="xs"
+            icon="i-lucide-search"
+            placeholder="Find an element by its text…"
+            class="max-w-xs"
+            @keydown.enter.prevent="searchNext"
+          />
+          <span v-if="searchQuery && searchCount > 0" class="text-xs text-gray-500 tabular-nums">
+            {{ searchIndex + 1 }}/{{ searchCount }}
+          </span>
+          <span v-else-if="searchQuery" class="text-xs text-gray-400">no matches</span>
+          <UButton
+            v-if="searchCount > 1"
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            icon="i-lucide-chevron-down"
+            title="Next match (Enter)"
+            @click="searchNext"
+          />
+        </div>
+
         <!-- Iframe with the snapshot. When the viewport is known the iframe is
            sized to it and scaled with a CSS transform (proportions preserved);
            otherwise it fills the pane (ARIA fallback has no viewport). -->
@@ -668,14 +528,16 @@ onBeforeUnmount(() => {
             <span class="ml-2 text-sm text-gray-500">Initializing picker...</span>
           </div>
           <div :style="canvasStyle">
+            <!-- Hardened: allow-scripts WITHOUT allow-same-origin → opaque origin,
+                 postMessage-only bridge. The picker script is baked into the blob
+                 HTML (see makeBlobUrl), so no parent-side injection on load. -->
             <iframe
               ref="iframeRef"
               :src="iframeBlobUrl"
               :style="iframeStyle"
               class="bg-white"
-              sandbox="allow-scripts allow-same-origin"
+              sandbox="allow-scripts"
               title="DOM snapshot"
-              @load="onIframeLoad"
             />
           </div>
         </div>
@@ -712,25 +574,29 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Alternatives list -->
-          <div class="space-y-1">
+          <div class="space-y-1" role="radiogroup" aria-label="Alternative locators">
             <LocatorAlternativeRow
               v-for="(alt, i) in alternatives"
               :key="i"
               :alt="alt"
-              :note="locatorNote(alt)"
               :copied="copiedKey === `picked-${i}`"
               :dense="true"
-              :class="selectedAlt?.locator === alt.locator ? 'ring-2 ring-primary/50 rounded' : ''"
-              class="cursor-pointer"
+              :selectable="true"
+              :selected="selectedAlt?.locator === alt.locator"
               @copy="copyLocator(alt.locator, `picked-${i}`)"
-              @click="selectAlternative(alt)"
+              @select="selectAlternative(alt)"
             />
           </div>
 
-          <!-- Recommendation -->
+          <!-- Recommendation — click selects it for Confirm; Copy stays separate -->
           <div
             v-if="recommendation.recommended"
-            class="rounded-lg border border-primary/40 bg-primary/5 p-3 flex items-center gap-3"
+            class="rounded-lg border border-primary/40 bg-primary/5 p-3 flex items-center gap-3 cursor-pointer"
+            role="button"
+            tabindex="0"
+            title="Select this locator for Confirm"
+            @click="selectAlternative(recommendation.recommended)"
+            @keydown.enter.prevent="selectAlternative(recommendation.recommended)"
           >
             <UIcon name="i-lucide-star" class="size-5 text-primary shrink-0" />
             <div class="flex-1 min-w-0">
@@ -744,7 +610,7 @@ onBeforeUnmount(() => {
               color="primary"
               variant="solid"
               :trailing-icon="copiedKey === 'rec' ? 'i-lucide-check' : 'i-lucide-copy'"
-              @click="copyLocator(recommendation.recommended.locator, 'rec')"
+              @click.stop="copyLocator(recommendation.recommended.locator, 'rec')"
             >
               Copy
             </UButton>

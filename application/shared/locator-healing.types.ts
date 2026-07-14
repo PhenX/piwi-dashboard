@@ -190,4 +190,23 @@ export interface LocatorHealingResult {
    * page.
    */
   priorNameMayBeStale?: boolean;
+  /**
+   * The failing locator's source call site (`file:line:col`) from the error
+   * stack, when identified — the exact place a suggested fix would be applied.
+   */
+  location?: string | null;
+  /**
+   * The failing test's source line — number + text — parsed from the captured
+   * `testSource` snippet, when available. Powers the panel's "suggested edit"
+   * (rewriting this line's locator) and gives an agent the line to edit.
+   */
+  sourceLine?: { line: number; text: string } | null;
+  /**
+   * Closed loop: when the recommended fix now passes at this call site — a later
+   * run captured the recommendation's locator signature at the same location —
+   * that run's id. Lets the panel confirm "healed in run #N". Null when not yet
+   * adopted, or when the recommendation is a chained anchor (its re-captured leaf
+   * signature can't be reconstructed to match).
+   */
+  healedInRunId?: number | null;
 }

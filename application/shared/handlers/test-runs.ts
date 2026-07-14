@@ -19,6 +19,7 @@ import type { TestStepEvent } from '../types';
 
 import type { DrizzleDB } from './db';
 import { normalizeGitUrl } from '../../server/utils/regression-context';
+import { getLocatorHealingBatch } from '../../server/utils/locator-healing';
 
 type ProjectScope = 'all' | Set<number>;
 
@@ -559,9 +560,37 @@ export async function getFailureGroups(db: DrizzleDB, runId: number) {
       : [];
   const diagnosisById = new Map(diagnosisRows.map((d: any) => [d.clusterId, d]));
 
+  // Attach "locator fix available" to the most impactful groups (sorted by case
+  // count). Capped so the run page stays cheap — one batch call over the
+  // representative failing case of each top group.
+  const HEALING_GROUP_CAP = 10;
+  const reps = result
+    .slice(0, HEALING_GROUP_CAP)
+    .map((g) => ({ clusterId: g.clusterId, repId: g.cases[0]?.testRunsCaseId }))
+    .filter((r): r is { clusterId: number; repId: number } => r.repId != null);
+  const healingByCluster = new Map<number, { recommended: string; source: string; healed: boolean }>();
+  if (reps.length > 0) {
+    const healingMap = await getLocatorHealingBatch(
+      db,
+      reps.map((r) => r.repId),
+    );
+    for (const { clusterId, repId } of reps) {
+      const h = healingMap.get(repId);
+      const rec = h?.recommendation?.recommended;
+      if (h && h.source !== 'none' && rec) {
+        healingByCluster.set(clusterId, {
+          recommended: rec.locator,
+          source: h.source,
+          healed: h.healedInRunId != null,
+        });
+      }
+    }
+  }
+
   return result.map((g) => ({
     ...g,
     diagnosis: diagnosisById.get(g.clusterId) ?? null,
+    locatorHealing: healingByCluster.get(g.clusterId) ?? null,
   }));
 }
 

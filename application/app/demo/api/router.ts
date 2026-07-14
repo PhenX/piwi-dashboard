@@ -16,7 +16,7 @@ import {
   setProjectMembers,
 } from '#shared/handlers/project-assignments';
 import { getDemoDb } from '../db.client';
-import { getLocatorHealing } from '~~/server/utils/locator-healing';
+import { getLocatorHealing, saveLocatorPick } from '~~/server/utils/locator-healing';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
 import {
@@ -422,6 +422,12 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/locator-healing$/,
     handler: async (m) => getLocatorHealing(await getDemoDb(), +m[2]!),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/locator-pick$/,
+    handler: async (m, body) =>
+      saveLocatorPick(await getDemoDb(), +m[2]!, body as Parameters<typeof saveLocatorPick>[2]),
   },
   {
     method: 'GET',
