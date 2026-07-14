@@ -540,6 +540,7 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
     :run-id="runId"
     :test-runs-case-id="testRunsCaseId"
     :failing-locator="healing.failingLocator"
+    :healing="healing"
     @confirmed="refreshHealing"
     @close="pickerOpen = false"
   />
