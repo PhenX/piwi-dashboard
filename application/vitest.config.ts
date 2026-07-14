@@ -7,6 +7,9 @@ const appDir = fileURLToPath(new URL('./app', import.meta.url)).replace(/\/$/, '
 export default defineConfig({
   test: {
     include: ['tests/unit/**/*.test.ts'],
+    // @piwitests/core ships TS source; inline it so Vitest transpiles it from
+    // the workspace instead of trying to load it as a built dependency.
+    server: { deps: { inline: [/@piwitests\/core/] } },
     coverage: {
       provider: 'v8',
       // json-summary + json feed the PR coverage comment (see .github/workflows/ci.yml).

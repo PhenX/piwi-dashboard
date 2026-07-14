@@ -1,0 +1,22 @@
+{
+  "name": "@piwitests/core",
+  "version": "0.12.0",
+  "description": "Pure cross-cutting logic and wire shapes shared by the Piwi Dashboard app and the Playwright reporter",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./locator-generation": "./src/locator-generation.ts",
+    "./locator-fingerprint": "./src/locator-fingerprint.ts",
+    "./locator-healing-types": "./src/locator-healing-types.ts"
+  },
+  "scripts": {
+    "core:test": "vitest run",
+    "core:test:watch": "vitest",
+    "core:lint": "oxlint --config oxlint.config.mts .",
+    "core:lint:fix": "oxlint --config oxlint.config.mts . --fix",
+    "core:format": "oxfmt --config oxfmt.config.mts --write \"src/\" \"tests/\"",
+    "core:format:check": "oxfmt --config oxfmt.config.mts --check \"src/\" \"tests/\"",
+    "test": "npm run core:test"
+  }
+}
