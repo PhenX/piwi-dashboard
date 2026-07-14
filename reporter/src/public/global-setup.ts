@@ -25,9 +25,9 @@ export function createGlobalSetup(
   userSetup?: (config: any) => any,
 ): (config: any) => Promise<any> {
   return async function globalSetupFn(config: any) {
-    // This module compiles to `dist/public/global-setup.js`; the package entry
-    // point is `dist/index.js`, one level up.
-    const piwiReporterPath = path.resolve(__dirname, '../index.js');
+    // tsup bundles this into `dist/index.js` and `dist/global-setup-module.js`,
+    // so at runtime __dirname is `dist/` and the package entry sits alongside.
+    const piwiReporterPath = path.resolve(__dirname, './index.js');
 
     // Extract options from the Piwi reporter entry in the Playwright config so
     // that serverUrl / projectName etc. set inline in the reporters array are

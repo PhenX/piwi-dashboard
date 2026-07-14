@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import type { PlaywrightTestConfig } from '@playwright/test';
 import { applyOptionsToEnv } from '../internal/config/env.js';
 import type { PiwiDashboardOptions } from './options.js';
@@ -25,11 +27,16 @@ function injectReporter(
 }
 
 function resolveSetupModule(): string {
-  try {
-    return require.resolve('../global-setup-module.js');
-  } catch {
-    return require.resolve('../global-setup-module.ts');
-  }
+  // In the bundled package this file's code runs from `dist/index.js`, so the
+  // global-setup module sits next to it at `dist/global-setup-module.js`. When
+  // running from source (dev/tests) it lives one level up as `.ts`. Locate it by
+  // probing rather than `require.resolve` so the path survives bundling.
+  const candidates = [
+    path.join(__dirname, 'global-setup-module.js'),
+    path.join(__dirname, '..', 'global-setup-module.js'),
+    path.join(__dirname, '..', 'global-setup-module.ts'),
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]!;
 }
 
 /**
