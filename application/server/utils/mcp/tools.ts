@@ -1238,6 +1238,10 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       source: h.source,
       capturedAt: h.capturedAt,
       failingLocator: h.failingLocator,
+      // The exact edit site: file:line:col + the failing source line, so an
+      // agent can apply the recommended fix without re-deriving either.
+      location: h.location ?? null,
+      sourceLine: h.sourceLine ? dropNulls({ line: h.sourceLine.line, text: h.sourceLine.text }) : null,
       recommendation: h.recommendation
         ? dropNulls({
             recommended: h.recommendation.recommended

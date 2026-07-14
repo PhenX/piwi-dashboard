@@ -183,7 +183,7 @@ function normalizeParsedArgs(method: string, args: unknown[]): { method: string;
  * Handles both anonymous frames (`at tests/x.spec.ts:42:5`) and named ones
  * (`at Object.foo (tests/x.spec.ts:42:5)`), mirroring `extractTopFrameFile`.
  */
-function extractErrorLocation(error: string): string | null {
+export function extractErrorLocation(error: string): string | null {
   const frameRe = /^\s+at (?:.*? \()?([^()\s][^()]*?):(\d+):(\d+)\)?\s*$/gm;
   let m: RegExpExecArray | null;
   while ((m = frameRe.exec(error)) !== null) {
@@ -192,6 +192,31 @@ function extractErrorLocation(error: string): string | null {
     return `${file}:${m[2]}:${m[3]}`;
   }
   return null;
+}
+
+/**
+ * Pull the failing source line (number + text) out of a captured `testSource`
+ * snippet. The reporter formats each line as `<marker><padded line no> | <code>`
+ * and marks the failing line with `> ` (see reporter `source-snippet.ts`). Prefer
+ * that marked line; fall back to the line whose number matches `location`.
+ */
+export function parseFailingSourceLine(
+  testSource: string | null | undefined,
+  location: string | null,
+): { line: number; text: string } | null {
+  if (!testSource) return null;
+  const rowRe = /^([>*\s])\s*(\d+)\s*\|\s?(.*)$/;
+  const locLine = location ? Number(splitFileLine(location)[1]) : NaN;
+  let fallback: { line: number; text: string } | null = null;
+  for (const raw of testSource.split('\n')) {
+    const m = rowRe.exec(raw);
+    if (!m) continue;
+    const line = Number(m[2]);
+    const text = m[3]!;
+    if (m[1] === '>') return { line, text };
+    if (!Number.isNaN(locLine) && line === locLine) fallback = { line, text };
+  }
+  return fallback;
 }
 
 /**
@@ -513,6 +538,7 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
       error: testRunsCases.error,
       testCaseId: testRunsCases.testCaseId,
       ariaSnapshot: testRunsCases.ariaSnapshot,
+      testSource: testRunsCases.testSource,
     })
     .from(testRunsCases)
     .where(eq(testRunsCases.id, testRunsCaseId));
@@ -532,6 +558,15 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
   const parsedLocator = selector ? parseLocatorExpression(selector) : null;
   const failingLocator = parsedLocator ? { method: parsedLocator.method, args: parsedLocator.args } : null;
   const location = extractErrorLocation(error);
+  const sourceLine = parseFailingSourceLine(row.testSource, location);
+
+  // Stamp the failing call site + source line onto whichever result the ladder
+  // returns, so every rung can power the panel's "suggested edit".
+  const attach = (r: LocatorHealingResult): LocatorHealingResult => {
+    r.location = location;
+    r.sourceLine = sourceLine;
+    return r;
+  };
 
   // Load every snapshot for this test case once (indexed by test_case_id). A
   // case has only a handful of locators, so matching in memory is cheaper than
@@ -547,7 +582,7 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
   if (location && snaps.length > 0) {
     const hit = snaps.find((s) => s.location === location) ?? snaps.find((s) => sameFileLine(s.location, location));
     if (hit) {
-      return resolveStoredHit(failingLocator, hit, row.ariaSnapshot ?? null, 'prior-run');
+      return attach(resolveStoredHit(failingLocator, hit, row.ariaSnapshot ?? null, 'prior-run'));
     }
   }
 
@@ -560,7 +595,7 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
     // first match.
     const hit = snaps.find((s) => s.usedArgsFp === sig && (!method || s.usedMethod === method));
     if (hit) {
-      return resolveStoredHit(failingLocator, hit, row.ariaSnapshot ?? null, 'fingerprint');
+      return attach(resolveStoredHit(failingLocator, hit, row.ariaSnapshot ?? null, 'fingerprint'));
     }
 
     // Ladder 2.5: cross-test — the same locator captured by another test in
@@ -570,7 +605,7 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
     if (testCaseId) {
       const crossHit = await findCrossTestSnapshot(db, testCaseId, sig, method);
       if (crossHit) {
-        return resolveStoredHit(failingLocator, crossHit, row.ariaSnapshot ?? null, 'cross-test');
+        return attach(resolveStoredHit(failingLocator, crossHit, row.ariaSnapshot ?? null, 'cross-test'));
       }
     }
   }
@@ -578,10 +613,10 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
   // Ladder 3: ARIA snapshot fallback
   const ariaAlts = generateFromAriaSnapshot(row.ariaSnapshot ?? null, failingLocator);
   if (ariaAlts) {
-    return buildHealingResult(failingLocator, null, ariaAlts, 'aria-snapshot');
+    return attach(buildHealingResult(failingLocator, null, ariaAlts, 'aria-snapshot'));
   }
 
-  return buildHealingResult(failingLocator, null, null, 'none');
+  return attach(buildHealingResult(failingLocator, null, null, 'none'));
 }
 
 /**
