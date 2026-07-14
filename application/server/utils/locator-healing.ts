@@ -23,7 +23,12 @@ import {
   TEXT_CONTENT_ROLES,
   type ElementFingerprint,
 } from '#shared/locator-fingerprint';
-import type { RankedLocator, LocatorSnapshot, LocatorHealingResult } from '#shared/locator-healing.types';
+import type {
+  RankedLocator,
+  LocatorSnapshot,
+  LocatorHealingResult,
+  ElementAttributes,
+} from '#shared/locator-healing.types';
 import type { DrizzleDB } from '#shared/handlers/db';
 
 // The payload shape lives in shared/ so the API handler, MCP tools, AI context
@@ -827,4 +832,120 @@ export async function upsertLocatorSnapshots(
       .delete(locatorSnapshots)
       .where(and(eq(locatorSnapshots.testCaseId, caseId), notInArray(locatorSnapshots.location, [...locs])));
   }
+}
+
+/** Input for saving a user-confirmed pick from the dashboard's DOM-snapshot picker. */
+export interface LocatorPickInput {
+  /**
+   * The failing locator as the healing panel displayed it — identity fallback
+   * for the rare error whose stored text can't be re-parsed server-side.
+   */
+  failingLocator?: { method: string; args: Record<string, unknown> } | null;
+  /** The alternative the user confirmed. */
+  pickedLocator: RankedLocator;
+  /** The picked element as probed inside the rendered DOM snapshot. */
+  element?: Partial<ElementAttributes> | null;
+}
+
+export type LocatorPickSaveResult =
+  | { status: 'ok'; associatedBy: 'location' | 'fingerprint' | 'new-call-site' }
+  | { status: 'not-found' }
+  | { status: 'not-persisted'; reason: 'no-identity' };
+
+/**
+ * Persist a user-confirmed locator pick against the failing call site so the
+ * healing lookup surfaces it (`pickedByUser` wins the recommendation). Shared
+ * by the `locator-pick` endpoint and the demo mirror.
+ *
+ * The failing locator's identity — call-site location and signature — is
+ * re-derived from the stored error with the same helpers `getLocatorHealing`
+ * uses, so the saved row is guaranteed to be found by the same ladder (location
+ * first, then `usedArgsFp`). The client-provided `failingLocator` is only a
+ * fallback when the error can't be re-parsed.
+ *
+ * An existing snapshot row keeps its captured element data (richer than the
+ * snapshot-probe's) — the pick is merged to the front of `alternatives`. When
+ * no row exists (the locator never passed), a new row is created from the pick;
+ * `elementAttrs` follows the same storage-whitelist shape as
+ * `upsertLocatorSnapshots`. Never silently drops a pick: when there is nothing
+ * to key it on, the caller gets `not-persisted` to surface.
+ */
+export async function saveLocatorPick(
+  db: DrizzleDB,
+  testRunsCaseId: number,
+  input: LocatorPickInput,
+): Promise<LocatorPickSaveResult> {
+  const rows = await db
+    .select({ testCaseId: testRunsCases.testCaseId, error: testRunsCases.error })
+    .from(testRunsCases)
+    .where(eq(testRunsCases.id, testRunsCaseId));
+  const row = rows[0];
+  if (!row) return { status: 'not-found' };
+  if (!row.testCaseId) return { status: 'not-persisted', reason: 'no-identity' };
+
+  // Same identity derivation as getLocatorHealing, so save and lookup agree.
+  const error = row.error ?? '';
+  const location = error ? extractErrorLocation(error) : null;
+  const selector = error ? extractLeafSelector(error) : null;
+  const method = (selector ? locatorExpressionMethod(selector) : null) ?? input.failingLocator?.method ?? null;
+  const sig = selector
+    ? await locatorSignatureFromExpression(selector)
+    : input.failingLocator
+      ? await locatorSignature(input.failingLocator.method, Object.values(input.failingLocator.args ?? {}))
+      : null;
+  if (!location && !sig) return { status: 'not-persisted', reason: 'no-identity' };
+
+  const pick: RankedLocator = { ...input.pickedLocator, pickedByUser: true };
+  const mergePick = (existing: RankedLocator[] | null): string =>
+    JSON.stringify([pick, ...(existing ?? []).filter((a) => a.locator !== pick.locator)].slice(0, 10));
+
+  const snaps = await db.select().from(locatorSnapshots).where(eq(locatorSnapshots.testCaseId, row.testCaseId));
+
+  let associatedBy: 'location' | 'fingerprint' = 'location';
+  let hit = location
+    ? (snaps.find((s) => s.location === location) ?? snaps.find((s) => sameFileLine(s.location, location)))
+    : undefined;
+  if (!hit && sig) {
+    hit = snaps.find((s) => s.usedArgsFp === sig && (!method || s.usedMethod === method));
+    if (hit) associatedBy = 'fingerprint';
+  }
+
+  if (hit) {
+    await db
+      .update(locatorSnapshots)
+      .set({ alternatives: mergePick(parseAlternativesColumn(hit)), lastSeenAt: new Date() })
+      .where(eq(locatorSnapshots.id, hit.id));
+    return { status: 'ok', associatedBy };
+  }
+
+  // No stored snapshot for this call site (the locator never passed) — create
+  // one from the pick so the ladder finds it: by location when the error had
+  // one, else by signature (the synthetic location only serves the unique key).
+  const parsed = selector ? parseLocatorExpression(selector) : null;
+  const el = input.element;
+  await db
+    .insert(locatorSnapshots)
+    .values({
+      testCaseId: row.testCaseId,
+      location: location ?? `pick:${sig}`,
+      usedMethod: method ?? pick.method,
+      usedArgs: JSON.stringify(parsed?.args ?? input.failingLocator?.args ?? {}),
+      usedArgsFp: sig ?? (await locatorSignature(method ?? pick.method, [])),
+      elementTag: el?.tagName ?? 'unknown',
+      // Same storage whitelist as upsertLocatorSnapshots — anything not folded
+      // in here is dropped.
+      elementAttrs: JSON.stringify({
+        ...(el?.attributes ?? {}),
+        accessibleName: el?.accessibleName ?? null,
+        center: el?.center ?? null,
+      }),
+      elementText: el?.textContent ?? null,
+      alternatives: JSON.stringify([pick]),
+      lastSeenAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [locatorSnapshots.testCaseId, locatorSnapshots.location],
+      set: { alternatives: sql`excluded.alternatives`, lastSeenAt: sql`excluded.last_seen_at` },
+    });
+  return { status: 'ok', associatedBy: 'new-call-site' };
 }
