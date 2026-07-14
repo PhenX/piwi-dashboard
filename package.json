@@ -3,6 +3,7 @@
   "version": "0.12.0",
   "type": "module",
   "workspaces": [
+    "packages/core",
     "application",
     "reporter",
     "integrations/nitro"

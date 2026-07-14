@@ -2,70 +2,24 @@
  * Wire contract — the **external** shapes sent to / received from the Piwi
  * Dashboard server.
  *
- * These structurally mirror — but do not import — `application/shared/types.ts`
- * (`TestCasePayload`, `StreamEventPayload`, `TestRunFinishPayload`). Importing
- * that module would leak the monorepo path into the published `.d.ts` files; the
- * constraint forbids the import, not the types. **Any change here is a change to
- * the server contract** — keep both sides structurally compatible.
+ * The small leaf shapes (`SuiteConfigEntry`, `TestAnnotation`, `FilterDetails`,
+ * `BrowserConfig`, `TestStepEvent`) come from `@piwitests/core` (bundled at build
+ * time, shared with the app). The per-case `WireTestCase` and the stream-event
+ * union below are the reporter's own producer shapes; they stay structurally
+ * compatible with the server's `TestCasePayload` / `StreamEventPayload` (pinned by
+ * the dashboard's wire drift-guard test). **Any change here is a server-contract change.**
  *
  * For the in-process collection model (never sent verbatim), see `./collected.ts`.
  */
+import type {
+  BrowserConfig,
+  FilterDetails,
+  SuiteConfigEntry,
+  TestAnnotation,
+  TestStepEvent,
+} from '@piwitests/core/wire';
 
-// ── Suite / browser / annotation shapes ──────────────────────────────────────
-
-export interface SuiteConfigEntry {
-  mode: 'parallel' | 'serial' | 'default';
-  annotations: Array<{ type: string; description?: string }>;
-}
-
-export interface TestAnnotation {
-  type: string;
-  description?: string;
-}
-
-/**
- * Filter that narrowed a run to a subset of tests, recorded when `isFullRun`
- * is false. Mirrors `FilterDetails` in `application/shared/types.ts`.
- */
-export interface FilterDetails {
-  /** A non-default `--grep` pattern (Playwright's default `.*` is excluded). */
-  grep?: string;
-  /** A `--grep-invert` pattern. */
-  grepInvert?: string;
-  /** Positional file/path filters from the CLI invocation (e.g. ["tests/login.spec.ts"]). */
-  files?: string[];
-}
-
-export interface BrowserConfig {
-  projectName?: string;
-  browserName?: string | null;
-  channel?: string | null;
-  viewport?: { width: number; height: number } | null;
-  deviceScaleFactor?: number | null;
-  isMobile?: boolean | null;
-  hasTouch?: boolean | null;
-  locale?: string | null;
-  timezoneId?: string | null;
-  geolocation?: { longitude: number; latitude: number; accuracy?: number } | null;
-  colorScheme?: string | null;
-  reducedMotion?: string | null;
-  forcedColors?: string | null;
-  offline?: boolean | null;
-  bypassCSP?: boolean | null;
-  javaScriptEnabled?: boolean | null;
-  serviceWorkers?: string | null;
-  userAgent?: string | null;
-}
-
-/** A hook/fixture step event with absolute timings (for the workers timeline). */
-export interface TestStepEvent {
-  title: string;
-  category: 'hook' | 'fixture' | 'test.step' | 'expect' | 'wait';
-  startedAt: number;
-  duration: number;
-  status: string;
-  location?: string | null;
-}
+export type { BrowserConfig, FilterDetails, SuiteConfigEntry, TestAnnotation, TestStepEvent };
 
 // ── Per-case wire shape ──────────────────────────────────────────────────────
 

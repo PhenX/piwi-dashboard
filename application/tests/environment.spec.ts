@@ -235,7 +235,10 @@ test.describe('Environment API Tests', () => {
   });
 
   test('reporter options.d.ts should include environment option', async () => {
-    const typeDefsPath = join(process.cwd(), '..', 'reporter', 'dist', 'public', 'options.d.ts');
+    // The reporter bundles its dist/ via tsup: only the published entry
+    // (dist/index.d.ts) is a stable public-contract path — internal per-file
+    // dts output (e.g. dist/public/options.d.ts) is not guaranteed to exist.
+    const typeDefsPath = join(process.cwd(), '..', 'reporter', 'dist', 'index.d.ts');
     const typeDefs = readFileSync(typeDefsPath, 'utf-8');
 
     expect(typeDefs).toContain('environment');
