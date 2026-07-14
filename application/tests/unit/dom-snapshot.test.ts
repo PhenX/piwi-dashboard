@@ -3,9 +3,9 @@ import {
   renderSnapshotHtml,
   sanitizeDomSnapshot,
   extractDomSnapshot,
-  renderAriaSnapshotHtml,
   resolveCaseDomSnapshot,
 } from '~~/server/utils/dom-snapshot';
+import { renderAriaSnapshotHtml } from '~~/server/utils/dom-snapshot-aria';
 import type { TraceFrameSnapshot, ParsedTraceData } from '~~/server/utils/trace-parser';
 
 function snap(overrides: Partial<TraceFrameSnapshot>): TraceFrameSnapshot {
@@ -191,6 +191,31 @@ describe('renderAriaSnapshotHtml', () => {
     expect(html).not.toContain('<img src=x');
     expect(html).toContain('&lt;img src=x');
     expect(html).toContain('data-name="a&quot;b'); // quote escaped inside the attribute
+  });
+
+  // The demo picker renders these seeded ARIA snapshots (scripts/generate-demo-seed.mjs
+  // `ariaSnapshotForCluster`) for failure clusters without a trace. Verify the exact
+  // shapes — nested indentation, `[disabled]` markers, trailing `:` — parse into the
+  // pickable chips the picker needs, so trace-less clusters aren't blank in the demo.
+  test('renders the seeded strict-mode cluster snapshot into pickable button chips', () => {
+    const html = renderAriaSnapshotHtml(
+      '- document:\n  - button "Primary"\n  - button "Disabled" [disabled]\n  - button "Loading"',
+    )!;
+    expect(html).toContain('data-name="Primary"');
+    expect(html).toContain('data-name="Disabled"'); // the `[disabled]` marker is ignored
+    expect(html).toContain('data-name="Loading"');
+    expect((html.match(/data-role="button"/g) ?? []).length).toBe(3);
+  });
+
+  test('renders the seeded getByLabel checkout cluster snapshot into pickable field chips', () => {
+    const html = renderAriaSnapshotHtml(
+      '- document:\n  - form "Checkout":\n    - combobox "Contact method"\n' +
+        '    - textbox "Card number"\n    - textbox "Expiry date"\n    - textbox "CVV"\n    - button "Pay"',
+    )!;
+    expect(html).toContain('data-role="combobox"');
+    expect(html).toContain('data-name="Contact method"');
+    expect((html.match(/data-role="textbox"/g) ?? []).length).toBe(3);
+    expect(html).toContain('data-name="Pay"');
   });
 });
 
