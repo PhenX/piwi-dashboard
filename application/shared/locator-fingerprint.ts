@@ -245,6 +245,132 @@ export function freshLocatorsFromCandidate(c: AriaCandidate): RankedLocator[] {
   return out;
 }
 
+// ── Page-wide ARIA fallback generator ────────────────────────────────────────
+//
+// `generateFromAriaSnapshot` and `freshLocatorsFromCandidate` (above) both turn
+// ARIA candidates into ranked getByRole/getByText/getByLabel locators, but they
+// serve different jobs and so score on different regimes — kept side by side so
+// the distinction stays legible:
+//   • freshLocatorsFromCandidate scores ONE candidate already matched to the
+//     failing element (element-match healing) in a FIXED band (role 60 / text 55
+//     / label 50): confidence comes from the match, not the text.
+//   • generateFromAriaSnapshot is the last-resort fallback with NO matched
+//     element — it ranks EVERY named candidate on the page by RELEVANCE to the
+//     failing locator's text: base 40 + Jaccard token overlap (0–25) + a
+//     position bonus (0–10; content sits after the sidebar in tree order).
+
+/**
+ * Generate alternatives from an ARIA snapshot, filtered and scored by relevance
+ * to the failing locator's text — the fallback used when no prior snapshot or
+ * element match exists. Accepts the failing locator's args so it can:
+ * 1. filter to elements whose accessible name overlaps the failing text,
+ * 2. score proportionally to token overlap, and
+ * 3. also emit `getByText` for text-bearing roles.
+ */
+export function generateFromAriaSnapshot(
+  ariaSnapshot: string | null,
+  failingLocator: { method: string; args: Record<string, unknown> } | null,
+): RankedLocator[] | null {
+  if (!ariaSnapshot) return null;
+
+  const alts: RankedLocator[] = [];
+  const seen = new Set<string>();
+  const add = (l: RankedLocator) => {
+    if (!seen.has(l.locator)) {
+      seen.add(l.locator);
+      alts.push(l);
+    }
+  };
+
+  // The failing text: the string literal(s) the test was searching for.
+  const failingText = extractFailingText(failingLocator);
+  const failingTokens = failingText ? tokenize(failingText) : null;
+
+  // Collect all candidates first so the position bonus (content-area elements
+  // appear later in the ARIA tree than sidebar/nav) can rank them apart.
+  const candidates = parseAriaCandidates(ariaSnapshot);
+  const totalCandidates = candidates.length;
+
+  for (let idx = 0; idx < candidates.length; idx++) {
+    const { role, name, level } = candidates[idx]!;
+    if (!name) continue;
+
+    // Score: 40 base + text-overlap bonus (Jaccard, 0–25) + position bonus
+    // (0–10, linear across tree order — content sits after the sidebar).
+    let score = 40;
+    if (failingTokens && failingTokens.size > 0) {
+      const nameTokens = tokenize(name);
+      const intersection = [...nameTokens].filter((t) => failingTokens.has(t)).length;
+      const union = failingTokens.size + nameTokens.size - intersection;
+      if (intersection > 0 && union > 0) {
+        score += Math.round((intersection / union) * 25);
+      }
+    }
+    if (totalCandidates > 1) {
+      score += Math.round((idx / (totalCandidates - 1)) * 10);
+    }
+
+    add(
+      level != null
+        ? {
+            locator: `getByRole('${escapeQuote(role)}', { name: '${escapeQuote(name)}', level: ${level} })`,
+            method: 'getByRole',
+            args: { role, name, level },
+            score,
+          }
+        : {
+            locator: `getByRole('${escapeQuote(role)}', { name: '${escapeQuote(name)}' })`,
+            method: 'getByRole',
+            args: { role, name },
+            score,
+          },
+    );
+
+    // getByText for roles whose visible text `getByText` inspects.
+    if (TEXT_CONTENT_ROLES.has(role)) {
+      add({
+        locator: `getByText('${escapeQuote(name)}')`,
+        method: 'getByText',
+        args: { text: name },
+        score: score - 5, // slightly below the role-based locator
+      });
+    }
+
+    if (['textbox', 'combobox', 'searchbox'].includes(role)) {
+      add({
+        locator: `getByLabel('${escapeQuote(name)}')`,
+        method: 'getByLabel',
+        args: { label: name },
+        score: score - 5,
+      });
+    }
+  }
+
+  if (alts.length === 0) return null;
+  return alts.sort((a, b) => b.score - a.score).slice(0, 8);
+}
+
+/**
+ * The first meaningful string argument of a failing locator, lowercased, for
+ * relevance comparison. For getByText/getByLabel/getByPlaceholder/getByAltText/
+ * getByTitle it's the primary text argument; for getByRole, the name option.
+ */
+function extractFailingText(locator: { method: string; args: Record<string, unknown> } | null): string | null {
+  if (!locator) return null;
+  const a = locator.args;
+  const text = (a.text ?? a.label ?? a.placeholder ?? a.alt ?? a.title ?? a.name) as string | undefined;
+  return text?.toLowerCase().trim() || null;
+}
+
+function tokenize(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .split(/[\s\-_.:,;!?()[\]{}'"\\/]+/)
+      .filter((t) => t.length > 0),
+  );
+}
+
 /**
  * Why an element match did or didn't produce fresh locators. `no-match` with a
  * named fingerprint is the "provably stale" signal: the old identity is gone

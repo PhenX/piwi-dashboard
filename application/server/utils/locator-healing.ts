@@ -17,12 +17,7 @@ import {
   locatorIdentityEquals,
   alternativeUsesName,
 } from '#shared/locator-healing';
-import {
-  elementMatchOutcome,
-  parseAriaCandidates,
-  TEXT_CONTENT_ROLES,
-  type ElementFingerprint,
-} from '#shared/locator-fingerprint';
+import { elementMatchOutcome, generateFromAriaSnapshot, type ElementFingerprint } from '#shared/locator-fingerprint';
 import type {
   RankedLocator,
   LocatorSnapshot,
@@ -217,130 +212,6 @@ export function parseFailingSourceLine(
     if (!Number.isNaN(locLine) && line === locLine) fallback = { line, text };
   }
   return fallback;
-}
-
-/**
- * Generate alternatives from ARIA snapshot text, filtered and scored by
- * relevance to the failing locator. Previously this dumped every named element
- * on the page with a flat score of 40 — a sidebar button and the actual
- * replacement heading were scored identically, and since all scores were equal,
- * the first element in ARIA tree order (always nav/sidebar) "won".
- *
- * Now the function accepts the failing locator's args so it can:
- * 1. Filter to elements whose accessible name overlaps the failing text
- * 2. Score proportionally to token overlap
- * 3. Generate `getByText` alternatives for text-bearing roles
- */
-function generateFromAriaSnapshot(
-  ariaSnapshot: string | null,
-  failingLocator: { method: string; args: Record<string, unknown> } | null,
-): RankedLocator[] | null {
-  if (!ariaSnapshot) return null;
-
-  const alts: RankedLocator[] = [];
-  const seen = new Set<string>();
-
-  const add = (l: RankedLocator) => {
-    if (!seen.has(l.locator)) {
-      seen.add(l.locator);
-      alts.push(l);
-    }
-  };
-
-  const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-
-  // Extract the failing text: the string literal(s) the test was searching for.
-  const failingText = extractFailingText(failingLocator);
-  const failingTokens = failingText ? tokenize(failingText) : null;
-
-  // Collect all candidates first so we can apply a position bonus (content-area
-  // elements appear later in the ARIA tree than sidebar/nav). Without this, the
-  // sidebar wins every time because all scores were identical.
-  const candidates = parseAriaCandidates(ariaSnapshot);
-  const totalCandidates = candidates.length;
-
-  for (let idx = 0; idx < candidates.length; idx++) {
-    const { role, name, level } = candidates[idx]!;
-    if (!name) continue;
-
-    // Score: 40 base + text-overlap bonus (Jaccard similarity, 0–25)
-    // + position bonus (0–10, linear across the tree order). Content-area
-    // elements sit after the sidebar so they naturally score higher.
-    let score = 40;
-    if (failingTokens && failingTokens.size > 0) {
-      const nameTokens = tokenize(name);
-      const intersection = [...nameTokens].filter((t) => failingTokens.has(t)).length;
-      const union = failingTokens.size + nameTokens.size - intersection;
-      if (intersection > 0 && union > 0) {
-        score += Math.round((intersection / union) * 25);
-      }
-    }
-    // Position bonus: later elements in the ARIA tree are more likely to
-    // be content than sidebar. Linear 0–10 ramp across all candidates.
-    if (totalCandidates > 1) {
-      score += Math.round((idx / (totalCandidates - 1)) * 10);
-    }
-
-    add(
-      level != null
-        ? {
-            locator: `getByRole('${role}', { name: '${esc(name)}', level: ${level} })`,
-            method: 'getByRole',
-            args: { role, name, level },
-            score,
-          }
-        : {
-            locator: `getByRole('${role}', { name: '${esc(name)}' })`,
-            method: 'getByRole',
-            args: { role, name },
-            score,
-          },
-    );
-
-    // getByText for roles whose visible text `getByText` inspects
-    if (TEXT_CONTENT_ROLES.has(role)) {
-      add({
-        locator: `getByText('${esc(name)}')`,
-        method: 'getByText',
-        args: { text: name },
-        score: score - 5, // slightly below the role-based locator
-      });
-    }
-
-    if (['textbox', 'combobox', 'searchbox'].includes(role)) {
-      add({
-        locator: `getByLabel('${esc(name)}')`,
-        method: 'getByLabel',
-        args: { label: name },
-        score: score - 5,
-      });
-    }
-  }
-
-  if (alts.length === 0) return null;
-  return alts.sort((a, b) => b.score - a.score).slice(0, 8);
-}
-
-/**
- * Extract the first meaningful string argument from a failing locator as
- * lowercase tokens for relevance comparison. For getByText/getByLabel/
- * getByPlaceholder/getByAltText getByTitle, this is the primary text argument.
- * For getByRole, it's the name option.
- */
-function extractFailingText(locator: { method: string; args: Record<string, unknown> } | null): string | null {
-  if (!locator) return null;
-  const a = locator.args;
-  const text = (a.text ?? a.label ?? a.placeholder ?? a.alt ?? a.title ?? a.name) as string | undefined;
-  return text?.toLowerCase().trim() || null;
-}
-
-function tokenize(text: string): Set<string> {
-  return new Set(
-    text
-      .toLowerCase()
-      .split(/[\s\-_.:,;!?()[\]{}'"\\/]+/)
-      .filter((t) => t.length > 0),
-  );
 }
 
 /**

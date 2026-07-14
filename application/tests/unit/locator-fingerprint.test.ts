@@ -7,6 +7,7 @@ import {
   freshLocatorsFromCandidate,
   elementMatchAlternatives,
   elementMatchOutcome,
+  generateFromAriaSnapshot,
 } from '#shared/locator-fingerprint';
 
 describe('parseAriaCandidates', () => {
@@ -265,5 +266,46 @@ describe('elementMatchOutcome', () => {
     const o = elementMatchOutcome({ role: 'checkbox', name: null }, '- checkbox "Terms"');
     // Sole same-role candidate → confidently matched, not a stale signal.
     expect(o.status).toBe('matched');
+  });
+});
+
+describe('generateFromAriaSnapshot', () => {
+  const failing = { method: 'getByText', args: { text: 'Save changes' } };
+
+  test('ranks token-overlap with the failing text above unrelated candidates', () => {
+    const aria = '- button "Cancel"\n- button "Save changes"';
+    const alts = generateFromAriaSnapshot(aria, failing)!;
+    expect(alts[0]).toMatchObject({ method: 'getByRole', args: { role: 'button', name: 'Save changes' } });
+    const save = alts.find((a) => a.args.name === 'Save changes')!;
+    const cancel = alts.find((a) => a.args.name === 'Cancel')!;
+    expect(save.score).toBeGreaterThan(cancel.score);
+  });
+
+  test('position bonus lifts later (content-area) candidates over an earlier match-less one', () => {
+    // Neither name overlaps the failing text, so only the position bonus ranks
+    // them — the later candidate (content, not sidebar) must win.
+    const aria = '- link "Home"\n- link "Docs"';
+    const alts = generateFromAriaSnapshot(aria, { method: 'getByText', args: { text: 'zzz' } })!;
+    const docs = alts.find((a) => a.args.name === 'Docs')!;
+    const home = alts.find((a) => a.args.name === 'Home')!;
+    expect(docs.score).toBeGreaterThan(home.score);
+  });
+
+  test('emits getByText for text-bearing roles and getByLabel for fields, below the role locator', () => {
+    const alts = generateFromAriaSnapshot('- button "Save changes"', failing)!;
+    const role = alts.find((a) => a.method === 'getByRole')!;
+    const text = alts.find((a) => a.method === 'getByText')!;
+    expect(text.score).toBe(role.score - 5);
+
+    const fieldAlts = generateFromAriaSnapshot('- textbox "Email"', {
+      method: 'getByLabel',
+      args: { label: 'Email' },
+    })!;
+    expect(fieldAlts.some((a) => a.method === 'getByLabel' && a.args.label === 'Email')).toBe(true);
+  });
+
+  test('returns null when the snapshot is empty or has no named candidates', () => {
+    expect(generateFromAriaSnapshot(null, failing)).toBeNull();
+    expect(generateFromAriaSnapshot('- generic', failing)).toBeNull();
   });
 });
