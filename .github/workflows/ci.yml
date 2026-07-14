@@ -105,6 +105,18 @@ jobs:
         working-directory: ./reporter
         run: npm run reporter:lint
 
+      - name: Typecheck reporter
+        if: matrix.storage == 'local' && matrix.database == 'sqlite'
+        working-directory: ./reporter
+        run: npm run reporter:typecheck
+
+      - name: Lint and test core
+        if: matrix.storage == 'local' && matrix.database == 'sqlite'
+        working-directory: ./packages/core
+        run: |
+          npm run core:lint
+          npm run core:test
+
       # The reporter dist is imported by playwright.config.ts, so build it in every cell.
       - name: Build reporter
         working-directory: ./reporter

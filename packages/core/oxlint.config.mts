@@ -7,19 +7,26 @@ export default defineConfig({
   ignorePatterns: [...base.ignorePatterns],
   rules: {
     ...base.rules,
-    // Core is pure and dependency-free: forbid Node built-ins (it must stay
-    // browser/worker/server-safe) and cross-package imports (no app/reporter
-    // leakage). The boundary test enforces the same invariants at runtime.
     'unicorn/prefer-node-protocol': 'error',
     '@typescript-eslint/consistent-type-imports': 'error',
-    'no-restricted-imports': [
-      'error',
-      {
-        patterns: [
-          { group: ['node:*'], message: 'Core must stay Node-free — keep runtime that needs node:* in the reporter.' },
-          { group: ['**/application/**', '**/reporter/**'], message: 'Core must not import from application/ or reporter/.' },
+  },
+  overrides: [
+    {
+      // Core source must stay pure: no Node built-ins (it has to be
+      // browser/worker/server-safe) and no cross-package imports. The boundary
+      // test in tests/ scans the source and may itself use node:*.
+      files: ['src/**/*.ts'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            patterns: [
+              { group: ['node:*'], message: 'Core must stay Node-free — keep runtime needing node:* in the reporter.' },
+              { group: ['**/application/**', '**/reporter/**'], message: 'Core must not import from application/ or reporter/.' },
+            ],
+          },
         ],
       },
-    ],
-  },
+    },
+  ],
 })

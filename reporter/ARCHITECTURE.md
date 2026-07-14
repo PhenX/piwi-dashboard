@@ -19,7 +19,10 @@ change. Everything under **`src/internal/`** is private plumbing — change it f
 
 Two **external contracts** beyond the npm API:
 - **Wire types** (`types/wire.ts`) — the JSON sent to / received from the server.
-  Structurally mirror `application/shared/types.ts`; a change here is a server-contract change.
+  The small leaf shapes (`BrowserConfig`, `TestStepEvent`, …) are re-exported from
+  `@piwitests/core/wire`; the per-case `WireTestCase`/stream union stay here and are
+  kept compatible with the server's `TestCasePayload`/`StreamEventPayload` by the
+  dashboard's `wire-shared-drift.test.ts`. A change here is a server-contract change.
 - **Side effects** — `PIWI_*` env vars (`internal/config/env.ts`), `piwi-*` testInfo
   attachment names (`internal/capture/attachments.ts`), temp files in `os.tmpdir()`,
   and `[Piwi Dashboard]`-prefixed logs (`internal/support/logger.ts`).
@@ -93,17 +96,29 @@ src/
   `evaluate` boundary (with a comment) and the dynamic options merge — everywhere else use
   precise types or `unknown`.
 - **Wire changes** touch `types/wire.ts` and `internal/submit/serializer.ts` together, and must
-  stay structurally compatible with `application/shared/types.ts` (do not `import` from it).
+  stay structurally compatible with `application/shared/types.ts` (kept in sync by the drift test).
+
+## Shared core (`@piwitests/core`)
+
+Pure cross-cutting logic — locator generation/scoring, ARIA parsing, element-match
+healing, the wire leaf shapes, the locator-method list — lives in the private
+`@piwitests/core` workspace package and is the single source of truth shared with
+the app. The reporter **`import`s it and tsup bundles it into `dist/`** at build
+time, so the published package stays self-contained: no `@piwitests/core` runtime
+dependency and no monorepo path in the public `dist/index.d.ts`. Reporter-only
+runtime that needs Node (`captureCallerLocation`) stays in `internal/capture/locator-healing.ts`.
 
 ## Build & test
 
 ```bash
-npm run reporter:build   # tsc: src/ → dist/ (mirrors the folder structure)
-npm run reporter:test    # vitest
+npm run reporter:build      # tsup: bundles src/ + @piwitests/core → dist/ (CJS + .d.ts)
+npm run reporter:typecheck  # tsc --noEmit
+npm run reporter:test       # vitest
 npm run reporter:lint
 npm run reporter:format
 ```
 
 The package entries (`index`, `global-setup-module`) stay at `dist/` root so
-`package.json` `main`/`types`/`exports` don't move; everything else lives under
-`dist/internal/`·`dist/public/`·`dist/types/`.
+`package.json` `main`/`types`/`exports` don't move. The capture modules the
+dashboard dogfoods (`internal/capture/*`) are emitted as their own entries so their
+`dist/` paths are preserved.
