@@ -64,8 +64,6 @@ test.describe('Dashboard UI Tests', () => {
 
     await page.waitForURL(/\/projects\/\d+/);
 
-    await page.getByText('Test run stats over time').click({ timeout: 3000 });
-
     // Wait for main content to confirm page loaded
     await expect(page.getByText('Test run statistics over time')).toBeVisible({ timeout: 30000 });
 

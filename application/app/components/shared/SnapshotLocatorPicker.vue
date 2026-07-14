@@ -108,11 +108,33 @@ function pickerScript(): string {
 
   function describe(el) {
     var tag = (el.tagName || '?').toLowerCase();
+
     var testId = el.getAttribute && el.getAttribute('data-testid');
-    if (testId) return tag + '[data-testid="' + testId + '"]';
-    if (el.id) return tag + '#' + el.id;
+    if (testId) return "getByTestId('" + testId + "')";
+
+    if (el.labels && el.labels.length > 0) {
+      var labelText = (el.labels[0].textContent || '').replace(/\\s+/g,' ').trim().slice(0,80);
+      if (labelText) return "getByLabel('" + labelText + "')";
+    }
+
+    var ariaLabel = el.getAttribute && el.getAttribute('aria-label');
+    if (ariaLabel) return "getByLabel('" + ariaLabel + "')";
+
+    var placeholder = el.getAttribute && el.getAttribute('placeholder');
+    if (placeholder) return "getByPlaceholder('" + placeholder + "')";
+
+    var alt = el.getAttribute && el.getAttribute('alt');
+    if (alt) return "getByAltText('" + alt + "')";
+
+    var titleAttr = el.getAttribute && el.getAttribute('title');
+    if (titleAttr) return "getByTitle('" + titleAttr + "')";
+
+    if (el.id) return "locator('#" + el.id + "')";
+
     var cls = ((el.getAttribute && el.getAttribute('class')) || '').split(/\\s+/).find(function(c){return c.length>1;});
-    return cls ? tag + '.' + cls : tag;
+    if (cls) return "locator('." + cls + "')";
+
+    return tag;
   }
 
   function buildChain(raw) {
@@ -180,11 +202,38 @@ function pickerScript(): string {
 
   function isOwn(el) { return el === banner || el === highlight || (banner.contains && banner.contains(el)); }
 
+  var bannerDocked = 'top';
+  function dockBanner(side) {
+    if (bannerDocked === side) return;
+    bannerDocked = side;
+    if (side === 'bottom') {
+      banner.style.top = 'auto';
+      banner.style.bottom = '12px';
+    } else {
+      banner.style.top = '12px';
+      banner.style.bottom = 'auto';
+    }
+  }
+
   function onMove(e) {
     var raw = e.target;
     if (!raw || isOwn(raw)) { highlight.style.display='none'; return; }
     if (raw !== lastRaw) { lastRaw=raw; chain=buildChain(raw); idx=snapIndex(chain); }
     refresh();
+    var el = current();
+    if (el) {
+      var r = el.getBoundingClientRect();
+      var bannerRect = banner.getBoundingClientRect();
+      var margin = 8;
+      if (
+        r.left < bannerRect.right + margin &&
+        r.right > bannerRect.left - margin &&
+        r.top < bannerRect.bottom + margin &&
+        r.bottom > bannerRect.top - margin
+      ) {
+        dockBanner(bannerDocked === 'top' ? 'bottom' : 'top');
+      }
+    }
   }
 
   function handleKey(k) {
@@ -523,7 +572,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <UModal v-model:open="isOpen" :ui="{ content: 'max-w-4xl' }" @after-leave="close">
+  <UModal v-model:open="isOpen" :ui="{ content: 'max-w-6xl w-[95vw]' }" @after-leave="close">
     <template #header>
       <div>
         <h3 class="text-lg font-medium">Pick a locator from the DOM snapshot</h3>
@@ -606,7 +655,7 @@ onBeforeUnmount(() => {
           ref="stageRef"
           class="relative border border-default rounded-lg"
           :class="[
-            step === 'pick-element' ? 'h-[60vh]' : 'h-64',
+            step === 'pick-element' ? 'h-[75vh]' : 'h-80',
             viewport ? 'overflow-auto bg-gray-100 dark:bg-gray-800' : 'overflow-hidden',
           ]"
         >
@@ -663,14 +712,15 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Alternatives list -->
-          <div class="space-y-2">
+          <div class="space-y-1">
             <LocatorAlternativeRow
               v-for="(alt, i) in alternatives"
               :key="i"
               :alt="alt"
               :note="locatorNote(alt)"
               :copied="copiedKey === `picked-${i}`"
-              :class="selectedAlt?.locator === alt.locator ? 'ring-2 ring-primary/50 rounded-lg' : ''"
+              :dense="true"
+              :class="selectedAlt?.locator === alt.locator ? 'ring-2 ring-primary/50 rounded' : ''"
               class="cursor-pointer"
               @copy="copyLocator(alt.locator, `picked-${i}`)"
               @click="selectAlternative(alt)"

@@ -419,13 +419,34 @@ export function installPickerOverlay(arg: { failing: string | null }): void {
   doc.body.appendChild(banner);
 
   // Short descriptor of an element for the banner breadcrumb.
+  const escJs = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const describe = (el: any): string => {
     const tag = (el.tagName || '?').toLowerCase();
+
     const testId = el.getAttribute && el.getAttribute('data-testid');
-    if (testId) return `${tag}[data-testid="${testId}"]`;
-    if (el.id) return `${tag}#${el.id}`;
+    if (testId) return `getByTestId('${escJs(testId)}')`;
+
+    if (el.labels && el.labels.length > 0) {
+      const labelText = (el.labels[0].textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      if (labelText) return `getByLabel('${escJs(labelText)}')`;
+    }
+
+    const ariaLabel = el.getAttribute && el.getAttribute('aria-label');
+    if (ariaLabel) return `getByLabel('${escJs(ariaLabel)}')`;
+
+    const placeholder = el.getAttribute && el.getAttribute('placeholder');
+    if (placeholder) return `getByPlaceholder('${escJs(placeholder)}')`;
+
+    const alt = el.getAttribute && el.getAttribute('alt');
+    if (alt) return `getByAltText('${escJs(alt)}')`;
+
+    const titleAttr = el.getAttribute && el.getAttribute('title');
+    if (titleAttr) return `getByTitle('${escJs(titleAttr)}')`;
+
+    if (el.id) return `locator('#${escJs(el.id)}')`;
+
     const cls = ((el.getAttribute && el.getAttribute('class')) || '').split(/\s+/).find((c: string) => c.length > 1);
-    return cls ? `${tag}.${cls}` : tag;
+    return cls ? `locator('.${escJs(cls)}')` : tag;
   };
 
   // The hover chain: raw target up to (not including) body, capped.
@@ -479,6 +500,18 @@ export function installPickerOverlay(arg: { failing: string | null }): void {
     e.stopImmediatePropagation();
   };
   const isOwn = (el: any) => el === banner || el === highlight || (banner.contains && banner.contains(el));
+  let bannerDocked: 'top' | 'bottom' = 'top';
+  const dockBanner = (side: 'top' | 'bottom') => {
+    if (bannerDocked === side) return;
+    bannerDocked = side;
+    if (side === 'bottom') {
+      banner.style.top = 'auto';
+      banner.style.bottom = '12px';
+    } else {
+      banner.style.top = '12px';
+      banner.style.bottom = 'auto';
+    }
+  };
   const onMove = (e: any) => {
     const raw = e.target;
     if (!raw || isOwn(raw)) {
@@ -491,6 +524,20 @@ export function installPickerOverlay(arg: { failing: string | null }): void {
       idx = snapIndex(chain);
     }
     refresh();
+    const el = current();
+    if (el) {
+      const r = el.getBoundingClientRect();
+      const br = banner.getBoundingClientRect();
+      const margin = 8;
+      if (
+        r.left < br.right + margin &&
+        r.right > br.left - margin &&
+        r.top < br.bottom + margin &&
+        r.bottom > br.top - margin
+      ) {
+        dockBanner(bannerDocked === 'top' ? 'bottom' : 'top');
+      }
+    }
   };
   const onClick = (e: any) => {
     stop(e);
