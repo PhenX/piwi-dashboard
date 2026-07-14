@@ -1,5 +1,6 @@
 import * as path from 'node:path';
-import { parseAriaCandidates, textSimilarity } from '@piwitests/core/locator-fingerprint';
+import { fingerprintPresent, matchRenamedElement, parseAriaCandidates } from '@piwitests/core/locator-fingerprint';
+import type { ElementFingerprint } from '@piwitests/core/locator-fingerprint';
 import { LOCATOR_BUILDER_METHODS } from '@piwitests/core/locator-methods';
 
 /**
@@ -274,31 +275,16 @@ export function suggestLocatorsFromAria(
   const candidates = parseAriaCandidates(ariaSnapshot);
   if (candidates.length === 0) return null;
 
-  const sameRole = role ? candidates.filter((c) => c.role === role) : [];
-  let pool = sameRole.length > 0 ? sameRole : candidates;
-
-  // A targeted heading level narrows the pool further — a lone renamed h1
-  // among many h2s becomes the single confident candidate. Fall back to all
-  // same-role candidates when none share the level (it may have changed too).
-  if (level != null && sameRole.length > 0) {
-    const sameLevel = sameRole.filter((c) => c.level === level);
-    if (sameLevel.length > 0) pool = sameLevel;
-  }
+  // Element identity + rename matching are shared with the server healing path
+  // (@piwitests/core); only the same-style suggestion rendering below is
+  // reporter-specific.
+  const fingerprint: ElementFingerprint = { role, name, level };
 
   // The targeted name is still on the page → not a rename, nothing to suggest.
-  if (pool.some((c) => textSimilarity(c.name, name) >= 0.8)) return null;
+  if (fingerprintPresent(fingerprint, candidates)) return null;
 
-  let best: { role: string; name: string | null; level: number | null } | null = null;
-  let bestScore = -1;
-  for (const c of pool) {
-    const s = textSimilarity(c.name, name);
-    if (s > bestScore) {
-      bestScore = s;
-      best = c;
-    }
-  }
+  const best = matchRenamedElement(fingerprint, candidates)?.candidate;
   if (!best || !best.name) return null;
-  if (bestScore < 0.2 && pool.length !== 1) return null;
 
   const suggestions = freshSuggestions({ role: best.role, name: best.name, level: best.level }, failed.method);
   if (suggestions.length === 0) return null;
