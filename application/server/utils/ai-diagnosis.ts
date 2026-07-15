@@ -229,7 +229,10 @@ async function claimRunningRow(db: DbClient, cluster: FailureCluster, config: Ai
 
   try {
     await db.insert(failureDiagnoses).values({
-      clusterId: cluster.id,
+      // Execution-scoped rows key on `testRunsCaseId`, never on a cluster — a failure may
+      // have no cluster, and a null keeps the (cluster_id, scope) unique index from
+      // colliding across executions that share one cluster.
+      clusterId: isExecutionScope ? null : cluster.id,
       scope: isExecutionScope ? 'execution' : 'cluster',
       createdAt: new Date(),
       ...(isExecutionScope ? { testRunsCaseId: opts.testRunsCaseId! } : {}),

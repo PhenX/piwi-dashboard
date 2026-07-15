@@ -204,6 +204,13 @@
       "when": 1783855125216,
       "tag": "0028_right_magneto",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1784146618356,
+      "tag": "0029_milky_moondragon",
+      "breakpoints": true
     }
   ]
 }

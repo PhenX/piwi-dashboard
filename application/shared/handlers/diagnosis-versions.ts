@@ -10,7 +10,7 @@
 /** The subset of a diagnosis row needed to snapshot a version (structurally typed). */
 export interface DiagnosisRowForVersion {
   id: number;
-  clusterId: number;
+  clusterId: number | null;
   scope: string;
   testRunsCaseId: number | null;
   status: string;
