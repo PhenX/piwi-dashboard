@@ -41,6 +41,27 @@ defineEmits<{
   refresh: [];
 }>();
 
+/** At-a-glance signal badges shown next to the title (regression / flaky / retry). */
+const signalBadges = computed(() => {
+  const tc = props.testCase;
+  if (!tc) return [] as { label: string; color: 'error' | 'warning' | 'neutral'; title: string }[];
+  const out: { label: string; color: 'error' | 'warning' | 'neutral'; title: string }[] = [];
+  if (tc.isNewRegression)
+    out.push({
+      label: 'New regression',
+      color: 'error',
+      title: 'Passed in the baseline run, failing here',
+    });
+  if (tc.isNewFlaky) out.push({ label: 'New flaky', color: 'warning', title: 'Newly started passing only on retry' });
+  if (tc.status === 'passed' && (tc.retries ?? 0) > 0)
+    out.push({ label: 'Passed on retry', color: 'warning', title: 'This test failed then passed on a retry' });
+  return out;
+});
+
+const annotations = computed(() => props.testCase?.testAnnotations ?? []);
+
+const startedAtMs = computed<number | null>(() => props.testCase?.startedAt ?? null);
+
 const { summaryColSpanClass, blockColSpanClass } = useDetailGrid(() => {
   let count = 0;
   if (props.scmInfo) count++;
@@ -114,9 +135,37 @@ function fileName(path: string): string {
                   <h2 class="text-base font-bold truncate">
                     {{ testCase?.title }}
                   </h2>
+                  <UBadge
+                    v-for="badge in signalBadges"
+                    :key="badge.label"
+                    :color="badge.color"
+                    variant="subtle"
+                    size="xs"
+                    :title="badge.title"
+                  >
+                    {{ badge.label }}
+                  </UBadge>
+                  <UBadge
+                    v-for="(ann, i) in annotations"
+                    :key="`ann-${i}`"
+                    color="neutral"
+                    variant="soft"
+                    size="xs"
+                    class="font-mono"
+                    :title="ann.description || ann.type"
+                  >
+                    @{{ ann.type }}
+                  </UBadge>
                 </div>
                 <p class="text-xs text-gray-500 mt-0.5">
                   <span v-if="testCase?.location">{{ testCase.location }}</span>
+                  <span
+                    v-if="startedAtMs"
+                    class="ml-2 text-gray-400"
+                    :title="new Date(startedAtMs).toLocaleString()"
+                  >
+                    started {{ formatRelativeTime(startedAtMs) }}
+                  </span>
                   <span v-if="historicalTiming" class="ml-2">
                     Avg {{ formatDuration(historicalTiming.avg) }} &middot;
                     <span :class="historicalTiming.diff > 0 ? 'text-red-600' : 'text-green-600'">
@@ -161,6 +210,13 @@ function fileName(path: string): string {
               <span v-if="testCase.slowestStepDuration" class="text-gray-500 shrink-0"
                 >({{ formatDuration(testCase.slowestStepDuration) }})</span
               >
+            </div>
+
+            <div v-if="(testCase?.wastedTimeMs ?? 0) > 0" class="flex items-center gap-1.5 text-sm">
+              <UIcon name="i-lucide-hourglass" class="size-4 text-amber-500 shrink-0" />
+              <span class="font-medium text-amber-700 dark:text-amber-300">Wasted in fixed waits:</span>
+              <span class="text-gray-700 dark:text-gray-300">{{ formatDuration(testCase?.wastedTimeMs) }}</span>
+              <HelpHint topic="case.wasted-time" />
             </div>
           </div>
         </UCard>

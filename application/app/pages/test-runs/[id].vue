@@ -5,6 +5,7 @@ import { subscribeDemoEvents } from '~/demo/run-events';
 import { useRunStream } from '~/composables/useRunStream';
 
 const route = useRoute();
+const router = useRouter();
 const runId = route.params.id;
 const isDemoMode = Boolean(useRuntimeConfig().public.demoMode);
 
@@ -492,6 +493,22 @@ const tabPanelClass: Record<string, string> = {
   'test-cases': 'overflow-hidden flex flex-col',
   endpoints: 'overflow-hidden flex flex-col',
 };
+
+// Deep-link the active tab via ?tab= so run views can be shared and cross-page
+// links (e.g. Run insights → this run's Performance) land on the right tab. The
+// tab set is conditional (failure-groups/regression only exist with failures),
+// so validate against the current tabItems.
+const runTabValues = computed(() => tabItems.value.map((t) => t.value));
+if (typeof route.query.tab === 'string' && runTabValues.value.includes(route.query.tab)) {
+  activeTab.value = route.query.tab;
+}
+watch(runTabValues, (vals) => {
+  if (!vals.includes(activeTab.value)) activeTab.value = 'test-cases';
+});
+watch(activeTab, (tab) => {
+  if (route.query.tab === tab) return;
+  router.replace({ query: { ...route.query, tab } });
+});
 
 // Ref for TestCasesList to call scrollToCase
 const testCasesListRef: {
