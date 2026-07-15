@@ -1,67 +1,87 @@
 /**
- * Canned DOM snapshot for demo mode. The server renders DOM snapshots from
- * trace ZIPs with node-only code (zlib), which cannot run in the demo's
- * browser sandbox — so the demo serves this pre-rendered result instead.
+ * DOM snapshots for demo mode, parsed from the real committed demo trace.
  *
- * The content below is the REAL output of `extractDomSnapshot` over the
- * committed demo trace (`public/demo/traces/checkout-pay-timeout.zip`).
- * Regenerate it after re-recording the trace (scripts/record-demo-media.mjs)
- * by running `extractDomSnapshot(await parseTraceEvents(zip), 200000)` and
- * pasting the JSON here.
+ * The server extracts DOM snapshots from trace ZIPs with node-only inflation
+ * (zlib); the demo does the same in the browser with a DataView central
+ * directory walk + DecompressionStream (`../trace-zip.client.ts`) and then
+ * runs the exact same node-free parsing/rendering the server uses
+ * (`trace-events.ts` + `dom-snapshot-render.ts`), so the locator picker and
+ * the DOM snapshot card show the genuine failure-time DOM — viewport and all —
+ * of `public/demo/traces/checkout-pay-timeout.zip`.
  */
 import { and, eq } from 'drizzle-orm';
 import { files, testRunsCases } from '~~/server/database/schema.sqlite';
 import { renderAriaSnapshotHtml } from '~~/server/utils/dom-snapshot-aria';
-import { getDemoDb } from '../db.client';
+import { parseTraceTexts, traceFileRank } from '~~/server/utils/trace-events';
+import {
+  DOM_SNAPSHOT_CAP_CHARS,
+  extractDomSnapshot,
+  type DomSnapshotResult,
+  type DomSnapshotSource,
+} from '~~/server/utils/dom-snapshot-render';
+import { readZipEntries } from '../trace-zip.client';
+import { getDemoDb, getDemoDbBaseUrl } from '../db.client';
 
-const CHECKOUT_DOM_SNAPSHOT = {
-  status: 'ok' as const,
-  html: `<!DOCTYPE html>
-<html lang="en"><head><base href="http://127.0.0.1:36203/checkout">
-<meta charset="utf-8">
-<title>Acme Shop — Checkout</title>
-<style>
-  body { font-family: system-ui, sans-serif; background: #f4f4f5; margin: 0; padding: 24px; }
-  .card { max-width: 380px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-  h1 { font-size: 18px; margin: 0 0 16px; }
-  label { display: block; font-size: 13px; color: #52525b; margin: 12px 0 4px; }
-  input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #d4d4d8; border-radius: 6px; font-size: 14px; }
-  button { margin-top: 18px; width: 100%; padding: 10px; border: 0; border-radius: 6px; background: #18181b; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
-  .error { display: none; margin-top: 14px; padding: 10px; border-radius: 6px; background: #fef2f2; color: #b91c1c; font-size: 13px; }
-</style>
-</head>
-<body>
-<div class="card">
-  <h1>Checkout</h1>
-  <div>Total: <strong>$42.00</strong></div>
-  <label for="email">Email</label>
-  <input id="email" type="email" placeholder="you@example.com">
-  <label for="card">Card number</label>
-  <input id="card" inputmode="numeric" placeholder="4242 4242 4242 4242">
-  <button id="pay">Pay</button>
-  <div class="error" id="error" style="display: block;">Payment failed: the server returned an error (HTTP 500). Please try again.</div>
-</div>
+/** Only committed demo assets may be fetched (mirrors files.ts). */
+const ALLOWED_TRACE_PREFIX = 'demo/traces/';
 
+// The committed trace is immutable for the lifetime of a build — parse it once
+// and share the result between the picker, the DOM snapshot card and the AI
+// context builder. Failed loads are not cached so a transient fetch error can
+// recover on the next request.
+const traceSnapshotCache = new Map<string, Promise<DomSnapshotResult | null>>();
 
-</body></html>`,
-  truncated: false,
-  snapshotName: 'after@call@18',
-};
+function getTraceDomSnapshot(path: string): Promise<DomSnapshotResult | null> {
+  const cached = traceSnapshotCache.get(path);
+  if (cached) return cached;
+  const promise = loadTraceDomSnapshot(path)
+    .catch(() => null)
+    .then((result) => {
+      if (!result) traceSnapshotCache.delete(path);
+      return result;
+    });
+  traceSnapshotCache.set(path, promise);
+  return promise;
+}
+
+/**
+ * Fetch a committed trace ZIP from the demo's static assets and extract the
+ * failure-time DOM snapshot, mirroring the server's `getTraceDomSnapshot`
+ * (`parseZip` → `parseTraceTexts` → `extractDomSnapshot`). Returns null when
+ * the trace is missing, unparsable, or holds no renderable snapshot.
+ */
+async function loadTraceDomSnapshot(path: string): Promise<DomSnapshotResult | null> {
+  if (!path.startsWith(ALLOWED_TRACE_PREFIX)) return null;
+
+  const base = getDemoDbBaseUrl().replace(/\/$/, '');
+  const response = await fetch(`${base}/${path}`);
+  if (!response.ok) return null;
+  const bytes = new Uint8Array(await response.arrayBuffer());
+
+  const traceEntries = (await readZipEntries(bytes, (name) => name.endsWith('.trace'))).sort(
+    (a, b) => traceFileRank(a.name) - traceFileRank(b.name),
+  );
+  if (traceEntries.length === 0) return null;
+
+  const decoder = new TextDecoder();
+  const data = parseTraceTexts(traceEntries.map((entry) => decoder.decode(entry.data)));
+  const result = extractDomSnapshot(data, DOM_SNAPSHOT_CAP_CHARS);
+  return result.status === 'ok' && result.html ? result : null;
+}
 
 /**
  * GET /api/test-runs/:id/cases/:caseId/dom-snapshot — mirrors the server's
  * `resolveCaseDomSnapshot`: trace-derived DOM by default, the ARIA tree as a
  * fallback or on demand (`?source=aria`), and `availableSources` so the picker
- * can offer the view toggle. The trace path can't run in the browser (node-only
- * zlib), so the one demo case carrying the committed trace returns the
- * pre-rendered result; every failed case's seeded `ariaSnapshot` renders with
- * the same browser-safe renderer the real app uses.
+ * can offer the view toggle. The case carrying the committed trace gets the
+ * real trace-derived DOM parsed in the browser; every failed case's seeded
+ * `ariaSnapshot` renders with the same browser-safe renderer the real app uses.
  */
 export async function apiGetDemoDomSnapshot(testRunsCaseId: number, query?: URLSearchParams): Promise<unknown> {
   const db = await getDemoDb();
   const [traceRows, caseRows] = await Promise.all([
     db
-      .select({ id: files.id })
+      .select({ path: files.path })
       .from(files)
       .where(and(eq(files.testRunsCaseId, testRunsCaseId), eq(files.type, 'trace')))
       .limit(1),
@@ -72,21 +92,32 @@ export async function apiGetDemoDomSnapshot(testRunsCaseId: number, query?: URLS
       .limit(1),
   ]);
 
-  const hasTrace = traceRows.length > 0;
+  const tracePath = traceRows[0]?.path;
   const ariaHtml = caseRows[0]?.aria ? renderAriaSnapshotHtml(caseRows[0].aria) : null;
-  const availableSources = [...(hasTrace ? ['dom'] : []), ...(ariaHtml ? ['aria'] : [])];
-  const source = query?.get('source');
-  const asAria = () => ({
-    status: 'ok' as const,
+  let domAvailable = !!tracePath;
+
+  const sources = (): DomSnapshotSource[] => [
+    ...(domAvailable ? (['dom'] as const) : []),
+    ...(ariaHtml ? (['aria'] as const) : []),
+  ];
+  const asAria = (): DomSnapshotResult => ({
+    status: 'ok',
     html: ariaHtml!,
     truncated: false,
     snapshotName: 'aria-fallback',
-    source: 'aria' as const,
-    availableSources,
+    source: 'aria',
+    availableSources: sources(),
   });
 
-  if (source === 'aria' && ariaHtml) return asAria();
-  if (hasTrace) return { ...CHECKOUT_DOM_SNAPSHOT, source: 'dom', availableSources };
+  // Explicit ARIA request — skip the trace entirely.
+  if (query?.get('source') === 'aria' && ariaHtml) return asAria();
+
+  if (tracePath) {
+    const result = await getTraceDomSnapshot(tracePath);
+    if (result) return { ...result, source: 'dom', availableSources: sources() };
+    // The trace produced no usable DOM — drop it as an option and fall back.
+    domAvailable = false;
+  }
   if (ariaHtml) return asAria();
-  return { status: 'no-trace', availableSources };
+  return { status: 'no-trace', availableSources: sources() };
 }

@@ -1,12 +1,8 @@
 import { describe, test, expect } from 'vitest';
-import {
-  renderSnapshotHtml,
-  sanitizeDomSnapshot,
-  extractDomSnapshot,
-  resolveCaseDomSnapshot,
-} from '~~/server/utils/dom-snapshot';
+import { renderSnapshotHtml, sanitizeDomSnapshot, extractDomSnapshot } from '~~/server/utils/dom-snapshot-render';
+import { resolveCaseDomSnapshot } from '~~/server/utils/dom-snapshot';
 import { renderAriaSnapshotHtml } from '~~/server/utils/dom-snapshot-aria';
-import type { TraceFrameSnapshot, ParsedTraceData } from '~~/server/utils/trace-parser';
+import type { TraceFrameSnapshot, ParsedTraceData } from '~~/server/utils/trace-events';
 
 function snap(overrides: Partial<TraceFrameSnapshot>): TraceFrameSnapshot {
   return { frameId: 'frame@1', isMainFrame: true, html: ['HTML', {}], ...overrides };
