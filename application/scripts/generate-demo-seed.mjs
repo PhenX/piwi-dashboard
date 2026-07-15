@@ -486,6 +486,55 @@ function testSourceForCluster(clusterDef) {
   return null;
 }
 
+/** Format lines as a line-numbered snippet (matches the reporter's readSourceSnippet). */
+function fmtSnippet(lines, failingIdx, startLine) {
+  return lines
+    .map((l, i) => `${i === failingIdx ? '> ' : '  '}${String(startLine + i).padStart(4)} | ${l}`)
+    .join('\n');
+}
+
+// Multi-frame call stack for a failing case: the failing line plus the callers
+// above it. Seeded for the flagship checkout failure — where the click actually
+// fails inside a shared helper the spec called — to showcase "the interesting
+// part is upper". Other clusters fall back to the single testSource snippet.
+function testSourceFramesForCluster(clusterDef) {
+  if (!clusterDef) return null;
+  if (!/getByRole\('button', \{ name: 'Pay' \}\)/.test(clusterDef.errorText || '')) return null;
+  return [
+    {
+      file: 'tests/helpers/payment.ts',
+      line: 16,
+      snippet: fmtSnippet(
+        [
+          'export async function fillPaymentDetails(page: Page) {',
+          "  await page.getByLabel('Card number').fill(TEST_CARD);",
+          "  await page.getByLabel('Expiry').fill('12/30');",
+          '  // The Pay button stays disabled until the async quote resolves',
+          "  await page.getByRole('button', { name: 'Pay' }).click();",
+          '}',
+        ],
+        4,
+        12,
+      ),
+    },
+    {
+      file: 'tests/checkout/checkout.spec.ts',
+      line: 42,
+      snippet: fmtSnippet(
+        [
+          "test('completes checkout', async ({ page }) => {",
+          "  await page.goto('/checkout');",
+          '  await fillPaymentDetails(page);',
+          "  await expect(page.getByText('Order confirmed')).toBeVisible();",
+          '});',
+        ],
+        2,
+        40,
+      ),
+    },
+  ];
+}
+
 // Simple URL normalizer for seed data (mirrors shared/utils/route.ts)
 function seedNormalizeUrl(url) {
   try {
@@ -951,6 +1000,7 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
           : null,
         aria_snapshot: isFailedCase ? ariaSnapshotForCluster(clusterDef) : null,
         test_source: isFailedCase ? testSourceForCluster(clusterDef) : null,
+        test_source_frames: isFailedCase ? testSourceFramesForCluster(clusterDef) : null,
         worker_index: workerIndex,
         started_at: caseStartMs,
         created_at: Math.floor(caseStartMs / 1000),
