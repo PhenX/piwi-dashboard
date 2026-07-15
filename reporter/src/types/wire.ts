@@ -16,10 +16,11 @@ import type {
   FilterDetails,
   SuiteConfigEntry,
   TestAnnotation,
+  TestSourceFrame,
   TestStepEvent,
 } from '@piwitests/core/wire';
 
-export type { BrowserConfig, FilterDetails, SuiteConfigEntry, TestAnnotation, TestStepEvent };
+export type { BrowserConfig, FilterDetails, SuiteConfigEntry, TestAnnotation, TestSourceFrame, TestStepEvent };
 
 // ── Per-case wire shape ──────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ export interface WireTestCase {
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
   testSource?: string | null;
+  testSourceFrames?: TestSourceFrame[] | null;
   browser?: BrowserConfig | null;
   suitePath?: string[] | null;
   suiteConfig?: SuiteConfigEntry[] | null;
@@ -99,6 +101,7 @@ export interface CompleteStreamEvent {
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
   testSource?: string | null;
+  testSourceFrames?: TestSourceFrame[] | null;
   locatorSnapshots?: unknown;
 }
 

@@ -177,6 +177,7 @@ describe('toWireTestCase', () => {
       'suitePath',
       'testAnnotations',
       'testSource',
+      'testSourceFrames',
       'title',
       'type',
       'wastedTimeMs',

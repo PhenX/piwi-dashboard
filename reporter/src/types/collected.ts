@@ -7,7 +7,7 @@
  * the external server contract, see `./wire.ts`.
  */
 
-import type { BrowserConfig, SuiteConfigEntry, TestAnnotation, TestStepEvent } from './wire.js';
+import type { BrowserConfig, SuiteConfigEntry, TestAnnotation, TestSourceFrame, TestStepEvent } from './wire.js';
 import type { LocatorSnapshot } from '../internal/capture/locator-healing.js';
 
 /**
@@ -67,6 +67,8 @@ export interface CollectedTestCase {
   testAnnotations?: TestAnnotation[] | null;
   /** Source snippet around the failing line (failed/timedOut only). */
   testSource?: string;
+  /** In-project call-stack frames (innermost first): the failing line + its callers. */
+  testSourceFrames?: TestSourceFrame[];
   /** Step metrics from `collectStepMetrics`. Consumed by the run summary + `toWireTestCase`. */
   performanceMetrics?: CollectedPerformanceMetrics;
   stepEvents?: TestStepEvent[];

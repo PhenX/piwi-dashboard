@@ -62,6 +62,7 @@ export function toWireTestCase(tc: CollectedTestCase): WireTestCase {
     consoleLogs: rest.consoleLogs || null,
     ariaSnapshot: rest.ariaSnapshot || null,
     testSource: rest.testSource || null,
+    testSourceFrames: rest.testSourceFrames || null,
     browser: rest.browser || null,
     suitePath: rest.suitePath ?? null,
     suiteConfig: rest.suiteConfig ?? null,

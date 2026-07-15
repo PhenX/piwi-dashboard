@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import { hashForProject, computeInstanceId } from '../src/internal/support/instance-id.js';
 import { getSetupFilePath, readSetupInfo } from '../src/internal/support/setup-file.js';
 import { detectCiRunLabel } from '../src/internal/support/ci.js';
-import { readSourceSnippet } from '../src/internal/support/source-snippet.js';
+import { readSourceSnippet, collectSourceFrames } from '../src/internal/support/source-snippet.js';
 import { createLimiter } from '../src/internal/support/limiter.js';
 import { workerIndexOf } from '../src/internal/support/worker-index.js';
 import { detectCliFileFilters } from '../src/internal/support/cli-filters.js';
@@ -211,6 +211,73 @@ describe('readSourceSnippet', () => {
       expect(snippet!.includes('> ')).toBeTruthy();
     } finally {
       fs.unlinkSync(tmp);
+    }
+  });
+});
+
+describe('collectSourceFrames', () => {
+  function makeProject() {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'piwi-frames-'));
+    const nm = path.join(root, 'node_modules', 'pw');
+    fs.mkdirSync(path.join(root, 'tests'), { recursive: true });
+    fs.mkdirSync(nm, { recursive: true });
+    const spec = path.join(root, 'tests', 'checkout.spec.ts');
+    const helper = path.join(root, 'tests', 'helper.ts');
+    const lib = path.join(nm, 'index.js');
+    fs.writeFileSync(spec, Array.from({ length: 50 }, (_, i) => `spec line ${i + 1}`).join('\n'));
+    fs.writeFileSync(helper, Array.from({ length: 30 }, (_, i) => `helper line ${i + 1}`).join('\n'));
+    fs.writeFileSync(lib, Array.from({ length: 10 }, (_, i) => `lib line ${i + 1}`).join('\n'));
+    return { root, spec, helper, lib };
+  }
+
+  it('collects in-project frames innermost-first and drops node_modules', () => {
+    const { root, spec, helper, lib } = makeProject();
+    try {
+      const error = [
+        'Error: boom',
+        `    at doClick (${lib}:5:3)`,
+        `    at checkout (${helper}:15:10)`,
+        `    at Object.<anonymous> (${spec}:42:5)`,
+      ].join('\n');
+      const frames = collectSourceFrames(error, spec, 40, { projectRoot: root, context: 2 });
+      // The node_modules frame is dropped; helper (innermost in-project) comes before the spec.
+      expect(frames.map((f) => f.file)).toEqual([path.join('tests', 'helper.ts'), path.join('tests', 'checkout.spec.ts')]);
+      expect(frames[0]!.line).toBe(15);
+      expect(frames[0]!.snippet).toContain('> ');
+      expect(frames[0]!.file.startsWith('..')).toBe(false); // project-relative
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to the test file when the stack has no in-project frame', () => {
+    const { root, spec, lib } = makeProject();
+    try {
+      const error = `Error: boom\n    at internal (${lib}:5:3)`;
+      const frames = collectSourceFrames(error, spec, 42, { projectRoot: root, context: 2 });
+      expect(frames).toHaveLength(1);
+      expect(frames[0]!.file).toBe(path.join('tests', 'checkout.spec.ts'));
+      expect(frames[0]!.line).toBe(42);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('caps the number of frames', () => {
+    const { root, spec, helper } = makeProject();
+    try {
+      const error = [
+        'Error: boom',
+        `    at a (${helper}:1:1)`,
+        `    at b (${helper}:5:1)`,
+        `    at c (${helper}:9:1)`,
+        `    at d (${spec}:20:1)`,
+        `    at e (${spec}:42:1)`,
+      ].join('\n');
+      const frames = collectSourceFrames(error, spec, 42, { projectRoot: root, context: 1, maxFrames: 3 });
+      expect(frames).toHaveLength(3);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
     }
   });
 });

@@ -13,7 +13,7 @@ import { StreamManager } from '../internal/streaming/stream-manager.js';
 import { collectStepMetrics, extractTestStepEvents, extractWaitEvents } from '../internal/collect/step-analyzer.js';
 import { computeInstanceId } from '../internal/support/instance-id.js';
 import { getReporterVersion } from '../internal/support/reporter-version.js';
-import { extractFailingLine, readSourceSnippet } from '../internal/support/source-snippet.js';
+import { collectSourceFrames, extractFailingLine, readSourceSnippet } from '../internal/support/source-snippet.js';
 import { detectCiRunLabel } from '../internal/support/ci.js';
 import { workerIndexOf } from '../internal/support/worker-index.js';
 import { detectCliFileFilters } from '../internal/support/cli-filters.js';
@@ -278,6 +278,10 @@ export class PiwiDashboardReporter {
       const failingLine = extractFailingLine(testCase.error, test.location.file, test.location.line);
       const snippet = readSourceSnippet(test.location.file, test.location.line, 30, failingLine);
       if (snippet) testCase.testSource = snippet;
+      // The call stack's in-project frames (innermost first) — the failing line
+      // plus the callers above it, so a failure inside a helper is visible.
+      const frames = collectSourceFrames(testCase.error, test.location.file, test.location.line);
+      if (frames.length) testCase.testSourceFrames = frames;
     }
 
     if (this.options.collectPerformanceMetrics && result.steps?.length > 0) {
