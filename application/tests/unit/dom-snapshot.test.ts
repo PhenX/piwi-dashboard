@@ -172,12 +172,56 @@ describe('sanitizeDomSnapshot', () => {
 });
 
 describe('renderAriaSnapshotHtml', () => {
-  test('renders a role-colored chip carrying data-role/data-name for each node', () => {
-    const html = renderAriaSnapshotHtml('- button "Submit"\n- heading "Title"');
+  test('renders each node with data-role/data-name plus real ARIA attrs for the picker', () => {
+    const html = renderAriaSnapshotHtml('- button "Submit"\n- heading "Title" [level=2]')!;
     expect(html).toContain('data-role="button"');
     expect(html).toContain('data-name="Submit"');
-    expect(html).toContain('button "Submit"');
+    // Real ARIA attributes so the picker probe resolves getByRole('button', { name }).
+    expect(html).toContain('role="button"');
+    expect(html).toContain('aria-label="Submit"');
     expect(html).toContain('data-role="heading"');
+    expect(html).toContain('aria-level="2"');
+    // Rendered as a tree, not a flat list.
+    expect(html).toContain('pw-node');
+  });
+
+  test('nests children under their parent inside a tree container', () => {
+    const html = renderAriaSnapshotHtml('- navigation "Main":\n  - link "Home"\n  - link "About"')!;
+    const body = html.slice(html.indexOf('<body>'));
+    // The parent row is followed by a children container holding both links.
+    expect(body).toMatch(/data-name="Main"[^]*pw-children[^]*data-name="Home"[^]*data-name="About"/);
+    expect((body.match(/data-role="link"/g) ?? []).length).toBe(2);
+  });
+
+  test('renders a heading state marker as a badge without polluting the name', () => {
+    const html = renderAriaSnapshotHtml('- button "Save" [disabled]')!;
+    expect(html).toContain('data-name="Save"');
+    expect(html).toContain('data-badges="disabled"');
+  });
+
+  test('renders text nodes as pickable text (getByText) with no role locator', () => {
+    const html = renderAriaSnapshotHtml('- text: Hello world')!;
+    expect(html).toContain('data-pw-text');
+    expect(html).toContain('data-pw-pick');
+    expect(html).toContain('Hello world');
+    // No aria-label / standalone role attribute (getByRole) for a bare text node.
+    const body = html.slice(html.indexOf('<body>'));
+    expect(body).not.toContain('aria-label=');
+    expect(body).not.toMatch(/\srole=/); // data-role is fine; a real `role=` is not
+  });
+
+  test('does not leak its own styling classes onto pickable rows (no class= to probe)', () => {
+    // The picker probes the picked element's `class`; ARIA rows must carry none,
+    // or every pick would offer a bogus `locator('.pw-row')` alternative.
+    const html = renderAriaSnapshotHtml('- button "Go"')!;
+    const body = html.slice(html.indexOf('<body>'));
+    expect(body).not.toContain('class=');
+  });
+
+  test('hoists nameless generic wrappers so their children stay at the top level', () => {
+    const html = renderAriaSnapshotHtml('- generic:\n  - button "Go"')!;
+    expect(html).toContain('data-role="button"');
+    expect(html).not.toContain('data-role="generic"');
   });
 
   test('returns null when the ARIA snapshot yields no candidates', () => {
@@ -220,10 +264,22 @@ describe('renderAriaSnapshotHtml', () => {
 });
 
 describe('resolveCaseDomSnapshot', () => {
-  test('falls back to the ARIA snapshot when there is no trace', async () => {
+  test('falls back to the ARIA tree when there is no trace', async () => {
     const res = await resolveCaseDomSnapshot(null, '- button "Go"');
     expect(res.status).toBe('ok');
     expect(res.snapshotName).toBe('aria-fallback');
+    expect(res.source).toBe('aria');
+    expect(res.availableSources).toEqual(['aria']);
+    expect(res.html).toContain('data-role="button"');
+  });
+
+  test('source:aria renders the ARIA tree without parsing the trace, and lists both sources', async () => {
+    // A trace path is present, but source:aria short-circuits before touching it,
+    // so the toggle can still offer to switch back to the DOM view.
+    const res = await resolveCaseDomSnapshot('demo/trace.zip', '- button "Go"', undefined, { source: 'aria' });
+    expect(res.status).toBe('ok');
+    expect(res.source).toBe('aria');
+    expect(res.availableSources).toEqual(['dom', 'aria']);
     expect(res.html).toContain('data-role="button"');
   });
 

@@ -15,10 +15,17 @@ defineRouteMeta({
     tags: ['Test Runs'],
     summary: 'Render the failure-time DOM snapshot for a test-run case',
     description:
-      'Extracts the DOM snapshot from the stored trace ZIP, falling back to a simplified render of the captured ARIA snapshot when no trace is available. Input values, inline handlers and script bodies are never included; token-shaped strings are masked.',
+      'Extracts the DOM snapshot from the stored trace ZIP, falling back to a nested render of the captured ARIA snapshot when no trace is available. Pass `source=aria` to render the ARIA tree even when a trace exists. Input values, inline handlers and script bodies are never included; token-shaped strings are masked.',
     parameters: [
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' }, description: 'Test run id' },
       { name: 'caseId', in: 'path', required: true, schema: { type: 'integer' }, description: 'Test run case id' },
+      {
+        name: 'source',
+        in: 'query',
+        required: false,
+        schema: { type: 'string', enum: ['dom', 'aria'] },
+        description: 'Which representation to render — trace-derived DOM (default) or the ARIA tree',
+      },
     ],
     'x-required-roles': REQUIRED_ROLES,
   },
@@ -33,6 +40,9 @@ export default eventHandler(async (event) => {
   // another project (the cluster page may pass a caseId from another run).
   const { db } = await requireResolvedProjectAccess(event, caseId, resolveTestRunCaseProjectId, 'Test run case');
 
+  const sourceParam = getQuery(event).source;
+  const source = sourceParam === 'aria' || sourceParam === 'dom' ? sourceParam : undefined;
+
   const [traceRows, caseRows] = await Promise.all([
     db
       .select({ path: files.path })
@@ -42,5 +52,5 @@ export default eventHandler(async (event) => {
     db.select({ aria: testRunsCases.ariaSnapshot }).from(testRunsCases).where(eq(testRunsCases.id, caseId)).limit(1),
   ]);
 
-  return resolveCaseDomSnapshot(traceRows[0]?.path ?? null, caseRows[0]?.aria ?? null);
+  return resolveCaseDomSnapshot(traceRows[0]?.path ?? null, caseRows[0]?.aria ?? null, undefined, { source });
 });
