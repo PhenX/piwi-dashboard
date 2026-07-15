@@ -340,6 +340,7 @@ export const testRunsCases = pgTable(
     consoleLogs: jsonb('console_logs'), // Array of { type, text, timestamp, location } console entries
     ariaSnapshot: text('aria_snapshot'), // ARIA snapshot of the page (YAML-like string from locator.ariaSnapshot())
     testSource: text('test_source'), // Source snippet around the failing assertion (sent by reporter)
+    testSourceFrames: jsonb('test_source_frames'), // Array<{ file, line, snippet }> — in-project call-stack frames (innermost first)
     browser: jsonb('browser'), // Playwright project/browser config: { projectName, browserName, channel, viewport }
     browserName: text('browser_name'), // Scalar browser identity (projectName) for index efficiency
     testAnnotations: jsonb('test_annotations'), // Array<{ type, description? }> — runtime test marks (@fixme, @slow …)
