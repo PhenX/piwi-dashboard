@@ -486,6 +486,7 @@ export interface TestCaseResult {
   duration?: number | null;
   location?: string;
   error?: string | null;
+  testSource?: string | null;
   failureClusterId?: number | null;
   retries?: number | null;
   steps?: PerformanceStep[] | null;
