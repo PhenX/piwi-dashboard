@@ -159,13 +159,11 @@ function fileName(path: string): string {
                 </div>
                 <p class="text-xs text-gray-500 mt-0.5">
                   <span v-if="testCase?.location">{{ testCase.location }}</span>
-                  <span
-                    v-if="startedAtMs"
-                    class="ml-2 text-gray-400"
-                    :title="new Date(startedAtMs).toLocaleString()"
-                  >
-                    started {{ formatRelativeTime(startedAtMs) }}
-                  </span>
+                  <ClientOnly>
+                    <span v-if="startedAtMs" class="ml-2 text-gray-400" :title="new Date(startedAtMs).toLocaleString()">
+                      started {{ formatRelativeTime(startedAtMs) }}
+                    </span>
+                  </ClientOnly>
                   <span v-if="historicalTiming" class="ml-2">
                     Avg {{ formatDuration(historicalTiming.avg) }} &middot;
                     <span :class="historicalTiming.diff > 0 ? 'text-red-600' : 'text-green-600'">

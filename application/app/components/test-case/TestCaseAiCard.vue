@@ -130,10 +130,19 @@ async function diagnose(force = false) {
   }
 }
 
+/** A 'running' row older than 5 min is a crashed/abandoned diagnosis — offer a restart. */
+function isStale(d: FailureDiagnosis) {
+  return d.status === 'running' && Date.now() - new Date(d.updatedAt).getTime() > 5 * 60 * 1000;
+}
+
 const showResult = computed(
   () => diagnosis.value && (diagnosis.value.status === 'completed' || diagnosis.value.status === 'failed'),
 );
-const showDiagnoseButton = computed(() => !diagnosis.value || diagnosis.value.status === 'failed');
+const showDiagnoseButton = computed(
+  () => !diagnosis.value || diagnosis.value.status === 'failed' || (diagnosis.value.status === 'running' && isStale(diagnosis.value)),
+);
+/** A fresh 'running' row: a diagnosis is genuinely in flight (this or another session). */
+const showRunning = computed(() => diagnosis.value?.status === 'running' && !isStale(diagnosis.value) && !posting.value);
 </script>
 
 <template>
@@ -193,8 +202,29 @@ const showDiagnoseButton = computed(() => !diagnosis.value || diagnosis.value.st
           />
         </div>
 
-        <!-- Diagnose / Re-diagnose -->
-        <div class="flex items-center gap-2">
+        <!-- A diagnosis is genuinely in flight (this or another session) -->
+        <div
+          v-if="showRunning"
+          class="flex items-center justify-between gap-2 rounded-lg border border-default bg-elevated/40 p-2.5"
+        >
+          <span class="inline-flex items-center gap-2 text-sm text-gray-500">
+            <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-primary shrink-0" />
+            Diagnosis in progress…
+          </span>
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="outline"
+            icon="i-lucide-refresh-cw"
+            :loading="posting"
+            @click="fetchStoredDiagnosis"
+          >
+            Refresh
+          </UButton>
+        </div>
+
+        <!-- Diagnose / Re-diagnose (a stale 'running' row is treated as restartable) -->
+        <div v-else class="flex items-center gap-2">
           <UButton
             v-if="showDiagnoseButton"
             icon="i-lucide-sparkles"
@@ -202,9 +232,9 @@ const showDiagnoseButton = computed(() => !diagnosis.value || diagnosis.value.st
             color="primary"
             variant="solid"
             :loading="posting"
-            @click="diagnose()"
+            @click="diagnose(diagnosis?.status === 'running')"
           >
-            Diagnose with AI
+            {{ diagnosis?.status === 'running' ? 'Restart diagnosis' : 'Diagnose with AI' }}
           </UButton>
           <UButton
             v-else-if="diagnosis?.status === 'completed'"

@@ -19,7 +19,7 @@ const props = defineProps<{
   currentId: number;
 }>();
 
-const isFail = (s?: string | null) => s === 'failed' || s === 'timedOut';
+const isFail = (s?: string | null) => s === 'failed' || s === 'timedOut' || s === 'timedout';
 
 interface Chip {
   label: string;
@@ -66,24 +66,40 @@ const chips = computed<Chip[]>(() => {
 /** Oldest → newest, capped, for the status strip. */
 const strip = computed(() => props.history.slice(0, 24).slice().reverse());
 
-/** Newest-first failing streak + the most recent green run. */
+/**
+ * Failing streak and the most recent green run, anchored to the execution being
+ * viewed (not the newest one) so an older execution reached via a deep link or
+ * the strip gets a verdict about itself. History is desc by run start, so entries
+ * after the anchor index are older.
+ */
 const verdict = computed(() => {
   const h = props.history; // desc by run start (newest first), includes the current execution
   if (!h.length) return null;
+  const anchor = Math.max(
+    0,
+    h.findIndex((p) => p.id === props.currentId),
+  );
   let streak = 0;
-  for (const p of h) {
-    if (isFail(p.status)) streak++;
+  for (let i = anchor; i < h.length; i++) {
+    if (isFail(h[i]!.status)) streak++;
     else break;
   }
-  const lastPass = h.find((p) => p.status === 'passed') ?? null;
-  return { streak, lastPass, total: h.length };
+  // Most recent green strictly older than the viewed execution.
+  let lastPass: TestCaseHistoryPoint | null = null;
+  for (let i = anchor + 1; i < h.length; i++) {
+    if (h[i]!.status === 'passed') {
+      lastPass = h[i]!;
+      break;
+    }
+  }
+  return { streak, lastPass, total: h.length, anchorFailing: isFail(h[anchor]?.status) };
 });
 
 const squareClass = (status: string) => ({
   'bg-red-500 hover:bg-red-600': isFail(status),
   'bg-green-500 hover:bg-green-600': status === 'passed',
   'bg-yellow-500 hover:bg-yellow-600': status === 'skipped',
-  'bg-gray-400 hover:bg-gray-500': !['passed', 'failed', 'timedOut', 'skipped'].includes(status),
+  'bg-gray-400 hover:bg-gray-500': !isFail(status) && !['passed', 'skipped'].includes(status),
 });
 </script>
 
