@@ -1,0 +1,259 @@
+/**
+ * Node-free trace event parsing: turn the JSONL event streams inside a
+ * Playwright trace ZIP into structured actions / console / network / DOM
+ * snapshot data. Lives in its own module (like `dom-snapshot-aria.ts`) so the
+ * browser demo can parse the committed demo trace with the exact same code the
+ * server uses — only ZIP inflation differs per runtime (node zlib in
+ * `trace-zip.ts`, DecompressionStream in the demo).
+ *
+ * We only parse what is useful for the diagnosis context and DOM snapshots.
+ */
+
+export interface TraceAction {
+  callId: string;
+  apiName: string;
+  class?: string;
+  method?: string;
+  params?: Record<string, unknown>;
+  startTime: number;
+  endTime?: number;
+  error?: { message?: string; stack?: string };
+  pageId?: string;
+  wallTime?: number;
+  log?: string[];
+  snapshotName?: string;
+  beforeSnapshot?: string;
+  afterSnapshot?: string;
+}
+
+export interface TraceConsoleEntry {
+  type: string;
+  text: string;
+  timestamp: number;
+  location?: string;
+}
+
+export interface TraceNetworkRequest {
+  url: string;
+  method: string;
+  statusCode?: number;
+  headers?: Record<string, string>;
+  startTime: number;
+  endTime?: number;
+}
+
+/**
+ * One `frame-snapshot` event from the trace: the serialized DOM Playwright
+ * captured before/after an action. `html` is the internal node-array format
+ * (`[TAG, {attrs}, ...children]`, back-references as `[[snapshotsAgo, nodeIndex]]`)
+ * rendered by `renderSnapshotHtml` (dom-snapshot-render.ts).
+ */
+export interface TraceFrameSnapshot {
+  callId?: string;
+  snapshotName?: string;
+  pageId?: string;
+  frameId?: string;
+  frameUrl?: string;
+  doctype?: string;
+  html: unknown;
+  isMainFrame?: boolean;
+  /** The page's viewport size when the snapshot was taken (for scaled rendering). */
+  viewport?: { width: number; height: number };
+}
+
+export interface ParsedTraceData {
+  actions: TraceAction[];
+  consoleEntries: TraceConsoleEntry[];
+  networkRequests: TraceNetworkRequest[];
+  /** DOM snapshots in trace order (back-references resolve against earlier ones). */
+  frameSnapshots: TraceFrameSnapshot[];
+  /** The action that had an error, if any. */
+  failingAction: TraceAction | null;
+  /** Failing action index in `actions` array for nearby context. */
+  failingActionIndex: number;
+  /** All parsed events (raw), for building the summary. */
+  eventCount: number;
+  /** True when the failing action was identified by timeout fallback (no action had an error). */
+  timeoutFallback: boolean;
+  /**
+   * Largest timestamp observed anywhere in the trace, in the same timebase as
+   * action startTime/endTime. 0 when no timestamp was found.
+   */
+  traceEndTime: number;
+}
+
+/**
+ * Order the trace event files: the runner-level `test.trace` first, then the
+ * per-context files (`0-trace.trace`, `1-trace.trace`, …) in numeric order, then
+ * anything else. Keeps the action timeline coherent when several files are
+ * concatenated; snapshot back-references resolve per-frame so cross-file order
+ * never affects DOM rendering.
+ */
+export function traceFileRank(name: string): number {
+  if (name === 'test.trace' || name === 'trace.trace') return -1;
+  const m = name.match(/^(\d+)-trace\.trace$/);
+  return m ? Number(m[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * Parse the decoded text of one or more `*.trace` JSONL files (already ordered
+ * by `traceFileRank`) into structured trace data. Unparseable lines are
+ * skipped, never thrown on.
+ */
+export function parseTraceTexts(texts: string[]): ParsedTraceData {
+  const events = texts
+    .flatMap((text) => text.split('\n'))
+    .filter(Boolean)
+    .map((l) => {
+      try {
+        return JSON.parse(l);
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean) as Record<string, unknown>[];
+
+  return extractFromEvents(events);
+}
+
+function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
+  const actions: TraceAction[] = [];
+  const consoleEntries: TraceConsoleEntry[] = [];
+  const networkRequests: TraceNetworkRequest[] = [];
+  const frameSnapshots: TraceFrameSnapshot[] = [];
+
+  // Map callId → beforeSnapshot/afterSnapshot from before/after events
+  const beforeSnapshots = new Map<string, string>();
+  const afterSnapshots = new Map<string, string>();
+
+  // Largest timestamp seen across all events, in the trace's own timebase.
+  let traceEndTime = 0;
+
+  for (const evt of events) {
+    const type = evt.type as string;
+
+    // Fold in any timestamp this event carries so traceEndTime tracks the last
+    // moment the trace recorded (used as an upper bound for timed-out actions).
+    for (const key of ['time', 'startTime', 'endTime'] as const) {
+      const ts = evt[key];
+      if (typeof ts === 'number' && Number.isFinite(ts) && ts > traceEndTime) {
+        traceEndTime = ts;
+      }
+    }
+
+    if (type === 'before') {
+      const callId = evt.callId as string;
+      if (callId && evt.pointers) {
+        const pointers = evt.pointers as Record<string, string>;
+        if (pointers.beforeSnapshot) beforeSnapshots.set(callId, pointers.beforeSnapshot);
+      }
+    }
+
+    if (type === 'frame-snapshot' && evt.snapshot && typeof evt.snapshot === 'object') {
+      frameSnapshots.push(evt.snapshot as TraceFrameSnapshot);
+    }
+
+    if (type === 'action') {
+      const callId = evt.callId as string;
+      if (!callId) continue;
+      const pointers = (evt.pointers ?? {}) as Record<string, string>;
+      const action: TraceAction = {
+        callId,
+        apiName: (evt.apiName as string) || (evt.method as string) || 'unknown',
+        class: evt.class as string,
+        method: evt.method as string,
+        params: evt.params as Record<string, unknown> | undefined,
+        startTime: (evt.startTime as number) ?? 0,
+        endTime: evt.endTime as number | undefined,
+        error: evt.error as { message?: string; stack?: string } | undefined,
+        pageId: evt.pageId as string,
+        log: evt.log as string[] | undefined,
+        snapshotName: (pointers.snapshot as string) || pointers.afterSnapshot,
+        beforeSnapshot: beforeSnapshots.get(callId) || (pointers.beforeSnapshot as string),
+        afterSnapshot: pointers.afterSnapshot as string,
+      };
+      actions.push(action);
+
+      // Track after-snapshot for nearby context
+      if (pointers.afterSnapshot) afterSnapshots.set(callId, pointers.afterSnapshot);
+    }
+
+    if (type === 'event') {
+      const method = evt.method as string;
+      const eventData = evt.event as Record<string, unknown> | undefined;
+      if (!eventData) continue;
+      const timestamp = (evt.time as number) ?? (evt.startTime as number) ?? 0;
+
+      if (method === 'console') {
+        const text =
+          (eventData.text as string) ??
+          (Array.isArray(eventData.args) ? eventData.args.map((a: unknown) => String(a ?? '')).join(' ') : '');
+        if (text) {
+          consoleEntries.push({
+            type: (eventData.type as string) || 'log',
+            text,
+            timestamp,
+            location: eventData.location as string | undefined,
+          });
+        }
+      }
+
+      if (method === '__create__' || method === '__update__') {
+        const url = eventData.url as string;
+        if (url) {
+          const existing = networkRequests.find((nr) => nr.url === url && nr.method === (eventData.method as string));
+          if (existing) {
+            if (eventData.response) {
+              const resp = eventData.response as Record<string, unknown>;
+              existing.statusCode = (resp.status as number) ?? (resp.statusCode as number);
+              existing.endTime = timestamp;
+            }
+          } else {
+            networkRequests.push({
+              url,
+              method: (eventData.method as string) || 'GET',
+              statusCode:
+                (eventData.statusCode as number) ??
+                ((eventData.response as Record<string, unknown> | undefined)?.status as number | undefined),
+              headers: eventData.headers as Record<string, string> | undefined,
+              startTime: timestamp,
+              endTime: timestamp,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Find the failing action: error-bearing action first, then timeout fallback.
+  let failingIndex = actions.findIndex((a) => a.error);
+  let failingAction: TraceAction | null = failingIndex >= 0 ? actions[failingIndex]! : null;
+  let timeoutFallback = false;
+
+  // Timeout fallback: when no action has an error, the test was killed
+  // mid-action. The interrupted action has no endTime and no error entry —
+  // its log tail (e.g. "waiting for locator(…)") is the most diagnostic fact.
+  if (!failingAction && actions.length > 0) {
+    failingIndex = actions.length - 1;
+    for (let i = actions.length - 1; i >= 0; i--) {
+      if (actions[i]!.endTime == null && !actions[i]!.error) {
+        failingIndex = i;
+        break;
+      }
+    }
+    failingAction = actions[failingIndex]!;
+    timeoutFallback = true;
+  }
+
+  return {
+    actions,
+    consoleEntries,
+    networkRequests,
+    frameSnapshots,
+    failingAction,
+    failingActionIndex: failingAction ? failingIndex : -1,
+    eventCount: events.length,
+    timeoutFallback,
+    traceEndTime,
+  };
+}

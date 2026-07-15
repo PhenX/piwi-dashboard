@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { formatFailingActionSection, parseTraceEvents } from '../../server/utils/trace-parser';
-import type { ParsedTraceData, TraceAction } from '../../server/utils/trace-parser';
+import type { ParsedTraceData, TraceAction } from '../../server/utils/trace-events';
 import { buildZip } from '../../server/utils/trace-zip';
 
 /** Build a slim trace ZIP containing a `trace.trace` file made of the given JSONL lines. */

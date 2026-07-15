@@ -674,7 +674,7 @@ async function assemble(
       };
     }
 
-    // DOM snapshot from trace — the canned render of the committed demo trace
+    // DOM snapshot from trace — parsed in-browser from the committed demo trace
     const domSnap = (await apiGetDemoDomSnapshot(rep.id)) as {
       status: string;
       html?: string;
