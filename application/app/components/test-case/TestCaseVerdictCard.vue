@@ -122,42 +122,49 @@ const squareClass = (status: string) => ({
         </UBadge>
       </div>
 
-      <!-- Verdict sentence -->
-      <p v-if="verdict" class="text-sm text-gray-600 dark:text-gray-400">
-        <template v-if="verdict.streak >= 1">
-          Failing for
-          <strong class="text-gray-800 dark:text-gray-200">{{ verdict.streak }}</strong>
-          consecutive run{{ verdict.streak === 1 ? '' : 's' }}.
-          <template v-if="verdict.lastPass">
-            Last passed in
-            <NuxtLink :to="`/test-run-cases/${verdict.lastPass.id}`" class="text-primary hover:underline">
-              run #{{ verdict.lastPass.runId }}
-            </NuxtLink>
-            ({{ formatRelativeTime(verdict.lastPass.startTime) }}).
+      <!--
+        History arrives via a client-only watch+fetch (not SSR-awaited), so it's
+        empty during SSR and on the pre-hydration client render — rendering
+        anything derived from it outside ClientOnly causes a hydration mismatch.
+      -->
+      <ClientOnly>
+        <!-- Verdict sentence -->
+        <p v-if="verdict" class="text-sm text-gray-600 dark:text-gray-400">
+          <template v-if="verdict.streak >= 1">
+            Failing for
+            <strong class="text-gray-800 dark:text-gray-200">{{ verdict.streak }}</strong>
+            consecutive run{{ verdict.streak === 1 ? '' : 's' }}.
+            <template v-if="verdict.lastPass">
+              Last passed in
+              <NuxtLink :to="`/test-run-cases/${verdict.lastPass.id}`" class="text-primary hover:underline">
+                run #{{ verdict.lastPass.runId }}
+              </NuxtLink>
+              ({{ formatRelativeTime(verdict.lastPass.startTime) }}).
+            </template>
+            <template v-else-if="verdict.total > 1"> No passing run in the last {{ verdict.total }} recorded. </template>
+            <template v-else> First recorded run of this test. </template>
           </template>
-          <template v-else-if="verdict.total > 1"> No passing run in the last {{ verdict.total }} recorded. </template>
-          <template v-else> First recorded run of this test. </template>
-        </template>
-        <template v-else-if="testCase?.status === 'passed'"> This execution passed. </template>
-      </p>
+          <template v-else-if="testCase?.status === 'passed'"> This execution passed. </template>
+        </p>
 
-      <!-- Clickable recent-status strip -->
-      <div v-if="strip.length > 1">
-        <p class="text-xs text-gray-400 mb-1">Recent runs (oldest → newest)</p>
-        <div class="flex items-center gap-1 flex-wrap">
-          <UTooltip
-            v-for="point in strip"
-            :key="point.id"
-            :text="`Run #${point.runId}: ${point.status}`"
-          >
-            <NuxtLink
-              :to="`/test-run-cases/${point.id}`"
-              class="size-3.5 rounded-sm inline-block transition-colors"
-              :class="[squareClass(point.status), point.id === currentId ? 'ring-2 ring-offset-1 ring-primary' : '']"
-            />
-          </UTooltip>
+        <!-- Clickable recent-status strip -->
+        <div v-if="strip.length > 1">
+          <p class="text-xs text-gray-400 mb-1">Recent runs (oldest → newest)</p>
+          <div class="flex items-center gap-1 flex-wrap">
+            <UTooltip
+              v-for="point in strip"
+              :key="point.id"
+              :text="`Run #${point.runId}: ${point.status}`"
+            >
+              <NuxtLink
+                :to="`/test-run-cases/${point.id}`"
+                class="size-3.5 rounded-sm inline-block transition-colors"
+                :class="[squareClass(point.status), point.id === currentId ? 'ring-2 ring-offset-1 ring-primary' : '']"
+              />
+            </UTooltip>
+          </div>
         </div>
-      </div>
+      </ClientOnly>
     </div>
   </SectionCard>
 </template>
