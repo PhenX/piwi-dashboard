@@ -33,31 +33,62 @@ const emit = defineEmits<{
 
 const isOpen = defineModel<boolean>('open', { required: true });
 
+type SnapshotSource = 'dom' | 'aria';
+
 interface DomSnapshotResponse {
   status: 'ok' | 'no-trace' | 'no-snapshot';
   html?: string;
   snapshotName?: string;
   viewport?: { width: number; height: number };
+  source?: SnapshotSource;
+  availableSources?: SnapshotSource[];
 }
 
 const snapshotPending = ref(false);
 const snapshot = ref<DomSnapshotResponse | null>(null);
 const snapshotError = ref<string | null>(null);
+// Which representation to request — undefined lets the server choose (trace
+// DOM when available, else the ARIA tree). Set from the response and by the
+// view toggle so the ARIA tree can be viewed even when a trace exists.
+const viewSource = ref<SnapshotSource | undefined>(undefined);
 
 async function fetchSnapshot() {
   snapshotPending.value = true;
   snapshotError.value = null;
   try {
     // Same endpoint as the read-only DOM snapshot card — trace-derived DOM with
-    // an ARIA-snapshot fallback. The picker adds its own interactive overlay.
+    // an ARIA-tree fallback (or ?source=aria on demand). The picker adds its own
+    // interactive overlay.
+    const query = viewSource.value ? `?source=${viewSource.value}` : '';
     snapshot.value = await $fetch<DomSnapshotResponse>(
-      `/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/dom-snapshot`,
+      `/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/dom-snapshot${query}`,
     );
+    // Reflect what the server actually rendered so the toggle stays in sync.
+    if (snapshot.value?.source) viewSource.value = snapshot.value.source;
   } catch (err: unknown) {
     snapshotError.value = err instanceof Error ? err.message : 'Unknown error';
   } finally {
     snapshotPending.value = false;
   }
+}
+
+const availableSources = computed<SnapshotSource[]>(() => snapshot.value?.availableSources ?? []);
+
+/** Switch representation (DOM ⇄ ARIA tree) and reload the picker on the new view. */
+function selectSource(src: SnapshotSource) {
+  if (src === viewSource.value || snapshotPending.value) return;
+  viewSource.value = src;
+  iframeReady.value = false;
+  step.value = 'pick-element';
+  contentHeight.value = 0;
+  userZoomed.value = false;
+  pickedAttrs.value = null;
+  alternatives.value = [];
+  selectedAlt.value = null;
+  searchQuery.value = '';
+  searchCount.value = 0;
+  searchIndex.value = -1;
+  fetchSnapshot();
 }
 
 watch(isOpen, (open) => {
@@ -67,6 +98,8 @@ watch(isOpen, (open) => {
     step.value = 'pick-element';
     contentHeight.value = 0;
     userZoomed.value = false;
+    // Let the server choose the default view again on each open.
+    viewSource.value = undefined;
     // A previous session's pick must not leak into this one — Confirm would
     // otherwise already be enabled with a stale selection.
     pickedAttrs.value = null;
@@ -144,13 +177,16 @@ const fitZoom = computed(() => {
 
 const canvasStyle = computed(() => {
   const vp = viewport.value;
-  if (!vp) return { width: '100%', height: '100%' };
+  // No viewport (ARIA tree): fill the pane width, but grow to the reported
+  // content height once known so the stage — not the iframe — scrolls, which
+  // lets find-by-text jump to a match the same way the DOM view does.
+  if (!vp) return { width: '100%', height: contentHeight.value ? `${contentHeight.value}px` : '100%' };
   const h = contentHeight.value || vp.height;
   return { width: `${Math.round(vp.width * zoom.value)}px`, height: `${Math.round(h * zoom.value)}px` };
 });
 const iframeStyle = computed(() => {
   const vp = viewport.value;
-  if (!vp) return { width: '100%', height: '100%', border: '0' };
+  if (!vp) return { width: '100%', height: contentHeight.value ? `${contentHeight.value}px` : '100%', border: '0' };
   const h = contentHeight.value || vp.height;
   return {
     width: `${vp.width}px`,
@@ -440,24 +476,55 @@ onBeforeUnmount(() => {
       </div>
 
       <template v-else>
-        <!-- Source note -->
-        <div
-          v-if="snapshot.snapshotName"
-          class="mb-2 text-xs flex items-center gap-1"
-          :class="
-            snapshot.snapshotName === 'aria-fallback'
-              ? 'text-amber-600 dark:text-amber-400'
-              : 'text-green-600 dark:text-green-400'
-          "
-        >
-          <UIcon
-            :name="snapshot.snapshotName === 'aria-fallback' ? 'i-lucide-info' : 'i-lucide-check'"
-            class="size-3.5 shrink-0"
-          />
-          <template v-if="snapshot.snapshotName === 'aria-fallback'">
-            Rendered from the ARIA snapshot — element styles are approximate
-          </template>
-          <template v-else> Rendered from the failure-time DOM snapshot </template>
+        <!-- Source note + view toggle (DOM ⇄ accessibility tree) -->
+        <div class="mb-2 flex items-center gap-2 flex-wrap">
+          <div
+            v-if="snapshot.source"
+            class="text-xs flex items-center gap-1"
+            :class="
+              snapshot.source === 'aria' ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'
+            "
+          >
+            <UIcon
+              :name="snapshot.source === 'aria' ? 'i-lucide-accessibility' : 'i-lucide-check'"
+              class="size-3.5 shrink-0"
+            />
+            <template v-if="snapshot.source === 'aria'">
+              Accessibility tree from the failure-time ARIA snapshot — element styles are approximate
+            </template>
+            <template v-else> Rendered from the failure-time DOM snapshot </template>
+          </div>
+
+          <!-- Only offered when the case has both representations -->
+          <div
+            v-if="availableSources.length > 1"
+            class="ml-auto inline-flex rounded-md border border-default overflow-hidden text-xs"
+          >
+            <button
+              type="button"
+              class="px-2 py-1 flex items-center gap-1 transition-colors"
+              :class="
+                viewSource === 'dom' ? 'bg-primary/10 text-primary font-medium' : 'text-gray-500 hover:bg-elevated'
+              "
+              title="Rendered page from the trace"
+              @click="selectSource('dom')"
+            >
+              <UIcon name="i-lucide-layout-panel-top" class="size-3.5" />
+              DOM
+            </button>
+            <button
+              type="button"
+              class="px-2 py-1 flex items-center gap-1 border-l border-default transition-colors"
+              :class="
+                viewSource === 'aria' ? 'bg-primary/10 text-primary font-medium' : 'text-gray-500 hover:bg-elevated'
+              "
+              title="Accessibility tree from the ARIA snapshot"
+              @click="selectSource('aria')"
+            >
+              <UIcon name="i-lucide-accessibility" class="size-3.5" />
+              Tree
+            </button>
+          </div>
         </div>
 
         <!-- Zoom toolbar — only when the recorded viewport is known -->
@@ -510,14 +577,12 @@ onBeforeUnmount(() => {
 
         <!-- Iframe with the snapshot. When the viewport is known the iframe is
            sized to it and scaled with a CSS transform (proportions preserved);
-           otherwise it fills the pane (ARIA fallback has no viewport). -->
+           otherwise it fills the pane width and grows to its content height so
+           the stage scrolls (the ARIA tree has no viewport). -->
         <div
           ref="stageRef"
-          class="relative border border-default rounded-lg"
-          :class="[
-            step === 'pick-element' ? 'h-[75vh]' : 'h-80',
-            viewport ? 'overflow-auto bg-gray-100 dark:bg-gray-800' : 'overflow-hidden',
-          ]"
+          class="relative border border-default rounded-lg overflow-auto"
+          :class="[step === 'pick-element' ? 'h-[75vh]' : 'h-80', viewport ? 'bg-gray-100 dark:bg-gray-800' : '']"
         >
           <!-- Loading overlay until the picker script initializes -->
           <div

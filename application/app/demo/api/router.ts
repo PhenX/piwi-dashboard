@@ -437,7 +437,7 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/dom-snapshot$/,
-    handler: async (m) => apiGetDemoDomSnapshot(+m[2]!),
+    handler: async (m, _body, query) => apiGetDemoDomSnapshot(+m[2]!, query),
   },
   // The demo cannot pixel-diff in the browser — it serves the overlay the
   // seed generated with the real diff code, straight from the files row.
