@@ -155,10 +155,17 @@ watch(tabValues, (vals) => {
 });
 
 // Keep the active tab in the URL so a failure can be deep-linked and shared.
-watch(activeTab, (tab) => {
-  if (route.query.tab === tab) return;
-  router.replace({ query: { ...route.query, tab } });
-});
+// `immediate` covers the initial resolved tab too — e.g. landing on a failing
+// case with no `?tab=` already defaults in-memory to 'diagnosis', but without
+// firing this on mount the URL bar would never reflect that default.
+watch(
+  activeTab,
+  (tab) => {
+    if (route.query.tab === tab) return;
+    router.replace({ query: { ...route.query, tab } });
+  },
+  { immediate: true },
+);
 
 const historyColumns: TableColumn<TestCaseHistoryPoint>[] = [
   { accessorKey: 'startTime', header: 'Date' },
