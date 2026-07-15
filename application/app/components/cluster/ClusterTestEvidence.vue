@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TraceInfo, AttachmentInfo } from '~~/types/api';
+import type { TraceInfo, AttachmentInfo, TestSourceFrame } from '~~/types/api';
 import { isImageFile, isVideoFile } from '~/utils/text-format';
 
 interface AffectedCase {
@@ -18,6 +18,7 @@ interface TestCaseDetail {
   networkRequests?: unknown;
   ariaSnapshot?: string | null;
   testSource?: string | null;
+  testSourceFrames?: TestSourceFrame[] | null;
   pageState?: import('~~/types/api').PageState | null;
   attachments: AttachmentInfo[];
 }
@@ -123,7 +124,7 @@ const evidenceChips = computed(() => {
     { icon: 'i-lucide-bug-play', label: 'traces', count: traces.value.length },
     { icon: 'i-lucide-list-checks', label: 'failing steps', count: failingSteps.value.length },
     { icon: 'i-lucide-triangle-alert', label: 'signals', count: consoleCount + failedRequests },
-    { icon: 'i-lucide-code', label: 'source', count: d.testSource ? 1 : 0 },
+    { icon: 'i-lucide-code', label: 'source', count: d.testSourceFrames?.length || (d.testSource ? 1 : 0) },
     { icon: 'i-lucide-accessibility', label: 'ARIA', count: d.ariaSnapshot ? 1 : 0 },
   ].filter((c) => c.count > 0);
 });
@@ -221,16 +222,17 @@ const evidenceChips = computed(() => {
         v-model:open="showSignals"
       />
 
-      <!-- Test source code (collapsible) -->
+      <!-- Test source code (collapsible): the failing line + its callers -->
       <TestEvidenceSection
-        v-if="caseDetail.testSource"
+        v-if="caseDetail.testSourceFrames?.length || caseDetail.testSource"
         icon="i-lucide-code"
         label="Test source"
-        :count="testSourceLines"
+        :count="caseDetail.testSourceFrames?.length || testSourceLines"
         v-model:open="showSource"
       >
-        <div class="overflow-x-auto max-h-64">
-          <MarkdownPreview :text="'```typescript\n' + caseDetail.testSource + '\n```'" />
+        <div class="overflow-x-auto max-h-72">
+          <TestSourceStack v-if="caseDetail.testSourceFrames?.length" :frames="caseDetail.testSourceFrames" />
+          <MarkdownPreview v-else-if="caseDetail.testSource" :text="'```typescript\n' + caseDetail.testSource + '\n```'" />
         </div>
       </TestEvidenceSection>
 

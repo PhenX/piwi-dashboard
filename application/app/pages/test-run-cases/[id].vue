@@ -448,18 +448,27 @@ provide(clusterSectionLocatorKey, {
 
               <!-- Left column: evidence funnel -->
               <div class="space-y-4 xl:order-1 min-w-0">
-                <!-- Test source around the failing assertion -->
+                <!-- Test source: the failing line and the callers above it -->
                 <CollapsibleSectionCard
-                  v-if="testCase?.testSource"
+                  v-if="testCase?.testSourceFrames?.length || testCase?.testSource"
                   ref="testSourceCard"
                   storage-key="case-test-source"
                   icon="i-lucide-code"
+                  :count="testCase?.testSourceFrames?.length || null"
                   title="Test source"
                   help="case.test-source"
                 >
-                  <template #folded>Source around the failing assertion</template>
-                  <div class="max-h-96 overflow-y-auto">
-                    <MarkdownPreview :text="'```typescript\n' + testCase.testSource + '\n```'" />
+                  <template #folded>
+                    <template v-if="(testCase?.testSourceFrames?.length ?? 0) > 1">
+                      The failing line and {{ (testCase?.testSourceFrames?.length ?? 0) - 1 }} caller{{
+                        (testCase?.testSourceFrames?.length ?? 0) - 1 === 1 ? '' : 's'
+                      }}
+                    </template>
+                    <template v-else>Source around the failing assertion</template>
+                  </template>
+                  <div class="max-h-[32rem] overflow-y-auto">
+                    <TestSourceStack v-if="testCase?.testSourceFrames?.length" :frames="testCase.testSourceFrames" />
+                    <MarkdownPreview v-else-if="testCase?.testSource" :text="'```typescript\n' + testCase.testSource + '\n```'" />
                   </div>
                 </CollapsibleSectionCard>
 

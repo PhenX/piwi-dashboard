@@ -267,6 +267,7 @@ export async function getTestRunCase(
     retries: trc.retries,
     steps: trc.steps,
     testSource: trc.testSource,
+    testSourceFrames: trc.testSourceFrames,
     testAnnotations: trc.testAnnotations,
     startedAt: trc.startedAt,
     slowestStep: trc.slowestStep,

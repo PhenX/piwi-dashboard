@@ -197,7 +197,7 @@ export const HELP_TOPICS = {
   },
   'case.test-source': {
     title: 'Test source',
-    text: 'The source lines around the failing assertion, sent by the reporter, so you can read the failing step without opening your editor.',
+    text: 'The source around the failing line and the callers above it — captured from the failure’s call stack — so you can read where it broke, and the code that led there, without opening your editor.',
     doc: 'capture-fixtures',
   },
   'case.artifacts': {

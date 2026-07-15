@@ -164,6 +164,7 @@ export default eventHandler(async (event) => {
             consoleLogs: testCase.consoleLogs,
             ariaSnapshot: testCase.ariaSnapshot as string | null | undefined,
             testSource: testCase.testSource ?? null,
+            testSourceFrames: testCase.testSourceFrames ?? null,
             workerIndex: testCase.workerIndex,
             shardIndex: testCase.shardIndex ?? null,
             startedAt: testCase.startedAt ?? null,
@@ -280,6 +281,7 @@ export default eventHandler(async (event) => {
         consoleLogs?: unknown;
         ariaSnapshot?: unknown;
         testSource?: string | null;
+        testSourceFrames?: unknown;
         startedAt?: number | null;
         workerIndex?: number | null;
         shardIndex?: number | null;
@@ -316,6 +318,7 @@ export default eventHandler(async (event) => {
           consoleLogs: testCase.consoleLogs,
           ariaSnapshot: testCase.ariaSnapshot as string | null | undefined,
           testSource: testCase.testSource ?? null,
+          testSourceFrames: testCase.testSourceFrames ?? null,
           workerIndex: testCase.workerIndex,
           shardIndex: testCase.shardIndex ?? null,
           startedAt: testCase.startedAt ?? null,

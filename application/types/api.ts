@@ -3,7 +3,8 @@
  * These types are used by both the server API and the app frontend
  */
 
-import type { Role, FilterDetails } from '#shared/types';
+import type { Role, FilterDetails, TestSourceFrame } from '#shared/types';
+export type { TestSourceFrame };
 
 // ============================================================================
 // Metadata types
@@ -487,6 +488,7 @@ export interface TestCaseResult {
   location?: string;
   error?: string | null;
   testSource?: string | null;
+  testSourceFrames?: TestSourceFrame[] | null;
   failureClusterId?: number | null;
   retries?: number | null;
   steps?: PerformanceStep[] | null;

@@ -505,6 +505,7 @@ export default eventHandler(async (event) => {
         consoleLogs: testCase.consoleLogs,
         ariaSnapshot: testCase.ariaSnapshot as string | null | undefined,
         testSource: testCase.testSource as string | null | undefined,
+        testSourceFrames: testCase.testSourceFrames as unknown,
         browser: testCase.browser as unknown | null | undefined,
         workerIndex: testCase.workerIndex as number | null | undefined,
         shardIndex: testCase.shardIndex as number | null | undefined,

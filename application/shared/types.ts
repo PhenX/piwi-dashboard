@@ -4,12 +4,13 @@ import type {
   FilterDetails,
   SuiteConfigEntry,
   TestAnnotation,
+  TestSourceFrame,
   TestStepEvent,
 } from '@piwitests/core/wire';
 
 // The wire leaf shapes live in @piwitests/core (shared with the reporter);
 // re-export them so `#shared/types` consumers keep importing them from here.
-export type { BrowserConfig, FilterDetails, SuiteConfigEntry, TestAnnotation, TestStepEvent };
+export type { BrowserConfig, FilterDetails, SuiteConfigEntry, TestAnnotation, TestSourceFrame, TestStepEvent };
 
 // ── Test status types ──────────────────────────────────────────────────────────
 // These mirror the values stored in the test_runs.status column and the
@@ -74,6 +75,8 @@ export interface TestCasePayload {
   locatorSnapshots?: LocatorSnapshot[] | null;
   /** Source snippet around the failing line of the spec file (captured on failure only). */
   testSource?: string | null;
+  /** In-project call-stack frames (innermost first): the failing line + its callers. */
+  testSourceFrames?: TestSourceFrame[] | null;
 }
 
 // ── Test run counters ─────────────────────────────────────────────────────────
@@ -151,6 +154,8 @@ export interface StreamEventPayload {
   locatorSnapshots?: LocatorSnapshot[] | null;
   /** Source snippet around the failing line of the spec file (captured on failure only). */
   testSource?: string | null;
+  /** In-project call-stack frames (innermost first): the failing line + its callers. */
+  testSourceFrames?: TestSourceFrame[] | null;
 }
 
 // ── Finish payload ────────────────────────────────────────────────────────────

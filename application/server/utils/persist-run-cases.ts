@@ -41,6 +41,7 @@ export interface RunCaseInput {
   consoleLogs?: unknown;
   ariaSnapshot?: string | null;
   testSource?: string | null;
+  testSourceFrames?: unknown;
   workerIndex?: number | null;
   shardIndex?: number | null;
   startedAt?: number | null;
@@ -270,6 +271,7 @@ export async function persistRunCases(
       consoleLogs: sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined) ?? null,
       ariaSnapshot: c.ariaSnapshot ?? null,
       testSource: c.testSource ?? null,
+      testSourceFrames: (c.testSourceFrames as any) ?? null,
       testAnnotations: (c.testAnnotations as any) ?? null,
       browser: c.browser ?? null,
       browserName: resolveBrowserName(c.browser),
