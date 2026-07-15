@@ -10,7 +10,8 @@
  * pasting the JSON here.
  */
 import { and, eq } from 'drizzle-orm';
-import { files } from '~~/server/database/schema.sqlite';
+import { files, testRunsCases } from '~~/server/database/schema.sqlite';
+import { renderAriaSnapshotHtml } from '~~/server/utils/dom-snapshot-aria';
 import { getDemoDb } from '../db.client';
 
 const CHECKOUT_DOM_SNAPSHOT = {
@@ -48,8 +49,12 @@ const CHECKOUT_DOM_SNAPSHOT = {
 };
 
 /**
- * GET /api/test-runs/:id/cases/:caseId/dom-snapshot — the canned snapshot for
- * the one demo case that carries the committed trace; 'no-trace' elsewhere.
+ * GET /api/test-runs/:id/cases/:caseId/dom-snapshot — mirrors the server's
+ * `resolveCaseDomSnapshot` order: trace-first, then the ARIA-snapshot fallback.
+ * The trace path can't run in the browser (node-only zlib), so the one demo
+ * case carrying the committed trace returns the pre-rendered result; every
+ * other failed case renders its seeded `ariaSnapshot` with the same browser-safe
+ * renderer the real app uses for trace-less failures.
  */
 export async function apiGetDemoDomSnapshot(testRunsCaseId: number): Promise<unknown> {
   const db = await getDemoDb();
@@ -58,6 +63,17 @@ export async function apiGetDemoDomSnapshot(testRunsCaseId: number): Promise<unk
     .from(files)
     .where(and(eq(files.testRunsCaseId, testRunsCaseId), eq(files.type, 'trace')))
     .limit(1);
-  if (traceRows.length === 0) return { status: 'no-trace' };
-  return CHECKOUT_DOM_SNAPSHOT;
+  if (traceRows.length > 0) return CHECKOUT_DOM_SNAPSHOT;
+
+  const caseRows = await db
+    .select({ aria: testRunsCases.ariaSnapshot })
+    .from(testRunsCases)
+    .where(eq(testRunsCases.id, testRunsCaseId))
+    .limit(1);
+  const aria = caseRows[0]?.aria;
+  if (aria) {
+    const html = renderAriaSnapshotHtml(aria);
+    if (html) return { status: 'ok', html, truncated: false, snapshotName: 'aria-fallback' };
+  }
+  return { status: 'no-trace' };
 }
