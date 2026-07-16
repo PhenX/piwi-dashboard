@@ -90,6 +90,10 @@ export interface FlatStep {
   error?: { message: string };
   /** True when the step carried an error — the signal the server needs for inline failure markers. */
   failed?: boolean;
+  /** Source pointer `file:line:col` (not a code snippet); present when Playwright reports one. */
+  location?: string;
+  /** Absolute start time in ms; enables per-step timing/waterfall on the case detail page. */
+  startTime?: number;
 }
 
 /** Step-event category restricted to the values `extractTestStepEvents` emits. */
@@ -108,6 +112,8 @@ export function flattenSteps(steps: any[]): FlatStep[] {
       flat.error = { message: step.error.message };
       flat.failed = true;
     }
+    if (step.location) flat.location = `${step.location.file}:${step.location.line}:${step.location.column}`;
+    if (step.startTime) flat.startTime = step.startTime instanceof Date ? step.startTime.getTime() : step.startTime;
     result.push(flat);
     if (step.steps?.length > 0) result.push(...flattenSteps(step.steps));
   }

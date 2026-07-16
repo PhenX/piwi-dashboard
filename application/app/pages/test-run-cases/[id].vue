@@ -108,8 +108,6 @@ const failureCluster = computed(() => {
   } | null;
 });
 
-const wastedTimeMs = computed(() => testCase.value?.wastedTimeMs ?? 0);
-
 // ── Tabs ────────────────────────────────────────────────────────────────────
 // The tab set depends on whether this execution has an error: a failing case
 // leads with Diagnosis; a passing one with its Steps and Artifacts.
@@ -180,14 +178,111 @@ const stepCategoryColor: Record<string, 'info' | 'success' | 'warning' | 'neutra
   navigation: 'info',
   assertion: 'success',
   action: 'warning',
+  input: 'warning',
+  api: 'info',
+  wait: 'neutral',
+  hook: 'neutral',
+  fixture: 'neutral',
 };
 
+// Widths are set via per-column `meta.class` (Nuxt UI applies these to th/td);
+// with `table-fixed w-full` the width-less Step column absorbs the remaining space.
 const stepColumns: TableColumn<PerformanceStep>[] = [
-  { id: 'status', header: '', size: 32 },
-  { accessorKey: 'category', header: 'Category' },
-  { accessorKey: 'title', header: 'Step' },
-  { accessorKey: 'duration', header: 'Duration' },
+  { id: 'index', header: '#', meta: { class: { th: 'w-12', td: 'w-12' } } },
+  { id: 'status', header: '', meta: { class: { th: 'w-10', td: 'w-10' } } },
+  { accessorKey: 'category', header: 'Category', meta: { class: { th: 'w-28', td: 'w-28' } } },
+  { accessorKey: 'title', header: 'Step' }, // no width → absorbs remaining width
+  { accessorKey: 'duration', header: 'Duration', meta: { class: { th: 'w-44', td: 'w-44' } } },
 ];
+
+// ── Steps tab derived data ───────────────────────────────────────────────────
+// Per-category rollup for the summary strip above the table. Durations are summed
+// over the flat step list (parents include their children), matching how the
+// reporter's StepMetrics already reports navigation/wait totals.
+const stepSummary = computed(() => {
+  const byCat = new Map<string, { count: number; duration: number }>();
+  for (const s of steps.value) {
+    const entry = byCat.get(s.category) ?? { count: 0, duration: 0 };
+    entry.count += 1;
+    entry.duration += s.duration || 0;
+    byCat.set(s.category, entry);
+  }
+  return Array.from(byCat, ([category, v]) => ({ category, ...v })).sort((a, b) => b.duration - a.duration);
+});
+
+// Row index of the single slowest step, used to tag that row. Mirrors the header's
+// slowestStep (max flat-step duration) but resolved to a stable row.
+const slowestStepIndex = computed(() => {
+  let idx = -1;
+  let max = -1;
+  steps.value.forEach((s, i) => {
+    if ((s.duration || 0) > max) {
+      max = s.duration || 0;
+      idx = i;
+    }
+  });
+  return idx;
+});
+
+const maxStepDuration = computed(() => steps.value.reduce((m, s) => Math.max(m, s.duration || 0), 0));
+
+// A true waterfall needs a startTime on every step (only runs from a recent
+// reporter carry one); otherwise the bars fall back to left-aligned magnitude.
+const hasStepTimings = computed(
+  () => steps.value.length > 0 && steps.value.every((s) => typeof s.startTime === 'number'),
+);
+const timelineStart = computed(
+  () =>
+    testCase.value?.startedAt ??
+    (hasStepTimings.value ? Math.min(...steps.value.map((s) => s.startTime as number)) : 0),
+);
+const timelineDuration = computed(() => {
+  const total = testCase.value?.duration ?? 0;
+  if (total > 0) return total;
+  if (hasStepTimings.value) {
+    const end = Math.max(...steps.value.map((s) => (s.startTime as number) + (s.duration || 0)));
+    return Math.max(1, end - timelineStart.value);
+  }
+  return 0;
+});
+
+/** Bar geometry for a step: a real waterfall when timings exist, else magnitude. */
+function stepBarStyle(step: PerformanceStep): Record<string, string> {
+  if (hasStepTimings.value && timelineDuration.value > 0) {
+    const left = Math.max(
+      0,
+      Math.min(100, (((step.startTime as number) - timelineStart.value) / timelineDuration.value) * 100),
+    );
+    const width = Math.min(100 - left, Math.max(1.5, ((step.duration || 0) / timelineDuration.value) * 100));
+    return { left: `${left}%`, width: `${width}%` };
+  }
+  const width = maxStepDuration.value > 0 ? Math.max(2, ((step.duration || 0) / maxStepDuration.value) * 100) : 0;
+  return { left: '0%', width: `${width}%` };
+}
+
+/** Step duration as a share of the whole test's wall-clock (e.g. "12%"). */
+function stepPctOfTest(duration: number): string {
+  const total = testCase.value?.duration ?? 0;
+  if (total <= 0) return '';
+  const pct = (duration / total) * 100;
+  if (pct > 0 && pct < 1) return '<1%';
+  return `${Math.round(pct)}%`;
+}
+
+/** Severity color for a duration value, shared by the number and its bar. */
+function stepDurationTextClass(duration: number): string {
+  return duration > 2000 ? 'text-red-600 font-medium' : duration > 500 ? 'text-orange-500' : 'text-gray-500';
+}
+function stepBarColorClass(duration: number): string {
+  return duration > 2000 ? 'bg-red-500' : duration > 500 ? 'bg-orange-400' : 'bg-gray-400 dark:bg-gray-500';
+}
+
+/** Shorten a `file:line:col` pointer to `basename:line` for compact display. */
+function shortLocation(location: string): string {
+  const withoutCol = location.replace(/:(\d+):\d+$/, ':$1');
+  const slash = withoutCol.lastIndexOf('/');
+  return slash >= 0 ? withoutCol.slice(slash + 1) : withoutCol;
+}
 
 const environment = computed(() => testCase.value?.testRun?.environment);
 
@@ -567,33 +662,48 @@ provide(clusterSectionLocatorKey, {
         <!-- ── Steps ────────────────────────────────────────────────────── -->
         <template #tab-steps>
           <div class="space-y-3">
-            <div v-if="wastedTimeMs > 0" class="flex items-center gap-1.5">
-              <UBadge color="warning" variant="subtle" size="sm" class="inline-flex items-center gap-1">
-                <UIcon name="i-lucide-hourglass" class="size-3 shrink-0" />
-                {{ formatDuration(wastedTimeMs) }} wasted in fixed waits
-              </UBadge>
-              <HelpHint topic="case.wasted-time" />
-            </div>
-
             <div v-if="steps.length > 0">
-              <TableScroller min-width="34rem" :bleed="false">
+              <!-- Per-category summary strip -->
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs mb-3">
+                <span class="font-medium text-gray-600 dark:text-gray-300">{{ steps.length }} steps</span>
+                <span class="text-gray-300 dark:text-gray-600">·</span>
+                <span v-for="c in stepSummary" :key="c.category" class="inline-flex items-center gap-1">
+                  <UBadge :color="stepCategoryColor[c.category] || 'neutral'" variant="soft" size="xs">
+                    {{ c.category }}
+                  </UBadge>
+                  <span class="tabular-nums text-gray-500 dark:text-gray-400"
+                    >×{{ c.count }} · {{ formatDuration(c.duration) }}</span
+                  >
+                </span>
+              </div>
+
+              <TableScroller min-width="40rem" :bleed="false">
                 <UTable
                   :data="steps"
                   :columns="stepColumns"
                   :ui="{
-                    base: 'table-fixed border-separate border-spacing-0 min-w-[34rem]',
+                    base: 'table-fixed w-full border-separate border-spacing-0 min-w-[40rem]',
                     thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
                     tbody: '[&>tr]:last:[&>td]:border-b-0',
                     th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
                     td: 'border-b border-default align-top',
                   }"
                 >
+                  <template #index-cell="{ row }">
+                    <span class="text-xs tabular-nums text-gray-400 dark:text-gray-500">{{ row.index + 1 }}</span>
+                  </template>
                   <template #status-cell="{ row }">
                     <span
                       v-if="row.original.failed"
                       class="inline-flex items-center justify-center size-5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs leading-none"
                       title="Step failed"
                       >✗</span
+                    >
+                    <span
+                      v-else
+                      class="inline-flex items-center justify-center size-5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs leading-none"
+                      title="Step passed"
+                      >✓</span
                     >
                   </template>
                   <template #category-cell="{ row }">
@@ -602,8 +712,20 @@ provide(clusterSectionLocatorKey, {
                     </UBadge>
                   </template>
                   <template #title-cell="{ row }">
-                    <div :class="row.original.failed ? 'text-red-600 dark:text-red-400 font-medium' : ''">
-                      {{ row.original.title }}
+                    <div class="flex items-center gap-2">
+                      <span :class="row.original.failed ? 'text-red-600 dark:text-red-400 font-medium' : ''">
+                        {{ row.original.title }}
+                      </span>
+                      <UBadge
+                        v-if="row.index === slowestStepIndex"
+                        color="warning"
+                        variant="subtle"
+                        size="xs"
+                        class="shrink-0"
+                        title="Slowest step in this test"
+                      >
+                        slowest
+                      </UBadge>
                     </div>
                     <p
                       v-if="row.original.failed && row.original.error?.message"
@@ -611,19 +733,35 @@ provide(clusterSectionLocatorKey, {
                     >
                       {{ row.original.error.message }}
                     </p>
+                    <p
+                      v-if="row.original.location"
+                      class="text-xs text-gray-400 dark:text-gray-500 font-mono mt-0.5 truncate"
+                      :title="row.original.location"
+                    >
+                      {{ shortLocation(row.original.location) }}
+                    </p>
                   </template>
                   <template #duration-cell="{ row }">
-                    <span
-                      :class="`text-sm tabular-nums ${
-                        row.original.duration > 2000
-                          ? 'text-red-600 font-medium'
-                          : row.original.duration > 500
-                            ? 'text-orange-500'
-                            : 'text-gray-500'
-                      }`"
-                    >
-                      {{ formatDuration(row.original.duration) }}
-                    </span>
+                    <div class="min-w-[6rem]">
+                      <div class="flex items-center justify-between gap-2">
+                        <span :class="`text-sm tabular-nums ${stepDurationTextClass(row.original.duration)}`">
+                          {{ formatDuration(row.original.duration) }}
+                        </span>
+                        <span
+                          v-if="stepPctOfTest(row.original.duration)"
+                          class="text-xs tabular-nums text-gray-400 dark:text-gray-500"
+                        >
+                          {{ stepPctOfTest(row.original.duration) }}
+                        </span>
+                      </div>
+                      <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                        <div
+                          class="absolute inset-y-0 rounded-full"
+                          :class="stepBarColorClass(row.original.duration)"
+                          :style="stepBarStyle(row.original)"
+                        />
+                      </div>
+                    </div>
                   </template>
                 </UTable>
               </TableScroller>
