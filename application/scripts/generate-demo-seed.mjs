@@ -9,18 +9,38 @@
  *  1. CREATE TABLE statements (complete current schema)
  *  2. INSERT statements for realistic demo data
  *
+ * All failure data derives from the story fixtures in
+ * `shared/demo/failure-stories.mjs` — the same module the demo SCM history,
+ * the run simulator and the consistency test consume — so every error string,
+ * source snippet, line number, suspect commit and suggested-fix patch agrees
+ * across the whole demo by construction. Fingerprints are computed with the
+ * mirror of the real clustering algorithm (`shared/demo/demo-fingerprint.mjs`),
+ * so live simulated failures join the seeded clusters.
+ *
+ * Generation is deterministic (seeded PRNG): re-running without changes
+ * produces byte-identical SQL, keeping the demo staleness hash stable.
+ *
  * It also writes public/demo/seed.version.json containing a SHA-256 hash of
  * the generated SQL content.  The Nuxt build reads this hash and exposes it
  * as runtime config so the demo SPA can detect stale IndexedDB data.
- *
- * The generated files are committed to the repository so `npm run app:generate:demo`
- * does not need a running server.
  */
 
 import { writeFileSync, mkdirSync, readFileSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
+
+import {
+  FAILURE_STORIES,
+  DEMO_PROJECTS,
+  SCM_REPOS,
+  SOURCE_FILES,
+  lineOf,
+  buildTestSource,
+  buildSourceFrames,
+  storyByClusterId,
+} from '../shared/demo/failure-stories.mjs';
+import { computeDemoFingerprint } from '../shared/demo/demo-fingerprint.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUTPUT = join(__dirname, '../public/demo/seed.sql');
@@ -51,43 +71,17 @@ function insert(table, rows) {
     .join('\n');
 }
 
-// ── Fingerprint helpers (mirrors shared/error-fingerprint.ts) ──────────────
-const UUID_RE = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
-const LONG_HEX_RE = /\b[0-9a-f]{8,}\b/gi;
-const SHORT_HEX_RE = /\b(?=[0-9a-f]*[a-f])(?=[0-9a-f]*[0-9])[0-9a-f]{6,7}\b/gi;
-const URL_RE = /\bhttps?:\/\/[^\s'"`)]+/gi;
-const EMAIL_RE = /\b[\w.+-]+@[\w-]+(?:\.[\w-]+)+\b/gi;
-
-function computeDemoFingerprint(rawError) {
-  const FINGERPRINT_VERSION = 3;
-  let errorType = 'unknown';
-  if (/strict mode violation/i.test(rawError)) errorType = 'strict-mode';
-  else if (/\bexpect\(|\.toBe|\.toContain|\.toEqual/.test(rawError)) errorType = 'assertion';
-  else if (/Timeout \d+m?s exceeded|TimeoutError/i.test(rawError)) errorType = 'timeout';
-  else if (/page\.goto|Navigation failed|net::ERR_/i.test(rawError)) errorType = 'navigation';
-  let head = rawError;
-  const stackIdx = head.search(/\n\s+at /);
-  if (stackIdx !== -1) head = head.slice(0, stackIdx);
-  const lines = head
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-  const messageHead = lines.slice(0, 5).join('\n');
-  const masked = messageHead
-    .replace(/^(\s*(?:Received|Expected)[^:\n]*:).*$/gm, '$1 <VALUE>')
-    .replace(URL_RE, '<URL>')
-    .replace(EMAIL_RE, '<EMAIL>')
-    .replace(UUID_RE, '<UUID>')
-    .replace(LONG_HEX_RE, '<HASH>')
-    .replace(SHORT_HEX_RE, '<HASH>')
-    .replace(/([A-Za-z])?(\d+)/g, (whole, letter) => (letter ? whole : '<N>'));
-  const signature = (masked.split('\n')[0] || '').slice(0, 200) || 'Unknown error';
-  // The stack frame is no longer part of the fingerprint (see error-fingerprint.ts);
-  // the demo mirror does not extract selectors, so the locator field stays empty.
-  const input = `v${FINGERPRINT_VERSION}\0${errorType}\0${masked}\0`;
-  const hash = createHash('sha256').update(input, 'utf-8').digest('hex');
-  return { fingerprint: hash, errorType, signature };
+// Deterministic PRNG (mulberry32) so regeneration is reproducible: identical
+// inputs → identical seed.sql → identical staleness hash.
+function mulberry32(seed) {
+  return function () {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
+const rng = mulberry32(0x5eed);
 
 // ── Schema (derived from Drizzle migrations) ────────────────────────────────
 // Read migrations in journal order so the demo schema always matches the server
@@ -105,6 +99,21 @@ const SCHEMA = journal.entries
       .trim(),
   )
   .join('\n\n');
+
+// ── Fingerprints (real algorithm mirror) ───────────────────────────────────
+// One fingerprint per story; every per-case error variant of a story MUST hash
+// identically (frames are not part of the hash), or the seed aborts.
+
+const storyFingerprints = new Map();
+for (const story of FAILURE_STORIES) {
+  const fps = await Promise.all(story.failingCases.map((fc) => computeDemoFingerprint(fc.error)));
+  for (const fp of fps.slice(1)) {
+    if (fp.fingerprint !== fps[0].fingerprint) {
+      throw new Error(`Story ${story.key}: per-case error variants produce different fingerprints`);
+    }
+  }
+  storyFingerprints.set(story.clusterId, fps[0]);
+}
 
 // ── Demo data ─────────────────────────────────────────────────────────────
 
@@ -150,6 +159,14 @@ const PROJECTS = [
     created_at: ts('2025-04-01'),
     updated_at: ts('2025-04-20T12:00:00'),
   },
+  {
+    id: 5,
+    name: 'web-dashboard',
+    label: 'Web Dashboard',
+    description: 'Cross-browser tests for the SaaS admin dashboard',
+    created_at: ts('2025-02-20'),
+    updated_at: ts('2025-04-25T09:10:00'),
+  },
 ];
 
 // Project-tag associations
@@ -160,111 +177,41 @@ const PROJECT_TAGS = [
   { project_id: 3, tag_id: 1 }, // ui-components → smoke
   { project_id: 3, tag_id: 4 }, // ui-components → performance
   { project_id: 4, tag_id: 2 }, // mobile-safari → regression
+  { project_id: 5, tag_id: 2 }, // web-dashboard → regression
+  { project_id: 5, tag_id: 3 }, // web-dashboard → critical
 ];
 
-// ── Test cases per project ─────────────────────────────────────────────────
+// ── Test suites & cases (from the fixture module) ──────────────────────────
+
+const TEST_SUITES = [];
 const TEST_CASES = [];
+let tsId = 1;
 let tcId = 1;
+const suiteNow = ts('2025-03-01');
+const suiteLookup = {}; // projectId → filePath → suiteId
+const caseIdsByProject = {}; // projectId → [caseId] (in DEMO_PROJECTS order)
+const caseById = new Map(); // caseId → { projectId, file, title, declLine, declColumn }
+const caseIdByKey = new Map(); // `${projectId}\x00${file}\x00${title}` → caseId
 
-const P1_CASES = [
-  ['tests/checkout/checkout.spec.ts', 'should complete checkout with credit card'],
-  ['tests/checkout/checkout.spec.ts', 'should complete checkout with PayPal'],
-  ['tests/checkout/checkout.spec.ts', 'should complete checkout with Apple Pay'],
-  ['tests/checkout/checkout.spec.ts', 'should show error for expired card'],
-  ['tests/checkout/checkout.spec.ts', 'should show error for invalid CVV'],
-  ['tests/checkout/cart.spec.ts', 'should add item to cart'],
-  ['tests/checkout/cart.spec.ts', 'should remove item from cart'],
-  ['tests/checkout/cart.spec.ts', 'should update item quantity'],
-  ['tests/checkout/cart.spec.ts', 'should apply discount code'],
-  ['tests/checkout/cart.spec.ts', 'should display cart total correctly'],
-  ['tests/checkout/address.spec.ts', 'should fill and save shipping address'],
-  ['tests/checkout/address.spec.ts', 'should validate required address fields'],
-];
-
-const P2_CASES = [
-  ['tests/api/auth.spec.ts', 'POST /auth/login returns 200 with valid credentials'],
-  ['tests/api/auth.spec.ts', 'POST /auth/login returns 401 with invalid credentials'],
-  ['tests/api/auth.spec.ts', 'GET /auth/me returns current user'],
-  ['tests/api/products.spec.ts', 'GET /products returns paginated list'],
-  ['tests/api/products.spec.ts', 'GET /products/:id returns product details'],
-  ['tests/api/products.spec.ts', 'POST /products creates product (admin)'],
-  ['tests/api/products.spec.ts', 'DELETE /products/:id removes product (admin)'],
-  ['tests/api/orders.spec.ts', 'POST /orders creates order'],
-  ['tests/api/orders.spec.ts', 'GET /orders/:id returns order details'],
-  ['tests/api/orders.spec.ts', 'PUT /orders/:id/status updates order status'],
-  ['tests/api/search.spec.ts', 'GET /search returns results'],
-  ['tests/api/search.spec.ts', 'GET /search handles empty query'],
-  ['tests/api/users.spec.ts', 'GET /users/:id returns user profile'],
-  ['tests/api/users.spec.ts', 'PUT /users/:id updates user profile'],
-];
-
-const P3_CASES = [
-  ['tests/ui/button.spec.ts', 'Button primary variant renders correctly'],
-  ['tests/ui/button.spec.ts', 'Button disabled state renders correctly'],
-  ['tests/ui/button.spec.ts', 'Button loading state renders correctly'],
-  ['tests/ui/modal.spec.ts', 'Modal opens and closes correctly'],
-  ['tests/ui/modal.spec.ts', 'Modal with large content scrolls correctly'],
-  ['tests/ui/form.spec.ts', 'Form validation shows errors correctly'],
-  ['tests/ui/form.spec.ts', 'Form submit button disabled when invalid'],
-  ['tests/ui/table.spec.ts', 'Table sorts by column correctly'],
-  ['tests/ui/table.spec.ts', 'Table pagination works correctly'],
-  ['tests/ui/table.spec.ts', 'Table search filters results'],
-];
-
-const P4_CASES = [
-  ['tests/mobile/navigation.spec.ts', 'Tab bar navigation works correctly'],
-  ['tests/mobile/navigation.spec.ts', 'Back gesture navigates correctly'],
-  ['tests/mobile/gestures.spec.ts', 'Swipe to dismiss works'],
-  ['tests/mobile/gestures.spec.ts', 'Pull to refresh triggers reload'],
-  ['tests/mobile/forms.spec.ts', 'Text input shows keyboard on focus'],
-  ['tests/mobile/forms.spec.ts', 'Date picker works correctly'],
-  ['tests/mobile/media.spec.ts', 'Images load with correct dimensions'],
-];
-
-// Suite definitions per project per file — mirrors describe blocks in test specs
-const SUITE_DEFS = {
-  1: {
-    'tests/checkout/checkout.spec.ts': { suitePath: ['Checkout'], mode: 'parallel', annotations: [] },
-    'tests/checkout/cart.spec.ts': { suitePath: ['Cart'], mode: 'default', annotations: [] },
-    'tests/checkout/address.spec.ts': { suitePath: ['Address'], mode: 'default', annotations: [] },
-  },
-  2: {
-    'tests/api/auth.spec.ts': { suitePath: ['Auth'], mode: 'default', annotations: [] },
-    'tests/api/products.spec.ts': { suitePath: ['Products'], mode: 'default', annotations: [] },
-    'tests/api/orders.spec.ts': { suitePath: ['Orders'], mode: 'default', annotations: [] },
-    'tests/api/search.spec.ts': { suitePath: ['Search'], mode: 'default', annotations: [] },
-    'tests/api/users.spec.ts': { suitePath: ['Users'], mode: 'default', annotations: [] },
-  },
-  3: {
-    'tests/ui/button.spec.ts': { suitePath: ['Button'], mode: 'parallel', annotations: [{ type: 'smoke' }] },
-    'tests/ui/modal.spec.ts': { suitePath: ['Modal'], mode: 'serial', annotations: [] },
-    'tests/ui/form.spec.ts': { suitePath: ['Form'], mode: 'default', annotations: [] },
-    'tests/ui/table.spec.ts': { suitePath: ['Table'], mode: 'default', annotations: [] },
-  },
-  4: {
-    'tests/mobile/navigation.spec.ts': { suitePath: ['Navigation'], mode: 'default', annotations: [] },
-    'tests/mobile/gestures.spec.ts': { suitePath: ['Gestures'], mode: 'default', annotations: [] },
-    'tests/mobile/forms.spec.ts': { suitePath: ['Forms'], mode: 'default', annotations: [] },
-    'tests/mobile/media.spec.ts': { suitePath: ['Media'], mode: 'default', annotations: [] },
-  },
+// Cases that are prone to flake (retry-pass) — their `flaky_root_cause` is set
+// coherently instead of at random.
+const FLAKY_CASES = {
+  1: { title: 'should apply discount code', rootCause: 'timing' },
+  2: { title: 'GET /search handles empty query', rootCause: 'network' },
+  3: { title: 'Table pagination works correctly', rootCause: 'timing' },
+  4: { title: 'Pull to refresh triggers reload', rootCause: 'timing' },
+  5: { title: 'toggles dark mode', rootCause: 'other' },
 };
 
-// Generate test_suites rows: one row per (project, filePath, suitePath)
-const TEST_SUITES = [];
-let tsId = 1;
-const suiteLookup = {}; // projectId → filePath → suiteId
-const suiteNow = ts('2025-03-01');
-
-for (const [pid, fileDefs] of Object.entries(SUITE_DEFS)) {
-  suiteLookup[pid] = {};
-  for (const [fp, def] of Object.entries(fileDefs)) {
-    const suitePathStr = def.suitePath.join('\x1f');
-    suiteLookup[pid][fp] = tsId;
+for (const proj of DEMO_PROJECTS) {
+  suiteLookup[proj.id] = {};
+  for (const [fp, def] of Object.entries(proj.suites)) {
+    suiteLookup[proj.id][fp] = tsId;
     TEST_SUITES.push({
       id: tsId,
-      project_id: +pid,
+      project_id: proj.id,
       file_path: fp,
-      suite_path: suitePathStr,
+      suite_path: def.suitePath.join('\x1f'),
       mode: def.mode,
       annotations: JSON.stringify(def.annotations),
       created_at: suiteNow,
@@ -272,266 +219,39 @@ for (const [pid, fileDefs] of Object.entries(SUITE_DEFS)) {
     });
     tsId++;
   }
-}
 
-const ROOT_CAUSES = ['timing', 'network', 'assertion', 'other'];
-function randomRootCause() {
-  if (Math.random() < 0.75) return null;
-  return ROOT_CAUSES[Math.floor(Math.random() * ROOT_CAUSES.length)];
-}
-
-const ALL_CASE_DEFS = [
-  [1, P1_CASES],
-  [2, P2_CASES],
-  [3, P3_CASES],
-  [4, P4_CASES],
-];
-
-const caseIdsByProject = {};
-const caseFilesByProject = {};
-for (const [pid, cases] of ALL_CASE_DEFS) {
-  caseIdsByProject[pid] = [];
-  caseFilesByProject[pid] = [];
-  const now = ts('2025-03-01');
-  for (const [fp, title] of cases) {
-    const suiteId = suiteLookup[pid]?.[fp] ?? null;
-    const suitePathStr = SUITE_DEFS[pid]?.[fp]?.suitePath.join('\x1f') ?? '';
+  caseIdsByProject[proj.id] = [];
+  for (const c of proj.cases) {
+    const flaky = FLAKY_CASES[proj.id]?.title === c.title ? FLAKY_CASES[proj.id] : null;
     TEST_CASES.push({
       id: tcId,
-      project_id: pid,
-      file_path: fp,
-      suite_path: suitePathStr,
-      suite_id: suiteId,
-      title,
-      flaky_root_cause: randomRootCause(),
-      created_at: now,
-      updated_at: now,
+      project_id: proj.id,
+      file_path: c.file,
+      suite_path: proj.suites[c.file]?.suitePath.join('\x1f') ?? '',
+      suite_id: suiteLookup[proj.id][c.file] ?? null,
+      title: c.title,
+      flaky_root_cause: flaky?.rootCause ?? null,
+      created_at: suiteNow,
+      updated_at: suiteNow,
     });
-    caseIdsByProject[pid].push(tcId);
-    caseFilesByProject[pid].push(fp);
+    caseIdsByProject[proj.id].push(tcId);
+    caseById.set(tcId, { projectId: proj.id, ...c });
+    caseIdByKey.set(`${proj.id}\x00${c.file}\x00${c.title}`, tcId);
     tcId++;
   }
 }
 
-// ── Failure cluster definitions ────────────────────────────────────────────
-// NOTE: caseIndices must be in [0, 2] because max failed tests per run is 3
-const CLUSTER_DEFS = [
-  {
-    projectId: 1,
-    errorText: `TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Pay' })\n    at tests/checkout/checkout.spec.ts:42:18`,
-    caseIndices: [0, 1],
-  },
-  {
-    // Renamed-label failure: the checkout email field's label was changed, so
-    // `getByLabel('Email address')` no longer matches. Showcases stale-aware
-    // locator healing (the name-based alternatives are flagged and the
-    // ancestor-scoped alternative is recommended instead).
-    projectId: 1,
-    errorText: `TimeoutError: locator.fill: Timeout 10000ms exceeded.\nCall log:\n  - waiting for getByLabel('Email address')\n    at tests/checkout/checkout.spec.ts:23:10`,
-    caseIndices: [2],
-  },
-  { projectId: 2, errorText: 'expect(received).toBe(expected)\n\nExpected: 200\nReceived: 500', caseIndices: [0, 1] },
-  {
-    projectId: 2,
-    errorText:
-      'expect(received).toHaveText(expected)\n\nExpected pattern: /success/i\n\nReceived: "Server error"\n    at tests/api/payments.spec.ts:88',
-    caseIndices: [2],
-  },
-  {
-    projectId: 3,
-    errorText: 'TimeoutError: page.waitForSelector: Timeout 5000ms exceeded.\n    at tests/ui/modal.spec.ts:18',
-    caseIndices: [1, 2],
-  },
-  {
-    projectId: 3,
-    errorText:
-      "Error: strict mode violation: getByRole('button') resolved to 3 elements\n\n    at tests/ui/button.spec.ts:55",
-    caseIndices: [0],
-  },
-  {
-    projectId: 4,
-    errorText: 'TimeoutError: page.goto: Timeout 30000ms exceeded.\n    at tests/mobile/navigation.spec.ts:15',
-    caseIndices: [0, 1],
-  },
-  {
-    projectId: 4,
-    errorText: 'Error: page.fill: Element not found\n    at tests/mobile/forms.spec.ts:28',
-    caseIndices: [2],
-  },
-];
-
-const CLUSTERS = CLUSTER_DEFS.map((def, i) => ({
-  id: i + 1,
-  ...def,
-  ...computeDemoFingerprint(def.errorText),
-}));
-
-const clusterLookup = {};
-for (const cl of CLUSTERS) {
-  if (!clusterLookup[cl.projectId]) clusterLookup[cl.projectId] = {};
-  for (const ci of cl.caseIndices) {
-    clusterLookup[cl.projectId][ci] = cl.id;
+/** Story cluster membership: caseId → story, per project. */
+const storyByCaseId = new Map(); // caseId → { story, failingCase }
+for (const story of FAILURE_STORIES) {
+  for (const fc of story.failingCases) {
+    const caseId = caseIdByKey.get(`${story.projectId}\x00${story.specFile}\x00${fc.title}`);
+    if (!caseId) throw new Error(`Story ${story.key}: failing case not found: ${fc.title}`);
+    storyByCaseId.set(caseId, { story, failingCase: fc });
   }
 }
 
-// ARIA snapshot for a failing case, shaped to match the cluster's failure so the
-// AI-diagnosis `ariaSnapshot` evidence section is grounded (e.g. the strict-mode
-// cluster shows the multiple button nodes that trip the unscoped locator).
-function ariaSnapshotForCluster(clusterDef) {
-  if (!clusterDef) return null;
-  const e = clusterDef.errorText || '';
-  if (clusterDef.errorType === 'strict-mode') {
-    return '- document:\n  - button "Primary"\n  - button "Disabled" [disabled]\n  - button "Loading"';
-  }
-  if (/page\.goto/.test(e)) {
-    return '- document:\n  - navigation "Loading…"\n  - img "Hero"';
-  }
-  if (/getByLabel\('Email address'\)/.test(e)) {
-    // The checkout email step was restructured — the "Email address" textbox is
-    // gone (replaced by a contact-method combobox), so the failing page has a
-    // different set of same-role fields and no confident rename match: the
-    // stored name-based locators are stale.
-    return (
-      '- document:\n  - form "Checkout":\n    - combobox "Contact method"\n    - textbox "Card number"\n' +
-      '    - textbox "Expiry date"\n    - textbox "CVV"\n    - button "Pay"'
-    );
-  }
-  if (clusterDef.projectId === 1) {
-    return (
-      '- document:\n  - form "Checkout":\n    - textbox "Card number"\n    - textbox "Expiry"\n' +
-      '    - textbox "CVV"\n    - button "Pay" [disabled]'
-    );
-  }
-  if (/page\.fill/.test(e)) {
-    return '- document:\n  - main:\n    - heading "Sign in"\n    - text "Email"';
-  }
-  return '- document:\n  - main:\n    - heading "Page"';
-}
-
-// Source snippet around the failing assertion for a failing case, shaped to match
-// the cluster's failure so the AI-diagnosis `testSource` section (and the "Test
-// source" card on the case page) are grounded in something plausible.
-function testSourceForCluster(clusterDef) {
-  if (!clusterDef) return null;
-  const e = clusterDef.errorText || '';
-  if (/getByRole\('button', \{ name: 'Pay' \}\)/.test(e)) {
-    return [
-      "test('completes checkout', async ({ page }) => {",
-      "  await page.goto('/checkout');",
-      '  await fillPaymentDetails(page);',
-      '  // Pay stays disabled until the async price quote resolves',
-      "  await page.getByRole('button', { name: 'Pay' }).click();",
-      "  await expect(page.getByText('Order confirmed')).toBeVisible();",
-      '});',
-    ].join('\n');
-  }
-  if (/getByLabel\('Email address'\)/.test(e)) {
-    return [
-      "test('fills contact details', async ({ page }) => {",
-      "  await page.goto('/checkout');",
-      "  await page.getByLabel('Email address').fill('buyer@example.com');",
-      "  await page.getByLabel('Card number').fill('4242424242424242');",
-      "  await page.getByRole('button', { name: 'Pay' }).click();",
-      '});',
-    ].join('\n');
-  }
-  if (/Expected: 200/.test(e)) {
-    return [
-      "test('returns 200 for a valid payment', async ({ request }) => {",
-      "  const res = await request.post('/api/payments', { data: validPayload });",
-      '  expect(res.status()).toBe(200);',
-      '});',
-    ].join('\n');
-  }
-  if (/toHaveText/.test(e)) {
-    return [
-      "test('shows a success message', async ({ page }) => {",
-      '  await submitPayment(page);',
-      "  await expect(page.getByTestId('status')).toHaveText(/success/i);",
-      '});',
-    ].join('\n');
-  }
-  if (/waitForSelector/.test(e)) {
-    return [
-      "test('opens the modal', async ({ page }) => {",
-      "  await page.getByRole('button', { name: 'Open' }).click();",
-      "  await page.waitForSelector('.modal.is-open');",
-      '});',
-    ].join('\n');
-  }
-  if (/strict mode violation/.test(e)) {
-    return [
-      "test('clicks the primary action', async ({ page }) => {",
-      '  // Three buttons render; the locator must be scoped to one',
-      "  await page.getByRole('button').click();",
-      '});',
-    ].join('\n');
-  }
-  if (/page\.goto/.test(e)) {
-    return [
-      "test('loads the landing page', async ({ page }) => {",
-      "  await page.goto('/', { waitUntil: 'networkidle' });",
-      '  await expect(page).toHaveTitle(/Home/);',
-      '});',
-    ].join('\n');
-  }
-  if (/page\.fill/.test(e)) {
-    return [
-      "test('submits the form', async ({ page }) => {",
-      "  await page.fill('#name', 'Ada');",
-      "  await page.getByRole('button', { name: 'Save' }).click();",
-      '});',
-    ].join('\n');
-  }
-  return null;
-}
-
-/** Format lines as a line-numbered snippet (matches the reporter's readSourceSnippet). */
-function fmtSnippet(lines, failingIdx, startLine) {
-  return lines.map((l, i) => `${i === failingIdx ? '> ' : '  '}${String(startLine + i).padStart(4)} | ${l}`).join('\n');
-}
-
-// Multi-frame call stack for a failing case: the failing line plus the callers
-// above it. Seeded for the flagship checkout failure — where the click actually
-// fails inside a shared helper the spec called — to showcase "the interesting
-// part is upper". Other clusters fall back to the single testSource snippet.
-function testSourceFramesForCluster(clusterDef) {
-  if (!clusterDef) return null;
-  if (!/getByRole\('button', \{ name: 'Pay' \}\)/.test(clusterDef.errorText || '')) return null;
-  return [
-    {
-      file: 'tests/helpers/payment.ts',
-      line: 16,
-      snippet: fmtSnippet(
-        [
-          'export async function fillPaymentDetails(page: Page) {',
-          "  await page.getByLabel('Card number').fill(TEST_CARD);",
-          "  await page.getByLabel('Expiry').fill('12/30');",
-          '  // The Pay button stays disabled until the async quote resolves',
-          "  await page.getByRole('button', { name: 'Pay' }).click();",
-          '}',
-        ],
-        4,
-        12,
-      ),
-    },
-    {
-      file: 'tests/checkout/checkout.spec.ts',
-      line: 42,
-      snippet: fmtSnippet(
-        [
-          "test('completes checkout', async ({ page }) => {",
-          "  await page.goto('/checkout');",
-          '  await fillPaymentDetails(page);',
-          "  await expect(page.getByText('Order confirmed')).toBeVisible();",
-          '});',
-        ],
-        2,
-        40,
-      ),
-    },
-  ];
-}
+// ── Test runs + test_runs_cases ────────────────────────────────────────────
 
 // Simple URL normalizer for seed data (mirrors shared/utils/route.ts)
 function seedNormalizeUrl(url) {
@@ -546,66 +266,43 @@ function seedNormalizeUrl(url) {
   }
 }
 
-// ── Test runs + test_runs_cases ────────────────────────────────────────────
-
 const TEST_RUNS = [];
 const TEST_RUNS_CASES = [];
 const NETWORK_REQUESTS = [];
-let nrId = 1;
 const REPORTS = [];
 const FAILURE_CLUSTERS = [];
-
-const clusterStats = {};
-for (const cl of CLUSTERS) {
-  clusterStats[cl.id] = { occurrences: 0, firstRunId: null, lastRunId: null };
-}
 
 let runId = 1;
 let trcId = 1;
 let reportId = 1;
+let nrId = 1;
 
-// 'main' appears 3× to weight it more heavily in the random distribution
-const BRANCHES = ['main', 'main', 'main', 'develop', 'feature/new-ui'];
-const AUTHORS = ['Alice Chen', 'Bob Smith', 'Carol White', 'David Lee', 'Eva Brown'];
-const COMMIT_MSGS = [
-  'feat: add new payment provider',
-  'fix: resolve checkout race condition',
-  'chore: update dependencies',
-  'feat: improve error messages',
-  'fix: mobile layout issues',
-  'perf: optimize database queries',
-  'feat: add A/B test framework',
-  'fix: resolve flaky test',
-  'docs: update API documentation',
-  'refactor: simplify auth flow',
-];
-
-function randomCommit() {
-  return Math.random().toString(16).slice(2, 10);
+const clusterStats = {};
+for (const story of FAILURE_STORIES) {
+  clusterStats[story.clusterId] = { occurrences: 0, firstRunId: null, lastRunId: null, firstStartMs: null, lastStartMs: null };
 }
 
-const ENVIRONMENTS = ['production', 'staging', 'integration', 'development'];
+// Runs per project. Failure scheduling is story-driven (see below), so there is
+// no blanket failure rate — only the flaky (retry-pass) rate is a dial here.
+const PROJECT_CONFIGS = {
+  1: { numRuns: 20, baseDuration: 145000, baseAvg: 4200, baseP90: 8900, flakyRate: 0.18 },
+  2: { numRuns: 18, baseDuration: 82000, baseAvg: 2100, baseP90: 4800, flakyRate: 0.12 },
+  3: { numRuns: 15, baseDuration: 310000, baseAvg: 8500, baseP90: 18000, flakyRate: 0.2 },
+  4: { numRuns: 8, baseDuration: 190000, baseAvg: 5800, baseP90: 12000, flakyRate: 0.15 },
+  5: { numRuns: 12, baseDuration: 210000, baseAvg: 5200, baseP90: 11000, flakyRate: 0.15 },
+};
 
-const STEPS_TEMPLATES = [
-  [
-    { title: 'Navigate to page', duration: 850, category: 'navigation' },
-    { title: 'Fill form fields', duration: 1100, category: 'action' },
-    { title: 'Submit form', duration: 1200, category: 'action' },
-    { title: 'Assert success', duration: 730, category: 'assertion' },
-  ],
-  [
-    { title: 'Open browser', duration: 400, category: 'setup' },
-    { title: 'Login as user', duration: 950, category: 'action' },
-    { title: 'Navigate to feature', duration: 620, category: 'navigation' },
-    { title: 'Interact with element', duration: 800, category: 'action' },
-    { title: 'Verify result', duration: 500, category: 'assertion' },
-  ],
-  [
-    { title: 'Setup test data', duration: 300, category: 'setup' },
-    { title: 'Execute action', duration: 1500, category: 'action' },
-    { title: 'Check database state', duration: 200, category: 'assertion' },
-  ],
-];
+// Base start time (most recent run is at this time, older runs go backwards)
+const BASE_START_MS = new Date('2025-04-25T08:30:00Z').getTime();
+
+const ENVIRONMENTS = ['production', 'staging', 'integration', 'development'];
+const RUN_GREPS = {
+  1: 'checkout|cart',
+  2: 'auth|orders',
+  3: 'button|modal',
+  4: 'navigation',
+  5: 'users|reports',
+};
 
 // Parallel-worker model for seeded runs: tests are pulled round-robin across a
 // fixed pool of workers and run back-to-back per worker (matching the demo
@@ -652,209 +349,149 @@ function buildSeedStepEvents(caseStartMs, caseDuration, location, waitHeavy) {
   return { stepEvents: events, wastedMs };
 }
 
-const SERVER_LOGS_OK = [
-  { timestamp: 1714000000000, level: 'info', category: 'http', message: 'GET /products — 200 OK (85ms)' },
-  { timestamp: 1714000000050, level: 'debug', category: 'cache', message: 'cache HIT for key products:featured' },
-];
+/** Scale a project's themed step titles to a case duration. */
+function buildSteps(proj, caseDuration) {
+  const total = proj.stepTitles.reduce((s, st) => s + st.weight, 0);
+  return proj.stepTitles.map((st) => ({
+    title: st.title,
+    duration: Math.round((st.weight / total) * caseDuration),
+    category: st.category,
+  }));
+}
 
-const SERVER_LOGS_ERROR = [
-  {
-    timestamp: 1714000000000,
-    level: 'error',
-    category: 'http',
-    message: 'POST /orders — 500 Internal Server Error',
-    stack:
-      'Error: connection pool exhausted\n    at Query.execute (db/query.ts:42)\n    at POST /orders (routes/orders.ts:18)',
-  },
-  { timestamp: 1714000000010, level: 'warn', category: 'database', message: 'Connection pool at 95% capacity' },
-];
+/** Themed network requests for one case (jittered durations; story overrides on failures). */
+function buildNetwork(proj, storyEntry) {
+  const base = proj.network.map((req) => ({
+    ...req,
+    duration: Math.max(8, Math.round(req.duration * (0.75 + rng() * 0.5))),
+  }));
+  const overrides = storyEntry?.story.evidence.failingNetwork ?? [];
+  for (const over of overrides) {
+    const idx = base.findIndex((r) => r.method === over.method && r.url === over.url);
+    if (idx >= 0) base[idx] = { ...over };
+    else base.push({ ...over });
+  }
+  return base;
+}
 
-const NETWORK_TEMPLATES = [
-  [
-    {
-      method: 'GET',
-      url: 'https://api.example.com/products',
-      status: 200,
-      duration: 85,
-      resourceType: 'fetch',
-      serverLogs: SERVER_LOGS_OK,
+/** Themed web vitals; failing pages render slower. */
+function buildWebVitals(proj, failing) {
+  if (!proj.webVitals) return null;
+  const slow = failing ? 1.6 : 1;
+  const url = proj.pageState?.url ?? proj.baseUrl ?? 'https://example.com/';
+  return {
+    navigation: {
+      url,
+      ttfb: Math.round((90 + rng() * 120) * slow),
+      domInteractive: Math.round((700 + rng() * 600) * slow),
+      domContentLoaded: Math.round((1000 + rng() * 800) * slow),
+      loadComplete: Math.round((1500 + rng() * 1000) * slow),
     },
-    { method: 'POST', url: 'https://api.example.com/orders', status: 201, duration: 145, resourceType: 'fetch' },
-    { method: 'GET', url: 'https://api.example.com/users/123', status: 200, duration: 62, resourceType: 'fetch' },
-  ],
-  [
-    { method: 'GET', url: 'https://api.example.com/auth/me', status: 200, duration: 45, resourceType: 'fetch' },
-    {
-      method: 'GET',
-      url: 'https://api.example.com/products/42',
-      status: 200,
-      duration: 72,
-      resourceType: 'fetch',
-      serverLogs: SERVER_LOGS_OK,
+    paint: {
+      firstPaint: Math.round((600 + rng() * 400) * slow),
+      firstContentfulPaint: Math.round((800 + rng() * 500) * slow),
     },
-    { method: 'POST', url: 'https://api.example.com/cart/items', status: 200, duration: 110, resourceType: 'fetch' },
-  ],
-];
+    vitals: {
+      lcp: Math.round((1200 + rng() * 1400) * slow),
+      cls: Math.round(rng() * 0.2 * 10000) / 10000,
+      // INP is frequently absent in short tests — mirror that in the seed.
+      inp: rng() < 0.6 ? Math.round(80 + rng() * 250) : null,
+    },
+  };
+}
 
-// Project configurations: [numRuns, baseTestCount, baseDuration, baseAvgMs, baseP90Ms, failRate, flakyRate]
-const PROJECT_CONFIGS = {
-  1: {
-    numRuns: 20,
-    totalTests: 12,
-    baseDuration: 145000,
-    baseAvg: 4200,
-    baseP90: 8900,
-    failRate: 0.15,
-    flakyRate: 0.12,
-  },
-  2: { numRuns: 18, totalTests: 14, baseDuration: 82000, baseAvg: 2100, baseP90: 4800, failRate: 0.1, flakyRate: 0.08 },
-  3: {
-    numRuns: 15,
-    totalTests: 10,
-    baseDuration: 310000,
-    baseAvg: 8500,
-    baseP90: 18000,
-    failRate: 0.2,
-    flakyRate: 0.15,
-  },
-  4: { numRuns: 8, totalTests: 7, baseDuration: 190000, baseAvg: 5800, baseP90: 12000, failRate: 0.25, flakyRate: 0.1 },
-};
+/** Themed page state; failing stories may drop localStorage keys (e.g. an unresolved quote). */
+function buildPageState(proj, storyEntry) {
+  if (!proj.pageState) return null;
+  const drop = new Set(storyEntry?.story.evidence.pageStateDropKeys ?? []);
+  return {
+    url: proj.pageState.url,
+    hash: null,
+    historyState: null,
+    localStorage: proj.pageState.localStorage.filter((e) => !drop.has(e.key)),
+    sessionStorage: proj.pageState.sessionStorage,
+    cookies: proj.pageState.cookies,
+  };
+}
 
-// Browser configs per project. These carry the richer context fields
-// (deviceScaleFactor, isMobile/hasTouch, locale, timezone, colorScheme, userAgent)
-// so the browser badge tooltip and the CI / Env card's dense browser line have
-// real content to show.
-const CHROME_UA =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-const BROWSER_CONFIGS = {
-  1: [
-    // e2e-checkout — Chromium most runs, Firefox occasionally
-    {
-      projectName: 'Chromium',
-      browserName: 'chromium',
-      channel: 'chrome',
-      viewport: { width: 1280, height: 720 },
-      deviceScaleFactor: 1,
-      isMobile: false,
-      hasTouch: false,
-      locale: 'en-US',
-      timezoneId: 'America/New_York',
-      colorScheme: 'light',
-      userAgent: CHROME_UA,
-    },
-    {
-      projectName: 'Firefox',
-      browserName: 'firefox',
-      channel: null,
-      viewport: { width: 1280, height: 720 },
-      deviceScaleFactor: 1,
-      isMobile: false,
-      hasTouch: false,
-      locale: 'en-US',
-      timezoneId: 'America/New_York',
-      colorScheme: 'light',
-      userAgent: 'Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0',
-    },
-  ],
-  2: [
-    // api-integration — headless Chromium in CI
-    {
-      projectName: 'Chromium',
-      browserName: 'chromium',
-      channel: null,
-      viewport: { width: 1280, height: 720 },
-      deviceScaleFactor: 1,
-      isMobile: false,
-      hasTouch: false,
-      locale: 'en-US',
-      timezoneId: 'UTC',
-      colorScheme: 'light',
-      userAgent:
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/124.0.0.0 Safari/537.36',
-    },
-  ],
-  3: [
-    // ui-components — Chromium at 2x DPR in dark mode (component visual tests)
-    {
-      projectName: 'Chromium',
-      browserName: 'chromium',
-      channel: null,
-      viewport: { width: 1280, height: 720 },
-      deviceScaleFactor: 2,
-      isMobile: false,
-      hasTouch: false,
-      locale: 'en-GB',
-      timezoneId: 'Europe/London',
-      colorScheme: 'dark',
-      userAgent: CHROME_UA,
-    },
-  ],
-  4: [
-    // mobile-safari — WebKit emulating an iPhone (mobile + touch + 3x DPR)
-    {
-      projectName: 'Mobile Safari',
-      browserName: 'webkit',
-      channel: null,
-      viewport: { width: 390, height: 844 },
-      deviceScaleFactor: 3,
-      isMobile: true,
-      hasTouch: true,
-      locale: 'en-US',
-      timezoneId: 'America/Los_Angeles',
-      colorScheme: 'light',
-      userAgent:
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
-    },
-  ],
-};
+for (const proj of DEMO_PROJECTS) {
+  const cfg = PROJECT_CONFIGS[proj.id];
+  const caseIds = caseIdsByProject[proj.id];
+  const commits = SCM_REPOS[proj.id].commits;
+  // Newest runs use the newest commits: run index i (0 = newest) maps onto the
+  // commit list in windows, so a story starts failing exactly when its suspect
+  // commit lands and "What changed" genuinely correlates.
+  const commitWindow = Math.ceil(cfg.numRuns / commits.length);
+  const commitIdxForRun = (i) => Math.min(Math.floor(i / commitWindow), commits.length - 1);
 
-// Base start time (most recent run is at this time, older runs go backwards)
-const BASE_START_MS = new Date('2025-04-25T08:30:00Z').getTime();
+  const projectStories = FAILURE_STORIES.filter((s) => s.projectId === proj.id);
+  const flakyCaseId = FLAKY_CASES[proj.id]
+    ? caseIdByKey.get(
+        `${proj.id}\x00${proj.cases.find((c) => c.title === FLAKY_CASES[proj.id].title)?.file}\x00${FLAKY_CASES[proj.id].title}`,
+      )
+    : null;
 
-for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
-  const projectId = +pid;
-  const caseIds = caseIdsByProject[projectId];
+  // Decide which stories fire on which runs (deterministic). A story is
+  // eligible once its suspect commit has landed (and, for environment-driven
+  // stories, only on runs whose browser profile matches); it always fires on
+  // the first eligible run (the regression's first appearance), then keeps
+  // firing with its configured chance.
+  const browserForRun = (i) => proj.browsers[proj.browserRotation[i % proj.browserRotation.length]] ?? proj.browsers[0];
+  const eligible = (story, i) => {
+    const suspectIdx = commits.findIndex((c) => c.sha === story.suspectSha);
+    if (suspectIdx === -1 || commitIdxForRun(i) > suspectIdx) return false;
+    const scheme = story.firing.requiresColorScheme;
+    if (scheme && browserForRun(i).colorScheme !== scheme) return false;
+    return true;
+  };
+  const firingByRun = new Map(); // runIndex → story[]
+  for (const story of projectStories) {
+    const eligibleRuns = [];
+    for (let i = 0; i < cfg.numRuns; i++) if (eligible(story, i)) eligibleRuns.push(i);
+    const oldestEligible = eligibleRuns[eligibleRuns.length - 1];
+    for (const i of eligibleRuns) {
+      if (i === oldestEligible || rng() < story.firing.chance) {
+        if (!firingByRun.has(i)) firingByRun.set(i, []);
+        firingByRun.get(i).push(story);
+      }
+    }
+  }
 
   for (let i = 0; i < cfg.numRuns; i++) {
     // Runs go from newest (i=0) to oldest (i=numRuns-1)
-    const startMs = BASE_START_MS - i * (8 * 60 * 60 * 1000 + Math.floor(Math.random() * 3600000));
+    const startMs = BASE_START_MS - i * (8 * 60 * 60 * 1000 + Math.floor(rng() * 3600000));
     const startTime = Math.floor(startMs / 1000);
-    const durationVariance = (Math.random() - 0.5) * 0.2 * cfg.baseDuration;
-    const duration = Math.round(cfg.baseDuration + durationVariance);
-    const avgVariance = (Math.random() - 0.5) * 0.15 * cfg.baseAvg;
-    const avgTestDuration = Math.round(cfg.baseAvg + avgVariance);
-    const p90Variance = (Math.random() - 0.5) * 0.15 * cfg.baseP90;
-    const p90TestDuration = Math.round(cfg.baseP90 + p90Variance);
+    const duration = Math.round(cfg.baseDuration + (rng() - 0.5) * 0.2 * cfg.baseDuration);
+    const avgTestDuration = Math.round(cfg.baseAvg + (rng() - 0.5) * 0.15 * cfg.baseAvg);
+    const p90TestDuration = Math.round(cfg.baseP90 + (rng() - 0.5) * 0.15 * cfg.baseP90);
+    const browser = browserForRun(i);
+    const commit = commits[commitIdxForRun(i)];
 
-    // Determine run status
-    const roll = Math.random();
-    let status;
-    let failedTests = 0;
-    let passedTests = cfg.totalTests;
-    let flakyTests = 0;
-    let didNotRunTests = 0;
-
-    if (roll < cfg.failRate) {
-      status = 'failed';
-      failedTests = Math.ceil(Math.random() * Math.min(3, cfg.totalTests));
-      passedTests = cfg.totalTests - failedTests;
-      flakyTests = Math.random() < 0.35 ? 1 : 0;
-    } else if (roll < cfg.failRate + 0.05) {
-      // An interrupted run: a failure cut the suite short, so the trailing
-      // tests never executed (didnotrun).
-      status = 'interrupted';
-      failedTests = 1;
-      didNotRunTests = Math.min(3, Math.max(0, cfg.totalTests - 2));
-      passedTests = cfg.totalTests - failedTests - didNotRunTests;
-    } else {
-      status = 'passed';
-      flakyTests = Math.random() < cfg.flakyRate ? 1 : 0;
+    const firingStories = firingByRun.get(i) ?? [];
+    const failingCaseIds = new Set();
+    for (const story of firingStories) {
+      for (const fc of story.failingCases) {
+        failingCaseIds.add(caseIdByKey.get(`${proj.id}\x00${story.specFile}\x00${fc.title}`));
+      }
     }
 
-    const branchIdx = i % BRANCHES.length;
-    const branch = i < 3 ? 'main' : BRANCHES[branchIdx];
-    const commitMsg = COMMIT_MSGS[i % COMMIT_MSGS.length];
-    const authorIdx = i % AUTHORS.length;
+    let failedTests = failingCaseIds.size;
+    let status = failedTests > 0 ? 'failed' : 'passed';
+    let didNotRunTests = 0;
+    // Occasionally a failure cuts the suite short: trailing (non-failing) tests
+    // never execute and the run is interrupted.
+    let didNotRunCaseIds = new Set();
+    if (failedTests > 0 && rng() < 0.15) {
+      status = 'interrupted';
+      for (let j = caseIds.length - 1; j >= 0 && didNotRunCaseIds.size < 3; j--) {
+        if (!failingCaseIds.has(caseIds[j])) didNotRunCaseIds.add(caseIds[j]);
+      }
+      didNotRunTests = didNotRunCaseIds.size;
+    }
+
+    const flakyThisRun = status !== 'interrupted' && flakyCaseId && !failingCaseIds.has(flakyCaseId) && rng() < cfg.flakyRate;
+    const flakyTests = flakyThisRun ? 1 : 0;
+    const passedTests = caseIds.length - failedTests - didNotRunTests;
 
     const metadata = {
       ci: {
@@ -862,23 +499,23 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
         buildNumber: String(1200 - i),
         jobName: 'test',
         workflow: 'CI',
-        buildUrl: `https://github.com/example/repo/actions/runs/${1200 - i}`,
+        buildUrl: `https://github.com/${SCM_REPOS[proj.id].repositoryUrl.split('/').slice(-2).join('/')}/actions/runs/${5100 + proj.id * 100 - i}`,
       },
       scm: {
-        commit: randomCommit(),
-        branch,
-        author: AUTHORS[authorIdx],
-        commitMessage: commitMsg,
+        commit: commit.sha,
+        branch: commit.branch,
+        author: commit.author,
+        commitMessage: commit.message,
       },
     };
 
-    const run = {
+    TEST_RUNS.push({
       id: runId,
-      project_id: projectId,
+      project_id: proj.id,
       status,
       start_time: startTime,
       duration,
-      total_tests: cfg.totalTests,
+      total_tests: caseIds.length,
       passed_tests: passedTests,
       failed_tests: failedTests,
       skipped_tests: 0,
@@ -886,9 +523,8 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
       flaky_tests: flakyTests,
       avg_test_duration: avgTestDuration,
       p90_test_duration: p90TestDuration,
-
       environment: ENVIRONMENTS[i % ENVIRONMENTS.length],
-      label: i === 0 ? `v${i + 1}.0.0 release` : null,
+      label: proj.id === 1 && i === 0 ? 'v2.4.0 release' : null,
       metadata,
       stream_token: null,
       instance_id: null,
@@ -898,13 +534,12 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
       playwright_version: i < 2 ? '1.52.0' : '1.51.0',
       reporter_version: '0.7.0',
       is_full_run: i % 5 !== 4 ? 1 : 0,
-      filter_details: i % 5 === 4 ? JSON.stringify({ grep: 'login|checkout' }) : null,
+      filter_details: i % 5 === 4 ? JSON.stringify({ grep: RUN_GREPS[proj.id] }) : null,
       created_at: startTime,
       updated_at: startTime + Math.floor(duration / 1000),
-    };
-    TEST_RUNS.push(run);
+    });
 
-    // Add a report for the first few runs of each project
+    // Add an HTML report for the first few runs of each project
     if (i < 3) {
       REPORTS.push({
         id: reportId++,
@@ -912,16 +547,11 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
         type: 'report',
         subtype: 'html',
         label: 'HTML Report',
-        path: `reports/${projectId}/${runId}/index.html`,
-        size: Math.floor(Math.random() * 500000) + 100000,
+        path: `reports/${proj.id}/${runId}/index.html`,
+        size: Math.floor(rng() * 500000) + 100000,
         created_at: startTime,
       });
     }
-
-    // Generate test_runs_cases for this run
-    const stepsTemplate = STEPS_TEMPLATES[i % STEPS_TEMPLATES.length];
-    const netTemplate = NETWORK_TEMPLATES[i % NETWORK_TEMPLATES.length];
-    const lookup = clusterLookup[projectId] || {};
 
     // Per-worker virtual clock (ms since run start). Tests run back-to-back on
     // their assigned worker, so timeline rows are dense rather than gappy.
@@ -930,142 +560,112 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
 
     for (let j = 0; j < caseIds.length; j++) {
       const caseId = caseIds[j];
-      const isFailedCase = failedTests > 0 && j < failedTests;
-      const isDidNotRunCase = !isFailedCase && didNotRunTests > 0 && j >= caseIds.length - didNotRunTests;
-      const isFlakyCase = !isFailedCase && !isDidNotRunCase && flakyTests > 0 && j === caseIds.length - 1;
+      const caseDef = caseById.get(caseId);
+      const isFailedCase = failingCaseIds.has(caseId);
+      const isDidNotRunCase = didNotRunCaseIds.has(caseId);
+      const isFlakyCase = flakyThisRun && caseId === flakyCaseId;
+
+      const storyEntry = isFailedCase ? storyByCaseId.get(caseId) : null;
+      const story = storyEntry?.story ?? null;
+      const noPage = Boolean(story?.evidence.noPageArtifacts);
 
       const caseStatus = isFailedCase ? 'failed' : isDidNotRunCase ? 'didnotrun' : 'passed';
-      const caseDurationVariance = (Math.random() - 0.5) * 0.3 * avgTestDuration;
-      const caseDuration = isDidNotRunCase ? 0 : Math.max(500, Math.round(avgTestDuration + caseDurationVariance));
+      const caseDuration = isDidNotRunCase
+        ? 0
+        : Math.max(500, Math.round(avgTestDuration + (rng() - 0.5) * 0.3 * avgTestDuration));
 
       const workerIndex = j % SEED_WORKER_COUNT;
       const caseStartMs = runStartMs + workerCursorMs[workerIndex];
 
-      // Determine cluster and error text for this case
-      const clusterId = isFailedCase ? lookup[j] || null : null;
-      const clusterDef = clusterId ? CLUSTERS.find((c) => c.id === clusterId) : null;
-      const error = isFailedCase
-        ? clusterDef
-          ? clusterDef.errorText
-          : 'expect(received).toBe(expected)\n\nExpected: true\nReceived: false'
-        : null;
-
-      if (clusterId && clusterDef) {
-        const stats = clusterStats[clusterId];
+      if (story) {
+        const stats = clusterStats[story.clusterId];
         stats.occurrences++;
-        if (stats.firstRunId === null) stats.firstRunId = runId;
-        stats.lastRunId = runId;
+        // Runs are generated newest-first, so the last write wins for "first".
+        if (stats.lastRunId === null) {
+          stats.lastRunId = runId;
+          stats.lastStartMs = startMs;
+        }
+        stats.firstRunId = runId;
+        stats.firstStartMs = startMs;
       }
 
-      // Scale steps durations proportionally
-      const scaleFactor = caseDuration / stepsTemplate.reduce((s, st) => s + st.duration, 0);
-      const steps = stepsTemplate.map((st) => ({
-        title: st.title,
-        duration: Math.round(st.duration * scaleFactor),
-        category: st.category,
-      }));
+      const steps = buildSteps(proj, caseDuration);
       const slowestStep = steps.reduce((a, b) => (a.duration > b.duration ? a : b));
 
-      const browserConfigs = BROWSER_CONFIGS[projectId] || BROWSER_CONFIGS[1];
-      const browser = browserConfigs[projectId === 1 ? i % browserConfigs.length : 0];
-
-      // Add backend server logs to some network requests for realism
-      const netWithLogs = isFailedCase
-        ? netTemplate.map((req, ri) => (ri === 0 ? { ...req, serverLogs: SERVER_LOGS_ERROR } : req))
-        : netTemplate;
-
-      // Assign test annotations — some tests have @fixme, some @slow
+      // Test annotations — failures link to their cluster, designated flaky
+      // cases are marked slow, and one checkout case carries a smoke marker.
       let testAnnotations = null;
-      if (isFailedCase && clusterId) {
-        testAnnotations = [{ type: 'fixme', description: 'Known issue — see cluster ' + clusterId }];
-      } else if (j % 5 === 4) {
+      if (isFailedCase && story) {
+        testAnnotations = [{ type: 'fixme', description: `Known issue — see cluster ${story.clusterId}` }];
+      } else if (isFlakyCase) {
         testAnnotations = [{ type: 'slow' }];
-      } else if (j === 2 && pid === '1') {
+      } else if (proj.id === 1 && j === 0) {
         testAnnotations = [{ type: 'smoke' }];
       }
 
       // Timeline step events: every executed case shows hooks/fixtures/waits;
       // ~1/3 of long-enough cases also carry an explicit wasted `Wait for timeout`.
       // Did-not-run cases never executed, so they have no step events.
-      const caseFile = caseFilesByProject[projectId][j];
       const waitHeavy = !isDidNotRunCase && caseDuration >= 1500 && j % 3 === 0;
       const { stepEvents, wastedMs } = isDidNotRunCase
         ? { stepEvents: null, wastedMs: 0 }
-        : buildSeedStepEvents(caseStartMs, caseDuration, `${caseFile}:${10 + j * 8}:5`, waitHeavy);
+        : buildSeedStepEvents(
+            caseStartMs,
+            caseDuration,
+            `${caseDef.file}:${caseDef.declLine}:${caseDef.declColumn}`,
+            waitHeavy,
+          );
+
+      // Themed browser console. Failing cases carry only what the story says a
+      // real browser would log (never an echo of the Playwright error); some
+      // passing cases carry the project's benign noise.
+      let consoleLogs = null;
+      if (isFailedCase && story?.evidence.consoleOnFail && !noPage) {
+        consoleLogs = story.evidence.consoleOnFail.map((entry, idx) => ({
+          type: entry.type,
+          text: entry.text,
+          timestamp: caseStartMs + Math.round(caseDuration * 0.6) + idx * 40,
+          location: entry.location,
+        }));
+      } else if (!isFailedCase && !isDidNotRunCase && proj.consolePassing && rng() < 0.3) {
+        consoleLogs = proj.consolePassing.map((entry, idx) => ({
+          type: entry.type,
+          text: entry.text,
+          timestamp: caseStartMs + 200 + idx * 60,
+          location: entry.location,
+        }));
+      }
 
       const trcIdVal = trcId++;
-      const trc = {
+      TEST_RUNS_CASES.push({
         id: trcIdVal,
         test_run_id: runId,
         test_case_id: caseId,
         status: caseStatus,
         duration: caseDuration,
-        error,
-        failure_cluster_id: clusterId,
+        error: isFailedCase ? storyEntry.failingCase.error : null,
+        failure_cluster_id: story?.clusterId ?? null,
         retries: isFlakyCase ? 1 : 0,
-        is_new_regression: isFailedCase && Math.random() < 0.25 ? 1 : 0,
-        is_new_flaky: !isFailedCase && Math.random() < 0.1 ? 1 : 0,
-        line: 10 + j * 8,
-        column: 5,
+        // Regression/new-flaky signals are computed after generation from the
+        // actual per-case history (see below), like the server does.
+        is_new_regression: 0,
+        is_new_flaky: 0,
+        line: caseDef.declLine,
+        column: caseDef.declColumn,
         browser,
+        browser_name: browser.projectName ?? null,
         test_annotations: testAnnotations,
         steps,
         step_events: stepEvents,
         wasted_time_ms: wastedMs,
         slowest_step: slowestStep.title,
         slowest_step_duration: slowestStep.duration,
-        web_vitals: {
-          navigation: {
-            url: 'https://app.example.com/',
-            ttfb: 90 + Math.floor(Math.random() * 120),
-            domInteractive: 700 + Math.floor(Math.random() * 600),
-            domContentLoaded: 1000 + Math.floor(Math.random() * 800),
-            loadComplete: 1500 + Math.floor(Math.random() * 1000),
-          },
-          paint: {
-            firstPaint: 600 + Math.floor(Math.random() * 400),
-            firstContentfulPaint: 800 + Math.floor(Math.random() * 500),
-          },
-          vitals: {
-            lcp: 1200 + Math.floor(Math.random() * 1400),
-            cls: Math.round(Math.random() * 0.2 * 10000) / 10000,
-            // INP is frequently absent in short tests — mirror that in the seed.
-            inp: Math.random() < 0.6 ? 80 + Math.floor(Math.random() * 250) : null,
-          },
-        },
-        // Failing cases are missing the session cookie — the app-state diff's
-        // "logged out mid-test" story. Values are never captured (keys/flags only).
-        page_state: {
-          url: 'https://app.example.com/',
-          hash: null,
-          historyState: null,
-          localStorage: [
-            { key: 'cart', length: 182 },
-            { key: 'theme', length: 5 },
-          ],
-          sessionStorage: [{ key: 'checkout-session', length: 36 }],
-          cookies: [
-            ...(isFailedCase
-              ? []
-              : [
-                  { name: 'sid', domain: '.app.example.com', path: '/', httpOnly: true, secure: true, sameSite: 'Lax' },
-                ]),
-            { name: 'ab_variant', domain: '.app.example.com', path: '/', httpOnly: false, secure: true },
-          ],
-        },
-        console_logs: isFailedCase
-          ? [
-              {
-                type: 'error',
-                text: error ? error.split('\n')[0] : 'Unknown error',
-                timestamp: caseStartMs,
-                location: null,
-              },
-            ]
-          : null,
-        aria_snapshot: isFailedCase ? ariaSnapshotForCluster(clusterDef) : null,
-        test_source: isFailedCase ? testSourceForCluster(clusterDef) : null,
-        test_source_frames: isFailedCase ? testSourceFramesForCluster(clusterDef) : null,
+        web_vitals: isDidNotRunCase || noPage ? null : buildWebVitals(proj, isFailedCase),
+        page_state: isDidNotRunCase || noPage ? null : buildPageState(proj, storyEntry),
+        console_logs: consoleLogs,
+        aria_snapshot: isFailedCase && !noPage ? story?.aria : null,
+        test_source: isFailedCase ? buildTestSource(story, storyEntry.failingCase, caseDef.declLine) : null,
+        test_source_frames: isFailedCase ? buildSourceFrames(storyEntry.failingCase) : null,
         worker_index: workerIndex,
         started_at: caseStartMs,
         created_at: caseStartMs,
@@ -1075,20 +675,22 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
       // Advance this worker's clock so the next test it picks up runs after it.
       workerCursorMs[workerIndex] += caseDuration + SEED_WORKER_GAP_MS;
 
-      for (const req of netWithLogs) {
-        NETWORK_REQUESTS.push({
-          id: nrId++,
-          test_runs_case_id: trcIdVal,
-          test_run_id: runId,
-          method: req.method,
-          url: req.url,
-          normalized_url: seedNormalizeUrl(req.url),
-          status: req.status,
-          duration: req.duration ?? null,
-          resource_type: req.resourceType ?? null,
-          content_type: req.contentType ?? (req.resourceType === 'document' ? 'text/html' : 'application/json'),
-          server_logs: req.serverLogs ?? null,
-        });
+      if (!isDidNotRunCase) {
+        for (const req of buildNetwork(proj, storyEntry)) {
+          NETWORK_REQUESTS.push({
+            id: nrId++,
+            test_runs_case_id: trcIdVal,
+            test_run_id: runId,
+            method: req.method,
+            url: req.url,
+            normalized_url: seedNormalizeUrl(req.url),
+            status: req.status,
+            duration: req.duration ?? null,
+            resource_type: req.resourceType ?? null,
+            content_type: req.contentType ?? (req.resourceType === 'document' ? 'text/html' : 'application/json'),
+            server_logs: req.serverLogs ?? null,
+          });
+        }
       }
     }
 
@@ -1096,230 +698,281 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
   }
 }
 
-// ── Demo screenshots ───────────────────────────────────────────────────────
-// Real screenshot PNGs live in public/demo/screenshots/ (committed to repo).
-// They are captured by scripts/take-demo-screenshots.mjs — see AGENTS.md
-// for the full procedure.
-// The attachment records below wire those files to test-run-cases in the seed.
+// ── Regression / new-flaky signals ──────────────────────────────────────────
+// Mirror the server's computeRegressionSignals: walk each case's executions in
+// chronological order; a failure right after a pass is a new regression, and a
+// retry-pass right after a clean pass is newly flaky.
+{
+  const byCase = new Map();
+  for (const trc of TEST_RUNS_CASES) {
+    if (!byCase.has(trc.test_case_id)) byCase.set(trc.test_case_id, []);
+    byCase.get(trc.test_case_id).push(trc);
+  }
+  for (const rows of byCase.values()) {
+    rows.sort((a, b) => a.started_at - b.started_at);
+    let prev = null;
+    for (const trc of rows) {
+      if (trc.status === 'didnotrun') continue;
+      if (prev) {
+        if (trc.status === 'failed' && prev.status === 'passed') trc.is_new_regression = 1;
+        if (trc.status === 'passed' && trc.retries > 0 && prev.status === 'passed' && prev.retries === 0) {
+          trc.is_new_flaky = 1;
+        }
+      }
+      prev = trc;
+    }
+  }
+}
 
-const SCREENSHOT_NAMES = [
-  'checkout-form-filled',
-  'checkout-order-confirmed',
-  'checkout-payment-form',
-  'checkout-error',
-  'login-form',
-  'cart-summary',
-];
+// ── Demo media (screenshots, trace, video, visual diff) ────────────────────
+// Real binaries live in public/demo/{screenshots,traces,videos} (committed to
+// the repo; regenerate with scripts/take-demo-screenshots.mjs and
+// scripts/record-demo-media.mjs). Each failure story declares its themed
+// evidence files; they are wired to the MOST RECENT failing execution of each
+// member case — max(test_runs_cases.id), matching how the cluster detail
+// handler picks its evidence row (`recentTestRunsCaseId` in
+// shared/handlers/failure-clusters.ts).
 
 const ATTACHMENTS = [];
 let attachmentId = reportId;
 
-for (let idx = 0; idx < SCREENSHOT_NAMES.length; idx++) {
-  const name = SCREENSHOT_NAMES[idx];
-  const filename = `${name}.png`;
-  const trcId = 1 + idx;
-  ATTACHMENTS.push({
-    id: attachmentId++,
-    test_runs_case_id: trcId,
-    test_run_id: 1,
-    type: 'attachment',
-    subtype: 'screenshot',
-    label: 'image/png',
-    path: `demo/screenshots/${filename}`,
-    size: 0,
-    created_at: ts('2025-04-25T08:30:00'),
-  });
-}
-
-// ── Demo trace + video ─────────────────────────────────────────────────────
-// A real (tiny) Playwright trace ZIP and failure video live in
-// public/demo/traces/ and public/demo/videos/ (committed to repo; regenerate
-// with scripts/record-demo-media.mjs). Wire them to the most recent failing
-// case of the checkout "Pay" timeout cluster (cluster 1), so the cluster
-// evidence tab and the test-case page have a working "View trace" and a
-// playable video. "Most recent" must match how the cluster detail handler
-// selects its evidence row — max(test_runs_cases.id) per test case
-// (shared/handlers/failure-clusters.ts) — so pick the highest trc id.
-const DEMO_MEDIA_CLUSTER_ID = 1;
-let latestClusterTrc = null;
-for (const trc of TEST_RUNS_CASES) {
-  if (trc.failure_cluster_id !== DEMO_MEDIA_CLUSTER_ID) continue;
-  if (!latestClusterTrc || trc.id > latestClusterTrc.id) {
-    latestClusterTrc = trc;
+function fileSize(relPath) {
+  try {
+    return statSync(new URL(`../public/${relPath}`, import.meta.url)).size;
+  } catch {
+    console.warn(`⚠ Missing ${relPath} — run the demo media scripts to regenerate it.`);
+    return 0;
   }
 }
 
-if (latestClusterTrc) {
-  const mediaCreatedAt = Math.floor((latestClusterTrc.started_at ?? Date.now()) / 1000);
-  const mediaFiles = [
-    {
-      type: 'trace',
-      subtype: 'trace',
-      label: 'trace',
-      relPath: 'demo/traces/checkout-pay-timeout.zip',
-    },
-    {
+function attach(trc, { type, subtype, label, relPath, metadata = undefined }) {
+  ATTACHMENTS.push({
+    id: attachmentId++,
+    test_runs_case_id: trc.id,
+    test_run_id: trc.test_run_id,
+    type,
+    subtype,
+    label,
+    path: relPath,
+    size: fileSize(relPath),
+    ...(metadata !== undefined ? { metadata } : {}),
+    created_at: Math.floor(trc.started_at / 1000),
+  });
+}
+
+/** Most recent execution of a case, optionally filtered. */
+function latestTrc(caseId, filter = () => true) {
+  let best = null;
+  for (const trc of TEST_RUNS_CASES) {
+    if (trc.test_case_id !== caseId) continue;
+    if (!filter(trc)) continue;
+    if (!best || trc.id > best.id) best = trc;
+  }
+  return best;
+}
+
+for (const story of FAILURE_STORIES) {
+  const media = story.media ?? {};
+  const memberCaseIds = story.failingCases.map((fc) =>
+    caseIdByKey.get(`${story.projectId}\x00${story.specFile}\x00${fc.title}`),
+  );
+
+  if (media.screenshot) {
+    for (const caseId of memberCaseIds) {
+      const trc = latestTrc(caseId, (t) => t.failure_cluster_id === story.clusterId);
+      if (trc) {
+        attach(trc, {
+          type: 'attachment',
+          subtype: 'screenshot',
+          label: 'image/png',
+          relPath: `demo/screenshots/${media.screenshot}`,
+        });
+      }
+    }
+  }
+
+  const anchorTrc = latestTrc(memberCaseIds[0], (t) => t.failure_cluster_id === story.clusterId);
+  if (anchorTrc && media.trace) {
+    attach(anchorTrc, { type: 'trace', subtype: 'trace', label: 'trace', relPath: `demo/traces/${media.trace}` });
+  }
+  if (anchorTrc && media.video) {
+    attach(anchorTrc, {
       type: 'attachment',
       subtype: 'video',
       label: 'video/webm',
-      relPath: 'demo/videos/checkout-pay-timeout.webm',
-    },
-  ];
-  for (const media of mediaFiles) {
-    let size = 0;
-    try {
-      size = statSync(new URL(`../public/${media.relPath}`, import.meta.url)).size;
-    } catch {
-      console.warn(`⚠ Missing ${media.relPath} — run scripts/record-demo-media.mjs to regenerate it.`);
-    }
-    ATTACHMENTS.push({
-      id: attachmentId++,
-      test_runs_case_id: latestClusterTrc.id,
-      test_run_id: latestClusterTrc.test_run_id,
-      type: media.type,
-      subtype: media.subtype,
-      label: media.label,
-      path: media.relPath,
-      size,
-      created_at: mediaCreatedAt,
+      relPath: `demo/videos/${media.video}`,
     });
+  }
+}
+
+// Screenshots on a few PASSING executions, so evidence isn't failure-only and
+// the visual diff has a real baseline execution to point at.
+const PASSING_SCREENSHOTS = [
+  { file: 'checkout-order-confirmed.png', projectId: 1, specFile: 'tests/checkout/checkout.spec.ts', title: 'should complete checkout with credit card' },
+  { file: 'checkout-form-filled.png', projectId: 1, specFile: 'tests/checkout/checkout.spec.ts', title: 'should complete checkout with PayPal' },
+  { file: 'cart-summary.png', projectId: 1, specFile: 'tests/checkout/cart.spec.ts', title: 'should display cart total correctly' },
+  { file: 'mobile-form-keyboard.png', projectId: 4, specFile: 'tests/mobile/forms.spec.ts', title: 'Text input shows keyboard on focus' },
+  { file: 'login-form.png', projectId: 5, specFile: 'tests/admin/login.spec.ts', title: 'signs in with SSO redirect' },
+];
+const passingShotTrcs = new Map(); // file → trc (for the visual-diff baseline below)
+for (const shot of PASSING_SCREENSHOTS) {
+  const caseId = caseIdByKey.get(`${shot.projectId}\x00${shot.specFile}\x00${shot.title}`);
+  const trc = latestTrc(caseId, (t) => t.status === 'passed');
+  if (trc) {
+    attach(trc, { type: 'attachment', subtype: 'screenshot', label: 'image/png', relPath: `demo/screenshots/${shot.file}` });
+    passingShotTrcs.set(shot.file, trc);
   }
 }
 
 // ── Demo visual diff ───────────────────────────────────────────────────────
-// A real pixelmatch overlay comparing the checkout failure screenshot with a
-// passing-state screenshot, generated here (same code path as the server) and
-// written to public/demo/screenshots/. The metrics ride the files.metadata
-// column so the demo router can serve the visual-diff endpoint data-driven.
-if (latestClusterTrc) {
-  const failingRel = 'demo/screenshots/checkout-error.png';
-  const baselineRel = 'demo/screenshots/checkout-order-confirmed.png';
-  const overlayRel = 'demo/screenshots/visual-diff-checkout.png';
-  try {
-    const { default: sharp } = await import('sharp');
-    const { default: pixelmatch } = await import('pixelmatch');
+// A real pixelmatch overlay comparing the checkout failure screenshot with the
+// passing-state screenshot of the SAME page, generated here (same code path as
+// the server) and written to public/demo/screenshots/. The metrics ride the
+// files.metadata column so the demo router serves the visual-diff endpoint
+// data-driven; the baseline pointers reference the real passing execution the
+// baseline screenshot is attached to.
+{
+  const story = FAILURE_STORIES.find((s) => s.media?.visualDiffBaseline);
+  const failingShot = story?.media.screenshot;
+  const baselineShot = story?.media.visualDiffBaseline;
+  const failingCaseId = story
+    ? caseIdByKey.get(`${story.projectId}\x00${story.specFile}\x00${story.failingCases[0].title}`)
+    : null;
+  const failingTrc = failingCaseId ? latestTrc(failingCaseId, (t) => t.failure_cluster_id === story.clusterId) : null;
+  const baselineTrc = baselineShot ? passingShotTrcs.get(baselineShot) : null;
 
-    const loadRaw = async (rel) => {
-      const abs = new URL(`../public/${rel}`, import.meta.url);
-      const { data, info } = await sharp(readFileSync(abs)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-      return { data: new Uint8Array(data), width: info.width, height: info.height };
-    };
-    const failing = await loadRaw(failingRel);
-    const baseline = await loadRaw(baselineRel);
+  if (story && failingTrc && baselineTrc) {
+    const failingRel = `demo/screenshots/${failingShot}`;
+    const baselineRel = `demo/screenshots/${baselineShot}`;
+    const overlayRel = 'demo/screenshots/visual-diff-checkout.png';
+    try {
+      const { default: sharp } = await import('sharp');
+      const { default: pixelmatch } = await import('pixelmatch');
 
-    const width = Math.max(failing.width, baseline.width);
-    const height = Math.max(failing.height, baseline.height);
-    const pad = (img) => {
-      if (img.width === width && img.height === height) return img.data;
-      const out = new Uint8Array(width * height * 4);
-      for (let y = 0; y < img.height; y++) {
-        out.set(img.data.subarray(y * img.width * 4, (y + 1) * img.width * 4), y * width * 4);
-      }
-      return out;
-    };
-    const overlay = new Uint8Array(width * height * 4);
-    const changedPixels = pixelmatch(pad(failing), pad(baseline), overlay, width, height, {
-      threshold: 0.1,
-      includeAA: false,
-    });
-    const overlayPng = await sharp(Buffer.from(overlay), { raw: { width, height, channels: 4 } })
-      .png()
-      .toBuffer();
-    writeFileSync(new URL(`../public/${overlayRel}`, import.meta.url), overlayPng);
+      const loadRaw = async (rel) => {
+        const abs = new URL(`../public/${rel}`, import.meta.url);
+        const { data, info } = await sharp(readFileSync(abs)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        return { data: new Uint8Array(data), width: info.width, height: info.height };
+      };
+      const failing = await loadRaw(failingRel);
+      const baseline = await loadRaw(baselineRel);
 
-    ATTACHMENTS.push({
-      id: attachmentId++,
-      test_runs_case_id: latestClusterTrc.id,
-      test_run_id: latestClusterTrc.test_run_id,
-      type: 'attachment',
-      subtype: 'screenshot',
-      label: 'image/png',
-      path: failingRel,
-      size: 0,
-      created_at: Math.floor((latestClusterTrc.started_at ?? Date.now()) / 1000),
-    });
-    ATTACHMENTS.push({
-      id: attachmentId++,
-      test_runs_case_id: latestClusterTrc.id,
-      test_run_id: latestClusterTrc.test_run_id,
-      type: 'visual-diff',
-      subtype: 'overlay',
-      label: 'Visual diff vs last pass',
-      path: overlayRel,
-      size: overlayPng.length,
-      metadata: {
-        changedPixels,
-        changedPixelRatio: Math.round((changedPixels / (width * height)) * 10000) / 10000,
-        width,
-        height,
-        dimensionMismatch: failing.width !== baseline.width || failing.height !== baseline.height,
-        baselineTestRunsCaseId: 2,
-        baselineRunId: 2,
-        failingPath: failingRel,
-        baselinePath: baselineRel,
-      },
-      created_at: Math.floor((latestClusterTrc.started_at ?? Date.now()) / 1000),
-    });
-  } catch (error) {
-    console.warn(`⚠ Could not generate the demo visual diff: ${error}`);
+      const width = Math.max(failing.width, baseline.width);
+      const height = Math.max(failing.height, baseline.height);
+      const pad = (img) => {
+        if (img.width === width && img.height === height) return img.data;
+        const out = new Uint8Array(width * height * 4);
+        for (let y = 0; y < img.height; y++) {
+          out.set(img.data.subarray(y * img.width * 4, (y + 1) * img.width * 4), y * width * 4);
+        }
+        return out;
+      };
+      const overlay = new Uint8Array(width * height * 4);
+      const changedPixels = pixelmatch(pad(failing), pad(baseline), overlay, width, height, {
+        threshold: 0.1,
+        includeAA: false,
+      });
+      const overlayPng = await sharp(Buffer.from(overlay), { raw: { width, height, channels: 4 } })
+        .png()
+        .toBuffer();
+      writeFileSync(new URL(`../public/${overlayRel}`, import.meta.url), overlayPng);
+
+      ATTACHMENTS.push({
+        id: attachmentId++,
+        test_runs_case_id: failingTrc.id,
+        test_run_id: failingTrc.test_run_id,
+        type: 'visual-diff',
+        subtype: 'overlay',
+        label: 'Visual diff vs last pass',
+        path: overlayRel,
+        size: overlayPng.length,
+        metadata: {
+          changedPixels,
+          changedPixelRatio: Math.round((changedPixels / (width * height)) * 10000) / 10000,
+          width,
+          height,
+          dimensionMismatch: failing.width !== baseline.width || failing.height !== baseline.height,
+          baselineTestRunsCaseId: baselineTrc.id,
+          baselineRunId: baselineTrc.test_run_id,
+          failingPath: failingRel,
+          baselinePath: baselineRel,
+        },
+        created_at: Math.floor(failingTrc.started_at / 1000),
+      });
+    } catch (error) {
+      console.warn(`⚠ Could not generate the demo visual diff: ${error}`);
+    }
   }
 }
 
 // ── Build failure_clusters rows ────────────────────────────────────────────
-// Ensure all clusters have valid first/last run IDs. Use any run from the
-// project as fallback (no FK constraint on failure_clusters → test_runs).
+
 const firstRunByProject = {};
 const lastRunByProject = {};
 for (const run of TEST_RUNS) {
-  if (!(run.project_id in firstRunByProject)) {
-    firstRunByProject[run.project_id] = run.id;
-  }
+  if (!(run.project_id in firstRunByProject)) firstRunByProject[run.project_id] = run.id;
   lastRunByProject[run.project_id] = run.id;
 }
 
-const clusterNow = ts('2025-04-25T09:00:00');
 const CLUSTER_TRIAGE = {
   1: {
     status: 'resolved',
     triage_note:
-      'Root cause identified: CI runner was throttled during peak hours. Added resource_class: large to the workflow. Monitor for recurrence over the next week.',
+      'Root cause identified: the new payment-provider SDK delays form interactivity on loaded CI runners. Mitigated by waiting for network idle in the payment helper; monitoring for recurrence.',
   },
   3: {
     status: 'open',
     triage_note:
-      'Investigating — auth service logs show 500 errors correlated with database connection pool exhaustion. Checking recent migration that added a new users table index.',
+      'Investigating — the auth service returns 500 on valid logins since the auth-flow refactor. Server logs show a null dereference in the login handler; fix in review.',
   },
   6: {
     status: 'ignored',
     triage_note:
-      'Known issue — three buttons match the role on the component page. This is intentional as the page demos multiple button variants. Skip this failure; not a bug.',
+      'Known issue — three buttons match the unscoped role query on the gallery page. The page intentionally demos multiple variants; the spec needs a name-scoped locator. Not an app bug.',
   },
 };
 
-for (const cl of CLUSTERS) {
-  const stats = clusterStats[cl.id];
-  const selector = cl.errorType === 'strict-mode' ? "getByRole('button')" : null;
-  const triage = CLUSTER_TRIAGE[cl.id] || {};
+for (const story of FAILURE_STORIES) {
+  const stats = clusterStats[story.clusterId];
+  const fp = storyFingerprints.get(story.clusterId);
+  const triage = CLUSTER_TRIAGE[story.clusterId] || {};
+  const createdAt = stats.firstStartMs ? Math.floor(stats.firstStartMs / 1000) : ts('2025-04-20T09:00:00');
+  const updatedAt = stats.lastStartMs ? Math.floor(stats.lastStartMs / 1000) : createdAt;
   FAILURE_CLUSTERS.push({
-    id: cl.id,
-    project_id: cl.projectId,
-    fingerprint: cl.fingerprint,
-    signature: cl.signature,
-    error_type: cl.errorType,
-    selector,
-    sample_error: cl.errorText,
+    id: story.clusterId,
+    project_id: story.projectId,
+    fingerprint: fp.fingerprint,
+    signature: fp.signature,
+    error_type: fp.errorType,
+    selector: fp.selector,
+    sample_error: story.failingCases[0].error,
     status: triage.status || 'open',
     triage_note: triage.triage_note || null,
-    first_seen_run_id: stats.firstRunId ?? firstRunByProject[cl.projectId],
-    last_seen_run_id: stats.lastRunId ?? lastRunByProject[cl.projectId],
+    first_seen_run_id: stats.firstRunId ?? firstRunByProject[story.projectId],
+    last_seen_run_id: stats.lastRunId ?? lastRunByProject[story.projectId],
     occurrences: stats.occurrences || 1,
-    created_at: clusterNow,
-    updated_at: clusterNow,
+    created_at: createdAt,
+    updated_at: updatedAt,
   });
 }
 
 // ── Demo AI diagnoses ─────────────────────────────────────────────────────
-const diagnosisNow = ts('2025-04-25T09:30:00');
+// Five clusters ship with a stored diagnosis; the rest are intentionally left
+// undiagnosed so a demo visitor can trigger a live (simulated) streaming
+// diagnosis themselves. Patches and suspect commits come from the story
+// fixtures, so `patchValidation` genuinely reports "applies" and every cited
+// commit exists in the canned SCM history.
+
+const storyFix = (clusterId) => {
+  const story = FAILURE_STORIES.find((s) => s.clusterId === clusterId);
+  return {
+    description: story.diagnosis.fix.description,
+    file: story.diagnosis.fix.file,
+    code: null,
+    patch: story.diagnosis.fix.patch,
+  };
+};
+const storySuspect = (clusterId) => [FAILURE_STORIES.find((s) => s.clusterId === clusterId).suspectSha];
 
 // Two-stage pipeline token accounting shared by all seeded diagnoses.
 const demoPipeline = (input, output) => [
@@ -1343,40 +996,12 @@ const demoPipeline = (input, output) => [
 // A patch that cleanly applies against the seeded source files (app/demo/demo-scm.ts).
 const appliesPatch = { status: 'applies', filesChecked: 1, filesInPatch: 1, errors: [] };
 
-// Suggested-fix patches — kept in sync with the source files declared in
-// app/demo/demo-scm.ts so `patchValidation` genuinely reports "applies".
-const CHECKOUT_FIX_PATCH = `--- a/tests/checkout/checkout.spec.ts
-+++ b/tests/checkout/checkout.spec.ts
-@@ -7,2 +7,3 @@
-   await page.getByLabel('CVV').fill('123');
-+  await page.waitForLoadState('networkidle');
-   await page.getByRole('button', { name: 'Pay' }).click();`;
+/** A diagnosis is written shortly after its cluster's latest occurrence. */
+const diagnosisTs = (clusterId, minutes) => {
+  const cluster = FAILURE_CLUSTERS.find((c) => c.id === clusterId);
+  return cluster.updated_at + minutes * 60;
+};
 
-const AUTH_FIX_PATCH = `--- a/src/routes/auth.ts
-+++ b/src/routes/auth.ts
-@@ -8,2 +8,5 @@
-   const user = await verifyCredentials(email, password);
-+  if (!user) {
-+    return res.status(401).json({ error: 'Invalid credentials' });
-+  }
-   const token = signSession(user.id);`;
-
-const BUTTON_FIX_PATCH = `--- a/tests/ui/button.spec.ts
-+++ b/tests/ui/button.spec.ts
-@@ -7,1 +7,1 @@
--  await page.getByRole('button').click();
-+  await page.getByRole('button', { name: 'Primary' }).click();`;
-
-const MOBILE_FIX_PATCH = `--- a/tests/mobile/navigation.spec.ts
-+++ b/tests/mobile/navigation.spec.ts
-@@ -4,1 +4,1 @@
--  await page.goto('https://app.example.com');
-+  await page.goto('https://app.example.com', { timeout: 60000 });`;
-
-// Seeded AI diagnoses — one per project, each matched to its cluster's real error
-// so the diagnosis, evidence citations, SCM diff and suggested patch all cohere.
-// Clusters 2, 4, 5 and 8 are intentionally left undiagnosed so a demo visitor can
-// trigger a live (simulated) streaming diagnosis themselves.
 const FAILURE_DIAGNOSES = [
   {
     id: 1,
@@ -1390,7 +1015,7 @@ const FAILURE_DIAGNOSES = [
     summary:
       'Checkout Pay button click times out — the payment form renders slowly on CI and the click races the render.',
     root_cause:
-      'The locator.click timeout (30 000 ms) is exceeded because the Pay button is present but not yet interactive. A recent commit added a third-party payment SDK fetched before the form is enabled; on a loaded CI runner that push interactivity past the timeout. Combined with CI variability this fails intermittently.',
+      'The click is interrupted by the 30 000 ms test timeout because the Pay button is present but not yet interactive. A recent commit added a third-party payment SDK fetched before the form is enabled; on a loaded CI runner that pushes interactivity past the timeout. Combined with CI variability this fails intermittently.',
     details: JSON.stringify({
       confidenceScore: 82,
       severity: 'high',
@@ -1400,22 +1025,23 @@ const FAILURE_DIAGNOSES = [
           category: 'infrastructure',
           likelihood: 82,
           rootCause:
-            'Slow CI runner renders the payment form too late; locator.click exceeds the 30s timeout before the button becomes interactive.',
+            'Slow CI runner renders the payment form too late; the click exceeds the 30s test timeout before the button becomes interactive.',
           evidence: [
             'Failure rate correlates with high-load CI runs [recurrenceFlakiness]',
-            'Element present in the DOM but not interactive at click time [steps]',
+            'The call log shows the button resolved but disabled at click time [executionError]',
           ],
         },
         {
           category: 'test-bug',
           likelihood: 38,
-          rootCause: 'The test clicks without an explicit wait for the payment form to be ready.',
-          evidence: ['No waitForLoadState/waitFor precedes the click [testSource]'],
+          rootCause: 'The payment helper clicks without an explicit wait for the quote to resolve.',
+          evidence: ['No waitForLoadState/waitFor precedes the click in fillPaymentDetails [testSource]'],
         },
       ],
       evidence: [
-        'TimeoutError fires during locator.click in both affected tests [executionError]',
+        'The test timeout interrupts locator.click in both affected tests [executionError]',
         'The SCM diff adds a third-party payment SDK fetched before the form is enabled [scmInvestigation]',
+        'The checkout quote request takes 28s on failing runs [networkRequests]',
         'The full call stack from the trace pins the timeout inside the checkout flow helper [traceCallStack]',
         'Recurs on high-load CI runs [recurrenceFlakiness]',
       ],
@@ -1427,16 +1053,10 @@ const FAILURE_DIAGNOSES = [
         'Await page.waitForLoadState("networkidle") before interacting with dynamically loaded payment forms',
         'Add a CI-aware timeout multiplier for payment-related actions',
       ],
-      suggestedFix: {
-        description:
-          'Wait for the network to settle before clicking, so the click no longer races the third-party form render.',
-        file: 'tests/checkout/checkout.spec.ts',
-        code: null,
-        patch: CHECKOUT_FIX_PATCH,
-      },
+      suggestedFix: storyFix(1),
       patchValidation: appliesPatch,
       pipeline: demoPipeline(1240, 380),
-      autoSelectedCommits: ['a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4'],
+      autoSelectedCommits: storySuspect(1),
       selectedCommitShas: null,
       additionalContext: null,
     }),
@@ -1444,8 +1064,8 @@ const FAILURE_DIAGNOSES = [
     input_tokens: 1984,
     output_tokens: 560,
     duration_ms: 2850,
-    created_at: diagnosisNow,
-    updated_at: diagnosisNow,
+    created_at: diagnosisTs(1, 42),
+    updated_at: diagnosisTs(1, 42),
   },
   {
     id: 2,
@@ -1471,14 +1091,14 @@ const FAILURE_DIAGNOSES = [
             'The login handler dereferences a null user after the auth refactor, throwing and returning HTTP 500.',
           evidence: [
             'Expected 200 / Received 500 in two separate auth test cases [executionError]',
-            'Backend server logs show an unhandled exception on the request [serverLogs]',
+            'Backend server logs show an unhandled TypeError on the request [serverLogs]',
             'The failure started after the auth refactor commit [scmInvestigation]',
           ],
         },
       ],
       evidence: [
         'Received 500 where 200 was expected across two auth tests [executionError]',
-        'Server logs capture the 5xx and stack trace on the failing request [serverLogs]',
+        'Server logs capture the 5xx and the null-dereference stack on the failing request [serverLogs]',
         'Began appearing after the "simplify auth flow" commit [scmInvestigation]',
       ],
       investigationSteps: [
@@ -1489,16 +1109,10 @@ const FAILURE_DIAGNOSES = [
         'Add integration tests that exercise the auth endpoint with missing/invalid users',
         'Add error monitoring on 5xx responses for the /auth/login route',
       ],
-      suggestedFix: {
-        description:
-          'Restore the missing-user guard the refactor dropped, so the handler returns 401 instead of dereferencing null.',
-        file: 'src/routes/auth.ts',
-        code: null,
-        patch: AUTH_FIX_PATCH,
-      },
+      suggestedFix: storyFix(3),
       patchValidation: appliesPatch,
       pipeline: demoPipeline(980, 310),
-      autoSelectedCommits: ['f1e2d3c4b5a6079887766554433221100ffeeddc'],
+      autoSelectedCommits: storySuspect(3),
       selectedCommitShas: null,
       additionalContext: null,
     }),
@@ -1506,8 +1120,8 @@ const FAILURE_DIAGNOSES = [
     input_tokens: 1568,
     output_tokens: 490,
     duration_ms: 2100,
-    created_at: diagnosisNow,
-    updated_at: diagnosisNow,
+    created_at: diagnosisTs(3, 35),
+    updated_at: diagnosisTs(3, 35),
   },
   {
     id: 3,
@@ -1552,15 +1166,10 @@ const FAILURE_DIAGNOSES = [
         'Scope locators to a container when multiple matches are expected',
         'Add data-testid attributes to disambiguate similar components',
       ],
-      suggestedFix: {
-        description: 'Scope the locator to a specific variant with a name filter so it matches exactly one button.',
-        file: 'tests/ui/button.spec.ts',
-        code: null,
-        patch: BUTTON_FIX_PATCH,
-      },
+      suggestedFix: storyFix(6),
       patchValidation: appliesPatch,
       pipeline: demoPipeline(870, 290),
-      autoSelectedCommits: ['3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d'],
+      autoSelectedCommits: storySuspect(6),
       selectedCommitShas: null,
       additionalContext: null,
     }),
@@ -1568,8 +1177,8 @@ const FAILURE_DIAGNOSES = [
     input_tokens: 1392,
     output_tokens: 470,
     duration_ms: 1950,
-    created_at: diagnosisNow,
-    updated_at: diagnosisNow,
+    created_at: diagnosisTs(6, 55),
+    updated_at: diagnosisTs(6, 55),
   },
   {
     id: 4,
@@ -1602,7 +1211,7 @@ const FAILURE_DIAGNOSES = [
           category: 'environment',
           likelihood: 34,
           rootCause: 'CI network throttling specific to the mobile project profile.',
-          evidence: ['Page load time tracks asset-bundle deploys [webVitals]'],
+          evidence: ['The hero image request alone takes ~28s on failing runs [networkRequests]'],
         },
       ],
       evidence: [
@@ -1618,15 +1227,10 @@ const FAILURE_DIAGNOSES = [
         'Set browser-specific navigation timeouts via Playwright config projects',
         'Optimize landing-page assets for mobile (responsive images, lazy-loading)',
       ],
-      suggestedFix: {
-        description: 'Raise the navigation timeout for the mobile profile while the asset weight is addressed.',
-        file: 'tests/mobile/navigation.spec.ts',
-        code: null,
-        patch: MOBILE_FIX_PATCH,
-      },
+      suggestedFix: storyFix(7),
       patchValidation: appliesPatch,
       pipeline: demoPipeline(1100, 340),
-      autoSelectedCommits: ['6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90'],
+      autoSelectedCommits: storySuspect(7),
       selectedCommitShas: null,
       additionalContext: null,
     }),
@@ -1634,8 +1238,70 @@ const FAILURE_DIAGNOSES = [
     input_tokens: 1760,
     output_tokens: 520,
     duration_ms: 2650,
-    created_at: diagnosisNow,
-    updated_at: diagnosisNow,
+    created_at: diagnosisTs(7, 48),
+    updated_at: diagnosisTs(7, 48),
+  },
+  {
+    id: 5,
+    cluster_id: 10,
+    scope: 'cluster',
+    status: 'completed',
+    provider: 'demo',
+    model: 'demo-simulated',
+    category: 'app-bug',
+    confidence: 'high',
+    summary:
+      'Users table renders 50 rows instead of 25 — server-driven pagination shipped with the API default page size.',
+    root_cause:
+      'The row-count assertion fails deterministically: the users endpoint now returns 50 rows per page. The server-driven pagination change replaced the dashboard page size (25) with the API default (50), so the table renders two pages worth of rows and the test correctly catches the regression.',
+    details: JSON.stringify({
+      confidenceScore: 88,
+      severity: 'medium',
+      affectedArea: 'users table / pagination',
+      hypotheses: [
+        {
+          category: 'app-bug',
+          likelihood: 88,
+          rootCause: 'listUsers now queries with PAGE_SIZE 50 — the API default — instead of the dashboard page size 25.',
+          evidence: [
+            'Expected 26 rows (header + 25), received 51 — exactly two pages plus the header [executionError]',
+            'The users API request returns 50 records [networkRequests]',
+            'The pagination change shipped in the suspect commit [scmInvestigation]',
+          ],
+        },
+        {
+          category: 'test-bug',
+          likelihood: 20,
+          rootCause: 'The new page size is intentional and the expected count is stale.',
+          evidence: ['No product note accompanies the page-size change [scmInvestigation]'],
+        },
+      ],
+      evidence: [
+        'Deterministic 26-vs-51 row count mismatch [executionError]',
+        'GET /api/users?page=1 returns 50 records on failing runs [networkRequests]',
+        'The "server-driven pagination" commit changed PAGE_SIZE from 25 to 50 [scmInvestigation]',
+      ],
+      investigationSteps: [
+        'Confirm the intended dashboard page size with the design system (table density assumes 25)',
+        'Check other tables consuming the same endpoint for the same regression',
+      ],
+      preventionTips: [
+        'Keep page-size constants in one shared module consumed by both API and UI',
+        'Assert on user-visible pagination controls in addition to raw row counts',
+      ],
+      suggestedFix: storyFix(10),
+      patchValidation: appliesPatch,
+      pipeline: demoPipeline(1010, 330),
+      autoSelectedCommits: storySuspect(10),
+      selectedCommitShas: null,
+      additionalContext: null,
+    }),
+    error: null,
+    input_tokens: 1620,
+    output_tokens: 505,
+    duration_ms: 2240,
+    created_at: diagnosisTs(10, 38),
+    updated_at: diagnosisTs(10, 38),
   },
 ];
 
@@ -1654,9 +1320,9 @@ const FAILURE_DIAGNOSIS_VERSIONS = [
     model: 'demo-simulated',
     category: 'test-bug',
     confidence: 'medium',
-    summary: 'Earlier take: likely a missing explicit wait in the test before the Pay click.',
+    summary: 'Earlier take: likely a missing explicit wait in the payment helper before the Pay click.',
     root_cause:
-      'Initial assessment attributed the timeout purely to a missing explicit wait in the test, before the SCM diff surfaced the newly added third-party payment SDK that delays interactivity.',
+      'Initial assessment attributed the timeout purely to a missing explicit wait in the payment helper, before the SCM diff surfaced the newly added third-party payment SDK that delays interactivity.',
     details: JSON.stringify({
       confidenceScore: 58,
       severity: 'medium',
@@ -1665,7 +1331,7 @@ const FAILURE_DIAGNOSIS_VERSIONS = [
         {
           category: 'test-bug',
           likelihood: 58,
-          rootCause: 'The test clicks the Pay button without waiting for it to become interactive.',
+          rootCause: 'The helper clicks the Pay button without waiting for it to become interactive.',
           evidence: ['No waitFor precedes the click [testSource]'],
         },
       ],
@@ -1674,7 +1340,7 @@ const FAILURE_DIAGNOSIS_VERSIONS = [
       preventionTips: ['Await the target before interacting'],
       suggestedFix: {
         description: 'Add an explicit wait before clicking the Pay button.',
-        file: 'tests/checkout/checkout.spec.ts',
+        file: 'tests/helpers/payment.ts',
         code: null,
         patch: null,
       },
@@ -1684,7 +1350,7 @@ const FAILURE_DIAGNOSIS_VERSIONS = [
     output_tokens: 210,
     duration_ms: 1700,
     context_sha: null,
-    created_at: ts('2025-04-24T18:00:00'),
+    created_at: diagnosisTs(1, -540),
   },
 ];
 
@@ -1712,7 +1378,7 @@ const ENTITY_LINKS = [
     test_run_id: null,
     test_runs_case_id: null,
     test_case_id: 1,
-    url: 'https://github.com/example/repo/issues/456',
+    url: 'https://github.com/example/shop-web/issues/456',
     provider: 'github-issue',
     key: '#456',
     title: 'Fix credit card checkout timeout',
@@ -1787,19 +1453,33 @@ for (const u of DEMO_USERS) {
 
 // ── Locator healing snapshots ───────────────────────────────────────────────
 // One row per (test_case_id, location) — the same schema as the live server.
-// The healing lookup ladder:
-//   L1: exact file:line:col match → used for cluster #1 (checkout Pay button).
-//   L2: locator signature (method + string literals) → used for cluster #6
-//       (button strict-mode violation: getByRole('button') with no name filter).
-// The extra rows for passing interactions (add-to-cart, email, card, address)
-// show what the reporter captures from a full test run — they don't directly
-// serve the healing panel for these particular demo failures but make the data
-// realistic when browsing individual test-case detail pages.
+// Locations are the real call sites in the fixture sources: the failing
+// locators' rows sit exactly where the error's innermost stack frame points
+// (`extractErrorLocation` takes the first frame), so the healing ladder's
+// exact-location rung hits. `last_seen_*` comes from the actual generated run
+// history: a failing locator was last captured on the case's most recent
+// PASSING execution; locators that still succeed update on every execution.
 function locatorSig(method, strings) {
   return createHash('sha256')
     .update(`${method} ${JSON.stringify(strings)}`, 'utf-8')
     .digest('hex');
 }
+
+/** `file:line:col` for a call in an authored fixture source. */
+function callSite(file, needle, column, nth = 0) {
+  return `${file}:${lineOf(SOURCE_FILES[file], needle, nth)}:${column}`;
+}
+
+/** last_seen fields from a case's most recent execution matching `filter`. */
+function lastSeen(projectId, specFile, title, filter) {
+  const caseId = caseIdByKey.get(`${projectId}\x00${specFile}\x00${title}`);
+  const trc = latestTrc(caseId, filter);
+  return trc
+    ? { last_seen_run_id: trc.test_run_id, last_seen_at: trc.started_at }
+    : { last_seen_run_id: null, last_seen_at: BASE_START_MS };
+}
+const seenOnPass = (pid, file, title) => lastSeen(pid, file, title, (t) => t.status === 'passed');
+const seenOnRun = (pid, file, title) => lastSeen(pid, file, title, (t) => t.status !== 'didnotrun');
 
 // Shared alternative lists — each sorted descending by stability score.
 const ALT_CHECKOUT_PAY = [
@@ -1812,18 +1492,6 @@ const ALT_CHECKOUT_PAY = [
   },
   { locator: "getByText('Pay now')", method: 'getByText', args: { text: 'Pay now' }, score: 75 },
   { locator: "locator('#checkout-pay')", method: 'locator', args: { selector: '#checkout-pay' }, score: 65 },
-];
-
-const ALT_ADD_TO_CART = [
-  { locator: "getByTestId('add-to-cart-btn')", method: 'getByTestId', args: { testId: 'add-to-cart-btn' }, score: 100 },
-  {
-    locator: "getByRole('button', { name: 'Add to cart' })",
-    method: 'getByRole',
-    args: { role: 'button', name: 'Add to cart' },
-    score: 90,
-  },
-  { locator: "getByText('Add to cart')", method: 'getByText', args: { text: 'Add to cart' }, score: 75 },
-  { locator: "locator('#add-to-cart-btn')", method: 'locator', args: { selector: '#add-to-cart-btn' }, score: 65 },
 ];
 
 const ALT_CHECKOUT_EMAIL = [
@@ -1919,18 +1587,6 @@ const ALT_FULL_NAME = [
   { locator: "locator('#full-name')", method: 'locator', args: { selector: '#full-name' }, score: 65 },
 ];
 
-const ALT_STREET_ADDR = [
-  { locator: "getByTestId('street-address')", method: 'getByTestId', args: { testId: 'street-address' }, score: 100 },
-  { locator: "getByLabel('Street address')", method: 'getByLabel', args: { label: 'Street address' }, score: 85 },
-  {
-    locator: "getByPlaceholder('123 Main St')",
-    method: 'getByPlaceholder',
-    args: { placeholder: '123 Main St' },
-    score: 80,
-  },
-  { locator: "locator('#street-address')", method: 'locator', args: { selector: '#street-address' }, score: 65 },
-];
-
 const ALT_SAVE_ADDRESS = [
   {
     locator: "getByTestId('save-address-btn')",
@@ -1948,28 +1604,38 @@ const ALT_SAVE_ADDRESS = [
 ];
 
 // Button strict-mode: the test called getByRole('button') without a name filter,
-// resolving to 3 elements. Alternatives narrow the selector to a specific button.
+// resolving to 3 elements (Primary / Disabled / Loading…). Alternatives narrow
+// the selector to the primary variant — the same one the diagnosis patch and
+// the ARIA snapshot name.
 const ALT_BUTTON_STRICT = [
   { locator: "getByTestId('primary-btn')", method: 'getByTestId', args: { testId: 'primary-btn' }, score: 100 },
   {
-    locator: "getByRole('button', { name: 'Submit' })",
+    locator: "getByRole('button', { name: 'Primary' })",
     method: 'getByRole',
-    args: { role: 'button', name: 'Submit' },
+    args: { role: 'button', name: 'Primary' },
     score: 90,
   },
-  { locator: "getByText('Submit')", method: 'getByText', args: { text: 'Submit' }, score: 75 },
+  { locator: "getByText('Primary')", method: 'getByText', args: { text: 'Primary' }, score: 75 },
   { locator: "locator('.btn-primary')", method: 'locator', args: { selector: '.btn-primary' }, score: 30 },
 ];
+
+const PAY_CLICK_SITE = storyByClusterId(1).captureLocation;
+const EMAIL_FILL_SITE = storyByClusterId(2).captureLocation;
+const BUTTON_CLICK_SITE = storyByClusterId(6).captureLocation;
 
 let lsId = 1;
 const LOCATOR_SNAPSHOTS = [
   // ── Cluster #1: checkout Pay button (test_case_ids 1 & 2) ─────────────────
-  // L1 exact-location match: the error text's synthetic stack frame is
-  // "at tests/checkout/checkout.spec.ts:42:18", so these rows are found immediately.
-  ...[1, 2].map((testCaseId) => ({
+  // The click lives in the shared payment helper, so both checkout cases carry
+  // a snapshot keyed at the SAME helper call site — exactly where the error's
+  // innermost frame points, so the exact-location rung matches immediately.
+  ...[
+    ['should complete checkout with credit card', 1],
+    ['should complete checkout with PayPal', 2],
+  ].map(([title, testCaseId]) => ({
     id: lsId++,
     test_case_id: testCaseId,
-    location: 'tests/checkout/checkout.spec.ts:42:18',
+    location: PAY_CLICK_SITE,
     used_method: 'getByRole',
     used_args: ['button', { name: 'Pay' }],
     used_args_fp: locatorSig('getByRole', ['button', 'Pay']),
@@ -1982,8 +1648,7 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: 'Pay now',
     alternatives: ALT_CHECKOUT_PAY,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-20') * 1000,
+    ...seenOnPass(1, 'tests/checkout/checkout.spec.ts', title),
   })),
 
   // ── Cluster #2: renamed email label (test_case_id 3) ──────────────────────
@@ -1995,7 +1660,7 @@ const LOCATOR_SNAPSHOTS = [
   {
     id: lsId++,
     test_case_id: 3,
-    location: 'tests/checkout/checkout.spec.ts:23:10',
+    location: EMAIL_FILL_SITE,
     used_method: 'getByLabel',
     used_args: ['Email address'],
     used_args_fp: locatorSig('getByLabel', ['Email address']),
@@ -2032,37 +1697,17 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: '',
     alternatives: ALT_CHECKOUT_EMAIL_RENAMED,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-20') * 1000,
+    ...seenOnPass(1, 'tests/checkout/checkout.spec.ts', 'should complete checkout with Apple Pay'),
   },
 
   // ── Additional captures from the credit-card checkout flow (test_case_id 1) ─
-  // Shows that the reporter captures every locator action in a passing run,
-  // not just the one that later fails — these populate the test-case detail page.
+  // Shows that the reporter captures every locator action in a run, not just
+  // the one that later fails — these populate the test-case detail page. The
+  // email fill sits in the spec; the card fields live in the shared helper.
   {
     id: lsId++,
     test_case_id: 1,
-    location: 'tests/checkout/checkout.spec.ts:15:14',
-    used_method: 'getByRole',
-    used_args: ['button', { name: 'Add to cart' }],
-    used_args_fp: locatorSig('getByRole', ['button', 'Add to cart']),
-    element_tag: 'button',
-    element_attrs: {
-      id: 'add-to-cart-btn',
-      'data-testid': 'add-to-cart-btn',
-      class: 'btn btn-primary add-to-cart',
-      accessibleName: 'Add to cart',
-      center: { x: 580, y: 440 },
-    },
-    element_text: 'Add to cart',
-    alternatives: ALT_ADD_TO_CART,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-20') * 1000,
-  },
-  {
-    id: lsId++,
-    test_case_id: 1,
-    location: 'tests/checkout/checkout.spec.ts:23:10',
+    location: callSite('tests/checkout/checkout.spec.ts', "getByLabel('Email address')", 10, 0),
     used_method: 'getByLabel',
     used_args: ['Email address'],
     used_args_fp: locatorSig('getByLabel', ['Email address']),
@@ -2095,13 +1740,12 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: '',
     alternatives: ALT_CHECKOUT_EMAIL,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-20') * 1000,
+    ...seenOnRun(1, 'tests/checkout/checkout.spec.ts', 'should complete checkout with credit card'),
   },
   {
     id: lsId++,
     test_case_id: 1,
-    location: 'tests/checkout/checkout.spec.ts:28:10',
+    location: callSite('tests/helpers/payment.ts', "getByLabel('Card number')", 14),
     used_method: 'getByLabel',
     used_args: ['Card number'],
     used_args_fp: locatorSig('getByLabel', ['Card number']),
@@ -2116,16 +1760,15 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: '',
     alternatives: ALT_CARD_NUMBER,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-20') * 1000,
+    ...seenOnRun(1, 'tests/checkout/checkout.spec.ts', 'should complete checkout with credit card'),
   },
   {
     id: lsId++,
     test_case_id: 1,
-    location: 'tests/checkout/checkout.spec.ts:31:10',
-    used_method: 'getByPlaceholder',
-    used_args: ['MM / YY'],
-    used_args_fp: locatorSig('getByPlaceholder', ['MM / YY']),
+    location: callSite('tests/helpers/payment.ts', "getByLabel('Expiry date')", 14),
+    used_method: 'getByLabel',
+    used_args: ['Expiry date'],
+    used_args_fp: locatorSig('getByLabel', ['Expiry date']),
     element_tag: 'input',
     element_attrs: {
       type: 'text',
@@ -2137,35 +1780,14 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: '',
     alternatives: ALT_CARD_EXPIRY,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-20') * 1000,
+    ...seenOnRun(1, 'tests/checkout/checkout.spec.ts', 'should complete checkout with credit card'),
   },
 
   // ── Additional captures from the PayPal checkout flow (test_case_id 2) ─────
   {
     id: lsId++,
     test_case_id: 2,
-    location: 'tests/checkout/checkout.spec.ts:15:14',
-    used_method: 'getByRole',
-    used_args: ['button', { name: 'Add to cart' }],
-    used_args_fp: locatorSig('getByRole', ['button', 'Add to cart']),
-    element_tag: 'button',
-    element_attrs: {
-      id: 'add-to-cart-btn',
-      'data-testid': 'add-to-cart-btn',
-      class: 'btn btn-primary add-to-cart',
-      accessibleName: 'Add to cart',
-      center: { x: 580, y: 440 },
-    },
-    element_text: 'Add to cart',
-    alternatives: ALT_ADD_TO_CART,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-20') * 1000,
-  },
-  {
-    id: lsId++,
-    test_case_id: 2,
-    location: 'tests/checkout/checkout.spec.ts:23:10',
+    location: callSite('tests/checkout/checkout.spec.ts', "getByLabel('Email address')", 10, 1),
     used_method: 'getByLabel',
     used_args: ['Email address'],
     used_args_fp: locatorSig('getByLabel', ['Email address']),
@@ -2180,13 +1802,12 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: '',
     alternatives: ALT_CHECKOUT_EMAIL,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-20') * 1000,
+    ...seenOnRun(1, 'tests/checkout/checkout.spec.ts', 'should complete checkout with PayPal'),
   },
   {
     id: lsId++,
     test_case_id: 2,
-    location: 'tests/checkout/checkout.spec.ts:36:14',
+    location: callSite('tests/checkout/checkout.spec.ts', "getByRole('button', { name: 'Continue with PayPal' })", 16),
     used_method: 'getByRole',
     used_args: ['button', { name: 'Continue with PayPal' }],
     used_args_fp: locatorSig('getByRole', ['button', 'Continue with PayPal']),
@@ -2199,15 +1820,14 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: 'Continue with PayPal',
     alternatives: ALT_PAYPAL_BTN,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-20') * 1000,
+    ...seenOnRun(1, 'tests/checkout/checkout.spec.ts', 'should complete checkout with PayPal'),
   },
 
   // ── Cart add-to-cart (test_case_id 6 — should add item to cart) ──────────
   {
     id: lsId++,
     test_case_id: 6,
-    location: 'tests/checkout/cart.spec.ts:12:14',
+    location: 'tests/checkout/cart.spec.ts:6:14',
     used_method: 'getByRole',
     used_args: ['button', { name: 'Add to cart' }],
     used_args_fp: locatorSig('getByRole', ['button', 'Add to cart']),
@@ -2220,16 +1840,25 @@ const LOCATOR_SNAPSHOTS = [
       center: { x: 580, y: 390 },
     },
     element_text: 'Add to cart',
-    alternatives: ALT_ADD_TO_CART,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-18') * 1000,
+    alternatives: [
+      { locator: "getByTestId('add-to-cart-btn')", method: 'getByTestId', args: { testId: 'add-to-cart-btn' }, score: 100 },
+      {
+        locator: "getByRole('button', { name: 'Add to cart' })",
+        method: 'getByRole',
+        args: { role: 'button', name: 'Add to cart' },
+        score: 90,
+      },
+      { locator: "getByText('Add to cart')", method: 'getByText', args: { text: 'Add to cart' }, score: 75 },
+      { locator: "locator('#add-to-cart-btn')", method: 'locator', args: { selector: '#add-to-cart-btn' }, score: 65 },
+    ],
+    ...seenOnRun(1, 'tests/checkout/cart.spec.ts', 'should add item to cart'),
   },
 
   // ── Cart remove (test_case_id 7 — should remove item from cart) ──────────
   {
     id: lsId++,
     test_case_id: 7,
-    location: 'tests/checkout/cart.spec.ts:22:14',
+    location: 'tests/checkout/cart.spec.ts:13:14',
     used_method: 'getByRole',
     used_args: ['button', { name: 'Remove' }],
     used_args_fp: locatorSig('getByRole', ['button', 'Remove']),
@@ -2243,15 +1872,14 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: 'Remove',
     alternatives: ALT_CART_REMOVE,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-18') * 1000,
+    ...seenOnRun(1, 'tests/checkout/cart.spec.ts', 'should remove item from cart'),
   },
 
   // ── Shipping address form (test_case_id 11 — should fill and save shipping address) ─
   {
     id: lsId++,
     test_case_id: 11,
-    location: 'tests/checkout/address.spec.ts:15:10',
+    location: 'tests/checkout/address.spec.ts:6:10',
     used_method: 'getByLabel',
     used_args: ['Full name'],
     used_args_fp: locatorSig('getByLabel', ['Full name']),
@@ -2266,13 +1894,12 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: '',
     alternatives: ALT_FULL_NAME,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-17') * 1000,
+    ...seenOnRun(1, 'tests/checkout/address.spec.ts', 'should fill and save shipping address'),
   },
   {
     id: lsId++,
     test_case_id: 11,
-    location: 'tests/checkout/address.spec.ts:17:10',
+    location: 'tests/checkout/address.spec.ts:7:10',
     used_method: 'getByLabel',
     used_args: ['Street address'],
     used_args_fp: locatorSig('getByLabel', ['Street address']),
@@ -2286,14 +1913,23 @@ const LOCATOR_SNAPSHOTS = [
       center: { x: 640, y: 340 },
     },
     element_text: '',
-    alternatives: ALT_STREET_ADDR,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-17') * 1000,
+    alternatives: [
+      { locator: "getByTestId('street-address')", method: 'getByTestId', args: { testId: 'street-address' }, score: 100 },
+      { locator: "getByLabel('Street address')", method: 'getByLabel', args: { label: 'Street address' }, score: 85 },
+      {
+        locator: "getByPlaceholder('123 Main St')",
+        method: 'getByPlaceholder',
+        args: { placeholder: '123 Main St' },
+        score: 80,
+      },
+      { locator: "locator('#street-address')", method: 'locator', args: { selector: '#street-address' }, score: 65 },
+    ],
+    ...seenOnRun(1, 'tests/checkout/address.spec.ts', 'should fill and save shipping address'),
   },
   {
     id: lsId++,
     test_case_id: 11,
-    location: 'tests/checkout/address.spec.ts:22:14',
+    location: 'tests/checkout/address.spec.ts:9:14',
     used_method: 'getByRole',
     used_args: ['button', { name: 'Save address' }],
     used_args_fp: locatorSig('getByRole', ['button', 'Save address']),
@@ -2306,20 +1942,19 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: 'Save address',
     alternatives: ALT_SAVE_ADDRESS,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-17') * 1000,
+    ...seenOnRun(1, 'tests/checkout/address.spec.ts', 'should fill and save shipping address'),
   },
 
   // ── Cluster #6: button strict-mode violation (test_case_id 27) ────────────
-  // The error text: "getByRole('button') resolved to 3 elements at tests/ui/button.spec.ts:55"
-  // extractErrorLocation returns null (frame has no :col), so L1 misses.
-  // extractLeafSelector returns "getByRole('button')" → L2 signature matches
-  // this row (used_args_fp = locatorSig('getByRole', ['button'])).
-  // The alternatives show more specific locators to fix the strict-mode violation.
+  // The snapshot is keyed at the getByRole call site. The error's frame carries
+  // a column (as real captures do), so the ladder resolves via the
+  // file:line rung (path-suffix tolerant) and then the locator signature.
+  // The captured element is the PRIMARY variant — the same one the ARIA
+  // snapshot, the diagnosis patch and the alternatives all name.
   {
     id: lsId++,
     test_case_id: 27,
-    location: 'tests/ui/button.spec.ts:12:14',
+    location: BUTTON_CLICK_SITE,
     used_method: 'getByRole',
     used_args: ['button'],
     used_args_fp: locatorSig('getByRole', ['button']),
@@ -2327,13 +1962,12 @@ const LOCATOR_SNAPSHOTS = [
     element_attrs: {
       'data-testid': 'primary-btn',
       class: 'btn btn-primary',
-      accessibleName: 'Submit',
+      accessibleName: 'Primary',
       center: { x: 320, y: 280 },
     },
-    element_text: 'Submit',
+    element_text: 'Primary',
     alternatives: ALT_BUTTON_STRICT,
-    last_seen_run_id: null,
-    last_seen_at: ts('2025-05-16') * 1000,
+    ...seenOnPass(3, 'tests/ui/button.spec.ts', 'Button primary variant renders correctly'),
   },
 ];
 
@@ -2388,7 +2022,7 @@ const lines = [
   '-- Test run cases',
   insert('test_runs_cases', TEST_RUNS_CASES),
   '',
-  '-- Files (screenshot attachments — reference test_runs_cases, so must come after)',
+  '-- Files (screenshot/trace/video attachments — reference test_runs_cases, so must come after)',
   insert('files', ATTACHMENTS),
   '',
   '-- Entity links (may reference test_runs_cases, so must come after)',
@@ -2431,6 +2065,7 @@ console.log(`   TestRuns   : ${TEST_RUNS.length}`);
 console.log(`   TRC rows   : ${TEST_RUNS_CASES.length}`);
 console.log(`   NR rows    : ${NETWORK_REQUESTS.length}`);
 console.log(`   Reports    : ${REPORTS.length}`);
+console.log(`   Attachments: ${ATTACHMENTS.length}`);
 console.log(`   Clusters   : ${FAILURE_CLUSTERS.length}`);
 console.log(`   Diagnoses  : ${FAILURE_DIAGNOSES.length}`);
 console.log(`   DiagVersions: ${FAILURE_DIAGNOSIS_VERSIONS.length}`);
