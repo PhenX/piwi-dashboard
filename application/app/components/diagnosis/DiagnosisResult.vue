@@ -2,6 +2,7 @@
 import type { FailureDiagnosis } from '~~/server/database/schema';
 import { formatRelativeTime } from '~/utils';
 import { DIAGNOSIS_SECTION_SHORT, isKnownSectionId } from '#shared/diagnosis-sections';
+import type { PatchValidation } from '#shared/patch';
 
 const props = defineProps<{
   diagnosis: FailureDiagnosis | null;
@@ -238,13 +239,6 @@ function downloadPatch() {
     a.remove();
     URL.revokeObjectURL(url);
   }, 1000);
-}
-
-interface PatchValidation {
-  status: 'applies' | 'applies-with-offset' | 'stale-file' | 'invalid' | 'unchecked';
-  filesChecked: number;
-  filesInPatch: number;
-  errors: string[];
 }
 
 const patchValidation = computed<PatchValidation | null>(() => {

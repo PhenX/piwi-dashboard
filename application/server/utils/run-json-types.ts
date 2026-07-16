@@ -1,4 +1,5 @@
 import type { BrowserConfig } from '#shared/types';
+import type { ServerLogEntry } from '~~/types/api';
 
 /**
  * View-types for the JSON columns on `test_runs` / `test_runs_cases`, covering
@@ -21,14 +22,6 @@ export interface ConsoleLogEntry {
   text: string;
   timestamp?: number;
   location?: string | null;
-}
-
-export interface ServerLogEntry {
-  timestamp: number;
-  level: string;
-  category: string;
-  message: string;
-  stack?: string;
 }
 
 export interface NetworkRequestEntry {
@@ -62,4 +55,4 @@ export interface RunMetadata {
   htmlReport?: { projects?: Array<{ use?: { browserName?: string | null } | null }> } | null;
 }
 
-export type { BrowserConfig };
+export type { BrowserConfig, ServerLogEntry };

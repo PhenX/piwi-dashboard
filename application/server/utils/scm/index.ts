@@ -5,8 +5,7 @@ import { eq } from 'drizzle-orm';
 import { GitHubProvider } from './GitHubProvider';
 import { GitLabProvider } from './GitLabProvider';
 import { BitbucketProvider } from './BitbucketProvider';
-
-type DbClient = Awaited<ReturnType<typeof import('../../database').getDatabase>>;
+import type { DbClient } from '../../database';
 
 /** Returns the SCM provider name for a repository URL, or null if unsupported. */
 export function detectScmProvider(repositoryUrl: string | null | undefined): 'github' | 'gitlab' | 'bitbucket' | null {

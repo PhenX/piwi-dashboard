@@ -9,6 +9,7 @@ import { requireAuth } from '../../utils/auth';
 import { Role } from '#shared/types';
 import { getStorage } from '../../storage';
 import { uploadDirectory } from '../../utils/storage-helpers';
+import { sanitizeFilename } from '../../utils/sanitize-filename';
 import { tmpdir } from 'os';
 import { rm, mkdir, readdir } from 'fs/promises';
 import { parseLocation } from '../../utils/parse-location';
@@ -78,11 +79,6 @@ export default eventHandler(async (event) => {
       statusCode: 400,
       message: 'No form data provided',
     });
-  }
-
-  // Helper function to sanitize filename
-  function sanitizeFilename(filename: string): string {
-    return filename.replace(/[^a-zA-Z0-9._-]/g, '_');
   }
 
   // Parse form fields

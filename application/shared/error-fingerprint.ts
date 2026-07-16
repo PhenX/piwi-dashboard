@@ -17,6 +17,7 @@
  * uses Web Crypto instead of node:crypto.
  */
 import { LOCATOR_BUILDER_METHODS } from '@piwitests/core/locator-methods';
+import { sha256Hex } from './utils/hash';
 
 /**
  * Bump when the normalization algorithm changes. The version is part of the
@@ -239,11 +240,6 @@ export function extractTopFrameFile(text: string): string | null {
     return file;
   }
   return null;
-}
-
-async function sha256Hex(input: string): Promise<string> {
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export function extractErrorSignature(rawError: string): ErrorSignature {

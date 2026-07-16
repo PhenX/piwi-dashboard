@@ -3,9 +3,7 @@ import { testRuns } from '../database/schema';
 import { runEventBus } from './run-events';
 import { validateAndReviveRun } from './revive-run';
 import { readShardTokensFromMeta } from './shard-tokens';
-import type { getDatabase } from '../database';
-
-type DB = Awaited<ReturnType<typeof getDatabase>>;
+import type { DbClient as DB } from '../database';
 
 /**
  * Authorize a streaming request by its stream token and return the run's `projectId`.

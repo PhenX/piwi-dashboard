@@ -10,8 +10,7 @@
 
 import { getAppSetting } from './app-settings';
 import type { AiModelRole, AiProvider, AiRoleSettings, AiSettings } from '~~/types/api';
-
-type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
+import type { DbClient } from '../database';
 
 export const AI_ROLES: AiModelRole[] = ['diagnosis', 'research', 'embedding'];
 

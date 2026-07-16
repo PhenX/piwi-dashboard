@@ -48,8 +48,7 @@ import type {
 } from './ai-context.types';
 import type { AiAttachedImage } from './ai-provider';
 import { getStorage } from '../storage';
-
-type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
+import type { DbClient } from '../database';
 
 type ScmCoverage = NonNullable<DiagnosisContextCoverage['scm']>;
 

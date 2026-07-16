@@ -371,24 +371,6 @@ watch(
   { immediate: true },
 );
 
-function getPassRate(testCase: TestCaseWithStats) {
-  if (testCase.totalRuns === 0) return 0;
-  return Math.round((testCase.passedRuns / testCase.totalRuns) * 100);
-}
-
-type BadgeColor = 'error' | 'neutral' | 'primary' | 'success' | 'warning' | 'secondary' | 'info';
-
-function getTestCaseStatus(testCase: TestCaseWithStats): { status: string; color: BadgeColor } {
-  const recentFlaky = testCase.recentFlakyRuns ?? testCase.flakyRuns;
-  if (recentFlaky > 0) {
-    return { status: 'flaky', color: 'warning' };
-  }
-  return {
-    status: testCase.lastStatus || 'unknown',
-    color: getStatusColor(testCase.lastStatus || 'unknown') as BadgeColor,
-  };
-}
-
 const testCasesColumns: TableColumn<TestCaseWithStats>[] = [
   { accessorKey: 'title', header: createSortHeader<TestCaseWithStats>('Test case') },
   { accessorKey: 'status', header: createSortHeader<TestCaseWithStats>('Status') },

@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { appSettings } from '../database/schema';
-
-type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
+import type { DbClient } from '../database';
 
 export async function getAppSetting<T>(db: DbClient, key: string): Promise<T | null> {
   const rows = await db.select({ value: appSettings.value }).from(appSettings).where(eq(appSettings.key, key));

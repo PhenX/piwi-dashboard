@@ -882,6 +882,20 @@ export interface DiagnosisCompact {
 }
 
 /**
+ * One rendered evidence section of the AI diagnosis context (a lens over what
+ * will be sent to the model). Shared by the context modal, the cluster diagnosis
+ * store and the demo context builder.
+ */
+export interface ContextSection {
+  id: string;
+  title: string;
+  chars: number;
+  truncated: boolean;
+  markdown: string;
+  items?: number;
+}
+
+/**
  * SCM coverage metadata returned alongside the diagnosis context preview.
  * null means the regression context block was never reached (DB error or no lastSeenRun).
  */

@@ -1,8 +1,6 @@
 import { testRuns } from '../database/schema';
 import { eq } from 'drizzle-orm';
-import type { getDatabase } from '../database';
-
-type DB = Awaited<ReturnType<typeof getDatabase>>;
+import type { DbClient as DB } from '../database';
 
 /**
  * Read shard tokens from a test run's metadata JSON column.

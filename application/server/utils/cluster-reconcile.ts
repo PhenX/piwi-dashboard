@@ -21,8 +21,7 @@ import { embedTexts } from './ai-embeddings';
 import { cosineSimilarity, parseEmbedding } from './cluster-similarity';
 import { adjudicateClusterPair } from './cluster-adjudicate';
 import type { ResolvedAiRole } from '~~/types/api';
-
-type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
+import type { DbClient } from '../database';
 
 function threshold(envVar: string, fallback: number): number {
   const v = Number(process.env[envVar]);

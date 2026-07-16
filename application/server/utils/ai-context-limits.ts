@@ -1,7 +1,6 @@
 import { CONTEXT_LIMIT_FIELDS, DEFAULT_CONTEXT_LIMITS, clampLimit } from '#shared/ai-context-limits';
 import type { ContextLimits } from '#shared/ai-context-limits';
-
-type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
+import type { DbClient } from '../database';
 
 export const CONTEXT_LIMITS_SETTING_KEY = 'ai_context_limits';
 

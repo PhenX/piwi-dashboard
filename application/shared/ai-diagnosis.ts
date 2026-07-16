@@ -125,7 +125,7 @@ export function scoreToConfidence(score: number): DiagnosisConfidence {
   return 'low';
 }
 
-function asCategory(v: unknown): DiagnosisCategory {
+export function asCategory(v: unknown): DiagnosisCategory {
   return DIAGNOSIS_CATEGORIES.includes(v as DiagnosisCategory) ? (v as DiagnosisCategory) : 'unknown';
 }
 

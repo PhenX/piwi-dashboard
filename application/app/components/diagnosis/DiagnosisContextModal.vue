@@ -1,14 +1,6 @@
 <script setup lang="ts">
 import { DIAGNOSIS_SECTIONS } from '#shared/diagnosis-sections';
-
-interface ContextSection {
-  id: string;
-  title: string;
-  chars: number;
-  truncated: boolean;
-  markdown: string;
-  items?: number;
-}
+import type { ContextSection } from '~~/types/api';
 
 const props = defineProps<{
   open: boolean;

@@ -1,8 +1,6 @@
 import { eq, and, desc, lt } from 'drizzle-orm';
 import { testRuns, testRunsCases } from '../database/schema';
-import type { getDatabase } from '../database';
-
-type DB = Awaited<ReturnType<typeof getDatabase>>;
+import type { DbClient as DB } from '../database';
 
 /**
  * Compute isNewRegression and isNewFlaky signals for all test_runs_cases

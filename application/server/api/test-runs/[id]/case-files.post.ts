@@ -7,6 +7,7 @@ import { validateAndReviveRun } from '../../../utils/revive-run';
 import { upsertTraceBlob, findTraceBlob } from '../../../utils/trace-blobs';
 import { getStorage } from '../../../storage';
 import { joinSuitePath } from '#shared/utils/suites';
+import { sanitizeFilename } from '../../../utils/sanitize-filename';
 import { Role } from '#shared/types';
 
 const REQUIRED_ROLES: Role[] = [];
@@ -56,10 +57,6 @@ export default eventHandler(async (event) => {
       statusCode: 400,
       message: 'No form data provided',
     });
-  }
-
-  function sanitizeFilename(filename: string): string {
-    return filename.replace(/[^a-zA-Z0-9._-]/g, '_');
   }
 
   let streamToken: string | undefined;
