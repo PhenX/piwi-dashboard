@@ -6,6 +6,17 @@ import { Logger } from '../support/logger.js';
 
 export { FormData };
 
+/** Pull a human-readable `message` field out of a JSON error response body, if present. */
+function parseErrorMessage(text: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    const message = (parsed as { message?: unknown } | null)?.message;
+    return typeof message === 'string' ? message : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * An HTTP response with a non-2xx status. Carries the numeric `status` so
  * callers can branch on a specific code (401, 404, 409, 422, …) via
@@ -60,6 +71,11 @@ export class HttpClient {
     private readonly logger: Logger = new Logger(),
     private readonly timeout = 30000,
   ) {}
+
+  /** Base URL of the Piwi Dashboard server this client talks to (used to print run links). */
+  get baseUrl(): string {
+    return this.serverUrl;
+  }
 
   /**
    * Resolve an auth credential: prefer `apiKey`, fall back to `username`/`password` login,
@@ -128,7 +144,12 @@ export class HttpClient {
     const headers = form.getHeaders() as Record<string, string>;
     const res = await this.request('POST', pathname, { headers, form, auth });
     if (res.status < 200 || res.status >= 300) {
-      throw new HttpError(res.status, `Request failed with status ${res.status}: ${res.text}`);
+      this.logger.debugError(`Response: ${res.text}`);
+      const detail = parseErrorMessage(res.text);
+      throw new HttpError(
+        res.status,
+        detail ? `Request failed with status ${res.status}: ${detail}` : `Request failed with status ${res.status}`,
+      );
     }
     try {
       return JSON.parse(res.text);

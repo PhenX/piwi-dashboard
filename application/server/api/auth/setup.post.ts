@@ -1,7 +1,5 @@
 import { Role } from '#shared/types';
-import { createUser, isAuthEnabled } from '../../utils/auth';
-import { getDatabase } from '../../database';
-import { users } from '../../database/schema';
+import { createUser, isAuthEnabled, needsInitialSetup } from '../../utils/auth';
 import { z } from 'zod';
 
 const REQUIRED_ROLES: Role[] = [];
@@ -31,11 +29,7 @@ export default eventHandler(async (event) => {
     });
   }
 
-  const db = await getDatabase();
-
-  // Check if any users exist
-  const existingUsers = await db.select().from(users);
-  if (existingUsers.length > 0) {
+  if (!(await needsInitialSetup())) {
     throw createError({
       statusCode: 400,
       message: 'Users already exist. This endpoint is only for initial setup.',

@@ -13,6 +13,67 @@ const state = reactive({
 const loading = ref(false);
 const error = ref('');
 
+// Fresh instance with auth enabled and zero users: the login form can never
+// succeed, so show a first-admin setup form instead (mirrors the documented
+// `POST /api/auth/setup` curl flow, but reachable from the UI).
+const needsSetup = ref<boolean | null>(null);
+const setupState = reactive({
+  username: '',
+  password: '',
+  confirmPassword: '',
+  name: '',
+});
+const setupLoading = ref(false);
+const setupError = ref('');
+
+onMounted(async () => {
+  if (config.public.demoMode) {
+    needsSetup.value = false;
+    return;
+  }
+  try {
+    const status = await $fetch<{ needsSetup: boolean }>('/api/auth/setup');
+    needsSetup.value = status.needsSetup;
+  } catch {
+    needsSetup.value = false;
+  }
+});
+
+async function handleSetup() {
+  if (!setupState.username || !setupState.password) {
+    setupError.value = 'Please choose a username and password';
+    return;
+  }
+  if (setupState.password !== setupState.confirmPassword) {
+    setupError.value = 'Passwords do not match';
+    return;
+  }
+
+  setupLoading.value = true;
+  setupError.value = '';
+
+  try {
+    await $fetch('/api/auth/setup', {
+      method: 'POST',
+      body: {
+        username: setupState.username,
+        password: setupState.password,
+        name: setupState.name || undefined,
+      },
+    });
+    await login(setupState.username, setupState.password);
+    toast.add({ title: 'Admin account created', description: "You're signed in.", color: 'success' });
+    router.push('/');
+  } catch (err: unknown) {
+    const errorMessage =
+      err && typeof err === 'object' && 'data' in err ? (err.data as { message?: string })?.message : undefined;
+    setupError.value = errorMessage || 'Failed to create the admin account';
+    toast.add({ title: 'Setup failed', description: setupError.value, color: 'error' });
+  } finally {
+    setupLoading.value = false;
+  }
+}
+
 const oauthProviders = computed(() => {
   if (config.public.demoMode) return [];
   return (config.public.oauthProviders as string[]) || [];
@@ -81,7 +142,70 @@ definePageMeta({
   <div class="min-h-screen flex flex-col items-center justify-center bg-elevated/50 gap-6 px-4">
     <img src="/logo-wide.svg" alt="Piwi Dashboard" class="h-16 rounded-xl" />
 
-    <UCard class="w-full max-w-md">
+    <UCard v-if="needsSetup === null" class="w-full max-w-md">
+      <LoadingState text="Loading…" />
+    </UCard>
+
+    <UCard v-else-if="needsSetup" class="w-full max-w-md">
+      <template #header>
+        <h1 class="text-xl font-semibold">Create the first admin account</h1>
+        <p class="text-sm text-muted mt-1">
+          Authentication is enabled and no accounts exist yet. Create the administrator account to sign in.
+        </p>
+      </template>
+
+      <UAlert v-if="setupError" color="error" :title="setupError" variant="subtle" class="mb-4" />
+
+      <form class="space-y-4" @submit.prevent="handleSetup">
+        <UFormField label="Username" name="username" required>
+          <UInput
+            v-model="setupState.username"
+            type="text"
+            placeholder="Choose a username"
+            autocomplete="username"
+            :disabled="setupLoading"
+            class="w-full"
+          />
+        </UFormField>
+
+        <UFormField label="Name" name="name">
+          <UInput
+            v-model="setupState.name"
+            type="text"
+            placeholder="Administrator (optional)"
+            autocomplete="name"
+            :disabled="setupLoading"
+            class="w-full"
+          />
+        </UFormField>
+
+        <UFormField label="Password" name="password" required>
+          <UInput
+            v-model="setupState.password"
+            type="password"
+            placeholder="Choose a password"
+            autocomplete="new-password"
+            :disabled="setupLoading"
+            class="w-full"
+          />
+        </UFormField>
+
+        <UFormField label="Confirm password" name="confirmPassword" required>
+          <UInput
+            v-model="setupState.confirmPassword"
+            type="password"
+            placeholder="Re-enter the password"
+            autocomplete="new-password"
+            :disabled="setupLoading"
+            class="w-full"
+          />
+        </UFormField>
+
+        <UButton type="submit" block :loading="setupLoading" :disabled="setupLoading"> Create admin account </UButton>
+      </form>
+    </UCard>
+
+    <UCard v-else class="w-full max-w-md">
       <template #header>
         <h1 class="text-xl font-semibold">Sign in to your account</h1>
       </template>

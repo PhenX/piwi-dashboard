@@ -139,10 +139,15 @@ const showResult = computed(
   () => diagnosis.value && (diagnosis.value.status === 'completed' || diagnosis.value.status === 'failed'),
 );
 const showDiagnoseButton = computed(
-  () => !diagnosis.value || diagnosis.value.status === 'failed' || (diagnosis.value.status === 'running' && isStale(diagnosis.value)),
+  () =>
+    !diagnosis.value ||
+    diagnosis.value.status === 'failed' ||
+    (diagnosis.value.status === 'running' && isStale(diagnosis.value)),
 );
 /** A fresh 'running' row: a diagnosis is genuinely in flight (this or another session). */
-const showRunning = computed(() => diagnosis.value?.status === 'running' && !isStale(diagnosis.value) && !posting.value);
+const showRunning = computed(
+  () => diagnosis.value?.status === 'running' && !isStale(diagnosis.value) && !posting.value,
+);
 </script>
 
 <template>

@@ -488,9 +488,7 @@ function testSourceForCluster(clusterDef) {
 
 /** Format lines as a line-numbered snippet (matches the reporter's readSourceSnippet). */
 function fmtSnippet(lines, failingIdx, startLine) {
-  return lines
-    .map((l, i) => `${i === failingIdx ? '> ' : '  '}${String(startLine + i).padStart(4)} | ${l}`)
-    .join('\n');
+  return lines.map((l, i) => `${i === failingIdx ? '> ' : '  '}${String(startLine + i).padStart(4)} | ${l}`).join('\n');
 }
 
 // Multi-frame call stack for a failing case: the failing line plus the callers

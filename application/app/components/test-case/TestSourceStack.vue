@@ -20,7 +20,11 @@ function rows(snippet: string) {
 
 <template>
   <div class="space-y-2">
-    <div v-for="(frame, i) in frames" :key="`${frame.file}:${frame.line}:${i}`" class="rounded-lg border border-default overflow-hidden">
+    <div
+      v-for="(frame, i) in frames"
+      :key="`${frame.file}:${frame.line}:${i}`"
+      class="rounded-lg border border-default overflow-hidden"
+    >
       <div class="flex items-center gap-2 px-3 py-1.5 bg-elevated/40 border-b border-default text-xs">
         <UIcon
           :name="i === 0 ? 'i-lucide-circle-x' : 'i-lucide-corner-left-up'"
@@ -38,8 +42,14 @@ function rows(snippet: string) {
             v-for="(row, j) in rows(frame.snippet)"
             :key="j"
             class="px-3 whitespace-pre"
-            :class="row.failing ? 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 font-medium' : 'text-gray-600 dark:text-gray-400'"
-          >{{ row.text }}</div>
+            :class="
+              row.failing
+                ? 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 font-medium'
+                : 'text-gray-600 dark:text-gray-400'
+            "
+          >
+            {{ row.text }}
+          </div>
         </div>
       </div>
     </div>

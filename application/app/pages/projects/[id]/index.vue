@@ -868,7 +868,15 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                 No test runs match the selected environment filter.
               </div>
 
-              <div v-else class="text-center py-8 text-gray-500">No test runs yet for this project.</div>
+              <EmptyState v-else icon="i-lucide-rocket" text="No test runs yet for this project.">
+                <p class="text-xs text-gray-400 max-w-sm">
+                  Point the reporter's <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">projectName</code> at
+                  <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">{{ project?.name }}</code> to send results
+                  here — see the
+                  <DocLink to="reporter" no-icon class="text-primary hover:underline">reporter docs</DocLink> for setup
+                  instructions.
+                </p>
+              </EmptyState>
             </UCard>
           </template>
 

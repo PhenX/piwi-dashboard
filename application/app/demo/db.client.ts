@@ -219,7 +219,7 @@ async function initialize(): Promise<void> {
 }
 
 /**
- * Returns the singleton in-browser Drizzle instance, initialising it on
+ * Returns the singleton in-browser Drizzle instance, initializing it on
  * first call (fetching the seed SQL and opening IndexedDB).
  */
 export async function getDemoDb(): Promise<DemoDB> {

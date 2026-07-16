@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { docsUrl } from '#shared/docs';
 
+const config = useRuntimeConfig();
+const authEnabled = computed(() => !!config.public.authEnabled);
+
 // Reflect the actual dashboard URL so the generated config snippet is correct
 const serverUrl = ref('http://localhost:3000');
 onMounted(() => {
   serverUrl.value = window.location.origin;
 });
+
+const apiKeyLine = computed(() => (authEnabled.value ? `\n      apiKey: process.env.PIWI_API_KEY,` : ''));
 
 const configCode = computed(
   () => `import { defineConfig } from '@playwright/test'
@@ -15,7 +20,7 @@ export default defineConfig({
     ['list'],
     ['@piwitests/reporter', {
       serverUrl: '${serverUrl.value}',
-      projectName: 'my-project',
+      projectName: 'my-project',${apiKeyLine.value}
     }],
   ],
   use: {
@@ -37,7 +42,7 @@ export default PiwiDashboard.wrapConfig(
   }),
   {
     serverUrl: '${serverUrl.value}',
-    projectName: 'my-project',
+    projectName: 'my-project',${apiKeyLine.value}
   },
 )`,
 );
@@ -65,40 +70,60 @@ import { extendPiwiFixtures } from '@piwitests/reporter'
 export const test = extendPiwiFixtures(base)
 export { expect } from '@playwright/test'`;
 
-const steps = computed(() => [
-  {
-    id: 1,
-    title: 'Start the dashboard',
-    description: "You're already here — the dashboard is running.",
-    done: true,
-    code: null as string | null,
-    lang: undefined as string | undefined,
-  },
-  {
-    id: 2,
-    title: 'Install the reporter',
-    description: 'Add the Piwi reporter to your Playwright project.',
-    done: false,
-    code: 'npm install --save-dev @piwitests/reporter',
-    lang: 'bash',
-  },
-  {
-    id: 3,
-    title: 'Configure Playwright',
-    description: 'Add the reporter to your playwright.config.ts.',
-    done: false,
-    code: configCode.value,
-    lang: 'typescript',
-  },
-  {
-    id: 4,
-    title: 'Run your tests',
-    description: 'Results appear in the dashboard automatically. The project is created on first submit.',
-    done: false,
-    code: 'npx playwright test',
-    lang: 'bash',
-  },
-]);
+interface WizardStep {
+  title: string;
+  description: string;
+  done?: boolean;
+  code?: string | null;
+  lang?: string;
+  /** Renders an inline call-to-action instead of (or alongside) a code block. */
+  action?: 'create-api-key';
+}
+
+const steps = computed<Array<WizardStep & { id: number }>>(() => {
+  const list: WizardStep[] = [
+    {
+      title: 'Start the dashboard',
+      description: "You're already here — the dashboard is running.",
+      done: true,
+    },
+    {
+      title: 'Install the reporter',
+      description: 'Add the Piwi reporter to your Playwright project.',
+      code: 'npm install --save-dev @piwitests/reporter',
+      lang: 'bash',
+    },
+  ];
+
+  if (authEnabled.value) {
+    list.push({
+      title: 'Create an API key',
+      description:
+        'Authentication is enabled on this instance, so the reporter needs a key to submit results. Create one, then set it as PIWI_API_KEY in your CI secrets (used by the snippet below).',
+      action: 'create-api-key',
+    });
+  }
+
+  list.push(
+    {
+      title: 'Configure Playwright',
+      description: 'Add the reporter to your playwright.config.ts.',
+      code: configCode.value,
+      lang: 'typescript',
+    },
+    {
+      title: 'Run your tests',
+      description: 'Results appear in the dashboard automatically. The project is created on first submit.',
+      code: 'npx playwright test',
+      lang: 'bash',
+    },
+  );
+
+  return list.map((step, index) => ({ id: index + 1, ...step }));
+});
+
+const STEP_COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six'];
+const stepCountWord = computed(() => STEP_COUNT_WORDS[steps.value.length] ?? String(steps.value.length));
 
 const goFurtherOpen = ref(false);
 </script>
@@ -114,7 +139,7 @@ const goFurtherOpen = ref(false);
           <h2 class="text-xl font-semibold inline-flex items-center gap-1">
             Get started in 60 seconds <HelpHint topic="home.get-started" />
           </h2>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Send your first test run in four steps</p>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Send your first test run in {{ stepCountWord }} steps</p>
         </div>
       </div>
     </template>
@@ -144,6 +169,15 @@ const goFurtherOpen = ref(false);
             <UBadge v-if="step.done" color="success" variant="subtle" size="xs">Done</UBadge>
           </div>
           <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">{{ step.description }}</p>
+          <UButton
+            v-if="step.action === 'create-api-key'"
+            to="/settings/users"
+            icon="i-lucide-key-round"
+            size="sm"
+            variant="soft"
+          >
+            Create an API key
+          </UButton>
           <CodeBlock v-if="step.code" :code="step.code" :lang="step.lang" />
         </div>
       </div>
@@ -174,7 +208,7 @@ const goFurtherOpen = ref(false);
               auto-injects the reporter and chains the global setup in one call. It also registers the run on the
               dashboard <em>before</em> your
               <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded">globalSetup</code> runs, so the
-              dashboard shows an initialising state during setup.
+              dashboard shows an initializing state during setup.
             </p>
             <CodeBlock :code="wrapConfigCode" lang="typescript" />
           </div>

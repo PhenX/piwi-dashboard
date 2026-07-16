@@ -52,8 +52,10 @@ describe('PIWI_ENV_VARS registry', () => {
     // Allow literal prefix strings used in dynamic env construction, plus the
     // registry/identifier names that happen to start with PIWI_ but are not env
     // vars (this registry's own constant, and the reporter's PIWI_ENV_KEYS map
-    // referenced in comments).
-    const knownFalsePositives = new Set(['PIWI_AI', 'PIWI_AI_MAX', 'PIWI_ENV_VARS', 'PIWI_ENV_KEYS']);
+    // referenced in comments), plus reporter-side vars the app only *mentions*
+    // in generated setup copy (the wizard, the API-key modal) without reading
+    // them itself — they belong to the reporter's own env map, not this one.
+    const knownFalsePositives = new Set(['PIWI_AI', 'PIWI_AI_MAX', 'PIWI_ENV_VARS', 'PIWI_ENV_KEYS', 'PIWI_API_KEY']);
     const realMissing = missing.filter((v) => !knownFalsePositives.has(v));
     expect(realMissing.sort()).toEqual([]);
   });

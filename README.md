@@ -66,6 +66,7 @@ Native Playwright HTML reports are great for local debugging — but they're eph
 
 ```bash
 # Linux / macOS
+mkdir -p .data && chown -R 1001:1001 .data # the container runs as non-root UID 1001
 docker run -p 3000:3000 -v $(pwd)/.data:/app/.data phenx/piwitests-server:latest
 ```
 
@@ -75,6 +76,8 @@ docker run -p 3000:3000 -v ${PWD}/.data:/app/.data phenx/piwitests-server:latest
 ```
 
 Visit `http://localhost:3000`. A [`docker-compose.yml`](./docker-compose.yml) is also included.
+
+> **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker auto-creates `.data` owned by `root` and the container can't write to it. Windows and macOS (Docker Desktop) don't need this step. See [Troubleshooting](./DOCKER.md#troubleshooting) if you hit a permission error.
 
 > **Production tip:** set `PIWI_SECRET_KEY` (any long random string) so credentials you store in the dashboard — AI API keys, SCM tokens — are encrypted at rest. Generate one with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. See the [deployment guide](https://piwitests.github.io/deployment).
 

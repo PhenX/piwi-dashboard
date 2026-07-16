@@ -32,6 +32,7 @@ The fastest way to get started is with the pre-built container image:
 
 ```bash [Linux / macOS]
 docker pull phenx/piwitests-server:latest
+mkdir -p .data && chown -R 1001:1001 .data # the container runs as non-root UID 1001
 docker run -p 3000:3000 -v $(pwd)/.data:/app/.data phenx/piwitests-server:latest
 ```
 
@@ -43,6 +44,8 @@ docker run -p 3000:3000 -v ${PWD}/.data:/app/.data phenx/piwitests-server:latest
 :::
 
 Visit `http://localhost:3000` to access the dashboard.
+
+> **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker auto-creates `.data` owned by `root` and the container can't write to it. Windows and macOS (Docker Desktop) don't need this step. See [Permission issues with volumes](./deployment#permission-issues-with-volumes) if you hit a permission error.
 
 See [Deployment](./deployment) for detailed Docker, Docker Compose, PostgreSQL, and Kubernetes options.
 
@@ -64,68 +67,6 @@ The dashboard will be available at `http://localhost:3000`.
 The SQLite database is automatically created on the first API call.
 
 > The repository is an npm-workspaces monorepo, so the application scripts are prefixed `app:` (e.g. `app:dev`, `app:build`). Run them from the `application/` directory.
-
-## Submitting your first test result
-
-Once the dashboard is running, submit a test result to verify everything works:
-
-::: code-group
-
-```bash [Linux / macOS]
-curl -X POST http://localhost:3000/api/test-runs/submit \
-  -H "Content-Type: application/json" \
-  -d '{
-    "projectName": "my-project",
-    "status": "passed",
-    "startTime": "2024-01-01T12:00:00Z",
-    "duration": 120000,
-    "totalTests": 2,
-    "passedTests": 1,
-    "failedTests": 1,
-    "skippedTests": 0,
-    "testCases": [
-      {
-        "title": "should login successfully",
-        "status": "passed",
-        "duration": 1500,
-        "location": "tests/login.spec.ts:10:5",
-        "retries": 0
-      },
-      {
-        "title": "should handle errors",
-        "status": "failed",
-        "duration": 2300,
-        "location": "tests/errors.spec.ts:5:5",
-        "error": "Expected true but got false",
-        "retries": 1
-      }
-    ]
-  }'
-```
-
-```powershell [Windows (PowerShell)]
-$body = @{
-  projectName  = 'my-project'
-  status       = 'passed'
-  startTime    = '2024-01-01T12:00:00Z'
-  duration     = 120000
-  totalTests   = 2
-  passedTests  = 1
-  failedTests  = 1
-  skippedTests = 0
-  testCases    = @(
-    @{ title = 'should login successfully'; status = 'passed'; duration = 1500; location = 'tests/login.spec.ts:10:5'; retries = 0 }
-    @{ title = 'should handle errors'; status = 'failed'; duration = 2300; location = 'tests/errors.spec.ts:5:5'; error = 'Expected true but got false'; retries = 1 }
-  )
-} | ConvertTo-Json -Depth 5
-
-Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/test-runs/submit `
-  -ContentType 'application/json' -Body $body
-```
-
-:::
-
-The project `my-project` is created automatically if it doesn't exist yet.
 
 ## Using the Piwi Dashboard reporter
 
@@ -184,6 +125,68 @@ import { test, expect } from './fixtures'
 ```
 
 The reporter works fine without this — see the [capture fixtures guide](./capture-fixtures) for exactly what the fixtures add, composition patterns, and troubleshooting.
+
+## Submitting via the REST API (optional)
+
+Not using Playwright, or piping results in from another tool? Submit runs directly over HTTP — this is what the reporter itself does under the hood.
+
+::: code-group
+
+```bash [Linux / macOS]
+curl -X POST http://localhost:3000/api/test-runs/submit \
+  -H "Content-Type: application/json" \
+  -d '{
+    "projectName": "my-project",
+    "status": "passed",
+    "startTime": "2024-01-01T12:00:00Z",
+    "duration": 120000,
+    "totalTests": 2,
+    "passedTests": 1,
+    "failedTests": 1,
+    "skippedTests": 0,
+    "testCases": [
+      {
+        "title": "should login successfully",
+        "status": "passed",
+        "duration": 1500,
+        "location": "tests/login.spec.ts:10:5",
+        "retries": 0
+      },
+      {
+        "title": "should handle errors",
+        "status": "failed",
+        "duration": 2300,
+        "location": "tests/errors.spec.ts:5:5",
+        "error": "Expected true but got false",
+        "retries": 1
+      }
+    ]
+  }'
+```
+
+```powershell [Windows (PowerShell)]
+$body = @{
+  projectName  = 'my-project'
+  status       = 'passed'
+  startTime    = '2024-01-01T12:00:00Z'
+  duration     = 120000
+  totalTests   = 2
+  passedTests  = 1
+  failedTests  = 1
+  skippedTests = 0
+  testCases    = @(
+    @{ title = 'should login successfully'; status = 'passed'; duration = 1500; location = 'tests/login.spec.ts:10:5'; retries = 0 }
+    @{ title = 'should handle errors'; status = 'failed'; duration = 2300; location = 'tests/errors.spec.ts:5:5'; error = 'Expected true but got false'; retries = 1 }
+  )
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/test-runs/submit `
+  -ContentType 'application/json' -Body $body
+```
+
+:::
+
+The project `my-project` is created automatically if it doesn't exist yet. See the [API docs](https://piwitests.github.io/demo/docs) for the full endpoint reference (or `/docs` on your own instance).
 
 ## Running in CI
 

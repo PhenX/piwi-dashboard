@@ -38,7 +38,12 @@ test.describe('Test-run-case page', () => {
             startedAt: startTime,
             steps: [
               { title: "page.goto('/checkout')", duration: 800, category: 'navigation' },
-              { title: "getByRole('button', { name: 'Pay' }).click()", duration: 5000, category: 'action', failed: true },
+              {
+                title: "getByRole('button', { name: 'Pay' }).click()",
+                duration: 5000,
+                category: 'action',
+                failed: true,
+              },
             ],
           },
           {

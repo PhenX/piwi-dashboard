@@ -305,11 +305,21 @@ const columns: TableColumn<ProjectWithStats>[] = [
         <p class="text-sm">Try adjusting your search or filters</p>
       </div>
 
-      <div v-else class="text-center py-12 text-gray-500">
-        <p class="text-lg mb-2">No projects yet</p>
-        <p class="text-sm mb-4">Submit test results via the API, or create a project manually</p>
-        <UButton icon="i-lucide-plus" label="New project" @click="isNewProjectModalOpen = true" />
-      </div>
+      <EmptyState v-else icon="i-lucide-rocket" text="No projects yet">
+        <p class="text-xs text-gray-400 max-w-sm">
+          Projects are created automatically once the reporter submits its first run — see the
+          <NuxtLink to="/" class="text-primary hover:underline">home page</NuxtLink> for a copy-paste setup snippet, or
+          the <DocLink to="reporter" no-icon class="text-primary hover:underline">reporter docs</DocLink>.
+        </p>
+        <UButton
+          icon="i-lucide-plus"
+          label="New project"
+          variant="ghost"
+          size="sm"
+          class="mt-2"
+          @click="isNewProjectModalOpen = true"
+        />
+      </EmptyState>
     </template>
   </UDashboardPanel>
 
