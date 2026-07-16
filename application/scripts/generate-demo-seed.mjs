@@ -43,7 +43,11 @@ import {
 import { computeDemoFingerprint } from '../shared/demo/demo-fingerprint.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const OUTPUT = join(__dirname, '../public/demo/seed.sql');
+// Overridable so concurrent callers (e.g. two unit test files regenerating in
+// their own beforeAll) can each write to an isolated directory instead of
+// racing on the single tracked public/demo/seed.sql.
+const OUTPUT_DIR = process.env.PIWI_DEMO_SEED_OUTPUT_DIR || join(__dirname, '../public/demo');
+const OUTPUT = join(OUTPUT_DIR, 'seed.sql');
 
 // Canonical demo identities — shared with the runtime app (app/demo/demo-users.ts).
 const DEMO_USERS = JSON.parse(readFileSync(join(__dirname, '../app/demo/demo-users.json'), 'utf-8'));
@@ -2089,9 +2093,9 @@ const content = hashLines.join('\n');
 const hash = createHash('sha256').update(content, 'utf-8').digest('hex');
 
 const versionInfo = { hash, generatedAt: new Date().toISOString() };
-const VERSION_OUTPUT = join(__dirname, '../public/demo/seed.version.json');
+const VERSION_OUTPUT = join(OUTPUT_DIR, 'seed.version.json');
 
-mkdirSync(join(__dirname, '../public/demo'), { recursive: true });
+mkdirSync(OUTPUT_DIR, { recursive: true });
 writeFileSync(OUTPUT, content, 'utf-8');
 writeFileSync(VERSION_OUTPUT, JSON.stringify(versionInfo, null, 2) + '\n', 'utf-8');
 

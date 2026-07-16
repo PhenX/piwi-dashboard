@@ -1,6 +1,8 @@
-import { describe, test, expect, beforeAll } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeErrorFingerprint } from '#shared/error-fingerprint';
 import { validatePatch } from '#shared/patch';
@@ -24,20 +26,28 @@ function q(sql: string): Row[] {
   return values.map((row) => Object.fromEntries(row.map((v, i) => [columns[i]!, v])));
 }
 
+// Regenerate into a throwaway directory unique to this test file, never the
+// tracked public/demo/seed.sql — another test file's beforeAll regenerates
+// concurrently (vitest runs files in parallel) and would otherwise race on
+// the same path, producing a torn read and a SQL parse error.
+function regenerate(outDir: string): string {
+  execFileSync('node', ['scripts/generate-demo-seed.mjs'], {
+    cwd: rootDir,
+    stdio: 'ignore',
+    env: { ...process.env, PIWI_DEMO_SEED_OUTPUT_DIR: outDir },
+  });
+  return readFileSync(join(outDir, 'seed.sql'), 'utf-8');
+}
+
+const tmpDirs: string[] = [];
+function tempOutDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'piwi-demo-seed-consistency-'));
+  tmpDirs.push(dir);
+  return dir;
+}
+
 beforeAll(async () => {
-  // Regenerate the (gitignored) seed so the test runs against a fresh artifact.
-  // The generator also rewrites the *tracked* seed.version.json (with a
-  // regeneration timestamp), so snapshot and restore it — running tests must
-  // never dirty a tracked file.
-  const versionPath = `${rootDir}/public/demo/seed.version.json`;
-  const savedVersion = existsSync(versionPath) ? readFileSync(versionPath) : null;
-  try {
-    execFileSync('node', ['scripts/generate-demo-seed.mjs'], { cwd: rootDir, stdio: 'ignore' });
-  } finally {
-    if (savedVersion) writeFileSync(versionPath, savedVersion);
-    else rmSync(versionPath, { force: true });
-  }
-  const seedSql = readFileSync(`${rootDir}/public/demo/seed.sql`, 'utf-8');
+  const seedSql = regenerate(tempOutDir());
 
   const initSqlJs = (await import('sql.js')).default;
   const SQL = await initSqlJs();
@@ -45,18 +55,14 @@ beforeAll(async () => {
   db.run(seedSql);
 });
 
+afterAll(() => {
+  for (const dir of tmpDirs) rmSync(dir, { recursive: true, force: true });
+});
+
 describe('demo seed generation is deterministic', () => {
   test('regenerating without source changes produces the same content hash', () => {
-    const versionPath = `${rootDir}/public/demo/seed.version.json`;
-    const savedVersion = existsSync(versionPath) ? readFileSync(versionPath) : null;
-    const before = readFileSync(`${rootDir}/public/demo/seed.sql`, 'utf-8');
-    try {
-      execFileSync('node', ['scripts/generate-demo-seed.mjs'], { cwd: rootDir, stdio: 'ignore' });
-    } finally {
-      if (savedVersion) writeFileSync(versionPath, savedVersion);
-      else rmSync(versionPath, { force: true });
-    }
-    const after = readFileSync(`${rootDir}/public/demo/seed.sql`, 'utf-8');
+    const before = regenerate(tempOutDir());
+    const after = regenerate(tempOutDir());
     // Compare content only, excluding the timestamp comment line (see the
     // generator's own hash-stability comment).
     const strip = (s: string) =>
