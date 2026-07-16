@@ -40,7 +40,7 @@ the server.
 Only the **local server** method can be confirmed from the browser: the dashboard
 sends it a `fetch` and, if the IDE answers, reports success. The `vscode://` and
 `jetbrains://` URL schemes are handed off to the operating system with **no
-success signal** — the browser's own "Open <app>?" prompt is the only real
+success signal** — the browser's own "Open &lt;app&gt;?" prompt is the only real
 confirmation.
 
 So **Auto** probes the JetBrains local server first (the detectable rung) and, if
