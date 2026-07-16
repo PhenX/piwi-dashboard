@@ -545,11 +545,11 @@ const cachedTokens = computed<number>(() => pipeline.value.reduce((acc, s) => ac
       <div v-if="details?.suggestedFix">
         <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Suggested fix</p>
         <p class="text-sm text-gray-600 dark:text-gray-400">{{ details.suggestedFix.description }}</p>
-        <code
+        <OpenInIdeLink
           v-if="details.suggestedFix.file && !details.suggestedFix.patch"
-          class="block text-xs font-mono mt-1 text-primary"
-          >{{ details.suggestedFix.file }}</code
-        >
+          :file-path="details.suggestedFix.file"
+          class="text-xs mt-1"
+        />
 
         <div v-if="details.suggestedFix.patch" class="mt-2">
           <div class="flex items-center justify-between mb-1">

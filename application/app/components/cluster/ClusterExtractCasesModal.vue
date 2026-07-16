@@ -13,6 +13,9 @@ const props = defineProps<{
   open: boolean;
   clusterId: number;
   affectedTestCases: AffectedTestCase[];
+  /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
+  projectKey?: string | number | null;
+  projectName?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -143,8 +146,13 @@ async function extract() {
                     View details
                   </NuxtLink>
                 </td>
-                <td class="px-2 py-2.5 text-gray-500 text-xs truncate max-w-[16rem] hidden sm:table-cell">
-                  {{ tc.filePath }}
+                <td class="px-2 py-2.5 text-gray-500 text-xs max-w-[16rem] hidden sm:table-cell">
+                  <OpenInIdeLink
+                    :file-path="tc.filePath"
+                    :project-key="projectKey"
+                    :project-name="projectName"
+                    class="max-w-full"
+                  />
                 </td>
                 <td class="px-2 py-2.5 text-right text-gray-500 text-xs">
                   {{ tc.runCount }}

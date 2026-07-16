@@ -25,6 +25,9 @@ interface TestCaseDetail {
 
 const props = defineProps<{
   affectedTestCases: AffectedCase[];
+  /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
+  projectKey?: string | number | null;
+  projectName?: string | null;
 }>();
 
 const selectedId = ref(props.affectedTestCases[0]?.recentTestRunsCaseId ?? null);
@@ -155,7 +158,12 @@ const evidenceChips = computed(() => {
     <div v-if="selectedCase" class="flex items-start justify-between gap-2 flex-wrap">
       <div class="min-w-0">
         <p class="text-sm font-medium break-words">{{ selectedCase.title }}</p>
-        <p class="text-xs font-mono text-gray-400 truncate">{{ selectedCase.filePath }}</p>
+        <OpenInIdeLink
+          :file-path="selectedCase.filePath"
+          :project-key="projectKey"
+          :project-name="projectName"
+          class="text-xs text-gray-400"
+        />
       </div>
       <UButton
         :to="`/test-run-cases/${selectedCase.recentTestRunsCaseId}`"
@@ -231,7 +239,12 @@ const evidenceChips = computed(() => {
         v-model:open="showSource"
       >
         <div class="overflow-x-auto max-h-72">
-          <TestSourceStack v-if="caseDetail.testSourceFrames?.length" :frames="caseDetail.testSourceFrames" />
+          <TestSourceStack
+            v-if="caseDetail.testSourceFrames?.length"
+            :frames="caseDetail.testSourceFrames"
+            :project-key="projectKey"
+            :project-name="projectName"
+          />
           <MarkdownPreview
             v-else-if="caseDetail.testSource"
             :text="'```typescript\n' + caseDetail.testSource + '\n```'"

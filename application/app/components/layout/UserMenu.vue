@@ -10,6 +10,7 @@ const appConfig = useAppConfig();
 const config = useRuntimeConfig();
 const { authState, logout } = useAuth();
 const settingsNav = useSettingsNav();
+const { openSettings: openIdeSettings } = useOpenInIde();
 
 const colors = [
   'red',
@@ -138,6 +139,14 @@ const items = computed<DropdownMenuItem[][]>(() => {
             },
           },
         ],
+      },
+      {
+        label: 'Open in IDE…',
+        icon: 'i-lucide-external-link',
+        onSelect: (e: Event) => {
+          e.preventDefault();
+          openIdeSettings();
+        },
       },
     ],
     [

@@ -880,6 +880,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
               v-if="activeTab === 'flaky-tests'"
               :project-id="String(projectId)"
               :environment="flakyEnvironment"
+              :project-name="project?.name"
             />
           </template>
 
@@ -931,9 +932,14 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                 <template #title-cell="{ row }">
                   <div>
                     <div class="font-medium">{{ row.original.title }}</div>
-                    <code class="text-xs bg-gray-100 dark:bg-gray-800 p-1 rounded mt-1 block">{{
-                      row.original.filePath
-                    }}</code>
+                    <div class="mt-1">
+                      <OpenInIdeLink
+                        :file-path="row.original.filePath"
+                        :project-key="projectId"
+                        :project-name="project?.name"
+                        class="text-xs"
+                      />
+                    </div>
                   </div>
                 </template>
                 <template #trend-cell="{ row }">
@@ -1103,7 +1109,12 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                     </a>
                     <div class="flex items-center gap-1 text-xs text-gray-400">
                       <UIcon name="i-lucide-file-code" class="size-3 shrink-0" />
-                      <span class="font-mono truncate">{{ row.original.filePath }}</span>
+                      <OpenInIdeLink
+                        :file-path="row.original.filePath"
+                        :project-key="projectId"
+                        :project-name="project?.name"
+                        class="min-w-0"
+                      />
                     </div>
                   </div>
                 </template>

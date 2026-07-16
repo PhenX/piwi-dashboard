@@ -7,6 +7,9 @@ const props = defineProps<{
   suites: SuiteInfo[];
   hasFilter: boolean;
   highlightedCaseId?: number | null;
+  /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
+  projectKey?: string | number | null;
+  projectName?: string | null;
 }>();
 
 const suiteLookup = computed(() => {
@@ -243,7 +246,15 @@ const flatRows = computed<FlatRow[]>(() => {
             class="size-4 shrink-0"
             :class="row.depth === 0 ? 'text-blue-500' : 'text-amber-500'"
           />
-          <span class="font-medium truncate min-w-0" :class="row.depth === 0 ? 'text-default' : 'text-muted'">
+          <span v-if="row.depth === 0" class="min-w-0" @click.stop>
+            <OpenInIdeLink
+              :file-path="row.label"
+              :project-key="projectKey"
+              :project-name="projectName"
+              class="font-medium text-default"
+            />
+          </span>
+          <span v-else class="font-medium truncate min-w-0 text-muted">
             {{ row.label }}
           </span>
           <div v-if="row.depth > 0" class="flex items-center gap-1 shrink-0">

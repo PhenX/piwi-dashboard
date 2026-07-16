@@ -77,6 +77,7 @@ export default defineConfig({
         items: [
           { text: 'API docs (interactive)', link: 'https://piwitests.github.io/demo/docs' },
           { text: 'MCP server', link: '/mcp' },
+          { text: 'Open in IDE', link: '/ide-integration' },
           { text: 'Backend logs', link: '/backend-logs' },
         ],
       },

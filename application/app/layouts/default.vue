@@ -384,5 +384,8 @@ onMounted(async () => {
     <UDashboardSearch v-model:search-term="searchTerm" :groups="groups" :preserve-group-order="!!searchResults" />
 
     <slot />
+
+    <!-- Global "Open in IDE" settings modal, toggled from file-path choosers and the user menu -->
+    <OpenInIdeSettingsModal />
   </UDashboardGroup>
 </template>

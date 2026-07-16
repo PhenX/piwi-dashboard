@@ -550,6 +550,11 @@ export const HELP_TOPICS = {
     title: 'Entity links',
     text: 'Links to external systems (Jira, GitHub, etc.) attached to this item. The provider is detected automatically from the URL.',
   },
+  'ide.open': {
+    title: 'Open in IDE',
+    text: 'Click a source path to open it in your local editor. Set your local workspace folder (so VS Code gets an absolute path) or a JetBrains project name, then pick a method. Auto probes the JetBrains local server first (the only one it can confirm) before falling back to a vscode:// or jetbrains:// launch. These preferences live in this browser only.',
+    doc: 'ide-integration',
+  },
 
   // ── Locator healing ────────────────────────────────────────────────────
   'locator-healing': {

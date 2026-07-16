@@ -20,7 +20,7 @@ function escapeShellArg(arg: string): string {
 // Playwright's CLI file filter is matched as a regex against forward-slash paths,
 // so a Windows-captured backslash path (e.g. "tests\foo.spec.ts:10") never matches.
 // Normalize to POSIX separators, which Playwright accepts on every platform.
-function toPosixPath(filePath: string): string {
+export function toPosixPath(filePath: string): string {
   return filePath.replace(/\\/g, '/');
 }
 

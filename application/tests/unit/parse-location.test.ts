@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { parseLocation } from '../../server/utils/parse-location';
+import { parseLocation } from '#shared/parse-location';
 
 describe('parseLocation', () => {
   test('parses filePath:line:column', () => {
