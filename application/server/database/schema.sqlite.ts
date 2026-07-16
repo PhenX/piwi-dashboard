@@ -63,6 +63,7 @@ export const testRuns = sqliteTable(
     projectIdIdx: index('idx_test_runs_project_id').on(table.projectId),
     projectStartTimeIdx: index('idx_test_runs_project_start').on(table.projectId, table.startTime),
     startTimeIdx: index('idx_test_runs_start_time').on(table.startTime),
+    statusIdx: index('idx_test_runs_status').on(table.status),
   }),
 );
 
@@ -118,6 +119,7 @@ export const testCases = sqliteTable(
       table.suitePath,
       table.title,
     ),
+    suiteIdIdx: index('idx_test_cases_suite').on(table.suiteId),
   }),
 );
 
@@ -158,6 +160,7 @@ export const failureClusters = sqliteTable(
       table.fingerprint,
     ),
     projectLastSeenIdx: index('idx_failure_clusters_project_last_seen').on(table.projectId, table.lastSeenRunId),
+    projectStatusIdx: index('idx_failure_clusters_project_status').on(table.projectId, table.status),
   }),
 );
 
@@ -221,6 +224,7 @@ export const clusterMergeSuggestions = sqliteTable(
   (table) => ({
     pairIdx: uniqueIndex('idx_cluster_merge_suggestions_pair').on(table.clusterAId, table.clusterBId),
     projectStatusIdx: index('idx_cluster_merge_suggestions_project_status').on(table.projectId, table.status),
+    clusterBIdx: index('idx_cluster_merge_suggestions_cluster_b').on(table.clusterBId),
   }),
 );
 
@@ -295,6 +299,7 @@ export const failureDiagnosisVersions = sqliteTable(
   (table) => ({
     diagnosisIdIdx: index('idx_fdv_diagnosis_id').on(table.diagnosisId),
     clusterIdIdx: index('idx_fdv_cluster_id').on(table.clusterId),
+    testRunsCaseIdx: index('idx_fdv_test_runs_case').on(table.testRunsCaseId),
   }),
 );
 
@@ -350,7 +355,9 @@ export const testRunsCases = sqliteTable(
   },
   (table) => ({
     testRunIdIdx: index('idx_test_runs_cases_test_run_id').on(table.testRunId),
-    testCaseIdIdx: index('idx_test_runs_cases_test_case_id').on(table.testCaseId),
+    // Composite: covers plain test_case_id lookups (prefix) and the
+    // per-case recency sorts used by history/flakiness queries.
+    testCaseCreatedIdx: index('idx_test_runs_cases_case_created').on(table.testCaseId, table.createdAt),
     failureClusterIdIdx: index('idx_test_runs_cases_failure_cluster_id').on(table.failureClusterId),
     runCaseBrowserUnique: uniqueIndex('idx_test_runs_cases_run_browser').on(
       table.testRunId,
@@ -389,6 +396,7 @@ export const locatorSnapshots = sqliteTable(
     fingerprintIdx: index('idx_locator_snapshots_fp').on(table.testCaseId, table.usedMethod, table.usedArgsFp),
     // Cross-test healing looks a signature up across all of a project's cases.
     argsFpIdx: index('idx_locator_snapshots_args_fp').on(table.usedArgsFp),
+    lastSeenRunIdx: index('idx_locator_snapshots_last_seen_run').on(table.lastSeenRunId),
   }),
 );
 
@@ -484,6 +492,8 @@ export const files = sqliteTable(
   (table) => ({
     testRunIdIdx: index('idx_files_test_run_id').on(table.testRunId),
     testRunsCaseIdIdx: index('idx_files_test_runs_case_id').on(table.testRunsCaseId),
+    // Trace deletion refcounts blob references with a COUNT(*) on this column.
+    blobIdIdx: index('idx_files_blob_id').on(table.blobId),
   }),
 );
 
@@ -524,6 +534,7 @@ export const entityLinks = sqliteTable(
     runIdx: index('idx_entity_links_run').on(t.testRunId),
     caseRunIdx: index('idx_entity_links_case_run').on(t.testRunsCaseId),
     caseIdx: index('idx_entity_links_case').on(t.testCaseId),
+    createdByIdx: index('idx_entity_links_created_by').on(t.createdBy),
   }),
 );
 
@@ -607,7 +618,10 @@ export const accountTokens = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
   },
-  (t) => ({ hashIdx: uniqueIndex('idx_account_tokens_hash').on(t.tokenHash) }),
+  (t) => ({
+    hashIdx: uniqueIndex('idx_account_tokens_hash').on(t.tokenHash),
+    userIdx: index('idx_account_tokens_user').on(t.userId),
+  }),
 );
 
 // Notification channels table - a configured delivery destination (email / Slack / webhook)
@@ -686,6 +700,8 @@ export const notificationDeliveries = sqliteTable(
   (t) => ({
     statusScheduledIdx: index('idx_notification_deliveries_status').on(t.status, t.scheduledFor),
     dedupeKeyIdx: uniqueIndex('idx_notification_deliveries_dedupe').on(t.dedupeKey),
+    subscriptionIdx: index('idx_notification_deliveries_subscription').on(t.subscriptionId),
+    channelIdx: index('idx_notification_deliveries_channel').on(t.channelId),
   }),
 );
 
@@ -708,6 +724,7 @@ export const projectAssignments = sqliteTable(
     userIdx: index('idx_project_assignments_user').on(t.userId),
     projectIdx: index('idx_project_assignments_project').on(t.projectId),
     userProjectUnique: uniqueIndex('idx_project_assignments_user_project').on(t.userId, t.projectId),
+    createdByIdx: index('idx_project_assignments_created_by').on(t.createdBy),
   }),
 );
 

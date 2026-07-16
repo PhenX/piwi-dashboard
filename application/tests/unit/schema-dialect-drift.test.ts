@@ -188,18 +188,7 @@ describe('schema dialect drift', () => {
  * scan the child table. Deliberate exceptions live in the allowlist below and
  * should shrink over time, not grow.
  */
-const FK_INDEX_COVERAGE_ALLOWLIST = new Set([
-  'account_tokens.user_id',
-  'cluster_merge_suggestions.cluster_b_id',
-  'entity_links.created_by',
-  'failure_diagnosis_versions.test_runs_case_id',
-  'files.blob_id',
-  'locator_snapshots.last_seen_run_id',
-  'notification_deliveries.channel_id',
-  'notification_deliveries.subscription_id',
-  'project_assignments.created_by',
-  'test_cases.suite_id',
-]);
+const FK_INDEX_COVERAGE_ALLOWLIST = new Set<string>([]);
 
 describe('foreign key index coverage', () => {
   test('every FK child column is covered by an index prefix', () => {

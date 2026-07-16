@@ -232,6 +232,20 @@
       "when": 1784240406280,
       "tag": "0032_failure_diagnoses_cluster_scope_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1784241421372,
+      "tag": "0033_hot_path_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1784241440567,
+      "tag": "0034_backfill_browser_name",
+      "breakpoints": true
     }
   ]
 }
