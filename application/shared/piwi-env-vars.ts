@@ -32,6 +32,7 @@ export type PiwiEnvVarCategory =
   | 'oauth'
   | 'ai'
   | 'ai-limits'
+  | 'ingest'
   | 'clustering'
   | 'smtp'
   | 'testing'
@@ -310,6 +311,48 @@ export const PIWI_ENV_VARS = {
   PIWI_AI_IMAGE_MAX_EDGE: {
     description: 'Screenshots are downscaled to at most this many pixels on the long edge before being sent.',
     category: 'ai-limits',
+  },
+
+  // ── Ingest storage limits ────────────────────────────────────────────────
+  PIWI_INGEST_MAX_CONSOLE_ENTRIES: {
+    description: 'Max console entries stored per test execution.',
+    category: 'ingest',
+  },
+  PIWI_INGEST_MAX_CONSOLE_ENTRY_CHARS: {
+    description: 'Max characters stored per console entry.',
+    category: 'ingest',
+  },
+  PIWI_INGEST_MAX_STEPS: {
+    description: 'Max test steps stored per execution.',
+    category: 'ingest',
+  },
+  PIWI_INGEST_MAX_STEP_EVENTS: {
+    description: 'Max step events stored per execution.',
+    category: 'ingest',
+  },
+  PIWI_INGEST_MAX_ARIA_CHARS: {
+    description: 'Max characters of the ARIA snapshot stored per failing execution.',
+    category: 'ingest',
+  },
+  PIWI_INGEST_MAX_ERROR_CHARS: {
+    description: 'Max characters of error text stored per execution (head and tail are kept).',
+    category: 'ingest',
+  },
+  PIWI_INGEST_MAX_SAMPLE_ERROR_CHARS: {
+    description: 'Max characters of the sample error stored per failure cluster.',
+    category: 'ingest',
+  },
+  PIWI_INGEST_MAX_TEST_SOURCE_CHARS: {
+    description: 'Max characters of the test source snippet stored per failing execution.',
+    category: 'ingest',
+  },
+  PIWI_INGEST_MAX_SOURCE_FRAMES: {
+    description: 'Max source stack frames stored per failing execution.',
+    category: 'ingest',
+  },
+  PIWI_INGEST_MAX_SOURCE_FRAME_CHARS: {
+    description: 'Max characters per stored source frame snippet.',
+    category: 'ingest',
   },
 
   PIWI_TEST_LOGS_DISABLED: {

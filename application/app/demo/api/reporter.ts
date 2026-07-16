@@ -18,7 +18,17 @@ import { mapCompleteEventToRunCase } from '~~/server/utils/map-complete-event';
 import { buildNetworkRequestItems, buildNetworkRequestInsertValues } from '~~/server/utils/network-request-helpers';
 import { upsertLocatorSnapshots } from '~~/server/utils/locator-healing';
 import type { LocatorSnapshot } from '#shared/locator-healing.types';
-import { sanitizeMetadata, sanitizeWebVitals, sanitizeConsoleLogs, sanitizePageState } from '~~/server/utils/sanitize';
+import {
+  capArray,
+  capConsoleLogs,
+  capErrorText,
+  capText,
+  sanitizeMetadata,
+  sanitizeWebVitals,
+  sanitizeConsoleLogs,
+  sanitizePageState,
+} from '~~/server/utils/sanitize';
+import { DEFAULT_INGEST_LIMITS } from '#shared/ingest-limits';
 import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fingerprint';
 import { durationStats } from '#shared/utils/stats';
 import { countFailedFromTally, sumFailedAndTimedOut } from '#shared/utils/test-counts';
@@ -350,7 +360,12 @@ async function persistRunCases(
       if (pending) {
         pending.count++;
       } else {
-        pendingClusters.set(fingerprint.fingerprint, { fp: fingerprint, sampleError: c.error, count: 1 });
+        // The fingerprint is computed from the raw error above; only storage is capped.
+        pendingClusters.set(fingerprint.fingerprint, {
+          fp: fingerprint,
+          sampleError: capText(c.error, DEFAULT_INGEST_LIMITS.sampleErrorChars)!,
+          count: 1,
+        });
       }
     }
     rowFingerprints.push(fingerprint);
@@ -367,18 +382,22 @@ async function persistRunCases(
       testCaseId: shared.id,
       status: c.status,
       duration: c.duration ?? null,
-      error: c.error ?? null,
+      error: capErrorText(c.error, DEFAULT_INGEST_LIMITS.errorChars),
       retries: c.retries ?? 0,
       line: c.line,
       column: c.column,
-      steps: c.steps ?? null,
-      stepEvents: c.stepEvents ?? null,
+      steps: capArray(c.steps, DEFAULT_INGEST_LIMITS.steps),
+      stepEvents: capArray(c.stepEvents, DEFAULT_INGEST_LIMITS.stepEvents),
       slowestStep: c.slowestStep ?? null,
       slowestStepDuration: c.slowestStepDuration ?? null,
       webVitals: sanitizeWebVitals(c.webVitals as Record<string, unknown> | null | undefined) ?? null,
       pageState: sanitizePageState(c.pageState),
-      consoleLogs: sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined) ?? null,
-      ariaSnapshot: c.ariaSnapshot ?? null,
+      consoleLogs:
+        capConsoleLogs(
+          sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined),
+          DEFAULT_INGEST_LIMITS,
+        ) ?? null,
+      ariaSnapshot: capText(c.ariaSnapshot, DEFAULT_INGEST_LIMITS.ariaSnapshotChars),
       browser: c.browser ?? null,
       workerIndex: c.workerIndex ?? null,
       shardIndex: c.shardIndex ?? null,

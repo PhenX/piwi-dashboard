@@ -98,6 +98,23 @@ When unset, configure the patterns from **Settings → Wasted time** (administra
 
 The `PIWI_AI_MAX_*` and `PIWI_AI_SLOW_REQUEST_MS` context-limit variables are documented in [AI diagnosis → Context limits](./ai-diagnosis#context-limits-and-token-cost).
 
+## Ingest limits
+
+Caps applied to per-execution payloads (console output, steps, ARIA snapshots, error text, source snippets) before they are stored. They bound database growth against verbose or hostile submitters; values above each limit are truncated with a visible marker. Distinct from the `PIWI_AI_MAX_*` limits, which bound what enters an AI diagnosis prompt — the storage defaults sit at or above the AI maxima so the AI limits stay the binding constraint for prompts. Environment-only (no settings UI).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PIWI_INGEST_MAX_CONSOLE_ENTRIES` | `200` | Max console entries stored per execution (first 20 + newest kept, with a drop marker). |
+| `PIWI_INGEST_MAX_CONSOLE_ENTRY_CHARS` | `2000` | Max characters stored per console entry. |
+| `PIWI_INGEST_MAX_STEPS` | `500` | Max test steps stored per execution. |
+| `PIWI_INGEST_MAX_STEP_EVENTS` | `1000` | Max step events stored per execution. |
+| `PIWI_INGEST_MAX_ARIA_CHARS` | `100000` | Max characters of the ARIA snapshot stored per failing execution. |
+| `PIWI_INGEST_MAX_ERROR_CHARS` | `20000` | Max characters of error text stored per execution (head and tail are kept). |
+| `PIWI_INGEST_MAX_SAMPLE_ERROR_CHARS` | `50000` | Max characters of the sample error stored per failure cluster. |
+| `PIWI_INGEST_MAX_TEST_SOURCE_CHARS` | `50000` | Max characters of the test source snippet stored per failing execution. |
+| `PIWI_INGEST_MAX_SOURCE_FRAMES` | `8` | Max source stack frames stored per failing execution. |
+| `PIWI_INGEST_MAX_SOURCE_FRAME_CHARS` | `4000` | Max characters per stored source frame snippet. |
+
 ## Email (SMTP)
 
 Required for email notifications and account flows (verification, password reset, invites). Set via environment only.

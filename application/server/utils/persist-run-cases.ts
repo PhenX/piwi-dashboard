@@ -1,7 +1,17 @@
 import { testCases, testRunsCases, testSuites, networkRequests } from '../database/schema';
 import { eq } from 'drizzle-orm';
 import { buildNetworkRequestItems, buildNetworkRequestInsertValues } from './network-request-helpers';
-import { sanitizeWebVitals, sanitizeConsoleLogs, sanitizePageState } from './sanitize';
+import {
+  capArray,
+  capConsoleLogs,
+  capErrorText,
+  capSourceFrames,
+  capText,
+  sanitizeWebVitals,
+  sanitizeConsoleLogs,
+  sanitizePageState,
+} from './sanitize';
+import { resolveIngestLimits } from './ingest-limits';
 import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fingerprint';
 import { testCaseCache } from './test-case-cache';
 import { testSuiteCache } from './test-suite-cache';
@@ -167,6 +177,8 @@ export async function persistRunCases(
 ): Promise<Array<{ id: number; status: string }>> {
   if (cases.length === 0) return [];
 
+  const limits = resolveIngestLimits();
+
   // --- Step 1: Resolve all suites referenced in this batch ---
   const suiteIdMap = await resolveSuites(db, projectId, cases);
 
@@ -245,7 +257,12 @@ export async function persistRunCases(
       if (pending) {
         pending.count++;
       } else {
-        pendingClusters.set(fingerprint.fingerprint, { fp: fingerprint, sampleError: c.error!, count: 1 });
+        // The fingerprint is computed from the raw error above; only storage is capped.
+        pendingClusters.set(fingerprint.fingerprint, {
+          fp: fingerprint,
+          sampleError: capText(c.error, limits.sampleErrorChars)!,
+          count: 1,
+        });
       }
     }
     rowFingerprints.push(fingerprint);
@@ -255,21 +272,25 @@ export async function persistRunCases(
       testCaseId: caseId,
       status: c.status,
       duration: c.duration ?? null,
-      error: c.error ?? null,
+      error: capErrorText(c.error, limits.errorChars),
       retries: c.retries ?? 0,
       line: c.line,
       column: c.column,
-      steps: c.steps ?? null,
-      stepEvents: c.stepEvents ?? null,
+      steps: capArray(c.steps, limits.steps),
+      stepEvents: capArray(c.stepEvents, limits.stepEvents),
       slowestStep: c.slowestStep ?? null,
       slowestStepDuration: c.slowestStepDuration ?? null,
       wastedTimeMs: c.wastedTimeMs ?? null,
       webVitals: sanitizeWebVitals(c.webVitals as Record<string, unknown> | null | undefined) ?? null,
       pageState: sanitizePageState(c.pageState),
-      consoleLogs: sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined) ?? null,
-      ariaSnapshot: c.ariaSnapshot ?? null,
-      testSource: c.testSource ?? null,
-      testSourceFrames: (c.testSourceFrames as any) ?? null,
+      consoleLogs:
+        capConsoleLogs(
+          sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined),
+          limits,
+        ) ?? null,
+      ariaSnapshot: capText(c.ariaSnapshot, limits.ariaSnapshotChars),
+      testSource: capText(c.testSource, limits.testSourceChars),
+      testSourceFrames: capSourceFrames(c.testSourceFrames, limits) as any,
       testAnnotations: (c.testAnnotations as any) ?? null,
       browser: c.browser ?? null,
       browserName: resolveBrowserName(c.browser),
