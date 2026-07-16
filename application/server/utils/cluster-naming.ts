@@ -8,8 +8,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { failureClusters } from '../database/schema';
 import { callAiProvider } from './ai-provider';
 import type { ResolvedAiRole } from '~~/types/api';
-
-type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
+import type { DbClient } from '../database';
 
 const MAX_NAME_PER_RUN = 20; // cost guard
 

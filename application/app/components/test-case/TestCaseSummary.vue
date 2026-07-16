@@ -1,20 +1,6 @@
 <script setup lang="ts">
-import type { TestCaseResult, EntityLinkInfo } from '~~/types/api';
+import type { TestCaseResult, EntityLinkInfo, TestRunScmMetadata, TestRunCiMetadata } from '~~/types/api';
 import type { BrowserConfig } from '#shared/types';
-
-interface ScmInfo {
-  commit?: string;
-  branch?: string;
-  author?: string;
-  commitMessage?: string;
-}
-
-interface CiInfo {
-  provider?: string;
-  buildNumber?: string;
-  buildUrl?: string;
-  workflow?: string;
-}
 
 interface HistoricalTiming {
   avg: number;
@@ -25,8 +11,8 @@ interface HistoricalTiming {
 
 const props = defineProps<{
   testCase: TestCaseResult | null;
-  scmInfo: ScmInfo | null;
-  ciInfo: CiInfo | null;
+  scmInfo: TestRunScmMetadata | null;
+  ciInfo: TestRunCiMetadata | null;
   browser: BrowserConfig | null;
   environment: string | null | undefined;
   stepsCount: number;

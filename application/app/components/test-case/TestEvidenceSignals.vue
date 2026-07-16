@@ -1,19 +1,10 @@
 <script setup lang="ts">
+import type { ConsoleEntry, NetworkRequest } from '~~/types/api';
+
 const props = defineProps<{
   consoleLogs: unknown;
   networkRequests: unknown;
 }>();
-
-interface ConsoleEntry {
-  type: string;
-  text: string;
-}
-
-interface NetworkRequest {
-  status: number;
-  url: string;
-  method?: string;
-}
 
 const consoleErrors = computed((): ConsoleEntry[] => {
   if (!Array.isArray(props.consoleLogs)) return [];

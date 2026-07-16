@@ -11,6 +11,9 @@ import { fileURLToPath } from 'url';
 
 type DB = ReturnType<typeof sqliteDrizzle<typeof sqliteSchema>>;
 
+/** The resolved database client returned by getDatabase(). Import this instead of re-deriving it locally. */
+export type DbClient = Awaited<ReturnType<typeof getDatabase>>;
+
 let db: DB;
 let migrationPromise: Promise<void> | null = null;
 

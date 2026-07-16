@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3';
 import { getDatabase } from '../database';
+import type { DbClient } from '../database';
 import {
   projectAssignments,
   testRuns,
@@ -13,7 +14,7 @@ import { requireAuth, isAuthEnabled } from './auth';
 import { Role } from '#shared/types';
 import type { User } from '../database/schema';
 
-export type DrizzleDB = Awaited<ReturnType<typeof getDatabase>>;
+export type DrizzleDB = DbClient;
 
 export type ProjectScope = 'all' | Set<number>;
 

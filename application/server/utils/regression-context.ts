@@ -1,10 +1,8 @@
 import { eq, and, lt, desc } from 'drizzle-orm';
 import { testRuns, testRunsCases } from '../database/schema';
 import type { RunMetadata } from './run-json-types';
-
-type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
-
-type MetaDiffEntry = { key: string; label: string; before: string | null; after: string | null };
+import type { DbClient } from '../database';
+import { buildCompareUrl, computeMetadataDiff, type MetaDiffEntry } from '#shared/utils/run-metadata';
 
 export interface RunForRegression {
   id: number;
@@ -53,61 +51,6 @@ export function normalizeGitUrl(remoteUrl: string | null | undefined): string | 
   } catch {
     return url;
   }
-}
-
-export function buildCompareUrl(repositoryUrl: string, fromSha: string, toSha: string): string | null {
-  try {
-    const { hostname } = new URL(repositoryUrl);
-    if (hostname === 'github.com' || hostname.endsWith('.github.com')) {
-      return `${repositoryUrl}/compare/${fromSha}...${toSha}`;
-    }
-    if (hostname === 'gitlab.com' || hostname.includes('gitlab')) {
-      return `${repositoryUrl}/-/compare/${fromSha}...${toSha}`;
-    }
-    if (hostname === 'bitbucket.org') {
-      return `${repositoryUrl}/branches/compare/${toSha}..${fromSha}#diff`;
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-export function getBrowserList(meta: RunMetadata | null | undefined): string {
-  const projects = meta?.htmlReport?.projects;
-  if (!projects?.length) return '';
-  const names = [...new Set(projects.map((p) => p.use?.browserName).filter(Boolean))] as string[];
-  return names.join(', ');
-}
-
-export function computeMetadataDiff(
-  prevMeta: RunMetadata | null,
-  currMeta: RunMetadata | null,
-  prevEnv: string | null,
-  currEnv: string | null,
-): MetaDiffEntry[] {
-  const diff: MetaDiffEntry[] = [];
-
-  if (prevEnv !== currEnv) {
-    diff.push({ key: 'environment', label: 'Environment', before: prevEnv, after: currEnv });
-  }
-  const prevBranch: string | null = prevMeta?.scm?.branch ?? null;
-  const currBranch: string | null = currMeta?.scm?.branch ?? null;
-  if (prevBranch !== currBranch) {
-    diff.push({ key: 'branch', label: 'Branch', before: prevBranch, after: currBranch });
-  }
-  const prevCi: string | null = prevMeta?.ci?.provider ?? null;
-  const currCi: string | null = currMeta?.ci?.provider ?? null;
-  if (prevCi !== currCi) {
-    diff.push({ key: 'ci_provider', label: 'CI provider', before: prevCi, after: currCi });
-  }
-  const prevBrowsers = getBrowserList(prevMeta);
-  const currBrowsers = getBrowserList(currMeta);
-  if (prevBrowsers !== currBrowsers) {
-    diff.push({ key: 'browsers', label: 'Browsers', before: prevBrowsers || null, after: currBrowsers || null });
-  }
-
-  return diff;
 }
 
 const FAIL_STATUSES = new Set(['failed', 'timedOut']);

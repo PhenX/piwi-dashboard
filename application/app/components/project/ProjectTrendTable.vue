@@ -28,10 +28,6 @@ const sortedProjects = computed(() => {
   return tableExpanded.value ? sorted : sorted.slice(0, props.limit);
 });
 
-function passRate(run: { passedTests: number; totalTests: number }): number {
-  return run.totalTests > 0 ? Math.round((run.passedTests / run.totalTests) * 100) : 0;
-}
-
 function passRateColorClass(rate: number): string {
   if (rate >= 90) return 'text-green-600 dark:text-green-400';
   if (rate >= 50) return 'text-yellow-600 dark:text-yellow-400';

@@ -7,7 +7,7 @@
  * It deliberately produces NO final verdict or fix.
  */
 
-import { DIAGNOSIS_CATEGORIES, type DiagnosisCategory } from '#shared/ai-diagnosis';
+import { DIAGNOSIS_CATEGORIES, asCategory, type DiagnosisCategory } from '#shared/ai-diagnosis';
 
 export const RESEARCH_SYSTEM_PROMPT = `You are a triage assistant doing a FAST first pass on a Playwright test failure, before a senior engineer writes the final diagnosis.
 From the failure context (note the "## Data Coverage" map of what evidence is present/absent), output a brief, structured pre-analysis:
@@ -51,10 +51,6 @@ export const RESEARCH_JSON_SCHEMA = {
     notes: { type: 'string' },
   },
 };
-
-function asCategory(v: unknown): DiagnosisCategory {
-  return DIAGNOSIS_CATEGORIES.includes(v as DiagnosisCategory) ? (v as DiagnosisCategory) : 'unknown';
-}
 
 export function parseResearchJson(text: string): ResearchResult {
   let parsed: unknown;

@@ -38,19 +38,12 @@ import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
 import { renderAppStateMarkdown, type PageStateLike } from '#shared/page-state';
 import { getLastPassPageState } from '#shared/handlers/test-cases';
-import type { DiagnosisContextCoverage, ScmChanges } from '~~/types/api';
+import type { ContextSection, DiagnosisContextCoverage, ScmChanges } from '~~/types/api';
 import { getDemoScmProject, getDemoChangesSince, getDemoChangesForShas } from '../demo-scm';
 
 // ── Section plumbing ────────────────────────────────────────────────────────
 
-export interface ContextSection {
-  id: string;
-  title: string;
-  chars: number;
-  truncated: boolean;
-  markdown: string;
-  items?: number;
-}
+export type { ContextSection };
 
 function section(id: string, title: string, markdown: string | null, items?: number): ContextSection | null {
   if (!markdown) return null;

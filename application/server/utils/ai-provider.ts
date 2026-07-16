@@ -2,13 +2,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { getAppSetting } from './app-settings';
 import { decryptSecret, getEncryptionKey } from './crypto';
 import type { AiProvider, AiConfig, AiModelRole, ResolvedAiRole } from '~~/types/api';
+import type { DbClient } from '../database';
 
 export type { AiConfig };
 
 /** Default Anthropic model when none is configured. */
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-opus-4-8';
-
-type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
 
 /** Stored shape of a single role in the `ai` app-setting (apiKey is encrypted). */
 interface StoredRole {

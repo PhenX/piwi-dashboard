@@ -150,10 +150,6 @@ function showPartialRuns(): void {
 
 // ── Pass rate helper (for activity list) ─────────────────────────────────────
 
-function passRate(run: { passedTests: number; totalTests: number }): number {
-  return run.totalTests > 0 ? Math.round((run.passedTests / run.totalTests) * 100) : 0;
-}
-
 function passRateClass(run: { passedTests: number; totalTests: number }): string {
   const rate = passRate(run);
   if (rate >= 90) return 'text-green-600 dark:text-green-400';

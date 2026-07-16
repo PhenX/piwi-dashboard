@@ -1,13 +1,8 @@
 <script setup lang="ts">
-interface ScmInfo {
-  branch?: string;
-  commit?: string;
-  author?: string;
-  commitMessage?: string;
-}
+import type { TestRunScmMetadata } from '~~/types/api';
 
 defineProps<{
-  scm: ScmInfo;
+  scm: TestRunScmMetadata;
   class?: string;
 }>();
 </script>

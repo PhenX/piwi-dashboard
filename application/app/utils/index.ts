@@ -1,7 +1,7 @@
 import { h } from 'vue';
 import { UIcon } from '#components';
 import type { Column } from '@tanstack/vue-table';
-import type { CommitListItem } from '~~/types/api';
+import type { CommitListItem, TestCaseWithStats } from '~~/types/api';
 import { formatDuration as formatDurationLib, formatDistanceToNow } from 'date-fns';
 
 /**
@@ -467,4 +467,30 @@ export function copyPreview(text: string | null | undefined, max = 120): string 
   if (!text) return '';
   const singleLine = text.replace(/\n/g, ' · ');
   return singleLine.length <= max ? singleLine : singleLine.slice(0, max) + '…';
+}
+
+/** Nuxt UI `color` union shared by `UBadge` / `UButton` call sites. */
+export type BadgeColor = 'error' | 'neutral' | 'primary' | 'success' | 'warning' | 'secondary' | 'info';
+
+/** Pass rate (0–100) for a single run, guarding against divide-by-zero. */
+export function passRate(run: { passedTests: number; totalTests: number }): number {
+  return run.totalTests > 0 ? Math.round((run.passedTests / run.totalTests) * 100) : 0;
+}
+
+/** Pass rate (0–100) across all of a test case's runs. */
+export function getPassRate(testCase: TestCaseWithStats): number {
+  if (testCase.totalRuns === 0) return 0;
+  return Math.round((testCase.passedRuns / testCase.totalRuns) * 100);
+}
+
+/** Display status + badge color for a test case, treating recent flakiness as its own state. */
+export function getTestCaseStatus(testCase: TestCaseWithStats): { status: string; color: BadgeColor } {
+  const recentFlaky = testCase.recentFlakyRuns ?? testCase.flakyRuns;
+  if (recentFlaky > 0) {
+    return { status: 'flaky', color: 'warning' };
+  }
+  return {
+    status: testCase.lastStatus || 'unknown',
+    color: getStatusColor(testCase.lastStatus || 'unknown') as BadgeColor,
+  };
 }

@@ -1,6 +1,6 @@
 import type { InjectionKey, Ref, ComputedRef } from 'vue';
 import type { FailureDiagnosis } from '~~/server/database/schema';
-import type { DiagnosisContextCoverage, ScmChanges } from '~~/types/api';
+import type { ContextSection, DiagnosisContextCoverage, ScmChanges } from '~~/types/api';
 
 /**
  * Shared state + actions for the failure-cluster diagnosis page, owned by the
@@ -17,14 +17,7 @@ export interface DiagnoseImage {
   data: string;
 }
 
-export interface ContextSection {
-  id: string;
-  title: string;
-  chars: number;
-  truncated: boolean;
-  markdown: string;
-  items?: number;
-}
+export type { ContextSection };
 
 export interface ClusterDiagnosisStore {
   clusterId: number;

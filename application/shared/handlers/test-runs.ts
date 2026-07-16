@@ -15,7 +15,9 @@ import { fetchAndFormatSuites, splitSuitePath } from '../utils/suites';
 import { normalizeRoute } from '../utils/route';
 import { percentile } from '../utils/stats';
 import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-waits';
+import { buildCompareUrl, computeMetadataDiff } from '../utils/run-metadata';
 import type { TestStepEvent } from '../types';
+import type { EndpointSummary, DiagnosisCompact } from '../../types/api';
 
 import type { DrizzleDB } from './db';
 import { normalizeGitUrl } from '../../server/utils/regression-context';
@@ -297,18 +299,6 @@ export async function patchTestRun(db: DrizzleDB, id: number, label: string | nu
 
 // ─── getNetworkRequests — aggregated network endpoint stats ──────────────────
 
-interface EndpointSummary {
-  method: string;
-  route: string;
-  count: number;
-  avgDuration: number;
-  maxDuration: number;
-  minDuration: number;
-  p90Duration: number;
-  errorRate: number;
-  testCases: string[];
-}
-
 export async function getNetworkRequests(db: DrizzleDB, runId: number) {
   const runResults = await db.select({ id: testRuns.id }).from(testRuns).where(eq(testRuns.id, runId));
   if (!runResults[0]) return null;
@@ -402,13 +392,6 @@ interface GroupCase {
   retries: number;
   workerIndex: number | null;
   passedOnRetry: boolean;
-}
-
-interface DiagnosisCompact {
-  status: string;
-  category: string | null;
-  confidence: string | null;
-  summary: string | null;
 }
 
 interface FailureGroup {
@@ -595,68 +578,6 @@ export async function getFailureGroups(db: DrizzleDB, runId: number) {
 }
 
 // ─── computeRegressionContextForRun — regression vs last green run ────────────
-
-interface MetaDiffEntry {
-  key: string;
-  label: string;
-  before: string | null;
-  after: string | null;
-}
-
-function buildCompareUrl(repositoryUrl: string, fromSha: string, toSha: string): string | null {
-  try {
-    const { hostname } = new URL(repositoryUrl);
-    if (hostname === 'github.com' || hostname.endsWith('.github.com')) {
-      return `${repositoryUrl}/compare/${fromSha}...${toSha}`;
-    }
-    if (hostname === 'gitlab.com' || hostname.includes('gitlab')) {
-      return `${repositoryUrl}/-/compare/${fromSha}...${toSha}`;
-    }
-    if (hostname === 'bitbucket.org') {
-      return `${repositoryUrl}/branches/compare/${toSha}..${fromSha}#diff`;
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-function getBrowserList(meta: any): string {
-  const projectsList = meta?.htmlReport?.projects as Array<{ use?: { browserName?: string } }> | undefined;
-  if (!projectsList?.length) return '';
-  const names = [...new Set(projectsList.map((p) => p.use?.browserName).filter(Boolean))] as string[];
-  return names.join(', ');
-}
-
-function computeMetadataDiff(
-  prevMeta: any,
-  currMeta: any,
-  prevEnv: string | null,
-  currEnv: string | null,
-): MetaDiffEntry[] {
-  const diff: MetaDiffEntry[] = [];
-
-  if (prevEnv !== currEnv) {
-    diff.push({ key: 'environment', label: 'Environment', before: prevEnv, after: currEnv });
-  }
-  const prevBranch: string | null = prevMeta?.scm?.branch ?? null;
-  const currBranch: string | null = currMeta?.scm?.branch ?? null;
-  if (prevBranch !== currBranch) {
-    diff.push({ key: 'branch', label: 'Branch', before: prevBranch, after: currBranch });
-  }
-  const prevCi: string | null = prevMeta?.ci?.provider ?? null;
-  const currCi: string | null = currMeta?.ci?.provider ?? null;
-  if (prevCi !== currCi) {
-    diff.push({ key: 'ci_provider', label: 'CI provider', before: prevCi, after: currCi });
-  }
-  const prevBrowsers = getBrowserList(prevMeta);
-  const currBrowsers = getBrowserList(currMeta);
-  if (prevBrowsers !== currBrowsers) {
-    diff.push({ key: 'browsers', label: 'Browsers', before: prevBrowsers || null, after: currBrowsers || null });
-  }
-
-  return diff;
-}
 
 const FAIL_STATUSES = new Set(['failed', 'timedOut']);
 

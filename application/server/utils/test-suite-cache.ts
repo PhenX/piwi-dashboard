@@ -1,8 +1,6 @@
 import { testSuites } from '../database/schema';
 import { eq } from 'drizzle-orm';
-import type { getDatabase } from '../database';
-
-type DB = Awaited<ReturnType<typeof getDatabase>>;
+import type { DbClient as DB } from '../database';
 
 function makeCacheKey(filePath: string, suitePath: string): string {
   return `${filePath}\x00${suitePath}`;

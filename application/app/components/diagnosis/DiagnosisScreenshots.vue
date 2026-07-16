@@ -28,14 +28,7 @@ const emit = defineEmits<{
   (e: 'update:images', images: DiagnoseImage[]): void;
 }>();
 
-const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
-const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const MAX_SCREENSHOTS = 8;
-
-function isImage(path: string, contentType?: string | null): boolean {
-  const ext = '.' + (path.toLowerCase().split('.').pop() || '');
-  return IMAGE_EXTS.has(ext) || (!!contentType && IMAGE_TYPES.has(contentType.toLowerCase()));
-}
 
 async function blobToBase64(blob: Blob): Promise<{ data: string; mediaType: string }> {
   const mediaType = (blob.type || 'image/webp').split(';')[0]!.trim();
@@ -71,7 +64,7 @@ async function loadScreenshots() {
         testRun: { startTime: string | null } | null;
       }>(`/api/test-run-cases/${tc.recentTestRunsCaseId}`);
       for (const att of detail.attachments ?? []) {
-        if (!isImage(att.path, att.contentType)) continue;
+        if (!isImageFile(att.path, att.contentType)) continue;
         if (results.length >= MAX_SCREENSHOTS) break;
         const imgName = att.name || att.path.split('/').pop() || 'screenshot';
         const url = `/api/files/${getFileApiPath(att.path)}?compress=1`;

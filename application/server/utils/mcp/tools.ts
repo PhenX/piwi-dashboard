@@ -49,8 +49,7 @@ import {
 import type { ProjectScope } from '../project-access';
 import type { User } from '../../database/schema';
 import { Role } from '#shared/types';
-
-type DbClient = Awaited<ReturnType<typeof import('../../database').getDatabase>>;
+import type { DbClient } from '../../database';
 
 // ── Token-optimization helpers ───────────────────────────────────────────────
 

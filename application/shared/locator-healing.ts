@@ -3,6 +3,7 @@
  * Node.js and browser (Web Crypto) environments.
  */
 import type { RankedLocator, LocatorFixRecommendation } from './locator-healing.types';
+import { sha256Hex } from './utils/hash';
 
 /**
  * Method family for each locator method. The single recommended fix prefers an
@@ -88,12 +89,6 @@ export function recommendLocatorFix(
     // Even the most stable alternative is fragile — recommend adding a test id.
     suggestAddTestId: durable.score < floor,
   };
-}
-
-async function sha256Hex(input: string): Promise<string> {
-  // Use Web Crypto API — same API surface in Node 19+ and browsers.
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**

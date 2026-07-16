@@ -1,7 +1,6 @@
 import { getAppSetting } from './app-settings';
 import { DEFAULT_WASTED_WAIT_PATTERNS, parseWastedWaitPatterns } from '#shared/utils/wasted-waits';
-
-type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
+import type { DbClient } from '../database';
 
 /** App-settings key under which the wasted-wait patterns are stored. */
 export const WASTED_WAIT_PATTERNS_KEY = 'wasted_wait_patterns';

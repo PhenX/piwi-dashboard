@@ -1,8 +1,6 @@
 import { testRuns } from '../database/schema';
 import { eq } from 'drizzle-orm';
-import type { getDatabase } from '../database';
-
-type DB = Awaited<ReturnType<typeof getDatabase>>;
+import type { DbClient as DB } from '../database';
 
 /**
  * Validates the stream token for a test run. If the run was interrupted by the

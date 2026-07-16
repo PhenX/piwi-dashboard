@@ -3,6 +3,7 @@ import { parseTraceTexts, traceFileRank, type ParsedTraceData } from './trace-ev
 import { getStorage } from '../storage';
 import { getAppSetting, setAppSetting } from './app-settings';
 import type { ContextLimits } from '#shared/ai-context-limits';
+import type { DbClient } from '../database';
 
 // The event model and JSONL parsing live in the node-free `trace-events.ts`
 // (shared with the browser demo, which inflates the ZIP with
@@ -10,8 +11,6 @@ import type { ContextLimits } from '#shared/ai-context-limits';
 // inflation, storage access and the DB-backed parse cache. No re-exports:
 // Nitro auto-imports every server/utils export, and duplicates would shadow
 // each other — import the shared types from `trace-events.ts` directly.
-
-type DbClient = Awaited<ReturnType<typeof import('../database').getDatabase>>;
 
 const TRACE_CACHE_SETTING_KEY = 'trace_parse_cache';
 

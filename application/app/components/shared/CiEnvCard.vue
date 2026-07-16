@@ -1,14 +1,8 @@
 <script setup lang="ts">
-interface CiInfo {
-  provider?: string;
-  buildNumber?: string;
-  buildUrl?: string;
-  workflow?: string;
-  jobName?: string;
-}
+import type { TestRunCiMetadata } from '~~/types/api';
 
 defineProps<{
-  ci?: CiInfo | null;
+  ci?: TestRunCiMetadata | null;
   environment?: string | null;
   playwrightVersion?: string | null;
   reporterVersion?: string | null;

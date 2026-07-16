@@ -8,8 +8,7 @@ import { JiraUnfurlProvider } from './JiraUnfurlProvider';
 import type { AtlassianConfig } from './JiraUnfurlProvider';
 import { ConfluenceUnfurlProvider } from './ConfluenceUnfurlProvider';
 import { GitHubUnfurlProvider } from './GitHubUnfurlProvider';
-
-type DbClient = Awaited<ReturnType<typeof import('../../database').getDatabase>>;
+import type { DbClient } from '../../database';
 
 const RICH_PROVIDERS: ReadonlySet<LinkProvider> = new Set([
   'jira',
