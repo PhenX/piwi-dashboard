@@ -6,6 +6,7 @@ import { HttpError } from '../transport/http-client.js';
 import type { FileHandler } from '../files/file-handler.js';
 import { Logger } from '../support/logger.js';
 import { serializeRun, toWireTestCase } from './serializer.js';
+import { runUrl } from '../support/run-url.js';
 import type { CollectedTestCase, TraceHashInfo, FilterDetails } from '../../types.js';
 
 /** Payload for a batch test-run submission */
@@ -87,7 +88,10 @@ export class Uploader {
     );
 
     this.logger.info(`Successfully uploaded test results`);
-    if (response.testRunId) this.logger.info(`Test Run ID: ${response.testRunId}, Project ID: ${response.projectId}`);
+    if (response.testRunId) {
+      this.logger.info(`Test Run ID: ${response.testRunId}, Project ID: ${response.projectId}`);
+      this.logger.info(`View run: ${runUrl(this.httpClient.baseUrl, response.testRunId)}`);
+    }
     return response;
   }
 
@@ -103,7 +107,10 @@ export class Uploader {
 
     const response = await this.httpClient.postFormData('/api/test-runs/upload', form, auth);
     this.logger.info(`Successfully uploaded test results with files`);
-    if (response.testRunId) this.logger.info(`Test Run ID: ${response.testRunId}, Project ID: ${response.projectId}`);
+    if (response.testRunId) {
+      this.logger.info(`Test Run ID: ${response.testRunId}, Project ID: ${response.projectId}`);
+      this.logger.info(`View run: ${runUrl(this.httpClient.baseUrl, response.testRunId)}`);
+    }
     if (response.reports) {
       for (const r of response.reports) this.logger.info(`${r.label}: ${r.path}`);
     }

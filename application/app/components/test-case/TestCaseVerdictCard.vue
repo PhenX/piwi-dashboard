@@ -141,7 +141,9 @@ const squareClass = (status: string) => ({
               </NuxtLink>
               ({{ formatRelativeTime(verdict.lastPass.startTime) }}).
             </template>
-            <template v-else-if="verdict.total > 1"> No passing run in the last {{ verdict.total }} recorded. </template>
+            <template v-else-if="verdict.total > 1">
+              No passing run in the last {{ verdict.total }} recorded.
+            </template>
             <template v-else> First recorded run of this test. </template>
           </template>
           <template v-else-if="testCase?.status === 'passed'"> This execution passed. </template>
@@ -151,11 +153,7 @@ const squareClass = (status: string) => ({
         <div v-if="strip.length > 1">
           <p class="text-xs text-gray-400 mb-1">Recent runs (oldest → newest)</p>
           <div class="flex items-center gap-1 flex-wrap">
-            <UTooltip
-              v-for="point in strip"
-              :key="point.id"
-              :text="`Run #${point.runId}: ${point.status}`"
-            >
+            <UTooltip v-for="point in strip" :key="point.id" :text="`Run #${point.runId}: ${point.status}`">
               <NuxtLink
                 :to="`/test-run-cases/${point.id}`"
                 class="size-3.5 rounded-sm inline-block transition-colors"

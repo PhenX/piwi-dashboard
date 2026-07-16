@@ -232,7 +232,10 @@ const evidenceChips = computed(() => {
       >
         <div class="overflow-x-auto max-h-72">
           <TestSourceStack v-if="caseDetail.testSourceFrames?.length" :frames="caseDetail.testSourceFrames" />
-          <MarkdownPreview v-else-if="caseDetail.testSource" :text="'```typescript\n' + caseDetail.testSource + '\n```'" />
+          <MarkdownPreview
+            v-else-if="caseDetail.testSource"
+            :text="'```typescript\n' + caseDetail.testSource + '\n```'"
+          />
         </div>
       </TestEvidenceSection>
 

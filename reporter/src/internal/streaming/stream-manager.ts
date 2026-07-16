@@ -10,6 +10,7 @@ import type { FileHandler } from '../files/file-handler.js';
 import { Logger } from '../support/logger.js';
 import { createLimiter } from '../support/limiter.js';
 import { readSetupInfo } from '../support/setup-file.js';
+import { runUrl } from '../support/run-url.js';
 import type { CollectedTestCase, StreamEvent, FilterDetails } from '../../types.js';
 
 /**
@@ -198,6 +199,9 @@ export class StreamManager {
         this._token = response.streamToken;
         this._enabled = true;
         this.logger.info(`Streaming enabled. Run ID: ${response.runId}`);
+        if (this.options.serverUrl) {
+          this.logger.info(`Watch live: ${runUrl(this.options.serverUrl, response.runId)}`);
+        }
         this.lastActivityAt = Date.now();
         this.scheduleHeartbeat();
 
@@ -208,7 +212,15 @@ export class StreamManager {
         }
       }
     } catch (error) {
-      this.logger.debug(`Streaming not available: ${errorMessage(error)}. Will use batch mode.`);
+      if (error instanceof HttpError && (error.status === 401 || error.status === 403)) {
+        this.logger.warn(
+          `Live streaming could not start: the dashboard at ${this.options.serverUrl} requires authentication. ` +
+            `Set the reporter's \`apiKey\` option (or PIWI_API_KEY) — create a key under Settings → Users on the dashboard. ` +
+            `Falling back to batch upload at the end of the run.`,
+        );
+      } else {
+        this.logger.debug(`Streaming not available: ${errorMessage(error)}. Will use batch mode.`);
+      }
       this._enabled = false;
     }
   }

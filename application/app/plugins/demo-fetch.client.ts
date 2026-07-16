@@ -33,7 +33,7 @@ export default defineNuxtPlugin(() => {
     return;
   }
 
-  // Track whether the demo DB has finished initialising.
+  // Track whether the demo DB has finished initializing.
   // The first intercepted API call will be slow (WASM download + seed SQL).
   // Components can check this ref to show/hide a loading overlay.
   const demoReady = useState('demoReady', () => false);

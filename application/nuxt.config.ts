@@ -94,7 +94,7 @@ export default defineNuxtConfig({
       if (process.env.PIWI_AUTH_ENABLED === 'true' && !process.env.PIWI_AUTH_SECRET) {
         throw new Error(
           'PIWI_AUTH_ENABLED is true but PIWI_AUTH_SECRET is not set. ' +
-            'Generate a secure secret with: openssl rand -hex 32',
+            "Generate one with: node -e \"console.log(require('node:crypto').randomBytes(32).toString('hex'))\"",
         );
       }
       return process.env.PIWI_AUTH_SECRET || 'default-secret-change-in-production-use-random-string';

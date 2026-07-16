@@ -1,15 +1,33 @@
 <script setup lang="ts">
 import type { HomeFilterState } from '~/components/home/HomeFilters.vue';
 import type { ProjectOverview, TestRunForChart } from '~~/types/api';
+import { errorMessage } from '~/utils';
 
 useHead({ title: 'Piwi Dashboard' });
 
-const { data: overview, refresh: refreshOverview } = await useFetch<ProjectOverview[]>('/api/projects/overview', {
+const {
+  data: overview,
+  error: overviewError,
+  refresh: refreshOverview,
+} = await useFetch<ProjectOverview[]>('/api/projects/overview', {
   default: () => [] as ProjectOverview[],
 });
-const { data: recentTestRuns, refresh: refreshRecentRuns } = await useFetch<TestRunForChart[]>('/api/test-runs/recent');
+const {
+  data: recentTestRuns,
+  error: recentRunsError,
+  refresh: refreshRecentRuns,
+} = await useFetch<TestRunForChart[]>('/api/test-runs/recent');
 
 useRunStream(() => Promise.all([refreshOverview(), refreshRecentRuns()]));
+
+// A failed load must never be mistaken for "no projects yet" — that would
+// render the onboarding wizard over what's actually a broken DB/API.
+const loadError = computed(() => overviewError.value || recentRunsError.value);
+
+function retryLoad(): void {
+  refreshOverview();
+  refreshRecentRuns();
+}
 
 // ── Filters (persisted to cookie, SSR-safe — no hydration flicker) ───────────
 
@@ -116,6 +134,20 @@ const hasMoreActivity = computed(() => allActivity.value.length > ACTIVITY_PREVI
 const hasActivity = computed(() => filteredRecentRuns.value.length > 0);
 const hasProjects = computed(() => (overview.value?.length ?? 0) > 0);
 
+// Runs that exist (within the environment filter) but are hidden by "Full runs
+// only" — without this, a project's very first (partial) run reads as if
+// nothing arrived: 0 runs today, no recent activity, "No full runs" everywhere.
+const hiddenPartialRunsCount = computed(() => {
+  if (!filters.value.fullRunsOnly) return 0;
+  const runs = recentTestRuns.value ?? [];
+  const envScoped = runs.filter((r) => matchesEnv(r.environment));
+  return envScoped.filter((r) => !r.isFullRun).length;
+});
+
+function showPartialRuns(): void {
+  filters.value = { ...filters.value, fullRunsOnly: false };
+}
+
 // ── Pass rate helper (for activity list) ─────────────────────────────────────
 
 function passRate(run: { passedTests: number; totalTests: number }): number {
@@ -185,7 +217,33 @@ const featureHighlights = [
     </template>
 
     <template #body>
-      <div class="p-6 space-y-8">
+      <div v-if="loadError" class="p-6">
+        <ErrorState :text="`Couldn't load the dashboard: ${errorMessage(loadError)}`">
+          <template #action>
+            <UButton size="sm" color="neutral" variant="outline" icon="i-lucide-refresh-cw" @click="retryLoad">
+              Retry
+            </UButton>
+          </template>
+        </ErrorState>
+      </div>
+
+      <div v-else class="p-6 space-y-8">
+        <!-- Partial runs hidden by the "Full runs only" filter — without this, a
+             project's first (partial) run reads as if nothing arrived. -->
+        <UAlert
+          v-if="hiddenPartialRunsCount > 0"
+          icon="i-lucide-info"
+          color="primary"
+          variant="subtle"
+          :title="
+            hiddenPartialRunsCount === 1
+              ? '1 partial run is hidden'
+              : `${hiddenPartialRunsCount} partial runs are hidden`
+          "
+          description="The “Full runs only” filter hides runs that only cover part of the suite (e.g. a single spec or --grep)."
+          :actions="[{ label: 'Show them', color: 'primary', variant: 'solid', size: 'xs', onClick: showPartialRuns }]"
+        />
+
         <!-- Compact stat strip (full-run-aware) -->
         <div
           v-if="hasProjects"
@@ -296,8 +354,10 @@ const featureHighlights = [
           <p>No runs match the current filters.</p>
         </div>
 
-        <!-- Empty state: feature highlights + setup wizard -->
+        <!-- Empty state: setup wizard first (the actionable step), feature highlights after -->
         <template v-if="!hasProjects">
+          <GetStartedWizard />
+
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <UCard v-for="feature in featureHighlights" :key="feature.title" class="flex flex-col">
               <div class="flex flex-col gap-3 h-full">
@@ -312,8 +372,6 @@ const featureHighlights = [
               </div>
             </UCard>
           </div>
-
-          <GetStartedWizard />
         </template>
       </div>
     </template>

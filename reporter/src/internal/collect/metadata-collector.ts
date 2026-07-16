@@ -130,7 +130,12 @@ export class MetadataCollector {
   private collectScmInfo(_options: any): Record<string, string> | undefined {
     const scm: Record<string, string> = {};
     try {
-      const execOpts = { encoding: 'utf8' as const, timeout: 5000, maxBuffer: 1024 * 1024 };
+      const execOpts = {
+        encoding: 'utf8' as const,
+        timeout: 5000,
+        maxBuffer: 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'ignore'] as const,
+      };
       scm.commit = execSync('git rev-parse HEAD', execOpts).trim();
       scm.branch = execSync('git rev-parse --abbrev-ref HEAD', execOpts).trim();
       scm.author = execSync('git log -1 --pretty=format:"%an"', execOpts).trim();

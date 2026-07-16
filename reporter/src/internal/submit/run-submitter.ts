@@ -9,6 +9,7 @@ import type { StreamManager } from '../streaming/stream-manager.js';
 import { Logger } from '../support/logger.js';
 import { computePerformanceSummary } from '../collect/step-analyzer.js';
 import { resolveOverallStatus, serializeRun } from './serializer.js';
+import { runUrl } from '../support/run-url.js';
 import type { CollectedTestCase, SetupStep, FilterDetails } from '../../types.js';
 
 /**
@@ -189,6 +190,9 @@ export class RunSubmitter {
       await this.httpClient.postJSON(`/api/test-runs/${sm.runId}/finish`, finishBody, auth);
 
       this.logger.info(`Successfully finalized streaming run #${sm.runId}`);
+      if (run.options.serverUrl) {
+        this.logger.info(`View run: ${runUrl(run.options.serverUrl, sm.runId!)}`);
+      }
       this.recovery.clear();
 
       if (this.hasReports(run)) {
@@ -227,7 +231,10 @@ export class RunSubmitter {
       this.recovery.clear();
       return true;
     } catch (error) {
-      if (error instanceof HttpError && error.status === 401 && !auth) throw error;
+      if (error instanceof HttpError && error.status === 401 && !auth) {
+        this.logAuthRequired(run.options.serverUrl);
+        throw error;
+      }
       this.logger.warn(`Failed to upload with files: ${errorMessage(error)}`);
       this.logger.info('Falling back to JSON upload...');
       return false;
@@ -247,11 +254,27 @@ export class RunSubmitter {
     } catch (error) {
       // If the server returned 401 and no auth was configured, this is a
       // configuration error — throw so the caller knows it's fatal.
-      if (error instanceof HttpError && error.status === 401 && !auth) throw error;
+      if (error instanceof HttpError && error.status === 401 && !auth) {
+        this.logAuthRequired(run.options.serverUrl);
+        throw error;
+      }
       this.logger.error(`All upload methods failed: ${errorMessage(error)}`);
+      this.logger.info(
+        `Saved a local recovery copy — it will be uploaded automatically on your next test run. ` +
+          `If this keeps happening, check that serverUrl (${run.options.serverUrl ?? 'not set'}) is correct and reachable.`,
+      );
       // Save the wire-serialized form so the recovery file matches the
       // original submit payload (no raw attachments / internal fields).
       this.recovery.save(serializeRun(payload, { includeTestCases: true }));
     }
+  }
+
+  /** Log one actionable line explaining how to fix a 401 caused by a missing credential. */
+  private logAuthRequired(serverUrl?: string | null): void {
+    this.logger.error(
+      `Authentication is required by ${serverUrl ?? 'the dashboard'} but no credentials were configured. ` +
+        `Create an API key (Settings → Users on the dashboard) and set the reporter's \`apiKey\` option ` +
+        `or the PIWI_API_KEY environment variable.`,
+    );
   }
 }

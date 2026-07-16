@@ -116,6 +116,13 @@ export async function verifyUser(username: string, password: string): Promise<Us
 }
 
 // Create a new user
+/** Whether the users table is empty — i.e. initial setup (`POST /api/auth/setup`) is still available. */
+export async function needsInitialSetup(): Promise<boolean> {
+  const db = await getDatabase();
+  const existing = await db.select({ id: users.id }).from(users).limit(1);
+  return existing.length === 0;
+}
+
 export async function createUser(username: string, password: string, role: Role, name?: string): Promise<User> {
   const db = await getDatabase();
   const hashedPassword = await hashPassword(password);

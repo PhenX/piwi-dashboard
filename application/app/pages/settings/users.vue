@@ -188,6 +188,18 @@ const newKeyName = ref('');
 const newKeyExpiry = ref('');
 const createdKeyValue = ref<string | null>(null);
 
+// SSR-safe origin for the ready-to-paste reporter snippet shown after creating a key
+const serverOrigin = ref('http://localhost:3000');
+onMounted(() => {
+  serverOrigin.value = window.location.origin;
+});
+const apiKeyUsageSnippet = computed(
+  () => `['@piwitests/reporter', {
+  serverUrl: '${serverOrigin.value}',
+  apiKey: '${createdKeyValue.value ?? ''}', // or set PIWI_API_KEY and use apiKey: process.env.PIWI_API_KEY
+}]`,
+);
+
 function startCreateKey() {
   newKeyName.value = '';
   newKeyExpiry.value = '';
@@ -435,6 +447,7 @@ async function handleInviteUser(user: UserDetails) {
                 variant="ghost"
                 size="sm"
                 title="Send invite email"
+                aria-label="Send invite email"
                 :loading="invitingUserId === row.original.id"
                 @click="handleInviteUser(row.original)"
               />
@@ -445,6 +458,7 @@ async function handleInviteUser(user: UserDetails) {
                 variant="ghost"
                 size="sm"
                 title="Project access"
+                aria-label="Project access"
                 @click="openProjectAccessModal(row.original)"
               />
               <UButton
@@ -454,6 +468,7 @@ async function handleInviteUser(user: UserDetails) {
                 variant="ghost"
                 size="sm"
                 title="Manage API keys"
+                aria-label="Manage API keys"
                 @click="openApiKeysModal(row.original)"
               />
               <UButton
@@ -463,6 +478,7 @@ async function handleInviteUser(user: UserDetails) {
                 variant="ghost"
                 size="sm"
                 title="Delete user"
+                aria-label="Delete user"
                 @click="handleDeleteUser(row.original)"
               />
             </div>
@@ -579,6 +595,13 @@ async function handleInviteUser(user: UserDetails) {
                   @click="copyKey"
                 />
                 <UButton label="Done" variant="ghost" size="sm" @click="dismissCreatedKey" />
+              </div>
+
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-muted mb-2">
+                  Use it in your reporter config
+                </p>
+                <CodeBlock :code="apiKeyUsageSnippet" lang="typescript" />
               </div>
             </div>
 

@@ -475,7 +475,10 @@ provide(clusterSectionLocatorKey, {
                   </template>
                   <div class="max-h-[32rem] overflow-y-auto">
                     <TestSourceStack v-if="testCase?.testSourceFrames?.length" :frames="testCase.testSourceFrames" />
-                    <MarkdownPreview v-else-if="testCase?.testSource" :text="'```typescript\n' + testCase.testSource + '\n```'" />
+                    <MarkdownPreview
+                      v-else-if="testCase?.testSource"
+                      :text="'```typescript\n' + testCase.testSource + '\n```'"
+                    />
                   </div>
                 </CollapsibleSectionCard>
 
