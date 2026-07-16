@@ -765,6 +765,8 @@ routes.push(
     },
   },
   { method: 'GET', pattern: /^\/api\/auth\/session$/, handler: () => UNAUTHENTICATED },
+  // The demo always ships with seeded users, so first-admin setup never applies.
+  { method: 'GET', pattern: /^\/api\/auth\/setup$/, handler: () => Promise.resolve({ needsSetup: false }) },
   {
     method: 'POST',
     pattern: /^\/api\/auth\/login$/,
