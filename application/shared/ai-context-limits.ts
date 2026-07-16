@@ -283,3 +283,47 @@ export function clampLimit(field: ContextLimitField, value: unknown): number | n
   if (!Number.isFinite(n)) return null;
   return Math.min(field.max, Math.max(field.min, Math.floor(n)));
 }
+
+/** App-setting key the effective overrides are stored under (server DB and demo DB alike). */
+export const CONTEXT_LIMITS_SETTING_KEY = 'ai_context_limits';
+
+/**
+ * Merge stored per-field overrides over the defaults, clamping each to its
+ * field range. Env-var precedence (server-only) is layered on top by the
+ * caller — this is the part the demo shares verbatim since it has no env.
+ */
+export function resolveStoredContextLimits(stored: Partial<ContextLimits> | null | undefined): ContextLimits {
+  const limits: ContextLimits = { ...DEFAULT_CONTEXT_LIMITS };
+  if (!stored) return limits;
+  for (const field of CONTEXT_LIMIT_FIELDS) {
+    const storedVal = clampLimit(field, stored[field.key]);
+    if (storedVal != null) limits[field.key] = storedVal;
+  }
+  return limits;
+}
+
+/**
+ * Merge an incoming partial update into a stored overrides map: null/empty
+ * resets a field to its default, an env-managed field is ignored, everything
+ * else is clamped to its field range. Shared so the server and demo persist
+ * identically.
+ */
+export function mergeContextLimitsUpdate(
+  stored: Partial<ContextLimits> | null | undefined,
+  incoming: Partial<Record<keyof ContextLimits, unknown>>,
+  envManaged: ReadonlySet<keyof ContextLimits> = new Set(),
+): Partial<ContextLimits> {
+  const next: Partial<ContextLimits> = { ...stored };
+  for (const field of CONTEXT_LIMIT_FIELDS) {
+    if (envManaged.has(field.key)) continue;
+    if (!(field.key in incoming)) continue;
+    const raw = incoming[field.key];
+    if (raw === null || raw === undefined || raw === '') {
+      delete next[field.key];
+      continue;
+    }
+    const clamped = clampLimit(field, raw);
+    if (clamped != null) next[field.key] = clamped;
+  }
+  return next;
+}

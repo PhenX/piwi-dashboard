@@ -22,7 +22,15 @@ import {
 } from '../../../server/database/schema';
 import type { FailureDiagnosis } from '../../../server/database/schema';
 import { getDemoDb } from '../db.client';
-import { CONTEXT_LIMIT_FIELDS, DEFAULT_CONTEXT_LIMITS } from '#shared/ai-context-limits';
+import {
+  CONTEXT_LIMIT_FIELDS,
+  DEFAULT_CONTEXT_LIMITS,
+  CONTEXT_LIMITS_SETTING_KEY,
+  resolveStoredContextLimits,
+  mergeContextLimitsUpdate,
+} from '#shared/ai-context-limits';
+import type { ContextLimits } from '#shared/ai-context-limits';
+import { getAppSetting, setAppSetting } from '~~/server/utils/app-settings';
 import { validatePatch } from '#shared/patch';
 import { buildDiagnosisVersionValues } from '#shared/handlers/diagnosis-versions';
 import { collectClusterEvidence } from './diagnosis-context';
@@ -953,12 +961,29 @@ export async function apiListAiModels(_body?: unknown) {
 
 /** GET /api/settings/ai/limits */
 export async function apiGetAiLimits() {
-  return { limits: DEFAULT_CONTEXT_LIMITS, envManaged: [], fields: CONTEXT_LIMIT_FIELDS };
+  const db = await getDemoDb();
+  const stored = await getAppSetting<Partial<ContextLimits>>(db, CONTEXT_LIMITS_SETTING_KEY);
+  return {
+    limits: resolveStoredContextLimits(stored),
+    defaults: DEFAULT_CONTEXT_LIMITS,
+    envManaged: [],
+    fields: CONTEXT_LIMIT_FIELDS,
+  };
 }
 
-/** PUT /api/settings/ai/limits — no-op in demo */
-export async function apiPutAiLimits(_body: unknown) {
-  return { success: true };
+/** PUT /api/settings/ai/limits — persisted the same way the server does, minus env precedence. */
+export async function apiPutAiLimits(body: unknown) {
+  const incoming = (body as { limits?: Partial<Record<keyof ContextLimits, unknown>> } | undefined)?.limits ?? {};
+  const db = await getDemoDb();
+  const stored = await getAppSetting<Partial<ContextLimits>>(db, CONTEXT_LIMITS_SETTING_KEY);
+  const next = mergeContextLimitsUpdate(stored, incoming);
+  await setAppSetting(db, CONTEXT_LIMITS_SETTING_KEY, next);
+  return {
+    limits: resolveStoredContextLimits(next),
+    defaults: DEFAULT_CONTEXT_LIMITS,
+    envManaged: [],
+    fields: CONTEXT_LIMIT_FIELDS,
+  };
 }
 
 /** GET /api/settings/ai/usage — synthesised from stored demo diagnoses. */

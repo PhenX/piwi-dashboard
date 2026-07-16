@@ -1,12 +1,13 @@
 import { getDatabase } from '../../../database';
 import { requireAuth } from '../../../utils/auth';
 import { getAppSetting, setAppSetting } from '../../../utils/app-settings';
+import { resolveContextLimits, envManagedLimitKeys } from '../../../utils/ai-context-limits';
 import {
-  resolveContextLimits,
-  envManagedLimitKeys,
+  CONTEXT_LIMIT_FIELDS,
+  DEFAULT_CONTEXT_LIMITS,
   CONTEXT_LIMITS_SETTING_KEY,
-} from '../../../utils/ai-context-limits';
-import { CONTEXT_LIMIT_FIELDS, DEFAULT_CONTEXT_LIMITS, clampLimit } from '#shared/ai-context-limits';
+  mergeContextLimitsUpdate,
+} from '#shared/ai-context-limits';
 import type { ContextLimits } from '#shared/ai-context-limits';
 
 defineRouteMeta({
@@ -28,21 +29,9 @@ export default eventHandler(async (event) => {
   const incoming = body?.limits ?? {};
 
   const db = await getDatabase();
-  const stored = (await getAppSetting<Partial<ContextLimits>>(db, CONTEXT_LIMITS_SETTING_KEY)) ?? {};
+  const stored = await getAppSetting<Partial<ContextLimits>>(db, CONTEXT_LIMITS_SETTING_KEY);
   const envManaged = new Set(envManagedLimitKeys());
-
-  const next: Partial<ContextLimits> = { ...stored };
-  for (const field of CONTEXT_LIMIT_FIELDS) {
-    if (envManaged.has(field.key)) continue; // env overrides; never persist these
-    if (!(field.key in incoming)) continue;
-    const raw = incoming[field.key];
-    if (raw === null || raw === undefined || raw === '') {
-      delete next[field.key]; // reset to default
-      continue;
-    }
-    const clamped = clampLimit(field, raw);
-    if (clamped != null) next[field.key] = clamped;
-  }
+  const next = mergeContextLimitsUpdate(stored, incoming, envManaged);
 
   await setAppSetting(db, CONTEXT_LIMITS_SETTING_KEY, next);
 
