@@ -19,8 +19,14 @@ const route = useRoute();
 const router = useRouter();
 const { treeView, setTreeView } = useTreeViewCookie('project-test-cases');
 
-const PAGE_SIZE = 50;
 const TREE_LIMIT = 1000;
+const DEFAULT_PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [
+  { label: '10 / page', value: 10 },
+  { label: '25 / page', value: 25 },
+  { label: '50 / page', value: 50 },
+  { label: '100 / page', value: 100 },
+];
 const AGE_OPTIONS = [
   { label: 'Last 7 days', value: 7 },
   { label: 'Last 30 days', value: 30 },
@@ -48,6 +54,8 @@ const statuses = ref<string[]>(typeof init.status === 'string' ? init.status.spl
 const age = ref(typeof init.age === 'string' && init.age !== '' ? Math.max(0, Number(init.age) || 0) : defaultAge);
 const sort = ref<TestCasesSort>(typeof init.sort === 'string' ? (init.sort as TestCasesSort) : 'lastRun');
 const dir = ref<'asc' | 'desc'>(init.dir === 'asc' ? 'asc' : 'desc');
+const initialPageSize = Number(init.pageSize);
+const pageSize = ref(PAGE_SIZE_OPTIONS.some((o) => o.value === initialPageSize) ? initialPageSize : DEFAULT_PAGE_SIZE);
 
 watch(
   searchInput,
@@ -55,13 +63,13 @@ watch(
     q.value = value.trim();
   }, 300),
 );
-watch([q, statuses, age, sort, dir, treeView], () => {
+watch([q, statuses, age, sort, dir, pageSize, treeView], () => {
   page.value = 1;
 });
 
 const query = computed(() => ({
-  limit: treeView.value ? TREE_LIMIT : PAGE_SIZE,
-  offset: treeView.value ? 0 : (page.value - 1) * PAGE_SIZE,
+  limit: treeView.value ? TREE_LIMIT : pageSize.value,
+  offset: treeView.value ? 0 : (page.value - 1) * pageSize.value,
   ...(q.value ? { q: q.value } : {}),
   ...(statuses.value.length > 0 ? { status: statuses.value.join(',') } : {}),
   maxAgeDays: age.value,
@@ -82,7 +90,7 @@ watch(
 );
 
 if (props.syncQuery) {
-  watch([q, statuses, age, sort, dir, page], () => {
+  watch([q, statuses, age, sort, dir, page, pageSize], () => {
     router.replace({
       query: {
         ...route.query,
@@ -92,6 +100,7 @@ if (props.syncQuery) {
         sort: sort.value !== 'lastRun' ? sort.value : undefined,
         dir: dir.value !== 'desc' ? dir.value : undefined,
         page: page.value > 1 ? String(page.value) : undefined,
+        pageSize: pageSize.value !== DEFAULT_PAGE_SIZE ? String(pageSize.value) : undefined,
       },
     });
   });
@@ -146,8 +155,10 @@ const columns = computed<TableColumn<TestCaseWithStats>[]>(() => [
 
 const items = computed(() => data.value?.items ?? []);
 const total = computed(() => data.value?.total ?? 0);
-const showingFrom = computed(() => (total.value === 0 ? 0 : (page.value - 1) * PAGE_SIZE + 1));
-const showingTo = computed(() => (treeView.value ? items.value.length : Math.min(page.value * PAGE_SIZE, total.value)));
+const showingFrom = computed(() => (total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1));
+const showingTo = computed(() =>
+  treeView.value ? items.value.length : Math.min(page.value * pageSize.value, total.value),
+);
 const hasSearchOrStatusFilter = computed(() => q.value !== '' || statuses.value.length > 0);
 const hasAnyFilter = computed(() => hasSearchOrStatusFilter.value || age.value !== 0);
 const initialLoading = computed(() => status.value === 'pending' && !data.value);
@@ -297,7 +308,7 @@ defineExpose({ refresh });
               :data="items"
               :columns="columns"
               :ui="{
-                base: 'table-fixed border-separate border-spacing-0 min-w-[56rem]',
+                base: 'w-full table-fixed border-separate border-spacing-0 min-w-[56rem]',
                 thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
                 tbody: '[&>tr]:last:[&>td]:border-b-0 [&>tr]:hover:bg-gray-50 dark:[&>tr]:hover:bg-gray-900/50',
                 th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
@@ -434,11 +445,29 @@ defineExpose({ refresh });
           </div>
 
           <!-- Pagination footer -->
-          <div v-if="total > PAGE_SIZE" class="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <span class="text-sm text-muted tabular-nums"
-              >Showing {{ showingFrom }}–{{ showingTo }} of {{ total }}</span
-            >
-            <UPagination v-model:page="page" :total="total" :items-per-page="PAGE_SIZE" size="sm" />
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="text-sm text-muted tabular-nums"
+                >Showing {{ showingFrom }}–{{ showingTo }} of {{ total }}</span
+              >
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm text-muted">Rows per page</span>
+                <USelect
+                  v-model="pageSize"
+                  :items="PAGE_SIZE_OPTIONS"
+                  size="sm"
+                  class="w-28"
+                  aria-label="Rows per page"
+                />
+              </div>
+            </div>
+            <UPagination
+              v-if="total > pageSize"
+              v-model:page="page"
+              :total="total"
+              :items-per-page="pageSize"
+              size="sm"
+            />
           </div>
         </template>
       </div>
