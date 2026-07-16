@@ -395,8 +395,7 @@ export const locatorSnapshots = sqliteTable(
 // Network requests table - normalized child table of test_runs_cases
 // Stores one row per filtered network request (API/document types only).
 // Normalized URLs enable endpoint-grouped stats without parsing JSON.
-// Populated at ingest time alongside test_runs_cases; the old JSON column
-// is kept for backward compat with existing data.
+// Populated at ingest time alongside test_runs_cases.
 export const networkRequests = sqliteTable(
   'network_requests',
   {

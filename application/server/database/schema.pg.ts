@@ -264,7 +264,8 @@ export const failureDiagnoses = pgTable(
       .$defaultFn(() => new Date()),
   },
   (table) => ({
-    executionScopeIdx: uniqueIndex('idx_failure_diagnoses_execution_scope').on(table.testRunsCaseId, table.scope),
+    clusterScopeIdx: uniqueIndex('idx_failure_diagnoses_cluster_scope').on(table.clusterId, table.scope),
+    executionIdx: uniqueIndex('idx_failure_diagnoses_execution').on(table.testRunsCaseId, table.scope),
   }),
 );
 
