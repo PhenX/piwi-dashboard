@@ -124,6 +124,10 @@ Deleting runs removes rows and stored files, but giving the freed pages back to 
 
 The dashboard uses an abstraction layer that allows switching backends without any code changes. Files are stored using relative paths (e.g. `project-1/run-123/index.html`), making migration between backends straightforward.
 
+### Evidence payload deduplication
+
+Large failure evidence captured per execution — the page's ARIA snapshot, the failing test's source snippet, and its source stack frames — is stored content-addressed: each unique payload is written once per project (keyed by SHA-256) and executions reference it by id. A test that fails the same way across many runs, or across several browsers in one run, stores that evidence a single time instead of once per execution. Unreferenced payloads are garbage-collected when runs are deleted. Deduplication happens server-side at ingest, so it applies regardless of reporter version.
+
 ## Database storage
 
 The dashboard supports two database backends: **SQLite** (default, zero-configuration) and **PostgreSQL** (for production multi-user deployments).

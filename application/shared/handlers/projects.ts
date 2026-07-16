@@ -8,6 +8,7 @@ import {
   projectTags,
   failureClusters,
   failureDiagnoses,
+  casePayloads,
 } from '../../server/database/schema';
 import { desc, eq, sql, and, inArray, gte, lte, isNotNull, count } from 'drizzle-orm';
 
@@ -356,6 +357,7 @@ export async function deleteProjectData(db: DrizzleDB, projectId: number) {
   }
 
   await db.delete(testCases).where(eq(testCases.projectId, projectId));
+  await db.delete(casePayloads).where(eq(casePayloads.projectId, projectId));
 
   // Deleting the project row cascades to: projectTags, failureClusters,
   // failureDiagnoses, traceBlobs, traceResources

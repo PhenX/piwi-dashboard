@@ -11,6 +11,7 @@ import {
 } from '../../server/database/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-waits';
+import { inlineCasePayloads } from '../../server/utils/case-payloads';
 import type { TestStepEvent } from '../types';
 
 import type { DrizzleDB } from './db';
@@ -152,6 +153,9 @@ export async function getTestRunCase(
   const [trc] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
   if (!trc) return null;
 
+  // Large evidence payloads are content-addressed; legacy rows keep them inline.
+  const evidence = await inlineCasePayloads(db, trc);
+
   const [[testCase], [testRun], reportList, attachmentList] = await Promise.all([
     db
       .select()
@@ -268,8 +272,8 @@ export async function getTestRunCase(
     error: trc.error,
     retries: trc.retries,
     steps: trc.steps,
-    testSource: trc.testSource,
-    testSourceFrames: trc.testSourceFrames,
+    testSource: evidence.testSource,
+    testSourceFrames: evidence.testSourceFrames,
     testAnnotations: trc.testAnnotations,
     startedAt: trc.startedAt,
     slowestStep: trc.slowestStep,
@@ -286,7 +290,7 @@ export async function getTestRunCase(
     webVitals: trc.webVitals,
     pageState: trc.pageState,
     consoleLogs: trc.consoleLogs,
-    ariaSnapshot: trc.ariaSnapshot,
+    ariaSnapshot: evidence.ariaSnapshot,
     workerIndex: trc.workerIndex,
     shardIndex: trc.shardIndex,
     browser: trc.browser,

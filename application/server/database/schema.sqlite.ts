@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
 
 // Projects table
 export const projects = sqliteTable(
@@ -312,6 +313,29 @@ export const appSettings = sqliteTable('app_settings', {
     .$defaultFn(() => new Date()),
 });
 
+// Content-addressed storage for large per-execution text payloads (ARIA
+// snapshots, test source snippets, source-frame JSON). One row per unique
+// content per project — test_runs_cases rows reference payloads by id, so a
+// test failing identically across many runs stores each payload once.
+export const casePayloads = sqliteTable(
+  'case_payloads',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    hash: text('hash').notNull(), // SHA-256 hex of content
+    content: text('content').notNull(),
+    size: integer('size').notNull(), // content length in characters, for storage stats
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    projectHashIdx: uniqueIndex('idx_case_payloads_project_hash').on(table.projectId, table.hash),
+  }),
+);
+
 // Test runs cases table - junction table with run-specific data
 export const testRunsCases = sqliteTable(
   'test_runs_cases',
@@ -338,9 +362,15 @@ export const testRunsCases = sqliteTable(
     webVitals: text('web_vitals', { mode: 'json' }), // { navigation: {...}, paint: {...} }
     pageState: text('page_state', { mode: 'json' }), // URL/history/storage-keys/cookie-flags at test end (values never captured)
     consoleLogs: text('console_logs', { mode: 'json' }), // Array of { type, text, timestamp, location } console entries
+    // Legacy inline payload columns: still readable on old rows, no longer
+    // written — new rows store these payloads content-addressed in
+    // case_payloads and reference them via the *PayloadId columns below.
     ariaSnapshot: text('aria_snapshot'), // ARIA snapshot of the page (YAML-like string from locator.ariaSnapshot())
     testSource: text('test_source'), // Source snippet around the failing assertion (sent by reporter)
     testSourceFrames: text('test_source_frames', { mode: 'json' }), // Array<{ file, line, snippet }> — in-project call-stack frames (innermost first)
+    ariaSnapshotPayloadId: integer('aria_snapshot_payload_id').references(() => casePayloads.id),
+    testSourcePayloadId: integer('test_source_payload_id').references(() => casePayloads.id),
+    testSourceFramesPayloadId: integer('test_source_frames_payload_id').references(() => casePayloads.id),
     browser: text('browser', { mode: 'json' }), // Playwright project/browser config: { projectName, browserName, channel, viewport }
     browserName: text('browser_name'), // Scalar browser identity (projectName) for index efficiency
     testAnnotations: text('test_annotations', { mode: 'json' }), // Array<{ type, description? }> — runtime test marks (@fixme, @slow …)
@@ -365,6 +395,17 @@ export const testRunsCases = sqliteTable(
       table.retries,
       table.browserName,
     ),
+    // Partial indexes back the payload-GC reachability probes; populated on
+    // failures only, so the hot insert path pays almost nothing for them.
+    ariaPayloadIdx: index('idx_trc_aria_payload')
+      .on(table.ariaSnapshotPayloadId)
+      .where(sql`aria_snapshot_payload_id IS NOT NULL`),
+    sourcePayloadIdx: index('idx_trc_source_payload')
+      .on(table.testSourcePayloadId)
+      .where(sql`test_source_payload_id IS NOT NULL`),
+    framesPayloadIdx: index('idx_trc_frames_payload')
+      .on(table.testSourceFramesPayloadId)
+      .where(sql`test_source_frames_payload_id IS NOT NULL`),
   }),
 );
 
@@ -775,6 +816,8 @@ export type File = typeof files.$inferSelect;
 export type NewFile = typeof files.$inferInsert;
 export type TraceBlob = typeof traceBlobs.$inferSelect;
 export type NewTraceBlob = typeof traceBlobs.$inferInsert;
+export type CasePayload = typeof casePayloads.$inferSelect;
+export type NewCasePayload = typeof casePayloads.$inferInsert;
 export type TraceResource = typeof traceResources.$inferSelect;
 export type NewTraceResource = typeof traceResources.$inferInsert;
 export type User = typeof users.$inferSelect;

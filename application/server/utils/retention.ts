@@ -4,6 +4,7 @@ import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { getDialect } from '../database';
 import type { DbClient } from '../database';
 import {
+  casePayloads,
   entityLinks,
   failureDiagnoses,
   failureDiagnosisVersions,
@@ -62,6 +63,25 @@ export async function deleteRunsOlderThan(db: DbClient, olderThanDays: number): 
   const caseIds = runsCases.map((c) => c.id);
   const affectedClusterIds = [...new Set(runsCases.filter((c) => c.failureClusterId).map((c) => c.failureClusterId!))];
 
+  // Content-addressed payloads referenced by the doomed rows — candidates for
+  // GC once the rows are gone (other runs may still reference them).
+  const candidatePayloadIds = new Set<number>();
+  for (const batch of batches(caseIds)) {
+    const refs = await db
+      .select({
+        aria: testRunsCases.ariaSnapshotPayloadId,
+        source: testRunsCases.testSourcePayloadId,
+        frames: testRunsCases.testSourceFramesPayloadId,
+      })
+      .from(testRunsCases)
+      .where(inArray(testRunsCases.id, batch));
+    for (const ref of refs) {
+      if (ref.aria != null) candidatePayloadIds.add(ref.aria);
+      if (ref.source != null) candidatePayloadIds.add(ref.source);
+      if (ref.frames != null) candidatePayloadIds.add(ref.frames);
+    }
+  }
+
   // Files first: storage objects (with trace-blob refcounting) need their rows.
   for (const batch of batches(caseIds)) {
     const caseFiles = await db.select().from(files).where(inArray(files.testRunsCaseId, batch));
@@ -117,11 +137,27 @@ export async function deleteRunsOlderThan(db: DbClient, olderThanDays: number): 
     await db.delete(testRuns).where(inArray(testRuns.id, batch));
   }
 
+  // GC payloads no longer referenced by any surviving execution row.
+  for (const batch of batches([...candidatePayloadIds])) {
+    await db.delete(casePayloads).where(and(inArray(casePayloads.id, batch), payloadUnreferenced())!);
+  }
+
   for (const clusterId of affectedClusterIds) {
     await recomputeClusterOccurrences(db, clusterId);
   }
 
   return { deletedRuns: runIds.length, deletedCases: caseIds.length };
+}
+
+/**
+ * Predicate: no surviving `test_runs_cases` row references the payload
+ * through any of the three ref columns. Three separate NOT EXISTS probes so
+ * each hits its partial index.
+ */
+function payloadUnreferenced(): SQL {
+  return sql`NOT EXISTS (SELECT 1 FROM ${testRunsCases} WHERE ${testRunsCases.ariaSnapshotPayloadId} = ${casePayloads.id})
+    AND NOT EXISTS (SELECT 1 FROM ${testRunsCases} WHERE ${testRunsCases.testSourcePayloadId} = ${casePayloads.id})
+    AND NOT EXISTS (SELECT 1 FROM ${testRunsCases} WHERE ${testRunsCases.testSourceFramesPayloadId} = ${casePayloads.id})`;
 }
 
 export interface OrphanSweepResult {
@@ -130,6 +166,7 @@ export interface OrphanSweepResult {
   diagnoses: number;
   diagnosisVersions: number;
   notificationDeliveries: number;
+  casePayloads: number;
 }
 
 async function countWhere(db: DbClient, table: SQLiteTable, where: SQL): Promise<number> {
@@ -153,6 +190,10 @@ export async function sweepOrphans(db: DbClient): Promise<OrphanSweepResult> {
   const orphanedDiagnoses = sql`${failureDiagnoses.testRunsCaseId} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ${testRunsCases} WHERE ${testRunsCases.id} = ${failureDiagnoses.testRunsCaseId})`;
   const orphanedVersions = sql`NOT EXISTS (SELECT 1 FROM ${failureDiagnoses} WHERE ${failureDiagnoses.id} = ${failureDiagnosisVersions.diagnosisId})`;
   const orphanedDeliveries = sql`${notificationDeliveries.subscriptionId} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ${subscriptions} WHERE ${subscriptions.id} = ${notificationDeliveries.subscriptionId})`;
+  // Age gate: a payload is upserted moments before the rows that reference it,
+  // so a concurrent sweep must not reap rows from an in-flight ingest batch.
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const orphanedPayloads = and(lt(casePayloads.createdAt, oneHourAgo), payloadUnreferenced())!;
 
   const result: OrphanSweepResult = {
     networkRequests: await countWhere(db, networkRequests, orphanedNetworkRequests),
@@ -161,6 +202,7 @@ export async function sweepOrphans(db: DbClient): Promise<OrphanSweepResult> {
     diagnoses: await countWhere(db, failureDiagnoses, orphanedDiagnoses),
     diagnosisVersions: await countWhere(db, failureDiagnosisVersions, orphanedVersions),
     notificationDeliveries: await countWhere(db, notificationDeliveries, orphanedDeliveries),
+    casePayloads: await countWhere(db, casePayloads, orphanedPayloads),
   };
 
   await db.delete(networkRequests).where(orphanedNetworkRequests);
@@ -171,6 +213,7 @@ export async function sweepOrphans(db: DbClient): Promise<OrphanSweepResult> {
   await db.delete(failureDiagnoses).where(orphanedDiagnoses);
   await db.delete(failureDiagnosisVersions).where(orphanedVersions);
   await db.delete(notificationDeliveries).where(orphanedDeliveries);
+  await db.delete(casePayloads).where(orphanedPayloads);
 
   return result;
 }

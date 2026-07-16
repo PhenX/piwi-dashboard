@@ -12,6 +12,7 @@ import {
   sanitizePageState,
 } from './sanitize';
 import { resolveIngestLimits } from './ingest-limits';
+import { upsertCasePayloads } from './case-payloads';
 import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fingerprint';
 import { testCaseCache } from './test-case-cache';
 import { testSuiteCache } from './test-suite-cache';
@@ -195,6 +196,10 @@ export async function persistRunCases(
   );
 
   const runCasesRows: Array<typeof testRunsCases.$inferInsert> = [];
+  // Capped payload strings per row, deduplicated into case_payloads after the
+  // loop; the junction rows store only the payload ids (inline columns stay
+  // null on new rows — readers coalesce via inlineCasePayloads).
+  const rowPayloads: Array<{ aria: string | null; source: string | null; framesJson: string | null }> = [];
   const networkRequestBuilders: Array<{
     items: Array<{
       method: string;
@@ -267,6 +272,11 @@ export async function persistRunCases(
     }
     rowFingerprints.push(fingerprint);
 
+    const aria = capText(c.ariaSnapshot, limits.ariaSnapshotChars);
+    const source = capText(c.testSource, limits.testSourceChars);
+    const frames = capSourceFrames(c.testSourceFrames, limits);
+    rowPayloads.push({ aria, source, framesJson: frames != null ? JSON.stringify(frames) : null });
+
     runCasesRows.push({
       testRunId,
       testCaseId: caseId,
@@ -288,9 +298,9 @@ export async function persistRunCases(
           sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined),
           limits,
         ) ?? null,
-      ariaSnapshot: capText(c.ariaSnapshot, limits.ariaSnapshotChars),
-      testSource: capText(c.testSource, limits.testSourceChars),
-      testSourceFrames: capSourceFrames(c.testSourceFrames, limits) as any,
+      ariaSnapshot: null,
+      testSource: null,
+      testSourceFrames: null,
       testAnnotations: (c.testAnnotations as any) ?? null,
       browser: c.browser ?? null,
       browserName: resolveBrowserName(c.browser),
@@ -304,6 +314,19 @@ export async function persistRunCases(
   }
 
   if (runCasesRows.length === 0) return [];
+
+  // Payloads land first so the junction rows can reference them.
+  const payloadIds = await upsertCasePayloads(
+    db,
+    projectId,
+    rowPayloads.flatMap((p) => [p.aria, p.source, p.framesJson]),
+  );
+  runCasesRows.forEach((row, i) => {
+    const p = rowPayloads[i]!;
+    row.ariaSnapshotPayloadId = p.aria ? (payloadIds.get(p.aria) ?? null) : null;
+    row.testSourcePayloadId = p.source ? (payloadIds.get(p.source) ?? null) : null;
+    row.testSourceFramesPayloadId = p.framesJson ? (payloadIds.get(p.framesJson) ?? null) : null;
+  });
 
   const clusterIds = await getOrCreateFailureClusters(db, projectId, testRunId, pendingClusters);
   runCasesRows.forEach((row, i) => {
