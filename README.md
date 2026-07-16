@@ -154,7 +154,7 @@ Every tool in that table is good at what it targets — the honest version with 
 | Storage configuration | [piwitests.github.io/storage](https://piwitests.github.io/storage) |
 | Deployment | [piwitests.github.io/deployment](https://piwitests.github.io/deployment) |
 
-The running dashboard also serves interactive API docs (Scalar) at `/docs`.
+The running dashboard also serves self-contained interactive API docs at `/docs`, rendered in-app from the OpenAPI spec — no external CDN, so they work offline / air-gapped.
 
 ## Community & support
 
