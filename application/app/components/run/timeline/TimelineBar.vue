@@ -15,8 +15,6 @@ const props = defineProps<{
   x: number;
   y: number;
   width: number;
-  /** True when another bar is hovered, so this one dims. */
-  dimmed: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -41,7 +39,12 @@ function onClick(): void {
 </script>
 
 <template>
-  <g @mouseenter="emit('hover', item, $event)" @mousemove="emit('move', $event)" @mouseleave="emit('leave')">
+  <g
+    class="timeline-bar-group"
+    @mouseenter="emit('hover', item, $event)"
+    @mousemove="emit('move', $event)"
+    @mouseleave="emit('leave')"
+  >
     <template v-if="isHookLike">
       <rect
         :x="x"
@@ -54,8 +57,8 @@ function onClick(): void {
         :stroke="timelineHookStroke(item.status)"
         stroke-width="1"
         stroke-dasharray="3,2"
-        class="transition-opacity duration-100"
-        :class="[dimmed ? 'opacity-40' : 'opacity-80', cursorClass]"
+        class="timeline-bar-shape transition-opacity duration-100 opacity-80"
+        :class="cursorClass"
         @click="onClick"
       />
       <text
@@ -80,8 +83,8 @@ function onClick(): void {
         fill-opacity="0.28"
         :stroke="TIMELINE_WAIT_COLORS.stroke"
         stroke-width="1.5"
-        class="transition-opacity duration-100"
-        :class="[dimmed ? 'opacity-40' : 'opacity-90', cursorClass]"
+        class="timeline-bar-shape transition-opacity duration-100 opacity-90"
+        :class="cursorClass"
         @click="onClick"
       />
       <line
@@ -122,8 +125,7 @@ function onClick(): void {
         r="3"
         fill="#2563eb"
         filter="url(#glow)"
-        class="cursor-pointer"
-        :class="dimmed ? 'opacity-40' : 'opacity-90'"
+        class="timeline-bar-shape transition-opacity duration-100 cursor-pointer opacity-90"
         @click="onClick"
       />
       <circle
@@ -135,8 +137,7 @@ function onClick(): void {
         stroke-width="1.5"
         stroke-opacity="0.4"
         filter="url(#glow)"
-        class="cursor-pointer"
-        :class="dimmed ? 'opacity-40' : 'opacity-90'"
+        class="timeline-bar-shape transition-opacity duration-100 cursor-pointer opacity-90"
         @click="onClick"
       />
     </template>
@@ -149,8 +150,7 @@ function onClick(): void {
         :rx="3"
         :ry="3"
         :fill="timelineStatusHex(item.status)"
-        class="transition-opacity duration-100 cursor-pointer"
-        :class="dimmed ? 'opacity-40' : 'opacity-90'"
+        class="timeline-bar-shape transition-opacity duration-100 cursor-pointer opacity-90"
         @click="onClick"
       />
       <text
