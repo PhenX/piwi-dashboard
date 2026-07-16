@@ -40,8 +40,9 @@ export interface DeleteRunsResult {
  * and every dependent row.
  *
  * Child rows are deleted explicitly, in FK order, rather than relying on
- * ON DELETE actions: SQLite databases opened by older versions never had
- * foreign-key enforcement enabled, and file/blob cleanup needs the rows
+ * ON DELETE actions: SQLite foreign-key enforcement is a per-connection
+ * pragma (historically supplied only by a libsql driver default, not by
+ * every client that opens the file), and file/blob cleanup needs the rows
  * before they disappear. The result is identical on both dialects.
  */
 export async function deleteRunsOlderThan(db: DbClient, olderThanDays: number): Promise<DeleteRunsResult> {

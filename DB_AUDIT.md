@@ -59,7 +59,7 @@ Counter-examples already in the codebase showed the right patterns: `trace_blobs
 
 ### 3.3 Foreign-key enforcement and orphaned rows
 
-The schemas declare `ON DELETE CASCADE` throughout, but the SQLite client never issued `PRAGMA foreign_keys=ON`, so cascades do not fire at runtime on SQLite; all delete paths rely on explicit child deletion. The manual cleanup endpoint deleted files, case rows, and runs — but not `network_requests`, `entity_links`, or execution-scoped `failure_diagnoses`, leaving orphans on SQLite. PostgreSQL enforces the same FKs natively, so the two backends silently disagreed about what a delete leaves behind.
+The schemas declare `ON DELETE CASCADE` throughout, but the application never issued `PRAGMA foreign_keys=ON` — enforcement on the SQLite path rested entirely on the libsql client's non-standard default of enabling it (verified: `PRAGMA foreign_keys` reports `1` on a fresh libsql connection). That default is not shared by plain SQLite tooling (the `db-query`/seed scripts, sql.js in the demo, any external sqlite3 client), so whether a delete cascaded depended on which client touched the file, and a driver swap or upstream default change would have silently turned cascades off. The fix pins the pragma explicitly at init and makes the cleanup path delete child rows explicitly (`network_requests`, `entity_links`, execution-scoped `failure_diagnoses` were previously reached only via the implicit cascades), so deletion behavior is identical on both dialects and independent of driver defaults.
 
 ### 3.4 Missing indexes
 
