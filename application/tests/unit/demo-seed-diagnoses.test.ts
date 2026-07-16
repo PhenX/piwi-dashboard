@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { allDemoSourceFiles } from '~~/app/demo/demo-scm';
 import { validatePatch } from '#shared/patch';
+import { FAILURE_STORIES } from '#shared/demo/failure-stories.mjs';
 
 // Root of the Nuxt app (tests/unit/ -> ../../).
 const rootDir = fileURLToPath(new URL('../..', import.meta.url)).replace(/\/$/, '');
@@ -61,8 +62,8 @@ beforeAll(async () => {
 describe('seeded demo diagnoses', () => {
   test('seeds several completed cluster diagnoses (and leaves some clusters undiagnosed)', () => {
     expect(diagnoses.length).toBeGreaterThanOrEqual(3);
-    // 8 clusters total; not all are diagnosed, so a visitor can trigger a live one.
-    expect(diagnoses.length).toBeLessThan(8);
+    // Not all clusters are diagnosed, so a visitor can trigger a live one.
+    expect(diagnoses.length).toBeLessThan(FAILURE_STORIES.length);
     expect(diagnoses.every((d) => d.scope === 'cluster')).toBe(true);
   });
 
