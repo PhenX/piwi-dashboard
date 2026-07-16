@@ -408,6 +408,133 @@ function ariaSnapshotForCluster(clusterDef) {
   return '- document:\n  - main:\n    - heading "Page"';
 }
 
+// Source snippet around the failing assertion for a failing case, shaped to match
+// the cluster's failure so the AI-diagnosis `testSource` section (and the "Test
+// source" card on the case page) are grounded in something plausible.
+function testSourceForCluster(clusterDef) {
+  if (!clusterDef) return null;
+  const e = clusterDef.errorText || '';
+  if (/getByRole\('button', \{ name: 'Pay' \}\)/.test(e)) {
+    return [
+      "test('completes checkout', async ({ page }) => {",
+      "  await page.goto('/checkout');",
+      '  await fillPaymentDetails(page);',
+      '  // Pay stays disabled until the async price quote resolves',
+      "  await page.getByRole('button', { name: 'Pay' }).click();",
+      "  await expect(page.getByText('Order confirmed')).toBeVisible();",
+      '});',
+    ].join('\n');
+  }
+  if (/getByLabel\('Email address'\)/.test(e)) {
+    return [
+      "test('fills contact details', async ({ page }) => {",
+      "  await page.goto('/checkout');",
+      "  await page.getByLabel('Email address').fill('buyer@example.com');",
+      "  await page.getByLabel('Card number').fill('4242424242424242');",
+      "  await page.getByRole('button', { name: 'Pay' }).click();",
+      '});',
+    ].join('\n');
+  }
+  if (/Expected: 200/.test(e)) {
+    return [
+      "test('returns 200 for a valid payment', async ({ request }) => {",
+      "  const res = await request.post('/api/payments', { data: validPayload });",
+      '  expect(res.status()).toBe(200);',
+      '});',
+    ].join('\n');
+  }
+  if (/toHaveText/.test(e)) {
+    return [
+      "test('shows a success message', async ({ page }) => {",
+      '  await submitPayment(page);',
+      "  await expect(page.getByTestId('status')).toHaveText(/success/i);",
+      '});',
+    ].join('\n');
+  }
+  if (/waitForSelector/.test(e)) {
+    return [
+      "test('opens the modal', async ({ page }) => {",
+      "  await page.getByRole('button', { name: 'Open' }).click();",
+      "  await page.waitForSelector('.modal.is-open');",
+      '});',
+    ].join('\n');
+  }
+  if (/strict mode violation/.test(e)) {
+    return [
+      "test('clicks the primary action', async ({ page }) => {",
+      '  // Three buttons render; the locator must be scoped to one',
+      "  await page.getByRole('button').click();",
+      '});',
+    ].join('\n');
+  }
+  if (/page\.goto/.test(e)) {
+    return [
+      "test('loads the landing page', async ({ page }) => {",
+      "  await page.goto('/', { waitUntil: 'networkidle' });",
+      '  await expect(page).toHaveTitle(/Home/);',
+      '});',
+    ].join('\n');
+  }
+  if (/page\.fill/.test(e)) {
+    return [
+      "test('submits the form', async ({ page }) => {",
+      "  await page.fill('#name', 'Ada');",
+      "  await page.getByRole('button', { name: 'Save' }).click();",
+      '});',
+    ].join('\n');
+  }
+  return null;
+}
+
+/** Format lines as a line-numbered snippet (matches the reporter's readSourceSnippet). */
+function fmtSnippet(lines, failingIdx, startLine) {
+  return lines
+    .map((l, i) => `${i === failingIdx ? '> ' : '  '}${String(startLine + i).padStart(4)} | ${l}`)
+    .join('\n');
+}
+
+// Multi-frame call stack for a failing case: the failing line plus the callers
+// above it. Seeded for the flagship checkout failure — where the click actually
+// fails inside a shared helper the spec called — to showcase "the interesting
+// part is upper". Other clusters fall back to the single testSource snippet.
+function testSourceFramesForCluster(clusterDef) {
+  if (!clusterDef) return null;
+  if (!/getByRole\('button', \{ name: 'Pay' \}\)/.test(clusterDef.errorText || '')) return null;
+  return [
+    {
+      file: 'tests/helpers/payment.ts',
+      line: 16,
+      snippet: fmtSnippet(
+        [
+          'export async function fillPaymentDetails(page: Page) {',
+          "  await page.getByLabel('Card number').fill(TEST_CARD);",
+          "  await page.getByLabel('Expiry').fill('12/30');",
+          '  // The Pay button stays disabled until the async quote resolves',
+          "  await page.getByRole('button', { name: 'Pay' }).click();",
+          '}',
+        ],
+        4,
+        12,
+      ),
+    },
+    {
+      file: 'tests/checkout/checkout.spec.ts',
+      line: 42,
+      snippet: fmtSnippet(
+        [
+          "test('completes checkout', async ({ page }) => {",
+          "  await page.goto('/checkout');",
+          '  await fillPaymentDetails(page);',
+          "  await expect(page.getByText('Order confirmed')).toBeVisible();",
+          '});',
+        ],
+        2,
+        40,
+      ),
+    },
+  ];
+}
+
 // Simple URL normalizer for seed data (mirrors shared/utils/route.ts)
 function seedNormalizeUrl(url) {
   try {
@@ -872,6 +999,8 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
             ]
           : null,
         aria_snapshot: isFailedCase ? ariaSnapshotForCluster(clusterDef) : null,
+        test_source: isFailedCase ? testSourceForCluster(clusterDef) : null,
+        test_source_frames: isFailedCase ? testSourceFramesForCluster(clusterDef) : null,
         worker_index: workerIndex,
         started_at: caseStartMs,
         created_at: Math.floor(caseStartMs / 1000),

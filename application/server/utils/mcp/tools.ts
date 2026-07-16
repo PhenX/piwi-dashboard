@@ -44,6 +44,7 @@ import {
   resolveClusterProjectId,
   resolveCaseProjectId,
   resolveTestRunCaseProjectId,
+  resolveDiagnosisProjectId,
 } from '../project-access';
 import type { ProjectScope } from '../project-access';
 import type { User } from '../../database/schema';
@@ -1506,12 +1507,14 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       throw new Error('feedback must be "up", "down", or null');
     }
     const [existing] = await db
-      .select({ id: failureDiagnoses.id, clusterId: failureDiagnoses.clusterId })
+      .select({ id: failureDiagnoses.id })
       .from(failureDiagnoses)
       .where(eq(failureDiagnoses.id, id))
       .limit(1);
     if (!existing) return null;
-    if ((await checkEntityScope(db, ctx, existing.clusterId, resolveClusterProjectId)) === 'not-found') return null;
+    // Resolve via the diagnosis itself — cluster-scoped rows resolve through their
+    // cluster, execution-scoped rows (null cluster) through their run.
+    if ((await checkEntityScope(db, ctx, existing.id, resolveDiagnosisProjectId)) === 'not-found') return null;
     const note = typeof params.feedbackNote === 'string' ? params.feedbackNote.trim() || null : null;
     await db
       .update(failureDiagnoses)

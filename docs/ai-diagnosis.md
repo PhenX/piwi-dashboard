@@ -112,6 +112,17 @@ A diagnosis is grounded in your actual run — it is not a generic "ask AI" butt
   <figcaption>A cluster page — the AI diagnosis (category, confidence, root cause, evidence, and a suggested fix) sits beside the actual error and the ranked alternative locators it was grounded in.</figcaption>
 </figure>
 
+## Diagnosing one execution
+
+The [failure cluster](./ui-overview#failure-cluster-detail) page diagnoses a *group* of failures that share a fingerprint. When you are looking at a single failing execution, the [test case detail](./ui-overview#test-case-detail) page's **Diagnosis** tab can diagnose *just that execution* — same model, same structured result, scoped to the one run in front of you. This is handy when a failure hasn't clustered yet, or when you want a diagnosis grounded in this specific execution's evidence rather than the cluster aggregate.
+
+Two things are always available there, even with **no provider configured**:
+
+- **Copy AI context** — copies the exact evidence bundle (error, steps, console, network, ARIA snapshot, source, and more, trimmed to the [context limits](#context-limits-and-token-cost)) so you can paste it into your own AI tool. It is the same context the model would receive.
+- A **coverage strip** showing which evidence sections are present, truncated, or absent — the same map the model sees.
+
+With a provider configured, **Diagnose with AI** runs the diagnosis inline and renders the result (category, confidence, root cause, evidence, suggested fix) right in the tab; cited evidence links jump to the matching section on the page. The result is stored per execution, so it survives a reload, and you can add free-text context or re-diagnose. Execution-scoped and cluster-scoped diagnoses are independent — running one never overwrites the other.
+
 ## SCM-grounded context
 
 The real power is feeding the model the code that changed. On a cluster page you can:

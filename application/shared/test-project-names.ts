@@ -106,6 +106,7 @@ export const PROJECT = {
   TEST_API: 'test-api-project',
   TEST_FLAKY: 'test-flaky-project',
   TEST_PROJECT: 'test-project',
+  TEST_RUN_CASE_PAGE: 'test-run-case-page-test',
   TRACE_DEDUP: 'trace-dedup-test',
   TRACE_PREFLIGHT: 'trace-preflight-test',
   TRACE_RESOURCES: 'trace-resources-test',

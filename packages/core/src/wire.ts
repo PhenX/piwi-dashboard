@@ -54,6 +54,20 @@ export interface BrowserConfig {
   userAgent?: string | null;
 }
 
+/**
+ * One in-project source frame from a failure's call stack — the failing line
+ * plus the callers above it — so the interesting code that led into the
+ * assertion is visible, not just the test line that triggered it.
+ */
+export interface TestSourceFrame {
+  /** Project-relative source path (e.g. `tests/checkout.spec.ts`). */
+  file: string;
+  /** 1-based line within `file` the stack frame points at. */
+  line: number;
+  /** Line-numbered snippet around `line`, with a `>` marker on it. */
+  snippet: string;
+}
+
 /** A hook/fixture/step event with absolute timings (for the workers timeline). */
 export interface TestStepEvent {
   title: string;

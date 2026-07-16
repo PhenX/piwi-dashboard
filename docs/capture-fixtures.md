@@ -56,6 +56,10 @@ That's the entire setup — there is nothing to start, wrap, or await inside you
 | **ARIA snapshot** of the final page state | on failure | Failure evidence on the test-case and cluster pages; [AI diagnosis](./ai-diagnosis) context |
 | **Locator snapshots** — element attributes, stable-ancestor anchors, and same-role position, plus ranked alternative locators (including rename-proof ancestor-scoped and name-free ones) for each acted-on element, stamped with the call site | after each successful action | [Locator healing](./reporter#locator-healing); when a failing name-based locator (`getByRole`, `getByText`, `getByLabel`, …) matches nothing, a fresh suggestion is attached to the test as a Playwright annotation |
 
+::: tip Test source is captured without any fixture
+On a failure the reporter also reads the **call stack's in-project source** — the line that actually threw plus the callers above it (helpers, page objects), each as a small line-numbered snippet with the failing line marked. It needs no fixture (it comes from the stack trace plus the local source files) and renders as the **Test source** call stack on the [test-case](./ui-overview#test-case-detail) and cluster pages. `node_modules`/Playwright frames are skipped.
+:::
+
 ## With and without the fixtures
 
 The reporter degrades gracefully — nothing breaks without the fixtures. This is exactly what you give up:

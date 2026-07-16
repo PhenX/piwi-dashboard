@@ -41,6 +41,7 @@ import {
   patchClusterBaseCommit,
   extractClusterCases,
   getClusterDiagnosis,
+  getExecutionDiagnosis,
 } from '#shared/handlers/failure-clusters';
 import { getClusterCommits, getClusterCommitDiff, getClusterBranches } from './scm';
 import { getClusterContext, getExecutionContext } from './diagnosis-context';
@@ -412,6 +413,11 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/test-run-cases\/(\d+)\/diagnosis-context$/,
     handler: async (m, _, q) => getExecutionContext(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/diagnosis$/,
+    handler: async (m) => getExecutionDiagnosis(await getDemoDb(), +m[1]!),
   },
   {
     method: 'POST',

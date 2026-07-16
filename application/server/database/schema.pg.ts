@@ -235,9 +235,10 @@ export const failureDiagnoses = pgTable(
   'failure_diagnoses',
   {
     id: serial('id').primaryKey(),
-    clusterId: integer('cluster_id')
-      .notNull()
-      .references(() => failureClusters.id, { onDelete: 'cascade' }),
+    // Nullable: execution-scoped diagnoses key on `testRunsCaseId` and carry no cluster
+    // (a failure may have no cluster, and it keeps the (cluster_id, scope) unique index
+    // from colliding across executions of the same cluster).
+    clusterId: integer('cluster_id').references(() => failureClusters.id, { onDelete: 'cascade' }),
     scope: text('scope').notNull().default('cluster'), // 'cluster', 'execution'
     testRunsCaseId: integer('test_runs_case_id').references(() => testRunsCases.id, { onDelete: 'cascade' }),
     contextSha: text('context_sha'), // hash of the context sent, for staleness detection
@@ -275,9 +276,8 @@ export const failureDiagnosisVersions = pgTable(
     diagnosisId: integer('diagnosis_id')
       .notNull()
       .references(() => failureDiagnoses.id, { onDelete: 'cascade' }),
-    clusterId: integer('cluster_id')
-      .notNull()
-      .references(() => failureClusters.id, { onDelete: 'cascade' }),
+    // Nullable to match `failureDiagnoses.clusterId` (execution-scoped snapshots have no cluster).
+    clusterId: integer('cluster_id').references(() => failureClusters.id, { onDelete: 'cascade' }),
     scope: text('scope').notNull().default('cluster'),
     testRunsCaseId: integer('test_runs_case_id').references(() => testRunsCases.id, { onDelete: 'cascade' }),
     status: text('status').notNull().default('running'),
@@ -340,6 +340,7 @@ export const testRunsCases = pgTable(
     consoleLogs: jsonb('console_logs'), // Array of { type, text, timestamp, location } console entries
     ariaSnapshot: text('aria_snapshot'), // ARIA snapshot of the page (YAML-like string from locator.ariaSnapshot())
     testSource: text('test_source'), // Source snippet around the failing assertion (sent by reporter)
+    testSourceFrames: jsonb('test_source_frames'), // Array<{ file, line, snippet }> — in-project call-stack frames (innermost first)
     browser: jsonb('browser'), // Playwright project/browser config: { projectName, browserName, channel, viewport }
     browserName: text('browser_name'), // Scalar browser identity (projectName) for index efficiency
     testAnnotations: jsonb('test_annotations'), // Array<{ type, description? }> — runtime test marks (@fixme, @slow …)

@@ -90,6 +90,20 @@ export async function getClusterDiagnosis(db: DrizzleDB, clusterId: number) {
   };
 }
 
+/**
+ * The stored execution-scoped AI diagnosis for a single test-run case, if any.
+ * Mirrors `getClusterDiagnosis` but keyed on the execution instead of a cluster,
+ * so the test-run-case page can restore a diagnosis after a reload. Shared by the
+ * server endpoint and the demo router so the two never drift.
+ */
+export async function getExecutionDiagnosis(db: DrizzleDB, testRunsCaseId: number) {
+  const [diag] = await db
+    .select()
+    .from(failureDiagnoses)
+    .where(and(eq(failureDiagnoses.testRunsCaseId, testRunsCaseId), eq(failureDiagnoses.scope, 'execution')));
+  return { diagnosis: diag ?? null };
+}
+
 export async function patchClusterStatus(db: DrizzleDB, clusterId: number, status: string, triageNote?: string | null) {
   if (!status || !VALID_STATUSES.includes(status)) {
     return null;

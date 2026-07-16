@@ -121,11 +121,17 @@ export async function resolveTestRunCaseProjectId(db: DrizzleDB, runCaseId: numb
 }
 
 export async function resolveDiagnosisProjectId(db: DrizzleDB, diagnosisId: number): Promise<number | null> {
+  // Cluster-scoped diagnoses resolve via their cluster; execution-scoped rows carry no
+  // cluster (null) and resolve via the execution's run instead.
   const rows = await db
-    .select({ projectId: failureClusters.projectId })
+    .select({ clusterProjectId: failureClusters.projectId, execProjectId: testRuns.projectId })
     .from(failureDiagnoses)
-    .innerJoin(failureClusters, eq(failureDiagnoses.clusterId, failureClusters.id))
+    .leftJoin(failureClusters, eq(failureDiagnoses.clusterId, failureClusters.id))
+    .leftJoin(testRunsCases, eq(failureDiagnoses.testRunsCaseId, testRunsCases.id))
+    .leftJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
     .where(eq(failureDiagnoses.id, diagnosisId))
     .limit(1);
-  return rows[0]?.projectId ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  return row.clusterProjectId ?? row.execProjectId ?? null;
 }

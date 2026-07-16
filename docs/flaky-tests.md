@@ -76,6 +76,8 @@ Individual test cases in a run carry at-a-glance badges:
 
 Toggle filters on the run's test-case list to show only new regressions or new flaky tests.
 
+Opening a failing execution surfaces the same signals in its **Verdict** card (see [Test case detail](./ui-overview#test-case-detail)): new-regression / new-flaky / passed-on-retry chips, plus how long the test has been failing and a link back to its last green run.
+
 ## Performance
 
 - **Duration trends** — average and **P90** over time, so a few slow outliers don't hide a real regression.

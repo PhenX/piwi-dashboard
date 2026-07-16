@@ -180,6 +180,46 @@ export const HELP_TOPICS = {
     doc: 'ui-overview#test-run-detail',
   },
   // ── Single execution (test-run-case) ──────────────────────────────────
+  'case.diagnosis-tab': {
+    title: 'Diagnosis',
+    text: 'Everything you need to understand and fix this failure in one place — the error, a verdict on what kind of failure it is, the captured evidence, and an AI diagnosis.',
+    doc: 'ui-overview#test-case-detail',
+  },
+  'case.verdict': {
+    title: 'Failure verdict',
+    text: 'An at-a-glance read on this failure: whether it newly regressed or is flaky, how many times it retried, and how long the test has been failing.',
+    doc: 'flaky-tests#regression-signals',
+  },
+  'case.evidence': {
+    title: 'Failure evidence',
+    text: 'What was captured at the moment of failure — screenshots, video and traces — grouped so you can see exactly what the browser saw.',
+    doc: 'ui-overview#trace-viewer',
+  },
+  'case.test-source': {
+    title: 'Test source',
+    text: 'The source around the failing line and the callers above it — captured from the failure’s call stack — so you can read where it broke, and the code that led there, without opening your editor.',
+    doc: 'capture-fixtures',
+  },
+  'case.artifacts': {
+    title: 'Artifacts',
+    text: 'Traces, attachments, console output and network requests captured for this execution — the raw material behind the result.',
+    doc: 'ui-overview#trace-viewer',
+  },
+  'case.steps': {
+    title: 'Steps',
+    text: 'Each step Playwright ran, with its duration. A failed step is highlighted with its error, and slow steps are color-coded.',
+    doc: 'ui-overview#test-case-detail',
+  },
+  'case.wasted-time': {
+    title: 'Wasted time',
+    text: 'Time spent in fixed waits (waitForTimeout and matching patterns) that could usually be replaced with a web-first assertion.',
+    doc: 'flaky-tests#performance',
+  },
+  'case.ai': {
+    title: 'AI diagnosis for this execution',
+    text: 'Diagnose just this failing execution, or copy the full evidence context to paste into your own AI assistant.',
+    doc: 'ai-diagnosis#diagnosing-one-execution',
+  },
   'case.web-vitals': {
     title: 'Web Vitals',
     text: 'Core Web Vitals (LCP, CLS, etc.) captured during the test, measuring real loading and responsiveness of the page under test.',

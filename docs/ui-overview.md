@@ -76,9 +76,20 @@ Administrators can **delete** the entire run and its files from the header.
 
 ## Test case detail
 
-Everything about a single test execution: a **status card** (id, title, copyable location, duration, worker, retries, slowest step, duration-vs-average), **run context** (environment, CI, branch, commit, author, browser), a link into the specific test in the HTML report, and attached **traces** (open in the Playwright viewer or download; they stream in live while the parent run is in progress).
+Everything about a single test execution, laid out **diagnosis-first**. A pinned **summary** carries the status, title, copyable location, duration, worker, retries and duration-vs-average, plus at-a-glance **signal badges** (new regression, new flaky, passed-on-retry), any test annotations (`@fixme`, `@slow`, …), the **wasted time** spent in fixed waits, and metadata cards (environment, CI, branch, commit, author, browser, storage). Traces stream in live while the parent run is still running.
 
-For a failed test the page opens on the **Failure** tab, which leads with the raw **error** (copyable), then — when the failure belongs to a cluster — a banner linking to the [failure cluster](#failure-cluster-detail) where the full investigation lives (cross-test evidence, what changed since the last green run, and AI diagnosis); below that, **alternative locators** when a locator broke, with ranked replacements and a recommended fix (see [locator healing](./reporter#locator-healing)), and the failure-time **ARIA snapshot**. The other tabs cover **performance hints**, execution **steps**, **Web Vitals** with color-coded thresholds, **network requests** with inline backend server logs (see [Backend logs](./backend-logs)), and a **history** chart of this test's status and duration over time. The Web Vitals, network, console, ARIA-snapshot, and alternative-locators data all come from the [capture fixtures](./capture-fixtures).
+The tabs adapt to the result.
+
+**A failing execution opens on the Diagnosis tab** — the whole investigation on one screen, modeled on the [failure cluster](#failure-cluster-detail) page you already know. It leads with the raw **error** (copyable), then splits into a right-hand rail and a left-hand evidence funnel:
+
+- **Verdict** — is this a new regression or flaky, how many times it retried, and how long the test has been failing, with a clickable recent-runs strip to jump between executions.
+- **Failure cluster** *(when the failure is clustered)* — signature, error type, how many tests it hit, the cluster's own AI verdict, and a hand-off to the full cross-test investigation.
+- **AI diagnosis** — diagnose *this execution* with one click, or **Copy AI context** to paste the full evidence bundle into your own assistant (works even with no provider configured). Cited evidence links jump to the matching section on the page.
+- **Evidence funnel** — the **test source** as a call stack (the line that actually threw plus the callers above it, so a failure inside a helper is visible, not just the test line that invoked it), grouped **failure evidence** (screenshots, video, traces, attachments), [alternative locators](./reporter#locator-healing) for a broken locator, an **environment diff** and **visual diff** against the last green run, **console** output, **network requests** with inline [backend logs](./backend-logs), **app state**, the failure-time **ARIA snapshot**, and the reconstructed **DOM snapshot**.
+
+**A passing execution opens on Steps**, with an **Artifacts** tab for its traces, attachments, console and network.
+
+Both keep a **Performance** tab (performance hints plus color-coded **Web Vitals**) and a **History** tab (this test's status and duration trend over recent runs, linking through to the full test history). A **Copy retry command** button in the header gives you the exact Playwright command to re-run just this test. The Web Vitals, network, console, ARIA-snapshot and alternative-locator data all come from the [capture fixtures](./capture-fixtures).
 
 <figure>
   <img src="/screenshots/test-case-detail.png" alt="Test case detail page with summary stats, duration trend, status history, and recent executions">

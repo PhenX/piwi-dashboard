@@ -12,11 +12,12 @@
  * force-refresh snapshots the previous result into the version history first.
  */
 
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import {
   failureDiagnoses,
   failureDiagnosisVersions,
   testRunsCases,
+  testRuns,
   failureClusters,
 } from '../../../server/database/schema';
 import type { FailureDiagnosis } from '../../../server/database/schema';
@@ -519,7 +520,7 @@ async function snapshotAndClear(db: Awaited<ReturnType<typeof getDemoDb>>, clust
 }
 
 async function persistDiagnosis(
-  clusterId: number,
+  clusterId: number | null,
   gen: Awaited<ReturnType<typeof generateDiagnosis>>,
   scope: 'cluster' | 'execution' = 'cluster',
   testRunsCaseId: number | null = null,
@@ -550,17 +551,30 @@ async function persistDiagnosis(
     })
     .returning();
 
-  // Look up project for the notification event
-  const [cluster] = await db
-    .select({ projectId: failureClusters.projectId })
-    .from(failureClusters)
-    .where(eq(failureClusters.id, clusterId))
-    .limit(1);
+  // Look up project for the notification event — cluster-scoped rows resolve via the
+  // cluster; execution-scoped rows carry no cluster and resolve via the execution's run.
+  let projectId = 0;
+  if (clusterId != null) {
+    const [cluster] = await db
+      .select({ projectId: failureClusters.projectId })
+      .from(failureClusters)
+      .where(eq(failureClusters.id, clusterId))
+      .limit(1);
+    projectId = cluster?.projectId ?? 0;
+  } else if (testRunsCaseId != null) {
+    const [run] = await db
+      .select({ projectId: testRuns.projectId })
+      .from(testRunsCases)
+      .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
+      .where(eq(testRunsCases.id, testRunsCaseId))
+      .limit(1);
+    projectId = run?.projectId ?? 0;
+  }
 
   publishDemoNotificationEvent({
     type: 'diagnosis.completed',
-    clusterId,
-    projectId: cluster?.projectId ?? 0,
+    clusterId: clusterId ?? 0,
+    projectId,
     summary: gen.row.summary,
     rootCause: gen.row.rootCause,
     category: gen.row.category,
@@ -593,13 +607,17 @@ export async function apiDiagnoseExecution(
     .select({ clusterId: testRunsCases.failureClusterId })
     .from(testRunsCases)
     .where(eq(testRunsCases.id, testRunsCaseId));
-  if (!trc?.clusterId) throw new Error('Execution has no cluster to diagnose in demo mode');
+  if (!trc) throw new Error('Execution not found');
+  // Every failing demo case belongs to a cluster; ground the diagnosis in that cluster's
+  // evidence when present (the common path). If a failure ever had no cluster the diagnose
+  // action simply wouldn't fire, so a missing cluster is a hard error, not a silent no-op.
+  if (!trc.clusterId) throw new Error('Execution has no failure to diagnose');
 
   // Snapshot/replace any existing execution-scoped row for this case.
   const [existing] = await db
     .select()
     .from(failureDiagnoses)
-    .where(eq(failureDiagnoses.testRunsCaseId, testRunsCaseId))
+    .where(and(eq(failureDiagnoses.testRunsCaseId, testRunsCaseId), eq(failureDiagnoses.scope, 'execution')))
     .limit(1);
   if (existing) {
     await db.insert(failureDiagnosisVersions).values(buildDiagnosisVersionValues(existing, new Date()));
@@ -610,7 +628,9 @@ export async function apiDiagnoseExecution(
     additionalContext: (body?.additionalContext as string) ?? null,
     selectedCommitShas: (body?.selectedCommitShas as string[]) ?? null,
   });
-  return persistDiagnosis(trc.clusterId, gen, 'execution', testRunsCaseId);
+  // Execution-scoped rows persist a null cluster (mirrors the server + keeps the
+  // (cluster_id, scope) unique index from colliding across executions of one cluster).
+  return persistDiagnosis(null, gen, 'execution', testRunsCaseId);
 }
 
 /**

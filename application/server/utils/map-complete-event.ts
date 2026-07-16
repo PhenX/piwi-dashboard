@@ -31,6 +31,7 @@ export interface ParsedCompleteEvent {
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
   testSource?: string | null;
+  testSourceFrames?: unknown;
   suitePath?: string[] | null;
   suiteConfig?: Array<{ mode: string; annotations: Array<{ type: string; description?: string }> }> | null;
   testAnnotations?: Array<{ type: string; description?: string }> | null;
@@ -73,6 +74,7 @@ export function mapCompleteEventToRunCase(tc: ParsedCompleteEvent): RunCaseInput
     consoleLogs: tc.consoleLogs,
     ariaSnapshot: (tc.ariaSnapshot as string | null | undefined) ?? null,
     testSource: tc.testSource ?? null,
+    testSourceFrames: tc.testSourceFrames ?? null,
     workerIndex: tc.workerIndex ?? null,
     shardIndex: tc.shardIndex ?? null,
     startedAt: tc.startedAt ?? null,

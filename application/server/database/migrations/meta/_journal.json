@@ -211,6 +211,20 @@
       "when": 1783855124439,
       "tag": "0029_rapid_spiral",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1784146609218,
+      "tag": "0030_nebulous_vengeance",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1784150456542,
+      "tag": "0031_careful_johnny_blaze",
+      "breakpoints": true
     }
   ]
 }
