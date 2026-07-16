@@ -218,6 +218,41 @@
       "when": 1784150457427,
       "tag": "0030_worthless_purple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1784240360285,
+      "tag": "0031_dedupe_failure_diagnoses_cluster_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1784240406280,
+      "tag": "0032_failure_diagnoses_cluster_scope_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1784241421372,
+      "tag": "0033_hot_path_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1784241440567,
+      "tag": "0034_backfill_browser_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1784242099728,
+      "tag": "0035_case_payloads",
+      "breakpoints": true
     }
   ]
 }

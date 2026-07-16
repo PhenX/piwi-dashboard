@@ -8,9 +8,9 @@ import {
   projectTags,
   failureClusters,
   failureDiagnoses,
+  casePayloads,
 } from '../../server/database/schema';
 import { asc, desc, eq, exists, sql, and, inArray, gte, lte, isNotNull, count } from 'drizzle-orm';
-import type { BrowserConfig } from '../types';
 
 import type { DrizzleDB } from './db';
 
@@ -128,7 +128,11 @@ export async function listProjects(db: DrizzleDB, scope: ProjectScope = 'all') {
 
 // ─── getProject ──────────────────────────────────────────────────
 
-export async function getProject(db: DrizzleDB, id: number) {
+export async function getProject(db: DrizzleDB, id: number, options?: { runLimit?: number }) {
+  // Bounds the run list (and the charts derived from it) — projects grow
+  // unboundedly, so an uncapped select scales with total history.
+  const runLimit = Math.min(Math.max(options?.runLimit ?? 200, 1), 1000);
+
   const projectResults: any[] = await db.select().from(projects).where(eq(projects.id, id));
   const project = projectResults[0];
 
@@ -165,7 +169,8 @@ export async function getProject(db: DrizzleDB, id: number) {
     })
     .from(testRuns)
     .where(eq(testRuns.projectId, id))
-    .orderBy(desc(testRuns.startTime));
+    .orderBy(desc(testRuns.startTime))
+    .limit(runLimit);
 
   // Fetch reports for all runs in a single query
   const runIds: number[] = runs.map((r: any) => r.id);
@@ -187,19 +192,19 @@ export async function getProject(db: DrizzleDB, id: number) {
     reportsByRunId.set(r.testRunId!, list);
   }
 
-  // Aggregate distinct browsers per run
+  // Aggregate distinct browsers per run from the scalar column — the wide
+  // `browser` JSON is only needed for full configs, not the name list.
   const browserRows: any[] =
     runIds.length > 0
       ? await db
-          .select({ testRunId: testRunsCases.testRunId, browser: testRunsCases.browser })
+          .selectDistinct({ testRunId: testRunsCases.testRunId, browserName: testRunsCases.browserName })
           .from(testRunsCases)
-          .where(and(inArray(testRunsCases.testRunId, runIds), isNotNull(testRunsCases.browser)))
+          .where(and(inArray(testRunsCases.testRunId, runIds), isNotNull(testRunsCases.browserName)))
       : [];
 
   const browsersByRunId = new Map<number, string[]>();
   for (const row of browserRows) {
-    const browser = row.browser as BrowserConfig | null;
-    const name = browser?.projectName;
+    const name = row.browserName as string | null;
     if (!name) continue;
     const list = browsersByRunId.get(row.testRunId) ?? [];
     if (!list.includes(name)) list.push(name);
@@ -352,6 +357,7 @@ export async function deleteProjectData(db: DrizzleDB, projectId: number) {
   }
 
   await db.delete(testCases).where(eq(testCases.projectId, projectId));
+  await db.delete(casePayloads).where(eq(casePayloads.projectId, projectId));
 
   // Deleting the project row cascades to: projectTags, failureClusters,
   // failureDiagnoses, traceBlobs, traceResources

@@ -102,9 +102,31 @@ You can also delete individual test runs:
 - From the **test run detail page** — click the red **Delete** button in the page header.
 - From the **project detail page** — click the **Delete** button in the Actions column of the test runs table.
 
+### Data retention
+
+A nightly sweep (03:17 server time) handles recurring cleanup:
+
+- **Test-run pruning** — deletes runs older than `PIWI_RETENTION_DAYS` days, including their files, traces, and reports. **Off by default**: deleting history is opt-in, so nothing is pruned until you set the variable.
+- **Notification outbox pruning** — removes sent/failed delivery rows older than `PIWI_RETENTION_NOTIFICATION_DAYS` days (default 30).
+- **Diagnosis history capping** — keeps the newest `PIWI_RETENTION_DIAGNOSIS_VERSIONS` versions per AI diagnosis (default 20).
+- **Orphan sweep** — removes rows whose parent records were deleted by older versions.
+
+The manual **Settings › Storage** cleanup remains available for one-off bulk deletes and uses the same deletion logic.
+
+### Space reclamation
+
+Deleting runs removes rows and stored files, but giving the freed pages back to the filesystem depends on the backend:
+
+- **SQLite** — databases created by recent versions have `auto_vacuum=INCREMENTAL` enabled, so the cleanup endpoint reclaims space automatically. Databases created before that (where `PRAGMA auto_vacuum` reports `0`) need a one-off full rebuild: call the cleanup API with `{ "olderThanDays": ..., "vacuum": true }` to run a blocking `VACUUM` after the delete. Expect it to take a while on large databases.
+- **PostgreSQL** — freed space is reused by PostgreSQL's autovacuum; no manual action is needed.
+
 ## Storage architecture
 
 The dashboard uses an abstraction layer that allows switching backends without any code changes. Files are stored using relative paths (e.g. `project-1/run-123/index.html`), making migration between backends straightforward.
+
+### Evidence payload deduplication
+
+Large failure evidence captured per execution — the page's ARIA snapshot, the failing test's source snippet, and its source stack frames — is stored content-addressed: each unique payload is written once per project (keyed by SHA-256) and executions reference it by id. A test that fails the same way across many runs, or across several browsers in one run, stores that evidence a single time instead of once per execution. Unreferenced payloads are garbage-collected when runs are deleted. Deduplication happens server-side at ingest, so it applies regardless of reporter version.
 
 ## Database storage
 

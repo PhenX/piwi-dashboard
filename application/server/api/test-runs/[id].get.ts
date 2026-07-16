@@ -1,7 +1,7 @@
 import { getTestRun } from '#shared/handlers/test-runs';
 import { Role } from '#shared/types';
 import { requireResolvedProjectAccess, requireRouteId, resolveRunProjectId } from '../../utils/project-access';
-import { resolveWastedPatterns } from '../../utils/wasted-settings';
+import { resolveWastedSettings } from '../../utils/wasted-settings';
 
 const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
@@ -20,8 +20,10 @@ export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'test run ID');
   const { db } = await requireResolvedProjectAccess(event, id, resolveRunProjectId, 'Test run');
 
-  const wastedPatterns = await resolveWastedPatterns(db);
-  const result = await getTestRun(db, id, wastedPatterns);
+  // Only custom patterns force a per-case recompute; with the defaults the
+  // stored wasted_time_ms is served as-is.
+  const wasted = await resolveWastedSettings(db);
+  const result = await getTestRun(db, id, wasted.isDefault ? null : wasted.patterns);
   if (!result) throw createError({ statusCode: 404, message: 'Test run not found' });
   return result;
 });

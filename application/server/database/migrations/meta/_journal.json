@@ -225,6 +225,27 @@
       "when": 1784150456542,
       "tag": "0031_careful_johnny_blaze",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1784241420528,
+      "tag": "0032_hot_path_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1784241439687,
+      "tag": "0033_backfill_browser_name",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1784242098846,
+      "tag": "0034_case_payloads",
+      "breakpoints": true
     }
   ]
 }
