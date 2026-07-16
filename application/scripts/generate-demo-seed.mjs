@@ -1068,7 +1068,7 @@ for (const [pid, cfg] of Object.entries(PROJECT_CONFIGS)) {
         test_source_frames: isFailedCase ? testSourceFramesForCluster(clusterDef) : null,
         worker_index: workerIndex,
         started_at: caseStartMs,
-        created_at: Math.floor(caseStartMs / 1000),
+        created_at: caseStartMs,
       };
       TEST_RUNS_CASES.push(trc);
 

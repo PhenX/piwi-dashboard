@@ -100,7 +100,7 @@ export const HELP_TOPICS = {
   },
   'project.test-cases': {
     title: 'Test cases',
-    text: 'Every distinct test in the project with its pass rate across runs. Click one to see its full history.',
+    text: 'Every distinct test in the project with its executed-only pass rate, result breakdown and average duration across runs. Search by title or file, filter by status, and switch to a per-spec tree. Cases not run within the selected age window are hidden by default (last 30 days) — pick "All time" to see obsolete ones. Click a test to see its full history.',
     doc: 'ui-overview#project-detail',
   },
   'project.compare': {

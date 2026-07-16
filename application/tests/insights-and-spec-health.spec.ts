@@ -104,7 +104,7 @@ test.describe.serial('Insights, spec health & flaky classification', () => {
   test('flaky-classify labels a timeout failure as "timing"', async ({ request }) => {
     const tcRes = await request.get(`/api/projects/${projectId}/test-cases`);
     expect(tcRes.ok()).toBeTruthy();
-    const cases = (await tcRes.json()) as Array<{ id: number; title: string }>;
+    const { items: cases } = (await tcRes.json()) as { items: Array<{ id: number; title: string }> };
     const checkout = cases.find((c) => c.title === 'checkout works');
     expect(checkout, 'checkout test case exists').toBeTruthy();
 

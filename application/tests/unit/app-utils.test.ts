@@ -6,6 +6,7 @@ import {
   formatRelativeTime,
   getStatusColor,
   formatStatusLabel,
+  testCaseCategoryColor,
   clusterStatusColor,
   clusterErrorTypeColor,
   getFileApiPath,
@@ -44,6 +45,18 @@ describe('formatDuration', () => {
   test('formats seconds and prefixes a minus sign for negative durations', () => {
     expect(formatDuration(5000)).toBe('5 seconds');
     expect(formatDuration(-5000)).toBe('−5 seconds');
+  });
+
+  test('rounds fractional milliseconds to at most 3 decimals of seconds', () => {
+    expect(formatDuration(8234.666666667)).toBe('8.235 seconds');
+    expect(formatDuration(1234.5678)).toBe('1.235 seconds');
+    expect(formatDuration(1234)).toBe('1.234 seconds');
+    expect(formatDuration(-1234.5678)).toBe('−1.235 seconds');
+  });
+
+  test('renders zero durations as 0 seconds instead of an empty string', () => {
+    expect(formatDuration(0)).toBe('0 seconds');
+    expect(formatDuration(0.2)).toBe('0 seconds');
   });
 });
 
@@ -89,7 +102,18 @@ describe('formatStatusLabel', () => {
     expect(formatStatusLabel('timedOut')).toBe('failed');
     expect(formatStatusLabel('timedout')).toBe('failed');
     expect(formatStatusLabel('didnotrun')).toBe("didn't run");
+    expect(formatStatusLabel('never-run')).toBe('never run');
     expect(formatStatusLabel('passed')).toBe('passed');
+  });
+});
+
+describe('testCaseCategoryColor', () => {
+  test('maps derived catalog categories to badge colors', () => {
+    expect(testCaseCategoryColor('flaky')).toBe('warning');
+    expect(testCaseCategoryColor('never-run')).toBe('neutral');
+    expect(testCaseCategoryColor('didnotrun')).toBe('warning');
+    expect(testCaseCategoryColor('passed')).toBe('success');
+    expect(testCaseCategoryColor('failed')).toBe('error');
   });
 });
 

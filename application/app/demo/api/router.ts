@@ -24,6 +24,7 @@ import {
   getProject,
   getProjectPerformance,
   getProjectTestCases,
+  parseTestCasesQuery,
   getProjectSlowTests,
   getProjectFailureClusters,
   updateProject,
@@ -176,7 +177,7 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/test-cases$/,
-    handler: async (m) => getProjectTestCases(await getDemoDb(), +m[1]!),
+    handler: async (m, _, q) => getProjectTestCases(await getDemoDb(), +m[1]!, parseTestCasesQuery(q)),
   },
   {
     method: 'GET',

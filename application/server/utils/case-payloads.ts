@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { casePayloads } from '../database/schema';
-import type { DbClient } from '../database';
+import type { DrizzleDB } from '#shared/handlers/db';
 import { sha256Hex } from '#shared/utils/hash';
 
 /**
@@ -33,7 +33,7 @@ function* batches<T>(items: T[]): Generator<T[]> {
  * pattern).
  */
 export async function upsertCasePayloads(
-  db: DbClient,
+  db: DrizzleDB,
   projectId: number,
   contents: Array<string | null | undefined>,
 ): Promise<Map<string, number>> {
@@ -88,7 +88,7 @@ export async function upsertCasePayloads(
 
 /** Batched fetch of payload contents by id. */
 export async function resolveCasePayloadContents(
-  db: DbClient,
+  db: DrizzleDB,
   ids: Array<number | null | undefined>,
 ): Promise<Map<number, string>> {
   const map = new Map<number, string>();
@@ -118,7 +118,7 @@ interface CasePayloadRefFields {
  * coalesced from their content-addressed payloads, falling back to the legacy
  * inline columns for rows written before dedup existed.
  */
-export async function inlineCasePayloads<T extends CasePayloadRefFields>(db: DbClient, row: T): Promise<T> {
+export async function inlineCasePayloads<T extends CasePayloadRefFields>(db: DrizzleDB, row: T): Promise<T> {
   const contents = await resolveCasePayloadContents(db, [
     row.ariaSnapshotPayloadId,
     row.testSourcePayloadId,
