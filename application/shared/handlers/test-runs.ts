@@ -25,6 +25,17 @@ import { getLocatorHealingBatch } from '../../server/utils/locator-healing';
 
 type ProjectScope = 'all' | Set<number>;
 
+/** The most recent test run for a project (id + status only), or null if none. */
+export async function getProjectLatestRun(db: DrizzleDB, projectId: number) {
+  const rows = await db
+    .select({ id: testRuns.id, status: testRuns.status })
+    .from(testRuns)
+    .where(eq(testRuns.projectId, projectId))
+    .orderBy(desc(testRuns.id))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 // ─── getTestRun — full test run detail ───────────────────────────────────────
 
 export async function getTestRun(

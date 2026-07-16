@@ -1,7 +1,6 @@
-import { eq, desc } from 'drizzle-orm';
 import { getDatabase } from '../../../database';
-import { testRuns } from '../../../database/schema';
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
+import { getProjectLatestRun } from '#shared/handlers/test-runs';
 
 defineRouteMeta({
   openAPI: {
@@ -19,12 +18,5 @@ export default eventHandler(async (event) => {
   await requireProjectAccess(event, id);
 
   const db = await getDatabase();
-  const result = await db
-    .select({ id: testRuns.id, status: testRuns.status })
-    .from(testRuns)
-    .where(eq(testRuns.projectId, id))
-    .orderBy(desc(testRuns.id))
-    .limit(1);
-
-  return result[0] ?? null;
+  return getProjectLatestRun(db, id);
 });

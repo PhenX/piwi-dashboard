@@ -545,6 +545,25 @@ export async function apiPostRunEvents(
   return { success: true, processed: insertedRunCases.length + beginEvents.length };
 }
 
+/** POST /api/test-runs/:id/heartbeat */
+export async function apiHeartbeatTestRun(id: number, body: { streamToken?: string }) {
+  const db = await getDemoDb();
+
+  const testRunResults = await db.select().from(testRuns).where(eq(testRuns.id, id));
+  const testRun = testRunResults[0];
+
+  if (!testRun) throw new Error('Test run not found');
+  const shardTokenSet = demoShardTokens.get(id);
+  const isValidShardToken = body.streamToken ? shardTokenSet?.has(body.streamToken) : false;
+  if (!body.streamToken || (testRun.streamToken !== body.streamToken && !isValidShardToken)) {
+    throw new Error('Invalid stream token');
+  }
+
+  await db.update(testRuns).set({ updatedAt: new Date() }).where(eq(testRuns.id, id));
+
+  return { success: true };
+}
+
 /** POST /api/test-runs/:id/finish (demo mode has no pending uploads) */
 export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
   const db = await getDemoDb();

@@ -921,6 +921,36 @@ export async function apiTestAiSettings() {
   };
 }
 
+/**
+ * POST /api/settings/ai/models — the real endpoint calls out to the
+ * configured provider's models API; the demo has no real provider (and a
+ * browser-side fetch to most providers' model-list endpoints would fail on
+ * CORS anyway), so it returns the two canned demo "models" this build
+ * actually uses, in the same `ModelInfo[]` shape.
+ */
+export async function apiListAiModels(_body?: unknown) {
+  return {
+    models: [
+      {
+        id: DEMO_MODEL,
+        label: 'Demo (simulated)',
+        description: 'Generates diagnoses from the seeded cluster evidence — no real model calls in demo mode.',
+        contextLength: undefined,
+        maxTokens: undefined,
+        modalities: undefined,
+      },
+      {
+        id: 'demo-research',
+        label: 'Demo research (simulated)',
+        description: 'The simulated research stage of the two-stage diagnosis pipeline.',
+        contextLength: undefined,
+        maxTokens: undefined,
+        modalities: undefined,
+      },
+    ],
+  };
+}
+
 /** GET /api/settings/ai/limits */
 export async function apiGetAiLimits() {
   return { limits: DEFAULT_CONTEXT_LIMITS, envManaged: [], fields: CONTEXT_LIMIT_FIELDS };
