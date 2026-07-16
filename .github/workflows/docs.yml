@@ -23,7 +23,7 @@ jobs:
 
       # ── Build VitePress docs ──────────────────────────────────────────────
       - name: Setup Node (docs)
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -45,7 +45,7 @@ jobs:
 
       # ── Build Nuxt demo (SPA, deployed at /demo/) ─────────────────────────
       - name: Setup Node (demo)
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
