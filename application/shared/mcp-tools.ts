@@ -441,6 +441,7 @@ export const MCP_TOOL_DEFS = [
         projectId: { type: 'number', description: 'Project ID' },
         pageSize: { type: 'number', description: 'Results per page (default 10, max 50)' },
         offset: { type: 'number', description: 'Row offset for paging (default 0)' },
+        query: { type: 'string', description: 'Optional case-insensitive substring filter on title or file path' },
       },
       required: ['projectId'],
     },

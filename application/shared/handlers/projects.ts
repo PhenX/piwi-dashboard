@@ -9,7 +9,7 @@ import {
   failureClusters,
   failureDiagnoses,
 } from '../../server/database/schema';
-import { desc, eq, sql, and, inArray, gte, lte, isNotNull, count } from 'drizzle-orm';
+import { asc, desc, eq, exists, sql, and, inArray, gte, lte, isNotNull, count } from 'drizzle-orm';
 import type { BrowserConfig } from '../types';
 
 import type { DrizzleDB } from './db';
@@ -447,44 +447,180 @@ export async function getProjectPerformance(
 
 // ─── getProjectTestCases ─────────────────────────────────────────
 
-export async function getProjectTestCases(db: DrizzleDB, projectId: number) {
-  const testCasesWithStats: any[] = await db
-    .select({
-      id: testCases.id,
-      filePath: testCases.filePath,
-      title: testCases.title,
-      totalRuns: sql<number>`COUNT(${testRunsCases.id})`,
-      passedRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'passed' THEN 1 ELSE 0 END)`,
-      failedRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'failed' THEN 1 ELSE 0 END)`,
-      skippedRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'skipped' THEN 1 ELSE 0 END)`,
-      timedOutRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'timedOut' THEN 1 ELSE 0 END)`,
-      flakyRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'passed' AND ${testRunsCases.retries} > 0 THEN 1 ELSE 0 END)`,
-      recentFlakyRuns: sql<number>`(
+export const TEST_CASE_SORTS = ['lastRun', 'title', 'totalRuns', 'passRate', 'avgDuration', 'status'] as const;
+export type TestCasesSort = (typeof TEST_CASE_SORTS)[number];
+
+/** Filterable per-case status categories (the derived `status` field, not raw run statuses). */
+export const TEST_CASE_STATUS_FILTERS = ['passed', 'failed', 'flaky', 'skipped', 'didnotrun'] as const;
+
+export interface TestCasesQuery {
+  limit: number;
+  offset: number;
+  q?: string;
+  statuses?: string[];
+  maxAgeDays: number;
+  sort: TestCasesSort;
+  dir: 'asc' | 'desc';
+}
+
+/**
+ * Parse and clamp the test-cases catalog query parameters. Shared by the REST
+ * endpoint (`getQuery` record) and the demo router (`URLSearchParams`) so both
+ * apply identical defaults: limit 50 (max 1000), `maxAgeDays` 0 = all time
+ * (the UI sends its own default), sort by last run, newest first.
+ */
+export function parseTestCasesQuery(input?: URLSearchParams | Record<string, unknown> | null): TestCasesQuery {
+  const get = (key: string): string | undefined => {
+    if (!input) return undefined;
+    const value = input instanceof URLSearchParams ? input.get(key) : (input as Record<string, unknown>)[key];
+    if (value == null) return undefined;
+    return String(Array.isArray(value) ? value[0] : value);
+  };
+  const num = (key: string, fallback: number): number => {
+    const n = Number(get(key));
+    return Number.isFinite(n) ? n : fallback;
+  };
+  const statuses = (get('status') ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => (TEST_CASE_STATUS_FILTERS as readonly string[]).includes(s));
+  const rawSort = get('sort') ?? '';
+  return {
+    limit: Math.min(1000, Math.max(1, Math.floor(num('limit', 50)))),
+    offset: Math.max(0, Math.floor(num('offset', 0))),
+    q: get('q')?.trim() || undefined,
+    statuses: statuses.length > 0 ? statuses : undefined,
+    maxAgeDays: Math.max(0, num('maxAgeDays', 0)),
+    sort: (TEST_CASE_SORTS as readonly string[]).includes(rawSort) ? (rawSort as TestCasesSort) : 'lastRun',
+    dir: get('dir') === 'asc' ? 'asc' : 'desc',
+  };
+}
+
+/**
+ * Normalize a `MAX(created_at)` aggregate to epoch milliseconds. The raw value
+ * is a ms integer on SQLite, a Date (or timestamp string) on PostgreSQL, and
+ * Unix seconds in demo databases seeded before the unit fix.
+ */
+function toEpochMs(value: unknown): number | null {
+  if (value == null) return null;
+  if (value instanceof Date) return value.getTime();
+  const n = typeof value === 'number' ? value : Number(value);
+  if (Number.isFinite(n)) return n < 1e12 ? n * 1000 : n;
+  const parsed = Date.parse(String(value));
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+/**
+ * Paginated test-case catalog for a project with per-case aggregates.
+ *
+ * Timed-out runs (both the raw `timedOut` Playwright spelling and the declared
+ * lowercase `timedout`) are folded into `failedRuns`, matching how the rest of
+ * the UI treats timeouts. `passRate` is computed over executed runs only
+ * (passed + failed; skipped/didnotrun excluded) and is null when nothing ran.
+ * The derived `status` category is what the status filter and sort operate on:
+ * `flaky` when any of the last 10 executions is a retry-pass, otherwise the
+ * latest run's status (timeouts shown as failed), or `never-run`.
+ */
+export async function getProjectTestCases(db: DrizzleDB, projectId: number, options: Partial<TestCasesQuery> = {}) {
+  const { limit = 50, offset = 0, q, statuses, maxAgeDays = 0, sort = 'lastRun', dir = 'desc' } = options;
+
+  const passed = sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'passed' THEN 1 ELSE 0 END)`;
+  const failed = sql<number>`SUM(CASE WHEN ${testRunsCases.status} IN ('failed', 'timedOut', 'timedout') THEN 1 ELSE 0 END)`;
+  const recentFlaky = sql<number>`(
       SELECT COUNT(*) FROM (
         SELECT ${testRunsCases.status} AS s, ${testRunsCases.retries} AS r
         FROM ${testRunsCases}
         WHERE ${testRunsCases.testCaseId} = ${testCases.id}
         ORDER BY ${testRunsCases.createdAt} DESC
         LIMIT 10
-      ) WHERE s = 'passed' AND r > 0
-    )`,
-      avgDuration: sql<number>`AVG(${testRunsCases.duration})`,
-      lastRun: sql<number>`MAX(${testRunsCases.createdAt})`,
-      lastStatus: sql<string>`(
+      ) AS recent WHERE s = 'passed' AND r > 0
+    )`;
+  const lastStatus = sql<string | null>`(
       SELECT ${testRunsCases.status}
       FROM ${testRunsCases}
       WHERE ${testRunsCases.testCaseId} = ${testCases.id}
       ORDER BY ${testRunsCases.createdAt} DESC
       LIMIT 1
-    )`,
+    )`;
+  const category = sql<string>`CASE
+      WHEN ${recentFlaky} > 0 THEN 'flaky'
+      WHEN ${lastStatus} IN ('timedOut', 'timedout') THEN 'failed'
+      ELSE COALESCE(${lastStatus}, 'never-run')
+    END`;
+  const passRate = sql<
+    number | null
+  >`CASE WHEN (${passed} + ${failed}) > 0 THEN (${passed} * 1.0) / (${passed} + ${failed}) END`;
+
+  const conditions = [eq(testCases.projectId, projectId)];
+  if (q) {
+    const pattern = `%${q.toLowerCase()}%`;
+    conditions.push(sql`(lower(${testCases.title}) LIKE ${pattern} OR lower(${testCases.filePath}) LIKE ${pattern})`);
+  }
+  if (maxAgeDays > 0) {
+    const cutoff = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000);
+    conditions.push(
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(testRunsCases)
+          .where(and(eq(testRunsCases.testCaseId, testCases.id), gte(testRunsCases.createdAt, cutoff))),
+      ),
+    );
+  }
+  if (statuses && statuses.length > 0) {
+    conditions.push(inArray(category, statuses));
+  }
+  const where = and(...conditions);
+
+  // Every predicate above is per-case (correlated on testCases.id only), so the
+  // total is a plain count over test_cases — no join or grouping needed.
+  const countRows: any[] = await db.select({ total: count() }).from(testCases).where(where);
+  const total = Number(countRows[0]?.total ?? 0);
+
+  const sortExpressions: Record<TestCasesSort, ReturnType<typeof sql>> = {
+    lastRun: sql`MAX(${testRunsCases.createdAt})`,
+    title: sql`lower(${testCases.title})`,
+    totalRuns: sql`COUNT(${testRunsCases.id})`,
+    passRate,
+    avgDuration: sql`AVG(CASE WHEN ${testRunsCases.status} NOT IN ('skipped', 'didnotrun') THEN ${testRunsCases.duration} END)`,
+    status: category,
+  };
+
+  const rows: any[] = await db
+    .select({
+      id: testCases.id,
+      filePath: testCases.filePath,
+      suitePath: testCases.suitePath,
+      title: testCases.title,
+      status: category,
+      totalRuns: sql<number>`COUNT(${testRunsCases.id})`,
+      passedRuns: passed,
+      failedRuns: failed,
+      skippedRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'skipped' THEN 1 ELSE 0 END)`,
+      didNotRunRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'didnotrun' THEN 1 ELSE 0 END)`,
+      flakyRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'passed' AND ${testRunsCases.retries} > 0 THEN 1 ELSE 0 END)`,
+      recentFlakyRuns: recentFlaky,
+      passRate,
+      avgDuration: sql<
+        number | null
+      >`AVG(CASE WHEN ${testRunsCases.status} NOT IN ('skipped', 'didnotrun') THEN ${testRunsCases.duration} END)`,
+      lastRun: sql<number | null>`MAX(${testRunsCases.createdAt})`,
+      lastStatus,
     })
     .from(testCases)
     .leftJoin(testRunsCases, eq(testCases.id, testRunsCases.testCaseId))
-    .where(eq(testCases.projectId, projectId))
-    .groupBy(testCases.id, testCases.filePath, testCases.title)
-    .orderBy(desc(sql`MAX(${testRunsCases.createdAt})`));
+    .where(where)
+    .groupBy(testCases.id, testCases.filePath, testCases.suitePath, testCases.title)
+    .orderBy(sql`${sortExpressions[sort]} ${sql.raw(dir === 'asc' ? 'ASC' : 'DESC')} NULLS LAST`, asc(testCases.id))
+    .limit(limit)
+    .offset(offset);
 
-  return testCasesWithStats;
+  return {
+    items: rows.map((row) => ({ ...row, lastRun: toEpochMs(row.lastRun) })),
+    total,
+    limit,
+    offset,
+  };
 }
 
 /**

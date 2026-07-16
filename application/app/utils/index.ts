@@ -1,7 +1,7 @@
 import { h } from 'vue';
 import { UIcon } from '#components';
 import type { Column } from '@tanstack/vue-table';
-import type { CommitListItem, TestCaseWithStats } from '~~/types/api';
+import type { CommitListItem } from '~~/types/api';
 import { formatDuration as formatDurationLib, formatDistanceToNow } from 'date-fns';
 
 /**
@@ -82,8 +82,12 @@ export function formatRelativeTime(date: string | Date | number | null | undefin
 
 export function formatDuration(ms?: number | null) {
   if (ms === null || ms === undefined) return 'N/A';
+  // Round to whole milliseconds so fractional inputs (SQL averages) never
+  // render more than 3 decimals of seconds.
+  const rounded = Math.round(Math.abs(ms));
+  if (rounded === 0) return '0 seconds';
   const sign = ms < 0 ? '−' : '';
-  return sign + formatDurationLib({ seconds: Math.abs(ms) / 1000 });
+  return sign + formatDurationLib({ seconds: rounded / 1000 });
 }
 
 export function reportIcon(type: string): string {
@@ -155,6 +159,7 @@ export function getStatusColor(status: string) {
 export function formatStatusLabel(status: string): string {
   if (status === 'timedOut' || status === 'timedout') return 'failed';
   if (status === 'didnotrun') return "didn't run";
+  if (status === 'never-run') return 'never run';
   return status;
 }
 
@@ -477,20 +482,14 @@ export function passRate(run: { passedTests: number; totalTests: number }): numb
   return run.totalTests > 0 ? Math.round((run.passedTests / run.totalTests) * 100) : 0;
 }
 
-/** Pass rate (0–100) across all of a test case's runs. */
-export function getPassRate(testCase: TestCaseWithStats): number {
-  if (testCase.totalRuns === 0) return 0;
-  return Math.round((testCase.passedRuns / testCase.totalRuns) * 100);
-}
-
-/** Display status + badge color for a test case, treating recent flakiness as its own state. */
-export function getTestCaseStatus(testCase: TestCaseWithStats): { status: string; color: BadgeColor } {
-  const recentFlaky = testCase.recentFlakyRuns ?? testCase.flakyRuns;
-  if (recentFlaky > 0) {
-    return { status: 'flaky', color: 'warning' };
-  }
-  return {
-    status: testCase.lastStatus || 'unknown',
-    color: getStatusColor(testCase.lastStatus || 'unknown') as BadgeColor,
-  };
+/**
+ * Badge color for a test case's derived status category (the server-computed
+ * `status` on `TestCaseWithStats`: flaky wins, timeouts fold into failed,
+ * `never-run` for cases without executions).
+ */
+export function testCaseCategoryColor(category: string): BadgeColor {
+  if (category === 'flaky') return 'warning';
+  if (category === 'never-run') return 'neutral';
+  if (category === 'didnotrun') return 'warning';
+  return getStatusColor(category) as BadgeColor;
 }

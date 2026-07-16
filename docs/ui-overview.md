@@ -55,7 +55,7 @@ The complete history for one project, organized into tabs:
 - **Test runs** — every run with status, start time, duration, test counts, and browser badges; select two runs to compare. Runs with a shared failure signature roll up into **Failure clusters** here (see [AI diagnosis & clustering](./ai-diagnosis)).
 - **Flaky tests** — intermittent tests scored by a composite flakiness metric, with root-cause classification and impact ranking. See [Flaky tests & analytics](./flaky-tests#flaky-test-detection).
 - **Performance** — average/P90 duration trends and a slowest-tests table. See [Performance](./flaky-tests#performance).
-- **Test cases** — every unique test with pass rate, result breakdown, average duration, and last-run date.
+- **Test cases** — every unique test with status, executed-only pass rate, result breakdown, average duration, and last run; searchable, filterable by status and last-run age (stale cases hidden by default), paginated, with flat and per-spec tree views.
 - **Compare** — side-by-side delta between two runs (new failures, recovered, duration changes).
 - **Spec health** — a heatmap grouping test cases by spec file and coloring each by pass rate, so an unhealthy area of the suite jumps out. See [Spec health heatmap](./flaky-tests#spec-health-heatmap).
 - **Members** *(admins, when auth is enabled)* — grant or scope project access per user. See [Project access](./authentication#project-access).

@@ -614,22 +614,39 @@ export interface ProjectFailureCluster {
 }
 
 /**
- * Test case with statistics - returned by GET /api/projects/[id]/test-cases
+ * Test case with statistics - one item of GET /api/projects/[id]/test-cases.
+ * `failedRuns` includes timed-out runs; `status` is the derived category the
+ * status filter operates on (flaky wins over the last run's status, timeouts
+ * count as failed, `never-run` when the case has no executions). `passRate`
+ * is over executed runs only (0..1), null when nothing executed.
  */
 export interface TestCaseWithStats {
   id: number;
   filePath: string;
+  suitePath: string;
   title: string;
+  status: string;
   totalRuns: number;
   passedRuns: number;
   failedRuns: number;
   skippedRuns: number;
-  timedOutRuns: number;
+  didNotRunRuns: number;
   flakyRuns: number;
   recentFlakyRuns?: number;
-  avgDuration: number;
-  lastRun: number;
-  lastStatus: string;
+  passRate: number | null;
+  avgDuration: number | null;
+  lastRun: number | null;
+  lastStatus: string | null;
+}
+
+/**
+ * Paginated envelope returned by GET /api/projects/[id]/test-cases
+ */
+export interface TestCasesPage {
+  items: TestCaseWithStats[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 // ============================================================================
