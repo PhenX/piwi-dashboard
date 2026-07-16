@@ -407,8 +407,6 @@ provide(clusterSectionLocatorKey, {
             :environment="environment"
             :steps-count="steps.length"
             :historical-timing="historicalTiming"
-            :traces="traceData ?? []"
-            :attachments="(testCase as any)?.attachments ?? []"
             :stable-links="(testCase as any)?.stableLinks ?? null"
             @refresh="refresh()"
           />

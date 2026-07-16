@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { TestCaseResult, TraceInfo, AttachmentInfo } from '~~/types/api';
-import type { EntityLinkInfo } from '~~/types/api';
+import type { TestCaseResult, EntityLinkInfo } from '~~/types/api';
 import type { BrowserConfig } from '#shared/types';
 
 interface ScmInfo {
@@ -32,8 +31,6 @@ const props = defineProps<{
   environment: string | null | undefined;
   stepsCount: number;
   historicalTiming: HistoricalTiming | null;
-  traces?: TraceInfo[];
-  attachments?: AttachmentInfo[];
   stableLinks?: EntityLinkInfo[] | null;
 }>();
 
@@ -67,36 +64,9 @@ const { summaryColSpanClass, blockColSpanClass } = useDetailGrid(() => {
   if (props.scmInfo) count++;
   if (props.ciInfo || props.environment) count++;
   if (props.browser) count++;
-  if ((props.traces?.length ?? 0) > 0 || (props.attachments?.length ?? 0) > 0) count++;
   count++; // Links card always visible
   return count;
 });
-
-const config = useRuntimeConfig();
-
-function attFileUrl(path: string, contentType?: string | null): string {
-  return fileApiUrl(path, contentType, config.app?.baseURL);
-}
-
-const imageExts = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp']);
-const imageMimes = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/svg+xml', 'image/webp']);
-
-function isImage(path: string, contentType?: string | null): boolean {
-  if (imageExts.has(path.toLowerCase().split('.').pop()!)) return true;
-  if (contentType && imageMimes.has(contentType.toLowerCase())) return true;
-  return false;
-}
-
-function totalStorageSize(traces?: TraceInfo[], attachments?: AttachmentInfo[]): number {
-  let total = 0;
-  if (traces) for (const t of traces) if (t.size) total += t.size;
-  if (attachments) for (const a of attachments) if (a.size) total += a.size;
-  return total;
-}
-
-function fileName(path: string): string {
-  return path.split('/').pop() || path;
-}
 </script>
 
 <template>
@@ -287,51 +257,6 @@ function fileName(path: string): string {
             class="text-xs text-gray-400 break-all leading-snug pt-1 border-t border-default"
           >
             {{ browser.userAgent }}
-          </div>
-        </div>
-      </BlockCard>
-
-      <!-- Storage: traces + attachments -->
-      <BlockCard
-        v-if="(traces?.length ?? 0) > 0 || (attachments?.length ?? 0) > 0"
-        :class="blockColSpanClass"
-        title="Storage"
-        icon="i-lucide-database"
-        :subtitle="`${(traces?.length ?? 0) + (attachments?.length ?? 0)} files · ${formatBytes(totalStorageSize(traces, attachments))}`"
-      >
-        <div class="space-y-2">
-          <!-- Traces -->
-          <TraceListItem v-for="trace in traces" :key="trace.id" :trace="trace" :show-time="false" class="py-1.5" />
-
-          <!-- Attachments summary -->
-          <div v-if="(attachments?.length ?? 0) > 0" class="space-y-1">
-            <div v-for="att in attachments" :key="att.id" class="flex items-center justify-between gap-2 py-1">
-              <div class="flex items-center gap-2 min-w-0">
-                <img
-                  v-if="isImage(att.path, att.contentType)"
-                  :src="attFileUrl(att.path, att.contentType)"
-                  class="size-6 rounded object-cover shrink-0"
-                  alt=""
-                />
-                <UIcon v-else name="i-lucide-file" class="size-4 text-gray-400 shrink-0" />
-                <span class="text-xs truncate">{{ fileName(att.path) }}</span>
-                <span v-if="att.name && att.name !== fileName(att.path)" class="text-[10px] text-gray-400 shrink-0">{{
-                  att.name
-                }}</span>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <span class="text-xs text-gray-400">{{ formatBytes(att.size ?? 0) }}</span>
-                <UButton
-                  :to="attFileUrl(att.path, att.contentType)"
-                  target="_blank"
-                  icon="i-lucide-external-link"
-                  size="xs"
-                  color="neutral"
-                  variant="soft"
-                  label="Open"
-                />
-              </div>
-            </div>
           </div>
         </div>
       </BlockCard>
