@@ -135,6 +135,17 @@ describe('flattenSteps', () => {
     expect(flat[0].duration).toBe(42);
   });
 
+  it('captures the error message and failed flag for failing steps', () => {
+    const flat = flattenSteps([
+      { title: 'locator.click', duration: 5, error: { message: 'element not found' }, steps: [] },
+      { title: 'ok', duration: 1, steps: [] },
+    ] as any);
+    expect(flat[0].error).toEqual({ message: 'element not found' });
+    expect(flat[0].failed).toBe(true);
+    expect(flat[1].error).toBeUndefined();
+    expect(flat[1].failed).toBeUndefined();
+  });
+
   it('captures location (as file:line:col) and startTime when the raw step provides them', () => {
     const start = new Date('2024-01-01T00:00:00.000Z');
     const flat = flattenSteps([
