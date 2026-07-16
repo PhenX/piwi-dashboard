@@ -24,8 +24,41 @@ const dbPath = join(__dirname, '../.data/piwi.db');
 const sql = readFileSync(sqlPath, 'utf8');
 const db = createClient({ url: `file:${dbPath}` });
 
-const statements = sql
-  .split(';')
+/**
+ * Split a SQL script into statements on `;`, but ignore semicolons that sit
+ * inside single-quoted string literals (e.g. a user-agent like
+ * `Mozilla/5.0 (iPhone; CPU ...)` or a commit message). A naive `split(';')`
+ * shatters those INSERTs and silently drops the data.
+ */
+function splitSqlStatements(script) {
+  const out = [];
+  let cur = '';
+  let inString = false;
+  for (let i = 0; i < script.length; i++) {
+    const ch = script[i];
+    if (ch === "'") {
+      // A doubled '' inside a string is an escaped quote, not a terminator.
+      if (inString && script[i + 1] === "'") {
+        cur += "''";
+        i++;
+        continue;
+      }
+      inString = !inString;
+      cur += ch;
+      continue;
+    }
+    if (ch === ';' && !inString) {
+      out.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur.trim()) out.push(cur);
+  return out;
+}
+
+const statements = splitSqlStatements(sql)
   .map((s) => s.trim())
   .filter((s) => s.startsWith('INSERT INTO'));
 

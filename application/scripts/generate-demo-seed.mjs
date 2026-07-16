@@ -720,24 +720,91 @@ const PROJECT_CONFIGS = {
   4: { numRuns: 8, totalTests: 7, baseDuration: 190000, baseAvg: 5800, baseP90: 12000, failRate: 0.25, flakyRate: 0.1 },
 };
 
-// Browser configs per project
+// Browser configs per project. These carry the richer context fields
+// (deviceScaleFactor, isMobile/hasTouch, locale, timezone, colorScheme, userAgent)
+// so the browser badge tooltip and the CI / Env card's dense browser line have
+// real content to show.
+const CHROME_UA =
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 const BROWSER_CONFIGS = {
   1: [
     // e2e-checkout — Chromium most runs, Firefox occasionally
-    { projectName: 'Chromium', browserName: 'chromium', channel: null, viewport: { width: 1280, height: 720 } },
-    { projectName: 'Firefox', browserName: 'firefox', channel: null, viewport: { width: 1280, height: 720 } },
+    {
+      projectName: 'Chromium',
+      browserName: 'chromium',
+      channel: 'chrome',
+      viewport: { width: 1280, height: 720 },
+      deviceScaleFactor: 1,
+      isMobile: false,
+      hasTouch: false,
+      locale: 'en-US',
+      timezoneId: 'America/New_York',
+      colorScheme: 'light',
+      userAgent: CHROME_UA,
+    },
+    {
+      projectName: 'Firefox',
+      browserName: 'firefox',
+      channel: null,
+      viewport: { width: 1280, height: 720 },
+      deviceScaleFactor: 1,
+      isMobile: false,
+      hasTouch: false,
+      locale: 'en-US',
+      timezoneId: 'America/New_York',
+      colorScheme: 'light',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0',
+    },
   ],
   2: [
-    // api-integration — always Chromium
-    { projectName: 'Chromium', browserName: 'chromium', channel: null, viewport: { width: 1280, height: 720 } },
+    // api-integration — headless Chromium in CI
+    {
+      projectName: 'Chromium',
+      browserName: 'chromium',
+      channel: null,
+      viewport: { width: 1280, height: 720 },
+      deviceScaleFactor: 1,
+      isMobile: false,
+      hasTouch: false,
+      locale: 'en-US',
+      timezoneId: 'UTC',
+      colorScheme: 'light',
+      userAgent:
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/124.0.0.0 Safari/537.36',
+    },
   ],
   3: [
-    // ui-components — always Chromium
-    { projectName: 'Chromium', browserName: 'chromium', channel: null, viewport: { width: 1280, height: 720 } },
+    // ui-components — Chromium at 2x DPR in dark mode (component visual tests)
+    {
+      projectName: 'Chromium',
+      browserName: 'chromium',
+      channel: null,
+      viewport: { width: 1280, height: 720 },
+      deviceScaleFactor: 2,
+      isMobile: false,
+      hasTouch: false,
+      locale: 'en-GB',
+      timezoneId: 'Europe/London',
+      colorScheme: 'dark',
+      userAgent: CHROME_UA,
+    },
   ],
   4: [
-    // mobile-safari — always WebKit with iPhone viewport
-    { projectName: 'Mobile Safari', browserName: 'webkit', channel: null, viewport: { width: 390, height: 844 } },
+    // mobile-safari — WebKit emulating an iPhone (mobile + touch + 3x DPR)
+    {
+      projectName: 'Mobile Safari',
+      browserName: 'webkit',
+      channel: null,
+      viewport: { width: 390, height: 844 },
+      deviceScaleFactor: 3,
+      isMobile: true,
+      hasTouch: true,
+      locale: 'en-US',
+      timezoneId: 'America/Los_Angeles',
+      colorScheme: 'light',
+      userAgent:
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+    },
   ],
 };
 

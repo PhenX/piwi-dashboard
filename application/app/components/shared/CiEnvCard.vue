@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import type { TestRunCiMetadata } from '~~/types/api';
+import type { BrowserConfig } from '#shared/types';
 
 defineProps<{
   ci?: TestRunCiMetadata | null;
   environment?: string | null;
   playwrightVersion?: string | null;
   reporterVersion?: string | null;
+  /** When provided, a dense browser line (icon + screen resolution) is folded in. */
+  browser?: BrowserConfig | null;
   class?: string;
 }>();
 </script>
@@ -42,6 +45,16 @@ defineProps<{
         <span v-if="playwrightVersion">Playwright v{{ playwrightVersion }}</span>
         <span v-if="playwrightVersion && reporterVersion" class="text-gray-300 dark:text-gray-600">·</span>
         <span v-if="reporterVersion">Piwi v{{ reporterVersion }}</span>
+      </div>
+      <!-- Browser: dense (icon + screen resolution); full config on hover via the badge -->
+      <div v-if="browser" class="flex items-center gap-1.5">
+        <BrowserBadge :browser="{ ...browser, viewport: undefined }" size="sm" />
+        <span v-if="browser.viewport" class="tabular-nums">
+          {{ browser.viewport.width }}×{{ browser.viewport.height }}
+          <span v-if="browser.deviceScaleFactor && browser.deviceScaleFactor !== 1" class="text-gray-400"
+            >@{{ browser.deviceScaleFactor }}x</span
+          >
+        </span>
       </div>
     </div>
   </BlockCard>

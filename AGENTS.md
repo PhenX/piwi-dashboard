@@ -129,7 +129,7 @@ Nuxt file-based routing:
   - `/test-cases/[id]` — Case detail across runs (pass rate + duration stats, duration trend, status-history strip, recent executions, failure clusters)
   - `/test-run-cases/[id]` — Single execution detail, **diagnosis-first**. A failing execution opens on a **Diagnosis** tab modeled on the cluster page: full-width error card, then a `grid grid-cols-1 xl:grid-cols-[3fr_2fr]` with a right rail (`TestCaseVerdictCard`, `FailureClusterCard`, `TestCaseAiCard`; `xl:order-2` so it follows the error on mobile) and a left evidence funnel (`TestCaseEvidenceCard`, `LocatorHealingPanel`, `EnvironmentDiffCard`, `VisualDiffCard`, console/network, `PageStateCard`, ARIA, `DomSnapshotCard`). A passing execution opens on **Steps** with an **Artifacts** tab. Both keep **Performance** (hints + Web Vitals, always enabled) and **History** (always enabled). Tab is synced to `?tab=` with legacy aliases (`error`→`diagnosis`, `traces`→`diagnosis`/`artifacts`); the page `provide`s `clusterSectionLocatorKey` so an AI-diagnosis citation can reveal/scroll to the matching evidence section.
 - **Components** (`app/components/`): organized into domain subfolders; all auto-imported without folder prefix (Nuxt `pathPrefix: false`).
-  - **`shared/`** — UI primitives used across multiple pages: `RunStatusBadge`, `TestStatusBar`, `RunReports`, `TagBadge`, `TagsSelect`, `BrowserBadge`, `CiEnvCard`, `SourceInfoCard`, `OpenInIdeLink` (clickable source path/`file:line` → open in the local IDE; see the "Clickable source paths" rule), `CodeBlock`, `MarkdownPreview`, `ScreenshotLightbox`, `LocatorHealingPanel` (fetches `/api/test-runs/:id/cases/:caseId/locator-healing`; renders ranked alternatives + recommended fix; used on the test-case and cluster pages)
+  - **`shared/`** — UI primitives used across multiple pages: `RunStatusBadge`, `TestStatusBar`, `RunReports`, `TagBadge`, `TagsSelect`, `BrowserBadge`, `CiEnvCard` (CI provider/build/workflow + environment + tooling versions; pass an optional `browser` to fold in a dense browser line — icon + screen resolution, full config in the `BrowserBadge` tooltip), `SourceInfoCard`, `OpenInIdeLink` (clickable source path/`file:line` → open in the local IDE; see the "Clickable source paths" rule), `CodeBlock`, `MarkdownPreview`, `ScreenshotLightbox`, `LocatorHealingPanel` (fetches `/api/test-runs/:id/cases/:caseId/locator-healing`; renders ranked alternatives + recommended fix; used on the test-case and cluster pages)
   - **`run/`** — Test run detail page (`/test-runs/[id]`): `RunSummary` (summary card + CI/Source/Other metadata), `TestCasesList` (paginated table, sticky headers, row highlighting via `meta.class.tr`), `WorkersTimeline` (clickable bars, emits `selectTestCase`), `RunCompare` (self-contained, watches internal `compareRunA`), `SlowEndpoints` (fetches `/api/test-runs/:id/network-requests` internally), `FailureGroups`, `RunReports`
   - **`test-case/`** — Single-execution detail page (`/test-run-cases/[id]`): `TestCaseSummary` (pinned summary: status, location, duration, retries, worker, slowest step, timing vs avg, signal badges, annotation chips, wasted-time), `TestCaseVerdictCard` (regression/flaky/retry chips + clickable recent-runs strip + failing-streak verdict), `FailureClusterCard` (signature/error-type/occurrences + cluster AI verdict + hand-off; evolved from the old `FailureClusterBanner`), `TestCaseAiCard` (execution-scoped **Copy AI context** + **Diagnose with AI**, renders `DiagnosisResult` inline via the execution `/diagnose` + `/diagnosis` endpoints), `TestCaseEvidenceCard` (grouped screenshots/videos/traces/attachments with a folded peek), `TestCaseTracesCard`, `TestCaseConsoleCard`, `TestCaseNetworkRequests`, `TestCaseAttachmentsCard`, `PageStateCard`, `DomSnapshotCard`, `TestCaseHistoryChart`, `TestEvidenceSection`, `TestEvidenceScreenshots`, `TestEvidenceVideos`, `TestEvidenceSignals`, `TestEvidenceTraces`
   - **`cluster/`** — Failure cluster detail (`/failure-clusters/[id]`): `ClusterSummary` (top summary: signature/metadata info card + inline Triage card, wrapped in `FoldableSummary`), `ClusterTestEvidence` (one tab per affected case, each with an "Open test run case" link, an evidence chip strip and reordered screenshots/traces/failing-steps/signals/source/ARIA blocks; caches each case's detail), `ClusterInvestigation` (baseline picker + SCM diff; its status line is derived from the shared `useScmStatusSummary` composable), `CommitPicker` (baseline selector with aggregate diff stats, caches per baseline), `CommitBrowserModal` (full-screen split modal: paginated commit list + per-commit diff), `ClusterExtractCasesModal`, `RegressionContext`. The page wraps the left-column sections (error, alternative locators, test evidence, what changed) in `CollapsibleSectionCard` (folded by default with a peek) and `provide`s a `clusterSectionLocator` (`useClusterSectionLocator`) so a diagnosis citation can unfold + scroll to the matching section.
@@ -271,7 +271,8 @@ Nuxt file-based routing:
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:push` | Push schema (dev only) |
 | `npm run db:studio` | Drizzle Studio |
-| `npm run app:seed:demo` | Regenerate demo seed data |
+| `npm run app:seed:demo` | Regenerate demo seed data (`public/demo/seed.sql`) |
+| `npm run app:seed:dev` | Load the demo sample data into the local dev SQLite DB |
 | `npm run app:generate:demo` | Build demo SPA |
 | `npm run app:check:demo` | Verify demo routes |
 | `node scripts/db-query.mjs "<sql>"` | Query the local SQLite DB directly |
@@ -281,6 +282,26 @@ Nuxt file-based routing:
 node scripts/db-query.mjs "SELECT key, value FROM app_settings"
 node scripts/db-query.mjs "SELECT id, name FROM projects" --json
 ```
+
+### Running the app locally with sample data (verification & screenshots)
+
+**When you need to see a change working in the real app** — verify a UI tweak, drive a flow, or capture a screenshot — run a **plain (non-demo) dev server backed by a dev DB seeded from the demo data**. Do this instead of hunting for a way to boot the app each time.
+
+```bash
+cd application
+npm run app:seed:demo                            # 1. generate public/demo/seed.sql (skip if it already exists)
+mkdir -p .data && npm run db:migrate             # 2. create + migrate an empty dev DB (.data/piwi.db)
+npm run app:seed:dev                             # 3. load the sample data (server must be stopped — DB lock)
+NUXT_IGNORE_LOCK=1 npx nuxt dev --port 3002      # 4. plain dev server (auth disabled by default)
+```
+
+Then drive `http://localhost:3002` with Playwright using the pre-installed Chromium at `/opt/pw-browsers/chromium` (see `scripts/take-demo-screenshots.mjs` for a working harness). `app:seed:dev` is idempotent (`INSERT OR IGNORE`), so re-running it is safe; to refresh stale rows, wipe `.data` and repeat from step 2.
+
+**Caveats (these cost real debugging time — read them first):**
+- **Do NOT use `PIWI_DEMO_MODE=true` for local verification.** The demo runs entirely in-browser via a service worker + WASM SQLite that does **not** install in headless Chromium, so pages render blank. Demo mode is only for building the static demo SPA.
+- **Test cases live under runs #21+.** Runs #1–20 have 0 cases (their rows target a migration-only table that the dev schema drops), so a test-run-case URL for those runs renders empty. Query the DB (`node scripts/db-query.mjs`) for a real `test_runs_cases.id` — e.g. `SELECT id FROM test_runs_cases ORDER BY id DESC LIMIT 5`.
+- **Clusters with data:** #3, #4, #5, #7, #8.
+- **Brand icons** (`i-simple-icons-*`, e.g. browser badges) resolve from the iconify CDN at runtime; with no outbound network they render blank (only the `lucide` collection is bundled locally). This is an environment limitation, not a bug.
 
 ### Reporter commands (from `reporter/`)
 
@@ -486,31 +507,15 @@ When implementing or extending sharding support:
 
 Demo screenshots live in `application/public/demo/screenshots/*.png` and are committed to the repo. They appear as attachment thumbnails on cluster detail pages. To replace them with fresh real-app captures:
 
-1. **Start a plain dev server** (no `PIWI_DEMO_MODE`) on a free port:
-   ```bash
-   cd application
-   NUXT_IGNORE_LOCK=1 npx nuxt dev --port 3002
-   ```
-   Auth is disabled by default — no login needed.
+1. **Seed a dev server** exactly as in [Running the app locally with sample data](#running-the-app-locally-with-sample-data-verification--screenshots) above (`npm run app:seed:dev` into a migrated `.data/piwi.db`, then `NUXT_IGNORE_LOCK=1 npx nuxt dev --port 3002`).
 
-2. **Seed the dev DB** from the demo SQL (stop the server first to avoid a DB lock, or use a separate terminal while the server is running if it's not writing):
-   ```bash
-   node scripts/seed-dev-from-demo.mjs
-   ```
-   This reads `public/demo/seed.sql` and runs `INSERT OR IGNORE` into `.data/piwi.db`. It is idempotent.
-
-3. **Restart the dev server** (it may have a stale DB on first boot):
-   ```bash
-   NUXT_IGNORE_LOCK=1 npx nuxt dev --port 3002
-   ```
-
-4. **Capture screenshots** with Playwright:
+2. **Capture screenshots** with Playwright:
    ```bash
    node scripts/take-demo-screenshots.mjs
    ```
    This writes `public/demo/screenshots/*.png` directly. The script targets `localhost:3002` and uses the Chromium at `/opt/pw-browsers/chromium`.
 
-5. **Commit the new PNGs** — they are committed to the repo so the demo SPA can serve them.
+3. **Commit the new PNGs** — they are committed to the repo so the demo SPA can serve them.
 
 ### Demo trace + video (committed binary evidence)
 
