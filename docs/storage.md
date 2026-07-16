@@ -102,6 +102,13 @@ You can also delete individual test runs:
 - From the **test run detail page** — click the red **Delete** button in the page header.
 - From the **project detail page** — click the **Delete** button in the Actions column of the test runs table.
 
+### Space reclamation
+
+Deleting runs removes rows and stored files, but giving the freed pages back to the filesystem depends on the backend:
+
+- **SQLite** — databases created by recent versions have `auto_vacuum=INCREMENTAL` enabled, so the cleanup endpoint reclaims space automatically. Databases created before that (where `PRAGMA auto_vacuum` reports `0`) need a one-off full rebuild: call the cleanup API with `{ "olderThanDays": ..., "vacuum": true }` to run a blocking `VACUUM` after the delete. Expect it to take a while on large databases.
+- **PostgreSQL** — freed space is reused by PostgreSQL's autovacuum; no manual action is needed.
+
 ## Storage architecture
 
 The dashboard uses an abstraction layer that allows switching backends without any code changes. Files are stored using relative paths (e.g. `project-1/run-123/index.html`), making migration between backends straightforward.
