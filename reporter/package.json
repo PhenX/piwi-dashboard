@@ -53,7 +53,7 @@
     "dist/"
   ],
   "peerDependencies": {
-    "@playwright/test": "^1.40.0"
+    "@playwright/test": "^1.61.1"
   },
   "dependencies": {
     "form-data": "^4.0.0"
