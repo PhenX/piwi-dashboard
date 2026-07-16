@@ -1,4 +1,4 @@
-import { inArray, lt, sql } from 'drizzle-orm';
+import { and, inArray, lt, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { getDialect } from '../database';
@@ -173,6 +173,45 @@ export async function sweepOrphans(db: DbClient): Promise<OrphanSweepResult> {
   await db.delete(notificationDeliveries).where(orphanedDeliveries);
 
   return result;
+}
+
+/**
+ * Delete outbox rows that finished dispatching (sent/failed/skipped) before
+ * the cutoff. Pending rows are never touched. The outbox is otherwise
+ * append-only — without pruning it grows one row per event × channel forever.
+ */
+export async function pruneNotificationDeliveries(db: DbClient, olderThanDays: number): Promise<number> {
+  const cutoffDate = new Date(Date.now() - olderThanDays * MS_PER_DAY);
+  // Typed operators bind the Date correctly for each dialect (ms integer on
+  // SQLite, timestamp on PostgreSQL).
+  const settled = and(
+    inArray(notificationDeliveries.status, ['sent', 'failed', 'skipped']),
+    lt(notificationDeliveries.createdAt, cutoffDate),
+  )!;
+  const pruned = await countWhere(db, notificationDeliveries, settled);
+  if (pruned > 0) await db.delete(notificationDeliveries).where(settled);
+  return pruned;
+}
+
+/**
+ * Keep only the newest `keep` history snapshots per diagnosis. Every
+ * re-diagnose appends a version row, so long-lived clusters accumulate them
+ * without bound.
+ */
+export async function capDiagnosisVersions(db: DbClient, keep: number): Promise<number> {
+  const overflow = sql`${failureDiagnosisVersions.id} IN (
+    SELECT id FROM (
+      SELECT ${sql.identifier('id')} AS id,
+        row_number() OVER (
+          PARTITION BY ${sql.identifier('diagnosis_id')}
+          ORDER BY ${sql.identifier('created_at')} DESC, ${sql.identifier('id')} DESC
+        ) AS rn
+      FROM ${failureDiagnosisVersions}
+    ) ranked WHERE rn > ${keep}
+  )`;
+  const pruned = await countWhere(db, failureDiagnosisVersions, overflow);
+  if (pruned > 0) await db.delete(failureDiagnosisVersions).where(overflow);
+  return pruned;
 }
 
 export interface ReclaimSpaceResult {

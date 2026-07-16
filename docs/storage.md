@@ -102,6 +102,17 @@ You can also delete individual test runs:
 - From the **test run detail page** — click the red **Delete** button in the page header.
 - From the **project detail page** — click the **Delete** button in the Actions column of the test runs table.
 
+### Data retention
+
+A nightly sweep (03:17 server time) handles recurring cleanup:
+
+- **Test-run pruning** — deletes runs older than `PIWI_RETENTION_DAYS` days, including their files, traces, and reports. **Off by default**: deleting history is opt-in, so nothing is pruned until you set the variable.
+- **Notification outbox pruning** — removes sent/failed delivery rows older than `PIWI_RETENTION_NOTIFICATION_DAYS` days (default 30).
+- **Diagnosis history capping** — keeps the newest `PIWI_RETENTION_DIAGNOSIS_VERSIONS` versions per AI diagnosis (default 20).
+- **Orphan sweep** — removes rows whose parent records were deleted by older versions.
+
+The manual **Settings › Storage** cleanup remains available for one-off bulk deletes and uses the same deletion logic.
+
 ### Space reclamation
 
 Deleting runs removes rows and stored files, but giving the freed pages back to the filesystem depends on the backend:

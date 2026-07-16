@@ -86,6 +86,21 @@ export const PIWI_ENV_VARS = {
     category: 'database',
     secret: true,
   },
+  PIWI_RETENTION_DAYS: {
+    description:
+      'Days of test-run history the nightly retention sweep keeps. Unset or 0 disables automatic run pruning (the default — pruning is opt-in).',
+    category: 'database',
+  },
+  PIWI_RETENTION_NOTIFICATION_DAYS: {
+    description:
+      'Days to keep sent/failed notification outbox rows before the nightly sweep prunes them (default 30; 0 keeps them forever).',
+    category: 'database',
+  },
+  PIWI_RETENTION_DIAGNOSIS_VERSIONS: {
+    description:
+      'AI-diagnosis history versions kept per diagnosis by the nightly sweep (default 20; 0 disables capping).',
+    category: 'database',
+  },
 
   // ── Storage ──────────────────────────────────────────────────────────────
   PIWI_STORAGE_TYPE: {

@@ -28,8 +28,11 @@ Piwi uses SQLite by default. Setting `PIWI_DATABASE_URL` switches it to PostgreS
 |----------|---------|-------------|
 | `PIWI_DATABASE_PATH` | `.data/piwi.db` | Path to the SQLite database file. |
 | `PIWI_DATABASE_URL` | — | PostgreSQL connection string (e.g. `postgres://user:pass@host:5432/piwi`). When set, PostgreSQL is used instead of SQLite. |
+| `PIWI_RETENTION_DAYS` | — (off) | Days of test-run history the nightly retention sweep keeps. Unset or `0` disables automatic run pruning — deleting history is opt-in. |
+| `PIWI_RETENTION_NOTIFICATION_DAYS` | `30` | Days to keep sent/failed notification outbox rows. `0` keeps them forever. |
+| `PIWI_RETENTION_DIAGNOSIS_VERSIONS` | `20` | AI-diagnosis history versions kept per diagnosis. `0` disables capping. |
 
-See [Deployment](./deployment) for PostgreSQL setup.
+See [Deployment](./deployment) for PostgreSQL setup and [Storage → Data retention](./storage#data-retention) for how the nightly sweep works.
 
 ## Storage
 
