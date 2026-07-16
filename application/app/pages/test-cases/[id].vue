@@ -104,7 +104,13 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
         <div class="flex items-start gap-4 flex-wrap">
           <div class="flex-1 min-w-0">
             <h1 class="text-xl font-bold truncate">{{ testCase?.title }}</h1>
-            <p v-if="testCase?.filePath" class="text-sm text-gray-500 font-mono mt-0.5">{{ testCase.filePath }}</p>
+            <OpenInIdeLink
+              v-if="testCase?.filePath"
+              :file-path="testCase.filePath"
+              :project-key="testCase?.project?.id"
+              :project-name="testCase?.project?.name"
+              class="text-sm text-gray-500 mt-0.5"
+            />
             <div v-if="testCase?.project" class="flex items-center gap-2 mt-2">
               <UBadge color="neutral" variant="soft" size="xs" class="font-mono">
                 {{ testCase.project.name }}

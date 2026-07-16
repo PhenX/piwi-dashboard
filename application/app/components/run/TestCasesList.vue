@@ -10,6 +10,9 @@ const props = defineProps<{
   suites: SuiteInfo[];
   isLive: boolean;
   failureClusterFilter?: number | null;
+  /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
+  projectKey?: string | number | null;
+  projectName?: string | null;
 }>();
 
 // Filter state is owned by the parent page so it survives tab switches.
@@ -301,6 +304,8 @@ defineExpose({ scrollToCase });
       :suites="suites"
       :has-filter="hasFilter"
       :highlighted-case-id="highlightedCaseId"
+      :project-key="projectKey"
+      :project-name="projectName"
       class="flex-1 min-h-0"
     />
 
@@ -356,12 +361,13 @@ defineExpose({ scrollToCase });
                 >{{ row.original.title }}</a
               >
             </div>
-            <code
+            <OpenInIdeLink
               v-if="row.original.location"
-              class="block text-xs text-gray-400 dark:text-gray-500 truncate"
-              :title="row.original.location"
-              >{{ row.original.location }}</code
-            >
+              :location="row.original.location"
+              :project-key="projectKey"
+              :project-name="projectName"
+              class="text-xs text-gray-400 dark:text-gray-500"
+            />
           </div>
         </template>
 

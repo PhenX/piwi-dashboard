@@ -472,7 +472,12 @@ provide(clusterSectionLocatorKey, {
                     <template v-else>Source around the failing assertion</template>
                   </template>
                   <div class="max-h-[32rem] overflow-y-auto">
-                    <TestSourceStack v-if="testCase?.testSourceFrames?.length" :frames="testCase.testSourceFrames" />
+                    <TestSourceStack
+                      v-if="testCase?.testSourceFrames?.length"
+                      :frames="testCase.testSourceFrames"
+                      :project-key="testCase?.testRun?.project?.id"
+                      :project-name="testCase?.testRun?.project?.name"
+                    />
                     <MarkdownPreview
                       v-else-if="testCase?.testSource"
                       :text="'```typescript\n' + testCase.testSource + '\n```'"

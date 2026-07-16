@@ -10,6 +10,9 @@ import type { TestSourceFrame } from '~~/types/api';
 
 defineProps<{
   frames: TestSourceFrame[];
+  /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
+  projectKey?: string | number | null;
+  projectName?: string | null;
 }>();
 
 /** Split a line-numbered snippet into rows, flagging the `>`-marked failing line. */
@@ -31,7 +34,13 @@ function rows(snippet: string) {
           :class="i === 0 ? 'text-red-500' : 'text-gray-400'"
           class="size-3.5 shrink-0"
         />
-        <span class="font-mono truncate" :title="`${frame.file}:${frame.line}`">{{ frame.file }}:{{ frame.line }}</span>
+        <OpenInIdeLink
+          :file-path="frame.file"
+          :line="frame.line"
+          :project-key="projectKey"
+          :project-name="projectName"
+          class="min-w-0"
+        />
         <UBadge :color="i === 0 ? 'error' : 'neutral'" variant="subtle" size="xs" class="ml-auto shrink-0">
           {{ i === 0 ? 'Failed here' : 'Caller' }}
         </UBadge>

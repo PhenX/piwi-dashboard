@@ -633,6 +633,8 @@ function handleSelectCluster(clusterId: number) {
             :suites="testRun?.suites ?? []"
             :is-live="isLive"
             :failure-cluster-filter="selectedClusterFilter"
+            :project-key="testRun?.projectId"
+            :project-name="testRun?.project?.name"
             class="flex-1 min-h-0"
           />
         </template>

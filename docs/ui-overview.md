@@ -13,6 +13,10 @@ The dashboard is a single-page app built with [Nuxt UI](https://ui.nuxt.com). It
 
 Blocks that aren't self-explanatory carry a small muted help icon (a circled question mark) next to their title. Click it for a short explanation and, where relevant, a **Learn more** link into these docs. The icon is keyboard-focusable and closes with `Esc`. Self-explanatory blocks (counters, search boxes) have no icon, keeping the UI uncluttered.
 
+## Open in IDE
+
+Every source path shown in the dashboard is clickable — hover it to reveal an **open in IDE** control that jumps to that file (and line) in VS Code or JetBrains. See [Open in IDE](./ide-integration) for setup and the available methods.
+
 ## Navigation
 
 The sidebar gives access to the top-level sections:

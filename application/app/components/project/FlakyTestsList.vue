@@ -5,6 +5,8 @@ import type { FlakyTest } from '~~/types/api';
 const props = defineProps<{
   projectId: string | number;
   environment?: string | null;
+  /** Piwi project name, threaded so the IDE opener can default the JetBrains project. */
+  projectName?: string | null;
 }>();
 
 const runsWindow = ref(50);
@@ -129,7 +131,12 @@ const columns: TableColumn<FlakyTest>[] = [
             >
               {{ row.original.title }}
             </NuxtLink>
-            <span class="text-xs text-gray-400 font-mono truncate block">{{ row.original.filePath }}</span>
+            <OpenInIdeLink
+              :file-path="row.original.filePath"
+              :project-key="projectId"
+              :project-name="projectName"
+              class="text-xs text-gray-400"
+            />
           </div>
         </template>
 

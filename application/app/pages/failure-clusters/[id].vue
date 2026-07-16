@@ -297,7 +297,13 @@ const breadcrumbItems = computed(() => [
               <template #folded>
                 {{ cluster.affectedTests }} {{ cluster.affectedTests === 1 ? 'test' : 'tests' }} ·
                 {{ cluster.occurrences }} occurrence{{ cluster.occurrences === 1 ? '' : 's' }} ·
-                <span class="font-mono text-xs">{{ cluster.affectedTestCases[0]?.filePath }}</span>
+                <OpenInIdeLink
+                  v-if="cluster.affectedTestCases[0]?.filePath"
+                  :file-path="cluster.affectedTestCases[0].filePath"
+                  :project-key="cluster.project?.id"
+                  :project-name="cluster.project?.name"
+                  class="text-xs"
+                />
               </template>
               <template #actions>
                 <UBadge color="neutral" variant="subtle" size="sm">
@@ -326,7 +332,11 @@ const breadcrumbItems = computed(() => [
                   </UButton>
                 </UTooltip>
               </template>
-              <ClusterTestEvidence :affected-test-cases="cluster.affectedTestCases" />
+              <ClusterTestEvidence
+                :affected-test-cases="cluster.affectedTestCases"
+                :project-key="cluster.project?.id"
+                :project-name="cluster.project?.name"
+              />
             </CollapsibleSectionCard>
 
             <!-- SCM investigation: baseline picker + commit diff -->
@@ -367,6 +377,8 @@ const breadcrumbItems = computed(() => [
     :open="extractModalOpen"
     :cluster-id="clusterId"
     :affected-test-cases="cluster.affectedTestCases ?? []"
+    :project-key="cluster.project?.id"
+    :project-name="cluster.project?.name"
     @update:open="extractModalOpen = $event"
     @extracted="onExtracted"
   />
