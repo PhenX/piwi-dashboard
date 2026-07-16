@@ -1348,12 +1348,12 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     assertProject(ctx, projectId);
     const pageSize = clampPageSize(params.pageSize);
     const offset = Math.max(0, Number(params.offset) || 0);
-    const all = (await getProjectTestCases(db, projectId)) as any[];
-    const page = all.slice(offset, offset + pageSize);
+    const query = typeof params.query === 'string' && params.query.trim() ? params.query.trim() : undefined;
+    const page = await getProjectTestCases(db, projectId, { limit: pageSize, offset, q: query });
     return {
-      total: all.length,
+      total: page.total,
       offset,
-      items: page.map((t: any) =>
+      items: page.items.map((t: any) =>
         dropNulls({
           testCaseId: t.id,
           title: t.title,
@@ -1366,7 +1366,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
           avgDuration: t.avgDuration != null ? Math.round(t.avgDuration) : null,
         }),
       ),
-      nextOffset: offset + pageSize < all.length ? offset + pageSize : null,
+      nextOffset: offset + pageSize < page.total ? offset + pageSize : null,
     };
   },
 
