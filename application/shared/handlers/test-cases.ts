@@ -145,7 +145,9 @@ export async function getTestCaseHistory(db: DrizzleDB, testCaseId: number) {
 export async function getTestRunCase(
   db: DrizzleDB,
   id: number,
-  wastedPatterns: readonly string[] = DEFAULT_WASTED_WAIT_PATTERNS,
+  // Custom wasted-wait patterns; null = the defaults are in effect, so the
+  // stored wasted_time_ms (computed at ingest) is authoritative.
+  wastedPatterns: readonly string[] | null = null,
 ) {
   const [trc] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
   if (!trc) return null;
@@ -272,8 +274,14 @@ export async function getTestRunCase(
     startedAt: trc.startedAt,
     slowestStep: trc.slowestStep,
     slowestStepDuration: trc.slowestStepDuration,
-    wastedTimeMs:
-      trc.stepEvents != null ? computeWastedMs(trc.stepEvents as TestStepEvent[], wastedPatterns) : trc.wastedTimeMs,
+    wastedTimeMs: wastedPatterns
+      ? trc.stepEvents != null
+        ? computeWastedMs(trc.stepEvents as TestStepEvent[], wastedPatterns)
+        : trc.wastedTimeMs
+      : (trc.wastedTimeMs ??
+        (trc.stepEvents != null
+          ? computeWastedMs(trc.stepEvents as TestStepEvent[], DEFAULT_WASTED_WAIT_PATTERNS)
+          : null)),
     networkRequests: networkRequestsData,
     webVitals: trc.webVitals,
     pageState: trc.pageState,

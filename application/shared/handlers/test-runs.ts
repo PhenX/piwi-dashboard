@@ -30,7 +30,9 @@ type ProjectScope = 'all' | Set<number>;
 export async function getTestRun(
   db: DrizzleDB,
   id: number,
-  wastedPatterns: readonly string[] = DEFAULT_WASTED_WAIT_PATTERNS,
+  // Custom wasted-wait patterns; null = the defaults are in effect, so the
+  // stored per-case wasted_time_ms (computed at ingest) is authoritative.
+  wastedPatterns: readonly string[] | null = null,
 ) {
   const testRunResults = await db.select().from(testRuns).where(eq(testRuns.id, id));
   const testRun = testRunResults[0];
@@ -130,13 +132,18 @@ export async function getTestRun(
     retries: tc.retries,
     slowestStep: tc.slowestStep,
     slowestStepDuration: tc.slowestStepDuration,
-    // Wasted time is recomputed at read time from the stored wait events using
-    // the configured allowlist, so changing the patterns re-classifies existing
-    // runs. Falls back to the stored column only when no step events exist.
-    wastedTimeMs:
-      tc.stepEvents != null
+    // With custom patterns configured, wasted time is recomputed from the
+    // stored wait events so the new allowlist re-classifies existing runs.
+    // With the defaults in effect the stored column is authoritative
+    // (recomputed only for legacy rows that predate it).
+    wastedTimeMs: wastedPatterns
+      ? tc.stepEvents != null
         ? computeWastedMs(tc.stepEvents as TestStepEvent[], wastedPatterns)
-        : (tc.wastedTimeMs ?? null),
+        : (tc.wastedTimeMs ?? null)
+      : (tc.wastedTimeMs ??
+        (tc.stepEvents != null
+          ? computeWastedMs(tc.stepEvents as TestStepEvent[], DEFAULT_WASTED_WAIT_PATTERNS)
+          : null)),
     stepEvents: (tc as { stepEvents?: unknown }).stepEvents ?? null,
     workerIndex: tc.workerIndex,
     shardIndex: tc.shardIndex,
@@ -184,7 +191,7 @@ export async function getTestRun(
     })),
     suites,
     storageStats,
-    wastedWaitPatterns: [...wastedPatterns],
+    wastedWaitPatterns: [...(wastedPatterns ?? DEFAULT_WASTED_WAIT_PATTERNS)],
   };
 }
 
