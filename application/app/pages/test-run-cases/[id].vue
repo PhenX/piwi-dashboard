@@ -277,13 +277,6 @@ function stepBarColorClass(duration: number): string {
   return duration > 2000 ? 'bg-red-500' : duration > 500 ? 'bg-orange-400' : 'bg-gray-400 dark:bg-gray-500';
 }
 
-/** Shorten a `file:line:col` pointer to `basename:line` for compact display. */
-function shortLocation(location: string): string {
-  const withoutCol = location.replace(/:(\d+):\d+$/, ':$1');
-  const slash = withoutCol.lastIndexOf('/');
-  return slash >= 0 ? withoutCol.slice(slash + 1) : withoutCol;
-}
-
 const environment = computed(() => testCase.value?.testRun?.environment);
 
 // ── Retry command ─────────────────────────────────────────────────────────
@@ -733,13 +726,13 @@ provide(clusterSectionLocatorKey, {
                     >
                       {{ row.original.error.message }}
                     </p>
-                    <p
+                    <OpenInIdeLink
                       v-if="row.original.location"
-                      class="text-xs text-gray-400 dark:text-gray-500 font-mono mt-0.5 truncate"
-                      :title="row.original.location"
-                    >
-                      {{ shortLocation(row.original.location) }}
-                    </p>
+                      :location="row.original.location"
+                      :project-key="testCase?.testRun?.project?.id"
+                      :project-name="testCase?.testRun?.project?.name"
+                      class="text-xs text-gray-400 dark:text-gray-500 mt-0.5"
+                    />
                   </template>
                   <template #duration-cell="{ row }">
                     <div class="min-w-[6rem]">
