@@ -340,6 +340,10 @@ export interface PerformanceStep {
   error?: { message?: string };
   /** True when the step failed. */
   failed?: boolean;
+  /** Source pointer `file:line:col` (not a code snippet); present on runs from a recent reporter. */
+  location?: string;
+  /** Absolute start time in ms; present on runs from a recent reporter. Enables per-step timing. */
+  startTime?: number;
 }
 
 /**

@@ -330,7 +330,7 @@ export const testRunsCases = pgTable(
     retries: integer('retries').default(0),
     line: integer('line'), // line number in file
     column: integer('column'), // column number in file
-    steps: jsonb('steps'), // Array of { title, duration, category } step objects
+    steps: jsonb('steps'), // Array of { title, duration, category, location?, startTime? } step objects
     stepEvents: jsonb('step_events'), // Array of { title, category, startedAt, duration, status, location } — hook/fixture steps for timeline
     slowestStep: text('slowest_step'), // Title of the slowest step
     slowestStepDuration: integer('slowest_step_duration'), // Duration of the slowest step in ms

@@ -134,6 +134,45 @@ describe('flattenSteps', () => {
     const flat = flattenSteps([{ title: 'x', duration: 42, steps: [] }] as any);
     expect(flat[0].duration).toBe(42);
   });
+
+  it('captures the error message and failed flag for failing steps', () => {
+    const flat = flattenSteps([
+      { title: 'locator.click', duration: 5, error: { message: 'element not found' }, steps: [] },
+      { title: 'ok', duration: 1, steps: [] },
+    ] as any);
+    expect(flat[0].error).toEqual({ message: 'element not found' });
+    expect(flat[0].failed).toBe(true);
+    expect(flat[1].error).toBeUndefined();
+    expect(flat[1].failed).toBeUndefined();
+  });
+
+  it('captures location (as file:line:col) and startTime when the raw step provides them', () => {
+    const start = new Date('2024-01-01T00:00:00.000Z');
+    const flat = flattenSteps([
+      {
+        title: 'Click',
+        category: 'action',
+        duration: 5,
+        startTime: start,
+        location: { file: 'a.spec.ts', line: 7, column: 3 },
+        steps: [],
+      },
+      { title: 'plain', duration: 1, steps: [] },
+    ] as any);
+    expect(flat[0].location).toBe('a.spec.ts:7:3');
+    expect(flat[0].startTime).toBe(start.getTime());
+  });
+
+  it('omits location/startTime entirely when the raw step lacks them (no undefined keys)', () => {
+    const flat = flattenSteps([{ title: 'plain', duration: 1, steps: [] }] as any);
+    expect('location' in flat[0]).toBe(false);
+    expect('startTime' in flat[0]).toBe(false);
+  });
+
+  it('accepts a numeric startTime (passes through)', () => {
+    const flat = flattenSteps([{ title: 'x', duration: 1, startTime: 12345, steps: [] }] as any);
+    expect(flat[0].startTime).toBe(12345);
+  });
 });
 
 describe('collectStepMetrics', () => {

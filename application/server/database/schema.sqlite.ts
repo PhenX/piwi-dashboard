@@ -325,7 +325,7 @@ export const testRunsCases = sqliteTable(
     retries: integer('retries').default(0),
     line: integer('line'), // line number in file
     column: integer('column'), // column number in file
-    steps: text('steps', { mode: 'json' }), // Array of { title, duration, category } step objects
+    steps: text('steps', { mode: 'json' }), // Array of { title, duration, category, location?, startTime? } step objects
     stepEvents: text('step_events', { mode: 'json' }), // Array of { title, category, startedAt, duration, status, location } — hook/fixture steps for timeline
     slowestStep: text('slowest_step'), // Title of the slowest step
     slowestStepDuration: integer('slowest_step_duration'), // Duration of the slowest step in ms
