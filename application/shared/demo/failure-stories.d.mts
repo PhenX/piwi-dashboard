@@ -179,7 +179,11 @@ export declare function buildActionTimeoutError(p: {
   callLog: string[];
   frames: StoryFrame[];
 }): string;
-export declare function buildValueAssertionError(p: { matcherLine: string; body: string[]; frames: StoryFrame[] }): string;
+export declare function buildValueAssertionError(p: {
+  matcherLine: string;
+  body: string[];
+  frames: StoryFrame[];
+}): string;
 export declare function buildWebAssertionError(p: {
   matcher: string;
   locator: string;

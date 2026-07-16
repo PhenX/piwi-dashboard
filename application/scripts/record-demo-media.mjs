@@ -120,9 +120,7 @@ const SCENARIOS = [
       '/hero-4k.png': () => new Promise(() => {}),
     },
     async run(page, baseUrl) {
-      await page
-        .goto(`${baseUrl}/`, { waitUntil: 'load', timeout: 2500 })
-        .catch(() => {});
+      await page.goto(`${baseUrl}/`, { waitUntil: 'load', timeout: 2500 }).catch(() => {});
     },
     outputs: ['video'],
   },

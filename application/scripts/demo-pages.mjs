@@ -162,9 +162,7 @@ export function mobileNavPage({ heroImage = false } = {}) {
   // hero-4k.png" regression) so the recording server can hold that request
   // open and produce a genuine page.goto("load") timeout. Screenshot capture
   // (no `heroImage`) uses a CSS placeholder instead — no network dependency.
-  const hero = heroImage
-    ? `<img src="/hero-4k.png" alt="Hero" class="hero">`
-    : `<div class="hero">Loading…</div>`;
+  const hero = heroImage ? `<img src="/hero-4k.png" alt="Hero" class="hero">` : `<div class="hero">Loading…</div>`;
   return page(
     'Acme Shop — Mobile',
     `.hero { width: 100%; height: 220px; background: linear-gradient(135deg,#e4e4e7,#d4d4d8); display:flex; align-items:center; justify-content:center; color:#71717a; font-size:13px; object-fit: cover; }

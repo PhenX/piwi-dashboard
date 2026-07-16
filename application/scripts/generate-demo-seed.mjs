@@ -279,7 +279,13 @@ let nrId = 1;
 
 const clusterStats = {};
 for (const story of FAILURE_STORIES) {
-  clusterStats[story.clusterId] = { occurrences: 0, firstRunId: null, lastRunId: null, firstStartMs: null, lastStartMs: null };
+  clusterStats[story.clusterId] = {
+    occurrences: 0,
+    firstRunId: null,
+    lastRunId: null,
+    firstStartMs: null,
+    lastStartMs: null,
+  };
 }
 
 // Runs per project. Failure scheduling is story-driven (see below), so there is
@@ -489,7 +495,8 @@ for (const proj of DEMO_PROJECTS) {
       didNotRunTests = didNotRunCaseIds.size;
     }
 
-    const flakyThisRun = status !== 'interrupted' && flakyCaseId && !failingCaseIds.has(flakyCaseId) && rng() < cfg.flakyRate;
+    const flakyThisRun =
+      status !== 'interrupted' && flakyCaseId && !failingCaseIds.has(flakyCaseId) && rng() < cfg.flakyRate;
     const flakyTests = flakyThisRun ? 1 : 0;
     const passedTests = caseIds.length - failedTests - didNotRunTests;
 
@@ -808,10 +815,30 @@ for (const story of FAILURE_STORIES) {
 // Screenshots on a few PASSING executions, so evidence isn't failure-only and
 // the visual diff has a real baseline execution to point at.
 const PASSING_SCREENSHOTS = [
-  { file: 'checkout-order-confirmed.png', projectId: 1, specFile: 'tests/checkout/checkout.spec.ts', title: 'should complete checkout with credit card' },
-  { file: 'checkout-form-filled.png', projectId: 1, specFile: 'tests/checkout/checkout.spec.ts', title: 'should complete checkout with PayPal' },
-  { file: 'cart-summary.png', projectId: 1, specFile: 'tests/checkout/cart.spec.ts', title: 'should display cart total correctly' },
-  { file: 'mobile-form-keyboard.png', projectId: 4, specFile: 'tests/mobile/forms.spec.ts', title: 'Text input shows keyboard on focus' },
+  {
+    file: 'checkout-order-confirmed.png',
+    projectId: 1,
+    specFile: 'tests/checkout/checkout.spec.ts',
+    title: 'should complete checkout with credit card',
+  },
+  {
+    file: 'checkout-form-filled.png',
+    projectId: 1,
+    specFile: 'tests/checkout/checkout.spec.ts',
+    title: 'should complete checkout with PayPal',
+  },
+  {
+    file: 'cart-summary.png',
+    projectId: 1,
+    specFile: 'tests/checkout/cart.spec.ts',
+    title: 'should display cart total correctly',
+  },
+  {
+    file: 'mobile-form-keyboard.png',
+    projectId: 4,
+    specFile: 'tests/mobile/forms.spec.ts',
+    title: 'Text input shows keyboard on focus',
+  },
   { file: 'login-form.png', projectId: 5, specFile: 'tests/admin/login.spec.ts', title: 'signs in with SSO redirect' },
 ];
 const passingShotTrcs = new Map(); // file → trc (for the visual-diff baseline below)
@@ -819,7 +846,12 @@ for (const shot of PASSING_SCREENSHOTS) {
   const caseId = caseIdByKey.get(`${shot.projectId}\x00${shot.specFile}\x00${shot.title}`);
   const trc = latestTrc(caseId, (t) => t.status === 'passed');
   if (trc) {
-    attach(trc, { type: 'attachment', subtype: 'screenshot', label: 'image/png', relPath: `demo/screenshots/${shot.file}` });
+    attach(trc, {
+      type: 'attachment',
+      subtype: 'screenshot',
+      label: 'image/png',
+      relPath: `demo/screenshots/${shot.file}`,
+    });
     passingShotTrcs.set(shot.file, trc);
   }
 }
@@ -1262,7 +1294,8 @@ const FAILURE_DIAGNOSES = [
         {
           category: 'app-bug',
           likelihood: 88,
-          rootCause: 'listUsers now queries with PAGE_SIZE 50 — the API default — instead of the dashboard page size 25.',
+          rootCause:
+            'listUsers now queries with PAGE_SIZE 50 — the API default — instead of the dashboard page size 25.',
           evidence: [
             'Expected 26 rows (header + 25), received 51 — exactly two pages plus the header [executionError]',
             'The users API request returns 50 records [networkRequests]',
@@ -1841,7 +1874,12 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: 'Add to cart',
     alternatives: [
-      { locator: "getByTestId('add-to-cart-btn')", method: 'getByTestId', args: { testId: 'add-to-cart-btn' }, score: 100 },
+      {
+        locator: "getByTestId('add-to-cart-btn')",
+        method: 'getByTestId',
+        args: { testId: 'add-to-cart-btn' },
+        score: 100,
+      },
       {
         locator: "getByRole('button', { name: 'Add to cart' })",
         method: 'getByRole',
@@ -1914,7 +1952,12 @@ const LOCATOR_SNAPSHOTS = [
     },
     element_text: '',
     alternatives: [
-      { locator: "getByTestId('street-address')", method: 'getByTestId', args: { testId: 'street-address' }, score: 100 },
+      {
+        locator: "getByTestId('street-address')",
+        method: 'getByTestId',
+        args: { testId: 'street-address' },
+        score: 100,
+      },
       { locator: "getByLabel('Street address')", method: 'getByLabel', args: { label: 'Street address' }, score: 85 },
       {
         locator: "getByPlaceholder('123 Main St')",

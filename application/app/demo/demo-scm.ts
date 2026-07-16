@@ -20,12 +20,7 @@
  */
 
 import type { ScmChangedFile, ScmChanges, CommitListItem } from '~~/types/api';
-import {
-  FAILURE_STORIES,
-  SCM_REPOS,
-  projectSourceFilePaths,
-  sourceText,
-} from '#shared/demo/failure-stories.mjs';
+import { FAILURE_STORIES, SCM_REPOS, projectSourceFilePaths, sourceText } from '#shared/demo/failure-stories.mjs';
 
 export interface DemoCommit {
   sha: string;

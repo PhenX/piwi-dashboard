@@ -41,8 +41,18 @@ const OUT_DIR = join(__dirname, '../public/demo/screenshots');
 
 /** Each shot: output filename, page route, viewport, colorScheme, optional post-load action. */
 const SHOTS = [
-  { file: 'checkout-form-filled.png', route: '/checkout', page: () => checkoutFormPage(), viewport: { width: 460, height: 620 } },
-  { file: 'checkout-order-confirmed.png', route: '/checkout', page: () => checkoutFormPage({ confirmed: true }), viewport: { width: 460, height: 620 } },
+  {
+    file: 'checkout-form-filled.png',
+    route: '/checkout',
+    page: () => checkoutFormPage(),
+    viewport: { width: 460, height: 620 },
+  },
+  {
+    file: 'checkout-order-confirmed.png',
+    route: '/checkout',
+    page: () => checkoutFormPage({ confirmed: true }),
+    viewport: { width: 460, height: 620 },
+  },
   {
     file: 'checkout-error-banner.png',
     route: '/checkout',
@@ -50,14 +60,45 @@ const SHOTS = [
     extraRoutes: { '/api/quote': () => new Promise(() => {}) },
     viewport: { width: 460, height: 620 },
   },
-  { file: 'checkout-contact-restructured.png', route: '/checkout', page: () => checkoutFormPage({ contactRestructured: true }), viewport: { width: 460, height: 700 } },
+  {
+    file: 'checkout-contact-restructured.png',
+    route: '/checkout',
+    page: () => checkoutFormPage({ contactRestructured: true }),
+    viewport: { width: 460, height: 700 },
+  },
   { file: 'cart-summary.png', route: '/cart', page: () => cartSummaryPage(), viewport: { width: 460, height: 400 } },
-  { file: 'button-gallery-strict.png', route: '/components/button', page: () => buttonGalleryPage(), viewport: { width: 640, height: 240 } },
-  { file: 'components-modal-stuck.png', route: '/components/modal', page: () => modalPage(), viewport: { width: 640, height: 300 } },
+  {
+    file: 'button-gallery-strict.png',
+    route: '/components/button',
+    page: () => buttonGalleryPage(),
+    viewport: { width: 640, height: 240 },
+  },
+  {
+    file: 'components-modal-stuck.png',
+    route: '/components/modal',
+    page: () => modalPage(),
+    viewport: { width: 640, height: 300 },
+  },
   { file: 'mobile-nav-loading.png', route: '/', page: () => mobileNavPage(), viewport: { width: 390, height: 664 } },
-  { file: 'mobile-form-keyboard.png', route: '/checkout', page: () => mobileFormsPage(), viewport: { width: 390, height: 664 } },
-  { file: 'admin-dark-dashboard.png', route: '/reports/monthly', page: () => adminReportsPage({ dark: true }), viewport: { width: 720, height: 420 }, colorScheme: 'dark' },
-  { file: 'admin-users-table.png', route: '/users', page: () => adminUsersPage({ rowCount: 51 }), viewport: { width: 700, height: 560 } },
+  {
+    file: 'mobile-form-keyboard.png',
+    route: '/checkout',
+    page: () => mobileFormsPage(),
+    viewport: { width: 390, height: 664 },
+  },
+  {
+    file: 'admin-dark-dashboard.png',
+    route: '/reports/monthly',
+    page: () => adminReportsPage({ dark: true }),
+    viewport: { width: 720, height: 420 },
+    colorScheme: 'dark',
+  },
+  {
+    file: 'admin-users-table.png',
+    route: '/users',
+    page: () => adminUsersPage({ rowCount: 51 }),
+    viewport: { width: 700, height: 560 },
+  },
   { file: 'login-form.png', route: '/login', page: () => loginPage(), viewport: { width: 460, height: 300 } },
 ];
 

@@ -70,7 +70,11 @@ const STORY_KINDS: DiagnosisKind[] = [
  * kind on the failure story; clusters created live (e.g. by the run simulator)
  * fall back to pattern-matching the error the same way the seeded ones would.
  */
-function diagnosisKind(errorType: string | null, sampleError: string | null, story: FailureStory | null): DiagnosisKind {
+function diagnosisKind(
+  errorType: string | null,
+  sampleError: string | null,
+  story: FailureStory | null,
+): DiagnosisKind {
   const storyKind = story?.diagnosis.kind as DiagnosisKind | undefined;
   if (storyKind && STORY_KINDS.includes(storyKind)) return storyKind;
   const e = sampleError ?? '';
@@ -121,7 +125,12 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence, story: FailureSto
   /** The story's verified fix, or advice-only when the cluster has no story. */
   const fix = (fallbackDescription: string, code: string | null = null) =>
     story
-      ? { description: story.diagnosis.fix.description, file: story.diagnosis.fix.file, code: null, patch: story.diagnosis.fix.patch }
+      ? {
+          description: story.diagnosis.fix.description,
+          file: story.diagnosis.fix.file,
+          code: null,
+          patch: story.diagnosis.fix.patch,
+        }
       : { description: fallbackDescription, file: null, code, patch: null };
 
   switch (kind) {
@@ -260,7 +269,9 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence, story: FailureSto
           'Add integration tests exercising the auth endpoint with missing/invalid users',
           'Add error monitoring on 5xx responses for the auth route',
         ],
-        suggestedFix: fix('Guard the failing path server-side so the endpoint returns a proper 4xx instead of throwing.'),
+        suggestedFix: fix(
+          'Guard the failing path server-side so the endpoint returns a proper 4xx instead of throwing.',
+        ),
         thinkingChunks: [
           'The assertion compares status codes — Expected 200, Received 500. A 500 is server-side, so this is very likely an app bug, not a test bug.\n\n',
           'The backend server logs on the failing request show an unhandled exception, not a timeout — confirming a thrown error.\n\n',
@@ -353,7 +364,9 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence, story: FailureSto
           'Assert on user-visible behavior rather than internal defaults where possible',
           'Flag intentional behavior changes in the PR description so expected values get updated together',
         ],
-        suggestedFix: fix('Update the application (or the expected value, if the change was intentional) so the assertion and behavior agree.'),
+        suggestedFix: fix(
+          'Update the application (or the expected value, if the change was intentional) so the assertion and behavior agree.',
+        ),
         thinkingChunks: [
           'Expected vs Received disagree the same way on every occurrence — this is deterministic, so not a race.\n\n',
           `Recurrence is ${runs}; a stable mismatch means the app now genuinely returns the other value.\n\n`,
@@ -375,7 +388,8 @@ function buildScript(kind: DiagnosisKind, ev: ClusterEvidence, story: FailureSto
           {
             category: 'test-bug',
             likelihood: 80,
-            rootCause: 'The locator keys on a label/name that was renamed; a structure-anchored locator survives the change.',
+            rootCause:
+              'The locator keys on a label/name that was renamed; a structure-anchored locator survives the change.',
             evidence: [
               'The failing ARIA snapshot no longer contains the captured accessible name [ariaSnapshot]',
               'Locator healing flags the name-based alternatives as stale and recommends an anchored one [locatorHealing]',
