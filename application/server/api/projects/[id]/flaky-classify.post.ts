@@ -25,7 +25,7 @@ defineRouteMeta({
         },
       },
     },
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 

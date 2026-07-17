@@ -11,7 +11,7 @@ defineRouteMeta({
     description:
       'Merges the two suggested clusters (lower id survives) and consumes the suggestion. Requires reporter or administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 

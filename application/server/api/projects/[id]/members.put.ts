@@ -15,7 +15,7 @@ defineRouteMeta({
     description:
       'Replaces the explicit (non-global) user assignments for this project. Does not affect users with global access. Requires administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

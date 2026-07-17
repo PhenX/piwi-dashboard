@@ -6,14 +6,12 @@ import { Role } from '#shared/types';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 
-const REQUIRED_ROLES: Role[] = [];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Notifications'],
     summary: 'Create a subscription',
     description: 'Creates a new subscription for the current user.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
   },
 });
 

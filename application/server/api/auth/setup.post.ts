@@ -2,15 +2,13 @@ import { Role } from '#shared/types';
 import { createUser, isAuthEnabled, needsInitialSetup } from '../../utils/auth';
 import { z } from 'zod';
 
-const REQUIRED_ROLES: Role[] = [];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Auth'],
     summary: 'Initial setup',
     description:
       'Creates the first administrator user. Only available when no users exist yet. Accepts username, password, and optional name in the request body.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     security: [],
   },
 });

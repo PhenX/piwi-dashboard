@@ -13,7 +13,7 @@ defineRouteMeta({
     summary: 'Check trace blob existence',
     description:
       'Checks which trace blob SHA-256 hashes already exist in storage for a given project. Accepts projectName and hashes array in the request body.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 

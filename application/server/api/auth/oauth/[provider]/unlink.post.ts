@@ -11,7 +11,7 @@ defineRouteMeta({
     description:
       'Removes the OAuth provider link from the current user. Requires the account to have a password set so the user keeps a way to sign in.',
     parameters: [{ name: 'provider', in: 'path', required: true, schema: { type: 'string' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

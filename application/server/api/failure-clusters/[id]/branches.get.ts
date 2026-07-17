@@ -2,17 +2,14 @@ import { failureClusters, testRuns } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
 import { normalizeGitUrl } from '../../../utils/regression-context';
 import { createScmProvider } from '../../../utils/scm';
-import { Role } from '#shared/types';
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../../utils/project-access';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
     tags: ['Failure Clusters'],
     summary: 'List branches for a cluster repository',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

@@ -15,7 +15,7 @@ defineRouteMeta({
     description:
       'Sets the project assignments for a user. If global is true, the user gets access to all projects. If global is false, the user gets access only to the specified project IDs. Cannot set assignments for administrators.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

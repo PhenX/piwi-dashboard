@@ -1,10 +1,7 @@
 import { failureClusters } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
 import { buildDiagnosisContext } from '../../../utils/ai-context';
-import { Role } from '#shared/types';
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../../utils/project-access';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -16,7 +13,7 @@ defineRouteMeta({
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
       { name: 'format', in: 'query', required: false, schema: { type: 'string', enum: ['json'] } },
     ],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

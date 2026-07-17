@@ -14,7 +14,7 @@ defineRouteMeta({
     summary: 'Get admin statistics',
     description:
       'Returns aggregate statistics about projects, test runs, test cases, files, and storage disk usage. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

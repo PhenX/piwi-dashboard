@@ -14,7 +14,7 @@ defineRouteMeta({
     description:
       'Returns the project assignments for a user, including whether they have global access and a list of explicit project IDs. Administrators always have implicit access to all projects.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

@@ -14,7 +14,7 @@ defineRouteMeta({
     description:
       'Returns all users who have access to this project, including those with explicit assignment, global access, and administrators (implicit access).',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

@@ -10,7 +10,7 @@ defineRouteMeta({
     summary: 'Update failure cluster status',
     description: 'Updates the status (open, resolved, ignored) and optional triage note for a failure cluster.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 

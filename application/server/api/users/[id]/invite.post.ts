@@ -14,7 +14,7 @@ defineRouteMeta({
     summary: 'Send invite email',
     description:
       'Sends an invite email to a user with a link to set their password. Requires the user to have an email address set. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
   },
 });

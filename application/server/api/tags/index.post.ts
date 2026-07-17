@@ -11,7 +11,7 @@ defineRouteMeta({
     tags: ['Tags'],
     summary: 'Create a tag',
     description: 'Creates a new tag with text (max 50 characters) and color. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

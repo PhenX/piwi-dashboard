@@ -14,7 +14,7 @@ defineRouteMeta({
     summary: 'Save AI settings',
     description:
       'Updates the per-role AI configuration (diagnosis, research, embedding), auto-diagnose toggle, custom instructions, and SCM token. Each role has its own provider/model/baseUrl/apiKey, or `reuse` to inherit another role. Requires administrator role. Not available when AI is managed via environment variables.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

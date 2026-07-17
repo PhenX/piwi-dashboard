@@ -62,6 +62,8 @@ export interface OpenApiOperation {
   requestBody?: OpenApiRequestBody;
   responses?: Record<string, OpenApiResponse>;
   security?: SecurityRequirement[];
+  /** Roles allowed to call the endpoint (custom extension emitted by the routes). */
+  'x-required-roles'?: string[];
 }
 
 export interface OpenApiPathItem {
@@ -197,8 +199,6 @@ export function resolveSchema(
   return spec?.components?.schemas?.[match[1]] ?? schema;
 }
 
-import { ROUTE_ROLES } from './route-roles.generated';
-
 const ALL_ROLES = ['administrator', 'reporter', 'user'];
 
 function capitalize(role: string): string {
@@ -217,12 +217,12 @@ export interface RoleRequirement {
 }
 
 /**
- * The role requirement for an operation, from the generated route-roles map.
- * Returns null for public or token-authenticated routes (which carry no role
- * restriction) — the caller shows its own public/auth indicator instead.
+ * The role requirement for an operation, read from its `x-required-roles`
+ * extension. Returns null for public or token-authenticated routes (which carry
+ * no role restriction) — the caller shows its own public/auth indicator instead.
  */
-export function routeRoleRequirement(method: string, path: string): RoleRequirement | null {
-  const roles = ROUTE_ROLES[`${method.toLowerCase()} ${path}`];
+export function routeRoleRequirement(operation: OpenApiOperation): RoleRequirement | null {
+  const roles = operation['x-required-roles'];
   if (!roles || roles.length === 0) return null;
   const isAny = ALL_ROLES.every((role) => roles.includes(role));
   return {

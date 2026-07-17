@@ -1,8 +1,5 @@
 import { patchTestRun } from '#shared/handlers/test-runs';
 import { requireResolvedProjectAccess, requireRouteId, resolveRunProjectId } from '../../utils/project-access';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -10,7 +7,7 @@ defineRouteMeta({
     summary: 'Update a test run',
     description: "Updates a test run's metadata (label). Requires any authenticated user.",
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
     requestBody: {
       content: {
         'application/json': {

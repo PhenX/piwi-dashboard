@@ -17,7 +17,7 @@ defineRouteMeta({
     summary: 'Initialize a streaming test run in setup phase',
     description:
       'Initialize a new streaming test run in "initialising" status. Returns a setup token to be used by the begin endpoint to transition the run to "running" status. Cancels any previous runs from the same instance. Supports sharded runs.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
     requestBody: {
       content: {
         'application/json': {

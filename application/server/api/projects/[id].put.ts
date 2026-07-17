@@ -14,7 +14,7 @@ defineRouteMeta({
     description:
       'Updates project metadata including label, description, diagnosis instructions, SCM token, and tags. Requires administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

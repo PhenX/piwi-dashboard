@@ -13,7 +13,7 @@ defineRouteMeta({
     summary: 'Create a user',
     description:
       'Creates a new user with username, password, role (administrator, reporter, or user), and optional name. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

@@ -4,15 +4,13 @@ import { notificationChannels, users } from '../../database/schema';
 import { requireAuth, isAuthEnabled } from '../../utils/auth';
 import { Role } from '#shared/types';
 
-const REQUIRED_ROLES: Role[] = [];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Notifications'],
     summary: 'List notification channels',
     description:
       'Returns channels owned by the current user and global (admin-managed) channels. Auto-creates a personal email channel if the user has an account email set.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
   },
 });
 

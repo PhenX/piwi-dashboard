@@ -11,7 +11,7 @@ defineRouteMeta({
     summary: 'Send test email',
     description:
       'Sends a test email via the env-configured SMTP settings to verify the configuration. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
     requestBody: {
       content: {
         'application/json': {

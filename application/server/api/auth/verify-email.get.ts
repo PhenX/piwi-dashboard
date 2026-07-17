@@ -2,16 +2,13 @@ import { eq } from 'drizzle-orm';
 import { getDatabase } from '../../database';
 import { users } from '../../database/schema';
 import { validateAccountToken, consumeAccountToken } from '../../utils/account-tokens';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [];
 
 defineRouteMeta({
   openAPI: {
     tags: ['Auth'],
     summary: 'Verify email address',
     description: 'Validates a verify token from the emailed link and marks the account email as verified.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     security: [],
     parameters: [{ name: 'token', in: 'query', required: true, schema: { type: 'string' } }],
   },

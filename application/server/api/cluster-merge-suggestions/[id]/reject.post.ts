@@ -11,7 +11,7 @@ defineRouteMeta({
     description:
       'Marks the suggestion as rejected; both clusters are left untouched. Requires reporter or administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 

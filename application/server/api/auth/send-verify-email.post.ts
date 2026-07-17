@@ -2,16 +2,13 @@ import { getDatabase } from '../../database';
 import { requireAuth } from '../../utils/auth';
 import { mintAccountToken } from '../../utils/account-tokens';
 import { isEmailConfigured, sendEmail, renderVerifyEmail } from '../../utils/email';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
     tags: ['Auth'],
     summary: 'Send email verification link',
     description: "Sends a verification link to the authenticated user's email address.",
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

@@ -1,8 +1,5 @@
-import { Role } from '#shared/types';
 import { isAuthEnabled, getCurrentUser } from '../../../../utils/auth';
 import { initiateOAuth } from '../../../../utils/oauth';
-
-const REQUIRED_ROLES: Role[] = [];
 
 defineRouteMeta({
   openAPI: {
@@ -14,7 +11,7 @@ defineRouteMeta({
       { name: 'provider', in: 'path', required: true, schema: { type: 'string' } },
       { name: 'link', in: 'query', required: false, schema: { type: 'string', enum: ['1'] } },
     ],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     security: [],
   },
 });

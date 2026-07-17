@@ -10,7 +10,7 @@ defineRouteMeta({
     summary: 'Update manual base commit for a cluster',
     description: 'Persists a manual baseline commit SHA for a failure cluster used in AI diagnosis context.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 

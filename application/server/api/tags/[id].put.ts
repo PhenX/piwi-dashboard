@@ -12,7 +12,7 @@ defineRouteMeta({
     summary: 'Update a tag',
     description: 'Updates the text and/or color of an existing tag. Requires administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

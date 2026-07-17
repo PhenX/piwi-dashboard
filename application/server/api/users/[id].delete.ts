@@ -14,7 +14,7 @@ defineRouteMeta({
     description:
       'Deletes a user by ID. Prevents self-deletion and removal of the last administrator account. Requires administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

@@ -24,7 +24,7 @@ defineRouteMeta({
     description:
       'Triggers an AI-powered diagnosis for the specified test run case (execution scope). Uses its failure cluster for context if available.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 

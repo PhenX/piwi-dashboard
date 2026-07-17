@@ -29,7 +29,7 @@ defineRouteMeta({
     summary: 'Upload test results with reports, traces, and attachments',
     description:
       'Upload Playwright test run results as multipart form data, including HTML reports, trace files, and other attachments. Supports both new runs and attaching files to existing streaming runs.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
     requestBody: {
       content: {
         'multipart/form-data': {

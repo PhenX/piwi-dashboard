@@ -14,7 +14,7 @@ defineRouteMeta({
     description:
       'Permanently delete a test run and all associated data including reports, traces, files, and failure clusters. Administrator access required.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

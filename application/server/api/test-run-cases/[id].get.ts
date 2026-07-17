@@ -1,9 +1,6 @@
 import { getTestRunCase } from '#shared/handlers/test-cases';
-import { Role } from '#shared/types';
 import { requireResolvedProjectAccess, requireRouteId, resolveTestRunCaseProjectId } from '../../utils/project-access';
 import { resolveWastedSettings } from '../../utils/wasted-settings';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -12,7 +9,7 @@ defineRouteMeta({
     description:
       'Returns detailed information about a test run case (one execution in a test run) including test run data, failure cluster context, reports, and attachments.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

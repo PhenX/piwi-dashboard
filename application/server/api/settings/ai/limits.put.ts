@@ -18,7 +18,7 @@ defineRouteMeta({
     summary: 'Save AI context limits',
     description:
       'Persists overrides for the AI diagnosis context limits. Values are clamped to each field range; an empty/null value resets a field to its default. Fields pinned by environment variables are ignored. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

@@ -1,14 +1,12 @@
 import { Role } from '#shared/types';
 import { getCurrentUser, isAuthEnabled } from '../../utils/auth';
 
-const REQUIRED_ROLES: Role[] = [];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Auth'],
     summary: 'Get current user',
     description: 'Returns the currently authenticated user details or unauthenticated status.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     security: [],
   },
 });

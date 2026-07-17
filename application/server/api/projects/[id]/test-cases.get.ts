@@ -1,9 +1,6 @@
 import { getDatabase } from '../../../database';
 import { getProjectTestCases, parseTestCasesQuery } from '#shared/handlers/projects';
-import { Role } from '#shared/types';
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -67,7 +64,7 @@ defineRouteMeta({
         description: 'Sort direction',
       },
     ],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

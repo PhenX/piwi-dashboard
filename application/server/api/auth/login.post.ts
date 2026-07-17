@@ -2,14 +2,12 @@ import { Role } from '#shared/types';
 import { verifyUser, setUserSession, isAuthEnabled } from '../../utils/auth';
 import { z } from 'zod';
 
-const REQUIRED_ROLES: Role[] = [];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Auth'],
     summary: 'Login',
     description: 'Authenticates a user with username and password credentials and creates a session.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     security: [],
   },
 });

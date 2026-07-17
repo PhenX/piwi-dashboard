@@ -11,7 +11,7 @@ defineRouteMeta({
     summary: 'Delete a tag',
     description: 'Deletes a tag by ID. Requires administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

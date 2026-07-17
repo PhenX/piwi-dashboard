@@ -22,7 +22,7 @@ defineRouteMeta({
     summary: 'Submit test results as JSON',
     description:
       'Submit Playwright test run results as a JSON payload. Creates or updates a project, test run, and test cases. Supports sharded runs via shardIndex / shardTotal.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
     requestBody: {
       content: {
         'application/json': {

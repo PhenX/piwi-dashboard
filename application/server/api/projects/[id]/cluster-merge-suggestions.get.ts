@@ -1,9 +1,6 @@
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
 import { getDatabase } from '../../../database';
 import { listMergeSuggestions } from '#shared/handlers/cluster-merge-suggestions';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -12,7 +9,7 @@ defineRouteMeta({
     description:
       'Returns pending (or filtered) merge suggestions surfaced by the embedding reconciler / LLM adjudicator, each joined with both clusters’ summaries.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

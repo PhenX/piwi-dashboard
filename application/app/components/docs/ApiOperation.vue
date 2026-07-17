@@ -10,7 +10,7 @@ const open = ref(false);
 
 const requiresAuth = computed(() => operationRequiresAuth(props.item.operation, props.spec));
 const isPublic = computed(() => operationIsPublic(props.item.operation));
-const roleReq = computed(() => routeRoleRequirement(props.item.method, props.item.path));
+const roleReq = computed(() => routeRoleRequirement(props.item.operation));
 
 // Full readable access requirement shown in the expanded body.
 const accessLabel = computed(() => {

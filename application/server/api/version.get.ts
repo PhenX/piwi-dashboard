@@ -1,14 +1,10 @@
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [];
-
 defineRouteMeta({
   openAPI: {
     tags: ['System'],
     summary: 'Get server version and runtime info',
     description:
       'Returns the dashboard application version, build provenance, and live runtime info (Node version, database backend). Public — used by the Settings → About page and external monitors.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     security: [],
   },
 });

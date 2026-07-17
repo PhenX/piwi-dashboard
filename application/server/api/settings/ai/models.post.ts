@@ -38,7 +38,7 @@ defineRouteMeta({
     summary: 'List available models from an AI provider',
     description:
       "Calls the provider's models endpoint to return available models with metadata. Accepts provider, baseUrl, apiKey, and role in the request body; when apiKey is omitted, the saved key for that role (then the diagnosis role) is used. Requires administrator role.",
-    'x-required-roles': [Role.ADMINISTRATOR],
+    'x-required-roles': ['administrator'],
   },
 });
 

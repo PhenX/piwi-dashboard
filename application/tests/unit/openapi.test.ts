@@ -124,8 +124,8 @@ describe('resolveSchema', () => {
 });
 
 describe('routeRoleRequirement', () => {
-  test('flags an admin-only route as elevated', () => {
-    const req = routeRoleRequirement('delete', '/api/admin/cleanup');
+  test('flags an admin-only operation as elevated', () => {
+    const req = routeRoleRequirement({ 'x-required-roles': ['administrator'] });
     expect(req).toMatchObject({
       roles: ['administrator'],
       label: 'Administrator',
@@ -134,23 +134,19 @@ describe('routeRoleRequirement', () => {
     });
   });
 
-  test('treats an all-roles route as "any signed-in user" (not elevated)', () => {
-    const req = routeRoleRequirement('get', '/api/test-runs/{id}');
+  test('treats an all-roles operation as "any signed-in user" (not elevated)', () => {
+    const req = routeRoleRequirement({ 'x-required-roles': ['administrator', 'reporter', 'user'] });
     expect(req).toMatchObject({ label: 'Any signed-in user', elevated: false });
   });
 
   test('joins multiple elevated roles', () => {
-    const req = routeRoleRequirement('post', '/api/test-runs/submit');
+    const req = routeRoleRequirement({ 'x-required-roles': ['administrator', 'reporter'] });
     expect(req).toMatchObject({ label: 'Administrator or Reporter', shortLabel: 'Admin / Reporter', elevated: true });
   });
 
-  test('returns null for a public / unmapped route', () => {
-    expect(routeRoleRequirement('get', '/api/health')).toBeNull();
-    expect(routeRoleRequirement('get', '/api/does-not-exist')).toBeNull();
-  });
-
-  test('is case-insensitive on the method', () => {
-    expect(routeRoleRequirement('DELETE', '/api/admin/cleanup')?.elevated).toBe(true);
+  test('returns null when there is no role restriction', () => {
+    expect(routeRoleRequirement({})).toBeNull();
+    expect(routeRoleRequirement({ 'x-required-roles': [] })).toBeNull();
   });
 });
 

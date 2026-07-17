@@ -4,14 +4,12 @@ import { subscriptions } from '../../database/schema';
 import { requireAuth, isAuthEnabled } from '../../utils/auth';
 import { Role } from '#shared/types';
 
-const REQUIRED_ROLES: Role[] = [];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Notifications'],
     summary: 'Delete a subscription',
     description: 'Deletes a subscription.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
   },
 });

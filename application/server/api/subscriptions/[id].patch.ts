@@ -6,14 +6,12 @@ import { NOTIFICATION_EVENTS } from '#shared/notification-events';
 import { Role } from '#shared/types';
 import { z } from 'zod';
 
-const REQUIRED_ROLES: Role[] = [];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Notifications'],
     summary: 'Update a subscription',
     description: 'Updates events, filters, mode, muting, or active state.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
   },
 });

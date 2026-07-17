@@ -14,7 +14,7 @@ defineRouteMeta({
     summary: 'Clean up test data',
     description:
       'Deletes all test projects and test tags by known names. Only available in non-production environments with administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

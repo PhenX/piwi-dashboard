@@ -1,9 +1,6 @@
 import { failureDiagnosisVersions } from '../../../database/schema';
 import { eq, desc } from 'drizzle-orm';
-import { Role } from '#shared/types';
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../../utils/project-access';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -11,7 +8,7 @@ defineRouteMeta({
     summary: 'Get diagnosis history for a cluster',
     description: 'Returns previous diagnosis versions for a failure cluster, ordered by creation date descending.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

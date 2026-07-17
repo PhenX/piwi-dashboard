@@ -14,7 +14,7 @@ defineRouteMeta({
     description:
       'Aggregates AI diagnosis token usage over the requested period, grouped by provider and model. Requires administrator role.',
     parameters: [{ name: 'days', in: 'query', schema: { type: 'integer', default: 30, minimum: 1, maximum: 365 } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

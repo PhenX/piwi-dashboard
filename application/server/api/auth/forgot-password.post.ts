@@ -4,10 +4,7 @@ import { users } from '../../database/schema';
 import { mintAccountToken } from '../../utils/account-tokens';
 import { isEmailConfigured, sendEmail, renderPasswordResetEmail } from '../../utils/email';
 import { checkRateLimit } from '../../utils/rate-limit';
-import { Role } from '#shared/types';
 import { z } from 'zod';
-
-const REQUIRED_ROLES: Role[] = [];
 
 defineRouteMeta({
   openAPI: {
@@ -15,7 +12,7 @@ defineRouteMeta({
     summary: 'Request password reset',
     description:
       'If a non-OAuth user with the given email exists, sends a password reset link. Always returns 200 to prevent user enumeration. Rate-limited.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     security: [],
   },
 });

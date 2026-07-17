@@ -10,7 +10,7 @@ defineRouteMeta({
     summary: 'Get SMTP configuration',
     description:
       'Returns SMTP configuration display info (host, port, from address, configured status). Password is never returned. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 

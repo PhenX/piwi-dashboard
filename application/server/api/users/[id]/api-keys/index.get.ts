@@ -11,7 +11,7 @@ defineRouteMeta({
     summary: 'List API keys for a user',
     description: 'Returns API keys belonging to a specific user. Non-administrators can only list their own keys.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

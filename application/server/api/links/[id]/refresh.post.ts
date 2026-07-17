@@ -14,7 +14,7 @@ defineRouteMeta({
     summary: 'Refresh entity link enrichment',
     description: 'Re-run provider detection, key extraction, and unfurl (fetch title) for a link.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 

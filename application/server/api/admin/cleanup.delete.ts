@@ -11,7 +11,7 @@ defineRouteMeta({
     summary: 'Cleanup old test data',
     description:
       'Deletes test runs older than a specified number of days, including associated files, traces, and reports. Optionally runs a full VACUUM (SQLite) to return freed space to the filesystem. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
     requestBody: {
       content: {
         'application/json': {

@@ -2,14 +2,11 @@ import { and, eq } from 'drizzle-orm';
 import { files, testRunsCases } from '../../../../../database/schema';
 import { resolveCaseDomSnapshot } from '../../../../../utils/dom-snapshot';
 import { resolveCasePayloadContents } from '../../../../../utils/case-payloads';
-import { Role } from '#shared/types';
 import {
   requireResolvedProjectAccess,
   requireRouteId,
   resolveTestRunCaseProjectId,
 } from '../../../../../utils/project-access';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -28,7 +25,7 @@ defineRouteMeta({
         description: 'Which representation to render — trace-derived DOM (default) or the ARIA tree',
       },
     ],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

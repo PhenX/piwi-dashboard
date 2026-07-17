@@ -5,12 +5,9 @@ import {
   requireRouteId,
   resolveClusterProjectId,
 } from '../../../../utils/project-access';
-import { Role } from '#shared/types';
 import { resolveAiConfig } from '../../../../utils/ai-provider';
 import type { AiAttachedImage } from '../../../../utils/ai-provider';
 import { streamClusterDiagnosis, isDiagnosisRunning, isDiagnosisStale } from '../../../../utils/ai-diagnosis';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -19,7 +16,7 @@ defineRouteMeta({
     description:
       'Triggers an AI-powered diagnosis for the specified failure cluster and returns the result as a Server-Sent Events stream. Text tokens are pushed as `event: thinking` chunks; the final structured result arrives as `event: result`.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 

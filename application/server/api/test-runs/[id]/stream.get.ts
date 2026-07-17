@@ -2,10 +2,7 @@ import { testRuns, testCases, testRunsCases } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
 import { runEventBus } from '../../../utils/run-events';
 import { createSSEEndpoint } from '../../../utils/sse';
-import { Role } from '#shared/types';
 import { requireResolvedProjectAccess, requireRouteId, resolveRunProjectId } from '../../../utils/project-access';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -14,7 +11,7 @@ defineRouteMeta({
     description:
       'Subscribe to Server-Sent Events for a live test run. Sends an initial catch-up snapshot of current state and existing test cases, then streams real-time events (test-begin, test-completed, run-progress, run-finished) until the run completes.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 
