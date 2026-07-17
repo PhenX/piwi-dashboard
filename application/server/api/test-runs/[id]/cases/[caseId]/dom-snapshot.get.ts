@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { files, testRunsCases } from '../../../../../database/schema';
 import { resolveCaseDomSnapshot } from '../../../../../utils/dom-snapshot';
+import { resolveCasePayloadContents } from '../../../../../utils/case-payloads';
 import { Role } from '#shared/types';
 import {
   requireResolvedProjectAccess,
@@ -49,8 +50,19 @@ export default eventHandler(async (event) => {
       .from(files)
       .where(and(eq(files.testRunsCaseId, caseId), eq(files.type, 'trace')))
       .limit(1),
-    db.select({ aria: testRunsCases.ariaSnapshot }).from(testRunsCases).where(eq(testRunsCases.id, caseId)).limit(1),
+    db
+      .select({ aria: testRunsCases.ariaSnapshot, ariaPayloadId: testRunsCases.ariaSnapshotPayloadId })
+      .from(testRunsCases)
+      .where(eq(testRunsCases.id, caseId))
+      .limit(1),
   ]);
 
-  return resolveCaseDomSnapshot(traceRows[0]?.path ?? null, caseRows[0]?.aria ?? null, undefined, { source });
+  // ARIA is content-addressed on new rows; legacy rows keep it inline.
+  const payloadContents = await resolveCasePayloadContents(db, [caseRows[0]?.ariaPayloadId]);
+  const aria =
+    (caseRows[0]?.ariaPayloadId != null ? payloadContents.get(caseRows[0].ariaPayloadId) : undefined) ??
+    caseRows[0]?.aria ??
+    null;
+
+  return resolveCaseDomSnapshot(traceRows[0]?.path ?? null, aria, undefined, { source });
 });

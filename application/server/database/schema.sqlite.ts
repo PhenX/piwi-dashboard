@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
 
 // Projects table
 export const projects = sqliteTable(
@@ -63,6 +64,7 @@ export const testRuns = sqliteTable(
     projectIdIdx: index('idx_test_runs_project_id').on(table.projectId),
     projectStartTimeIdx: index('idx_test_runs_project_start').on(table.projectId, table.startTime),
     startTimeIdx: index('idx_test_runs_start_time').on(table.startTime),
+    statusIdx: index('idx_test_runs_status').on(table.status),
   }),
 );
 
@@ -118,6 +120,7 @@ export const testCases = sqliteTable(
       table.suitePath,
       table.title,
     ),
+    suiteIdIdx: index('idx_test_cases_suite').on(table.suiteId),
   }),
 );
 
@@ -158,6 +161,7 @@ export const failureClusters = sqliteTable(
       table.fingerprint,
     ),
     projectLastSeenIdx: index('idx_failure_clusters_project_last_seen').on(table.projectId, table.lastSeenRunId),
+    projectStatusIdx: index('idx_failure_clusters_project_status').on(table.projectId, table.status),
   }),
 );
 
@@ -221,6 +225,7 @@ export const clusterMergeSuggestions = sqliteTable(
   (table) => ({
     pairIdx: uniqueIndex('idx_cluster_merge_suggestions_pair').on(table.clusterAId, table.clusterBId),
     projectStatusIdx: index('idx_cluster_merge_suggestions_project_status').on(table.projectId, table.status),
+    clusterBIdx: index('idx_cluster_merge_suggestions_cluster_b').on(table.clusterBId),
   }),
 );
 
@@ -295,6 +300,7 @@ export const failureDiagnosisVersions = sqliteTable(
   (table) => ({
     diagnosisIdIdx: index('idx_fdv_diagnosis_id').on(table.diagnosisId),
     clusterIdIdx: index('idx_fdv_cluster_id').on(table.clusterId),
+    testRunsCaseIdx: index('idx_fdv_test_runs_case').on(table.testRunsCaseId),
   }),
 );
 
@@ -306,6 +312,29 @@ export const appSettings = sqliteTable('app_settings', {
     .notNull()
     .$defaultFn(() => new Date()),
 });
+
+// Content-addressed storage for large per-execution text payloads (ARIA
+// snapshots, test source snippets, source-frame JSON). One row per unique
+// content per project — test_runs_cases rows reference payloads by id, so a
+// test failing identically across many runs stores each payload once.
+export const casePayloads = sqliteTable(
+  'case_payloads',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    hash: text('hash').notNull(), // SHA-256 hex of content
+    content: text('content').notNull(),
+    size: integer('size').notNull(), // content length in characters, for storage stats
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    projectHashIdx: uniqueIndex('idx_case_payloads_project_hash').on(table.projectId, table.hash),
+  }),
+);
 
 // Test runs cases table - junction table with run-specific data
 export const testRunsCases = sqliteTable(
@@ -333,9 +362,15 @@ export const testRunsCases = sqliteTable(
     webVitals: text('web_vitals', { mode: 'json' }), // { navigation: {...}, paint: {...} }
     pageState: text('page_state', { mode: 'json' }), // URL/history/storage-keys/cookie-flags at test end (values never captured)
     consoleLogs: text('console_logs', { mode: 'json' }), // Array of { type, text, timestamp, location } console entries
+    // Legacy inline payload columns: still readable on old rows, no longer
+    // written — new rows store these payloads content-addressed in
+    // case_payloads and reference them via the *PayloadId columns below.
     ariaSnapshot: text('aria_snapshot'), // ARIA snapshot of the page (YAML-like string from locator.ariaSnapshot())
     testSource: text('test_source'), // Source snippet around the failing assertion (sent by reporter)
     testSourceFrames: text('test_source_frames', { mode: 'json' }), // Array<{ file, line, snippet }> — in-project call-stack frames (innermost first)
+    ariaSnapshotPayloadId: integer('aria_snapshot_payload_id').references(() => casePayloads.id),
+    testSourcePayloadId: integer('test_source_payload_id').references(() => casePayloads.id),
+    testSourceFramesPayloadId: integer('test_source_frames_payload_id').references(() => casePayloads.id),
     browser: text('browser', { mode: 'json' }), // Playwright project/browser config: { projectName, browserName, channel, viewport }
     browserName: text('browser_name'), // Scalar browser identity (projectName) for index efficiency
     testAnnotations: text('test_annotations', { mode: 'json' }), // Array<{ type, description? }> — runtime test marks (@fixme, @slow …)
@@ -350,7 +385,9 @@ export const testRunsCases = sqliteTable(
   },
   (table) => ({
     testRunIdIdx: index('idx_test_runs_cases_test_run_id').on(table.testRunId),
-    testCaseIdIdx: index('idx_test_runs_cases_test_case_id').on(table.testCaseId),
+    // Composite: covers plain test_case_id lookups (prefix) and the
+    // per-case recency sorts used by history/flakiness queries.
+    testCaseCreatedIdx: index('idx_test_runs_cases_case_created').on(table.testCaseId, table.createdAt),
     failureClusterIdIdx: index('idx_test_runs_cases_failure_cluster_id').on(table.failureClusterId),
     runCaseBrowserUnique: uniqueIndex('idx_test_runs_cases_run_browser').on(
       table.testRunId,
@@ -358,6 +395,17 @@ export const testRunsCases = sqliteTable(
       table.retries,
       table.browserName,
     ),
+    // Partial indexes back the payload-GC reachability probes; populated on
+    // failures only, so the hot insert path pays almost nothing for them.
+    ariaPayloadIdx: index('idx_trc_aria_payload')
+      .on(table.ariaSnapshotPayloadId)
+      .where(sql`aria_snapshot_payload_id IS NOT NULL`),
+    sourcePayloadIdx: index('idx_trc_source_payload')
+      .on(table.testSourcePayloadId)
+      .where(sql`test_source_payload_id IS NOT NULL`),
+    framesPayloadIdx: index('idx_trc_frames_payload')
+      .on(table.testSourceFramesPayloadId)
+      .where(sql`test_source_frames_payload_id IS NOT NULL`),
   }),
 );
 
@@ -389,14 +437,14 @@ export const locatorSnapshots = sqliteTable(
     fingerprintIdx: index('idx_locator_snapshots_fp').on(table.testCaseId, table.usedMethod, table.usedArgsFp),
     // Cross-test healing looks a signature up across all of a project's cases.
     argsFpIdx: index('idx_locator_snapshots_args_fp').on(table.usedArgsFp),
+    lastSeenRunIdx: index('idx_locator_snapshots_last_seen_run').on(table.lastSeenRunId),
   }),
 );
 
 // Network requests table - normalized child table of test_runs_cases
 // Stores one row per filtered network request (API/document types only).
 // Normalized URLs enable endpoint-grouped stats without parsing JSON.
-// Populated at ingest time alongside test_runs_cases; the old JSON column
-// is kept for backward compat with existing data.
+// Populated at ingest time alongside test_runs_cases.
 export const networkRequests = sqliteTable(
   'network_requests',
   {
@@ -485,6 +533,8 @@ export const files = sqliteTable(
   (table) => ({
     testRunIdIdx: index('idx_files_test_run_id').on(table.testRunId),
     testRunsCaseIdIdx: index('idx_files_test_runs_case_id').on(table.testRunsCaseId),
+    // Trace deletion refcounts blob references with a COUNT(*) on this column.
+    blobIdIdx: index('idx_files_blob_id').on(table.blobId),
   }),
 );
 
@@ -525,6 +575,7 @@ export const entityLinks = sqliteTable(
     runIdx: index('idx_entity_links_run').on(t.testRunId),
     caseRunIdx: index('idx_entity_links_case_run').on(t.testRunsCaseId),
     caseIdx: index('idx_entity_links_case').on(t.testCaseId),
+    createdByIdx: index('idx_entity_links_created_by').on(t.createdBy),
   }),
 );
 
@@ -608,7 +659,10 @@ export const accountTokens = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
   },
-  (t) => ({ hashIdx: uniqueIndex('idx_account_tokens_hash').on(t.tokenHash) }),
+  (t) => ({
+    hashIdx: uniqueIndex('idx_account_tokens_hash').on(t.tokenHash),
+    userIdx: index('idx_account_tokens_user').on(t.userId),
+  }),
 );
 
 // Notification channels table - a configured delivery destination (email / Slack / webhook)
@@ -687,6 +741,8 @@ export const notificationDeliveries = sqliteTable(
   (t) => ({
     statusScheduledIdx: index('idx_notification_deliveries_status').on(t.status, t.scheduledFor),
     dedupeKeyIdx: uniqueIndex('idx_notification_deliveries_dedupe').on(t.dedupeKey),
+    subscriptionIdx: index('idx_notification_deliveries_subscription').on(t.subscriptionId),
+    channelIdx: index('idx_notification_deliveries_channel').on(t.channelId),
   }),
 );
 
@@ -709,6 +765,7 @@ export const projectAssignments = sqliteTable(
     userIdx: index('idx_project_assignments_user').on(t.userId),
     projectIdx: index('idx_project_assignments_project').on(t.projectId),
     userProjectUnique: uniqueIndex('idx_project_assignments_user_project').on(t.userId, t.projectId),
+    createdByIdx: index('idx_project_assignments_created_by').on(t.createdBy),
   }),
 );
 
@@ -759,6 +816,8 @@ export type File = typeof files.$inferSelect;
 export type NewFile = typeof files.$inferInsert;
 export type TraceBlob = typeof traceBlobs.$inferSelect;
 export type NewTraceBlob = typeof traceBlobs.$inferInsert;
+export type CasePayload = typeof casePayloads.$inferSelect;
+export type NewCasePayload = typeof casePayloads.$inferInsert;
 export type TraceResource = typeof traceResources.$inferSelect;
 export type NewTraceResource = typeof traceResources.$inferInsert;
 export type User = typeof users.$inferSelect;

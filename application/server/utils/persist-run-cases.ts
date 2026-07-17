@@ -1,7 +1,18 @@
 import { testCases, testRunsCases, testSuites, networkRequests } from '../database/schema';
 import { eq } from 'drizzle-orm';
 import { buildNetworkRequestItems, buildNetworkRequestInsertValues } from './network-request-helpers';
-import { sanitizeWebVitals, sanitizeConsoleLogs, sanitizePageState } from './sanitize';
+import {
+  capArray,
+  capConsoleLogs,
+  capErrorText,
+  capSourceFrames,
+  capText,
+  sanitizeWebVitals,
+  sanitizeConsoleLogs,
+  sanitizePageState,
+} from './sanitize';
+import { resolveIngestLimits } from './ingest-limits';
+import { upsertCasePayloads } from './case-payloads';
 import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fingerprint';
 import { testCaseCache } from './test-case-cache';
 import { testSuiteCache } from './test-suite-cache';
@@ -167,6 +178,8 @@ export async function persistRunCases(
 ): Promise<Array<{ id: number; status: string }>> {
   if (cases.length === 0) return [];
 
+  const limits = resolveIngestLimits();
+
   // --- Step 1: Resolve all suites referenced in this batch ---
   const suiteIdMap = await resolveSuites(db, projectId, cases);
 
@@ -183,6 +196,10 @@ export async function persistRunCases(
   );
 
   const runCasesRows: Array<typeof testRunsCases.$inferInsert> = [];
+  // Capped payload strings per row, deduplicated into case_payloads after the
+  // loop; the junction rows store only the payload ids (inline columns stay
+  // null on new rows — readers coalesce via inlineCasePayloads).
+  const rowPayloads: Array<{ aria: string | null; source: string | null; framesJson: string | null }> = [];
   const networkRequestBuilders: Array<{
     items: Array<{
       method: string;
@@ -245,31 +262,45 @@ export async function persistRunCases(
       if (pending) {
         pending.count++;
       } else {
-        pendingClusters.set(fingerprint.fingerprint, { fp: fingerprint, sampleError: c.error!, count: 1 });
+        // The fingerprint is computed from the raw error above; only storage is capped.
+        pendingClusters.set(fingerprint.fingerprint, {
+          fp: fingerprint,
+          sampleError: capText(c.error, limits.sampleErrorChars)!,
+          count: 1,
+        });
       }
     }
     rowFingerprints.push(fingerprint);
+
+    const aria = capText(c.ariaSnapshot, limits.ariaSnapshotChars);
+    const source = capText(c.testSource, limits.testSourceChars);
+    const frames = capSourceFrames(c.testSourceFrames, limits);
+    rowPayloads.push({ aria, source, framesJson: frames != null ? JSON.stringify(frames) : null });
 
     runCasesRows.push({
       testRunId,
       testCaseId: caseId,
       status: c.status,
       duration: c.duration ?? null,
-      error: c.error ?? null,
+      error: capErrorText(c.error, limits.errorChars),
       retries: c.retries ?? 0,
       line: c.line,
       column: c.column,
-      steps: c.steps ?? null,
-      stepEvents: c.stepEvents ?? null,
+      steps: capArray(c.steps, limits.steps),
+      stepEvents: capArray(c.stepEvents, limits.stepEvents),
       slowestStep: c.slowestStep ?? null,
       slowestStepDuration: c.slowestStepDuration ?? null,
       wastedTimeMs: c.wastedTimeMs ?? null,
       webVitals: sanitizeWebVitals(c.webVitals as Record<string, unknown> | null | undefined) ?? null,
       pageState: sanitizePageState(c.pageState),
-      consoleLogs: sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined) ?? null,
-      ariaSnapshot: c.ariaSnapshot ?? null,
-      testSource: c.testSource ?? null,
-      testSourceFrames: (c.testSourceFrames as any) ?? null,
+      consoleLogs:
+        capConsoleLogs(
+          sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined),
+          limits,
+        ) ?? null,
+      ariaSnapshot: null,
+      testSource: null,
+      testSourceFrames: null,
       testAnnotations: (c.testAnnotations as any) ?? null,
       browser: c.browser ?? null,
       browserName: resolveBrowserName(c.browser),
@@ -283,6 +314,19 @@ export async function persistRunCases(
   }
 
   if (runCasesRows.length === 0) return [];
+
+  // Payloads land first so the junction rows can reference them.
+  const payloadIds = await upsertCasePayloads(
+    db,
+    projectId,
+    rowPayloads.flatMap((p) => [p.aria, p.source, p.framesJson]),
+  );
+  runCasesRows.forEach((row, i) => {
+    const p = rowPayloads[i]!;
+    row.ariaSnapshotPayloadId = p.aria ? (payloadIds.get(p.aria) ?? null) : null;
+    row.testSourcePayloadId = p.source ? (payloadIds.get(p.source) ?? null) : null;
+    row.testSourceFramesPayloadId = p.framesJson ? (payloadIds.get(p.framesJson) ?? null) : null;
+  });
 
   const clusterIds = await getOrCreateFailureClusters(db, projectId, testRunId, pendingClusters);
   runCasesRows.forEach((row, i) => {

@@ -1,4 +1,5 @@
 import { filterAndCapNetworkRequests } from '#shared/utils/filter-network-requests';
+import type { IngestLimits } from '#shared/ingest-limits';
 
 /**
  * URL and network data sanitization helpers.
@@ -152,4 +153,80 @@ export function sanitizeConsoleLogs(
     if (!match) return log;
     return { ...log, location: `${sanitizeUrl(match[1]!)}:${match[2]}:${match[3]}` };
   });
+}
+
+/*
+ * Ingest storage caps (see `shared/ingest-limits.ts`): bound the size of the
+ * per-execution payloads before they are persisted. Applied by
+ * `persistRunCases` and the demo reporter mirror.
+ */
+
+/** Truncate a string to `maxChars`, appending a truncation marker when cut. */
+export function capText(text: string | null | undefined, maxChars: number): string | null {
+  if (typeof text !== 'string') return null;
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)}\n[truncated ${text.length - maxChars} chars]`;
+}
+
+/**
+ * Truncate error text keeping both ends — the message/assertion detail lives
+ * at the head, the innermost stack frames at the tail.
+ */
+export function capErrorText(error: string | null | undefined, maxChars: number): string | null {
+  if (typeof error !== 'string') return null;
+  if (error.length <= maxChars) return error;
+  const headChars = Math.floor(maxChars * 0.75);
+  const tailChars = maxChars - headChars;
+  const dropped = error.length - headChars - tailChars;
+  return `${error.slice(0, headChars)}\n… [truncated ${dropped} chars] …\n${error.slice(error.length - tailChars)}`;
+}
+
+/** Cap an unknown-typed JSON array payload (steps, step events) to `max` entries. */
+export function capArray(value: unknown, max: number): unknown {
+  if (!Array.isArray(value) || value.length <= max) return value ?? null;
+  return value.slice(0, max);
+}
+
+/**
+ * Cap console entries to `limits.consoleEntries`, keeping the first 20 (page
+ * setup context) and the newest remainder, with a synthetic marker entry in
+ * between. Every entry's text is capped to `limits.consoleEntryChars`.
+ */
+export function capConsoleLogs(
+  logs: Array<Record<string, unknown>> | null | undefined,
+  limits: IngestLimits,
+): Array<Record<string, unknown>> | null {
+  if (!logs || !Array.isArray(logs)) return null;
+  const capEntry = (log: Record<string, unknown>): Record<string, unknown> =>
+    typeof log.text === 'string' && log.text.length > limits.consoleEntryChars
+      ? { ...log, text: `${log.text.slice(0, limits.consoleEntryChars)} [truncated]` }
+      : log;
+
+  if (logs.length <= limits.consoleEntries) return logs.map(capEntry);
+
+  const headCount = Math.min(20, limits.consoleEntries - 1);
+  const tailCount = limits.consoleEntries - headCount;
+  const dropped = logs.length - headCount - tailCount;
+  return [
+    ...logs.slice(0, headCount).map(capEntry),
+    { type: 'info', text: `[${dropped} console entries dropped]` },
+    ...logs.slice(logs.length - tailCount).map(capEntry),
+  ];
+}
+
+/**
+ * Cap the source stack frames (count, per-frame snippet chars, path length).
+ * Shape-validates against arbitrary submitters: non-object frames are dropped.
+ */
+export function capSourceFrames(frames: unknown, limits: IngestLimits): unknown {
+  if (!Array.isArray(frames)) return frames ?? null;
+  const capped = frames
+    .filter((f): f is Record<string, unknown> => !!f && typeof f === 'object' && !Array.isArray(f))
+    .slice(0, limits.sourceFrames)
+    .map((f) => ({
+      ...f,
+      file: typeof f.file === 'string' ? f.file.slice(0, 500) : f.file,
+      snippet: typeof f.snippet === 'string' ? (capText(f.snippet, limits.sourceFrameChars) ?? '') : f.snippet,
+    }));
+  return capped.length > 0 ? capped : null;
 }

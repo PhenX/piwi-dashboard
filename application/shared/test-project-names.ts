@@ -104,6 +104,7 @@ export const PROJECT = {
   STREAMING_TEST: 'streaming-test-project',
   TAG_ASSIGNMENT: 'tag-assignment-test-project',
   TEST_API: 'test-api-project',
+  TEST_CASES_CATALOG: 'test-cases-catalog-test',
   TEST_FLAKY: 'test-flaky-project',
   TEST_PROJECT: 'test-project',
   TEST_RUN_CASE_PAGE: 'test-run-case-page-test',

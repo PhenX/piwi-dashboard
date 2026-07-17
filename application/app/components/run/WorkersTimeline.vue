@@ -156,7 +156,6 @@ function onBarLeave() {
           :x="getBarX(item)"
           :y="getBarTop(item)"
           :width="getBarWidth(item)"
-          :dimmed="!!hoveredItem && hoveredItem.key !== item.key"
           @select="emit('selectTestCase', $event)"
           @hover="onBarEnter"
           @move="onBarMove"
@@ -172,3 +171,15 @@ function onBarLeave() {
     <p>No worker data available for this run.</p>
   </div>
 </template>
+
+<style>
+/*
+ * Hover-dimming for timeline bars is plain CSS rather than a Vue-bound
+ * `dimmed` prop: with hundreds of bars, driving it through reactive props
+ * made every bar re-render on each hover change. `:has()` lets the browser
+ * do it in one style recalc with no Vue/JS involved.
+ */
+svg:has(.timeline-bar-group:hover) .timeline-bar-group:not(:hover) .timeline-bar-shape {
+  opacity: 0.4;
+}
+</style>

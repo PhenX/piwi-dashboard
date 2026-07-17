@@ -34,6 +34,7 @@ import type {
 import type { RunMetadata, BrowserConfig } from '../run-json-types';
 import { getStorage } from '../../storage';
 import { getLocatorHealingBatch, getLocatorHealing } from '../locator-healing';
+import { inlineCasePayloads } from '../case-payloads';
 import { selectCaseScreenshots } from '../case-screenshots';
 import { createScmProvider } from '../scm';
 import { resolveAiConfig } from '../ai-provider';
@@ -824,6 +825,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     if (built.sections.length === 0) {
       const [row] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id)).limit(1);
       if (row) {
+        const evidence = await inlineCasePayloads(db, row);
         return {
           ...base,
           rawExecution: dropNulls({
@@ -832,7 +834,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
             steps: row.steps,
             consoleLogs: row.consoleLogs,
             webVitals: row.webVitals,
-            ariaSnapshot: trunc(row.ariaSnapshot, 4000),
+            ariaSnapshot: trunc(evidence.ariaSnapshot, 4000),
           }),
         };
       }
@@ -984,6 +986,8 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         : null;
     const want = (k: string) => include === null || include.has(k);
 
+    const evidence = want('aria') || want('source') ? await inlineCasePayloads(db, row) : row;
+
     return dropNulls({
       executionId: row.id,
       testCaseId: row.testCaseId,
@@ -1004,8 +1008,8 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       slowestStepDuration: row.slowestStepDuration || null,
       consoleLogs: want('console') ? row.consoleLogs : null,
       webVitals: want('webVitals') ? row.webVitals : null,
-      ariaSnapshot: want('aria') ? trunc(row.ariaSnapshot, 8000) : null,
-      testSource: want('source') ? row.testSource || null : null,
+      ariaSnapshot: want('aria') ? trunc(evidence.ariaSnapshot, 8000) : null,
+      testSource: want('source') ? evidence.testSource || null : null,
       testAnnotations: row.testAnnotations,
       startedAt: iso(row.startedAt),
       isNewRegression: row.isNewRegression || null,
@@ -1348,12 +1352,12 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     assertProject(ctx, projectId);
     const pageSize = clampPageSize(params.pageSize);
     const offset = Math.max(0, Number(params.offset) || 0);
-    const all = (await getProjectTestCases(db, projectId)) as any[];
-    const page = all.slice(offset, offset + pageSize);
+    const query = typeof params.query === 'string' && params.query.trim() ? params.query.trim() : undefined;
+    const page = await getProjectTestCases(db, projectId, { limit: pageSize, offset, q: query });
     return {
-      total: all.length,
+      total: page.total,
       offset,
-      items: page.map((t: any) =>
+      items: page.items.map((t: any) =>
         dropNulls({
           testCaseId: t.id,
           title: t.title,
@@ -1366,7 +1370,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
           avgDuration: t.avgDuration != null ? Math.round(t.avgDuration) : null,
         }),
       ),
-      nextOffset: offset + pageSize < all.length ? offset + pageSize : null,
+      nextOffset: offset + pageSize < page.total ? offset + pageSize : null,
     };
   },
 
@@ -1431,6 +1435,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
     const [row] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
     if (!row) return null;
+    const evidence = await inlineCasePayloads(db, row);
     const [tc] = await db
       .select({ title: testCases.title, filePath: testCases.filePath })
       .from(testCases)
@@ -1462,7 +1467,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       slowestStep: row.slowestStep || null,
       steps: row.steps,
       consoleLogs: row.consoleLogs,
-      ariaSnapshot: trunc(row.ariaSnapshot, 3000),
+      ariaSnapshot: trunc(evidence.ariaSnapshot, 3000),
       locatorFix: rec ? dropNulls({ locator: rec.locator, method: rec.method, score: rec.score }) : null,
       screenshotCount: screenshotRows.length || null,
       diagnosisContext: diagContext?.text || null,

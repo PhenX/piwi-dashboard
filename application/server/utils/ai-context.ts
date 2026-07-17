@@ -16,6 +16,7 @@ import { condenseErrorText, maskVolatile, stripAnsi } from '#shared/error-finger
 import { DIAGNOSIS_SECTIONS } from '#shared/diagnosis-sections';
 import { durationStats } from '#shared/utils/stats';
 import { computeRegressionContext, normalizeGitUrl } from './regression-context';
+import { inlineCasePayloads } from './case-payloads';
 import { createScmProvider, detectScmProvider } from './scm';
 import { MAX_RAW_DIFF_BYTES } from './scm/ScmProvider';
 import type { ScmChanges, ChangedFile } from './scm/ScmProvider';
@@ -354,6 +355,8 @@ async function loadExecutionRow(db: DbClient, where: SQL) {
       consoleLogs: testRunsCases.consoleLogs,
       ariaSnapshot: testRunsCases.ariaSnapshot,
       testSource: testRunsCases.testSource,
+      ariaSnapshotPayloadId: testRunsCases.ariaSnapshotPayloadId,
+      testSourcePayloadId: testRunsCases.testSourcePayloadId,
       webVitals: testRunsCases.webVitals,
       pageState: testRunsCases.pageState,
       testAnnotations: testRunsCases.testAnnotations,
@@ -375,8 +378,11 @@ async function loadExecutionRow(db: DbClient, where: SQL) {
     .orderBy(desc(testRunsCases.id))
     .limit(1);
 
-  const rep = repRows[0] ?? null;
-  if (!rep) return null;
+  const repRow = repRows[0] ?? null;
+  if (!repRow) return null;
+
+  // ARIA snapshot / test source are content-addressed on new rows.
+  const rep = await inlineCasePayloads(db, repRow);
 
   const [runRow, nrRows] = await Promise.all([
     db

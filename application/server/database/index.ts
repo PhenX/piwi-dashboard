@@ -20,6 +20,15 @@ let migrationPromise: Promise<void> | null = null;
 // Detect which database backend to use
 const databaseUrl = process.env.PIWI_DATABASE_URL;
 
+/**
+ * Which SQL dialect the runtime database speaks. Use this to guard
+ * dialect-specific statements (PRAGMA, VACUUM) — the drizzle client is typed
+ * against the SQLite API even when PostgreSQL is the actual backend.
+ */
+export function getDialect(): 'postgres' | 'sqlite' {
+  return databaseUrl ? 'postgres' : 'sqlite';
+}
+
 export async function initDatabase() {
   if (!db) {
     if (databaseUrl) {
@@ -71,12 +80,23 @@ export async function initDatabase() {
       const dbPath = process.env.PIWI_DATABASE_PATH || '.data/piwi.db';
       const absolutePath = resolve(dbPath);
       const dbUrl = pathToFileURL(absolutePath).href;
+      const isFreshDatabase = !existsSync(absolutePath);
 
       // Create client with WAL mode for better concurrent read/write performance
       const { createClient } = await import('@libsql/client');
       const client = createClient({ url: dbUrl });
+      if (isFreshDatabase) {
+        // Must be set before the first table is created (a no-op on existing
+        // databases unless a full VACUUM runs) — enables `PRAGMA
+        // incremental_vacuum` to reclaim pages after bulk deletes.
+        await client.execute('PRAGMA auto_vacuum=INCREMENTAL');
+      }
       await client.execute('PRAGMA journal_mode=WAL');
       await client.execute('PRAGMA synchronous=NORMAL');
+      // Enforce the ON DELETE actions declared in the schema. Delete paths
+      // still remove child rows explicitly (see server/utils/retention.ts) so
+      // behavior does not depend on this per-connection pragma.
+      await client.execute('PRAGMA foreign_keys=ON');
       db = sqliteDrizzle(client, { schema: sqliteSchema });
 
       migrationPromise = (async () => {
