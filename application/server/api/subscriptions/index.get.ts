@@ -4,14 +4,12 @@ import { subscriptions, notificationChannels } from '../../database/schema';
 import { requireAuth, isAuthEnabled } from '../../utils/auth';
 import { Role } from '#shared/types';
 
-const REQUIRED_ROLES: Role[] = [];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Notifications'],
     summary: 'List subscriptions',
     description: "Returns the current user's subscriptions (admins can see all).",
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     parameters: [{ name: 'projectId', in: 'query', schema: { type: 'integer' } }],
   },
 });

@@ -3,7 +3,6 @@ import { getDatabase } from '../../database';
 import { projects, testRuns } from '../../database/schema';
 import { eq, and, or } from 'drizzle-orm';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
 import { parseLocation } from '../../utils/parse-location';
 import { persistRunCases, type RunCaseInput } from '../../utils/persist-run-cases';
 import { sanitizeMetadata } from '../../utils/sanitize';
@@ -14,15 +13,13 @@ import { emitRunNotifications } from '../../utils/notifications/run-notification
 import { getProjectScope, scopeAllows } from '../../utils/project-access';
 import { sumFailedAndTimedOut } from '#shared/utils/test-counts';
 
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Test Runs'],
     summary: 'Submit test results as JSON',
     description:
       'Submit Playwright test run results as a JSON payload. Creates or updates a project, test run, and test cases. Supports sharded runs via shardIndex / shardTotal.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
     requestBody: {
       content: {
         'application/json': {
@@ -45,7 +42,7 @@ defineRouteMeta({
 
 export default eventHandler(async (event) => {
   // Require reporter or administrator role for submitting test results
-  const user = await requireAuth(event, REQUIRED_ROLES);
+  const user = await requireAuth(event);
 
   const body = await readBody(event);
 

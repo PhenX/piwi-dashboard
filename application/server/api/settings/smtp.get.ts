@@ -1,8 +1,5 @@
 import { requireAuth } from '../../utils/auth';
 import { getSmtpConfig } from '../../utils/email';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -10,12 +7,12 @@ defineRouteMeta({
     summary: 'Get SMTP configuration',
     description:
       'Returns SMTP configuration display info (host, port, from address, configured status). Password is never returned. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
   const cfg = getSmtpConfig();
   return {
     host: cfg.host || null,

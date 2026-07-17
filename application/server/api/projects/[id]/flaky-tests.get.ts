@@ -1,9 +1,6 @@
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
 import { getDatabase } from '../../../database';
 import { getProjectFlakyTests } from '#shared/handlers/projects';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -16,7 +13,7 @@ defineRouteMeta({
       { name: 'runs', in: 'query', required: false, schema: { type: 'integer' } },
       { name: 'environment', in: 'query', required: false, schema: { type: 'string' } },
     ],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

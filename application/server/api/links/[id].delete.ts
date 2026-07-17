@@ -1,9 +1,6 @@
 import { requireAuth } from '../../utils/auth';
 import { getDatabase } from '../../database';
 import { deleteLink } from '#shared/handlers/links';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -11,12 +8,12 @@ defineRouteMeta({
     summary: 'Delete an entity link',
     description: 'Remove an entity link by ID.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) {

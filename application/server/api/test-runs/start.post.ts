@@ -3,14 +3,11 @@ import { getDatabase } from '../../database';
 import { projects, testRuns } from '../../database/schema';
 import { eq, and, or } from 'drizzle-orm';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
 import { cancelInstanceRuns } from '../../utils/cancel-instance-runs';
 import { sanitizeMetadata } from '../../utils/sanitize';
 import { runEventBus } from '../../utils/run-events';
 import { persistShardToken } from '../../utils/shard-tokens';
 import { getProjectScope, scopeAllows } from '../../utils/project-access';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -18,7 +15,7 @@ defineRouteMeta({
     summary: 'Start a streaming test run',
     description:
       'Start a new streaming test run directly in "running" status. Returns a stream token for authenticating subsequent streaming event submissions. Cancels any previous runs from the same instance. Supports sharded runs: when shardTotal > 1, reuses an existing run from the same instanceId.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
     requestBody: {
       content: {
         'application/json': {
@@ -43,7 +40,7 @@ defineRouteMeta({
 
 export default eventHandler(async (event) => {
   // Require reporter or administrator role
-  const user = await requireAuth(event, REQUIRED_ROLES);
+  const user = await requireAuth(event);
 
   const body = await readBody(event);
 

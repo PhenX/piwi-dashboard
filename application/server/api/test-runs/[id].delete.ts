@@ -1,11 +1,8 @@
 import { testRuns, testRunsCases, files } from '../../database/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { requireResolvedProjectAccess, requireRouteId, resolveRunProjectId } from '../../utils/project-access';
-import { Role } from '#shared/types';
 import { deleteFileRow } from '../../utils/delete-run-files';
 import { recomputeClusterOccurrences } from '#shared/handlers/failure-cluster-ops';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -14,13 +11,13 @@ defineRouteMeta({
     description:
       'Permanently delete a test run and all associated data including reports, traces, files, and failure clusters. Administrator access required.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'test run ID');
-  const { db } = await requireResolvedProjectAccess(event, id, resolveRunProjectId, 'Test run', REQUIRED_ROLES);
+  const { db } = await requireResolvedProjectAccess(event, id, resolveRunProjectId, 'Test run');
 
   const testRunResults = await db.select().from(testRuns).where(eq(testRuns.id, id));
   const testRun = testRunResults[0];

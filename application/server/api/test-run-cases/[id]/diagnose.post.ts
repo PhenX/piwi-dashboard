@@ -5,7 +5,6 @@ import {
   requireRouteId,
   resolveTestRunCaseProjectId,
 } from '../../../utils/project-access';
-import { Role } from '#shared/types';
 import { resolveAiConfig } from '../../../utils/ai-provider';
 import type { AiAttachedImage } from '../../../utils/ai-provider';
 import {
@@ -15,8 +14,6 @@ import {
   isDiagnosisStale,
 } from '../../../utils/ai-diagnosis';
 
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Test Run Cases'],
@@ -24,19 +21,13 @@ defineRouteMeta({
     description:
       'Triggers an AI-powered diagnosis for the specified test run case (execution scope). Uses its failure cluster for context if available.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'test run case ID');
-  const { db, projectId } = await requireResolvedProjectAccess(
-    event,
-    id,
-    resolveTestRunCaseProjectId,
-    'Test run case',
-    REQUIRED_ROLES,
-  );
+  const { db, projectId } = await requireResolvedProjectAccess(event, id, resolveTestRunCaseProjectId, 'Test run case');
 
   const force = getQuery(event).force === 'true';
   const body = (await readBody(event).catch(() => null)) as {

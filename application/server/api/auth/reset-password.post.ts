@@ -4,17 +4,14 @@ import { users } from '../../database/schema';
 import { validateAccountToken, consumeAccountToken } from '../../utils/account-tokens';
 import { hashPassword } from '../../utils/auth';
 import { clearUserSession } from '../../utils/auth';
-import { Role } from '#shared/types';
 import { z } from 'zod';
-
-const REQUIRED_ROLES: Role[] = [];
 
 defineRouteMeta({
   openAPI: {
     tags: ['Auth'],
     summary: 'Reset password using token',
     description: 'Validates a single-use reset/invite token, sets the new password, and invalidates existing sessions.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     security: [],
   },
 });

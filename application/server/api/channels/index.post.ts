@@ -5,14 +5,12 @@ import { encryptSecret, getEncryptionKey } from '../../utils/crypto';
 import { Role } from '#shared/types';
 import { z } from 'zod';
 
-const REQUIRED_ROLES: Role[] = [];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Notifications'],
     summary: 'Create a notification channel',
     description: 'Creates a new notification channel. Webhook secrets are encrypted at rest.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
   },
 });
 

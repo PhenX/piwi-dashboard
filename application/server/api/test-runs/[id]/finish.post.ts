@@ -8,10 +8,7 @@ import { autoDiagnoseRun } from '../../../utils/ai-diagnosis';
 import { readShardTokensFromMeta, removeStoredShardToken } from '../../../utils/shard-tokens';
 import { emitRunNotifications } from '../../../utils/notifications/run-notifications';
 import { computeRegressionSignals } from '../../../utils/compute-regression-signals';
-import { Role } from '#shared/types';
 import { sumFailedAndTimedOut } from '#shared/utils/test-counts';
-
-const REQUIRED_ROLES: Role[] = [];
 
 defineRouteMeta({
   openAPI: {
@@ -20,7 +17,7 @@ defineRouteMeta({
     description:
       'Finalize a streaming test run by setting its final status and calculating performance metrics. Supports pending uploads mode where reports are uploaded asynchronously after finishing. For sharded runs, counters are accumulated and the run finishes only after all shards report.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     requestBody: {
       content: {
         'application/json': {

@@ -2,9 +2,6 @@ import { getDatabase } from '../../database';
 import { updateTag } from '#shared/handlers/tags';
 import { z } from 'zod';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -12,7 +9,7 @@ defineRouteMeta({
     summary: 'Update a tag',
     description: 'Updates the text and/or color of an existing tag. Requires administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
@@ -22,7 +19,7 @@ const updateTagSchema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) {

@@ -3,9 +3,6 @@ import { z } from 'zod';
 import { requireProjectAccess, requireRouteId } from '../../utils/project-access';
 import { updateProject } from '#shared/handlers/projects';
 import { encryptSecret, getEncryptionKey } from '../../utils/crypto';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -14,7 +11,7 @@ defineRouteMeta({
     description:
       'Updates project metadata including label, description, diagnosis instructions, SCM token, and tags. Requires administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
@@ -30,7 +27,7 @@ export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'project ID');
 
   // Require administrator role for updating projects
-  await requireProjectAccess(event, id, REQUIRED_ROLES);
+  await requireProjectAccess(event, id);
 
   const db = await getDatabase();
 

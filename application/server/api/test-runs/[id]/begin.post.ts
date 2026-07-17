@@ -6,9 +6,6 @@ import { cancelInstanceRuns } from '../../../utils/cancel-instance-runs';
 import { sanitizeMetadata } from '../../../utils/sanitize';
 import { runEventBus } from '../../../utils/run-events';
 import { persistShardToken } from '../../../utils/shard-tokens';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [];
 
 defineRouteMeta({
   openAPI: {
@@ -17,7 +14,7 @@ defineRouteMeta({
     description:
       'Begins a streaming test run by transitioning it from "initialising" to "running" status. Requires the setup token returned by the setup endpoint. Supports sharded runs: already-running sharded runs accept additional setup tokens.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     requestBody: {
       content: {
         'application/json': {

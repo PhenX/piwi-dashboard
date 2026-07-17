@@ -1,9 +1,6 @@
 import { requireAuth } from '../../utils/auth';
 import { getDatabase } from '../../database';
 import { listLinks } from '#shared/handlers/links';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -19,12 +16,12 @@ defineRouteMeta({
       },
       { name: 'entityId', in: 'query', required: true, schema: { type: 'integer' } },
     ],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const query = getQuery(event);
   const entityType = query.entityType as string;

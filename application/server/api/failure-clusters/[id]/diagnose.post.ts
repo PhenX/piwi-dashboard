@@ -1,12 +1,9 @@
 import { failureClusters, failureDiagnoses, testRunsCases } from '../../../database/schema';
 import { eq, and } from 'drizzle-orm';
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../../utils/project-access';
-import { Role } from '#shared/types';
 import { resolveAiConfig } from '../../../utils/ai-provider';
 import type { AiAttachedImage } from '../../../utils/ai-provider';
 import { runClusterDiagnosis, isDiagnosisRunning, isDiagnosisStale } from '../../../utils/ai-diagnosis';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -15,7 +12,7 @@ defineRouteMeta({
     description:
       'Triggers an AI-powered diagnosis for the specified failure cluster. Accepts optional force flag, additional context, images, base commit, and selected commit SHAs in the request body.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 

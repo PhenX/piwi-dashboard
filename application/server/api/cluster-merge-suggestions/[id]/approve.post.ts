@@ -1,8 +1,5 @@
 import { requireResolvedProjectAccess, requireRouteId } from '../../../utils/project-access';
-import { Role } from '#shared/types';
 import { approveMergeSuggestion, getSuggestionProjectId } from '#shared/handlers/cluster-merge-suggestions';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -11,13 +8,13 @@ defineRouteMeta({
     description:
       'Merges the two suggested clusters (lower id survives) and consumes the suggestion. Requires reporter or administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'suggestion ID');
-  const { db } = await requireResolvedProjectAccess(event, id, getSuggestionProjectId, 'Suggestion', REQUIRED_ROLES);
+  const { db } = await requireResolvedProjectAccess(event, id, getSuggestionProjectId, 'Suggestion');
 
   const result = await approveMergeSuggestion(db, id);
   if (!result) throw createError({ statusCode: 409, message: 'Suggestion is not pending' });

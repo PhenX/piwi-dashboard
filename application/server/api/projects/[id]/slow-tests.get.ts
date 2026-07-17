@@ -1,9 +1,6 @@
 import { getDatabase } from '../../../database';
 import { getProjectSlowTests } from '#shared/handlers/projects';
-import { Role } from '#shared/types';
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -12,7 +9,7 @@ defineRouteMeta({
     description:
       'Returns the slowest test cases for a project with average, max, min duration, run count, and trend direction',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

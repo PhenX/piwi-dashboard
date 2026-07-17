@@ -223,9 +223,10 @@ export default defineNuxtConfig({
         // Override with `security: []` on auth endpoints (login, oauth, ai/status).
         security: [{ bearerAuth: [] }, { sessionCookie: [] }],
       } as any,
-      // The Scalar UI is served by our own app/pages/docs.vue (fetches /_openapi.json
-      // directly), which also covers the static demo where no live server exists.
-      // Disabling Nitro's built-in routes here avoids them colliding with that page.
+      // The reference UI is rendered in-app by app/pages/docs.vue from the
+      // generated /_openapi.json — self-contained (no CDN), and it also covers the
+      // static demo where no live server exists. Disabling Nitro's built-in Scalar
+      // and Swagger routes here avoids them colliding with that page.
       ui: {
         scalar: false,
         swagger: false,

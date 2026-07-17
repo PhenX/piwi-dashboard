@@ -4,9 +4,6 @@ import { users } from '../../../database/schema';
 import { requireAuth } from '../../../utils/auth';
 import { mintAccountToken } from '../../../utils/account-tokens';
 import { isEmailConfigured, sendEmail, renderInviteEmail } from '../../../utils/email';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -14,13 +11,13 @@ defineRouteMeta({
     summary: 'Send invite email',
     description:
       'Sends an invite email to a user with a link to set their password. Requires the user to have an email address set. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
   },
 });
 
 export default eventHandler(async (event) => {
-  const admin = await requireAuth(event, REQUIRED_ROLES);
+  const admin = await requireAuth(event);
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) throw createError({ statusCode: 400, message: 'Invalid user ID' });
 

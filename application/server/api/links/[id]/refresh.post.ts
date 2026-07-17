@@ -3,10 +3,7 @@ import { getDatabase } from '../../../database';
 import { entityLinks } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
 import { refreshLinkMeta } from '#shared/handlers/links';
-import { Role } from '#shared/types';
 import { unfurlUrl } from '../../../utils/unfurl';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -14,12 +11,12 @@ defineRouteMeta({
     summary: 'Refresh entity link enrichment',
     description: 'Re-run provider detection, key extraction, and unfurl (fetch title) for a link.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) {

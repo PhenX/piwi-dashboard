@@ -7,6 +7,7 @@ import type { User } from '../database/schema';
 import { scrypt, randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { Role } from '#shared/types';
+import { getRouteRequiredRoles } from './route-required-roles';
 
 const scryptAsync = promisify(scrypt);
 
@@ -266,6 +267,11 @@ export async function requireAuth(event: H3Event, allowedRoles?: Role[]): Promis
     };
   }
 
+  // Roles come from the route's `x-required-roles` meta (the single source of
+  // truth, also shown in /docs); an explicit `allowedRoles` argument overrides
+  // it for the rare route that computes its own authorization.
+  const roles = allowedRoles ?? getRouteRequiredRoles(event) ?? undefined;
+
   // 1. Try API key authentication (preferred for CI/reporter usage)
   const apiKeyValue = extractApiKey(event);
   if (apiKeyValue) {
@@ -277,7 +283,7 @@ export async function requireAuth(event: H3Event, allowedRoles?: Role[]): Promis
       });
     }
 
-    if (allowedRoles && !hasRole(user, allowedRoles)) {
+    if (roles && !hasRole(user, roles)) {
       throw createError({
         statusCode: 403,
         message: 'Insufficient permissions',
@@ -296,7 +302,7 @@ export async function requireAuth(event: H3Event, allowedRoles?: Role[]): Promis
     });
   }
 
-  if (allowedRoles && !hasRole(user, allowedRoles)) {
+  if (roles && !hasRole(user, roles)) {
     throw createError({
       statusCode: 403,
       message: 'Insufficient permissions',

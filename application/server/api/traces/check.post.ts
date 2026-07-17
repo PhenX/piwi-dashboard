@@ -2,10 +2,7 @@ import { getDatabase } from '../../database';
 import { projects } from '../../database/schema';
 import { eq } from 'drizzle-orm';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
 import { checkExistingBlobs } from '../../utils/trace-blobs';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -13,12 +10,12 @@ defineRouteMeta({
     summary: 'Check trace blob existence',
     description:
       'Checks which trace blob SHA-256 hashes already exist in storage for a given project. Accepts projectName and hashes array in the request body.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const body = await readBody(event);
   const projectName = body?.projectName as string | undefined;

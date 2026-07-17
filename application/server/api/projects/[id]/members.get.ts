@@ -2,10 +2,7 @@ import { getDatabase } from '../../../database';
 import { projects } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
-import { Role } from '#shared/types';
 import { getProjectMembers } from '#shared/handlers/project-assignments';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -14,14 +11,14 @@ defineRouteMeta({
     description:
       'Returns all users who have access to this project, including those with explicit assignment, global access, and administrators (implicit access).',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'project ID');
 
-  await requireProjectAccess(event, id, REQUIRED_ROLES);
+  await requireProjectAccess(event, id);
 
   const db = await getDatabase();
   const projectResults = await db.select().from(projects).where(eq(projects.id, id));

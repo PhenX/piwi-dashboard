@@ -1,8 +1,5 @@
 import { getDatabase } from '../database';
 import { appSettings } from '../database/schema';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [];
 
 defineRouteMeta({
   openAPI: {
@@ -10,7 +7,7 @@ defineRouteMeta({
     summary: 'Health check',
     description:
       'Liveness/readiness probe for containers, load balancers, and uptime monitors. Verifies the database is reachable with a lightweight query. Returns 200 when healthy, 503 when the database cannot be queried. Public.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     security: [],
   },
 });

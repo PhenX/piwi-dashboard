@@ -1,9 +1,6 @@
 import { failureDiagnoses } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
 import { requireResolvedProjectAccess, requireRouteId, resolveDiagnosisProjectId } from '../../../utils/project-access';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -11,7 +8,7 @@ defineRouteMeta({
     summary: 'Submit feedback on a diagnosis',
     description: 'Record thumbs up/down feedback on a diagnosis result, with an optional note.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

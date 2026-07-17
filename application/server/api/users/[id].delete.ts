@@ -5,8 +5,6 @@ import { deleteUserRecord } from '#shared/handlers/users';
 import { requireAuth, isAuthEnabled } from '../../utils/auth';
 import { Role } from '#shared/types';
 
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Users'],
@@ -14,12 +12,12 @@ defineRouteMeta({
     description:
       'Deletes a user by ID. Prevents self-deletion and removal of the last administrator account. Requires administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
 export default eventHandler(async (event) => {
-  const currentUser = await requireAuth(event, REQUIRED_ROLES);
+  const currentUser = await requireAuth(event);
 
   const id = parseInt(getRouterParam(event, 'id') || '0');
 

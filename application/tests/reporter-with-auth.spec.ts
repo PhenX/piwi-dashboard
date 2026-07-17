@@ -218,6 +218,28 @@ test.describe.serial('Reporter with authentication enabled', () => {
     expect(data.projectId).toBeDefined();
   });
 
+  // Roles are enforced from each route's `x-required-roles` OpenAPI meta (the
+  // single source of truth). A reporter must be refused an administrator-only
+  // route but allowed on an any-authenticated one.
+  test('reporter is refused an admin-only route but allowed an any-auth route', async ({ request }) => {
+    const loginRes = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'ci-reporter', password: 'reporterpassword123' },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+
+    // admin-only (x-required-roles: ['administrator'])
+    const adminOnly = await request.get(`${AUTH_SERVER_URL}/api/admin/stats`);
+    expect(adminOnly.status()).toBe(403);
+    const createUser = await request.post(`${AUTH_SERVER_URL}/api/users`, {
+      data: { username: 'nope-user', password: 'nopepassword123', role: 'user' },
+    });
+    expect(createUser.status()).toBe(403);
+
+    // any authenticated user (x-required-roles: ['administrator', 'reporter', 'user'])
+    const anyAuth = await request.get(`${AUTH_SERVER_URL}/api/projects`);
+    expect(anyAuth.ok()).toBeTruthy();
+  });
+
   // ---------------------------------------------------------------------------
   // Reporter module – login + submit flow (verified via direct HTTP calls)
   // The reporter's upload helpers are CommonJS and cannot be imported from an
@@ -781,23 +803,15 @@ test.describe.serial('Reporter with authentication enabled', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // POST /api/failure-clusters/:id/diagnose/stream — required-role check
+  // POST /api/failure-clusters/:id/diagnose/stream — required-role enforcement.
   //
-  // SUSPECTED SOURCE BUG (not fixed, per task instructions): both
-  // `diagnose.post.ts` and `diagnose/stream.post.ts` declare
-  // `x-required-roles: [ADMINISTRATOR, REPORTER]` in their OpenAPI metadata,
-  // but neither actually passes that `REQUIRED_ROLES` array into
-  // `requireResolvedProjectAccess(...)` (contrast with `extract-cases.post.ts`,
-  // which does pass it as the 5th argument). Because the `roles` parameter is
-  // therefore `undefined`, `requireAuth`'s role check
-  // (`if (allowedRoles && !hasRole(...))`) never fires, so a "user"-role caller
-  // who otherwise has access to the project is NOT rejected with 403 as
-  // documented — the request proceeds to the cluster-lookup/AI-config checks
-  // just like an administrator or reporter would. The test below documents the
-  // CURRENT (buggy) behavior; it is not asserting that a 503 here is correct.
+  // The route declares `x-required-roles: ['administrator', 'reporter']`, which
+  // `requireAuth` enforces from the route meta (the single source of truth). So
+  // a "user"-role caller — even one with access to the project — is rejected
+  // with 403 before the request reaches the cluster-lookup / AI-config checks.
   // ---------------------------------------------------------------------------
 
-  test('BUG: a "user"-role caller with project access is not blocked from diagnose/stream', async ({ request }) => {
+  test('a "user"-role caller with project access is blocked from diagnose/stream', async ({ request }) => {
     // Give ci-user project access via a run + failing test case so we have a cluster.
     const adminLogin = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
       data: { username: 'admin', password: 'adminpassword123' },
@@ -843,10 +857,8 @@ test.describe.serial('Reporter with authentication enabled', () => {
     expect(userLogin.ok()).toBeTruthy();
 
     const streamRes = await request.post(`${AUTH_SERVER_URL}/api/failure-clusters/${clusterId}/diagnose/stream`);
-    // Documented behavior would be 403 (role not in [ADMINISTRATOR, REPORTER]).
-    // Actual behavior: the request is let through to the AI-config check, which
-    // 503s because this server has no AI provider configured — the same
-    // response an administrator or reporter would get. See the bug note above.
-    expect(streamRes.status()).toBe(503);
+    // The "user" role is not in [administrator, reporter], so enforcement from
+    // the route meta rejects the request with 403 (before the AI-config check).
+    expect(streamRes.status()).toBe(403);
   });
 });

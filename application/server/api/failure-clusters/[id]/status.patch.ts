@@ -1,8 +1,5 @@
 import { patchClusterStatus } from '#shared/handlers/failure-clusters';
-import { Role } from '#shared/types';
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../../utils/project-access';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -10,7 +7,7 @@ defineRouteMeta({
     summary: 'Update failure cluster status',
     description: 'Updates the status (open, resolved, ignored) and optional triage note for a failure cluster.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter'],
   },
 });
 
@@ -18,13 +15,7 @@ const VALID_STATUSES = ['open', 'resolved', 'ignored'];
 
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'cluster ID');
-  const { db } = await requireResolvedProjectAccess(
-    event,
-    id,
-    resolveClusterProjectId,
-    'Failure cluster',
-    REQUIRED_ROLES,
-  );
+  const { db } = await requireResolvedProjectAccess(event, id, resolveClusterProjectId, 'Failure cluster');
 
   const body = await readBody(event);
   const status = body?.status;

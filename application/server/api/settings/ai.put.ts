@@ -1,12 +1,9 @@
 import { getDatabase } from '../../database';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
 import { getAppSetting, setAppSetting, deleteAppSetting } from '../../utils/app-settings';
 import { encryptSecret, getEncryptionKey } from '../../utils/crypto';
 import { AI_ROLES, storedRoles, readAiSettings, type RawStoredAi, type RawStoredRole } from '../../utils/ai-settings';
 import type { AiModelRole, AiProvider, SaveAiSettingsBody } from '~~/types/api';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -14,14 +11,14 @@ defineRouteMeta({
     summary: 'Save AI settings',
     description:
       'Updates the per-role AI configuration (diagnosis, research, embedding), auto-diagnose toggle, custom instructions, and SCM token. Each role has its own provider/model/baseUrl/apiKey, or `reuse` to inherit another role. Requires administrator role. Not available when AI is managed via environment variables.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
 const VALID_PROVIDERS: AiProvider[] = ['anthropic', 'openai'];
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const runtimeConfig = useRuntimeConfig();
   const envAi = runtimeConfig.ai as { provider?: string } | undefined;

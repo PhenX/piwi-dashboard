@@ -2,9 +2,6 @@ import { getDatabase } from '../../database';
 import { z } from 'zod';
 import { requireAuth } from '../../utils/auth';
 import { createProject } from '#shared/handlers/projects';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -12,7 +9,7 @@ defineRouteMeta({
     summary: 'Create a new project',
     description:
       'Creates a project with optional label, description, and tag associations. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
@@ -24,7 +21,7 @@ const createProjectSchema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const body = await readBody(event);
   const validation = createProjectSchema.safeParse(body);

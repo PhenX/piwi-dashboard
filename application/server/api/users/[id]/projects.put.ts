@@ -6,8 +6,6 @@ import { Role } from '#shared/types';
 import { setUserAssignments } from '#shared/handlers/project-assignments';
 import { z } from 'zod';
 
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Users'],
@@ -15,7 +13,7 @@ defineRouteMeta({
     description:
       'Sets the project assignments for a user. If global is true, the user gets access to all projects. If global is false, the user gets access only to the specified project IDs. Cannot set assignments for administrators.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
@@ -25,7 +23,7 @@ const schema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  const currentUser = await requireAuth(event, REQUIRED_ROLES);
+  const currentUser = await requireAuth(event);
 
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) throw createError({ statusCode: 400, message: 'Invalid user ID' });

@@ -1,9 +1,6 @@
 import { getDatabase } from '../../database';
 import { deleteTag } from '#shared/handlers/tags';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -11,12 +8,12 @@ defineRouteMeta({
     summary: 'Delete a tag',
     description: 'Deletes a tag by ID. Requires administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) {

@@ -161,10 +161,8 @@ const links = computed(() => {
     label: 'API Docs',
     icon: 'i-lucide-book-open',
     to: '/docs',
-    // In non-demo mode, `/docs` is served by Nitro (Scalar UI), not a Nuxt page —
-    // force a full page navigation so the client router doesn't intercept it.
-    // In demo mode, `/docs` is a Nuxt page that renders Scalar client-side.
-    external: !isDemo,
+    // `/docs` is a normal Nuxt page in every mode — it renders the API reference
+    // in-app from the generated OpenAPI spec, so ordinary client navigation works.
     onSelect: () => {
       open.value = false;
     },

@@ -6,14 +6,12 @@ import { decryptSecret, getEncryptionKey } from '../../../utils/crypto';
 import { sendEmail, renderTestEmail, isEmailConfigured } from '../../../utils/email';
 import { Role } from '#shared/types';
 
-const REQUIRED_ROLES: Role[] = [];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Notifications'],
     summary: 'Send test notification',
     description: 'Sends a test notification through the specified channel.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
   },
 });

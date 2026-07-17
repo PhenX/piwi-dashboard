@@ -5,10 +5,7 @@ import { getStorage } from '../../storage';
 import { gunzip } from 'zlib';
 import { promisify } from 'util';
 import { parseZip, buildZip } from '../../utils/trace-zip';
-import { Role } from '#shared/types';
 import sharp from 'sharp';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -17,7 +14,7 @@ defineRouteMeta({
     description:
       'Serves stored files including test reports, trace archives, and attachments. Supports trace ZIP reconstruction from slim blobs and gzip decompression for report archives.',
     parameters: [{ name: 'path', in: 'path', required: true, schema: { type: 'string' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

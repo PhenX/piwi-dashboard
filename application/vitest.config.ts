@@ -31,6 +31,9 @@ export default defineConfig({
       // Stub Nuxt's auto-import virtual module so pure helpers in modules that
       // reference auto-imported components can be unit-tested in isolation.
       '#components': `${rootDir}/tests/unit/stubs/nuxt-components.ts`,
+      // Stub Nitro's compiled-route-metas virtual so server utils that read it
+      // (route-required-roles.ts, via auth.ts) import cleanly under Vitest.
+      '#nitro-internal-virtual/server-handlers-meta': `${rootDir}/tests/unit/stubs/nitro-handlers-meta.ts`,
     },
   },
 });

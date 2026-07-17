@@ -1,12 +1,9 @@
 import { getLocatorHealing } from '../../../../../utils/locator-healing';
-import { Role } from '#shared/types';
 import {
   requireResolvedProjectAccess,
   requireRouteId,
   resolveTestRunCaseProjectId,
 } from '../../../../../utils/project-access';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -18,7 +15,7 @@ defineRouteMeta({
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' }, description: 'Test run id' },
       { name: 'caseId', in: 'path', required: true, schema: { type: 'integer' }, description: 'Test run case id' },
     ],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

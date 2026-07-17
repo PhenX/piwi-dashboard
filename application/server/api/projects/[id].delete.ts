@@ -2,10 +2,7 @@ import { getDatabase } from '../../database';
 import { projects } from '../../database/schema';
 import { eq } from 'drizzle-orm';
 import { requireProjectAccess, requireRouteId } from '../../utils/project-access';
-import { Role } from '#shared/types';
 import { deleteProject } from '../../utils/delete-project';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -14,14 +11,14 @@ defineRouteMeta({
     description:
       'Permanently delete a project and all its associated data including test runs, reports, traces, failure clusters, and test cases. Administrator access required.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'project ID');
 
-  await requireProjectAccess(event, id, REQUIRED_ROLES);
+  await requireProjectAccess(event, id);
 
   const db = await getDatabase();
   const existing = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, id));

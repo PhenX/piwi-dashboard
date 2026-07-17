@@ -1,79 +1,61 @@
 <script setup lang="ts">
+import type { OpenApiSpec } from '~/utils/openapi';
+
 const config = useRuntimeConfig();
 const isDemo = config.public.demoMode;
 const specUrl = isDemo ? '/demo/_openapi.json' : '/_openapi.json';
-const container = ref<HTMLDivElement>();
-
-// The interactive reference is loaded from a CDN; a restricted/offline network
-// must fall back to a plain link to the raw spec instead of a blank page.
-const status = ref<'loading' | 'ready' | 'error'>('loading');
-const SCRIPT_TIMEOUT_MS = 8000;
 
 useHead({
   title: 'API Reference — Piwi Dashboard',
 });
 
-onMounted(() => {
-  const timeout = setTimeout(() => {
-    if (status.value === 'loading') status.value = 'error';
-  }, SCRIPT_TIMEOUT_MS);
-
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/@scalar/api-reference';
-  script.async = true;
-  script.onload = () => {
-    clearTimeout(timeout);
-    const S = (window as unknown as Record<string, unknown>).Scalar as
-      | { createApiReference: (element: HTMLElement, config: Record<string, unknown>) => void }
-      | undefined;
-    if (S?.createApiReference && container.value) {
-      S.createApiReference(container.value, {
-        url: specUrl,
-        darkMode: true,
-        showSidebar: true,
-        metaData: {
-          title: 'Piwi Dashboard API',
-          description:
-            'REST API for storing and querying Playwright test results, traces, failure diagnoses, and project statistics.',
-        },
-      });
-      status.value = 'ready';
-    } else {
-      status.value = 'error';
-    }
-  };
-  script.onerror = () => {
-    clearTimeout(timeout);
-    status.value = 'error';
-  };
-  document.head.appendChild(script);
+// The reference UI is rendered entirely in-app from the auto-generated spec, so
+// `/docs` is self-contained: no third-party CDN, works offline / air-gapped, and
+// makes no outbound calls. The only failure mode left is the spec itself being
+// unreachable, which falls back to a link to the raw JSON.
+const {
+  data: spec,
+  status,
+  error,
+  refresh,
+} = useFetch<OpenApiSpec>(specUrl, {
+  key: 'openapi-spec',
+  lazy: true,
+  server: !isDemo,
 });
 </script>
 
 <template>
-  <ClientOnly>
-    <div v-if="status === 'error'" class="flex flex-col items-center justify-center h-screen gap-3 text-center px-4">
-      <UIcon name="i-lucide-circle-alert" class="size-6 text-red-400" />
-      <p class="text-sm text-gray-400 max-w-sm">
-        Couldn't load the interactive API reference (it's fetched from a CDN, which may be unreachable on this network).
-      </p>
-      <UButton :to="specUrl" target="_blank" size="sm" variant="outline" icon="i-lucide-file-json">
-        View the raw OpenAPI spec
-      </UButton>
-    </div>
-    <div v-show="status !== 'error'" ref="container" class="scalar-container" />
-    <template #fallback>
-      <div class="flex items-center justify-center h-screen text-gray-400">Loading API reference...</div>
+  <UDashboardPanel id="docs">
+    <template #header>
+      <UDashboardNavbar>
+        <template #leading>
+          <UDashboardSidebarCollapse />
+          <UBreadcrumb :items="[{ label: 'API Reference', icon: 'i-lucide-book-open' }]" />
+        </template>
+      </UDashboardNavbar>
     </template>
-  </ClientOnly>
-</template>
 
-<style>
-.scalar-container {
-  height: 100vh;
-  width: 100%;
-}
-.scalar-container :deep(.scalar-app) {
-  min-height: 100vh;
-}
-</style>
+    <template #body>
+      <LoadingState v-if="status === 'pending' || (!spec && !error)" text="Loading API reference…" />
+
+      <div v-else-if="error || !spec" class="p-6">
+        <ErrorState text="Couldn't load the API reference UI.">
+          <template #action>
+            <p class="text-sm text-muted max-w-sm">The raw OpenAPI spec is still available directly.</p>
+            <div class="flex flex-wrap justify-center gap-2 mt-1">
+              <UButton size="sm" color="neutral" variant="outline" icon="i-lucide-refresh-cw" @click="() => refresh()">
+                Retry
+              </UButton>
+              <UButton :to="specUrl" target="_blank" external size="sm" variant="outline" icon="i-lucide-file-json">
+                Raw OpenAPI spec
+              </UButton>
+            </div>
+          </template>
+        </ErrorState>
+      </div>
+
+      <ApiReference v-else :spec="spec" :spec-url="specUrl" />
+    </template>
+  </UDashboardPanel>
+</template>

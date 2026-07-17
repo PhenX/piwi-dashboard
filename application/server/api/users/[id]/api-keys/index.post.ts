@@ -4,8 +4,6 @@ import { createUserApiKeyRecord } from '#shared/handlers/users';
 import { requireAuth, generateApiKey } from '../../../../utils/auth';
 import { Role } from '#shared/types';
 
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Users'],
@@ -13,7 +11,7 @@ defineRouteMeta({
     description:
       'Creates a new API key for a user. The plaintext key is returned once and cannot be retrieved again. Accepts name and optional expiresAt in the request body. Non-administrators can only create keys for themselves.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 
@@ -23,7 +21,7 @@ const createKeySchema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  const currentUser = await requireAuth(event, REQUIRED_ROLES);
+  const currentUser = await requireAuth(event);
 
   const targetId = parseInt(getRouterParam(event, 'id') || '0');
   if (!targetId) {

@@ -7,10 +7,7 @@ import { persistRunCases, type RunCaseInput } from '../../../utils/persist-run-c
 import { mapCompleteEventToRunCase } from '../../../utils/map-complete-event';
 import { authorizeStreamToken } from '../../../utils/stream-auth';
 import type { StreamEventPayload } from '#shared/types';
-import { Role } from '#shared/types';
 import { countFailedFromTally } from '#shared/utils/test-counts';
-
-const REQUIRED_ROLES: Role[] = [];
 
 defineRouteMeta({
   openAPI: {
@@ -19,7 +16,7 @@ defineRouteMeta({
     description:
       'Submit test case begin and complete events for an active streaming test run. Requires the stream token. Supports both single and batch event submission for real-time progress updates.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': [],
     requestBody: {
       content: {
         'application/json': {

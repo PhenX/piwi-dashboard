@@ -1,8 +1,5 @@
 import { requireResolvedProjectAccess, requireRouteId, resolveCaseProjectId } from '../../utils/project-access';
 import { getTestCase } from '#shared/handlers/test-cases';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -11,7 +8,7 @@ defineRouteMeta({
     description:
       'Returns the stable test case identity with aggregated run stats, recent executions, linked failure clusters, and entity links.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

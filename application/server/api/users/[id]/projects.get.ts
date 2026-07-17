@@ -5,8 +5,6 @@ import { requireAuth } from '../../../utils/auth';
 import { Role } from '#shared/types';
 import { getUserAssignments } from '#shared/handlers/project-assignments';
 
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Users'],
@@ -14,12 +12,12 @@ defineRouteMeta({
     description:
       'Returns the project assignments for a user, including whether they have global access and a list of explicit project IDs. Administrators always have implicit access to all projects.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) throw createError({ statusCode: 400, message: 'Invalid user ID' });

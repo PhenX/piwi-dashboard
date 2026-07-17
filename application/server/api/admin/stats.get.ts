@@ -1,12 +1,9 @@
 import { getDatabase } from '../../database';
 import { getAdminStats } from '#shared/handlers/admin';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
 import { getStorage } from '../../storage';
 import { getDirectorySize } from '../../utils/filesize';
 import { resolve } from 'path';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -14,12 +11,12 @@ defineRouteMeta({
     summary: 'Get admin statistics',
     description:
       'Returns aggregate statistics about projects, test runs, test cases, files, and storage disk usage. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const stats = await getAdminStats(await getDatabase());
 

@@ -1,11 +1,8 @@
 import { getDatabase } from '../../../database';
 import { requireAuth } from '../../../utils/auth';
-import { Role } from '#shared/types';
 import { resolveAiConfig, callAiProvider } from '../../../utils/ai-provider';
 import { embedTexts } from '../../../utils/ai-embeddings';
 import type { AiModelRole, AiProvider, ResolvedAiRole } from '~~/types/api';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -13,12 +10,12 @@ defineRouteMeta({
     summary: 'Test AI provider connection',
     description:
       'Sends a connectivity test to the configured AI provider for a given model role (`diagnosis`, `research`, or `embedding` — the embedding role is probed via the embeddings endpoint). Accepts optional role, provider, apiKey, model, and baseUrl in the request body; omitted fields fall back to the saved configuration. Requires administrator role.',
-    'x-required-roles': REQUIRED_ROLES,
+    'x-required-roles': ['administrator'],
   },
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const body = (await readBody(event).catch(() => null)) as {
     role?: string;
