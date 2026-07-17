@@ -7,6 +7,7 @@ WORKDIR /app
 
 # Copy workspace manifest files first so npm ci is cached separately from source
 COPY package.json package-lock.json ./
+COPY packages/core/package.json ./packages/core/
 COPY application/package.json ./application/
 COPY reporter/package.json ./reporter/
 COPY integrations/nitro/package.json ./integrations/nitro/
@@ -19,6 +20,11 @@ RUN --mount=type=cache,target=/root/.npm \
 
 # Copy root tsconfig (extended by application/tsconfig.json)
 COPY tsconfig.json ./
+
+# Copy the shared core workspace package (@piwitests/core). The app imports it
+# via #shared/* shims; Vite transpiles it (nuxt.config transpile) and Nitro
+# inlines it into .output (noExternals), so its source must be present at build.
+COPY packages/core/ ./packages/core/
 
 # Copy application source
 COPY application/ ./application/
