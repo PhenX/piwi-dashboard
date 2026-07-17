@@ -73,7 +73,7 @@ SQLite database auto-initializes on first API call.
 Nuxt file-based routing:
 - `GET /api/health` — Public health/readiness probe; verifies DB connectivity (200 ok / 503)
 - `GET /_openapi.json` — Auto-generated OpenAPI 3.1 spec (enabled via `nitro.experimental.openAPI`)
-- `GET /docs` — Self-contained in-app API reference UI (no external CDN) rendered from the OpenAPI spec
+- `GET /docs` — Self-contained in-app API reference UI (no external CDN) rendered from the OpenAPI spec; includes a "Try it out" console (same-origin requests) and cURL / fetch code samples
 - `POST /api/test-runs/submit` — Submit JSON test results
 - `POST /api/test-runs/upload` — Upload with HTML reports + traces
 - `POST /api/test-runs/start` / `[id]/events` / `[id]/finish` — Streaming protocol (live runs)
@@ -137,6 +137,7 @@ Nuxt file-based routing:
   - **`project/`** — Project detail page (`/projects/[id]`): `PassRateChart`, `PerformanceTrendChart`, `TestRunsChart`, `FlakyTestsList` (score badges, retry-pass / alternation breakdown), `FailureClustersList`, `ScmChangesView`, `SubscribeBell` (notification subscribe popover; hidden when auth disabled)
   - **`layout/`** — App shell / navigation: `ProjectsMenu`, `UserMenu`, `GetStartedWizard`
   - **`demo/`** — Demo mode only: `DemoBanner`, `DemoInitScreen`, `DemoSimulator`
+  - **`docs/`** — In-app API reference (`/docs`), rendered from `/_openapi.json` with no CDN: `ApiReference` (overview + filter + tag groups), `ApiOperation` (one collapsible endpoint), `ApiSchema` (recursive schema tree), `ApiTryIt` ("Try it out" console + cURL / fetch samples). Pure helpers/types live in `app/utils/openapi.ts` + `app/utils/openapi-console.ts`; the shared bearer token in `useApiConsole`
   - **Shared building blocks in `shared/`** (prefer these over re-implementing):
     - `SectionCard` — `UCard` with a standard header: optional `icon` (+ `iconClass`), `title`, optional `(count)` and `subtitle` (prop or `subtitle` slot). `actions` slot for header-right controls, `footer` slot forwarded to `UCard`. Use for any card that needs an icon/title (and optional description) header.
     - `CollapsibleSectionCard` — a `SectionCard` that folds to a single header row. Same header contract as `SectionCard` (`icon`/`iconClass`/`title`/`count`/`help`/`subtitle`/`actions`) plus a required `storageKey` (fold state persisted per user in a cookie, defaulting to folded) and a `#folded` slot for the one-line peek shown when collapsed. `actions` stay clickable while folded; exposes `setFolded(value)` so a parent can open it programmatically. Fold state is backed by the `useFoldedState(cookieKey, defaultFolded)` composable (also used by `useFoldableSummary`). Use for any left-column detail section that should default to a compact, scannable header.

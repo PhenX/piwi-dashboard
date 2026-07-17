@@ -135,6 +135,9 @@ function responseColor(status: string): string {
           </div>
         </div>
       </div>
+
+      <!-- Interactive console + code samples -->
+      <ApiTryIt :item="item" :spec="spec" />
     </div>
   </div>
 </template>

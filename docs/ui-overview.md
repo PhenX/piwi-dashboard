@@ -26,7 +26,7 @@ The sidebar gives access to the top-level sections:
 | Home | `/` | Aggregate stats and activity across all projects |
 | Projects | `/projects` | Full project listing with search and tag filters |
 | Settings | `/settings` | Configuration — general, account, users, storage, tags, wasted time, AI, notifications |
-| API docs | `/docs` | Self-contained OpenAPI 3.1 reference (no external CDN) — browse endpoints, parameters, and schemas |
+| API docs | `/docs` | Self-contained OpenAPI 3.1 reference (no external CDN) — browse endpoints and schemas, try requests live, copy cURL / fetch snippets |
 | MCP server | `/mcp` | Setup guide for connecting AI clients (see [MCP server](./mcp)) |
 
 Everything else is reached by drilling into a project, run, or test case:
