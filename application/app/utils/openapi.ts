@@ -197,6 +197,42 @@ export function resolveSchema(
   return spec?.components?.schemas?.[match[1]] ?? schema;
 }
 
+import { ROUTE_ROLES } from './route-roles.generated';
+
+const ALL_ROLES = ['administrator', 'reporter', 'user'];
+
+function capitalize(role: string): string {
+  return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+export interface RoleRequirement {
+  /** The raw roles that may call the endpoint. */
+  roles: string[];
+  /** Full readable requirement, e.g. "Administrator or Reporter" / "Any signed-in user". */
+  label: string;
+  /** Compact chip label, e.g. "Admin" / "Admin / Reporter". */
+  shortLabel: string;
+  /** True when a plain user cannot call it (admin/reporter-only) — worth flagging. */
+  elevated: boolean;
+}
+
+/**
+ * The role requirement for an operation, from the generated route-roles map.
+ * Returns null for public or token-authenticated routes (which carry no role
+ * restriction) — the caller shows its own public/auth indicator instead.
+ */
+export function routeRoleRequirement(method: string, path: string): RoleRequirement | null {
+  const roles = ROUTE_ROLES[`${method.toLowerCase()} ${path}`];
+  if (!roles || roles.length === 0) return null;
+  const isAny = ALL_ROLES.every((role) => roles.includes(role));
+  return {
+    roles,
+    label: isAny ? 'Any signed-in user' : roles.map(capitalize).join(' or '),
+    shortLabel: isAny ? 'Any user' : roles.map((r) => (r === 'administrator' ? 'Admin' : capitalize(r))).join(' / '),
+    elevated: !isAny && !roles.includes('user'),
+  };
+}
+
 /** Render a schema's type as a short human string (e.g. `string`, `array<object>`). */
 export function schemaTypeLabel(schema: JsonSchema | undefined): string {
   if (!schema) return 'any';

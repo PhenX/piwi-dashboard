@@ -7,6 +7,7 @@ import {
   operationIsPublic,
   resolveSchema,
   schemaTypeLabel,
+  routeRoleRequirement,
   type OpenApiSpec,
 } from '../../app/utils/openapi';
 
@@ -119,6 +120,37 @@ describe('resolveSchema', () => {
   test('returns the ref schema untouched when the target is missing', () => {
     const schema = { $ref: '#/components/schemas/Missing' };
     expect(resolveSchema(schema, spec)).toBe(schema);
+  });
+});
+
+describe('routeRoleRequirement', () => {
+  test('flags an admin-only route as elevated', () => {
+    const req = routeRoleRequirement('delete', '/api/admin/cleanup');
+    expect(req).toMatchObject({
+      roles: ['administrator'],
+      label: 'Administrator',
+      shortLabel: 'Admin',
+      elevated: true,
+    });
+  });
+
+  test('treats an all-roles route as "any signed-in user" (not elevated)', () => {
+    const req = routeRoleRequirement('get', '/api/test-runs/{id}');
+    expect(req).toMatchObject({ label: 'Any signed-in user', elevated: false });
+  });
+
+  test('joins multiple elevated roles', () => {
+    const req = routeRoleRequirement('post', '/api/test-runs/submit');
+    expect(req).toMatchObject({ label: 'Administrator or Reporter', shortLabel: 'Admin / Reporter', elevated: true });
+  });
+
+  test('returns null for a public / unmapped route', () => {
+    expect(routeRoleRequirement('get', '/api/health')).toBeNull();
+    expect(routeRoleRequirement('get', '/api/does-not-exist')).toBeNull();
+  });
+
+  test('is case-insensitive on the method', () => {
+    expect(routeRoleRequirement('DELETE', '/api/admin/cleanup')?.elevated).toBe(true);
   });
 });
 

@@ -10,6 +10,15 @@ const open = ref(false);
 
 const requiresAuth = computed(() => operationRequiresAuth(props.item.operation, props.spec));
 const isPublic = computed(() => operationIsPublic(props.item.operation));
+const roleReq = computed(() => routeRoleRequirement(props.item.method, props.item.path));
+
+// Full readable access requirement shown in the expanded body.
+const accessLabel = computed(() => {
+  if (isPublic.value) return 'Public — no authentication required';
+  if (roleReq.value) return roleReq.value.label;
+  if (requiresAuth.value) return 'Requires authentication';
+  return null;
+});
 
 const pathParams = computed(() => props.item.parameters.filter((p) => p.in === 'path'));
 const queryParams = computed(() => props.item.parameters.filter((p) => p.in === 'query'));
@@ -66,15 +75,26 @@ function responseColor(status: string): string {
         <span v-for="(seg, i) in pathSegments" :key="i" :class="seg.isParam ? 'text-warning' : ''">{{ seg.text }}</span>
       </code>
       <span class="text-sm text-muted truncate hidden sm:inline flex-1">{{ item.operation.summary }}</span>
+      <UBadge
+        v-if="roleReq?.elevated"
+        color="warning"
+        variant="subtle"
+        size="sm"
+        icon="i-lucide-shield"
+        class="shrink-0 ml-auto sm:ml-0"
+        :title="`Requires role: ${roleReq.label}`"
+      >
+        {{ roleReq.shortLabel }}
+      </UBadge>
+      <UBadge v-else-if="isPublic" color="neutral" variant="subtle" size="sm" class="shrink-0 ml-auto sm:ml-0">
+        Public
+      </UBadge>
       <UIcon
-        v-if="requiresAuth"
+        v-else-if="requiresAuth"
         name="i-lucide-lock"
         class="size-3.5 text-dimmed shrink-0 ml-auto sm:ml-0"
         title="Requires authentication"
       />
-      <UBadge v-else-if="isPublic" color="neutral" variant="subtle" size="sm" class="shrink-0 ml-auto sm:ml-0">
-        Public
-      </UBadge>
       <UIcon :name="open ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-4 text-dimmed shrink-0" />
     </button>
 
@@ -83,6 +103,13 @@ function responseColor(status: string): string {
         {{ item.operation.summary }}
       </p>
       <p v-if="item.operation.description" class="text-sm text-muted">{{ item.operation.description }}</p>
+
+      <!-- Access / required role -->
+      <div v-if="accessLabel" class="flex items-center gap-1.5 text-xs">
+        <UIcon :name="roleReq?.elevated ? 'i-lucide-shield' : 'i-lucide-users'" class="size-3.5 text-dimmed shrink-0" />
+        <span class="text-dimmed">Access</span>
+        <span class="text-muted font-medium">{{ accessLabel }}</span>
+      </div>
 
       <!-- Parameters -->
       <template
