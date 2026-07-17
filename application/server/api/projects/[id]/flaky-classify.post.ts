@@ -2,10 +2,7 @@ import { requireProjectAccess, requireRouteId } from '../../../utils/project-acc
 import { getDatabase } from '../../../database';
 import { testCases, testRunsCases, testRuns } from '../../../database/schema';
 import { eq, and, desc } from 'drizzle-orm';
-import { Role } from '#shared/types';
 import { classifyFlakyRootCause, type FlakyRootCause } from '../../../utils/flaky-classify';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -32,7 +29,7 @@ defineRouteMeta({
 export default eventHandler(async (event) => {
   const projectId = requireRouteId(event, 'id', 'project ID');
 
-  await requireProjectAccess(event, projectId, REQUIRED_ROLES);
+  await requireProjectAccess(event, projectId);
 
   const body = await readBody<{ testCaseId: number }>(event);
   if (!body?.testCaseId) throw createError({ statusCode: 400, message: 'testCaseId is required' });

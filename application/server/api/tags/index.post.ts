@@ -2,9 +2,6 @@ import { getDatabase } from '../../database';
 import { createTag } from '#shared/handlers/tags';
 import { z } from 'zod';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -21,7 +18,7 @@ const createTagSchema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const body = await readBody(event);
   const validation = createTagSchema.safeParse(body);

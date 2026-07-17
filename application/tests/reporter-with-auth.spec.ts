@@ -218,6 +218,28 @@ test.describe.serial('Reporter with authentication enabled', () => {
     expect(data.projectId).toBeDefined();
   });
 
+  // Roles are enforced from each route's `x-required-roles` OpenAPI meta (the
+  // single source of truth). A reporter must be refused an administrator-only
+  // route but allowed on an any-authenticated one.
+  test('reporter is refused an admin-only route but allowed an any-auth route', async ({ request }) => {
+    const loginRes = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'ci-reporter', password: 'reporterpassword123' },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+
+    // admin-only (x-required-roles: ['administrator'])
+    const adminOnly = await request.get(`${AUTH_SERVER_URL}/api/admin/stats`);
+    expect(adminOnly.status()).toBe(403);
+    const createUser = await request.post(`${AUTH_SERVER_URL}/api/users`, {
+      data: { username: 'nope-user', password: 'nopepassword123', role: 'user' },
+    });
+    expect(createUser.status()).toBe(403);
+
+    // any authenticated user (x-required-roles: ['administrator', 'reporter', 'user'])
+    const anyAuth = await request.get(`${AUTH_SERVER_URL}/api/projects`);
+    expect(anyAuth.ok()).toBeTruthy();
+  });
+
   // ---------------------------------------------------------------------------
   // Reporter module – login + submit flow (verified via direct HTTP calls)
   // The reporter's upload helpers are CommonJS and cannot be imported from an

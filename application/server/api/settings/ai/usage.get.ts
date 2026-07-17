@@ -2,10 +2,7 @@ import { and, avg, count, gte, isNotNull, sql, sum } from 'drizzle-orm';
 import { getDatabase } from '../../../database';
 import { failureDiagnoses } from '../../../database/schema';
 import { requireAuth } from '../../../utils/auth';
-import { Role } from '#shared/types';
 import type { AiUsageSummary } from '~~/types/api';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -19,7 +16,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event): Promise<AiUsageSummary> => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const parsed = parseInt((getQuery(event).days as string) || '30');
   const days = Math.min(365, Math.max(1, Number.isFinite(parsed) ? parsed : 30));

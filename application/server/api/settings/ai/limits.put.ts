@@ -1,6 +1,5 @@
 import { getDatabase } from '../../../database';
 import { requireAuth } from '../../../utils/auth';
-import { Role } from '#shared/types';
 import { getAppSetting, setAppSetting } from '../../../utils/app-settings';
 import {
   resolveContextLimits,
@@ -9,8 +8,6 @@ import {
 } from '../../../utils/ai-context-limits';
 import { CONTEXT_LIMIT_FIELDS, DEFAULT_CONTEXT_LIMITS, clampLimit } from '#shared/ai-context-limits';
 import type { ContextLimits } from '#shared/ai-context-limits';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -23,7 +20,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const body = (await readBody(event).catch(() => null)) as {
     limits?: Partial<Record<keyof ContextLimits, unknown>>;

@@ -1,10 +1,7 @@
 import { getDatabase } from '../../../database';
 import { requireAuth } from '../../../utils/auth';
-import { Role } from '#shared/types';
 import { resolveContextLimits, envManagedLimitKeys } from '../../../utils/ai-context-limits';
 import { CONTEXT_LIMIT_FIELDS, DEFAULT_CONTEXT_LIMITS } from '#shared/ai-context-limits';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -17,7 +14,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
   const db = await getDatabase();
   return {
     limits: await resolveContextLimits(db),

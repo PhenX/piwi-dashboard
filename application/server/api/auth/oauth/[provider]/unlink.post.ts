@@ -1,8 +1,5 @@
-import { Role } from '#shared/types';
 import { requireAuth } from '../../../../utils/auth';
 import { unlinkProvider } from '../../../../utils/oauth';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
 
 defineRouteMeta({
   openAPI: {
@@ -16,7 +13,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  const user = await requireAuth(event, REQUIRED_ROLES);
+  const user = await requireAuth(event);
 
   const provider = getRouterParam(event, 'provider');
   if (!provider) {

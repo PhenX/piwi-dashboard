@@ -1,12 +1,9 @@
 import { getDatabase } from '../../database';
 import { getAdminStats } from '#shared/handlers/admin';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
 import { getStorage } from '../../storage';
 import { getDirectorySize } from '../../utils/filesize';
 import { resolve } from 'path';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -19,7 +16,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const stats = await getAdminStats(await getDatabase());
 

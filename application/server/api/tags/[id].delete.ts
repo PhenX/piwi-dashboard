@@ -1,9 +1,6 @@
 import { getDatabase } from '../../database';
 import { deleteTag } from '#shared/handlers/tags';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -16,7 +13,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) {

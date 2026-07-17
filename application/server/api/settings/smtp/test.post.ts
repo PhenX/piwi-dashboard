@@ -1,9 +1,6 @@
 import { requireAuth } from '../../../utils/auth';
 import { isEmailConfigured, sendEmail, renderTestEmail } from '../../../utils/email';
-import { Role } from '#shared/types';
 import { z } from 'zod';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -29,7 +26,7 @@ defineRouteMeta({
 const schema = z.object({ to: z.string().email() });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   if (!isEmailConfigured()) {
     throw createError({ statusCode: 503, message: 'SMTP is not configured' });

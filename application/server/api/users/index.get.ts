@@ -7,7 +7,7 @@ defineRouteMeta({
     tags: ['Users'],
     summary: 'List all users',
     description: 'Returns a list of all users (password fields excluded). Requires authentication.',
-    'x-required-roles': ['administrator'],
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

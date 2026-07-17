@@ -4,10 +4,7 @@ import { entityLinks } from '../../database/schema';
 import { eq } from 'drizzle-orm';
 import { createLink } from '#shared/handlers/links';
 import { z } from 'zod';
-import { Role } from '#shared/types';
 import { unfurlUrl } from '../../utils/unfurl';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -27,7 +24,7 @@ const createLinkSchema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const body = await readBody(event);
   const validation = createLinkSchema.safeParse(body);

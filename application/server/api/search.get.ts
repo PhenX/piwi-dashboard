@@ -10,7 +10,7 @@ defineRouteMeta({
     description:
       'Full-text search across project names/labels, run labels/IDs, and test case titles. Returns up to 5 results per category.',
     parameters: [{ name: 'q', in: 'query', required: true, schema: { type: 'string' } }],
-    'x-required-roles': ['administrator', 'user'],
+    'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
 

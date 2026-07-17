@@ -2,9 +2,6 @@ import { requireAuth } from '../../utils/auth';
 import { getDatabase } from '../../database';
 import { patchLink } from '#shared/handlers/links';
 import { z } from 'zod';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -22,7 +19,7 @@ const updateLinkSchema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) {

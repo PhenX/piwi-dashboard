@@ -5,8 +5,6 @@ import { Role } from '#shared/types';
 import { hashPassword, requireAuth } from '../../utils/auth';
 import { z } from 'zod';
 
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Users'],
@@ -26,7 +24,7 @@ const createUserSchema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const body = await readBody(event);
   const validation = createUserSchema.safeParse(body);

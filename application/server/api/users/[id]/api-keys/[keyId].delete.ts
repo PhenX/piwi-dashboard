@@ -3,8 +3,6 @@ import { deleteUserApiKeyRecord } from '#shared/handlers/users';
 import { requireAuth } from '../../../../utils/auth';
 import { Role } from '#shared/types';
 
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER, Role.USER];
-
 defineRouteMeta({
   openAPI: {
     tags: ['Users'],
@@ -19,7 +17,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  const currentUser = await requireAuth(event, REQUIRED_ROLES);
+  const currentUser = await requireAuth(event);
 
   const targetId = parseInt(getRouterParam(event, 'id') || '0');
   const keyId = parseInt(getRouterParam(event, 'keyId') || '0');

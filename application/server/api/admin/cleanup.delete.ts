@@ -1,9 +1,6 @@
 import { getDatabase } from '../../database';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
 import { deleteRunsOlderThan, reclaimSpace, sweepOrphans } from '../../utils/retention';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -33,7 +30,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const body = await readBody(event);
 

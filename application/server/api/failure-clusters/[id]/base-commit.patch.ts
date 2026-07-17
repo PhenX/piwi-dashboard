@@ -1,8 +1,5 @@
 import { patchClusterBaseCommit } from '#shared/handlers/failure-clusters';
-import { Role } from '#shared/types';
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../../utils/project-access';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR, Role.REPORTER];
 
 defineRouteMeta({
   openAPI: {
@@ -16,13 +13,7 @@ defineRouteMeta({
 
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'cluster ID');
-  const { db } = await requireResolvedProjectAccess(
-    event,
-    id,
-    resolveClusterProjectId,
-    'Failure cluster',
-    REQUIRED_ROLES,
-  );
+  const { db } = await requireResolvedProjectAccess(event, id, resolveClusterProjectId, 'Failure cluster');
 
   const body = await readBody(event);
   const commit = typeof body?.commit === 'string' ? body.commit.trim() : null;

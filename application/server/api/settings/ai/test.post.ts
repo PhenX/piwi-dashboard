@@ -1,11 +1,8 @@
 import { getDatabase } from '../../../database';
 import { requireAuth } from '../../../utils/auth';
-import { Role } from '#shared/types';
 import { resolveAiConfig, callAiProvider } from '../../../utils/ai-provider';
 import { embedTexts } from '../../../utils/ai-embeddings';
 import type { AiModelRole, AiProvider, ResolvedAiRole } from '~~/types/api';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -18,7 +15,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   const body = (await readBody(event).catch(() => null)) as {
     role?: string;

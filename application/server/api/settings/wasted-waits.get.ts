@@ -1,10 +1,7 @@
 import { getDatabase } from '../../database';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
 import { resolveWastedSettings } from '../../utils/wasted-settings';
 import { DEFAULT_WASTED_WAIT_PATTERNS } from '#shared/utils/wasted-waits';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -17,7 +14,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
   const db = await getDatabase();
   const resolved = await resolveWastedSettings(db);
   return { ...resolved, defaults: [...DEFAULT_WASTED_WAIT_PATTERNS] };

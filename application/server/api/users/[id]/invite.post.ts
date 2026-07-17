@@ -4,9 +4,6 @@ import { users } from '../../../database/schema';
 import { requireAuth } from '../../../utils/auth';
 import { mintAccountToken } from '../../../utils/account-tokens';
 import { isEmailConfigured, sendEmail, renderInviteEmail } from '../../../utils/email';
-import { Role } from '#shared/types';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -20,7 +17,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  const admin = await requireAuth(event, REQUIRED_ROLES);
+  const admin = await requireAuth(event);
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) throw createError({ statusCode: 400, message: 'Invalid user ID' });
 

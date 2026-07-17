@@ -2,11 +2,8 @@ import { getDatabase } from '../../../database';
 import { projects, users } from '../../../database/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
-import { Role } from '#shared/types';
 import { setProjectMembers } from '#shared/handlers/project-assignments';
 import { z } from 'zod';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -26,7 +23,7 @@ const schema = z.object({
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'project ID');
 
-  const currentUser = await requireProjectAccess(event, id, REQUIRED_ROLES);
+  const currentUser = await requireProjectAccess(event, id);
 
   const body = await readBody(event);
   const parsed = schema.safeParse(body);

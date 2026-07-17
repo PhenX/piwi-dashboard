@@ -1,11 +1,8 @@
 import { getDatabase } from '../../database';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
 import { setAppSetting, deleteAppSetting } from '../../utils/app-settings';
 import { resolveWastedSettings, WASTED_WAIT_PATTERNS_KEY } from '../../utils/wasted-settings';
 import { parseWastedWaitPatterns, DEFAULT_WASTED_WAIT_PATTERNS } from '#shared/utils/wasted-waits';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -18,7 +15,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
   const db = await getDatabase();
 
   const runtimeConfig = useRuntimeConfig();

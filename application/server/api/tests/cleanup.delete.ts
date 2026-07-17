@@ -2,11 +2,8 @@ import { getDatabase } from '../../database';
 import { projects, tags, projectTags } from '../../database/schema';
 import { eq, inArray, like } from 'drizzle-orm';
 import { requireAuth } from '../../utils/auth';
-import { Role } from '#shared/types';
 import { TEST_PROJECT_NAMES } from '#shared/test-project-names';
 import { deleteProject } from '../../utils/delete-project';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -21,7 +18,7 @@ defineRouteMeta({
 export default eventHandler(async (event) => {
   // This endpoint is only intended for test suites — guard against accidental
   // use in production by requiring administrator role AND a non-production env
-  await requireAuth(event, REQUIRED_ROLES);
+  await requireAuth(event);
 
   if (process.env.NODE_ENV === 'production') {
     throw createError({

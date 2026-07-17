@@ -1,6 +1,5 @@
 import { getDatabase } from '../../../database';
 import { requireAuth } from '../../../utils/auth';
-import { Role } from '#shared/types';
 import { resolveAiConfig } from '../../../utils/ai-provider';
 import type { AiModelRole, ModelInfo } from '~~/types/api';
 
@@ -43,7 +42,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event, [Role.ADMINISTRATOR]);
+  await requireAuth(event);
 
   const body = await readBody<{
     provider?: string;

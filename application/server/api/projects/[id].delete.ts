@@ -2,10 +2,7 @@ import { getDatabase } from '../../database';
 import { projects } from '../../database/schema';
 import { eq } from 'drizzle-orm';
 import { requireProjectAccess, requireRouteId } from '../../utils/project-access';
-import { Role } from '#shared/types';
 import { deleteProject } from '../../utils/delete-project';
-
-const REQUIRED_ROLES: Role[] = [Role.ADMINISTRATOR];
 
 defineRouteMeta({
   openAPI: {
@@ -21,7 +18,7 @@ defineRouteMeta({
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'project ID');
 
-  await requireProjectAccess(event, id, REQUIRED_ROLES);
+  await requireProjectAccess(event, id);
 
   const db = await getDatabase();
   const existing = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, id));
