@@ -7,7 +7,7 @@
  */
 
 import { and, eq } from 'drizzle-orm';
-import { users, files } from '~~/server/database/schema.sqlite';
+import { users, files, appSettings } from '~~/server/database/schema.sqlite';
 import { Role } from '#shared/types';
 import {
   getUserAssignments,
@@ -34,9 +34,16 @@ import {
   deleteProjectData,
   getProjectFlakyTests,
   getProjectsOverview,
+  getProjectSpecHealth,
 } from '#shared/handlers/projects';
 import { listTags, createTag, updateTag, deleteTag } from '#shared/handlers/tags';
-import { getTestCase, getTestRunCase, getTestCaseHistory, getTestRunCaseTraces } from '#shared/handlers/test-cases';
+import {
+  getTestCase,
+  getTestRunCase,
+  getTestCaseHistory,
+  getTestRunCaseTraces,
+  getTestCaseStabilityTrend,
+} from '#shared/handlers/test-cases';
 import {
   getFailureCluster,
   patchClusterStatus,
@@ -48,7 +55,11 @@ import {
 import { getClusterCommits, getClusterCommitDiff, getClusterBranches } from './scm';
 import { getClusterContext, getExecutionContext } from './diagnosis-context';
 import { listClusterDiagnosisVersions, apiSubmitDiagnosisFeedback } from './diagnoses';
-import { listMergeSuggestions } from '#shared/handlers/cluster-merge-suggestions';
+import {
+  listMergeSuggestions,
+  approveMergeSuggestion,
+  rejectMergeSuggestion,
+} from '#shared/handlers/cluster-merge-suggestions';
 import { listLinks, createLink, patchLink, deleteLink, refreshLinkMeta } from '#shared/handlers/links';
 import {
   getTestRun,
@@ -58,10 +69,12 @@ import {
   getNetworkRequests,
   getFailureGroups,
   computeRegressionContextForRun,
+  getProjectLatestRun,
 } from '#shared/handlers/test-runs';
 import { computeRunInsights } from '#shared/handlers/run-insights';
 import { isAnalyticsWidgetId, runAnalyticsWidget } from '#shared/handlers/analytics';
 import { parseAnalyticsScope } from '#shared/analytics/scope';
+import { classifyAndPersistFlakyRootCause } from '#shared/handlers/flaky-classify';
 import {
   listUsers,
   createUserRecord,
@@ -77,6 +90,7 @@ import {
   apiPostRunEvents,
   apiFinishTestRun,
   apiCancelStaleSimulatorRuns,
+  apiHeartbeatTestRun,
 } from './reporter';
 import { apiCreateUserApiKey } from './users';
 import { apiGetDemoFile } from './files';
@@ -91,9 +105,11 @@ import {
   apiGetAiLimits,
   apiPutAiLimits,
   apiGetAiUsage,
+  apiListAiModels,
 } from './ai';
 import { apiGetAdminStats } from './admin';
 import { apiDeleteTestRun } from './test-runs';
+import { apiGetWastedWaits, apiPutWastedWaits } from './settings';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
@@ -211,12 +227,52 @@ const routes: RouteEntry[] = [
     handler: async (m, _, q) => listMergeSuggestions(await getDemoDb(), +m[1]!, (q && q.get('status')) || 'pending'),
   },
   {
+    method: 'POST',
+    pattern: /^\/api\/cluster-merge-suggestions\/(\d+)\/approve$/,
+    handler: async (m) => {
+      const result = await approveMergeSuggestion(await getDemoDb(), +m[1]!);
+      if (!result) throw new Error('Suggestion is not pending');
+      return { success: true, ...result };
+    },
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/cluster-merge-suggestions\/(\d+)\/reject$/,
+    handler: async (m) => {
+      const ok = await rejectMergeSuggestion(await getDemoDb(), +m[1]!);
+      if (!ok) throw new Error('Suggestion is not pending');
+      return { success: true };
+    },
+  },
+  {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/flaky-tests$/,
     handler: async (m, _, q) => {
       const limit = q ? Number(q.get('runs')) || 50 : 50;
       const environment = q?.get('environment') || undefined;
       return getProjectFlakyTests(await getDemoDb(), +m[1]!, limit, environment);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/latest-run$/,
+    handler: async (m) => getProjectLatestRun(await getDemoDb(), +m[1]!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/spec-health$/,
+    handler: async (m, _, q) => {
+      const days = Math.min(90, Math.max(1, parseInt(q?.get('days') || '30')));
+      return getProjectSpecHealth(await getDemoDb(), +m[1]!, days);
+    },
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/projects\/(\d+)\/flaky-classify$/,
+    handler: async (m, body) => {
+      const b = body as { testCaseId?: number };
+      if (!b?.testCaseId) throw new Error('testCaseId is required');
+      return classifyAndPersistFlakyRootCause(await getDemoDb(), +m[1]!, b.testCaseId);
     },
   },
 
@@ -245,6 +301,11 @@ const routes: RouteEntry[] = [
     method: 'POST',
     pattern: /^\/api\/demo\/cancel-stale-runs$/,
     handler: (_, body) => apiCancelStaleSimulatorRuns(body as Parameters<typeof apiCancelStaleSimulatorRuns>[0]),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/test-runs\/(\d+)\/heartbeat$/,
+    handler: (m, body) => apiHeartbeatTestRun(+m[1]!, body as Parameters<typeof apiHeartbeatTestRun>[1]),
   },
 
   // Test runs
@@ -393,6 +454,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/settings\/ai\/limits$/,
     handler: (_, body) => apiPutAiLimits(body),
   },
+  { method: 'POST', pattern: /^\/api\/settings\/ai\/models$/, handler: (_, body) => apiListAiModels(body) },
 
   // Test-run streaming (no-op in demo mode; only terminal-status runs exist)
   { method: 'GET', pattern: /^\/api\/test-runs\/(\d+)\/stream$/, handler: () => Promise.resolve({ ok: true }) },
@@ -410,6 +472,14 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/test-cases\/(\d+)\/history$/,
     handler: async (m) => getTestCaseHistory(await getDemoDb(), +m[1]!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-cases\/(\d+)\/stability-trend$/,
+    handler: async (m, _, q) => {
+      const buckets = parseInt(q?.get('buckets') || '20');
+      return getTestCaseStabilityTrend(await getDemoDb(), +m[1]!, buckets);
+    },
   },
 
   // Test run cases (executions)
@@ -650,6 +720,23 @@ const routes: RouteEntry[] = [
       }),
   },
 
+  // Health — demo runs entirely client-side, so "the database" is always the
+  // in-browser sql.js instance; touch it the same way the server's liveness
+  // probe does (a lightweight query) so this stays a real check, not a stub.
+  {
+    method: 'GET',
+    pattern: /^\/api\/health$/,
+    handler: async () => {
+      try {
+        const db = await getDemoDb();
+        await db.select({ key: appSettings.key }).from(appSettings).limit(1);
+      } catch {
+        return { status: 'error', database: 'unreachable' };
+      }
+      return { status: 'ok', database: 'ok' };
+    },
+  },
+
   // Admin
   { method: 'GET', pattern: /^\/api\/admin\/stats$/, handler: () => apiGetAdminStats() },
   {
@@ -678,6 +765,8 @@ routes.push(
     },
   },
   { method: 'GET', pattern: /^\/api\/auth\/session$/, handler: () => UNAUTHENTICATED },
+  // The demo always ships with seeded users, so first-admin setup never applies.
+  { method: 'GET', pattern: /^\/api\/auth\/setup$/, handler: () => Promise.resolve({ needsSetup: false }) },
   {
     method: 'POST',
     pattern: /^\/api\/auth\/login$/,
@@ -723,6 +812,12 @@ routes.push(
     method: 'POST',
     pattern: /^\/api\/settings\/smtp\/test$/,
     handler: () => Promise.resolve({ success: false, error: 'Email not available in demo mode' }),
+  },
+  { method: 'GET', pattern: /^\/api\/settings\/wasted-waits$/, handler: () => apiGetWastedWaits() },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/settings\/wasted-waits$/,
+    handler: (_, body) => apiPutWastedWaits(body as Parameters<typeof apiPutWastedWaits>[0]),
   },
 );
 
@@ -853,6 +948,11 @@ const DEMO_LOGIN_REDIRECT = Promise.resolve({ url: '/login', status: 302 });
 routes.push(
   { method: 'GET', pattern: /^\/api\/auth\/oauth\/[^/]+\/login$/, handler: () => DEMO_LOGIN_REDIRECT },
   { method: 'GET', pattern: /^\/api\/auth\/oauth\/[^/]+\/callback$/, handler: () => DEMO_LOGIN_REDIRECT },
+  {
+    method: 'POST',
+    pattern: /^\/api\/auth\/oauth\/[^/]+\/unlink$/,
+    handler: () => Promise.resolve({ success: true }),
+  },
 );
 
 /**

@@ -16,6 +16,14 @@
  * through the real server.
  */
 
+import {
+  DEMO_PROJECTS,
+  storyByClusterId,
+  buildTestSource,
+  buildSourceFrames,
+  buildWebAssertionError,
+} from '#shared/demo/failure-stories.mjs';
+
 export const DEMO_SIMULATOR_INSTANCE_ID = 'demo-simulator';
 
 /** Project from the demo seed (scripts/generate-demo-seed.mjs) */
@@ -45,6 +53,8 @@ interface SimAttempt {
   consoleLogs?: Array<Record<string, unknown>>;
   ariaSnapshot?: string;
   testAnnotations?: Array<{ type: string; description?: string }> | null;
+  testSource?: string | null;
+  testSourceFrames?: Array<{ file: string; line: number; snippet: string }> | null;
 }
 
 interface SimTest {
@@ -81,6 +91,8 @@ export interface DemoScenario {
   stopAfter?: number;
   /** Enable sharding — tests are split across `shardCount` parallel shards */
   shardCount?: number;
+  /** Overrides the default '1.51.0' reported to setup/begin/finish. */
+  playwrightVersion?: string;
   metadata: () => Record<string, unknown>;
   tests: () => SimTest[];
 }
@@ -98,43 +110,35 @@ function randomCommitSha(): string {
   return sha.slice(0, 40);
 }
 
-/** Tests of the seeded e2e-checkout project, with realistic base durations */
-const CHECKOUT_TESTS: Array<{ file: string; title: string; duration: number }> = [
-  { file: 'tests/checkout/checkout.spec.ts', title: 'should complete checkout with credit card', duration: 6800 },
-  { file: 'tests/checkout/checkout.spec.ts', title: 'should complete checkout with PayPal', duration: 7200 },
-  { file: 'tests/checkout/checkout.spec.ts', title: 'should complete checkout with Apple Pay', duration: 5400 },
-  { file: 'tests/checkout/checkout.spec.ts', title: 'should show error for expired card', duration: 3100 },
-  { file: 'tests/checkout/checkout.spec.ts', title: 'should show error for invalid CVV', duration: 2900 },
-  { file: 'tests/checkout/cart.spec.ts', title: 'should add item to cart', duration: 2400 },
-  { file: 'tests/checkout/cart.spec.ts', title: 'should remove item from cart', duration: 2100 },
-  { file: 'tests/checkout/cart.spec.ts', title: 'should update item quantity', duration: 2600 },
-  { file: 'tests/checkout/cart.spec.ts', title: 'should apply discount code', duration: 3400 },
-  { file: 'tests/checkout/cart.spec.ts', title: 'should display cart total correctly', duration: 1900 },
-  { file: 'tests/checkout/address.spec.ts', title: 'should fill and save shipping address', duration: 4100 },
-  { file: 'tests/checkout/address.spec.ts', title: 'should validate required address fields', duration: 2700 },
-];
+/** The seeded e2e-checkout project — same source the seed generator reads. */
+const CHECKOUT_PROJECT = DEMO_PROJECTS.find((p) => p.id === DEMO_PROJECT_ID)!;
 
-/** Suite map — mirrors SUITE_DEFS in generate-demo-seed.mjs for the e2e-checkout project */
+/** Base durations, in the same order as CHECKOUT_PROJECT.cases (kept local — pacing is simulator-only). */
+const CHECKOUT_DURATIONS = [6800, 7200, 5400, 3100, 2900, 2400, 2100, 2600, 3400, 1900, 4100, 2700];
+
+/** Tests of the seeded e2e-checkout project — file/title/declaration line from the single source of truth. */
+const CHECKOUT_TESTS: Array<{ file: string; title: string; duration: number; declLine: number; declColumn: number }> =
+  CHECKOUT_PROJECT.cases.map((c, i) => ({
+    file: c.file,
+    title: c.title,
+    duration: CHECKOUT_DURATIONS[i]!,
+    declLine: c.declLine,
+    declColumn: c.declColumn,
+  }));
+
+/** Suite map — derived from the same DEMO_PROJECTS suites the seed generator reads. */
 const SUITE_MAP: Record<
   string,
   {
     suitePath: string[];
     suiteConfig: Array<{ mode: string; annotations: Array<{ type: string; description?: string }> }>;
   }
-> = {
-  'tests/checkout/checkout.spec.ts': {
-    suitePath: ['Checkout'],
-    suiteConfig: [{ mode: 'parallel', annotations: [] }],
-  },
-  'tests/checkout/cart.spec.ts': {
-    suitePath: ['Cart'],
-    suiteConfig: [{ mode: 'default', annotations: [] }],
-  },
-  'tests/checkout/address.spec.ts': {
-    suitePath: ['Address'],
-    suiteConfig: [{ mode: 'default', annotations: [] }],
-  },
-};
+> = Object.fromEntries(
+  Object.entries(CHECKOUT_PROJECT.suites).map(([file, def]) => [
+    file,
+    { suitePath: def.suitePath, suiteConfig: [{ mode: def.mode, annotations: def.annotations }] },
+  ]),
+);
 
 /** Browser configs for multi-browser scenarios */
 const BROWSER_CONFIGS: Record<string, Record<string, unknown>> = {
@@ -144,12 +148,35 @@ const BROWSER_CONFIGS: Record<string, Record<string, unknown>> = {
 };
 
 /**
- * Matches the seeded failure cluster of the e2e-checkout project
- * (see CLUSTER_DEFS in scripts/generate-demo-seed.mjs), so simulated
- * failures join the existing cluster and bump its occurrence history.
+ * The seeded checkout-Pay-timeout cluster (see FAILURE_STORIES in
+ * shared/demo/failure-stories.mjs) and the renamed-email-label cluster. Reusing
+ * their exact error text — not a hand-copied approximation — means the
+ * simulated failure fingerprints identically to the seeded one and joins the
+ * same cluster (bumping its occurrence history) instead of splitting into a
+ * lookalike duplicate.
  */
-const KNOWN_TIMEOUT_ERROR =
-  'TimeoutError: locator.click: Timeout 30000ms exceeded.\n    at tests/checkout/checkout.spec.ts:42';
+const CLUSTER1_STORY = storyByClusterId(1)!;
+const CLUSTER2_STORY = storyByClusterId(2)!;
+
+/**
+ * A new environment-sensitive error, built with the same reporter-faithful
+ * error builder the seed fixtures use. Deliberately not tied to a seeded
+ * story/cluster — this scenario exists to demonstrate the environment-diff
+ * card on a brand-new failure, not to join existing history.
+ */
+const ENV_DRIFT_ERROR = buildWebAssertionError({
+  matcher: 'expect(locator).toBeVisible()',
+  locator: "getByRole('button', { name: 'Retry payment' })",
+  expected: 'visible',
+  received: 'hidden',
+  timeoutMs: 5000,
+  callLog: [
+    'Expect "toBeVisible" with timeout 5000ms',
+    "waiting for getByRole('button', { name: 'Retry payment' })",
+    '9 × locator resolved to <button hidden class="retry-btn">Retry payment</button>',
+  ],
+  frames: [{ file: 'tests/checkout/checkout.spec.ts', line: CHECKOUT_TESTS[3]!.declLine + 4, column: 11 }],
+});
 
 /** A new error signature — forms a brand-new failure cluster (shown as "New") */
 const NEW_STRICT_MODE_ERROR =
@@ -331,21 +358,18 @@ function buildPageState(): Record<string, unknown> {
   };
 }
 
-function errorConsoleLogs(error: string, startedAt: number): Array<Record<string, unknown>> {
-  return [
-    {
-      type: 'warning',
-      text: '[checkout] payment provider responded slowly, retrying once',
-      timestamp: startedAt + 1200,
-      location: 'https://shop.example.com/assets/checkout.js:142:18',
-    },
-    {
-      type: 'error',
-      text: error.split('\n')[0] ?? 'Unknown error',
-      timestamp: startedAt + 2400,
-      location: 'https://shop.example.com/assets/checkout.js:217:11',
-    },
-  ];
+/**
+ * Stamp timestamps onto a story's themed console evidence. A real browser
+ * console never echoes the Playwright/Node assertion text back at itself, so
+ * — like the seed generator — this only ever surfaces what the story declares
+ * as plausible page console output, never a copy of `error`.
+ */
+function themedConsoleLogs(
+  entries: Array<{ type: string; text: string; location: string | null }> | undefined,
+  startedAt: number,
+): Array<Record<string, unknown>> | undefined {
+  if (!entries?.length) return undefined;
+  return entries.map((e, i) => ({ ...e, timestamp: startedAt + 1200 + i * 400 }));
 }
 
 interface BaseTestOptions {
@@ -559,13 +583,13 @@ function buildWaitHeavyStepEvents(testDuration: number, file: string, line: numb
 }
 
 function baseTests(opts: BaseTestOptions = {}): SimTest[] {
-  return CHECKOUT_TESTS.map((t, i) => {
+  return CHECKOUT_TESTS.map((t) => {
     const duration = vary(Math.round(t.duration * (opts.durationFactor ?? 1)), 0.12);
     const steps = buildSteps(duration, opts.slowSteps);
     const slowest = steps.reduce((a, b) => (a.duration > b.duration ? a : b));
     const suite = SUITE_MAP[t.file];
     const stepEvents = opts.waitHeavy
-      ? buildWaitHeavyStepEvents(duration, t.file, 10 + i * 8)
+      ? buildWaitHeavyStepEvents(duration, t.file, t.declLine)
       : buildStepEvents(duration);
     const wastedTimeMs = stepEvents
       .filter((e) => e.category === 'wait' && e.title === 'Wait for timeout')
@@ -573,7 +597,7 @@ function baseTests(opts: BaseTestOptions = {}): SimTest[] {
 
     return {
       title: t.title,
-      location: `${t.file}:${10 + i * 8}:5`,
+      location: `${t.file}:${t.declLine}:${t.declColumn}`,
       duration,
       attempts: [{ status: 'passed' as const }],
       steps,
@@ -661,19 +685,35 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       }),
     tests: () => {
       const tests = baseTests();
-      // Two tests hit the timeout cluster already known from previous runs
+      // Two tests hit the timeout cluster already known from previous runs —
+      // same error text as the seeded cluster 1, so this joins it rather than
+      // splitting into a lookalike duplicate.
       for (const i of [0, 1]) {
         const failedDuration = vary(31200, 0.03);
+        const failingCase = CLUSTER1_STORY.failingCases[i]!;
+        const startedAt = Date.now();
         tests[i]!.attempts = [
           {
             status: 'failed',
             duration: failedDuration,
-            error: KNOWN_TIMEOUT_ERROR,
-            consoleLogs: errorConsoleLogs(KNOWN_TIMEOUT_ERROR, Date.now()),
-            testAnnotations: [{ type: 'fixme', description: 'Known timeout issue — checkout page slow under load' }],
+            error: failingCase.error,
+            consoleLogs: themedConsoleLogs(CLUSTER1_STORY.evidence.consoleOnFail, startedAt),
+            testAnnotations: [{ type: 'fixme', description: `Known issue — see cluster ${CLUSTER1_STORY.clusterId}` }],
+            testSource: buildTestSource(CLUSTER1_STORY, failingCase, CHECKOUT_TESTS[i]!.declLine),
+            testSourceFrames: buildSourceFrames(failingCase),
           },
         ];
-        tests[i]!.networkRequests = buildNetworkRequests({ paymentError: true });
+        // Merge in the story's own themed evidence (a slow quote request, not
+        // a payment failure — the Pay button times out because the quote
+        // never resolves in time, not because payment itself errors).
+        const netOverrides: Array<Record<string, unknown>> = (CLUSTER1_STORY.evidence.failingNetwork ?? []).map(
+          (o) => ({ ...o }),
+        );
+        const base = buildNetworkRequests();
+        tests[i]!.networkRequests = [
+          ...base.filter((r) => !netOverrides.some((o) => o.method === r.method && o.url === r.url)),
+          ...netOverrides,
+        ];
       }
       // One test fails with a new error signature — a brand-new cluster
       tests[2]!.attempts = [
@@ -681,7 +721,6 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
           status: 'failed',
           duration: vary(4800),
           error: NEW_STRICT_MODE_ERROR,
-          consoleLogs: errorConsoleLogs(NEW_STRICT_MODE_ERROR, Date.now()),
           ariaSnapshot: STRICT_MODE_ARIA_SNAPSHOT,
           testAnnotations: [{ type: 'fixme', description: 'Duplicate test IDs — needs unique data-testid' }],
         },
@@ -711,7 +750,6 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
             status: 'failed',
             duration: vary(5600, 0.08),
             error: FLAKY_ASSERTION_ERROR,
-            consoleLogs: errorConsoleLogs(FLAKY_ASSERTION_ERROR, Date.now()),
             testAnnotations: [{ type: 'slow' }],
           },
           { status: 'passed', duration: vary(2600), testAnnotations: [{ type: 'slow' }] },
@@ -808,6 +846,76 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
         commitMessage: 'wip: add temporary waits while debugging flaky checkout',
       }),
     tests: () => baseTests({ waitHeavy: true }),
+  },
+  {
+    id: 'healing',
+    label: 'Locator healing',
+    description: 'A renamed field fails and joins the known cluster — watch the stale-aware recommendation',
+    icon: 'i-lucide-wand-sparkles',
+    speed: 2,
+    workers: 4,
+    environment: 'staging',
+    metadata: () =>
+      buildMetadata({
+        branch: 'feature/contact-method',
+        author: 'Carol White',
+        commitMessage: 'feat: replace the email field with a contact-method selector',
+      }),
+    tests: () => {
+      const tests = baseTests();
+      // "should complete checkout with Apple Pay" — the seeded renamed-label
+      // cluster's member case. Reusing its exact error (same embedded call
+      // site as the seeded locator snapshot) means the healing lookup finds
+      // the same stale-flagged recommendation immediately.
+      const i = tests.findIndex((t) => t.title === CLUSTER2_STORY.failingCases[0]!.title);
+      const failingCase = CLUSTER2_STORY.failingCases[0]!;
+      tests[i]!.attempts = [
+        {
+          status: 'failed',
+          duration: vary(10400, 0.05),
+          error: failingCase.error,
+          ariaSnapshot: CLUSTER2_STORY.aria ?? undefined,
+          testAnnotations: [{ type: 'fixme', description: `Known issue — see cluster ${CLUSTER2_STORY.clusterId}` }],
+          testSource: buildTestSource(CLUSTER2_STORY, failingCase, CHECKOUT_TESTS[i]!.declLine),
+          testSourceFrames: buildSourceFrames(failingCase),
+        },
+      ];
+      return tests;
+    },
+  },
+  {
+    id: 'env-drift',
+    label: 'Environment drift',
+    description: 'A dark-mode, newer-Playwright run surfaces a visibility bug the light-mode baseline never hit',
+    icon: 'i-lucide-moon',
+    speed: 2,
+    workers: 4,
+    environment: 'production',
+    playwrightVersion: '1.52.0',
+    metadata: () =>
+      buildMetadata({
+        branch: 'main',
+        author: 'Priya Singh',
+        commitMessage: 'style: ship the dark theme rollout',
+      }),
+    tests: () => {
+      const tests = baseTests();
+      // Same browser identity (projectName) as the seeded light-mode passes,
+      // so environment-diff baseline pinning (by browser_name) compares this
+      // failure against them and surfaces exactly the colorScheme + Playwright
+      // version drift as the diff.
+      const darkChromium = { ...BROWSER_CONFIGS.chromium, colorScheme: 'dark' };
+      for (const t of tests) t.browser = darkChromium;
+      tests[3]!.attempts = [
+        {
+          status: 'failed',
+          duration: vary(5200),
+          error: ENV_DRIFT_ERROR,
+          testAnnotations: [{ type: 'fixme', description: 'Dark-mode visibility regression — see environment diff' }],
+        },
+      ];
+      return tests;
+    },
   },
 ];
 
@@ -930,7 +1038,7 @@ async function runSingleSimulation(
       environment: scenario.environment,
       label: scenario.runLabel || null,
       instanceId,
-      playwrightVersion: '1.51.0',
+      playwrightVersion: scenario.playwrightVersion ?? '1.51.0',
       reporterVersion: '0.7.0',
       shardIndex: shardOverride?.shardIndex,
       shardTotal: shardOverride?.shardTotal,
@@ -954,7 +1062,7 @@ async function runSingleSimulation(
       // top of an already-correct total instead of starting from zero.
       totalTests: 0,
       metadata,
-      playwrightVersion: '1.51.0',
+      playwrightVersion: scenario.playwrightVersion ?? '1.51.0',
       reporterVersion: '0.7.0',
       shardIndex: shardOverride?.shardIndex,
       shardTotal: shardOverride?.shardTotal,
@@ -1037,6 +1145,8 @@ async function runSingleSimulation(
             pageState: test.pageState ?? null,
             consoleLogs: a.consoleLogs ?? null,
             ariaSnapshot: a.ariaSnapshot ?? null,
+            testSource: a.testSource ?? null,
+            testSourceFrames: a.testSourceFrames ?? null,
             browser: test.browser ?? null,
             workerIndex,
             shardIndex: shardOverride?.shardIndex ?? null,
@@ -1086,7 +1196,7 @@ async function runSingleSimulation(
       flakyTests: flakyCount,
       durations,
       metadata,
-      playwrightVersion: '1.51.0',
+      playwrightVersion: scenario.playwrightVersion ?? '1.51.0',
       reporterVersion: '0.7.0',
       ...(shardOverride ? { shardIndex: shardOverride.shardIndex, shardTotal: shardOverride.shardTotal } : {}),
     },

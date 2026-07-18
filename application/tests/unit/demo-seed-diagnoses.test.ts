@@ -1,9 +1,12 @@
-import { describe, test, expect, beforeAll } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { allDemoSourceFiles } from '~~/app/demo/demo-scm';
 import { validatePatch } from '#shared/patch';
+import { FAILURE_STORIES } from '#shared/demo/failure-stories.mjs';
 
 // Root of the Nuxt app (tests/unit/ -> ../../).
 const rootDir = fileURLToPath(new URL('../..', import.meta.url)).replace(/\/$/, '');
@@ -20,21 +23,20 @@ interface DiagnosisRow {
 let diagnoses: DiagnosisRow[] = [];
 let versionCount = 0;
 let ariaCount = 0;
+let tmpDir: string | undefined;
 
 beforeAll(async () => {
-  // Regenerate the (gitignored) seed so the test runs against a fresh artifact.
-  // The generator also rewrites the *tracked* seed.version.json (with random,
-  // timestamped content), so snapshot and restore it — running tests must never
-  // dirty a tracked file.
-  const versionPath = `${rootDir}/public/demo/seed.version.json`;
-  const savedVersion = existsSync(versionPath) ? readFileSync(versionPath) : null;
-  try {
-    execFileSync('node', ['scripts/generate-demo-seed.mjs'], { cwd: rootDir, stdio: 'ignore' });
-  } finally {
-    if (savedVersion) writeFileSync(versionPath, savedVersion);
-    else rmSync(versionPath, { force: true });
-  }
-  const seedSql = readFileSync(`${rootDir}/public/demo/seed.sql`, 'utf-8');
+  // Regenerate into a throwaway directory unique to this test file, never the
+  // tracked public/demo/seed.sql — another test file's beforeAll regenerates
+  // concurrently (vitest runs files in parallel) and would otherwise race on
+  // the same path, producing a torn read and a SQL parse error.
+  tmpDir = mkdtempSync(join(tmpdir(), 'piwi-demo-seed-diagnoses-'));
+  execFileSync('node', ['scripts/generate-demo-seed.mjs'], {
+    cwd: rootDir,
+    stdio: 'ignore',
+    env: { ...process.env, PIWI_DEMO_SEED_OUTPUT_DIR: tmpDir },
+  });
+  const seedSql = readFileSync(join(tmpDir, 'seed.sql'), 'utf-8');
 
   const initSqlJs = (await import('sql.js')).default;
   const SQL = await initSqlJs();
@@ -58,11 +60,15 @@ beforeAll(async () => {
   db.close();
 });
 
+afterAll(() => {
+  if (tmpDir) rmSync(tmpDir, { recursive: true, force: true });
+});
+
 describe('seeded demo diagnoses', () => {
   test('seeds several completed cluster diagnoses (and leaves some clusters undiagnosed)', () => {
     expect(diagnoses.length).toBeGreaterThanOrEqual(3);
-    // 8 clusters total; not all are diagnosed, so a visitor can trigger a live one.
-    expect(diagnoses.length).toBeLessThan(8);
+    // Not all clusters are diagnosed, so a visitor can trigger a live one.
+    expect(diagnoses.length).toBeLessThan(FAILURE_STORIES.length);
     expect(diagnoses.every((d) => d.scope === 'cluster')).toBe(true);
   });
 

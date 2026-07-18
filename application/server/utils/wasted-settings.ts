@@ -1,9 +1,10 @@
 import { getAppSetting } from './app-settings';
-import { DEFAULT_WASTED_WAIT_PATTERNS, parseWastedWaitPatterns } from '#shared/utils/wasted-waits';
+import {
+  parseWastedWaitPatterns,
+  resolveStoredWastedPatterns,
+  WASTED_WAIT_PATTERNS_KEY,
+} from '#shared/utils/wasted-waits';
 import type { DbClient } from '../database';
-
-/** App-settings key under which the wasted-wait patterns are stored. */
-export const WASTED_WAIT_PATTERNS_KEY = 'wasted_wait_patterns';
 
 export interface ResolvedWastedSettings {
   /** The effective allowlist of glob patterns. */
@@ -28,12 +29,7 @@ export async function resolveWastedSettings(db: DbClient): Promise<ResolvedWaste
   }
 
   const stored = await getAppSetting<{ value: string[] }>(db, WASTED_WAIT_PATTERNS_KEY);
-  if (stored && Array.isArray(stored.value)) {
-    // An explicitly-saved empty array means "nothing is wasted" — respect it.
-    return { patterns: parseWastedWaitPatterns(stored.value), envManaged: false, isDefault: false };
-  }
-
-  return { patterns: [...DEFAULT_WASTED_WAIT_PATTERNS], envManaged: false, isDefault: true };
+  return { ...resolveStoredWastedPatterns(stored), envManaged: false };
 }
 
 /** Convenience: just the effective patterns (for read-path recomputation). */

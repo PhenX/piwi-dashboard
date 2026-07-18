@@ -12,6 +12,9 @@ import type { TestStepEvent } from '../types';
  */
 export const DEFAULT_WASTED_WAIT_PATTERNS: readonly string[] = ['Wait for timeout*', '*waitForTimeout*'];
 
+/** `app_settings` key under which the wasted-wait patterns are stored. */
+export const WASTED_WAIT_PATTERNS_KEY = 'wasted_wait_patterns';
+
 /**
  * Parse a raw patterns value (from an env var or free-form text input) into a
  * clean string array. Accepts an array as-is, or a string split on newlines
@@ -21,6 +24,24 @@ export function parseWastedWaitPatterns(raw: string | string[] | null | undefine
   if (raw == null) return [];
   const parts = Array.isArray(raw) ? raw : raw.split(/[\n,]/);
   return parts.map((p) => p.trim()).filter((p) => p.length > 0);
+}
+
+/**
+ * Resolve the effective patterns from a stored `app_settings` row, falling
+ * back to the built-in default when unset. Pure — no env-var layer, so this
+ * is safe to call from contexts with no `useRuntimeConfig` (the demo SW).
+ * The real server's `resolveWastedSettings` (`server/utils/wasted-settings.ts`)
+ * layers `PIWI_WASTED_WAIT_PATTERNS` on top of this.
+ */
+export function resolveStoredWastedPatterns(stored: { value: string[] } | null | undefined): {
+  patterns: string[];
+  isDefault: boolean;
+} {
+  if (stored && Array.isArray(stored.value)) {
+    // An explicitly-saved empty array means "nothing is wasted" — respect it.
+    return { patterns: parseWastedWaitPatterns(stored.value), isDefault: false };
+  }
+  return { patterns: [...DEFAULT_WASTED_WAIT_PATTERNS], isDefault: true };
 }
 
 /** Convert a single glob pattern (`*` and `?` wildcards) to an anchored, case-insensitive RegExp. */

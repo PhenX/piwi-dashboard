@@ -1,8 +1,11 @@
-import { CONTEXT_LIMIT_FIELDS, DEFAULT_CONTEXT_LIMITS, clampLimit } from '#shared/ai-context-limits';
+import {
+  CONTEXT_LIMIT_FIELDS,
+  clampLimit,
+  resolveStoredContextLimits,
+  CONTEXT_LIMITS_SETTING_KEY,
+} from '#shared/ai-context-limits';
 import type { ContextLimits } from '#shared/ai-context-limits';
 import type { DbClient } from '../database';
-
-export const CONTEXT_LIMITS_SETTING_KEY = 'ai_context_limits';
 
 function parseEnvInt(name: string): number | null {
   const raw = process.env[name];
@@ -21,13 +24,10 @@ export function envManagedLimitKeys(): (keyof ContextLimits)[] {
  * (env wins). Stored/env values are clamped to each field's allowed range.
  */
 export async function resolveContextLimits(db: DbClient): Promise<ContextLimits> {
-  const stored = (await getAppSetting<Partial<ContextLimits>>(db, CONTEXT_LIMITS_SETTING_KEY)) ?? {};
-  const limits: ContextLimits = { ...DEFAULT_CONTEXT_LIMITS };
+  const stored = await getAppSetting<Partial<ContextLimits>>(db, CONTEXT_LIMITS_SETTING_KEY);
+  const limits = resolveStoredContextLimits(stored);
 
   for (const field of CONTEXT_LIMIT_FIELDS) {
-    const storedVal = clampLimit(field, stored[field.key]);
-    if (storedVal != null) limits[field.key] = storedVal;
-
     const envVal = parseEnvInt(field.envVar);
     if (envVal != null) limits[field.key] = clampLimit(field, envVal) ?? limits[field.key];
   }
