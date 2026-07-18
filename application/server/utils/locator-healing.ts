@@ -18,6 +18,7 @@ import {
   alternativeUsesName,
 } from '#shared/locator-healing';
 import { elementMatchOutcome, generateFromAriaSnapshot, type ElementFingerprint } from '#shared/locator-fingerprint';
+import { inlineCasePayloads, resolveCasePayloadContents } from './case-payloads';
 import type {
   RankedLocator,
   LocatorSnapshot,
@@ -411,11 +412,13 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
       testRunId: testRunsCases.testRunId,
       ariaSnapshot: testRunsCases.ariaSnapshot,
       testSource: testRunsCases.testSource,
+      ariaSnapshotPayloadId: testRunsCases.ariaSnapshotPayloadId,
+      testSourcePayloadId: testRunsCases.testSourcePayloadId,
     })
     .from(testRunsCases)
     .where(eq(testRunsCases.id, testRunsCaseId));
 
-  const row = rows[0];
+  const row = rows[0] ? await inlineCasePayloads(db, rows[0]) : undefined;
   if (!row?.error) return buildHealingResult(null, null, null, 'none');
 
   const testCaseId = row.testCaseId;
@@ -578,8 +581,9 @@ export async function getLocatorHealingBatch(
   const results = new Map<number, LocatorHealingResult>();
   if (testRunsCaseIds.length === 0) return results;
 
-  // 1. Load all failing rows in one query
-  const caseRows = await db
+  // 1. Load all failing rows in one query, then coalesce payload-stored
+  // aria/test-source content (one batched lookup for every referenced payload)
+  const rawCaseRows = await db
     .select({
       id: testRunsCases.id,
       error: testRunsCases.error,
@@ -587,9 +591,23 @@ export async function getLocatorHealingBatch(
       testRunId: testRunsCases.testRunId,
       ariaSnapshot: testRunsCases.ariaSnapshot,
       testSource: testRunsCases.testSource,
+      ariaSnapshotPayloadId: testRunsCases.ariaSnapshotPayloadId,
+      testSourcePayloadId: testRunsCases.testSourcePayloadId,
     })
     .from(testRunsCases)
     .where(inArray(testRunsCases.id, testRunsCaseIds));
+
+  const payloadContents = await resolveCasePayloadContents(
+    db,
+    rawCaseRows.flatMap((r) => [r.ariaSnapshotPayloadId, r.testSourcePayloadId]),
+  );
+  const caseRows = rawCaseRows.map((r) => ({
+    ...r,
+    ariaSnapshot:
+      (r.ariaSnapshotPayloadId != null ? payloadContents.get(r.ariaSnapshotPayloadId) : undefined) ?? r.ariaSnapshot,
+    testSource:
+      (r.testSourcePayloadId != null ? payloadContents.get(r.testSourcePayloadId) : undefined) ?? r.testSource,
+  }));
 
   // 2. Collect unique test case IDs and load all snapshots in one query
   const tcIds = [...new Set(caseRows.map((r) => r.testCaseId).filter(Boolean))];
