@@ -21,8 +21,8 @@ const { getLocatorHealing, getLocatorHealingBatch } = await import('../../server
 const ARIA = ['- heading "Piwi fixtures demo" [level=1] [ref=e9]', '- button "Load items" [ref=e11]'].join('\n');
 
 const ERROR = [
-  "Error: locator.click: Timeout 2000ms exceeded.",
-  "Call log:",
+  'Error: locator.click: Timeout 2000ms exceeded.',
+  'Call log:',
   "  - waiting for getByRole('button', { name: 'Load records' })",
   '',
   '    at /repo/tests/failing-locator.spec.ts:24:60',
@@ -40,7 +40,9 @@ beforeAll(async () => {
 
   await db.insert(schema.projects).values({ id: 1, name: 'payloads-project' });
   await db.insert(schema.testRuns).values({ id: 1, projectId: 1, status: 'failed', startTime: new Date() });
-  await db.insert(schema.testCases).values({ id: 1, projectId: 1, filePath: 'tests/failing-locator.spec.ts', title: 'fails' });
+  await db
+    .insert(schema.testCases)
+    .values({ id: 1, projectId: 1, filePath: 'tests/failing-locator.spec.ts', title: 'fails' });
 
   const payload = await db
     .insert(schema.casePayloads)

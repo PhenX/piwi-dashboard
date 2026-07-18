@@ -320,3 +320,117 @@ describe('parseTraceEvents', () => {
     expect(data!.networkRequests[0]).toMatchObject({ url: 'https://api.test/y', method: 'POST', statusCode: 201 });
   });
 });
+
+describe('parseTraceEvents — modern before/after event pairs', () => {
+  test('merges before/after pairs into completed actions with class.method apiName', async () => {
+    const zip = buildTraceZip([
+      {
+        type: 'before',
+        callId: 'call@8',
+        startTime: 1548.6,
+        class: 'Frame',
+        method: 'goto',
+        params: { url: 'https://x.test/checkout' },
+        pageId: 'page@1',
+        beforeSnapshot: 'before@call@8',
+      },
+      { type: 'after', callId: 'call@8', endTime: 1900.2, afterSnapshot: 'after@call@8' },
+    ]);
+    const data = await parseTraceEvents(zip);
+    expect(data!.actions).toHaveLength(1);
+    expect(data!.actions[0]).toMatchObject({
+      callId: 'call@8',
+      apiName: 'Frame.goto',
+      startTime: 1548.6,
+      endTime: 1900.2,
+      beforeSnapshot: 'before@call@8',
+      afterSnapshot: 'after@call@8',
+      pageId: 'page@1',
+    });
+    expect(data!.actions[0]!.params).toEqual({ url: 'https://x.test/checkout' });
+  });
+
+  test('prefers an explicit apiName over class.method when present', async () => {
+    const zip = buildTraceZip([
+      { type: 'before', callId: 'c1', startTime: 1, apiName: 'page.goto', class: 'Frame', method: 'goto' },
+      { type: 'after', callId: 'c1', endTime: 2 },
+    ]);
+    const data = await parseTraceEvents(zip);
+    expect(data!.actions[0]!.apiName).toBe('page.goto');
+  });
+
+  test('selects the failing action from an error carried by the after event (flat and nested shapes)', async () => {
+    const zip = buildTraceZip([
+      { type: 'before', callId: 'c1', startTime: 100, class: 'Frame', method: 'click' },
+      { type: 'after', callId: 'c1', endTime: 200 },
+      { type: 'before', callId: 'c2', startTime: 300, class: 'Frame', method: 'waitForSelector' },
+      {
+        type: 'after',
+        callId: 'c2',
+        endTime: 1800,
+        error: {
+          message: 'Timeout 1500ms exceeded.',
+          stack: 'TimeoutError: Timeout 1500ms exceeded.',
+          name: 'TimeoutError',
+        },
+      },
+      { type: 'before', callId: 'c3', startTime: 2000, class: 'Frame', method: 'fill' },
+      { type: 'after', callId: 'c3', endTime: 2100, error: { error: { message: 'nested boom' } } },
+    ]);
+    const data = await parseTraceEvents(zip);
+    expect(data!.timeoutFallback).toBe(false);
+    expect(data!.failingAction?.callId).toBe('c2');
+    expect(data!.failingAction?.error?.message).toBe('Timeout 1500ms exceeded.');
+    expect(data!.actions[2]!.error?.message).toBe('nested boom');
+  });
+
+  test('appends standalone log events to the open action and keeps the timeout fallback working', async () => {
+    const zip = buildTraceZip([
+      { type: 'before', callId: 'c1', startTime: 100, class: 'Frame', method: 'goto' },
+      { type: 'after', callId: 'c1', endTime: 200 },
+      { type: 'before', callId: 'c2', startTime: 300, class: 'Frame', method: 'waitForSelector' },
+      { type: 'log', callId: 'c2', time: 350, message: 'waiting for locator("#pay")' },
+      { type: 'log', callId: 'c2', time: 400, message: 'still waiting' },
+      // No `after` for c2 — the test was killed mid-call.
+    ]);
+    const data = await parseTraceEvents(zip);
+    expect(data!.timeoutFallback).toBe(true);
+    expect(data!.failingAction?.callId).toBe('c2');
+    expect(data!.failingAction?.endTime).toBeUndefined();
+    expect(data!.failingAction?.log).toEqual(['waiting for locator("#pay")', 'still waiting']);
+  });
+
+  test('folds a self-contained action event into the open action instead of duplicating it', async () => {
+    const zip = buildTraceZip([
+      { type: 'before', callId: 'c1', startTime: 100, pointers: { beforeSnapshot: 'before@c1' } },
+      {
+        type: 'action',
+        callId: 'c1',
+        apiName: 'locator.click',
+        startTime: 100,
+        endTime: 250,
+        pointers: { afterSnapshot: 'after@c1' },
+      },
+    ]);
+    const data = await parseTraceEvents(zip);
+    expect(data!.actions).toHaveLength(1);
+    expect(data!.actions[0]).toMatchObject({
+      callId: 'c1',
+      apiName: 'locator.click',
+      endTime: 250,
+      beforeSnapshot: 'before@c1',
+      afterSnapshot: 'after@c1',
+    });
+  });
+
+  test('legacy action-only traces parse exactly as before the before/after support', async () => {
+    const zip = buildTraceZip([
+      { type: 'action', callId: 'c1', apiName: 'locator.click', startTime: 1000, endTime: 1100 },
+      { type: 'action', callId: 'c2', apiName: 'locator.fill', startTime: 1200, error: { message: 'boom' } },
+    ]);
+    const data = await parseTraceEvents(zip);
+    expect(data!.actions).toHaveLength(2);
+    expect(data!.failingAction?.callId).toBe('c2');
+    expect(data!.timeoutFallback).toBe(false);
+  });
+});
