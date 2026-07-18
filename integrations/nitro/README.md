@@ -4,7 +4,11 @@ Nitro / Nuxt server plugin for [Piwi Dashboard](https://piwitests.github.io) —
 
 During a Playwright test run, the reporter reads this header from every response and stores the entries alongside the network request. The entries are then available in the Piwi Dashboard test-case view and are included in the AI diagnosis context.
 
-**Active only when `NODE_ENV !== 'production'`.** No header is emitted in production builds.
+**Active outside production by default.** Capture is controlled by the `PIWI_TEST_LOGS_DISABLED` environment variable:
+
+- unset — capture is on, except when `NODE_ENV === 'production'`
+- `PIWI_TEST_LOGS_DISABLED=true` — capture is off everywhere
+- `PIWI_TEST_LOGS_DISABLED=false` — capture is on even in production builds (useful for a production-mode test deployment)
 
 ## Installation
 
@@ -14,14 +18,17 @@ npm install @piwitests/instrumentation
 
 ## Usage
 
-Create a file in your project's `server/plugins/` directory:
+Create a file in your project's server plugins directory:
 
 ```typescript
-// server/plugins/piwi-test-logs.ts
+// Nuxt: server/plugins/piwi-test-logs.ts
+// Standalone Nitro: plugins/piwi-test-logs.ts
 export { default } from '@piwitests/instrumentation'
 ```
 
-That's all. Nitro auto-loads all files in `server/plugins/` on startup.
+That's all. Nitro auto-loads every file in that directory on startup (`server/plugins/` in a Nuxt app, `plugins/` under the Nitro `srcDir` in a standalone Nitro app).
+
+A runnable end-to-end demo lives in [`examples/playwright-fixtures`](../../examples/playwright-fixtures) — a standalone Nitro app instrumented with this package, with a Playwright spec showing the captured logs in the dashboard.
 
 ## What gets captured
 
@@ -30,14 +37,17 @@ That's all. Nitro auto-loads all files in `server/plugins/` on startup.
 | `consola.warn()` / `consola.error()` | Warning and Error entries logged via consola   |
 | Unhandled H3/Nitro errors            | Errors thrown in route handlers and middleware |
 
+> Only calls made through **consola** are captured — bare `console.warn()` / `console.error()` output is not. Nuxt server code typically logs via consola already; in a standalone Nitro app, `import { consola } from 'consola'` in your handlers.
+
 Each captured entry contains:
 
-| Field       | Description                               |
-|-------------|-------------------------------------------|
-| `timestamp` | Unix timestamp in milliseconds            |
-| `level`     | `"Warning"` or `"Error"`                  |
-| `category`  | Logger tag/category (e.g. `"database"`)   |
-| `message`   | Log message (truncated at 500 characters) |
+| Field       | Description                                                                          |
+|-------------|--------------------------------------------------------------------------------------|
+| `timestamp` | Unix timestamp in milliseconds                                                       |
+| `level`     | `"Warning"` or `"Error"`                                                             |
+| `category`  | Logger tag/category (e.g. `"database"`)                                              |
+| `message`   | Log message (truncated at 500 characters)                                            |
+| `stack`     | Shrunk stack trace when an `Error` was logged (max 5 frames, internal frames dropped) |
 
 Up to 50 entries per request are included. The header is always emitted (with an empty array when no entries were captured) so the Piwi reporter can confirm the plugin is active.
 
@@ -55,11 +65,11 @@ Playwright test
                                 └─ visible in test-case detail + AI diagnosis
 ```
 
-The plugin uses three mechanisms:
+The plugin wraps Nitro's root H3 handler and uses three mechanisms:
 
-1. **`event.context._piwiLogs`** — a plain array attached to the H3 event, readable by both the request and `beforeResponse` hooks via the same event object (no async-context propagation needed).
-2. **`AsyncLocalStorage`** — seeded in the `request` hook so that `consola` reporters can append to the per-request buffer from within synchronous route-handler code.
-3. **`error` hook** — catches unhandled Nitro/H3 errors that bypass consola.
+1. **`event.context._piwiLogs`** — a plain per-request array attached to the H3 event as the wrapped handler starts; everything captured for the request accumulates here.
+2. **`AsyncLocalStorage.run()`** — scopes that buffer around the entire downstream chain (hooks, middleware, route handlers), so the process-global `consola` reporter always appends to the correct request's buffer.
+3. **A patched `res.end`** — the header is written just before the response goes out, which covers **every** response, including H3 error responses that bypass Nitro's `beforeResponse` hook. Right before writing, unhandled errors are drained from `event.context.nitro.errors`, so thrown errors appear even when nothing logged via consola.
 
 ## Peer dependencies
 
