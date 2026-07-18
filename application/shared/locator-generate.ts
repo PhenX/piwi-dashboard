@@ -1,0 +1,338 @@
+/**
+ * Locator alternative generation — a faithful port of the reporter's
+ * `generateAlternatives` (and its role-resolution helpers) into `shared/` so
+ * the dashboard's snapshot picker can generate the same ranked, uniqueness-
+ * checked locators the reporter produces at capture time.
+ *
+ * The reporter package cannot import from `shared/` (that would leak monorepo
+ * paths into its published `.d.ts`), so this is a deliberate second copy. It is
+ * pinned to the reporter's version by a drift-guard test
+ * (`tests/unit/locator-generate-drift.test.ts`) that runs both over the same
+ * fixtures and asserts identical output — keep the two in lockstep.
+ */
+import type { ElementAttributes, RankedLocator } from './locator-healing.types';
+
+/** Element attributes read by the in-page probe (`data-*`, aria, id, class, …). */
+export const CAPTURED_ATTRIBUTES: string[] = [
+  'id',
+  'class',
+  'name',
+  'data-testid',
+  'placeholder',
+  'alt',
+  'title',
+  'aria-label',
+  'aria-level',
+  'role',
+  'type',
+  'href',
+  'multiple',
+];
+
+/** Implicit ARIA role for an HTML tag (when no explicit `role` is set). */
+export const TAG_TO_ROLE: Record<string, string> = {
+  a: 'link',
+  button: 'button',
+  nav: 'navigation',
+  main: 'main',
+  article: 'article',
+  section: 'region',
+  form: 'form',
+  img: 'img',
+  figure: 'figure',
+  figcaption: 'caption',
+  blockquote: 'blockquote',
+  table: 'table',
+  ul: 'list',
+  ol: 'list',
+  li: 'listitem',
+  dialog: 'dialog',
+  output: 'status',
+  progress: 'progressbar',
+  meter: 'meter',
+  textarea: 'textbox',
+  h1: 'heading',
+  h2: 'heading',
+  h3: 'heading',
+  h4: 'heading',
+  h5: 'heading',
+  h6: 'heading',
+  details: 'group',
+  summary: 'button',
+  search: 'search',
+};
+
+/** Implicit ARIA role for an `<input>` keyed by its `type` attribute. */
+export const INPUT_TYPE_TO_ROLE: Record<string, string> = {
+  button: 'button',
+  submit: 'button',
+  reset: 'button',
+  image: 'button',
+  checkbox: 'checkbox',
+  radio: 'radio',
+  range: 'slider',
+  search: 'searchbox',
+  number: 'spinbutton',
+  text: 'textbox',
+  email: 'textbox',
+  tel: 'textbox',
+  url: 'textbox',
+  password: 'textbox',
+};
+
+/** Resolve the ARIA role for an element (explicit `role` wins, else implicit from tag/type). */
+export function resolveAriaRole(attrs: ElementAttributes): string | null {
+  const explicit = attrs.attributes['role'];
+  if (explicit) return explicit;
+
+  const tag = attrs.tagName;
+  if (!tag) return null;
+
+  if (tag === 'input') {
+    const type = (attrs.attributes['type'] ?? 'text').toLowerCase();
+    return INPUT_TYPE_TO_ROLE[type] ?? 'textbox';
+  }
+  if (tag === 'select') {
+    return attrs.attributes['multiple'] != null ? 'listbox' : 'combobox';
+  }
+  if (tag === 'a') {
+    return attrs.attributes['href'] != null ? 'link' : null;
+  }
+  return TAG_TO_ROLE[tag] ?? null;
+}
+
+/** Heading level for a `heading`-role element: h1-h6 from the tag, else `aria-level`. */
+export function headingLevel(attrs: ElementAttributes, role: string | null): number | null {
+  if (role !== 'heading') return null;
+  const tagMatch = attrs.tagName.match(/^h([1-6])$/);
+  if (tagMatch) return Number(tagMatch[1]);
+  const ariaLevel = attrs.attributes['aria-level'];
+  if (ariaLevel && /^\d+$/.test(ariaLevel)) return Number(ariaLevel);
+  return null;
+}
+
+const attr = (a: ElementAttributes, key: string): string | null => a.attributes[key] || null;
+const esc = (s: string): string => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+const escCssAttrValue = (s: string): string => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+const isCssSafeId = (id: string): boolean => /^[A-Za-z][A-Za-z0-9_-]*$/.test(id);
+
+/**
+ * Build a ranked list of alternative locators from the captured element
+ * attributes, sorted descending by stability score. No duplicate expressions.
+ */
+export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] {
+  const alts: RankedLocator[] = [];
+  const seen = new Set<string>();
+  const add = (loc: RankedLocator) => {
+    if (!seen.has(loc.locator)) {
+      seen.add(loc.locator);
+      alts.push(loc);
+    }
+  };
+
+  const { accessibleName } = attrs;
+  const tag = attrs.tagName;
+  const role = resolveAriaRole(attrs);
+  const counts = attrs.selectorCounts;
+  const isUnique = (n: number | undefined): boolean => n == null || n <= 1;
+  const text = attrs.textContent ? attrs.textContent.replace(/\s+/g, ' ').trim() : null;
+
+  // 1. data-testid — highest stability (100)
+  const testId = attr(attrs, 'data-testid');
+  if (testId && isUnique(counts?.testId)) {
+    add({ locator: `getByTestId('${esc(testId)}')`, method: 'getByTestId', args: { testId }, score: 100 });
+  }
+
+  const level = headingLevel(attrs, role);
+  const levelPart = level != null ? `, level: ${level}` : '';
+  const withLevel = (base: Record<string, unknown>): Record<string, unknown> =>
+    level != null ? { ...base, level } : base;
+
+  // 2. role + accessible name from browser ARIA tree (85-95)
+  if (role && accessibleName) {
+    add({
+      locator: `getByRole('${role}', { name: '${esc(accessibleName)}'${levelPart} })`,
+      method: 'getByRole',
+      args: withLevel({ role, name: accessibleName }),
+      score: 90,
+    });
+  }
+
+  // 3. role + explicit aria-label (85, fallback when no browser-computed name)
+  const ariaLabel = attr(attrs, 'aria-label');
+  if (role && ariaLabel && ariaLabel !== accessibleName) {
+    add({
+      locator: `getByRole('${role}', { name: '${esc(ariaLabel)}'${levelPart} })`,
+      method: 'getByRole',
+      args: withLevel({ role, name: ariaLabel }),
+      score: 85,
+    });
+  }
+
+  // 4. getByLabel — for form fields (85), only when a label/aria-label backs the name
+  if (accessibleName && ['input', 'select', 'textarea'].includes(tag)) {
+    const label = attr(attrs, 'aria-label');
+    const labelBacked = attrs.hasLabel === undefined ? true : attrs.hasLabel === true || label === accessibleName;
+    if (labelBacked) {
+      add({
+        locator: `getByLabel('${esc(accessibleName)}')`,
+        method: 'getByLabel',
+        args: { label: accessibleName },
+        score: 85,
+      });
+    }
+  }
+
+  // 5. getByPlaceholder — for inputs (80)
+  const placeholder = attr(attrs, 'placeholder');
+  if (placeholder) {
+    add({
+      locator: `getByPlaceholder('${esc(placeholder)}')`,
+      method: 'getByPlaceholder',
+      args: { placeholder },
+      score: 80,
+    });
+  }
+
+  // 6. getByText — from visible text content (70-80)
+  if (text && text.length < 80) {
+    add({ locator: `getByText('${esc(text)}')`, method: 'getByText', args: { text }, score: 75 });
+  }
+
+  // 7. locator('#id') — if id exists and doesn't look auto-generated (50-70)
+  const id = attr(attrs, 'id');
+  if (id && !isAutoGenerated(id) && isUnique(counts?.id)) {
+    const selector = isCssSafeId(id) ? `#${id}` : `[id="${escCssAttrValue(id)}"]`;
+    add({ locator: `locator('${esc(selector)}')`, method: 'locator', args: { selector }, score: 65 });
+  }
+
+  // 8. locator('[name="..."]') — for form elements (60)
+  const name = attr(attrs, 'name');
+  if (name && isUnique(counts?.name)) {
+    const selector = `[name="${escCssAttrValue(name)}"]`;
+    add({ locator: `locator('${esc(selector)}')`, method: 'locator', args: { selector }, score: 60 });
+  }
+
+  // 9. getByAltText — for images (60)
+  const alt = attr(attrs, 'alt');
+  if (alt) {
+    add({ locator: `getByAltText('${esc(alt)}')`, method: 'getByAltText', args: { text: alt }, score: 60 });
+  }
+
+  // 10. getByTitle (50)
+  const title = attr(attrs, 'title');
+  if (title) {
+    add({ locator: `getByTitle('${esc(title)}')`, method: 'getByTitle', args: { title }, score: 50 });
+  }
+
+  // Structural alternatives (55-72) — name-free, survive label/text renames.
+  const hasOwnTestId = !!(testId && isUnique(counts?.testId));
+  if (role && !hasOwnTestId) {
+    const rolePart = level != null ? `'${role}', { level: ${level} }` : `'${role}'`;
+    const leafArgs = withLevel({ role });
+
+    let testIdAnchorDone = false;
+    let idAnchorDone = false;
+    let roleAnchorDone = false;
+    for (const anc of attrs.ancestors ?? []) {
+      if (anc.scopedRoleCount !== 1) continue;
+
+      if (!testIdAnchorDone && anc.testId && anc.testIdCount === 1) {
+        testIdAnchorDone = true;
+        add({
+          locator: `getByTestId('${esc(anc.testId)}').getByRole(${rolePart})`,
+          method: 'getByRole',
+          args: { ...leafArgs, anchorTestId: anc.testId },
+          score: 72,
+        });
+      }
+
+      if (!idAnchorDone && anc.id && !isAutoGenerated(anc.id) && anc.idCount === 1) {
+        idAnchorDone = true;
+        const anchorSelector = isCssSafeId(anc.id) ? `#${anc.id}` : `[id="${escCssAttrValue(anc.id)}"]`;
+        add({
+          locator: `locator('${esc(anchorSelector)}').getByRole(${rolePart})`,
+          method: 'getByRole',
+          args: { ...leafArgs, anchorSelector },
+          score: 64,
+        });
+      }
+
+      const ancestorRole = anc.role || TAG_TO_ROLE[anc.tag] || null;
+      if (!roleAnchorDone && ancestorRole && ancestorRole !== role && anc.roleCount === 1) {
+        roleAnchorDone = true;
+        add({
+          locator: `getByRole('${esc(ancestorRole)}').getByRole(${rolePart})`,
+          method: 'getByRole',
+          args: { ...leafArgs, anchorRole: ancestorRole },
+          score: 55,
+        });
+      }
+    }
+
+    const pos = attrs.rolePosition;
+    if (pos && pos.role === role && (pos.count === 1 || (level != null && pos.levelCount === 1))) {
+      add({ locator: `getByRole(${rolePart})`, method: 'getByRole', args: leafArgs, score: 58 });
+    }
+  }
+
+  // 11. CSS class-based locators — capped at 3 most stable classes.
+  const clsStr = attr(attrs, 'class');
+  if (clsStr) {
+    const classes = clsStr
+      .split(/\s+/)
+      .filter((c) => c.length > 1 && /^[A-Za-z_-][A-Za-z0-9_-]*$/.test(c) && isUnique(counts?.classes?.[c]))
+      .map((cls) => ({ cls, score: classifyCssStability(cls) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
+
+    for (const { cls, score } of classes) {
+      add({ locator: `locator('.${esc(cls)}')`, method: 'locator', args: { selector: `.${cls}` }, score });
+    }
+  }
+
+  return alts.sort((a, b) => b.score - a.score);
+}
+
+/** Score a CSS class name on a 0-40 stability scale. */
+export function classifyCssStability(className: string): number {
+  if (/[a-f0-9]{8,}/i.test(className)) return 10;
+  if (/^(?:css|sc|emotion|styled)-/i.test(className)) return 15;
+  if (
+    /^(bg|text|border|shadow|opacity|font|w-|h-|m[tblrxy]?-|p[tblrxy]?-|flex|grid|gap|rounded|absolute|relative|fixed|sticky|block|inline|hidden|overflow|z-|top-|right-|bottom-|left-|inset-|justify-|items-|self-|content-|order-|col-|row-)/.test(
+      className,
+    )
+  )
+    return 25;
+  if (/__/.test(className) || /--/.test(className)) return 35;
+  if (/^[a-z]+(-[a-z]+)+$/.test(className)) return 40;
+  if (/^[a-z]+[A-Z][a-zA-Z]+$/.test(className)) return 40;
+  if (className.includes('_')) return 15;
+  if (/^[a-z]+-[a-z0-9]{5,}$/.test(className) && /[0-9]/.test(className)) return 15;
+  return 15;
+}
+
+/** Detects GUID-like, auto-incremented, or hash-suffixed IDs unstable for testing. */
+export function isAutoGenerated(value: string): boolean {
+  if (/^[a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(value)) return true;
+  if (/^[a-f0-9]{8,}$/i.test(value)) return true;
+  if (/^[a-z]+-\d+$/.test(value)) return true;
+  if (/^(emotion-|styled-|css-|sc-)/.test(value)) return true;
+  if (value.startsWith('ng-')) return true;
+  if (/^(radix-|headlessui-|mui-|mantine-|chakra-)/i.test(value)) return true;
+  if (/^:r[0-9a-z]+:$/i.test(value) || /^«r[0-9a-z]+»$/i.test(value)) return true;
+  return false;
+}
+
+/** Approximate the accessible name from HTML attributes: aria-label > text > title > placeholder. */
+export function approximateAccessibleName(attrs: ElementAttributes): string | null {
+  const a = attrs.attributes;
+  const ariaLabel = a['aria-label'];
+  if (ariaLabel) return ariaLabel;
+  if (attrs.textContent) return attrs.textContent;
+  const title = a['title'];
+  if (title) return title;
+  const placeholder = a['placeholder'];
+  if (placeholder) return placeholder;
+  return null;
+}
