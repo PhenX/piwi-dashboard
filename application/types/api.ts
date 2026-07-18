@@ -1047,6 +1047,16 @@ export interface DiagnosisContextCoverage {
     chars: number;
     snapshotName?: string;
   } | null;
+  /** Full call stack of the failing action from the trace's stacks index. null when no trace/stacks. */
+  traceCallStack?: {
+    frames: number;
+    framesWithSource: number;
+  } | null;
+  /** Network activity parsed from the trace's HAR-like stream. null when no trace or no entries. */
+  traceNetwork?: {
+    requests: number;
+    failed: number;
+  } | null;
   /** App state (URL/storage keys/cookie flags) at test end. null when not captured. */
   appState?: {
     hasBaseline: boolean;

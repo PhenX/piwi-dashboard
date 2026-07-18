@@ -118,7 +118,7 @@ The [failure cluster](./ui-overview#failure-cluster-detail) page diagnoses a *gr
 
 Two things are always available there, even with **no provider configured**:
 
-- **Copy AI context** — copies the exact evidence bundle (error, steps, console, network, ARIA snapshot, source, and more, trimmed to the [context limits](#context-limits-and-token-cost)) so you can paste it into your own AI tool. It is the same context the model would receive.
+- **Copy AI context** — copies the exact evidence bundle (error, steps, console, network, ARIA snapshot, source — plus, when a trace was uploaded, the full call stack with embedded source and the trace's complete network activity — all trimmed to the [context limits](#context-limits-and-token-cost)) so you can paste it into your own AI tool. It is the same context the model would receive.
 - A **coverage strip** showing which evidence sections are present, truncated, or absent — the same map the model sees.
 
 With a provider configured, **Diagnose with AI** runs the diagnosis inline and renders the result (category, confidence, root cause, evidence, suggested fix) right in the tab; cited evidence links jump to the matching section on the page. The result is stored per execution, so it survives a reload, and you can add free-text context or re-diagnose. Execution-scoped and cluster-scoped diagnoses are independent — running one never overwrites the other.
@@ -222,6 +222,8 @@ Every piece of evidence sent to the model costs tokens. Piwi caps each input so 
 | `PIWI_AI_SLOW_REQUEST_MS` | 1500 | Duration (ms) above which a network request is flagged as slow |
 | `PIWI_AI_MAX_TRACE_ACTIONS` | 10 | Actions extracted from the Playwright trace ZIP for failing-action context (0 disables) |
 | `PIWI_AI_TRACE_DOM_CHARS` | 6000 | Characters of the trace-derived DOM/ARIA excerpt |
+| `PIWI_AI_MAX_TRACE_STACK_FRAMES` | 10 | Call-stack frames (with embedded-source windows) from the trace's stacks index (0 disables) |
+| `PIWI_AI_MAX_TRACE_NETWORK_REQUESTS` | 20 | Requests included from the trace's network stream — failed / during-failure / slow prioritized (0 disables) |
 | `PIWI_AI_IMAGE_MAX_EDGE` | 1920 | Screenshots are downscaled so their long edge is at most this many pixels before being sent |
 
 ## Try it in the demo

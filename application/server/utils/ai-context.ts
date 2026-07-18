@@ -30,7 +30,8 @@ import type {
 } from './run-json-types';
 import { resolveContextLimits } from './ai-context-limits';
 import type { ContextLimits } from '#shared/ai-context-limits';
-import { getTraceFailingActionSection } from './trace-parser';
+import { getCachedTraceSection, getTraceFailingActionSection, setCachedTraceSection } from './trace-parser';
+import { getTraceCallStackFromBlob, getTraceNetworkBodyFromBlob, getTraceNetworkFromBlob } from './trace-evidence';
 import { getTraceDomSnapshot } from './dom-snapshot';
 import { renderAppStateMarkdown, type PageStateLike } from '#shared/page-state';
 import { getLastPassPageState } from '#shared/handlers/test-cases';
@@ -111,6 +112,7 @@ const SECTION_ORDER: SectionId[] = [
   'representativeExecution',
   'testSource',
   'sourceFiles',
+  'traceCallStack',
   'failingAction',
   'failingSteps',
   'steps',
@@ -122,6 +124,7 @@ const SECTION_ORDER: SectionId[] = [
   'locatorHealing',
   'console',
   'networkRequests',
+  'traceNetwork',
   'serverLogs',
   'webVitals',
   'appState',
@@ -826,6 +829,161 @@ async function domSnapshotSection(
     section: markdown,
     coverage: { chars: result.html.length, ...(result.snapshotName ? { snapshotName: result.snapshotName } : {}) },
   };
+}
+
+const TRACE_SECTION_CACHE_TTL_MS = 3_600_000;
+/** Failed-response body excerpts appended to the trace network section. */
+const TRACE_NET_BODY_EXCERPTS = 2;
+const TRACE_NET_BODY_EXCERPT_CHARS = 500;
+
+/**
+ * Full call stack of the failing action from the trace's stacks index, each
+ * in-project frame with a window of its embedded source (real code, not just
+ * the reporter's 4-frame capture). Cached like the failing-action section —
+ * the blob is immutable, so the parse result is too.
+ */
+async function traceCallStackSection(
+  db: DbClient,
+  rep: RepresentativeRow,
+  limits: ContextLimits,
+): Promise<{ section: string | null; coverage: DiagnosisContextCoverage['traceCallStack'] }> {
+  if (limits.traceStackFrames <= 0) return { section: null, coverage: null };
+
+  const blobPath = await resolveTraceBlobPath(db, rep.id);
+  if (!blobPath) return { section: null, coverage: null };
+
+  const cacheKey = `stack:${blobPath}:${limits.traceStackFrames}`;
+  const cached = await getCachedTraceSection(db, cacheKey, TRACE_SECTION_CACHE_TTL_MS);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch {
+      // Malformed cache entry — recompute below.
+    }
+  }
+
+  const result = await getTraceCallStackFromBlob(blobPath, rep.testFilePath ?? null);
+  if (result.status !== 'ok' || !result.frames?.length) return { section: null, coverage: null };
+
+  const frames = result.frames.slice(0, limits.traceStackFrames);
+  const failedIndex = Math.max(
+    0,
+    frames.findIndex((f) => f.inProject),
+  );
+  const lines: string[] = ['## Full Call Stack (from trace)'];
+  if (result.apiName) {
+    lines.push(`Failing action: \`${result.apiName}\`${result.errorMessage ? ` — ${result.errorMessage}` : ''}`);
+  }
+  frames.forEach((frame, i) => {
+    const fn = frame.functionName ? ` in \`${frame.functionName}\`` : '';
+    if (!frame.inProject) {
+      lines.push(`- ${frame.file}:${frame.line}${fn} (dependency)`);
+      return;
+    }
+    lines.push(`- **${frame.file}:${frame.line}**${fn}${i === failedIndex ? ' ← failed here' : ''}`);
+    if (frame.source) {
+      const code = frame.source.lines.map((text, j) => {
+        const n = frame.source!.startLine + j;
+        return `${n === frame.line ? '>' : ' '} ${String(n).padStart(4)} | ${text}`;
+      });
+      lines.push('```', ...code, '```');
+    }
+  });
+  if (result.frames.length > frames.length) {
+    lines.push(`- … ${result.frames.length - frames.length} more frames (capped)`);
+  }
+
+  const value = {
+    section: lines.join('\n'),
+    coverage: { frames: frames.length, framesWithSource: frames.filter((f) => f.source).length },
+  };
+  setCachedTraceSection(db, cacheKey, JSON.stringify(value)).catch(() => {});
+  return value;
+}
+
+/**
+ * Every request from the trace's HAR-like network stream — unlike the
+ * fixture-captured `networkRequests` section this covers all resource types
+ * with sizes and failure-window correlation, prioritizing failed /
+ * during-failure / slow requests, plus short masked body excerpts for failed
+ * textual responses.
+ */
+async function traceNetworkSection(
+  db: DbClient,
+  rep: RepresentativeRow,
+  limits: ContextLimits,
+): Promise<{ section: string | null; coverage: DiagnosisContextCoverage['traceNetwork'] }> {
+  if (limits.traceNetworkRequests <= 0) return { section: null, coverage: null };
+
+  const blobPath = await resolveTraceBlobPath(db, rep.id);
+  if (!blobPath) return { section: null, coverage: null };
+
+  const cacheKey = `net:${blobPath}:${limits.traceNetworkRequests}`;
+  const cached = await getCachedTraceSection(db, cacheKey, TRACE_SECTION_CACHE_TTL_MS);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch {
+      // Malformed cache entry — recompute below.
+    }
+  }
+
+  const result = await getTraceNetworkFromBlob(blobPath);
+  if (result.status !== 'ok' || !result.requests?.length) return { section: null, coverage: null };
+
+  const all = result.requests;
+  const score = (r: (typeof all)[number]) =>
+    (r.failed ? 4 : 0) + (r.duringFailure ? 2 : 0) + (r.duration >= limits.slowRequestMs ? 1 : 0);
+  const picked = [...all]
+    .sort((a, b) => score(b) - score(a) || a.start - b.start)
+    .slice(0, limits.traceNetworkRequests)
+    .sort((a, b) => a.start - b.start);
+
+  const failedCount = all.filter((r) => r.failed).length;
+  const duringCount = all.filter((r) => r.duringFailure).length;
+  const summaryBits = [
+    `${all.length} requests recorded`,
+    failedCount > 0 ? `${failedCount} failed` : null,
+    duringCount > 0 ? `${duringCount} overlapping the failing action` : null,
+  ].filter(Boolean);
+  const lines: string[] = [
+    '## Network Activity (from trace)',
+    `${summaryBits.join(', ')}. Showing ${picked.length} (failed / during-failure / slow first, then chronological):`,
+  ];
+  for (const r of picked) {
+    const status = r.status > 0 ? String(r.status) : `failed${r.failureText ? ` (${r.failureText})` : ''}`;
+    const meta = [
+      `${Math.round(r.duration)}ms`,
+      r.responseBodySize != null ? formatFileSize(r.responseBodySize) : null,
+      r.mimeType ?? null,
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const marks = [r.duringFailure ? 'DURING FAILING ACTION' : null, r.failed ? 'FAILED' : null].filter(Boolean);
+    lines.push(`- ${r.method} ${r.url} → ${status} (${meta})${marks.length ? ` [${marks.join(', ')}]` : ''}`);
+  }
+
+  // Failed textual responses often carry the actual server error — quote a bit.
+  const failedWithBody = picked.filter((r) => r.failed && r.bodySha1).slice(0, TRACE_NET_BODY_EXCERPTS);
+  for (const r of failedWithBody) {
+    const body = await getTraceNetworkBodyFromBlob(blobPath, r.bodySha1!);
+    if (body.status === 'ok' && body.content) {
+      lines.push(
+        '',
+        `Response body of failed ${r.method} ${r.url} (excerpt):`,
+        '```',
+        body.content.slice(0, TRACE_NET_BODY_EXCERPT_CHARS),
+        '```',
+      );
+    }
+  }
+
+  const value = {
+    section: lines.join('\n'),
+    coverage: { requests: all.length, failed: failedCount },
+  };
+  setCachedTraceSection(db, cacheKey, JSON.stringify(value)).catch(() => {});
+  return value;
 }
 
 function formatFileSize(n: number | null): string {
@@ -2524,6 +2682,16 @@ export async function buildDiagnosisContext(
     push(section('domSnapshot', 'DOM Snapshot (from Trace)', domSnapResult.section));
     coverage = { ...coverage, domSnapshot: domSnapResult.coverage };
 
+    // Full call stack (stacks index + embedded sources) from the same trace blob
+    const traceStackResult = await traceCallStackSection(db, rep, limits);
+    push(section('traceCallStack', 'Full Call Stack (from Trace)', traceStackResult.section));
+    coverage = { ...coverage, traceCallStack: traceStackResult.coverage };
+
+    // Every request from the trace's HAR-like network stream
+    const traceNetworkResult = await traceNetworkSection(db, rep, limits);
+    push(section('traceNetwork', 'Network Activity (from Trace)', traceNetworkResult.section));
+    coverage = { ...coverage, traceNetwork: traceNetworkResult.coverage };
+
     // Alternative locators from prior success / ARIA snapshot (computed above,
     // before the nearest-ARIA hint)
     push(section('locatorHealing', 'Alternative Locators (Locator Healing)', healing.section));
@@ -2631,6 +2799,14 @@ export async function buildDiagnosisContext(
   }
   if (!sectionIds.has('failingAction')) {
     absentReasons.failingAction = 'no trace files found — enable trace recording in Playwright config';
+  }
+  if (!sectionIds.has('traceCallStack')) {
+    absentReasons.traceCallStack =
+      'no trace with a stacks index — record traces (trace: "retain-on-failure"; the test runner embeds sources by default) to include the full call stack';
+  }
+  if (!sectionIds.has('traceNetwork')) {
+    absentReasons.traceNetwork =
+      'no trace network stream — enable trace recording in Playwright config to include every request the page made';
   }
   if (!sectionIds.has('scmInvestigation') && cluster) {
     const scmError = coverage.scm?.error;

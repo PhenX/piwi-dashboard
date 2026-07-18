@@ -49,6 +49,8 @@ export const DIAGNOSIS_SECTIONS: DiagnosisSectionMeta[] = [
   { id: 'alreadyGreen', label: 'Baseline freshness / already-green check', short: 'Already green' },
   { id: 'topSuspectedCommit', label: 'Top suspected commit', short: 'Top commit' },
   { id: 'failingAction', label: 'Failing action from trace parsing', short: 'Trace' },
+  { id: 'traceCallStack', label: 'Full call stack with source (from trace)', short: 'Call stack' },
+  { id: 'traceNetwork', label: 'Network activity from trace (all requests)', short: 'Trace net' },
   { id: 'locatorHealing', label: 'Alternative locators from prior success', short: 'Alt locators' },
 ];
 

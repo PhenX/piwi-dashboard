@@ -319,6 +319,14 @@ export const PIWI_ENV_VARS = {
     description: 'Max characters for the trace-derived DOM/ARIA excerpt in failing-action context.',
     category: 'ai-limits',
   },
+  PIWI_AI_MAX_TRACE_STACK_FRAMES: {
+    description: 'Max call-stack frames (with source windows) from the trace call-stack section (0 disables).',
+    category: 'ai-limits',
+  },
+  PIWI_AI_MAX_TRACE_NETWORK_REQUESTS: {
+    description: 'Max requests included from the trace network stream (0 disables).',
+    category: 'ai-limits',
+  },
   PIWI_AI_MAX_DOM_SNAPSHOT_CHARS: {
     description: 'Max characters of the failure-time DOM snapshot rendered from the trace (0 disables).',
     category: 'ai-limits',

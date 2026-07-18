@@ -436,6 +436,8 @@ export const HELP_TOPICS = {
       'PIWI_AI_MAX_PASSED_PEERS',
       'PIWI_AI_MAX_CONSOLE_WINDOW',
       'PIWI_AI_SLOW_REQUEST_MS',
+      'PIWI_AI_MAX_TRACE_STACK_FRAMES',
+      'PIWI_AI_MAX_TRACE_NETWORK_REQUESTS',
     ],
   },
   'settings.users': {
