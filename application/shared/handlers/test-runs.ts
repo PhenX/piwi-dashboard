@@ -10,6 +10,7 @@ import {
   failureDiagnoses,
   entityLinks,
   networkRequests,
+  markers,
 } from '../../server/database/schema';
 import { fetchAndFormatSuites, splitSuitePath } from '../utils/suites';
 import { normalizeRoute } from '../utils/route';
@@ -184,8 +185,20 @@ export async function getTestRun(
 
   const { streamToken: _streamToken, ...testRunPublic } = testRun;
 
+  // Nearest timeline marker before this run's start, scoped to the run's
+  // environment (or global markers with no environment) — surfaced as context.
+  const precedingMarkerCandidates = await db
+    .select()
+    .from(markers)
+    .where(and(eq(markers.projectId, testRun.projectId), lt(markers.occurredAt, testRun.startTime)))
+    .orderBy(desc(markers.occurredAt))
+    .limit(10);
+  const precedingMarker =
+    precedingMarkerCandidates.find((m) => m.environment == null || m.environment === testRun.environment) ?? null;
+
   return {
     ...testRunPublic,
+    precedingMarker,
     isFullRun: testRun.isFullRun === 1,
     project: project ? { ...project, latestRunId, latestRunStatus } : project,
     reports: reportResults.map((r: any) => ({

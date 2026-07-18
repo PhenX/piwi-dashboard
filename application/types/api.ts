@@ -82,6 +82,34 @@ export interface TagsResponse {
 }
 
 // ============================================================================
+// Marker types (project timeline markers / events)
+// ============================================================================
+
+/**
+ * A dated timeline marker for a project (deploy, config change, incident, ...).
+ */
+export interface MarkerInfo {
+  id: number;
+  projectId: number;
+  occurredAt: string | Date;
+  label: string;
+  description: string | null;
+  category: string;
+  environment: string | null;
+  source: string; // 'manual' | 'auto'
+  runId: number | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+/**
+ * Markers response from API
+ */
+export interface MarkersResponse {
+  markers: MarkerInfo[];
+}
+
+// ============================================================================
 // Period and Range types (used for filtering and date range selection)
 // ============================================================================
 
@@ -284,6 +312,8 @@ export interface TestRunDetails {
   links?: EntityLinkInfo[];
   /** Effective allowlist of glob patterns classifying waits as wasted time. */
   wastedWaitPatterns?: string[];
+  /** Nearest timeline marker at or before this run's start (matching env or global), if any. */
+  precedingMarker?: MarkerInfo | null;
 }
 
 /**

@@ -11,6 +11,7 @@ import type {
   ProjectMembersResponse,
   UserDetails,
   UsersResponse,
+  MarkersResponse,
 } from '~~/types/api';
 import { useRunComparison } from '~/composables/useRunComparison';
 import type { ComparisonRow } from '~/composables/useRunComparison';
@@ -29,7 +30,7 @@ const deletingRunId = ref<number | null>(null);
 const confirmDeleteRunId = ref<number | null>(null);
 
 // === PROJECT DELETION ===
-const { isAdmin } = useAuth();
+const { isAdmin, isReporter } = useAuth();
 const runtimeConfig = useRuntimeConfig();
 const canDelete = computed(() => !runtimeConfig.public.authEnabled || isAdmin.value);
 const showDeleteProjectModal = ref(false);
@@ -172,6 +173,7 @@ const validTabs = [
   'test-cases',
   'compare',
   'spec-health',
+  'timeline',
   'members',
 ] as const;
 const queryTab = route.query.tab;
@@ -208,6 +210,12 @@ const tabItems = computed(() => [
   },
   { label: 'Compare', icon: 'i-lucide-git-compare-arrows', value: 'compare', slot: 'compare' },
   { label: 'Spec health', icon: 'i-lucide-table-2', value: 'spec-health', slot: 'spec-health' },
+  {
+    label: `Timeline${markers.value.length ? ` (${markers.value.length})` : ''}`,
+    icon: 'i-lucide-milestone',
+    value: 'timeline',
+    slot: 'timeline',
+  },
   ...(isAdmin.value ? [{ label: 'Members', icon: 'i-lucide-users', value: 'members', slot: 'members' }] : []),
 ]);
 
@@ -283,6 +291,30 @@ const filteredRuns = computed(() => {
 const flakyEnvironment = computed(() =>
   selectedEnvironments.value.length === 1 ? selectedEnvironments.value[0] : undefined,
 );
+
+// === TIMELINE MARKERS ===
+const { data: markersData, refresh: refreshMarkers } = await useFetch<MarkersResponse>(
+  `/api/projects/${projectId}/markers`,
+  { default: () => ({ markers: [] }) },
+);
+const markers = computed(() => markersData.value?.markers ?? []);
+
+const canEditMarkers = computed(() => !runtimeConfig.public.authEnabled || isAdmin.value || isReporter.value);
+
+// Markers overlaid on the charts follow the same environment filter as the runs:
+// show global (no-environment) markers always, and env-scoped markers only when
+// their environment is in the active filter (or no filter is set).
+const visibleMarkers = computed(() => {
+  if (selectedEnvironments.value.length === 0) return markers.value;
+  return markers.value.filter((m) => m.environment == null || selectedEnvironments.value.includes(m.environment));
+});
+
+// Clicking a marker line on a chart jumps to the Timeline tab and opens its editor.
+const focusMarkerId = ref<number | null>(null);
+function handleMarkerClick(id: number) {
+  focusMarkerId.value = id;
+  activeTab.value = 'timeline';
+}
 
 const chartRuns = computed(() => {
   const runs = project.value?.testRuns || [];
@@ -642,7 +674,12 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
               :subtitle="`Test run statistics over time for ${project?.label || project?.name}`"
               help="project.runs-trend"
             >
-              <TestRunsChart :test-runs="chartRuns" :height="200" />
+              <TestRunsChart
+                :test-runs="chartRuns"
+                :height="200"
+                :markers="visibleMarkers"
+                @marker-click="handleMarkerClick"
+              />
             </ChartCard>
 
             <UCard class="mt-4">
@@ -886,7 +923,12 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
             </div>
 
             <ChartCard title="Performance trend" subtitle="Duration metrics over time" help="project.performance">
-              <PerformanceTrendChart :data="performanceData || []" :height="350" />
+              <PerformanceTrendChart
+                :data="performanceData || []"
+                :height="350"
+                :markers="visibleMarkers"
+                @marker-click="handleMarkerClick"
+              />
             </ChartCard>
 
             <UCard>
@@ -1280,6 +1322,19 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
               </div>
               <div v-else class="text-center py-8 text-muted text-sm">Loading members…</div>
             </UCard>
+          </template>
+
+          <!-- TIMELINE TAB -->
+          <template #timeline>
+            <ProjectTimeline
+              :project-id="Number(projectId)"
+              :markers="markers"
+              :environments="availableEnvironments"
+              :can-edit="canEditMarkers"
+              :focus-marker-id="focusMarkerId"
+              @changed="refreshMarkers"
+              @clear-focus="focusMarkerId = null"
+            />
           </template>
         </UTabs>
       </div>

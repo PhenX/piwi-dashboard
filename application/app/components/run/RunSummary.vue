@@ -308,6 +308,18 @@ function onLabelKeydown(e: KeyboardEvent) {
                       <UIcon name="i-lucide-layout-grid" class="size-3 mr-1" />
                       {{ testRun.shardsFinished ?? 0 }}/{{ testRun.shardTotal }}
                     </UBadge>
+                    <UTooltip
+                      v-if="testRun?.precedingMarker"
+                      :text="`This run started after: ${testRun.precedingMarker.label}`"
+                    >
+                      <NuxtLink
+                        :to="`/projects/${testRun.projectId}?tab=timeline`"
+                        class="shrink-0 inline-flex items-center gap-1"
+                      >
+                        <span class="text-xs text-muted">After</span>
+                        <MarkerBadge :marker="testRun.precedingMarker" size="xs" />
+                      </NuxtLink>
+                    </UTooltip>
                     <span class="text-xs text-gray-500 ml-auto whitespace-nowrap">
                       {{ testRun?.project?.label ?? testRun?.project?.name }} · Started
                       {{ prettyDateFormat(testRun?.startTime) }}

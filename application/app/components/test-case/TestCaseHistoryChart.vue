@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import { VisXYContainer, VisLine, VisAxis } from '@unovis/vue';
 import { CurveType } from '@unovis/ts';
-import type { TestCaseHistoryPoint } from '~~/types/api';
+import type { TestCaseHistoryPoint, MarkerInfo } from '~~/types/api';
 
 interface Props {
   data: TestCaseHistoryPoint[];
   height?: number;
+  markers?: MarkerInfo[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
   height: 200,
+  markers: () => [],
 });
+
+const emit = defineEmits<{ 'marker-click': [id: number] }>();
+
+const markersRef = computed(() => props.markers);
 
 const chartData = computed(() => {
   if (!props.data || props.data.length === 0) return [];
@@ -47,15 +53,21 @@ const statusColor = (status: string): string => {
 };
 
 const xyContainerRef = ref<UnovisContainerRef | null>(null);
-const { tooltipData, tooltipPos, onRenderComplete } = useChartMarkers(xyContainerRef, chartData, {
-  x: (d) => d.date,
-  series: [{ y: (d) => d.duration, color: (d) => statusColor(d.status) }],
-  radius: 5,
-  hoverRadius: 8,
-  strokeWidth: 2,
-  hoverStrokeWidth: 3,
-  onClick: (d) => navigateTo(`/test-runs/${d.runId}`),
-});
+const { tooltipData, tooltipPos, markerTooltip, markerTooltipPos, onRenderComplete } = useChartMarkers(
+  xyContainerRef,
+  chartData,
+  {
+    x: (d) => d.date,
+    series: [{ y: (d) => d.duration, color: (d) => statusColor(d.status) }],
+    radius: 5,
+    hoverRadius: 8,
+    strokeWidth: 2,
+    hoverStrokeWidth: 3,
+    onClick: (d) => navigateTo(`/test-runs/${d.runId}`),
+    markers: markersRef,
+    onMarkerClick: (m) => emit('marker-click', m.id),
+  },
+);
 
 const legendItems = [
   { color: 'rgb(34, 197, 94)', label: 'Passed' },
@@ -122,6 +134,8 @@ const legendItems = [
           <div class="text-gray-400 text-xs mt-1">Click to view run details</div>
         </div>
       </div>
+
+      <ChartMarkerTooltip :marker="markerTooltip" :pos="markerTooltipPos" />
     </div>
 
     <EmptyState v-else text="No history data available to display chart" />

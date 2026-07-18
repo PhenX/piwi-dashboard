@@ -118,6 +118,12 @@ Caps applied to per-execution payloads (console output, steps, ARIA snapshots, e
 | `PIWI_INGEST_MAX_SOURCE_FRAMES` | `8` | Max source stack frames stored per failing execution. |
 | `PIWI_INGEST_MAX_SOURCE_FRAME_CHARS` | `4000` | Max characters per stored source frame snippet. |
 
+## Timeline markers
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PIWI_AUTO_MARKERS` | `true` | Automatically create a [timeline marker](./timeline-markers) when a run's Playwright or reporter version changes from the previous run in the same environment. Set to `false` to disable. |
+
 ## Email (SMTP)
 
 Required for email notifications and account flows (verification, password reset, invites). Set via environment only.

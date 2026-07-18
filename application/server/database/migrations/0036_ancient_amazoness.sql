@@ -1,0 +1,1 @@
+CREATE INDEX `idx_markers_run_id` ON `markers` (`run_id`);

@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import { VisXYContainer, VisLine, VisAxis } from '@unovis/vue';
 import { CurveType } from '@unovis/ts';
-import type { PerformanceTrendPoint } from '~~/types/api';
+import type { PerformanceTrendPoint, MarkerInfo } from '~~/types/api';
 
 interface Props {
   data: PerformanceTrendPoint[];
   height?: number;
+  markers?: MarkerInfo[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
   height: 300,
+  markers: () => [],
 });
+
+const emit = defineEmits<{ 'marker-click': [id: number] }>();
+
+const markersRef = computed(() => props.markers);
 
 const chartData = computed(() => {
   if (!props.data || props.data.length === 0) {
@@ -49,15 +55,21 @@ const yP90Duration = (d: DataPoint) => d.p90TestDuration ?? undefined;
 const lineColors = ['rgb(59, 130, 246)', 'rgb(34, 197, 94)', 'rgb(249, 115, 22)'] as const;
 
 const xyContainerRef = ref<UnovisContainerRef | null>(null);
-const { tooltipData, tooltipPos, onRenderComplete } = useChartMarkers(xyContainerRef, chartData, {
-  x: (d) => d.date,
-  series: [
-    { y: (d) => d.duration, color: lineColors[0] },
-    { y: (d) => d.avgTestDuration, color: lineColors[1] },
-    { y: (d) => d.p90TestDuration, color: lineColors[2] },
-  ],
-  onClick: (d) => navigateTo(`/test-runs/${d.id}`),
-});
+const { tooltipData, tooltipPos, markerTooltip, markerTooltipPos, onRenderComplete } = useChartMarkers(
+  xyContainerRef,
+  chartData,
+  {
+    x: (d) => d.date,
+    series: [
+      { y: (d) => d.duration, color: lineColors[0] },
+      { y: (d) => d.avgTestDuration, color: lineColors[1] },
+      { y: (d) => d.p90TestDuration, color: lineColors[2] },
+    ],
+    onClick: (d) => navigateTo(`/test-runs/${d.id}`),
+    markers: markersRef,
+    onMarkerClick: (m) => emit('marker-click', m.id),
+  },
+);
 
 const legendItems = [
   { color: lineColors[0], label: 'Total Duration' },
@@ -129,6 +141,8 @@ const legendItems = [
           <div class="text-gray-400 dark:text-gray-500 text-xs mt-1">Click to view run details</div>
         </div>
       </div>
+
+      <ChartMarkerTooltip :marker="markerTooltip" :pos="markerTooltipPos" />
     </div>
 
     <EmptyState v-else text="No performance data available to display chart" />

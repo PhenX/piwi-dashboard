@@ -616,6 +616,35 @@ export const projectTags = sqliteTable(
   }),
 );
 
+// Markers table - dated timeline events per project (deploys, config changes, incidents, ...)
+export const markers = sqliteTable(
+  'markers',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    occurredAt: integer('occurred_at', { mode: 'timestamp' }).notNull(), // The event time; drives the chart x-position
+    label: text('label').notNull(),
+    description: text('description'),
+    category: text('category').notNull().default('event'), // 'deploy', 'config', 'infra', 'incident', 'release', 'event'
+    environment: text('environment'), // Optional scope; null = applies to all environments
+    source: text('source').notNull().default('manual'), // 'manual' | 'auto'
+    runId: integer('run_id').references(() => testRuns.id, { onDelete: 'set null' }), // Optional link to the run that triggered/relates to the marker
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    projectIdIdx: index('idx_markers_project_id').on(table.projectId),
+    projectOccurredIdx: index('idx_markers_project_occurred').on(table.projectId, table.occurredAt),
+    runIdIdx: index('idx_markers_run_id').on(table.runId),
+  }),
+);
+
 // Users table - for authentication
 export const users = sqliteTable(
   'users',
@@ -836,6 +865,8 @@ export type Tag = typeof tags.$inferSelect;
 export type NewTag = typeof tags.$inferInsert;
 export type ProjectTag = typeof projectTags.$inferSelect;
 export type NewProjectTag = typeof projectTags.$inferInsert;
+export type Marker = typeof markers.$inferSelect;
+export type NewMarker = typeof markers.$inferInsert;
 export type ProjectAssignment = typeof projectAssignments.$inferSelect;
 export type NewProjectAssignment = typeof projectAssignments.$inferInsert;
 export type EntityLink = typeof entityLinks.$inferSelect;
