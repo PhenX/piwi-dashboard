@@ -346,8 +346,7 @@ function rowAccent(r: DecoratedRequest): string {
               <pre
                 v-if="stackOpen.has(`${req._index}:${li}`)"
                 class="mt-1 whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-gray-500 dark:text-gray-400 max-h-48 overflow-y-auto"
-                >{{ log.stack }}</pre
-              >
+                >{{ log.stack }}</pre>
             </div>
           </div>
         </div>

@@ -365,7 +365,7 @@ function onLabelKeydown(e: KeyboardEvent) {
               </div>
             </div>
 
-            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+            <div class="grid grid-cols-3 sm:grid-cols-5 gap-2">
               <button
                 class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
                 :class="
@@ -380,20 +380,40 @@ function onLabelKeydown(e: KeyboardEvent) {
                   {{ displayProgress?.totalTests ?? testRun?.totalTests ?? 0 }}
                 </p>
               </button>
-              <button
-                class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
-                :class="
-                  activeFilter === 'passed'
-                    ? 'bg-green-100 dark:bg-green-900/30 ring-2 ring-green-400 dark:ring-green-600'
-                    : 'bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
-                "
-                @click="emit('filter-status', 'passed')"
-              >
-                <p class="text-xs font-medium text-green-700 dark:text-green-400 uppercase tracking-wider">Passed</p>
-                <p class="text-xl font-bold mt-0.5 text-green-600 dark:text-green-400">
-                  {{ displayProgress?.passedTests ?? testRun?.passedTests ?? 0 }}
-                </p>
-              </button>
+              <!-- Passed cell hosts the flaky count as a corner badge: flaky tests are
+                   a subset of passed (they passed on retry), so they live "inside" Passed
+                   instead of taking their own column. Sibling buttons (not nested) keep the
+                   markup valid while giving each its own filter click + active highlight. -->
+              <div class="relative">
+                <button
+                  class="rounded-lg p-3 text-left w-full h-full transition-colors cursor-pointer"
+                  :class="
+                    activeFilter === 'passed'
+                      ? 'bg-green-100 dark:bg-green-900/30 ring-2 ring-green-400 dark:ring-green-600'
+                      : 'bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
+                  "
+                  @click="emit('filter-status', 'passed')"
+                >
+                  <p class="text-xs font-medium text-green-700 dark:text-green-400 uppercase tracking-wider">Passed</p>
+                  <p class="text-xl font-bold mt-0.5 text-green-600 dark:text-green-400">
+                    {{ displayProgress?.passedTests ?? testRun?.passedTests ?? 0 }}
+                  </p>
+                </button>
+                <button
+                  v-if="(testRun?.flakyTests ?? 0) > 0"
+                  class="absolute top-1.5 right-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-semibold leading-none tabular-nums transition-colors cursor-pointer"
+                  :class="
+                    activeFilter === 'flaky'
+                      ? 'bg-orange-200 dark:bg-orange-800/60 text-orange-800 dark:text-orange-200 ring-2 ring-orange-400 dark:ring-orange-600'
+                      : 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-800/60'
+                  "
+                  title="Flaky — passed only after a retry (a subset of passed). Click to filter."
+                  @click="emit('filter-status', 'flaky')"
+                >
+                  <UIcon name="i-lucide-shuffle" class="size-3" />
+                  {{ testRun?.flakyTests ?? 0 }}
+                </button>
+              </div>
               <button
                 class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
                 :class="
@@ -437,20 +457,6 @@ function onLabelKeydown(e: KeyboardEvent) {
                 </p>
                 <p class="text-xl font-bold mt-0.5 text-amber-600 dark:text-amber-400">
                   {{ testRun?.didNotRunTests ?? 0 }}
-                </p>
-              </button>
-              <button
-                class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
-                :class="
-                  activeFilter === 'flaky'
-                    ? 'bg-orange-100 dark:bg-orange-900/30 ring-2 ring-orange-400 dark:ring-orange-600'
-                    : 'bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30'
-                "
-                @click="emit('filter-status', 'flaky')"
-              >
-                <p class="text-xs font-medium text-orange-700 dark:text-orange-400 uppercase tracking-wider">Flaky</p>
-                <p class="text-xl font-bold mt-0.5 text-orange-600 dark:text-orange-400">
-                  {{ testRun?.flakyTests ?? 0 }}
                 </p>
               </button>
             </div>

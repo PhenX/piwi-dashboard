@@ -48,7 +48,11 @@ function cellClass(rate: number | null): string {
         <tbody>
           <tr v-for="row in matrix.rows" :key="row.projectId">
             <td class="pr-2 max-w-[12rem]">
-              <NuxtLink :to="`/projects/${row.projectId}`" class="truncate hover:text-primary block" :title="row.label || row.name">
+              <NuxtLink
+                :to="`/projects/${row.projectId}`"
+                class="truncate hover:text-primary block"
+                :title="row.label || row.name"
+              >
                 {{ row.label || row.name }}
               </NuxtLink>
             </td>
