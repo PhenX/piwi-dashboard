@@ -35,7 +35,9 @@ function pick(query: QueryLike, key: string): string | null {
 export function parseAnalyticsScope(query: QueryLike): AnalyticsScope {
   const rawDays = Number(pick(query, 'days'));
   const days =
-    Number.isFinite(rawDays) && rawDays > 0 ? Math.min(MAX_ANALYTICS_DAYS, Math.round(rawDays)) : DEFAULT_ANALYTICS_DAYS;
+    Number.isFinite(rawDays) && rawDays > 0
+      ? Math.min(MAX_ANALYTICS_DAYS, Math.round(rawDays))
+      : DEFAULT_ANALYTICS_DAYS;
 
   const rawProjects = pick(query, 'projects');
   const projectIds = rawProjects

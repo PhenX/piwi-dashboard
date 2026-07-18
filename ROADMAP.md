@@ -4,7 +4,7 @@ Piwi Dashboard is under active development (pre-1.0). This page shows direction,
 
 ## Recently shipped
 
-- **Automatic data retention & storage efficiency** — opt-in nightly pruning of old runs (`PIWI_RETENTION_DAYS`), notification-outbox and diagnosis-history housekeeping, ingest size caps, and content-addressed dedup of per-failure evidence payloads (see `DB_AUDIT.md`).
+- **Automatic data retention & storage efficiency** — opt-in nightly pruning of old runs (`PIWI_RETENTION_DAYS`), notification-outbox and diagnosis-history housekeeping, ingest size caps, and content-addressed dedup of per-failure evidence payloads.
 - **AI diagnosis, grounded** — failure-cluster analysis fed by your actual SCM diff, with suggested patches validated server-side against your source; optional two-stage (research → final) pipeline; works with Anthropic, OpenAI, or any OpenAI-compatible endpoint including local models.
 - **Locator healing** — element attributes captured on passing runs power ranked replacement locators when a selector breaks.
 - **MCP server** — 38 tools so AI agents can query runs, flaky tests, clusters, diagnoses, and traces.

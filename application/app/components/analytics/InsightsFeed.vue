@@ -21,7 +21,12 @@ const SEVERITY_META: Record<AnalyticsInsightSeverity, { icon: string; class: str
 </script>
 
 <template>
-  <SectionCard icon="i-lucide-lightbulb" title="Insights" :count="insights?.length || undefined" help="analytics.insights">
+  <SectionCard
+    icon="i-lucide-lightbulb"
+    title="Insights"
+    :count="insights?.length || undefined"
+    help="analytics.insights"
+  >
     <LoadingState v-if="pending" />
     <ErrorState v-else-if="error" :text="`Couldn't load insights: ${errorMessage(error)}`">
       <template #action>

@@ -1,8 +1,4 @@
-import {
-  analyticsScopeToQuery,
-  DEFAULT_ANALYTICS_DAYS,
-  type AnalyticsScope,
-} from '#shared/analytics/scope';
+import { analyticsScopeToQuery, DEFAULT_ANALYTICS_DAYS, type AnalyticsScope } from '#shared/analytics/scope';
 import type { AnalyticsWidgetId } from '#shared/analytics/registry';
 
 export interface AnalyticsScopeState {

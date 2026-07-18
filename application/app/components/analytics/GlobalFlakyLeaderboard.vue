@@ -58,7 +58,16 @@ function flakeSummary(row: AnalyticsFlakyRow): string {
           </p>
         </div>
         <div class="text-right shrink-0">
-          <p class="text-sm tabular-nums" :class="row.wastedCiMinutes >= 30 ? 'text-red-600 dark:text-red-400' : row.wastedCiMinutes >= 5 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-500'">
+          <p
+            class="text-sm tabular-nums"
+            :class="
+              row.wastedCiMinutes >= 30
+                ? 'text-red-600 dark:text-red-400'
+                : row.wastedCiMinutes >= 5
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-gray-500'
+            "
+          >
             {{ Math.round(row.wastedCiMinutes) }} min
           </p>
           <TagBadge v-if="row.rootCause" :text="row.rootCause" color="neutral" />

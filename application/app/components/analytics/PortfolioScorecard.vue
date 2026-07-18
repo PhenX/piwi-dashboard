@@ -70,7 +70,9 @@ function deltaMeta(delta: number | null): { icon: string; class: string } | null
         <TableScroller min-width="52rem">
           <table class="w-full text-sm">
             <thead>
-              <tr class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-800">
+              <tr
+                class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-800"
+              >
                 <th class="py-2 pr-4 font-medium">Project</th>
                 <th class="py-2 pr-4 font-medium">Trend</th>
                 <th class="py-2 pr-4 font-medium text-right">Pass rate</th>
@@ -97,7 +99,10 @@ function deltaMeta(delta: number | null): { icon: string; class: string } | null
                   </div>
                 </td>
                 <td class="py-2.5 pr-4 text-right">
-                  <span class="inline-flex items-center gap-1 tabular-nums font-semibold" :class="passRateClass(row.passRate)">
+                  <span
+                    class="inline-flex items-center gap-1 tabular-nums font-semibold"
+                    :class="passRateClass(row.passRate)"
+                  >
                     {{ row.passRate !== null ? `${row.passRate}%` : '—' }}
                     <UIcon
                       v-if="deltaMeta(row.passRateDelta)"
@@ -109,13 +114,19 @@ function deltaMeta(delta: number | null): { icon: string; class: string } | null
                   </span>
                 </td>
                 <td class="py-2.5 pr-4 text-right tabular-nums">{{ row.runCount }}</td>
-                <td class="py-2.5 pr-4 text-right tabular-nums" :class="row.flakyTests > 0 ? 'text-amber-600 dark:text-amber-400' : ''">
+                <td
+                  class="py-2.5 pr-4 text-right tabular-nums"
+                  :class="row.flakyTests > 0 ? 'text-amber-600 dark:text-amber-400' : ''"
+                >
                   {{ row.flakyTests }}
                 </td>
                 <td class="py-2.5 pr-4 text-right tabular-nums text-gray-500 dark:text-gray-400">
                   {{ row.avgRunDurationMs ? formatDuration(row.avgRunDurationMs) : '—' }}
                 </td>
-                <td class="py-2.5 pr-4 text-right tabular-nums" :class="row.openClusters > 0 ? 'text-red-600 dark:text-red-400' : ''">
+                <td
+                  class="py-2.5 pr-4 text-right tabular-nums"
+                  :class="row.openClusters > 0 ? 'text-red-600 dark:text-red-400' : ''"
+                >
                   {{ row.openClusters }}
                 </td>
                 <td class="py-2.5 text-right">

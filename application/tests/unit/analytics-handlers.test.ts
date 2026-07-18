@@ -160,7 +160,9 @@ describe('analytics scope parsing', () => {
       fullRunsOnly: true,
     });
     expect(parseAnalyticsScope({ days: '99999' }).days).toBe(3650);
-    expect(parseAnalyticsScope(new URLSearchParams('days=7&projects=1,2&environment=staging&fullRunsOnly=false'))).toEqual({
+    expect(
+      parseAnalyticsScope(new URLSearchParams('days=7&projects=1,2&environment=staging&fullRunsOnly=false')),
+    ).toEqual({
       days: 7,
       projectIds: [1, 2],
       environment: 'staging',

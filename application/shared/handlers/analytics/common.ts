@@ -42,7 +42,10 @@ export async function fetchScopedProjects(
   return rows;
 }
 
-export async function fetchTagsByProject(db: DrizzleDB, projectIds: number[]): Promise<Map<number, AnalyticsTagInfo[]>> {
+export async function fetchTagsByProject(
+  db: DrizzleDB,
+  projectIds: number[],
+): Promise<Map<number, AnalyticsTagInfo[]>> {
   const byProject = new Map<number, AnalyticsTagInfo[]>();
   if (projectIds.length === 0) return byProject;
 

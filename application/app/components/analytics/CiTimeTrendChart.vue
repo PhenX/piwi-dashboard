@@ -15,7 +15,9 @@ const {
 type DataPoint = { date: Date; totalMinutes: number; runCount: number };
 
 const chartData = computed<DataPoint[]>(
-  () => trend.value?.points.map((p) => ({ date: new Date(p.date), totalMinutes: p.totalMinutes, runCount: p.runCount })) ?? [],
+  () =>
+    trend.value?.points.map((p) => ({ date: new Date(p.date), totalMinutes: p.totalMinutes, runCount: p.runCount })) ??
+    [],
 );
 
 const hasData = computed(() => chartData.value.some((p) => p.runCount > 0));
@@ -35,7 +37,8 @@ const deltaBadge = computed(() => {
   const pct = trend.value.deltaPct;
   return {
     label: `${pct > 0 ? '+' : ''}${pct}% vs previous period`,
-    class: pct > 25 ? 'text-red-600 dark:text-red-400' : pct < -10 ? 'text-green-600 dark:text-green-400' : 'text-gray-500',
+    class:
+      pct > 25 ? 'text-red-600 dark:text-red-400' : pct < -10 ? 'text-green-600 dark:text-green-400' : 'text-gray-500',
   };
 });
 

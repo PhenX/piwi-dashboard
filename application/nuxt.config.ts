@@ -260,6 +260,7 @@ export default defineNuxtConfig({
         '@unovis/ts',
         '@unovis/vue',
         'date-fns',
+        'drizzle-orm',
         'drizzle-orm/sqlite-core',
         'drizzle-orm/sqlite-proxy',
         'highlight.js/lib/core',

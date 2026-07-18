@@ -1,7 +1,14 @@
 import type { DrizzleDB } from '../db';
 import type { AnalyticsScope } from '../../analytics/scope';
 import type { AnalyticsCiTimeTrend } from '../../analytics/types';
-import { fetchScopedRuns, firstNonEmptyIndex, makeTimeBuckets, minutes, periodStart, type ProjectAccess } from './common';
+import {
+  fetchScopedRuns,
+  firstNonEmptyIndex,
+  makeTimeBuckets,
+  minutes,
+  periodStart,
+  type ProjectAccess,
+} from './common';
 
 /**
  * Total CI minutes consumed by test runs over time, with the previous
