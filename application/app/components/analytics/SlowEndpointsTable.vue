@@ -62,9 +62,13 @@ function methodColor(method: string): 'success' | 'info' | 'warning' | 'error' |
             <code class="text-xs truncate">{{ ep.route }}</code>
           </div>
           <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-            <span>p90 <span class="tabular-nums font-medium" :class="latencyClass(ep.p90Ms)">{{ ep.p90Ms }} ms</span></span>
+            <span
+              >p90 <span class="tabular-nums font-medium" :class="latencyClass(ep.p90Ms)">{{ ep.p90Ms }} ms</span></span
+            >
             <span>{{ ep.requests }} reqs · {{ ep.projectCount }} proj</span>
-            <span v-if="ep.errorRate > 0" class="text-red-600 dark:text-red-400 tabular-nums">{{ ep.errorRate }}% err</span>
+            <span v-if="ep.errorRate > 0" class="text-red-600 dark:text-red-400 tabular-nums"
+              >{{ ep.errorRate }}% err</span
+            >
           </div>
         </div>
       </div>
@@ -74,7 +78,9 @@ function methodColor(method: string): 'success' | 'info' | 'warning' | 'error' |
         <TableScroller min-width="44rem">
           <table class="w-full text-sm">
             <thead>
-              <tr class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-800">
+              <tr
+                class="text-left text-xs text-gray-500 uppercase tracking-wider border-b border-gray-200 dark:border-gray-800"
+              >
                 <th class="py-2 pr-4 font-medium">Endpoint</th>
                 <th class="py-2 pr-4 font-medium text-right">Requests</th>
                 <th class="py-2 pr-4 font-medium text-right">p50</th>
@@ -94,7 +100,9 @@ function methodColor(method: string): 'success' | 'info' | 'warning' | 'error' |
                 </td>
                 <td class="py-2.5 pr-4 text-right tabular-nums">{{ ep.requests }}</td>
                 <td class="py-2.5 pr-4 text-right tabular-nums text-gray-500">{{ ep.p50Ms }} ms</td>
-                <td class="py-2.5 pr-4 text-right tabular-nums font-medium" :class="latencyClass(ep.p90Ms)">{{ ep.p90Ms }} ms</td>
+                <td class="py-2.5 pr-4 text-right tabular-nums font-medium" :class="latencyClass(ep.p90Ms)">
+                  {{ ep.p90Ms }} ms
+                </td>
                 <td class="py-2.5 pr-4 text-right tabular-nums text-gray-500">{{ ep.maxMs }} ms</td>
                 <td
                   class="py-2.5 pr-4 text-right tabular-nums"
