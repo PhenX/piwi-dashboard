@@ -10,6 +10,8 @@ import type {
   AnalyticsFlakyRow,
   AnalyticsInsight,
   AnalyticsPortfolioRow,
+  AnalyticsRegressionVelocity,
+  AnalyticsSlowEndpoints,
   AnalyticsWastedTime,
 } from './types';
 import type { AnalyticsScope } from './scope';
@@ -21,6 +23,8 @@ export interface InsightContext {
   wastedTime: AnalyticsWastedTime;
   clusters: AnalyticsClusterLandscape;
   flakyTests: AnalyticsFlakyRow[];
+  regressionVelocity: AnalyticsRegressionVelocity;
+  slowEndpoints: AnalyticsSlowEndpoints;
 }
 
 export interface InsightRule {
@@ -160,11 +164,46 @@ const topFlakyImpact: InsightRule = {
       })),
 };
 
+const regressionSurge: InsightRule = {
+  id: 'regression-surge',
+  evaluate: ({ regressionVelocity, scope }) => {
+    const { totalRegressions, prevRegressions, deltaPct } = regressionVelocity;
+    if (totalRegressions < 5 || deltaPct === null || deltaPct < 50) return [];
+    return [
+      {
+        id: 'regression-surge',
+        ruleId: 'regression-surge',
+        severity: deltaPct >= 100 ? 'warning' : 'info',
+        message: `New regressions rose ${deltaPct}% vs the previous ${scope.days} days`,
+        detail: `${totalRegressions} this period, up from ${prevRegressions}.`,
+      },
+    ];
+  },
+};
+
+const slowSharedEndpoint: InsightRule = {
+  id: 'slow-shared-endpoint',
+  evaluate: ({ slowEndpoints }) =>
+    slowEndpoints.endpoints
+      // A slow call hit by several projects points at a shared backend, not one flaky test.
+      .filter((ep) => ep.projectCount >= 2 && ep.p90Ms >= 1000)
+      .slice(0, 2)
+      .map((ep) => ({
+        id: `slow-shared-endpoint:${ep.method}:${ep.route}`,
+        ruleId: 'slow-shared-endpoint',
+        severity: 'warning' as const,
+        message: `${ep.method} ${ep.route} is slow (p90 ${ep.p90Ms} ms) across ${ep.projectCount} projects`,
+        detail: `${ep.requests} requests this period${ep.errorRate > 0 ? ` · ${ep.errorRate}% errored` : ''}.`,
+      })),
+};
+
 export const INSIGHT_RULES: InsightRule[] = [
   failingStreak,
   passRateDrop,
   staleCluster,
   topFlakyImpact,
+  regressionSurge,
+  slowSharedEndpoint,
   wastedCiTime,
   ciTimeGrowth,
   passRateRecovery,

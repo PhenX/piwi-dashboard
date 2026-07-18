@@ -88,6 +88,20 @@ export const HELP_TOPICS = {
     text: 'Open failure clusters across all projects — the biggest and oldest unresolved root causes. Clusters outlive run retention, so this works on long horizons.',
     doc: 'failure-clustering',
   },
+  'analytics.regression-velocity': {
+    title: 'Regression velocity',
+    text: 'How much new breakage each period introduces: tests that passed in a baseline and now fail (regressions), plus tests that turned flaky. Rising bars mean quality debt is accumulating.',
+    doc: 'flaky-tests#regression-signals',
+  },
+  'analytics.browser-matrix': {
+    title: 'Browser matrix',
+    text: 'Pass rate per project × browser, so a suite that is green on one browser but failing on another (a browser-specific bug) stands out immediately.',
+  },
+  'analytics.slow-endpoints': {
+    title: 'Slow endpoints',
+    text: 'Backend calls captured during tests, aggregated across all projects by route: p50/p90 latency, error rate, and how many projects hit each one — a shared endpoint regressing shows up here first.',
+    doc: 'capture-fixtures',
+  },
 
   // ── Projects list ─────────────────────────────────────────────────────
   'projects.tag-filter': {

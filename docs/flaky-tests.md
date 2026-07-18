@@ -106,7 +106,10 @@ Everything above is scoped to one project. The **Analytics** page (`/analytics`)
 - **CI time** and **Wasted CI time** — how many CI minutes your runs consume, and how many of those produce no signal (wait steps + failed attempts).
 - **Flakiest tests** — the global flaky leaderboard across all projects, using the [impact ranking](#impact-ranking) above.
 - **Failure clusters** — open root causes across all projects, by age and occurrences.
-- **Insights** — an auto-generated, severity-ranked feed of the findings that matter (pass-rate drops, failing streaks, stale clusters, wasted time), each linking to the source.
+- **Regression velocity** — new regressions and newly-flaky tests introduced per period (see [Regression signals](#regression-signals)), so you can see whether quality debt is growing or shrinking.
+- **Browser matrix** — pass rate per project × browser, to catch browser-specific breakage.
+- **Slow endpoints** — the backend calls captured during tests, aggregated across all projects by route (p50/p90 latency, error rate, projects affected).
+- **Insights** — an auto-generated, severity-ranked feed of the findings that matter (pass-rate drops, failing streaks, stale clusters, wasted time, regression surges, slow shared endpoints), each linking to the source.
 
 Each widget is served by `GET /api/analytics/:widget` and computed by a shared handler in `shared/handlers/analytics/`, so the same numbers back the dashboard, the demo, and any future API consumer.
 

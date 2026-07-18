@@ -61,6 +61,24 @@ export const ANALYTICS_WIDGETS = [
     icon: 'i-lucide-layers',
     size: 'half',
   },
+  {
+    id: 'regression-velocity',
+    title: 'Regression velocity',
+    icon: 'i-lucide-git-pull-request-arrow',
+    size: 'half',
+  },
+  {
+    id: 'browser-matrix',
+    title: 'Browser matrix',
+    icon: 'i-lucide-monitor-smartphone',
+    size: 'half',
+  },
+  {
+    id: 'slow-endpoints',
+    title: 'Slow endpoints',
+    icon: 'i-lucide-gauge',
+    size: 'full',
+  },
 ] as const satisfies readonly AnalyticsWidgetMeta[];
 
 export type AnalyticsWidgetId = (typeof ANALYTICS_WIDGETS)[number]['id'];
