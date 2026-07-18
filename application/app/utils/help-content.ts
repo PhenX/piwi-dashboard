@@ -134,6 +134,12 @@ export const HELP_TOPICS = {
     text: 'Duration trends for the suite — average and P90 (the slowest 10% threshold). Use it to catch tests getting steadily slower.',
     doc: 'flaky-tests#performance',
   },
+  'project.timeline': {
+    title: 'Timeline markers',
+    text: 'Dated events — deploys, config changes, infra migrations, incidents — overlaid as vertical lines on the trend charts, so you can tell whether a change moved your results or performance. Markers can be scoped to an environment; some are detected automatically when tooling versions change between runs.',
+    doc: 'timeline-markers',
+    envVars: ['PIWI_AUTO_MARKERS'],
+  },
   'project.slowest-tests': {
     title: 'Slowest tests',
     text: 'The tests taking the most time, ranked. Optimizing the top entries shortens your overall run the fastest.',

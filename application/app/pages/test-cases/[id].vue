@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TestCaseHistoryPoint } from '~~/types/api';
+import type { TestCaseHistoryPoint, MarkerInfo, MarkersResponse } from '~~/types/api';
 import type { TableColumn } from '@nuxt/ui';
 
 const route = useRoute();
@@ -7,6 +7,25 @@ const testCaseId = route.params.id;
 
 const { data: testCase, refresh } = await useFetch(`/api/test-cases/${testCaseId}`);
 const { data: historyData } = await useFetch<TestCaseHistoryPoint[]>(`/api/test-cases/${testCaseId}/history`);
+
+// Project timeline markers, overlaid on the history chart for context.
+const historyMarkers = ref<MarkerInfo[]>([]);
+watch(
+  () => testCase.value?.project?.id,
+  async (pid) => {
+    if (!pid) return;
+    try {
+      historyMarkers.value = (await $fetch<MarkersResponse>(`/api/projects/${pid}/markers`)).markers ?? [];
+    } catch {
+      // markers are optional context
+    }
+  },
+  { immediate: true },
+);
+function goToProjectTimeline() {
+  const pid = testCase.value?.project?.id;
+  if (pid) navigateTo(`/projects/${pid}?tab=timeline`);
+}
 
 useHead(
   computed(() => ({
@@ -161,7 +180,12 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
         <!-- Evolution charts -->
         <div v-if="historyData && historyData.length > 1" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ChartCard title="Duration trend" icon="i-lucide-trending-up" help="case.history-chart">
-            <TestCaseHistoryChart :data="historyData" :height="200" />
+            <TestCaseHistoryChart
+              :data="historyData"
+              :height="200"
+              :markers="historyMarkers"
+              @marker-click="goToProjectTimeline"
+            />
           </ChartCard>
 
           <ChartCard title="Status history" icon="i-lucide-check-circle" help="case.sparkline">

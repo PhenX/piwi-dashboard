@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import { VisXYContainer, VisArea, VisAxis, VisLine } from '@unovis/vue';
 import { CurveType } from '@unovis/ts';
-import type { TestRunForChart } from '~~/types/api';
+import type { TestRunForChart, MarkerInfo } from '~~/types/api';
 
 interface Props {
   testRuns: TestRunForChart[];
   height?: number;
+  markers?: MarkerInfo[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
   height: 300,
+  markers: () => [],
 });
+
+const emit = defineEmits<{ 'marker-click': [id: number] }>();
+
+const markersRef = computed(() => props.markers);
 
 const chartData = computed(() => {
   if (!props.testRuns || props.testRuns.length === 0) {
@@ -54,16 +60,22 @@ const yFlaky = (d: DataPoint) => d.flaky;
 const areaColors = ['rgb(34, 197, 94)', 'rgb(239, 68, 68)', 'rgb(245, 158, 11)', 'rgb(147, 51, 234)'] as const;
 
 const xyContainerRef = ref<UnovisContainerRef | null>(null);
-const { tooltipData, tooltipPos, onRenderComplete } = useChartMarkers(xyContainerRef, chartData, {
-  x: (d) => d.date,
-  series: [
-    { y: (d) => d.passed, color: areaColors[0] },
-    { y: (d) => d.failed, color: areaColors[1] },
-    { y: (d) => d.skipped, color: areaColors[2] },
-    { y: (d) => d.flaky, color: areaColors[3] },
-  ],
-  onClick: (d) => navigateTo(`/test-runs/${d.id}`),
-});
+const { tooltipData, tooltipPos, markerTooltip, markerTooltipPos, onRenderComplete } = useChartMarkers(
+  xyContainerRef,
+  chartData,
+  {
+    x: (d) => d.date,
+    series: [
+      { y: (d) => d.passed, color: areaColors[0] },
+      { y: (d) => d.failed, color: areaColors[1] },
+      { y: (d) => d.skipped, color: areaColors[2] },
+      { y: (d) => d.flaky, color: areaColors[3] },
+    ],
+    onClick: (d) => navigateTo(`/test-runs/${d.id}`),
+    markers: markersRef,
+    onMarkerClick: (m) => emit('marker-click', m.id),
+  },
+);
 
 const legendItems = [
   { color: areaColors[0], label: 'Passed' },
@@ -134,6 +146,8 @@ const legendItems = [
           <div class="text-gray-400 dark:text-gray-500 text-xs mt-1">Click to view run details</div>
         </div>
       </div>
+
+      <ChartMarkerTooltip :marker="markerTooltip" :pos="markerTooltipPos" />
     </div>
 
     <EmptyState v-else text="No test run data available to display chart" />

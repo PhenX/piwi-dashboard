@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import type { TableColumn } from '@nuxt/ui';
-import type { TestRunDetails, ProjectWithTestRuns } from '~~/types/api';
+import type { TestRunDetails, ProjectWithTestRuns, MarkerInfo, MarkersResponse } from '~~/types/api';
 import type { ComparisonRow } from '~/composables/useRunComparison';
 
 interface RunOption {
@@ -17,6 +17,7 @@ const route = useRoute();
 const runId = route.params.id;
 
 const projectData = ref<ProjectWithTestRuns | null>(null);
+const markers = ref<MarkerInfo[]>([]);
 
 // Live while running or finalizing — matches the run page's definition so the
 // compare view doesn't render against an unfinished run during the upload phase.
@@ -32,9 +33,33 @@ watch(
     } catch (e) {
       console.error('Failed to fetch project for RunCompare', e);
     }
+    try {
+      const res = await $fetch<MarkersResponse>(`/api/projects/${projectId}/markers`);
+      markers.value = res.markers ?? [];
+    } catch {
+      // markers are optional context; ignore fetch errors
+    }
   },
   { immediate: true },
 );
+
+// Timeline markers that fall between the two compared runs — surfaced as a hint
+// that something (a deploy, config change, ...) changed between them.
+const markersBetween = computed<MarkerInfo[]>(() => {
+  if (!baselineRun.value || !props.testRun) return [];
+  const t1 = new Date(baselineRun.value.startTime).getTime();
+  const t2 = new Date(props.testRun.startTime).getTime();
+  const lo = Math.min(t1, t2);
+  const hi = Math.max(t1, t2);
+  const envs = new Set(
+    [baselineRun.value.environment, props.testRun.environment].filter((e): e is string => e != null),
+  );
+  return markers.value.filter((m) => {
+    const t = new Date(m.occurredAt).getTime();
+    if (t <= lo || t >= hi) return false;
+    return m.environment == null || envs.has(m.environment);
+  });
+});
 
 const projectRunOptions = computed<RunOption[]>(() => {
   if (!projectData.value?.testRuns) return [];
@@ -152,6 +177,20 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
           <UIcon name="i-lucide-loader-2" class="size-4 animate-spin" />
           <span>Loading baseline data...</span>
         </div>
+
+        <UAlert
+          v-else-if="markersBetween.length > 0"
+          color="warning"
+          variant="subtle"
+          icon="i-lucide-milestone"
+          :title="`${markersBetween.length} timeline marker${markersBetween.length > 1 ? 's' : ''} between these runs`"
+        >
+          <template #description>
+            <div class="flex flex-wrap gap-2 mt-1">
+              <MarkerBadge v-for="m in markersBetween" :key="m.id" :marker="m" size="sm" />
+            </div>
+          </template>
+        </UAlert>
 
         <template v-else-if="baselineRun && comparisonData.length > 0">
           <div class="flex flex-wrap gap-4 text-sm">
