@@ -20,7 +20,7 @@ Piwi Dashboard is a self-hosted observability platform for [Playwright](https://
 
 ## Requirements
 
-- **Node.js 24+** — the runtime the dashboard targets (CI and the Docker image both use Node 24)
+- **Node.js 24+** — only for running the dashboard **from source** (CI and the Docker image both use Node 24). With Docker, your test project just needs a Node version supported by Playwright
 - **npm** — for package management
 - **PostgreSQL 14+** — optional; required only when using the PostgreSQL backend
 
@@ -125,6 +125,8 @@ import { test, expect } from './fixtures'
 ```
 
 The reporter works fine without this — see the [capture fixtures guide](./capture-fixtures) for exactly what the fixtures add, composition patterns, and troubleshooting.
+
+Prefer starting from something runnable? [`examples/playwright-fixtures`](https://github.com/PiwiTests/platform/tree/main/examples/playwright-fixtures) is a complete working project — a small instrumented Nitro app plus a Playwright suite exercising every capture path, including [backend logs](./backend-logs) and an intentional failure that lights up locator healing.
 
 ## Submitting via the REST API (optional)
 
