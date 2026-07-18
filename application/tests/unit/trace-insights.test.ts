@@ -350,25 +350,27 @@ describe('committed demo trace integration', () => {
   const zipPath = join(__dirname, '../../public/demo/traces/checkout-pay-timeout.zip');
   const entries = parseZipSync(readFileSync(zipPath));
 
-  test('parses the real network stream including the failing payment request', () => {
+  test('parses the real network stream including the stuck quote request', () => {
     const texts = entries.filter((e) => e.name.endsWith('.network')).map((e) => e.data.toString('utf8'));
     const snapshots = parseNetworkTexts(texts);
     expect(snapshots.length).toBeGreaterThanOrEqual(2);
     const result = buildTraceNetwork(null, snapshots);
     expect(result.status).toBe('ok');
-    const payment = result.requests!.find((r) => r.url.endsWith('/api/payments'));
-    expect(payment).toMatchObject({ method: 'POST', status: 500, failed: true, bodyPreviewable: true });
+    // The Pay button stays disabled because /api/quote never resolves — that's
+    // the story: a request the browser gave up on, not an HTTP error response.
+    const quote = result.requests!.find((r) => r.url.endsWith('/api/quote'));
+    expect(quote).toMatchObject({ method: 'GET', status: -1, failed: true, bodyPreviewable: false });
   });
 
   test('parses the real stacks index and correlates it with the failing action', () => {
     const stacksTexts = entries.filter((e) => e.name.endsWith('.stacks')).map((e) => e.data.toString('utf8'));
     const index = parseStacksTexts(stacksTexts);
     expect(index).not.toBeNull();
-    expect(index!.byCallId.get('call@18')).toBeTruthy();
 
     const traceTexts = entries.filter((e) => e.name.endsWith('.trace')).map((e) => e.data.toString('utf8'));
     const parsed = parseTraceTexts(traceTexts);
     expect(parsed.failingAction).not.toBeNull();
+    expect(parsed.failingAction!.apiName).toBe('Frame.click');
     expect(index!.byCallId.has(parsed.failingAction!.callId)).toBe(true);
   });
 

@@ -680,8 +680,7 @@ for (const proj of DEMO_PROJECTS) {
         worker_index: workerIndex,
         started_at: caseStartMs,
         created_at: caseStartMs,
-      };
-      TEST_RUNS_CASES.push(trc);
+      });
 
       // Advance this worker's clock so the next test it picks up runs after it.
       workerCursorMs[workerIndex] += caseDuration + SEED_WORKER_GAP_MS;
