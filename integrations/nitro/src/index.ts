@@ -1,7 +1,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { gzipSync } from 'node:zlib';
 import { consola } from 'consola';
-import { defineNitroPlugin } from 'nitropack/runtime';
+// Type-only: importing 'nitropack/runtime' at runtime only resolves inside a
+// Nitro build, and this module must also load from node_modules when the
+// server bundle externalizes it (e.g. dev builds).
+import type { NitroAppPlugin } from 'nitropack';
 
 const MAX_ENTRIES = 50;
 const MAX_MSG_LENGTH = 500;
@@ -36,8 +39,10 @@ function extractStack(err: unknown): string | undefined {
   return undefined;
 }
 
-// ALS is used only by the consola reporter (links log calls to the current request).
-// Cross-hook state lives on event.context._piwiLogs instead.
+// Links consola calls to the request being handled. The store is scoped with
+// als.run() around the whole downstream handler chain — enterWith() from a
+// request hook is not reliable here (the binding dies with the hook's own
+// async scope, so only the first request after boot would capture).
 const als = new AsyncLocalStorage<PiwiTestLogEntry[]>();
 
 // The consola reporter is process-global — register it only once.
@@ -47,7 +52,7 @@ const TEST_LOGS_DISABLED =
   process.env.PIWI_TEST_LOGS_DISABLED === 'true' ||
   (process.env.NODE_ENV === 'production' && process.env.PIWI_TEST_LOGS_DISABLED !== 'false');
 
-export default defineNitroPlugin((nitroApp) => {
+const piwiTestLogs: NitroAppPlugin = (nitroApp) => {
   if (TEST_LOGS_DISABLED) return;
 
   if (!reporterAdded) {
@@ -70,14 +75,17 @@ export default defineNitroPlugin((nitroApp) => {
     });
   }
 
-  nitroApp.hooks.hook('request', (event) => {
+  // Wrap the root h3 handler: both the node listener (dev and node-server
+  // production entries) and route dispatch go through h3App.handler, so the
+  // als.run() scope covers every hook, middleware, and route handler.
+  const originalHandler = nitroApp.h3App.handler;
+  nitroApp.h3App.handler = ((event) => {
     const logs: PiwiTestLogEntry[] = [];
     event.context._piwiLogs = logs;
-    als.enterWith(logs);
 
     // Patch res.end so the X-Piwi-Logs header is injected for ALL responses,
-    // including H3 error responses where Nitro bypasses the 'beforeResponse' hook
-    // (h3 skips onBeforeResponse once the error handler has called res.end).
+    // including H3 error responses where Nitro bypasses the 'beforeResponse'
+    // hook (h3 skips onBeforeResponse once the error handler has called res.end).
     const res = event.node.res as any;
     const originalEnd = res.end.bind(res) as (...args: any[]) => any;
     res.end = (...args: any[]) => {
@@ -105,5 +113,9 @@ export default defineNitroPlugin((nitroApp) => {
       }
       return originalEnd(...args);
     };
-  });
-});
+
+    return als.run(logs, () => originalHandler(event));
+  }) as typeof originalHandler;
+};
+
+export default piwiTestLogs;

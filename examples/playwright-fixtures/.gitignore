@@ -1,5 +1,9 @@
 node_modules/
 test-results/
 playwright-report/
-# The example floats on the latest published @piwitests/reporter — no lockfile.
+# Nitro dev/build output
+.nitro/
+.output/
+# The example installs the published @piwitests packages — no lockfile.
+# The exact pins are auto-bumped by release-please on every release.
 package-lock.json

@@ -9,7 +9,7 @@ Piwi Dashboard can capture server-side Warning and Error log entries during a Pl
 
 The mechanism is straightforward: the backend integration adds a `X-Piwi-Logs` response header (gzip-compressed, Base64-encoded JSON) to every HTTP response. The Piwi Dashboard reporter reads this header from each captured network request and stores the entries as `serverLogs` on that request.
 
-**Active only in non-production environments.** The header is never emitted in production builds.
+**Active only in non-production environments by default.** The ASP.NET Core integration emits the header only in Development/Test environments. The Nitro/Nuxt integration additionally honors `PIWI_TEST_LOGS_DISABLED`: set it to `true` to turn capture off anywhere, or to `false` to force capture on in a production-mode test deployment.
 
 ## How it looks in the dashboard
 
@@ -54,16 +54,19 @@ app.Run();
 npm install @piwitests/instrumentation
 ```
 
-Create a file in your project's `server/plugins/` directory:
+Create a file in your project's server plugins directory:
 
 ```typescript
-// server/plugins/piwi-test-logs.ts
+// Nuxt: server/plugins/piwi-test-logs.ts
+// Standalone Nitro: plugins/piwi-test-logs.ts
 export { default } from '@piwitests/instrumentation'
 ```
 
-The plugin is auto-loaded by Nitro. It captures `consola` Warning/Error entries and unhandled H3 errors, then writes them to the `X-Piwi-Logs` header in the `beforeResponse` hook — only when `NODE_ENV !== 'production'`.
+The plugin is auto-loaded by Nitro. It captures `consola` Warning/Error entries (bare `console.*` calls are not captured) and unhandled H3 errors, then writes the header just before each response goes out — including error responses. Capture is on outside production; override either way with `PIWI_TEST_LOGS_DISABLED` (`true` = always off, `false` = on even in production).
 
 **Requirements:** Nuxt 3+ / Nitro 2+ (peer deps `nitropack ≥2`, `h3 ≥1`, `consola ≥3` — all included in any Nuxt project).
+
+A runnable end-to-end demo lives in [`examples/playwright-fixtures`](https://github.com/PiwiTests/platform/tree/main/examples/playwright-fixtures) — a standalone Nitro app instrumented with this package, with a Playwright spec (`backend-logs.spec.ts`) showing the captured logs in the dashboard.
 
 ## Reporter setup
 
@@ -89,7 +92,7 @@ Each entry in the `X-Piwi-Logs` array has this shape:
 | Field | Type | Description |
 |-------|------|-------------|
 | `timestamp` | `number` | Unix timestamp in milliseconds |
-| `level` | `string` | `"Warning"`, `"Error"`, or `"Critical"` |
+| `level` | `string` | `"Warning"` or `"Error"` (the ASP.NET Core integration also emits `"Critical"`) |
 | `category` | `string` | Logger category or tag (e.g. `MyApp.Services.OrderService`) |
 | `message` | `string` | Log message (truncated at 500 characters) |
 | `stack` | `string` | Optional. Shrunk stack trace — framework/internal frames removed, namespace parts shortened to first lowercase letter, max 5 frames |
