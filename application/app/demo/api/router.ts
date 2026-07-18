@@ -37,6 +37,7 @@ import {
   getProjectSpecHealth,
 } from '#shared/handlers/projects';
 import { listTags, createTag, updateTag, deleteTag } from '#shared/handlers/tags';
+import { listProjectMarkers, createMarker, updateMarker, deleteMarker } from '#shared/handlers/markers';
 import {
   getTestCase,
   getTestRunCase,
@@ -578,6 +579,41 @@ const routes: RouteEntry[] = [
     handler: async (m, body) => updateTag(await getDemoDb(), +m[1]!, body as Parameters<typeof updateTag>[2]),
   },
   { method: 'DELETE', pattern: /^\/api\/tags\/(\d+)$/, handler: async (m) => deleteTag(await getDemoDb(), +m[1]!) },
+
+  // Markers (project timeline)
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/markers$/,
+    handler: async (m) => listProjectMarkers(await getDemoDb(), +m[1]!),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/projects\/(\d+)\/markers$/,
+    handler: async (m, body) => {
+      const b = body as {
+        label: string;
+        occurredAt: string;
+        category?: string;
+        environment?: string | null;
+        description?: string | null;
+      };
+      return createMarker(await getDemoDb(), +m[1]!, { ...b, occurredAt: new Date(b.occurredAt) });
+    },
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/markers\/(\d+)$/,
+    handler: async (m, body) => {
+      const b = body as { occurredAt?: string } & Record<string, unknown>;
+      const patch = { ...b, ...(b.occurredAt ? { occurredAt: new Date(b.occurredAt) } : {}) };
+      return updateMarker(await getDemoDb(), +m[1]!, patch as Parameters<typeof updateMarker>[2]);
+    },
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/markers\/(\d+)$/,
+    handler: async (m) => deleteMarker(await getDemoDb(), +m[1]!),
+  },
 
   // Users
   {

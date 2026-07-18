@@ -8,6 +8,7 @@ import { autoDiagnoseRun } from '../../../utils/ai-diagnosis';
 import { readShardTokensFromMeta, removeStoredShardToken } from '../../../utils/shard-tokens';
 import { emitRunNotifications } from '../../../utils/notifications/run-notifications';
 import { computeRegressionSignals } from '../../../utils/compute-regression-signals';
+import { syncAutoMarkersForRun } from '#shared/handlers/markers';
 import { sumFailedAndTimedOut } from '#shared/utils/test-counts';
 
 defineRouteMeta({
@@ -202,6 +203,7 @@ export default eventHandler(async (event) => {
       computeRegressionSignals(db, id).catch((e) =>
         console.error('[regression-signals] computeRegressionSignals failed', e),
       );
+      syncAutoMarkersForRun(db, id).catch((e) => console.error('[markers] syncAutoMarkersForRun failed', e));
       autoDiagnoseRun(db, testRun.projectId, id).catch((e) =>
         console.error('[ai-diagnosis] autoDiagnoseRun failed', e),
       );
@@ -327,6 +329,7 @@ export default eventHandler(async (event) => {
     computeRegressionSignals(db, id).catch((e) =>
       console.error('[regression-signals] computeRegressionSignals failed', e),
     );
+    syncAutoMarkersForRun(db, id).catch((e) => console.error('[markers] syncAutoMarkersForRun failed', e));
     autoDiagnoseRun(db, testRun.projectId, id).catch((e) => console.error('[ai-diagnosis] autoDiagnoseRun failed', e));
     emitRunNotifications(db, id).catch((e) => console.error('[notifications] emitRunNotifications failed', e));
 

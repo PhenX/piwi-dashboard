@@ -8,6 +8,7 @@ import {
   testRunsCases,
   failureClusters,
   failureDiagnoses,
+  markers,
 } from '../database/schema';
 import { eq } from 'drizzle-orm';
 import { requireAuth, isAuthEnabled } from './auth';
@@ -118,6 +119,11 @@ export async function resolveTestRunCaseProjectId(db: DrizzleDB, runCaseId: numb
     .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
     .where(eq(testRunsCases.id, runCaseId))
     .limit(1);
+  return rows[0]?.projectId ?? null;
+}
+
+export async function resolveMarkerProjectId(db: DrizzleDB, markerId: number): Promise<number | null> {
+  const rows = await db.select({ projectId: markers.projectId }).from(markers).where(eq(markers.id, markerId));
   return rows[0]?.projectId ?? null;
 }
 

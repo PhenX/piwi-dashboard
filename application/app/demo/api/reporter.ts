@@ -32,6 +32,7 @@ import { DEFAULT_INGEST_LIMITS } from '#shared/ingest-limits';
 import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fingerprint';
 import { durationStats } from '#shared/utils/stats';
 import { countFailedFromTally, sumFailedAndTimedOut } from '#shared/utils/test-counts';
+import { syncAutoMarkersForRun } from '#shared/handlers/markers';
 import {
   cancelInstanceRuns as sharedCancelInstanceRuns,
   getOrCreateFailureClusters,
@@ -661,6 +662,8 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
       });
 
       publishDemoGlobalEvent({ type: 'run-finished', runId: id, projectId: testRun.projectId, status: finalStatus });
+
+      await syncAutoMarkersForRun(db, id).catch(() => {});
     } else {
       publishDemoRunEvent(id, {
         type: 'run-progress',
@@ -738,6 +741,8 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
   });
 
   publishDemoGlobalEvent({ type: 'run-finished', runId: id, projectId: testRun.projectId, status });
+
+  await syncAutoMarkersForRun(db, id).catch(() => {});
 
   return { success: true, testRunId: id, status };
 }

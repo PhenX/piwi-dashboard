@@ -377,6 +377,11 @@ export const PIWI_ENV_VARS = {
     description: 'Max characters per stored source frame snippet.',
     category: 'ingest',
   },
+  PIWI_AUTO_MARKERS: {
+    description:
+      'Automatically create a timeline marker when a run’s environment, Playwright version, or reporter version changes from the previous run (default: enabled). Set to false to disable.',
+    category: 'ingest',
+  },
 
   PIWI_TEST_LOGS_DISABLED: {
     description:
