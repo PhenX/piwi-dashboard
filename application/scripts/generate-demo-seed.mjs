@@ -1406,8 +1406,9 @@ const ENTITY_LINKS = [
     metadata: null,
     unfurled_at: null,
     created_by: null,
-    created_at: ts('2025-04-25T08:30:00'),
-    updated_at: ts('2025-04-25T08:30:00'),
+    // entity_links.created_at/updated_at are timestamp_ms columns — store ms.
+    created_at: ts('2025-04-25T08:30:00') * 1000,
+    updated_at: ts('2025-04-25T08:30:00') * 1000,
   },
   {
     id: 2,
@@ -1423,8 +1424,8 @@ const ENTITY_LINKS = [
     metadata: null,
     unfurled_at: null,
     created_by: null,
-    created_at: ts('2025-04-24T10:00:00'),
-    updated_at: ts('2025-04-24T10:00:00'),
+    created_at: ts('2025-04-24T10:00:00') * 1000,
+    updated_at: ts('2025-04-24T10:00:00') * 1000,
   },
   {
     id: 3,
@@ -1440,8 +1441,8 @@ const ENTITY_LINKS = [
     metadata: null,
     unfurled_at: null,
     created_by: null,
-    created_at: ts('2025-04-25T09:00:00'),
-    updated_at: ts('2025-04-25T09:00:00'),
+    created_at: ts('2025-04-25T09:00:00') * 1000,
+    updated_at: ts('2025-04-25T09:00:00') * 1000,
   },
 ];
 
@@ -2017,6 +2018,107 @@ const LOCATOR_SNAPSHOTS = [
   },
 ];
 
+// ── Load-time timestamp rebase ─────────────────────────────────────────────
+// Every timestamp above is anchored to a fixed generation-time window, so a
+// committed seed would show runs that drift ever further into the past. To keep
+// the demo feeling live, the seed shifts every timestamp forward when it runs —
+// the first time a visitor opens the demo AND every time they reset the data —
+// so the newest run always lands near "now". SQLite evaluates
+// `strftime('%s','now')` at seed-run time, so the offset is computed relative to
+// the actual moment of the visit, not to when the seed file was built.
+//
+// `ANCHOR_SEC` is the newest timestamp in the dataset (in seconds). Mapping it
+// to the current time and shifting everything else by the same delta keeps the
+// data's internal spacing intact and guarantees nothing lands in the future.
+function collectAnchorSec() {
+  let max = 0;
+  // Fold a candidate timestamp into the running max, normalizing to seconds.
+  const bump = (v, unit) => {
+    if (typeof v !== 'number' || !Number.isFinite(v)) return;
+    const s = unit === 'ms' ? Math.floor(v / 1000) : v;
+    if (s > max) max = s;
+  };
+
+  // Tables whose created_at/updated_at are second-precision.
+  for (const rows of [TAGS, PROJECTS, USERS, TEST_SUITES, TEST_CASES, FAILURE_CLUSTERS, FAILURE_DIAGNOSES]) {
+    for (const r of rows) {
+      bump(r.created_at, 's');
+      bump(r.updated_at, 's');
+    }
+  }
+  for (const r of FAILURE_DIAGNOSIS_VERSIONS) bump(r.created_at, 's');
+  for (const r of TEST_RUNS) {
+    bump(r.start_time, 's');
+    bump(r.created_at, 's');
+    bump(r.updated_at, 's');
+  }
+  for (const r of REPORTS) bump(r.created_at, 's');
+  for (const r of ATTACHMENTS) bump(r.created_at, 's');
+
+  // Millisecond-precision columns.
+  for (const r of PROJECT_ASSIGNMENTS) bump(r.created_at, 'ms');
+  for (const r of LOCATOR_SNAPSHOTS) bump(r.last_seen_at, 'ms');
+  for (const r of ENTITY_LINKS) {
+    bump(r.created_at, 'ms');
+    bump(r.updated_at, 'ms');
+  }
+  for (const r of TEST_RUNS_CASES) {
+    bump(r.started_at, 'ms');
+    bump(r.created_at, 'ms');
+    for (const e of r.step_events || []) bump(e.startedAt, 'ms');
+    for (const e of r.console_logs || []) bump(e.timestamp, 'ms');
+  }
+  for (const r of NETWORK_REQUESTS) {
+    for (const e of r.server_logs || []) bump(e.timestamp, 'ms');
+  }
+  return max;
+}
+
+const ANCHOR_SEC = collectAnchorSec();
+// Delta between load time and the seed's anchor, computed by SQLite when the
+// seed runs. Referenced from a temp table so every statement shares one value
+// (a second-precision drift between statements would otherwise desync the ms
+// columns from their JSON-embedded counterparts and skew the timeline).
+const D = '(SELECT delta_sec FROM _rebase)';
+const D_MS = `(SELECT delta_sec FROM _rebase) * 1000`;
+
+// Shift a JSON array column's per-element ms timestamp (`$.field`) in place,
+// preserving element order (json_each iterates in array order).
+const shiftJsonMs = (table, column, field) =>
+  `UPDATE ${table} SET ${column} = (SELECT json_group_array(json_set(value, '$.${field}', ` +
+  `json_extract(value, '$.${field}') + ${D_MS})) FROM json_each(${table}.${column})) ` +
+  `WHERE ${column} IS NOT NULL AND json_valid(${column});`;
+
+const REBASE_SQL = [
+  '-- ── Rebase every timestamp to load time (see generator for rationale) ──────',
+  `CREATE TEMP TABLE _rebase AS SELECT (CAST(strftime('%s', 'now') AS INTEGER) - ${ANCHOR_SEC}) AS delta_sec;`,
+  '',
+  '-- Second-precision timestamp columns',
+  `UPDATE tags SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  `UPDATE projects SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  `UPDATE users SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  `UPDATE test_suites SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  `UPDATE test_cases SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  `UPDATE test_runs SET start_time = start_time + ${D}, created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  `UPDATE files SET created_at = created_at + ${D};`,
+  `UPDATE failure_clusters SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  `UPDATE failure_diagnoses SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  `UPDATE failure_diagnosis_versions SET created_at = created_at + ${D};`,
+  '',
+  '-- Millisecond timestamp columns',
+  `UPDATE test_runs_cases SET started_at = started_at + ${D_MS}, created_at = created_at + ${D_MS};`,
+  `UPDATE project_assignments SET created_at = created_at + ${D_MS};`,
+  `UPDATE entity_links SET created_at = created_at + ${D_MS}, updated_at = updated_at + ${D_MS};`,
+  `UPDATE locator_snapshots SET last_seen_at = last_seen_at + ${D_MS};`,
+  '',
+  '-- Millisecond timestamps embedded in JSON columns',
+  shiftJsonMs('test_runs_cases', 'step_events', 'startedAt'),
+  shiftJsonMs('test_runs_cases', 'console_logs', 'timestamp'),
+  shiftJsonMs('network_requests', 'server_logs', 'timestamp'),
+  '',
+  'DROP TABLE _rebase;',
+];
+
 // ── Assemble SQL ───────────────────────────────────────────────────────────
 const lines = [
   '-- Piwi Dashboard demo seed',
@@ -2079,6 +2181,8 @@ const lines = [
   '',
   '-- Locator healing snapshots (references test_cases)',
   insert('locator_snapshots', LOCATOR_SNAPSHOTS),
+  '',
+  ...REBASE_SQL,
   '',
   'COMMIT;',
 ];
