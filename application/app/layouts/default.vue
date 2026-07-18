@@ -178,6 +178,14 @@ const links = computed(() => {
         },
       },
       {
+        label: 'Analytics',
+        icon: 'i-lucide-chart-line',
+        to: '/analytics',
+        onSelect: () => {
+          open.value = false;
+        },
+      },
+      {
         label: 'Projects',
         icon: 'i-lucide-folder',
         to: '/projects',

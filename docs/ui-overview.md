@@ -24,6 +24,7 @@ The sidebar gives access to the top-level sections:
 | Section | Path | Purpose |
 |---------|------|---------|
 | Home | `/` | Aggregate stats and activity across all projects |
+| Analytics | `/analytics` | Cross-project trends, portfolio health, and insights over a chosen time window |
 | Projects | `/projects` | Full project listing with search and tag filters |
 | Settings | `/settings` | Configuration — general, account, users, storage, tags, wasted time, AI, notifications |
 | API docs | `/docs` | Self-contained OpenAPI 3.1 reference (no external CDN) — browse endpoints and schemas, try requests live, copy cURL / fetch snippets |
@@ -43,6 +44,20 @@ Everything else is reached by drilling into a project, run, or test case:
 ## Home
 
 A quick health check across all projects: **stats cards** (projects, runs, active/passing projects, flaky count, slowest project), a **test-results trend chart** (pass/fail/skip/flaky over time), **recent projects**, and a getting-started snippet for teams that haven't wired up the reporter yet.
+
+## Analytics
+
+A cross-project decision view — where Home answers *"what's happening now"*, Analytics answers *"across projects, over time"*. A **scope bar** at the top sets the period (last 7 / 30 / 90 days, last year, or all time), an optional environment, and a full-runs-only toggle; every widget re-aggregates against that scope. The widgets:
+
+- **Insights** — auto-generated, severity-ranked findings over the period (pass-rate drops, failing streaks, stale failure clusters, wasted CI time, CI-time growth). Each links straight to the project, run, cluster, or test case it's about.
+- **Portfolio health** — every project's pass rate (with its change vs the previous period), flaky volume, open failure clusters, average run duration, and latest run, in one sortable table with trend bars. Worst health sorts first.
+- **Pass rate heatmap** — a projects × time grid colored by daily (or, for longer periods, weekly) pass rate, so a project that degraded — and when — jumps out.
+- **CI time** — total CI minutes your runs consumed over the period, with the growth vs the previous period.
+- **Wasted CI time** — minutes that produced no signal: time inside wait steps plus time executing attempts that ended failed or timed out, split by project.
+- **Flakiest tests** — the worst flaky tests across all projects, using the same scoring as each project's Flaky tests tab, ranked by wasted-CI impact.
+- **Failure clusters** — open root causes across all projects, with age, occurrences, and error-type mix; the oldest unresolved cluster is highlighted.
+
+The analytics surface is **widget-driven**: each widget is a registry entry (`shared/analytics/registry.ts`) backed by a shared handler (`shared/handlers/analytics/`) and served by one generic endpoint, `GET /api/analytics/:widget`. See [Flaky tests & analytics](./flaky-tests).
 
 ## Projects
 

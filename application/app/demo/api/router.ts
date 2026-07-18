@@ -59,6 +59,8 @@ import {
   computeRegressionContextForRun,
 } from '#shared/handlers/test-runs';
 import { computeRunInsights } from '#shared/handlers/run-insights';
+import { isAnalyticsWidgetId, runAnalyticsWidget } from '#shared/handlers/analytics';
+import { parseAnalyticsScope } from '#shared/analytics/scope';
 import {
   listUsers,
   createUserRecord,
@@ -128,6 +130,16 @@ async function resolveDemoScope(actingUserId: number | null): Promise<ProjectSco
 }
 
 const routes: RouteEntry[] = [
+  // Analytics — one generic entry; widgets dispatch through the shared handler map
+  {
+    method: 'GET',
+    pattern: /^\/api\/analytics\/([\w-]+)$/,
+    handler: async (m, _, q, ctx) => {
+      const widget = m[1]!;
+      if (!isAnalyticsWidgetId(widget)) throw new Error('Unknown analytics widget');
+      return runAnalyticsWidget(await getDemoDb(), widget, parseAnalyticsScope(q), ctx?.scope ?? 'all');
+    },
+  },
   // Projects
   {
     method: 'GET',

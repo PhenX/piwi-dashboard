@@ -57,6 +57,38 @@ export const HELP_TOPICS = {
     doc: 'getting-started#using-the-piwi-dashboard-reporter',
   },
 
+  // ── Analytics ─────────────────────────────────────────────────────────
+  'analytics.insights': {
+    title: 'Insights',
+    text: 'Auto-generated findings over the selected period — pass-rate drops, failing streaks, stale clusters, wasted CI time. Ranked by severity; click one to jump to the source.',
+  },
+  'analytics.portfolio': {
+    title: 'Portfolio health',
+    text: 'Every project over the selected period: pass rate with its change vs the previous period, flaky volume, open failure clusters, and the latest run. Worst health sorts first.',
+  },
+  'analytics.heatmap': {
+    title: 'Pass rate heatmap',
+    text: 'Each cell is the aggregate pass rate of one project over one time bucket — green is healthy, red is broken, gray means no runs. Longer periods use wider buckets.',
+  },
+  'analytics.ci-time': {
+    title: 'CI time',
+    text: 'Total minutes your test runs consumed, over time, with the change vs the previous equal-length period. Steady growth here is a capacity conversation.',
+  },
+  'analytics.wasted-time': {
+    title: 'Wasted CI time',
+    text: 'Minutes that produced no signal: time inside wait steps plus time executing attempts that ended failed or timed out. The strongest argument for fixing slow waits and flaky tests.',
+  },
+  'analytics.flaky-leaderboard': {
+    title: 'Flakiest tests',
+    text: 'The worst flaky tests across all projects, using the same scoring as each project’s Flaky tests tab, sorted by wasted-CI impact.',
+    doc: 'flaky-tests#flaky-test-detection',
+  },
+  'analytics.cluster-landscape': {
+    title: 'Failure clusters',
+    text: 'Open failure clusters across all projects — the biggest and oldest unresolved root causes. Clusters outlive run retention, so this works on long horizons.',
+    doc: 'failure-clustering',
+  },
+
   // ── Projects list ─────────────────────────────────────────────────────
   'projects.tag-filter': {
     text: 'Filter projects by tag. Selecting several tags uses OR logic — a project matching any of them is shown.',

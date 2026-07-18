@@ -97,6 +97,19 @@ Network analysis and Web Vitals require the [capture fixtures](./capture-fixture
 
 A project-level overview groups test cases by spec file and colors each by pass rate, so an unhealthy area of the suite jumps out. Cells link straight to the filtered test-case list.
 
+## Cross-project analytics
+
+Everything above is scoped to one project. The **Analytics** page (`/analytics`) lifts the same signals to the whole portfolio over a time window you choose (last 7 / 30 / 90 days, last year, or all time — plus an optional environment and a full-runs-only toggle). It answers the higher-level questions a single project page can't:
+
+- **Portfolio health** — every project's pass rate with its change vs the previous period, flaky volume, open failure clusters, and latest run, sorted worst-first.
+- **Pass rate heatmap** — projects × time, colored by pass rate, so you can see who degraded and when.
+- **CI time** and **Wasted CI time** — how many CI minutes your runs consume, and how many of those produce no signal (wait steps + failed attempts).
+- **Flakiest tests** — the global flaky leaderboard across all projects, using the [impact ranking](#impact-ranking) above.
+- **Failure clusters** — open root causes across all projects, by age and occurrences.
+- **Insights** — an auto-generated, severity-ranked feed of the findings that matter (pass-rate drops, failing streaks, stale clusters, wasted time), each linking to the source.
+
+Each widget is served by `GET /api/analytics/:widget` and computed by a shared handler in `shared/handlers/analytics/`, so the same numbers back the dashboard, the demo, and any future API consumer.
+
 ## See also
 
 - [UI overview](./ui-overview) — where each of these views lives in the dashboard

@@ -39,6 +39,7 @@ Native Playwright HTML reports are great for local debugging — but they're eph
 - ⚡ **Live streaming** — watch runs in real time as CI executes; no polling, no waiting.
 - 🔗 **Failure clustering** — failures sharing a root cause are auto-grouped by error fingerprint.
 - 📈 **Performance & flaky tracking** — P90 duration trends, slowest tests, composite flakiness scores.
+- 📊 **Cross-project analytics** — a portfolio dashboard with pass-rate trends, a project × time heatmap, CI-time and wasted-time trends, a global flaky leaderboard, and an auto-generated insights feed for higher-level decisions.
 - 🩹 **Locator healing** — when a locator breaks, ranked replacement locators captured from prior passing runs, with a recommended fix.
 - 🎬 **Self-hosted trace viewer** — open the full Playwright trace viewer from any failure; the trace stays on your server.
 - 🔔 **Notifications** — email, Slack, webhook, and in-browser alerts for failed runs and new failure clusters.
