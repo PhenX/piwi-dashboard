@@ -197,8 +197,8 @@ export const HELP_TOPICS = {
   },
   'case.test-source': {
     title: 'Test source',
-    text: 'The source around the failing line and the callers above it — captured from the failure’s call stack — so you can read where it broke, and the code that led there, without opening your editor.',
-    doc: 'capture-fixtures',
+    text: 'The source around the failing line and the callers above it — captured from the failure’s call stack — so you can read where it broke, and the code that led there, without opening your editor. When the execution has a trace, this deepens into the complete call stack with the real source of every frame, read from the trace’s embedded files.',
+    doc: 'ui-overview#trace-powered-deep-views',
   },
   'case.artifacts': {
     title: 'Artifacts',
@@ -237,8 +237,8 @@ export const HELP_TOPICS = {
   },
   'case.network': {
     title: 'Network requests',
-    text: 'HTTP requests the page made during the test, with timing and status — useful for spotting failed or slow calls.',
-    doc: 'capture-fixtures',
+    text: 'HTTP requests the page made during the test, with timing and status — useful for spotting failed or slow calls. When the execution has a trace, the Full trace view shows every request (all resource types) with headers, timing phases, a waterfall and capped body previews; sensitive header values are masked.',
+    doc: 'ui-overview#trace-powered-deep-views',
   },
   'case.backend-logs': {
     title: 'Backend server logs',

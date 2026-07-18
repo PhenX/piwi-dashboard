@@ -34,6 +34,9 @@ const { data: traceData, refresh: refreshTraces } = await useFetch<TraceInfo[]>(
   `/api/test-run-cases/${testCaseId}/traces`,
 );
 
+/** Whether a trace file exists for this execution — unlocks the "go deeper" evidence views. */
+const hasTrace = computed(() => (traceData.value?.length ?? 0) > 0);
+
 useHead(
   computed(() => ({
     title: `${testCase.value?.title || `Test run case #${testCaseId}`} — Piwi Dashboard`,
@@ -400,6 +403,7 @@ const errorEl = ref<HTMLElement | null>(null);
 const consoleEl = ref<HTMLElement | null>(null);
 const networkEl = ref<HTMLElement | null>(null);
 const testSourceCard = ref<{ reveal: () => void } | null>(null);
+const networkCard = ref<{ showTraceMode: () => void } | null>(null);
 const evidenceCard = ref<{ reveal: () => void } | null>(null);
 const envDiffCard = ref<{ reveal: () => void } | null>(null);
 const visualDiffCard = ref<{ reveal: () => void } | null>(null);
@@ -424,6 +428,11 @@ const sectionToAction: Record<string, () => void> = {
   artifacts: () => evidenceCard.value?.reveal(),
   console: () => scrollToEl(consoleEl.value),
   networkRequests: () => scrollToEl(networkEl.value),
+  traceCallStack: () => testSourceCard.value?.reveal(),
+  traceNetwork: () => {
+    networkCard.value?.showTraceMode();
+    scrollToEl(networkEl.value);
+  },
   steps: () => {
     activeTab.value = 'steps';
   },
@@ -541,37 +550,19 @@ provide(clusterSectionLocatorKey, {
 
               <!-- Left column: evidence funnel -->
               <div class="space-y-4 xl:order-1 min-w-0">
-                <!-- Test source: the failing line and the callers above it -->
-                <CollapsibleSectionCard
-                  v-if="testCase?.testSourceFrames?.length || testCase?.testSource"
+                <!-- Test source: the failing line and its callers; full trace call stack when available -->
+                <TestSourceCard
+                  v-if="testCase?.testSourceFrames?.length || testCase?.testSource || hasTrace"
                   ref="testSourceCard"
                   storage-key="case-test-source"
-                  icon="i-lucide-code"
-                  :count="testCase?.testSourceFrames?.length || null"
-                  title="Test source"
-                  help="case.test-source"
-                >
-                  <template #folded>
-                    <template v-if="(testCase?.testSourceFrames?.length ?? 0) > 1">
-                      The failing line and {{ (testCase?.testSourceFrames?.length ?? 0) - 1 }} caller{{
-                        (testCase?.testSourceFrames?.length ?? 0) - 1 === 1 ? '' : 's'
-                      }}
-                    </template>
-                    <template v-else>Source around the failing assertion</template>
-                  </template>
-                  <div class="max-h-[32rem] overflow-y-auto">
-                    <TestSourceStack
-                      v-if="testCase?.testSourceFrames?.length"
-                      :frames="testCase.testSourceFrames"
-                      :project-key="testCase?.testRun?.project?.id"
-                      :project-name="testCase?.testRun?.project?.name"
-                    />
-                    <MarkdownPreview
-                      v-else-if="testCase?.testSource"
-                      :text="'```typescript\n' + testCase.testSource + '\n```'"
-                    />
-                  </div>
-                </CollapsibleSectionCard>
+                  :frames="testCase?.testSourceFrames ?? null"
+                  :test-source="testCase?.testSource ?? null"
+                  :run-id="testCase?.testRun?.id ?? null"
+                  :test-runs-case-id="Number(testCaseId)"
+                  :has-trace="hasTrace"
+                  :project-key="testCase?.testRun?.project?.id"
+                  :project-name="testCase?.testRun?.project?.name"
+                />
 
                 <!-- Screenshots, video, traces, non-media attachments -->
                 <TestCaseEvidenceCard
@@ -612,9 +603,15 @@ provide(clusterSectionLocatorKey, {
                   <TestCaseConsoleCard :entries="(testCase as any)?.consoleLogs ?? []" />
                 </div>
 
-                <!-- Network requests + backend logs -->
-                <div v-if="networkRequests.length > 0" ref="networkEl" class="scroll-mt-4">
-                  <TestCaseNetworkRequests :requests="networkRequests" />
+                <!-- Network requests + backend logs; full trace network when available -->
+                <div v-if="networkRequests.length > 0 || hasTrace" ref="networkEl" class="scroll-mt-4">
+                  <TestCaseNetworkRequests
+                    ref="networkCard"
+                    :requests="networkRequests"
+                    :run-id="testCase?.testRun?.id ?? null"
+                    :test-runs-case-id="Number(testCaseId)"
+                    :has-trace="hasTrace"
+                  />
                 </div>
 
                 <!-- App state at test end -->
@@ -777,7 +774,13 @@ provide(clusterSectionLocatorKey, {
               v-if="(testCase as any)?.consoleLogs?.length"
               :entries="(testCase as any)?.consoleLogs ?? []"
             />
-            <TestCaseNetworkRequests v-if="networkRequests.length > 0" :requests="networkRequests" />
+            <TestCaseNetworkRequests
+              v-if="networkRequests.length > 0 || hasTrace"
+              :requests="networkRequests"
+              :run-id="testCase?.testRun?.id ?? null"
+              :test-runs-case-id="Number(testCaseId)"
+              :has-trace="hasTrace"
+            />
 
             <div
               v-if="
