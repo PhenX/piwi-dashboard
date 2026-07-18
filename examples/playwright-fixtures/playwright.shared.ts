@@ -15,8 +15,9 @@ export const baseConfig = defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'node app/server.mjs',
+    command: 'npx nitro dev --port 4173',
     port: 4173,
     reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
   },
 });

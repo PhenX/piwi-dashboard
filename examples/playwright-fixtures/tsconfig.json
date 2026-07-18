@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["tests/**/*.ts", "playwright.config.ts", "playwright.manual-reporter.config.ts", "playwright.shared.ts"]
+  "include": ["app/**/*.ts", "tests/**/*.ts", "nitro.config.ts", "playwright.config.ts", "playwright.manual-reporter.config.ts", "playwright.shared.ts"]
 }
