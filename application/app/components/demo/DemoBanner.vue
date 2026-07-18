@@ -31,6 +31,7 @@ if (config.public.demoMode) {
         </span>
         <DemoUserSwitcher />
         <DemoSimulator />
+        <DemoResetButton />
       </div>
     </div>
   </Teleport>

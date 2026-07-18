@@ -1,32 +1,7 @@
 <script setup lang="ts">
 const runtimeConfig = useRuntimeConfig();
 const isDemoMode = runtimeConfig.public.demoMode;
-const isResetting = ref(false);
-const toast = useToast();
-
-async function resetDemo() {
-  isResetting.value = true;
-  try {
-    const { resetDemoDb } = await import('~/demo/db.client');
-    await resetDemoDb();
-    toast.add({
-      title: 'Demo reset',
-      description: 'The demo database has been reset to its initial state.',
-      icon: 'i-lucide-refresh-cw',
-      color: 'success',
-    });
-    // Brief delay so the success toast is visible before the reload clears the page
-    setTimeout(() => window.location.reload(), 800);
-  } catch (e) {
-    toast.add({
-      title: 'Reset failed',
-      description: String(e),
-      icon: 'i-lucide-x-circle',
-      color: 'error',
-    });
-    isResetting.value = false;
-  }
-}
+const { isResetting, resetDemo } = useDemoReset();
 </script>
 
 <template>
@@ -48,8 +23,8 @@ async function resetDemo() {
       <div>
         <p class="font-medium text-sm">Reset demo data</p>
         <p class="text-sm text-muted">
-          Wipe the in-browser database and reload with the original seed data. All changes made during this demo session
-          will be lost.
+          Wipe the in-browser database and reload with fresh sample data dated to the current moment. All changes made
+          during this demo session will be lost.
         </p>
       </div>
     </div>
