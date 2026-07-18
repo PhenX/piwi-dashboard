@@ -121,7 +121,9 @@ async function main() {
 
   // ── Trace ──────────────────────────────────────────────────────────────
   const traceContext = await browser.newContext({ viewport: { width: 640, height: 480 } });
-  await traceContext.tracing.start({ screenshots: true, snapshots: true, sources: false });
+  // sources: true embeds this script's own source under resources/src@… so the
+  // demo can show the full-call-stack-with-source evidence view.
+  await traceContext.tracing.start({ screenshots: true, snapshots: true, sources: true });
   const tracePage = await traceContext.newPage();
   tracePage._demoBaseUrl = baseUrl;
   await runScenario(tracePage);

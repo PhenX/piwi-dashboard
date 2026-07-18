@@ -1416,6 +1416,7 @@ const FAILURE_DIAGNOSES = [
       evidence: [
         'TimeoutError fires during locator.click in both affected tests [executionError]',
         'The SCM diff adds a third-party payment SDK fetched before the form is enabled [scmInvestigation]',
+        'The full call stack from the trace pins the timeout inside the checkout flow helper [traceCallStack]',
         'Recurs on high-load CI runs [recurrenceFlakiness]',
       ],
       investigationSteps: [

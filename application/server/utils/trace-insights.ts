@@ -524,3 +524,129 @@ function bytesToBase64(bytes: Uint8Array): string {
   }
   return btoa(binary);
 }
+
+// ---------------------------------------------------------------------------
+// AI diagnosis section formatting (shared by the server context builder and
+// the demo's diagnosis-context mirror — single source of the markdown)
+// ---------------------------------------------------------------------------
+
+/**
+ * Render the trace call stack as a diagnosis-context markdown section:
+ * in-project frames bold with a `>`-marked source window, dependency frames
+ * one-line. Returns null when there is nothing to show.
+ */
+export function formatTraceCallStackSection(
+  result: TraceCallStackResponse,
+  maxFrames: number,
+): { markdown: string; coverage: { frames: number; framesWithSource: number } } | null {
+  if (result.status !== 'ok' || !result.frames?.length || maxFrames <= 0) return null;
+
+  const frames = result.frames.slice(0, maxFrames);
+  const failedIndex = Math.max(
+    0,
+    frames.findIndex((f) => f.inProject),
+  );
+  const lines: string[] = ['## Full Call Stack (from trace)'];
+  if (result.apiName) {
+    lines.push(`Failing action: \`${result.apiName}\`${result.errorMessage ? ` — ${result.errorMessage}` : ''}`);
+  }
+  frames.forEach((frame, i) => {
+    const fn = frame.functionName ? ` in \`${frame.functionName}\`` : '';
+    if (!frame.inProject) {
+      lines.push(`- ${frame.file}:${frame.line}${fn} (dependency)`);
+      return;
+    }
+    lines.push(`- **${frame.file}:${frame.line}**${fn}${i === failedIndex ? ' ← failed here' : ''}`);
+    if (frame.source) {
+      const code = frame.source.lines.map((text, j) => {
+        const n = frame.source!.startLine + j;
+        return `${n === frame.line ? '>' : ' '} ${String(n).padStart(4)} | ${text}`;
+      });
+      lines.push('```', ...code, '```');
+    }
+  });
+  if (result.frames.length > frames.length) {
+    lines.push(`- … ${result.frames.length - frames.length} more frames (capped)`);
+  }
+
+  return {
+    markdown: lines.join('\n'),
+    coverage: { frames: frames.length, framesWithSource: frames.filter((f) => f.source).length },
+  };
+}
+
+/**
+ * Pick the requests worth showing the model: failed first, then during the
+ * failing action, then slow — chronological within the cap.
+ */
+export function selectTraceNetworkRequests(
+  result: TraceNetworkResponse,
+  maxRequests: number,
+  slowRequestMs: number,
+): TraceNetworkEntry[] {
+  if (result.status !== 'ok' || !result.requests?.length || maxRequests <= 0) return [];
+  const score = (r: TraceNetworkEntry) =>
+    (r.failed ? 4 : 0) + (r.duringFailure ? 2 : 0) + (r.duration >= slowRequestMs ? 1 : 0);
+  return [...result.requests]
+    .sort((a, b) => score(b) - score(a) || a.start - b.start)
+    .slice(0, maxRequests)
+    .sort((a, b) => a.start - b.start);
+}
+
+/** A masked body excerpt appended to the network section for a failed request. */
+export interface TraceNetworkBodyExcerpt {
+  label: string;
+  content: string;
+}
+
+/**
+ * Render the trace network activity as a diagnosis-context markdown section.
+ * `picked` comes from {@link selectTraceNetworkRequests}; body excerpts are
+ * fetched by the caller (server: storage pool, demo: ZIP entries).
+ */
+export function formatTraceNetworkSection(
+  result: TraceNetworkResponse,
+  picked: TraceNetworkEntry[],
+  bodyExcerpts: TraceNetworkBodyExcerpt[] = [],
+): { markdown: string; coverage: { requests: number; failed: number } } | null {
+  if (result.status !== 'ok' || !result.requests?.length || picked.length === 0) return null;
+
+  const all = result.requests;
+  const failedCount = all.filter((r) => r.failed).length;
+  const duringCount = all.filter((r) => r.duringFailure).length;
+  const summaryBits = [
+    `${all.length} requests recorded`,
+    failedCount > 0 ? `${failedCount} failed` : null,
+    duringCount > 0 ? `${duringCount} overlapping the failing action` : null,
+  ].filter(Boolean);
+  const lines: string[] = [
+    '## Network Activity (from trace)',
+    `${summaryBits.join(', ')}. Showing ${picked.length} (failed / during-failure / slow first, then chronological):`,
+  ];
+  for (const r of picked) {
+    const status = r.status > 0 ? String(r.status) : `failed${r.failureText ? ` (${r.failureText})` : ''}`;
+    const meta = [
+      `${Math.round(r.duration)}ms`,
+      r.responseBodySize != null ? formatByteSize(r.responseBodySize) : null,
+      r.mimeType ?? null,
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const marks = [r.duringFailure ? 'DURING FAILING ACTION' : null, r.failed ? 'FAILED' : null].filter(Boolean);
+    lines.push(`- ${r.method} ${r.url} → ${status} (${meta})${marks.length ? ` [${marks.join(', ')}]` : ''}`);
+  }
+  for (const excerpt of bodyExcerpts) {
+    lines.push('', `${excerpt.label}:`, '```', excerpt.content, '```');
+  }
+
+  return {
+    markdown: lines.join('\n'),
+    coverage: { requests: all.length, failed: failedCount },
+  };
+}
+
+function formatByteSize(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} MB`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)} KB`;
+  return `${n} B`;
+}

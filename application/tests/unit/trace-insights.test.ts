@@ -371,4 +371,27 @@ describe('committed demo trace integration', () => {
     expect(parsed.failingAction).not.toBeNull();
     expect(index!.byCallId.has(parsed.failingAction!.callId)).toBe(true);
   });
+
+  test('resolves real embedded sources via the src@{sha1(path)} convention', async () => {
+    // The committed trace is recorded with sources: true, so this exercises the
+    // production sha1(absolute path) → resources/src@{sha1}.txt mapping end to end.
+    const stacksTexts = entries.filter((e) => e.name.endsWith('.stacks')).map((e) => e.data.toString('utf8'));
+    const traceTexts = entries.filter((e) => e.name.endsWith('.trace')).map((e) => e.data.toString('utf8'));
+    const index = parseStacksTexts(stacksTexts)!;
+    const parsed = parseTraceTexts(traceTexts);
+
+    const resources = new Map(
+      entries.filter((e) => e.name.startsWith('resources/')).map((e) => [e.name.slice('resources/'.length), e.data]),
+    );
+    const reader: TraceResourceReader = async (name) => resources.get(name) ?? null;
+
+    const result = await buildTraceCallStack(parsed, index, reader, {});
+    expect(result.status).toBe('ok');
+    expect(result.hasSources).toBe(true);
+    const withSource = result.frames!.find((f) => f.source);
+    expect(withSource).toBeTruthy();
+    expect(withSource!.source!.lines.length).toBeGreaterThan(0);
+    // The window really covers the failing line of the recorded scenario script.
+    expect(withSource!.line).toBeGreaterThanOrEqual(withSource!.source!.startLine);
+  });
 });

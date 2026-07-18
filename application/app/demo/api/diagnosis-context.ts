@@ -36,6 +36,15 @@ import { getLocatorHealing } from '~~/server/utils/locator-healing';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
 import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
+import { apiGetDemoTraceStacks, apiGetDemoTraceNetwork, apiGetDemoTraceNetworkBody } from './trace-insights';
+import {
+  formatTraceCallStackSection,
+  formatTraceNetworkSection,
+  selectTraceNetworkRequests,
+  type TraceNetworkBodyExcerpt,
+} from '~~/server/utils/trace-insights';
+import { DEFAULT_CONTEXT_LIMITS } from '#shared/ai-context-limits';
+import type { TraceCallStackResponse, TraceNetworkResponse } from '~~/types/api';
 import { renderAppStateMarkdown, type PageStateLike } from '#shared/page-state';
 import { getLastPassPageState } from '#shared/handlers/test-cases';
 import type { ContextSection, DiagnosisContextCoverage, ScmChanges } from '~~/types/api';
@@ -65,6 +74,7 @@ const SECTION_ORDER = [
   'representativeExecution',
   'testSource',
   'sourceFiles',
+  'traceCallStack',
   'failingSteps',
   'steps',
   'ariaSnapshot',
@@ -74,6 +84,7 @@ const SECTION_ORDER = [
   'locatorHealing',
   'console',
   'networkRequests',
+  'traceNetwork',
   'serverLogs',
   'webVitals',
   'appState',
@@ -685,6 +696,40 @@ async function assemble(
         ...coverage,
         domSnapshot: { chars: domSnap.html.length, snapshotName: domSnap.snapshotName },
       };
+    }
+
+    // Full call stack + network activity, parsed in-browser from the same
+    // committed trace via the shared node-free builders/formatters.
+    const traceStack = (await apiGetDemoTraceStacks(rep.id)) as TraceCallStackResponse;
+    const stackFormatted = formatTraceCallStackSection(traceStack, DEFAULT_CONTEXT_LIMITS.traceStackFrames);
+    if (stackFormatted) {
+      push(section('traceCallStack', 'Full Call Stack (from Trace)', stackFormatted.markdown));
+      coverage = { ...coverage, traceCallStack: stackFormatted.coverage };
+    }
+
+    const traceNet = (await apiGetDemoTraceNetwork(rep.id)) as TraceNetworkResponse;
+    const netPicked = selectTraceNetworkRequests(
+      traceNet,
+      DEFAULT_CONTEXT_LIMITS.traceNetworkRequests,
+      DEFAULT_CONTEXT_LIMITS.slowRequestMs,
+    );
+    const netBodyExcerpts: TraceNetworkBodyExcerpt[] = [];
+    for (const r of netPicked.filter((p) => p.failed && p.bodySha1).slice(0, 2)) {
+      const body = (await apiGetDemoTraceNetworkBody(rep.id, new URLSearchParams({ sha1: r.bodySha1! }))) as {
+        status: string;
+        content?: string;
+      };
+      if (body.status === 'ok' && body.content) {
+        netBodyExcerpts.push({
+          label: `Response body of failed ${r.method} ${r.url} (excerpt)`,
+          content: body.content.slice(0, 500),
+        });
+      }
+    }
+    const netFormatted = formatTraceNetworkSection(traceNet, netPicked, netBodyExcerpts);
+    if (netFormatted) {
+      push(section('traceNetwork', 'Network Activity (from Trace)', netFormatted.markdown));
+      coverage = { ...coverage, traceNetwork: netFormatted.coverage };
     }
   }
 

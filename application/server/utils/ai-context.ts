@@ -32,6 +32,12 @@ import { resolveContextLimits } from './ai-context-limits';
 import type { ContextLimits } from '#shared/ai-context-limits';
 import { getCachedTraceSection, getTraceFailingActionSection, setCachedTraceSection } from './trace-parser';
 import { getTraceCallStackFromBlob, getTraceNetworkBodyFromBlob, getTraceNetworkFromBlob } from './trace-evidence';
+import {
+  formatTraceCallStackSection,
+  formatTraceNetworkSection,
+  selectTraceNetworkRequests,
+  type TraceNetworkBodyExcerpt,
+} from './trace-insights';
 import { getTraceDomSnapshot } from './dom-snapshot';
 import { renderAppStateMarkdown, type PageStateLike } from '#shared/page-state';
 import { getLastPassPageState } from '#shared/handlers/test-cases';
@@ -863,40 +869,10 @@ async function traceCallStackSection(
   }
 
   const result = await getTraceCallStackFromBlob(blobPath, rep.testFilePath ?? null);
-  if (result.status !== 'ok' || !result.frames?.length) return { section: null, coverage: null };
+  const formatted = formatTraceCallStackSection(result, limits.traceStackFrames);
+  if (!formatted) return { section: null, coverage: null };
 
-  const frames = result.frames.slice(0, limits.traceStackFrames);
-  const failedIndex = Math.max(
-    0,
-    frames.findIndex((f) => f.inProject),
-  );
-  const lines: string[] = ['## Full Call Stack (from trace)'];
-  if (result.apiName) {
-    lines.push(`Failing action: \`${result.apiName}\`${result.errorMessage ? ` — ${result.errorMessage}` : ''}`);
-  }
-  frames.forEach((frame, i) => {
-    const fn = frame.functionName ? ` in \`${frame.functionName}\`` : '';
-    if (!frame.inProject) {
-      lines.push(`- ${frame.file}:${frame.line}${fn} (dependency)`);
-      return;
-    }
-    lines.push(`- **${frame.file}:${frame.line}**${fn}${i === failedIndex ? ' ← failed here' : ''}`);
-    if (frame.source) {
-      const code = frame.source.lines.map((text, j) => {
-        const n = frame.source!.startLine + j;
-        return `${n === frame.line ? '>' : ' '} ${String(n).padStart(4)} | ${text}`;
-      });
-      lines.push('```', ...code, '```');
-    }
-  });
-  if (result.frames.length > frames.length) {
-    lines.push(`- … ${result.frames.length - frames.length} more frames (capped)`);
-  }
-
-  const value = {
-    section: lines.join('\n'),
-    coverage: { frames: frames.length, framesWithSource: frames.filter((f) => f.source).length },
-  };
+  const value = { section: formatted.markdown, coverage: formatted.coverage };
   setCachedTraceSection(db, cacheKey, JSON.stringify(value)).catch(() => {});
   return value;
 }
@@ -929,59 +905,24 @@ async function traceNetworkSection(
   }
 
   const result = await getTraceNetworkFromBlob(blobPath);
-  if (result.status !== 'ok' || !result.requests?.length) return { section: null, coverage: null };
-
-  const all = result.requests;
-  const score = (r: (typeof all)[number]) =>
-    (r.failed ? 4 : 0) + (r.duringFailure ? 2 : 0) + (r.duration >= limits.slowRequestMs ? 1 : 0);
-  const picked = [...all]
-    .sort((a, b) => score(b) - score(a) || a.start - b.start)
-    .slice(0, limits.traceNetworkRequests)
-    .sort((a, b) => a.start - b.start);
-
-  const failedCount = all.filter((r) => r.failed).length;
-  const duringCount = all.filter((r) => r.duringFailure).length;
-  const summaryBits = [
-    `${all.length} requests recorded`,
-    failedCount > 0 ? `${failedCount} failed` : null,
-    duringCount > 0 ? `${duringCount} overlapping the failing action` : null,
-  ].filter(Boolean);
-  const lines: string[] = [
-    '## Network Activity (from trace)',
-    `${summaryBits.join(', ')}. Showing ${picked.length} (failed / during-failure / slow first, then chronological):`,
-  ];
-  for (const r of picked) {
-    const status = r.status > 0 ? String(r.status) : `failed${r.failureText ? ` (${r.failureText})` : ''}`;
-    const meta = [
-      `${Math.round(r.duration)}ms`,
-      r.responseBodySize != null ? formatFileSize(r.responseBodySize) : null,
-      r.mimeType ?? null,
-    ]
-      .filter(Boolean)
-      .join(', ');
-    const marks = [r.duringFailure ? 'DURING FAILING ACTION' : null, r.failed ? 'FAILED' : null].filter(Boolean);
-    lines.push(`- ${r.method} ${r.url} → ${status} (${meta})${marks.length ? ` [${marks.join(', ')}]` : ''}`);
-  }
+  const picked = selectTraceNetworkRequests(result, limits.traceNetworkRequests, limits.slowRequestMs);
 
   // Failed textual responses often carry the actual server error — quote a bit.
-  const failedWithBody = picked.filter((r) => r.failed && r.bodySha1).slice(0, TRACE_NET_BODY_EXCERPTS);
-  for (const r of failedWithBody) {
+  const bodyExcerpts: TraceNetworkBodyExcerpt[] = [];
+  for (const r of picked.filter((p) => p.failed && p.bodySha1).slice(0, TRACE_NET_BODY_EXCERPTS)) {
     const body = await getTraceNetworkBodyFromBlob(blobPath, r.bodySha1!);
     if (body.status === 'ok' && body.content) {
-      lines.push(
-        '',
-        `Response body of failed ${r.method} ${r.url} (excerpt):`,
-        '```',
-        body.content.slice(0, TRACE_NET_BODY_EXCERPT_CHARS),
-        '```',
-      );
+      bodyExcerpts.push({
+        label: `Response body of failed ${r.method} ${r.url} (excerpt)`,
+        content: body.content.slice(0, TRACE_NET_BODY_EXCERPT_CHARS),
+      });
     }
   }
 
-  const value = {
-    section: lines.join('\n'),
-    coverage: { requests: all.length, failed: failedCount },
-  };
+  const formatted = formatTraceNetworkSection(result, picked, bodyExcerpts);
+  if (!formatted) return { section: null, coverage: null };
+
+  const value = { section: formatted.markdown, coverage: formatted.coverage };
   setCachedTraceSection(db, cacheKey, JSON.stringify(value)).catch(() => {});
   return value;
 }
