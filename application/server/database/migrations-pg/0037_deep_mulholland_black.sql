@@ -1,0 +1,1 @@
+CREATE INDEX "idx_markers_run_id" ON "markers" USING btree ("run_id");

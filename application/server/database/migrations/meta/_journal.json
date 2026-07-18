@@ -246,6 +246,20 @@
       "when": 1784242098846,
       "tag": "0034_case_payloads",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1784401154192,
+      "tag": "0035_real_namora",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1784402219086,
+      "tag": "0036_ancient_amazoness",
+      "breakpoints": true
     }
   ]
 }
