@@ -7,6 +7,8 @@ import { getAnalyticsCiTimeTrend } from './ci-time-trend';
 import { getAnalyticsWastedTime } from './wasted-time';
 import { getAnalyticsClusterLandscape } from './cluster-landscape';
 import { getAnalyticsFlakyLeaderboard } from './flaky-leaderboard';
+import { getAnalyticsRegressionVelocity } from './regression-velocity';
+import { getAnalyticsSlowEndpoints } from './slow-endpoints';
 import type { ProjectAccess } from './common';
 
 /**
@@ -19,13 +21,24 @@ export async function getAnalyticsInsights(
   scope: AnalyticsScope,
   access: ProjectAccess = 'all',
 ): Promise<AnalyticsInsight[]> {
-  const [portfolio, ciTime, wastedTime, clusters, flakyTests] = await Promise.all([
+  const [portfolio, ciTime, wastedTime, clusters, flakyTests, regressionVelocity, slowEndpoints] = await Promise.all([
     getAnalyticsPortfolio(db, scope, access),
     getAnalyticsCiTimeTrend(db, scope, access),
     getAnalyticsWastedTime(db, scope, access),
     getAnalyticsClusterLandscape(db, scope, access),
     getAnalyticsFlakyLeaderboard(db, scope, access),
+    getAnalyticsRegressionVelocity(db, scope, access),
+    getAnalyticsSlowEndpoints(db, scope, access),
   ]);
 
-  return evaluateInsightRules({ scope, portfolio, ciTime, wastedTime, clusters, flakyTests });
+  return evaluateInsightRules({
+    scope,
+    portfolio,
+    ciTime,
+    wastedTime,
+    clusters,
+    flakyTests,
+    regressionVelocity,
+    slowEndpoints,
+  });
 }

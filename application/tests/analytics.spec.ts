@@ -5,6 +5,7 @@
  */
 import { test, expect } from './fixtures';
 import { PROJECT } from '#shared/test-project-names';
+import { ANALYTICS_WIDGETS } from '#shared/analytics/registry';
 
 test.describe.serial('Analytics API', () => {
   let projectId: number;
@@ -89,17 +90,10 @@ test.describe.serial('Analytics API', () => {
   });
 
   test('every registered widget responds', async ({ request }) => {
-    for (const widget of [
-      'insights',
-      'portfolio',
-      'pass-rate-heatmap',
-      'ci-time-trend',
-      'wasted-time',
-      'flaky-leaderboard',
-      'cluster-landscape',
-    ]) {
-      const response = await request.get(`/api/analytics/${widget}?days=7`);
-      expect(response.ok(), `widget ${widget} should respond`).toBeTruthy();
+    // Driven by the registry so a newly added widget is covered automatically.
+    for (const widget of ANALYTICS_WIDGETS) {
+      const response = await request.get(`/api/analytics/${widget.id}?days=7`);
+      expect(response.ok(), `widget ${widget.id} should respond`).toBeTruthy();
     }
   });
 });
@@ -115,6 +109,9 @@ test.describe('Analytics page', () => {
     await expect(page.getByRole('heading', { name: 'Wasted CI time' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Flakiest tests' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Failure clusters' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Regression velocity' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Browser matrix' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Slow endpoints' })).toBeVisible();
   });
 
   test('is reachable from the sidebar', async ({ page }) => {

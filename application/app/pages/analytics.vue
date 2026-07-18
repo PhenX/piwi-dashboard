@@ -10,6 +10,9 @@ import {
   WastedTimeChart,
   GlobalFlakyLeaderboard,
   ClusterLandscape,
+  RegressionVelocityChart,
+  BrowserMatrix,
+  SlowEndpointsTable,
 } from '#components';
 
 useHead({ title: 'Analytics - Piwi Dashboard' });
@@ -43,6 +46,9 @@ const WIDGET_COMPONENTS: Record<AnalyticsWidgetId, Component> = {
   'wasted-time': WastedTimeChart,
   'flaky-leaderboard': GlobalFlakyLeaderboard,
   'cluster-landscape': ClusterLandscape,
+  'regression-velocity': RegressionVelocityChart,
+  'browser-matrix': BrowserMatrix,
+  'slow-endpoints': SlowEndpointsTable,
 };
 </script>
 

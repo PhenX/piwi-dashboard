@@ -15,6 +15,9 @@ const { getAnalyticsPassRateHeatmap } = await import('../../shared/handlers/anal
 const { getAnalyticsCiTimeTrend } = await import('../../shared/handlers/analytics/ci-time-trend');
 const { getAnalyticsWastedTime } = await import('../../shared/handlers/analytics/wasted-time');
 const { getAnalyticsClusterLandscape } = await import('../../shared/handlers/analytics/cluster-landscape');
+const { getAnalyticsRegressionVelocity } = await import('../../shared/handlers/analytics/regression-velocity');
+const { getAnalyticsBrowserMatrix } = await import('../../shared/handlers/analytics/browser-matrix');
+const { getAnalyticsSlowEndpoints } = await import('../../shared/handlers/analytics/slow-endpoints');
 const { evaluateInsightRules } = await import('../../shared/analytics/insight-rules');
 const { parseAnalyticsScope } = await import('../../shared/analytics/scope');
 const { ANALYTICS_WIDGETS } = await import('../../shared/analytics/registry');
@@ -86,11 +89,59 @@ beforeAll(async () => {
   // Non-terminal run — never counted.
   await seedRun({ projectId: 2, daysAgo: 1, status: 'running' });
 
-  // Wasted time on project 1's latest failing run.
+  // Wasted time + regression signals + browser split on project 1's latest failing run.
   await db.insert(schema.testCases).values({ id: 1, projectId: 1, filePath: 'checkout.spec.ts', title: 'pays' });
-  await db.insert(schema.testRunsCases).values([
-    { testRunId: failingRunId, testCaseId: 1, status: 'failed', duration: 120_000, wastedTimeMs: 60_000 },
-    { testRunId: failingRunId, testCaseId: 1, status: 'passed', duration: 30_000, retries: 1, wastedTimeMs: 0 },
+  const insertedCases = await db
+    .insert(schema.testRunsCases)
+    .values([
+      {
+        testRunId: failingRunId,
+        testCaseId: 1,
+        status: 'failed',
+        duration: 120_000,
+        wastedTimeMs: 60_000,
+        browserName: 'chromium',
+        isNewRegression: 1,
+      },
+      {
+        testRunId: failingRunId,
+        testCaseId: 1,
+        status: 'passed',
+        duration: 30_000,
+        retries: 1,
+        wastedTimeMs: 0,
+        browserName: 'webkit',
+        isNewFlaky: 1,
+      },
+    ])
+    .returning({ id: schema.testRunsCases.id });
+
+  // Network requests captured on those executions — one slow shared endpoint.
+  await db.insert(schema.networkRequests).values([
+    {
+      testRunsCaseId: insertedCases[0]!.id,
+      testRunId: failingRunId,
+      method: 'GET',
+      normalizedUrl: '/api/cart',
+      status: 200,
+      duration: 1500,
+    },
+    {
+      testRunsCaseId: insertedCases[0]!.id,
+      testRunId: failingRunId,
+      method: 'GET',
+      normalizedUrl: '/api/cart',
+      status: 500,
+      duration: 2500,
+    },
+    {
+      testRunsCaseId: insertedCases[1]!.id,
+      testRunId: failingRunId,
+      method: 'GET',
+      normalizedUrl: '/api/cart',
+      status: 200,
+      duration: 1800,
+    },
   ]);
 
   // Clusters: one old open on project 1, one fresh open + one resolved on project 2.
@@ -332,9 +383,103 @@ describe('insight rules', () => {
       },
       clusters: { totalOpen: 0, resolvedInPeriod: 0, byErrorType: [], clusters: [] },
       flakyTests: [],
+      regressionVelocity: {
+        points: [],
+        bucketDays: 1,
+        totalRegressions: 0,
+        totalNewFlaky: 0,
+        prevRegressions: null,
+        deltaPct: null,
+      },
+      slowEndpoints: { endpoints: [], totalRequests: 0 },
     });
     expect(insights).toHaveLength(1);
     expect(insights[0]!.ruleId).toBe('ci-time-growth');
     expect(insights[0]!.severity).toBe('warning');
+  });
+
+  test('regression-surge and slow-shared-endpoint rules fire on their inputs', () => {
+    const insights = evaluateInsightRules({
+      scope: DEFAULT_SCOPE,
+      portfolio: [],
+      ciTime: {
+        points: [],
+        bucketDays: 1,
+        totalMinutes: 0,
+        runCount: 0,
+        prevTotalMinutes: null,
+        deltaPct: null,
+        avgRunMinutes: null,
+      },
+      wastedTime: { points: [], bucketDays: 1, totalWaitMinutes: 0, totalFailedExecMinutes: 0, byProject: [] },
+      clusters: { totalOpen: 0, resolvedInPeriod: 0, byErrorType: [], clusters: [] },
+      flakyTests: [],
+      regressionVelocity: {
+        points: [],
+        bucketDays: 1,
+        totalRegressions: 12,
+        totalNewFlaky: 3,
+        prevRegressions: 4,
+        deltaPct: 200,
+      },
+      slowEndpoints: {
+        endpoints: [
+          {
+            method: 'GET',
+            route: '/api/cart',
+            requests: 40,
+            p50Ms: 900,
+            p90Ms: 1800,
+            maxMs: 2500,
+            errorRate: 12.5,
+            projectCount: 3,
+          },
+        ],
+        totalRequests: 40,
+      },
+    });
+    const ruleIds = insights.map((i) => i.ruleId);
+    expect(ruleIds).toContain('regression-surge');
+    expect(ruleIds).toContain('slow-shared-endpoint');
+  });
+});
+
+describe('getAnalyticsRegressionVelocity', () => {
+  test('counts new regressions and newly-flaky executions', async () => {
+    const velocity = await getAnalyticsRegressionVelocity(db, DEFAULT_SCOPE, 'all');
+    expect(velocity.totalRegressions).toBe(1);
+    expect(velocity.totalNewFlaky).toBe(1);
+    expect(velocity.points.some((p) => p.regressions > 0)).toBe(true);
+  });
+});
+
+describe('getAnalyticsBrowserMatrix', () => {
+  test('builds a project × browser pass-rate grid', async () => {
+    const matrix = await getAnalyticsBrowserMatrix(db, DEFAULT_SCOPE, 'all');
+    expect(matrix.browsers).toEqual(['chromium', 'webkit']);
+    const checkout = matrix.rows.find((r) => r.projectId === 1)!;
+    const chromiumRate = checkout.cells[matrix.browsers.indexOf('chromium')];
+    const webkitRate = checkout.cells[matrix.browsers.indexOf('webkit')];
+    expect(chromiumRate).toBe(0); // the one chromium execution failed
+    expect(webkitRate).toBe(100); // the one webkit execution passed
+  });
+});
+
+describe('getAnalyticsSlowEndpoints', () => {
+  test('aggregates network requests by route with percentiles and error rate', async () => {
+    const slow = await getAnalyticsSlowEndpoints(db, DEFAULT_SCOPE, 'all');
+    expect(slow.totalRequests).toBe(3);
+    const cart = slow.endpoints.find((e) => e.route === '/api/cart')!;
+    expect(cart.method).toBe('GET');
+    expect(cart.requests).toBe(3);
+    expect(cart.maxMs).toBe(2500);
+    expect(cart.errorRate).toBeCloseTo(33.3, 1); // 1 of 3 was a 500
+    expect(cart.projectCount).toBe(1);
+  });
+
+  test('respects the access scope', async () => {
+    const slow = await getAnalyticsSlowEndpoints(db, DEFAULT_SCOPE, new Set([2]));
+    expect(slow.totalRequests).toBe(0);
+    expect(slow.endpoints).toEqual([]);
   });
 });

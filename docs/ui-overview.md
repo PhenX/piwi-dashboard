@@ -56,6 +56,9 @@ A cross-project decision view — where Home answers *"what's happening now"*, A
 - **Wasted CI time** — minutes that produced no signal: time inside wait steps plus time executing attempts that ended failed or timed out, split by project.
 - **Flakiest tests** — the worst flaky tests across all projects, using the same scoring as each project's Flaky tests tab, ranked by wasted-CI impact.
 - **Failure clusters** — open root causes across all projects, with age, occurrences, and error-type mix; the oldest unresolved cluster is highlighted.
+- **Regression velocity** — new regressions (tests that passed in a baseline and now fail) and newly-flaky tests introduced per period, as a stacked bar with the change vs the previous period. Rising bars mean quality debt is accumulating.
+- **Browser matrix** — pass rate per project × browser, so a suite that's green on one browser but failing on another stands out at a glance.
+- **Slow endpoints** — backend calls captured during tests, aggregated across all projects by route: p50/p90 latency, error rate, and how many projects hit each one, so a shared endpoint regressing surfaces before it's obvious in any single suite.
 
 The analytics surface is **widget-driven**: each widget is a registry entry (`shared/analytics/registry.ts`) backed by a shared handler (`shared/handlers/analytics/`) and served by one generic endpoint, `GET /api/analytics/:widget`. See [Flaky tests & analytics](./flaky-tests).
 

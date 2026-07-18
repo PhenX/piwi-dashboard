@@ -8,6 +8,9 @@ import { getAnalyticsCiTimeTrend } from './ci-time-trend';
 import { getAnalyticsWastedTime } from './wasted-time';
 import { getAnalyticsFlakyLeaderboard } from './flaky-leaderboard';
 import { getAnalyticsClusterLandscape } from './cluster-landscape';
+import { getAnalyticsRegressionVelocity } from './regression-velocity';
+import { getAnalyticsBrowserMatrix } from './browser-matrix';
+import { getAnalyticsSlowEndpoints } from './slow-endpoints';
 import { getAnalyticsInsights } from './insights';
 
 export { isAnalyticsWidgetId };
@@ -27,6 +30,9 @@ const ANALYTICS_WIDGET_HANDLERS: Record<AnalyticsWidgetId, AnalyticsWidgetHandle
   'wasted-time': getAnalyticsWastedTime,
   'flaky-leaderboard': getAnalyticsFlakyLeaderboard,
   'cluster-landscape': getAnalyticsClusterLandscape,
+  'regression-velocity': getAnalyticsRegressionVelocity,
+  'browser-matrix': getAnalyticsBrowserMatrix,
+  'slow-endpoints': getAnalyticsSlowEndpoints,
 };
 
 export function runAnalyticsWidget(

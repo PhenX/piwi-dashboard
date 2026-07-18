@@ -150,6 +150,61 @@ export interface AnalyticsClusterLandscape {
   clusters: AnalyticsClusterRow[];
 }
 
+// ── Regression velocity ──────────────────────────────────────────────────────
+
+export interface AnalyticsRegressionPoint {
+  /** Bucket start date (ISO `YYYY-MM-DD`). */
+  date: string;
+  /** Executions first failing this period (`isNewRegression`). */
+  regressions: number;
+  /** Executions newly flaky this period (`isNewFlaky`). */
+  newFlaky: number;
+}
+
+export interface AnalyticsRegressionVelocity {
+  points: AnalyticsRegressionPoint[];
+  bucketDays: number;
+  totalRegressions: number;
+  totalNewFlaky: number;
+  /** Regressions in the previous equal-length period. Null without a baseline. */
+  prevRegressions: number | null;
+  deltaPct: number | null;
+}
+
+// ── Browser matrix ───────────────────────────────────────────────────────────
+
+export interface AnalyticsBrowserMatrix {
+  /** Browser identities present in the period (column order). */
+  browsers: string[];
+  rows: Array<{
+    projectId: number;
+    name: string;
+    label: string | null;
+    /** Pass rate (0–100) per browser; null = the project ran no tests on it. */
+    cells: Array<number | null>;
+  }>;
+}
+
+// ── Slow endpoints ───────────────────────────────────────────────────────────
+
+export interface AnalyticsSlowEndpointRow {
+  method: string;
+  route: string;
+  requests: number;
+  p50Ms: number;
+  p90Ms: number;
+  maxMs: number;
+  /** Share of requests with a 4xx/5xx status, 0–100. */
+  errorRate: number;
+  /** Distinct projects that hit this endpoint (shared-backend signal). */
+  projectCount: number;
+}
+
+export interface AnalyticsSlowEndpoints {
+  endpoints: AnalyticsSlowEndpointRow[];
+  totalRequests: number;
+}
+
 // ── Insights feed ────────────────────────────────────────────────────────────
 
 export type AnalyticsInsightSeverity = 'critical' | 'warning' | 'info' | 'positive';
