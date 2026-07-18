@@ -185,6 +185,51 @@ const PROJECT_TAGS = [
   { project_id: 5, tag_id: 3 }, // web-dashboard → critical
 ];
 
+// ── Timeline markers (dated project events overlaid on the trend charts) ────
+// Dated within project 1's run window (newest run 2025-04-25T08:30Z, ~8h apart)
+// so they land on the charts. Timestamps are rebased to load time like the runs.
+const MARKERS = [
+  {
+    id: 1,
+    project_id: 1,
+    occurred_at: ts('2025-04-22T12:00:00Z'),
+    label: 'Deployed checkout v2.4.0',
+    description: 'Rolled out the new payment provider integration.',
+    category: 'deploy',
+    environment: null,
+    source: 'manual',
+    run_id: null,
+    created_at: ts('2025-04-22T12:00:00Z'),
+    updated_at: ts('2025-04-22T12:00:00Z'),
+  },
+  {
+    id: 2,
+    project_id: 1,
+    occurred_at: ts('2025-04-20T09:00:00Z'),
+    label: 'Enabled strict CSP in production',
+    description: 'Tightened the content-security-policy header on the prod storefront.',
+    category: 'config',
+    environment: 'production',
+    source: 'manual',
+    run_id: null,
+    created_at: ts('2025-04-20T09:00:00Z'),
+    updated_at: ts('2025-04-20T09:00:00Z'),
+  },
+  {
+    id: 3,
+    project_id: 1,
+    occurred_at: ts('2025-04-24T18:30:00Z'),
+    label: 'Upstream payment API outage',
+    description: 'Third-party sandbox was down for ~40 min; expect failed checkouts.',
+    category: 'incident',
+    environment: null,
+    source: 'manual',
+    run_id: null,
+    created_at: ts('2025-04-24T18:30:00Z'),
+    updated_at: ts('2025-04-24T18:30:00Z'),
+  },
+];
+
 // ── Test suites & cases (from the fixture module) ──────────────────────────
 
 const TEST_SUITES = [];
@@ -2096,6 +2141,7 @@ const REBASE_SQL = [
   '-- Second-precision timestamp columns',
   `UPDATE tags SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE projects SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  `UPDATE markers SET occurred_at = occurred_at + ${D}, created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE users SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE test_suites SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE test_cases SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
@@ -2145,6 +2191,9 @@ const lines = [
   '',
   '-- Project-tag associations',
   insert('project_tags', PROJECT_TAGS),
+  '',
+  '-- Timeline markers',
+  insert('markers', MARKERS),
   '',
   '-- Test suites',
   insert('test_suites', TEST_SUITES),
