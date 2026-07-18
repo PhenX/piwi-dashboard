@@ -60,6 +60,7 @@ export default defineConfig({
         items: [
           { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
           { text: 'Flaky tests & analytics', link: '/flaky-tests' },
+          { text: 'Timeline markers', link: '/timeline-markers' },
           { text: 'Notifications & alerts', link: '/notifications' },
         ],
       },
