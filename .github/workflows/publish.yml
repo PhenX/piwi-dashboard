@@ -58,15 +58,98 @@ jobs:
           echo "npm install @piwitests/reporter" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
-  build-and-push:
-    runs-on: ubuntu-latest
+  # Build each architecture on its own NATIVE runner and push it by digest.
+  # Building linux/arm64 on a native arm runner (instead of QEMU emulation on an
+  # amd64 runner) is the main speed-up: the heavy npm ci + nuxt build no longer
+  # runs under emulation. The two arches run in parallel; the `merge` job below
+  # stitches the pushed digests into a single multi-arch manifest list.
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm  # GitHub-hosted native ARM; free for public repos
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
 
     steps:
+      - name: Prepare platform slug
+        # linux/amd64 -> linux-amd64 (used for artifact names and cache scopes)
+        run: echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+        env:
+          platform: ${{ matrix.platform }}
+
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Extract image labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PIWI_BUILD_SHA=${{ github.sha }}
+          # Registry cache is NOT branch-scoped (unlike type=gha), so release (v*)
+          # builds reuse the layers cached by main/edge builds. Per-arch ref keeps
+          # the two matrix legs from clobbering each other.
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-${{ env.PLATFORM_PAIR }}
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-${{ env.PLATFORM_PAIR }},mode=max
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Combine the per-arch digests pushed by the `build` matrix into one multi-arch
+  # manifest list per registry. imagetools reads the arch manifests from GHCR and
+  # (for Docker Hub) copies them across, so nothing is rebuilt or re-emulated here.
+  merge:
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -97,6 +180,13 @@ jobs:
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
 
+      - name: Create and push manifest list to GHCR
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+
       - name: Extract metadata for Docker Hub
         id: meta-dockerhub
         if: startsWith(github.ref, 'refs/tags/v')
@@ -109,34 +199,25 @@ jobs:
             type=semver,pattern={{major}}
             type=raw,value=latest
 
-      - name: Combine image tags
-        id: tags
+      - name: Create and push manifest list to Docker Hub
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: ${{ runner.temp }}/digests
         run: |
-          TAGS="${{ steps.meta-ghcr.outputs.tags }}"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            TAGS="${TAGS}"$'\n'"${{ steps.meta-dockerhub.outputs.tags }}"
-          fi
-          echo "all<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$TAGS" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v7
-        id: build
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.tags.outputs.all }}
-          labels: ${{ steps.meta-ghcr.outputs.labels }}
-          build-args: |
-            PIWI_BUILD_SHA=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+      - name: Inspect and capture digest
+        id: inspect
+        run: |
+          REF="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta-ghcr.outputs.version }}"
+          docker buildx imagetools inspect "$REF"
+          echo "digest=$(docker buildx imagetools inspect "$REF" --format '{{.Manifest.Digest}}')" >> "$GITHUB_OUTPUT"
 
       - name: Summary
         run: |
           IS_RELEASE="${{ startsWith(github.ref, 'refs/tags/v') }}"
+          PRIMARY_TAG="${{ steps.meta-ghcr.outputs.version }}"
           echo "## Container Image Published :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Registries" >> $GITHUB_STEP_SUMMARY
@@ -145,26 +226,32 @@ jobs:
             echo "- **Docker Hub**: \`phenx/piwitests-server\`" >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Platforms**: \`linux/amd64\`, \`linux/arm64\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Tags" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.tags.outputs.all }}" | while read -r tag; do
+          TAGS="${{ steps.meta-ghcr.outputs.tags }}"
+          if [[ "$IS_RELEASE" == "true" ]]; then
+            TAGS="${TAGS}"$'\n'"${{ steps.meta-dockerhub.outputs.tags }}"
+          fi
+          echo "$TAGS" | while read -r tag; do
             [[ -n "$tag" ]] && echo "- \`$tag\`" >> $GITHUB_STEP_SUMMARY
           done
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Image digest: \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Image digest: \`${{ steps.inspect.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Pull from GHCR" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${PRIMARY_TAG}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           if [[ "$IS_RELEASE" == "true" ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Pull from Docker Hub" >> $GITHUB_STEP_SUMMARY
             echo '```bash' >> $GITHUB_STEP_SUMMARY
-            echo "docker pull phenx/piwitests-server:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "docker pull phenx/piwitests-server:${PRIMARY_TAG}" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Run the container" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker run -p 3000:3000 -v \$(pwd)/.data:/app/.data ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "docker run -p 3000:3000 -v \$(pwd)/.data:/app/.data ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${PRIMARY_TAG}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
