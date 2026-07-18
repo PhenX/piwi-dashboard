@@ -19,6 +19,7 @@ import { getDemoDb } from '../db.client';
 import { getLocatorHealing, saveLocatorPick } from '~~/server/utils/locator-healing';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
+import { apiGetDemoTraceStacks, apiGetDemoTraceNetwork, apiGetDemoTraceNetworkBody } from './trace-insights';
 import {
   listProjects,
   getProject,
@@ -457,6 +458,21 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/dom-snapshot$/,
     handler: async (m, _body, query) => apiGetDemoDomSnapshot(+m[2]!, query),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/trace-stacks$/,
+    handler: async (m) => apiGetDemoTraceStacks(+m[2]!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/trace-network$/,
+    handler: async (m) => apiGetDemoTraceNetwork(+m[2]!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/trace-network-body$/,
+    handler: async (m, _body, query) => apiGetDemoTraceNetworkBody(+m[2]!, query),
   },
   // The demo cannot pixel-diff in the browser — it serves the overlay the
   // seed generated with the real diff code, straight from the files row.

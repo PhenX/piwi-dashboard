@@ -1,0 +1,652 @@
+/**
+ * Node-free parsing of the trace streams the DOM-snapshot path ignores: the
+ * `trace.stacks` call-stack index, the embedded `resources/src@{sha1}.txt`
+ * source files, and the HAR-like `resource-snapshot` events in `*.network`.
+ * Powers the "go deeper" evidence views (full call stack with source, full
+ * network trace) and their AI-diagnosis sections. Like `trace-events.ts`, this
+ * module must stay free of node imports so the browser demo can run the exact
+ * same code over the committed demo trace — only ZIP inflation and resource
+ * reads differ per runtime (see `TraceResourceReader`).
+ */
+import type { ParsedTraceData, TraceAction } from './trace-events';
+import { maskSensitiveText } from './dom-snapshot-render';
+import type {
+  TraceBodyResponse,
+  TraceCallStackResponse,
+  TraceNetworkEntry,
+  TraceNetworkResponse,
+  TraceStackFrame,
+} from '../../types/api';
+
+/** Reads one `resources/{name}` file of the trace — from the shared pool on the server, from the ZIP itself in the demo. */
+export type TraceResourceReader = (name: string) => Promise<Uint8Array | null>;
+
+/** A stack frame as stored in `trace.stacks`: [fileIndex, line, column, functionName?]. */
+export type RawStackFrame = [number, number, number, string?];
+
+export interface TraceStacksIndex {
+  /** Absolute file paths exactly as recorded on the machine that ran the tests. */
+  files: string[];
+  /** Normalized callId (`call@6`) → frames, innermost first. */
+  byCallId: Map<string, RawStackFrame[]>;
+}
+
+/**
+ * Parse one or more `*.stacks` JSON documents (`{ files, stacks: [[callId,
+ * frames]] }`). Stack keys are numeric in modern traces (`6` for `call@6`) and
+ * strings in older ones — both normalize to the event stream's `call@N` form.
+ * Returns null when nothing parseable was found.
+ */
+export function parseStacksTexts(texts: string[]): TraceStacksIndex | null {
+  const files: string[] = [];
+  const byCallId = new Map<string, RawStackFrame[]>();
+
+  for (const text of texts) {
+    let doc: unknown;
+    try {
+      doc = JSON.parse(text);
+    } catch {
+      continue;
+    }
+    if (!doc || typeof doc !== 'object') continue;
+    const docFiles = (doc as { files?: unknown }).files;
+    const docStacks = (doc as { stacks?: unknown }).stacks;
+    if (!Array.isArray(docFiles) || !Array.isArray(docStacks)) continue;
+
+    // File indexes are per-document; offset them when merging several docs.
+    const offset = files.length;
+    files.push(...docFiles.map((f) => String(f)));
+
+    for (const entry of docStacks) {
+      if (!Array.isArray(entry) || entry.length < 2) continue;
+      const [rawId, rawFrames] = entry as [unknown, unknown];
+      if (!Array.isArray(rawFrames)) continue;
+      const callId = typeof rawId === 'number' ? `call@${rawId}` : String(rawId);
+      const frames: RawStackFrame[] = [];
+      for (const frame of rawFrames) {
+        if (!Array.isArray(frame) || frame.length < 3) continue;
+        const [fileIdx, line, column, fn] = frame as [unknown, unknown, unknown, unknown];
+        if (typeof fileIdx !== 'number' || typeof line !== 'number' || typeof column !== 'number') continue;
+        frames.push([fileIdx + offset, line, column, typeof fn === 'string' ? fn : undefined]);
+      }
+      if (frames.length > 0 && !byCallId.has(callId)) byCallId.set(callId, frames);
+    }
+  }
+
+  return byCallId.size > 0 || files.length > 0 ? { files, byCallId } : null;
+}
+
+/** Hex SHA-1 of a string — how Playwright names embedded sources (`src@{sha1(absPath)}.txt`). */
+export async function sha1Hex(text: string): Promise<string> {
+  const digest = await globalThis.crypto.subtle.digest('SHA-1', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+const DEFAULT_MAX_FRAMES = 50;
+const DEFAULT_CONTEXT_LINES = 12;
+
+export interface BuildCallStackOptions {
+  /** The case's project-relative spec path (from the DB) — anchors abs-path → display-path derivation. */
+  knownTestFilePath?: string | null;
+  maxFrames?: number;
+  contextLines?: number;
+}
+
+/**
+ * Build the full-call-stack view for the failing action. The stack itself
+ * comes from `trace.stacks`; each distinct file's source is resolved by
+ * probing `src@{sha1(absPath)}.txt` through the reader — a miss (trace
+ * recorded with `sources: false`, or the resource was pruned) degrades that
+ * frame to `source: null`, never an error. When the failing action has no
+ * stack entry, the nearest preceding action that has one is used (its
+ * `apiName` is reported so the UI stays honest about whose stack it shows).
+ */
+export async function buildTraceCallStack(
+  parsed: ParsedTraceData,
+  stacks: TraceStacksIndex | null,
+  readResource: TraceResourceReader,
+  options: BuildCallStackOptions = {},
+): Promise<TraceCallStackResponse> {
+  if (!stacks || stacks.byCallId.size === 0) return { status: 'no-stacks' };
+
+  const { action, frames: rawFrames } = pickStackAction(parsed, stacks);
+  if (!action || !rawFrames) return { status: 'no-stacks' };
+
+  const maxFrames = options.maxFrames ?? DEFAULT_MAX_FRAMES;
+  const contextLines = options.contextLines ?? DEFAULT_CONTEXT_LINES;
+  const kept = rawFrames.slice(0, maxFrames);
+
+  // Derive the runner-side project root by locating the stack file that ends
+  // with the spec path the reporter stored (project-relative). Every file
+  // under that root gets a repo-relative display path and counts as
+  // in-project (dependency dirs excepted).
+  const known = normalizeSlashes(options.knownTestFilePath ?? '').replace(/^\.\//, '');
+  let root: string | null = null;
+  if (known) {
+    for (const file of stacks.files) {
+      const norm = normalizeSlashes(file);
+      if (norm === known) break; // already relative — nothing to strip
+      if (norm.endsWith(`/${known}`)) {
+        root = norm.slice(0, norm.length - known.length);
+        break;
+      }
+    }
+  }
+
+  // Read each distinct file's embedded source once.
+  const sourceByFile = new Map<string, string[] | null>();
+  for (const [fileIdx] of kept) {
+    const absPath = stacks.files[fileIdx];
+    if (absPath === undefined || sourceByFile.has(absPath)) continue;
+    const resource = await readResource(`src@${await sha1Hex(absPath)}.txt`);
+    sourceByFile.set(absPath, resource ? decodeText(resource).split('\n') : null);
+  }
+
+  const frames: TraceStackFrame[] = [];
+  for (const [fileIdx, line, column, functionName] of kept) {
+    const absPath = stacks.files[fileIdx];
+    if (absPath === undefined) continue;
+    const norm = normalizeSlashes(absPath);
+    let display: string;
+    let inProject: boolean;
+    if (root && norm.startsWith(root)) {
+      display = norm.slice(root.length);
+      inProject = !display.includes('node_modules/');
+    } else if (norm === known && known) {
+      display = norm;
+      inProject = true;
+    } else {
+      display = shortenPath(norm);
+      inProject = !norm.includes('node_modules/') && !root;
+    }
+
+    const allLines = sourceByFile.get(absPath) ?? null;
+    let source: TraceStackFrame['source'] = null;
+    if (allLines && line >= 1 && line <= allLines.length) {
+      const startLine = Math.max(1, line - contextLines);
+      const endLine = Math.min(allLines.length, line + contextLines);
+      source = { startLine, lines: allLines.slice(startLine - 1, endLine), totalLines: allLines.length };
+    }
+
+    frames.push({
+      file: display,
+      absFile: norm === display ? undefined : norm,
+      line,
+      column,
+      functionName,
+      inProject,
+      source,
+    });
+  }
+
+  if (frames.length === 0) return { status: 'no-stacks' };
+  return {
+    status: 'ok',
+    frames,
+    hasSources: frames.some((f) => f.source),
+    apiName: action.apiName,
+    errorMessage: action.error?.message?.slice(0, 500),
+  };
+}
+
+/** The failing action's stack, else the nearest preceding action that has one. */
+function pickStackAction(
+  parsed: ParsedTraceData,
+  stacks: TraceStacksIndex,
+): { action: TraceAction | null; frames: RawStackFrame[] | null } {
+  const fromIndex = parsed.failingActionIndex >= 0 ? parsed.failingActionIndex : parsed.actions.length - 1;
+  for (let i = fromIndex; i >= 0; i--) {
+    const action = parsed.actions[i];
+    if (!action) continue;
+    const frames = stacks.byCallId.get(action.callId);
+    if (frames?.length) return { action, frames };
+  }
+  return { action: null, frames: null };
+}
+
+function normalizeSlashes(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+/** Keep the tail of an out-of-project path readable without leaking the whole machine layout. */
+function shortenPath(path: string): string {
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length <= 4) return path;
+  return `…/${parts.slice(-4).join('/')}`;
+}
+
+function decodeText(bytes: Uint8Array): string {
+  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+}
+
+// ---------------------------------------------------------------------------
+// Network (`*.network` resource-snapshot events)
+// ---------------------------------------------------------------------------
+
+interface HarHeader {
+  name?: unknown;
+  value?: unknown;
+}
+
+/** The `snapshot` payload of one `resource-snapshot` line — HAR entry shaped. */
+export interface TraceResourceSnapshot {
+  startedDateTime?: string;
+  time?: number;
+  request?: {
+    method?: string;
+    url?: string;
+    headers?: HarHeader[];
+    bodySize?: number;
+    postData?: { mimeType?: string; text?: string; _sha1?: string };
+  };
+  response?: {
+    status?: number;
+    statusText?: string;
+    headers?: HarHeader[];
+    bodySize?: number;
+    content?: { size?: number; mimeType?: string; _sha1?: string };
+    _transferSize?: number;
+    _failureText?: string;
+  };
+  timings?: { dns?: number; connect?: number; ssl?: number; send?: number; wait?: number; receive?: number };
+  serverIPAddress?: string;
+  _monotonicTime?: number;
+  _resourceType?: string;
+  _failureText?: string;
+}
+
+/** Parse `*.network` JSONL texts into their raw HAR-like snapshots (order preserved). */
+export function parseNetworkTexts(texts: string[]): TraceResourceSnapshot[] {
+  const snapshots: TraceResourceSnapshot[] = [];
+  for (const text of texts) {
+    for (const line of text.split('\n')) {
+      if (!line) continue;
+      let evt: unknown;
+      try {
+        evt = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (!evt || typeof evt !== 'object') continue;
+      const { type, snapshot } = evt as { type?: unknown; snapshot?: unknown };
+      if (type === 'resource-snapshot' && snapshot && typeof snapshot === 'object') {
+        snapshots.push(snapshot as TraceResourceSnapshot);
+      }
+    }
+  }
+  return snapshots;
+}
+
+/**
+ * Header names whose values are always replaced with `[masked]`. A broader
+ * name heuristic below catches custom variants (`x-anything-token`, …);
+ * over-masking is deliberate — surviving values still pass
+ * {@link maskSensitiveText}.
+ */
+export const SENSITIVE_HEADERS: ReadonlySet<string> = new Set([
+  'authorization',
+  'proxy-authorization',
+  'cookie',
+  'set-cookie',
+  'x-api-key',
+  'api-key',
+  'x-auth-token',
+  'x-access-token',
+  'x-refresh-token',
+  'x-csrf-token',
+  'x-xsrf-token',
+  'x-session-id',
+  'x-amz-security-token',
+  'x-goog-api-key',
+]);
+
+const SENSITIVE_HEADER_NAME_RE = /token|secret|session|auth|cookie|api-?key/i;
+const MAX_HEADERS = 50;
+const MAX_HEADER_VALUE_CHARS = 2000;
+const MAX_URL_CHARS = 2048;
+const MAX_POST_DATA_CHARS = 2000;
+
+/** Mask sensitive header values and cap list/value sizes. */
+export function maskHeaders(headers: HarHeader[] | undefined): Array<{ name: string; value: string }> {
+  if (!Array.isArray(headers)) return [];
+  return headers.slice(0, MAX_HEADERS).map((h) => {
+    const name = String(h?.name ?? '');
+    const rawValue = String(h?.value ?? '');
+    const masked =
+      SENSITIVE_HEADERS.has(name.toLowerCase()) || SENSITIVE_HEADER_NAME_RE.test(name)
+        ? '[masked]'
+        : maskSensitiveText(rawValue);
+    return { name, value: capChars(masked, MAX_HEADER_VALUE_CHARS) };
+  });
+}
+
+/** Mask token-shaped strings in a body preview and cap its length. */
+export function maskBodyText(text: string, capCharsAt: number): { content: string; truncated: boolean } {
+  const masked = maskSensitiveText(text);
+  if (capCharsAt > 0 && masked.length > capCharsAt) {
+    return { content: masked.slice(0, capCharsAt), truncated: true };
+  }
+  return { content: masked, truncated: false };
+}
+
+function capChars(text: string, cap: number): string {
+  return text.length > cap ? `${text.slice(0, cap)}…` : text;
+}
+
+const TRACE_NETWORK_MAX_ENTRIES = 500;
+/** Requests starting up to this long before the failing action still count as "during failure". */
+const FAILURE_WINDOW_LEAD_MS = 1000;
+
+export interface BuildNetworkOptions {
+  maxEntries?: number;
+}
+
+/**
+ * Turn raw resource-snapshots into the chronological network-trace response:
+ * relative waterfall timeline, timing phases, masked headers, failure-window
+ * correlation and body-preview pointers. `_monotonicTime` shares the clock
+ * with action start/end times; when any entry lacks it the timeline falls
+ * back to `startedDateTime` deltas and failure correlation is skipped (wall
+ * clock and monotonic time cannot be mixed).
+ */
+export function buildTraceNetwork(
+  parsed: ParsedTraceData | null,
+  snapshots: TraceResourceSnapshot[],
+  options: BuildNetworkOptions = {},
+): TraceNetworkResponse {
+  if (snapshots.length === 0) return { status: 'empty' };
+
+  const monotonic = snapshots.every((s) => typeof s._monotonicTime === 'number');
+  const startOf = (s: TraceResourceSnapshot): number => {
+    if (monotonic) return s._monotonicTime!;
+    const parsedDate = s.startedDateTime ? Date.parse(s.startedDateTime) : Number.NaN;
+    return Number.isFinite(parsedDate) ? parsedDate : 0;
+  };
+
+  const ordered = snapshots.map((s) => ({ snapshot: s, absStart: startOf(s) })).sort((a, b) => a.absStart - b.absStart);
+  const timelineStart = ordered[0]!.absStart;
+
+  const failingAction = parsed?.failingAction ?? null;
+  const windowStartAbs = monotonic && failingAction ? failingAction.startTime - FAILURE_WINDOW_LEAD_MS : null;
+  const windowEndAbs =
+    monotonic && failingAction
+      ? (failingAction.endTime ?? (parsed!.traceEndTime > failingAction.startTime ? parsed!.traceEndTime : null))
+      : null;
+
+  const maxEntries = options.maxEntries ?? TRACE_NETWORK_MAX_ENTRIES;
+  const truncated = ordered.length > maxEntries;
+  const kept = ordered.slice(0, maxEntries);
+
+  const requests: TraceNetworkEntry[] = kept.map(({ snapshot, absStart }, index) => {
+    const request = snapshot.request ?? {};
+    const response = snapshot.response ?? {};
+    const content = response.content ?? {};
+    const start = Math.max(0, absStart - timelineStart);
+    const duration = Math.max(0, snapshot.time ?? 0);
+    const status = typeof response.status === 'number' ? response.status : 0;
+    const failureText = snapshot._failureText ?? response._failureText;
+    const inWindow =
+      windowStartAbs != null &&
+      absStart <= (windowEndAbs ?? Number.POSITIVE_INFINITY) &&
+      absStart + duration >= windowStartAbs;
+
+    const bodySha1 = content._sha1 ?? null;
+    const postDataText = request.postData?.text;
+
+    return {
+      index,
+      method: request.method ?? 'GET',
+      url: capChars(maskSensitiveText(request.url ?? ''), MAX_URL_CHARS),
+      status,
+      statusText: response.statusText || undefined,
+      failureText: failureText || undefined,
+      resourceType: snapshot._resourceType ?? inferResourceType(content.mimeType),
+      mimeType: content.mimeType,
+      requestHeaders: maskHeaders(request.headers),
+      responseHeaders: maskHeaders(response.headers),
+      requestBodySize: nonNegative(request.bodySize),
+      responseBodySize: nonNegative(content.size) ?? nonNegative(response.bodySize),
+      transferSize: nonNegative(response._transferSize),
+      start,
+      duration,
+      timings: snapshot.timings,
+      duringFailure: inWindow,
+      failed: status >= 400 || status <= 0,
+      bodySha1,
+      bodyPreviewable: !!bodySha1,
+      requestPostData: postDataText ? maskBodyText(postDataText, MAX_POST_DATA_CHARS).content : null,
+    };
+  });
+
+  const timelineDuration = requests.reduce((max, r) => Math.max(max, r.start + r.duration), 0);
+  const failingWindow =
+    windowStartAbs != null
+      ? {
+          start: Math.max(0, windowStartAbs - timelineStart),
+          end: Math.max(0, (windowEndAbs ?? timelineStart + timelineDuration) - timelineStart),
+        }
+      : null;
+
+  return {
+    status: 'ok',
+    requests,
+    timelineDuration,
+    failingWindow,
+    truncated,
+    totalBeforeCap: ordered.length,
+  };
+}
+
+function nonNegative(value: number | undefined): number | undefined {
+  return typeof value === 'number' && value >= 0 ? value : undefined;
+}
+
+function inferResourceType(mimeType: string | undefined): string | undefined {
+  if (!mimeType) return undefined;
+  if (mimeType.includes('html')) return 'document';
+  if (mimeType.includes('json')) return 'fetch';
+  if (mimeType.includes('css')) return 'stylesheet';
+  if (mimeType.includes('javascript')) return 'script';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('font/') || mimeType.includes('font')) return 'font';
+  if (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) return 'media';
+  return 'other';
+}
+
+/**
+ * Match a client-requested body id against the trace's own `_sha1` set —
+ * request bodies can only address resources this trace's network stream
+ * references, with or without the stored extension. Returns the stored
+ * resource name plus its mimeType, or null.
+ */
+export function matchNetworkBodySha1(
+  snapshots: TraceResourceSnapshot[],
+  requested: string,
+): { name: string; mimeType?: string } | null {
+  for (const snapshot of snapshots) {
+    for (const carrier of [snapshot.response?.content, snapshot.request?.postData] as Array<
+      { _sha1?: string; mimeType?: string } | undefined
+    >) {
+      const sha1 = carrier?._sha1;
+      if (!sha1) continue;
+      if (sha1 === requested || sha1.split('.')[0] === requested.split('.')[0]) {
+        return { name: sha1, mimeType: carrier?.mimeType };
+      }
+    }
+  }
+  return null;
+}
+
+const TEXT_BODY_CAP_CHARS = 100_000;
+const IMAGE_BODY_CAP_BYTES = 1_500_000;
+
+const TEXTUAL_MIME_RE = /^text\/|json|xml|javascript|svg|x-www-form-urlencoded/;
+
+/**
+ * Classify and render one body resource for preview: JSON pretty-printed and
+ * masked, text masked, images as a data URI — everything capped. Node-free so
+ * the demo serves previews from ZIP entries with the same code.
+ */
+export function buildTraceBodyPreview(bytes: Uint8Array, mimeType: string | undefined): TraceBodyResponse {
+  const size = bytes.length;
+  const mime = mimeType ?? '';
+
+  if (mime.startsWith('image/')) {
+    if (size > IMAGE_BODY_CAP_BYTES) return { status: 'too-large', mimeType, size };
+    return { status: 'ok', kind: 'image', dataUri: `data:${mime};base64,${bytesToBase64(bytes)}`, mimeType, size };
+  }
+
+  if (TEXTUAL_MIME_RE.test(mime)) {
+    let text = decodeText(bytes);
+    let kind: 'json' | 'text' = 'text';
+    if (mime.includes('json')) {
+      try {
+        text = JSON.stringify(JSON.parse(text), null, 2);
+        kind = 'json';
+      } catch {
+        // Not valid JSON after all — fall through as plain text.
+      }
+    }
+    const { content, truncated } = maskBodyText(text, TEXT_BODY_CAP_CHARS);
+    return { status: 'ok', kind, content, mimeType, size, truncated };
+  }
+
+  return { status: 'unsupported', mimeType, size };
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+// ---------------------------------------------------------------------------
+// AI diagnosis section formatting (shared by the server context builder and
+// the demo's diagnosis-context mirror — single source of the markdown)
+// ---------------------------------------------------------------------------
+
+/**
+ * Render the trace call stack as a diagnosis-context markdown section:
+ * in-project frames bold with a `>`-marked source window, dependency frames
+ * one-line. Returns null when there is nothing to show.
+ */
+export function formatTraceCallStackSection(
+  result: TraceCallStackResponse,
+  maxFrames: number,
+): { markdown: string; coverage: { frames: number; framesWithSource: number } } | null {
+  if (result.status !== 'ok' || !result.frames?.length || maxFrames <= 0) return null;
+
+  const frames = result.frames.slice(0, maxFrames);
+  const failedIndex = Math.max(
+    0,
+    frames.findIndex((f) => f.inProject),
+  );
+  const lines: string[] = ['## Full Call Stack (from trace)'];
+  if (result.apiName) {
+    lines.push(`Failing action: \`${result.apiName}\`${result.errorMessage ? ` — ${result.errorMessage}` : ''}`);
+  }
+  frames.forEach((frame, i) => {
+    const fn = frame.functionName ? ` in \`${frame.functionName}\`` : '';
+    if (!frame.inProject) {
+      lines.push(`- ${frame.file}:${frame.line}${fn} (dependency)`);
+      return;
+    }
+    lines.push(`- **${frame.file}:${frame.line}**${fn}${i === failedIndex ? ' ← failed here' : ''}`);
+    if (frame.source) {
+      const code = frame.source.lines.map((text, j) => {
+        const n = frame.source!.startLine + j;
+        return `${n === frame.line ? '>' : ' '} ${String(n).padStart(4)} | ${text}`;
+      });
+      lines.push('```', ...code, '```');
+    }
+  });
+  if (result.frames.length > frames.length) {
+    lines.push(`- … ${result.frames.length - frames.length} more frames (capped)`);
+  }
+
+  return {
+    markdown: lines.join('\n'),
+    coverage: { frames: frames.length, framesWithSource: frames.filter((f) => f.source).length },
+  };
+}
+
+/**
+ * Pick the requests worth showing the model: failed first, then during the
+ * failing action, then slow — chronological within the cap.
+ */
+export function selectTraceNetworkRequests(
+  result: TraceNetworkResponse,
+  maxRequests: number,
+  slowRequestMs: number,
+): TraceNetworkEntry[] {
+  if (result.status !== 'ok' || !result.requests?.length || maxRequests <= 0) return [];
+  const score = (r: TraceNetworkEntry) =>
+    (r.failed ? 4 : 0) + (r.duringFailure ? 2 : 0) + (r.duration >= slowRequestMs ? 1 : 0);
+  return [...result.requests]
+    .sort((a, b) => score(b) - score(a) || a.start - b.start)
+    .slice(0, maxRequests)
+    .sort((a, b) => a.start - b.start);
+}
+
+/** A masked body excerpt appended to the network section for a failed request. */
+export interface TraceNetworkBodyExcerpt {
+  label: string;
+  content: string;
+}
+
+/**
+ * Render the trace network activity as a diagnosis-context markdown section.
+ * `picked` comes from {@link selectTraceNetworkRequests}; body excerpts are
+ * fetched by the caller (server: storage pool, demo: ZIP entries).
+ */
+export function formatTraceNetworkSection(
+  result: TraceNetworkResponse,
+  picked: TraceNetworkEntry[],
+  bodyExcerpts: TraceNetworkBodyExcerpt[] = [],
+): { markdown: string; coverage: { requests: number; failed: number } } | null {
+  if (result.status !== 'ok' || !result.requests?.length || picked.length === 0) return null;
+
+  const all = result.requests;
+  const failedCount = all.filter((r) => r.failed).length;
+  const duringCount = all.filter((r) => r.duringFailure).length;
+  const summaryBits = [
+    `${all.length} requests recorded`,
+    failedCount > 0 ? `${failedCount} failed` : null,
+    duringCount > 0 ? `${duringCount} overlapping the failing action` : null,
+  ].filter(Boolean);
+  const lines: string[] = [
+    '## Network Activity (from trace)',
+    `${summaryBits.join(', ')}. Showing ${picked.length} (failed / during-failure / slow first, then chronological):`,
+  ];
+  for (const r of picked) {
+    const status = r.status > 0 ? String(r.status) : `failed${r.failureText ? ` (${r.failureText})` : ''}`;
+    const meta = [
+      `${Math.round(r.duration)}ms`,
+      r.responseBodySize != null ? formatByteSize(r.responseBodySize) : null,
+      r.mimeType ?? null,
+    ]
+      .filter(Boolean)
+      .join(', ');
+    const marks = [r.duringFailure ? 'DURING FAILING ACTION' : null, r.failed ? 'FAILED' : null].filter(Boolean);
+    lines.push(`- ${r.method} ${r.url} → ${status} (${meta})${marks.length ? ` [${marks.join(', ')}]` : ''}`);
+  }
+  for (const excerpt of bodyExcerpts) {
+    lines.push('', `${excerpt.label}:`, '```', excerpt.content, '```');
+  }
+
+  return {
+    markdown: lines.join('\n'),
+    coverage: { requests: all.length, failed: failedCount },
+  };
+}
+
+function formatByteSize(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)} MB`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)} KB`;
+  return `${n} B`;
+}

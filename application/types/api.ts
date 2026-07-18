@@ -390,6 +390,86 @@ export interface NetworkRequest {
   serverLogs?: ServerLogEntry[];
 }
 
+/** One frame of the trace-derived full call stack (innermost first). */
+export interface TraceStackFrame {
+  /** Display path — project-relative when derivable, shortened otherwise. */
+  file: string;
+  /** Original absolute path from the runner machine, when it differs from `file`. */
+  absFile?: string;
+  line: number;
+  column?: number;
+  functionName?: string;
+  inProject: boolean;
+  /** Window of the embedded source around `line`; null when the trace carries no source for this file. */
+  source?: { startLine: number; lines: string[]; totalLines: number } | null;
+}
+
+/** `GET /api/test-runs/:id/cases/:caseId/trace-stacks` */
+export interface TraceCallStackResponse {
+  status: 'ok' | 'no-trace' | 'no-stacks';
+  frames?: TraceStackFrame[];
+  /** False when the trace was recorded without embedded sources — frames render header-only. */
+  hasSources?: boolean;
+  /** The action whose stack is shown (normally the failing action). */
+  apiName?: string;
+  errorMessage?: string;
+}
+
+/** One request from the trace's HAR-like network stream (headers masked server-side). */
+export interface TraceNetworkEntry {
+  index: number;
+  method: string;
+  url: string;
+  /** HTTP status; <= 0 means the request failed or was aborted before a response. */
+  status: number;
+  statusText?: string;
+  failureText?: string;
+  resourceType?: string;
+  mimeType?: string;
+  requestHeaders: Array<{ name: string; value: string }>;
+  responseHeaders: Array<{ name: string; value: string }>;
+  requestBodySize?: number;
+  responseBodySize?: number;
+  transferSize?: number;
+  /** Milliseconds relative to the first request in the trace. */
+  start: number;
+  duration: number;
+  timings?: { dns?: number; connect?: number; ssl?: number; send?: number; wait?: number; receive?: number };
+  /** True when the request overlaps the failing action's time window. */
+  duringFailure: boolean;
+  failed: boolean;
+  /** Content-addressed name of the stored response body, fetchable via the trace-network-body endpoint. */
+  bodySha1?: string | null;
+  bodyPreviewable?: boolean;
+  /** Masked, capped request post data. */
+  requestPostData?: string | null;
+}
+
+/** `GET /api/test-runs/:id/cases/:caseId/trace-network` */
+export interface TraceNetworkResponse {
+  status: 'ok' | 'no-trace' | 'empty';
+  requests?: TraceNetworkEntry[];
+  /** Total waterfall span in ms (relative timeline). */
+  timelineDuration?: number;
+  /** Failing action's window on the same relative timeline, for shading. */
+  failingWindow?: { start: number; end: number } | null;
+  truncated?: boolean;
+  totalBeforeCap?: number;
+}
+
+/** `GET /api/test-runs/:id/cases/:caseId/trace-network-body?sha1=` */
+export interface TraceBodyResponse {
+  status: 'ok' | 'not-found' | 'too-large' | 'unsupported';
+  kind?: 'json' | 'text' | 'image';
+  /** Masked, capped textual body (kind json/text). */
+  content?: string;
+  /** Inline image payload (kind image). */
+  dataUri?: string;
+  mimeType?: string;
+  size?: number;
+  truncated?: boolean;
+}
+
 /**
  * Browser performance / web vitals recorded via dashboard fixture
  */
@@ -966,6 +1046,16 @@ export interface DiagnosisContextCoverage {
   domSnapshot?: {
     chars: number;
     snapshotName?: string;
+  } | null;
+  /** Full call stack of the failing action from the trace's stacks index. null when no trace/stacks. */
+  traceCallStack?: {
+    frames: number;
+    framesWithSource: number;
+  } | null;
+  /** Network activity parsed from the trace's HAR-like stream. null when no trace or no entries. */
+  traceNetwork?: {
+    requests: number;
+    failed: number;
   } | null;
   /** App state (URL/storage keys/cookie flags) at test end. null when not captured. */
   appState?: {

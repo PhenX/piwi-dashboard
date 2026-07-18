@@ -31,6 +31,10 @@ export interface ContextLimits {
   maxTraceActions: number;
   /** Max characters for trace-derived DOM/ARIA excerpt. */
   traceDomChars: number;
+  /** Max stack frames from the trace's call-stack index, with source windows (0 disables the section). */
+  traceStackFrames: number;
+  /** Max requests from the trace's network stream (0 disables the section). */
+  traceNetworkRequests: number;
   /** Max characters of the trace-derived failure-time DOM snapshot (0 disables the section). */
   domSnapshotChars: number;
   /** Max backend server log entries (from X-Piwi-Logs header) included. */
@@ -69,6 +73,8 @@ export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
   slowRequestMs: 1500,
   maxTraceActions: 10,
   traceDomChars: 6000,
+  traceStackFrames: 10,
+  traceNetworkRequests: 20,
   domSnapshotChars: 8000,
   imageMaxEdge: 1920,
 };
@@ -236,6 +242,22 @@ export const CONTEXT_LIMIT_FIELDS: ContextLimitField[] = [
     description: 'Max characters for the trace-derived DOM/ARIA excerpt in failing-action context.',
     min: 0,
     max: 20000,
+  },
+  {
+    key: 'traceStackFrames',
+    label: 'Trace stack frames',
+    envVar: 'PIWI_AI_MAX_TRACE_STACK_FRAMES',
+    description: 'Max call-stack frames (with source windows) from the trace (0 disables).',
+    min: 0,
+    max: 50,
+  },
+  {
+    key: 'traceNetworkRequests',
+    label: 'Trace network requests',
+    envVar: 'PIWI_AI_MAX_TRACE_NETWORK_REQUESTS',
+    description: 'Max requests from the trace network stream (0 disables).',
+    min: 0,
+    max: 200,
   },
   {
     key: 'domSnapshotChars',

@@ -110,6 +110,7 @@ export const PROJECT = {
   TEST_PROJECT: 'test-project',
   TEST_RUN_CASE_PAGE: 'test-run-case-page-test',
   TRACE_DEDUP: 'trace-dedup-test',
+  TRACE_INSIGHTS: 'trace-insights-test',
   TRACE_PREFLIGHT: 'trace-preflight-test',
   TRACE_RESOURCES: 'trace-resources-test',
   TRACES_API: 'traces-api-test',

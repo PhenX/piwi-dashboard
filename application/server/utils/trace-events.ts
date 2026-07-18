@@ -126,6 +126,14 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
   const beforeSnapshots = new Map<string, string>();
   const afterSnapshots = new Map<string, string>();
 
+  // Modern traces split each call into a `before` event (opens the action) and
+  // an `after` event (closes it with endTime/error), with standalone `log`
+  // events in between; legacy traces carry one self-contained `action` event.
+  // Open modern actions are keyed here until their `after` arrives — an action
+  // left unclosed (test killed mid-call) keeps `endTime` undefined, which is
+  // exactly what the timeout fallback below looks for.
+  const openActions = new Map<string, TraceAction>();
+
   // Largest timestamp seen across all events, in the trace's own timebase.
   let traceEndTime = 0;
 
@@ -143,10 +151,47 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
 
     if (type === 'before') {
       const callId = evt.callId as string;
-      if (callId && evt.pointers) {
-        const pointers = evt.pointers as Record<string, string>;
-        if (pointers.beforeSnapshot) beforeSnapshots.set(callId, pointers.beforeSnapshot);
+      if (!callId) continue;
+      const pointers = (evt.pointers ?? {}) as Record<string, string>;
+      const beforeSnapshot = (evt.beforeSnapshot as string) || pointers.beforeSnapshot;
+      if (beforeSnapshot) beforeSnapshots.set(callId, beforeSnapshot);
+      const cls = evt.class as string | undefined;
+      const method = evt.method as string | undefined;
+      const action: TraceAction = {
+        callId,
+        apiName: (evt.apiName as string) || (cls && method ? `${cls}.${method}` : method || 'unknown'),
+        class: cls,
+        method,
+        params: evt.params as Record<string, unknown> | undefined,
+        startTime: (evt.startTime as number) ?? 0,
+        pageId: evt.pageId as string | undefined,
+        beforeSnapshot,
+      };
+      openActions.set(callId, action);
+      actions.push(action);
+    }
+
+    if (type === 'after') {
+      const callId = evt.callId as string;
+      const action = callId ? openActions.get(callId) : undefined;
+      if (action) {
+        if (typeof evt.endTime === 'number') action.endTime = evt.endTime;
+        const error = unwrapAfterError(evt.error);
+        if (error) action.error = error;
+        const afterSnapshot =
+          (evt.afterSnapshot as string) || ((evt.pointers as Record<string, string> | undefined)?.afterSnapshot ?? '');
+        if (afterSnapshot) {
+          action.afterSnapshot = afterSnapshot;
+          afterSnapshots.set(callId, afterSnapshot);
+        }
       }
+    }
+
+    if (type === 'log') {
+      const callId = evt.callId as string;
+      const message = evt.message as string | undefined;
+      const action = callId ? openActions.get(callId) : undefined;
+      if (action && message) (action.log ??= []).push(message);
     }
 
     if (type === 'frame-snapshot' && evt.snapshot && typeof evt.snapshot === 'object') {
@@ -172,7 +217,17 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
         beforeSnapshot: beforeSnapshots.get(callId) || (pointers.beforeSnapshot as string),
         afterSnapshot: pointers.afterSnapshot as string,
       };
-      actions.push(action);
+      // A trace that carries both a `before` and an `action` for the same call
+      // gets the self-contained event's defined fields folded into the open
+      // action rather than a duplicate row.
+      const open = openActions.get(callId);
+      if (open) {
+        for (const [key, value] of Object.entries(action)) {
+          if (value !== undefined) (open as unknown as Record<string, unknown>)[key] = value;
+        }
+      } else {
+        actions.push(action);
+      }
 
       // Track after-snapshot for nearby context
       if (pointers.afterSnapshot) afterSnapshots.set(callId, pointers.afterSnapshot);
@@ -256,4 +311,24 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
     timeoutFallback,
     traceEndTime,
   };
+}
+
+/**
+ * `after` events carry the failure either flat (`{ message, stack }`) or, in
+ * some Playwright versions, nested one level (`{ error: { message, stack } }`).
+ */
+function unwrapAfterError(raw: unknown): { message?: string; stack?: string } | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const outer = raw as Record<string, unknown>;
+  if (typeof outer.message === 'string' || typeof outer.stack === 'string') {
+    return outer as { message?: string; stack?: string };
+  }
+  const inner = outer.error;
+  if (inner && typeof inner === 'object') {
+    const e = inner as Record<string, unknown>;
+    if (typeof e.message === 'string' || typeof e.stack === 'string') {
+      return e as { message?: string; stack?: string };
+    }
+  }
+  return undefined;
 }

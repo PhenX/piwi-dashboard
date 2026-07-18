@@ -175,15 +175,24 @@ const JWT_RE = /\beyJ[\w-]{10,}\.[\w-]{5,}\.[\w-]{5,}\b/g;
 const LONG_HEX_RE = /\b[0-9a-f]{32,}\b/gi;
 
 /**
+ * Mask token-shaped strings (base64 data URIs, JWTs, long hex blobs) in any
+ * user-visible text extracted from a trace. Single masking source of truth,
+ * shared by the DOM snapshot, network headers/bodies and AI-context sections.
+ */
+export function maskSensitiveText(text: string): string {
+  return text
+    .replace(DATA_URI_RE, 'data:[masked]')
+    .replace(JWT_RE, '[masked-token]')
+    .replace(LONG_HEX_RE, '[masked-hex]');
+}
+
+/**
  * Mask token-shaped strings and cap the rendered HTML. Pure and unit-testable.
  * The renderer already drops `__playwright_*` values, inline handlers, and
  * script bodies — this pass handles secrets baked into ordinary markup.
  */
 export function sanitizeDomSnapshot(html: string, capChars: number): { html: string; truncated: boolean } {
-  let out = html
-    .replace(DATA_URI_RE, 'data:[masked]')
-    .replace(JWT_RE, '[masked-token]')
-    .replace(LONG_HEX_RE, '[masked-hex]');
+  let out = maskSensitiveText(html);
   let truncated = false;
   if (capChars > 0 && out.length > capChars) {
     out = out.slice(0, capChars) + '\n<!-- [truncated] -->';

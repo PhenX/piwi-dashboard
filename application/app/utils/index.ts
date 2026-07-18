@@ -493,3 +493,28 @@ export function testCaseCategoryColor(category: string): BadgeColor {
   if (category === 'didnotrun') return 'warning';
   return getStatusColor(category) as BadgeColor;
 }
+
+/** Badge color for an HTTP method (network request rows). */
+export function httpMethodColor(method: string): 'info' | 'success' | 'error' | 'warning' | 'neutral' {
+  switch (method.toUpperCase()) {
+    case 'GET':
+      return 'info';
+    case 'POST':
+      return 'success';
+    case 'DELETE':
+      return 'error';
+    case 'PUT':
+    case 'PATCH':
+      return 'warning';
+    default:
+      return 'neutral';
+  }
+}
+
+/** Badge color for an HTTP status code; 0/negative (aborted, no response) is neutral. */
+export function httpStatusColor(status: number): 'success' | 'warning' | 'error' | 'neutral' {
+  if (!status || status <= 0) return 'neutral';
+  if (status >= 500) return 'error';
+  if (status >= 400) return 'warning';
+  return 'success';
+}

@@ -53,6 +53,8 @@ export type SectionId =
   | 'alreadyGreen'
   | 'topSuspectedCommit'
   | 'failingAction'
+  | 'traceCallStack'
+  | 'traceNetwork'
   | 'locatorHealing'
   | 'environmentDiff'
   | 'visualDiff'

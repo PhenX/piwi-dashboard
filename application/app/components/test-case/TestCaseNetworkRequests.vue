@@ -3,10 +3,59 @@ import type { NetworkRequest, ServerLogEntry } from '~~/types/api';
 
 const props = defineProps<{
   requests: NetworkRequest[];
+  /** Run + case ids and trace presence — enable the "Full trace" go-deeper view. */
+  runId?: number | null;
+  testRunsCaseId?: number | null;
+  hasTrace?: boolean;
 }>();
 
 type Filter = 'all' | 'failed' | 'logs';
 const filter = ref<Filter>('all');
+
+// ── Captured vs full-trace view ─────────────────────────────────────────────
+// The fixture-captured requests stay the baseline; when the execution has a
+// trace, a second view shows every request from the trace's network stream.
+// A trace-only execution (no fixture capture) opens directly on the trace.
+const {
+  data: traceNet,
+  pending: tracePending,
+  load: loadTraceNet,
+} = useTraceNetwork(
+  () => props.runId,
+  () => props.testRunsCaseId,
+  () => !!props.hasTrace,
+);
+
+const manualView = ref<'captured' | 'trace' | null>(null);
+const view = computed<'captured' | 'trace'>({
+  get: () => manualView.value ?? (props.requests.length === 0 && props.hasTrace ? 'trace' : 'captured'),
+  set: (value) => {
+    manualView.value = value;
+  },
+});
+
+// Load the trace network on the first switch into the full-trace view. A
+// `watch` on the view (not `watchEffect`) keeps `load()`'s internal reactive
+// reads out of the dependency set, so toggling pending doesn't re-trigger it.
+watch(
+  () => view.value === 'trace',
+  (isTrace) => {
+    if (isTrace) loadTraceNet();
+  },
+  { immediate: true },
+);
+
+const traceCount = computed(() => (traceNet.value?.status === 'ok' ? (traceNet.value.requests?.length ?? 0) : null));
+const viewItems = computed(() => [
+  { label: `Captured (${props.requests.length})`, value: 'captured' as const, disabled: props.requests.length === 0 },
+  { label: traceCount.value != null ? `Full trace (${traceCount.value})` : 'Full trace', value: 'trace' as const },
+]);
+
+/** Flip to the full-trace view (diagnosis citation reveal). */
+function showTraceMode() {
+  if (props.hasTrace) manualView.value = 'trace';
+}
+defineExpose({ showTraceMode });
 
 /** Per-request expansion state (keyed by stable index). */
 const expanded = ref<Set<number>>(new Set());
@@ -51,29 +100,6 @@ function levelColor(level: string): 'error' | 'warning' | 'info' | 'neutral' {
   const l = level.toLowerCase();
   if (l === 'info' || l === 'information') return 'info';
   return 'neutral';
-}
-
-function methodColor(method: string): 'info' | 'success' | 'error' | 'warning' | 'neutral' {
-  switch (method.toUpperCase()) {
-    case 'GET':
-      return 'info';
-    case 'POST':
-      return 'success';
-    case 'DELETE':
-      return 'error';
-    case 'PUT':
-    case 'PATCH':
-      return 'warning';
-    default:
-      return 'neutral';
-  }
-}
-
-function statusColor(status: number): 'success' | 'warning' | 'error' | 'neutral' {
-  if (!status) return 'neutral';
-  if (status >= 500) return 'error';
-  if (status >= 400) return 'warning';
-  return 'success';
 }
 
 /** Display the path portion of a request URL; full URL stays available on hover. */
@@ -163,28 +189,55 @@ function rowAccent(r: DecoratedRequest): string {
 </script>
 
 <template>
-  <SectionCard icon="i-lucide-network" title="Network & backend logs" :count="totals.total" help="case.network">
+  <SectionCard
+    icon="i-lucide-network"
+    title="Network & backend logs"
+    :count="view === 'trace' ? traceCount : totals.total"
+    help="case.network"
+  >
     <template #actions>
-      <div class="flex items-center gap-3">
-        <div v-if="totals.errorLogs > 0 || totals.warnLogs > 0" class="flex items-center gap-2 text-xs">
-          <span v-if="totals.errorLogs > 0" class="flex items-center gap-1 text-red-600 dark:text-red-400">
-            <UIcon name="i-lucide-octagon-alert" class="size-3.5" />{{ totals.errorLogs }}
-          </span>
-          <span v-if="totals.warnLogs > 0" class="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-            <UIcon name="i-lucide-triangle-alert" class="size-3.5" />{{ totals.warnLogs }}
-          </span>
-        </div>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <template v-if="view === 'captured'">
+          <div v-if="totals.errorLogs > 0 || totals.warnLogs > 0" class="flex items-center gap-2 text-xs">
+            <span v-if="totals.errorLogs > 0" class="flex items-center gap-1 text-red-600 dark:text-red-400">
+              <UIcon name="i-lucide-octagon-alert" class="size-3.5" />{{ totals.errorLogs }}
+            </span>
+            <span v-if="totals.warnLogs > 0" class="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+              <UIcon name="i-lucide-triangle-alert" class="size-3.5" />{{ totals.warnLogs }}
+            </span>
+          </div>
+          <UTabs
+            v-model="filter"
+            :items="filterItems"
+            size="xs"
+            variant="link"
+            :ui="{ list: 'gap-2', trigger: 'px-1.5' }"
+          />
+        </template>
         <UTabs
-          v-model="filter"
-          :items="filterItems"
+          v-if="hasTrace"
+          v-model="view"
+          :items="viewItems"
           size="xs"
-          variant="link"
-          :ui="{ list: 'gap-2', trigger: 'px-1.5' }"
+          variant="pill"
+          :ui="{ list: 'gap-1 p-0.5', trigger: 'px-2' }"
         />
       </div>
     </template>
 
-    <div class="space-y-1 max-h-[28rem] overflow-y-auto">
+    <!-- Full trace view: every request from the trace's network stream -->
+    <template v-if="view === 'trace'">
+      <LoadingState v-if="tracePending || !traceNet" text="Parsing trace network stream…" />
+      <TraceNetworkList
+        v-else-if="traceNet.status === 'ok'"
+        :data="traceNet"
+        :run-id="runId ?? null"
+        :test-runs-case-id="testRunsCaseId ?? 0"
+      />
+      <p v-else class="text-xs text-gray-400 py-2">No network activity recorded in this trace.</p>
+    </template>
+
+    <div v-else class="space-y-1 max-h-[28rem] overflow-y-auto">
       <div
         v-for="req in visibleRequests"
         :key="req._index"
@@ -206,10 +259,10 @@ function rowAccent(r: DecoratedRequest): string {
           />
           <span v-else class="size-3.5 shrink-0" />
 
-          <UBadge :color="methodColor(req.method)" variant="soft" size="xs" class="font-mono shrink-0">
+          <UBadge :color="httpMethodColor(req.method)" variant="soft" size="xs" class="font-mono shrink-0">
             {{ req.method }}
           </UBadge>
-          <UBadge :color="statusColor(req.status)" variant="soft" size="xs" class="font-mono shrink-0 tabular-nums">
+          <UBadge :color="httpStatusColor(req.status)" variant="soft" size="xs" class="font-mono shrink-0 tabular-nums">
             {{ req.status || '—' }}
           </UBadge>
 
@@ -293,19 +346,30 @@ function rowAccent(r: DecoratedRequest): string {
               <pre
                 v-if="stackOpen.has(`${req._index}:${li}`)"
                 class="mt-1 whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-gray-500 dark:text-gray-400 max-h-48 overflow-y-auto"
-                >{{ log.stack }}</pre
-              >
+                >{{ log.stack }}</pre>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <p v-if="!hasBackendLogs" class="mt-3 flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+    <p
+      v-if="view === 'captured' && !hasBackendLogs"
+      class="mt-3 flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500"
+    >
       <UIcon name="i-lucide-info" class="size-3.5 shrink-0" />
       No backend server logs captured — install
       <DocLink to="backend-logs" no-icon class="underline">a Piwi backend integration</DocLink>
       to see server-side warnings and errors under each request.
+    </p>
+
+    <p v-if="!hasTrace" class="mt-3 flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+      <UIcon name="i-lucide-info" class="size-3.5 shrink-0" />
+      <span>
+        Want to go deeper? Record traces (<code>trace: 'retain-on-failure'</code>) to see every request with headers,
+        timing and bodies here.
+        <DocLink to="ui-overview#trace-powered-deep-views" no-icon class="underline">Learn more</DocLink>
+      </span>
     </p>
   </SectionCard>
 </template>

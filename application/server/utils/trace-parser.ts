@@ -37,23 +37,26 @@ async function writeTraceCache(db: DbClient, cache: Record<string, TraceCacheEnt
 }
 
 /**
- * Get the cached failing-action section text for a blob path, if fresh.
+ * Get a cached trace-derived section text by cache key, if fresh. Keys are
+ * `blobPath` for the failing-action section (kept unprefixed so existing
+ * cache entries stay warm) and `<kind>:<blobPath>` for other sections.
  * Returns null when not cached or expired.
  */
-async function getCachedTraceSection(db: DbClient, blobPath: string, ttlMs: number): Promise<string | null> {
+export async function getCachedTraceSection(db: DbClient, cacheKey: string, ttlMs: number): Promise<string | null> {
   const cache = await readTraceCache(db);
-  const entry = cache[blobPath];
+  const entry = cache[cacheKey];
   if (!entry) return null;
   if (Date.now() - entry.parsedAt > ttlMs) return null;
   return entry.text;
 }
 
 /**
- * Cache a parsed failing-action section for a blob path.
+ * Cache a trace-derived section text under a cache key. One bounded pool
+ * (500 entries, oldest evicted) shared by every section kind.
  */
-async function setCachedTraceSection(db: DbClient, blobPath: string, text: string): Promise<void> {
+export async function setCachedTraceSection(db: DbClient, cacheKey: string, text: string): Promise<void> {
   const cache = await readTraceCache(db);
-  cache[blobPath] = { text, parsedAt: Date.now() };
+  cache[cacheKey] = { text, parsedAt: Date.now() };
   // Keep cache bounded to 500 entries
   const keys = Object.keys(cache);
   if (keys.length > 500) {

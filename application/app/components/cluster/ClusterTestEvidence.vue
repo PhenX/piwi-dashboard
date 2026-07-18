@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TraceInfo, AttachmentInfo, TestSourceFrame } from '~~/types/api';
+import type { TraceInfo, AttachmentInfo, TestSourceFrame, TraceCallStackResponse } from '~~/types/api';
 import { isImageFile, isVideoFile } from '~/utils/text-format';
 
 interface AffectedCase {
@@ -21,6 +21,7 @@ interface TestCaseDetail {
   testSourceFrames?: TestSourceFrame[] | null;
   pageState?: import('~~/types/api').PageState | null;
   attachments: AttachmentInfo[];
+  testRun?: { id: number } | null;
 }
 
 const props = defineProps<{
@@ -88,6 +89,32 @@ async function loadCase(id: number) {
     caseCache.set(id, { detail: detail.value, traces: traceList.value });
   }
 }
+
+// ── Full call stack from the case's trace (go-deeper view of Test source) ──
+const traceStackCache = new Map<number, TraceCallStackResponse | null>();
+const traceStack = ref<TraceCallStackResponse | null>(null);
+const stackView = ref<'trace' | 'captured'>('trace');
+const traceStackFrames = computed(() => traceStack.value?.frames ?? []);
+
+async function loadTraceStack(id: number) {
+  traceStack.value = traceStackCache.get(id) ?? null;
+  if (traceStackCache.has(id) || traces.value.length === 0) return;
+  const runId = caseDetail.value?.testRun?.id;
+  if (!runId) return;
+  try {
+    const res = await $fetch<TraceCallStackResponse>(`/api/test-runs/${runId}/cases/${id}/trace-stacks`);
+    const value = res.status === 'ok' && res.frames?.length ? res : null;
+    traceStackCache.set(id, value);
+    if (selectedId.value === id) traceStack.value = value;
+  } catch {
+    traceStackCache.set(id, null);
+  }
+}
+
+watch([caseDetail, traces], () => {
+  stackView.value = 'trace';
+  if (selectedId.value) loadTraceStack(selectedId.value);
+});
 
 watch(selectedId, (id) => {
   if (id) loadCase(id);
@@ -230,17 +257,35 @@ const evidenceChips = computed(() => {
         v-model:open="showSignals"
       />
 
-      <!-- Test source code (collapsible): the failing line + its callers -->
+      <!-- Test source code (collapsible): the failing line + its callers, or the full trace call stack -->
       <TestEvidenceSection
-        v-if="caseDetail.testSourceFrames?.length || caseDetail.testSource"
+        v-if="caseDetail.testSourceFrames?.length || caseDetail.testSource || traceStackFrames.length"
         icon="i-lucide-code"
         label="Test source"
-        :count="caseDetail.testSourceFrames?.length || testSourceLines"
+        :count="traceStackFrames.length || caseDetail.testSourceFrames?.length || testSourceLines"
         v-model:open="showSource"
       >
+        <UTabs
+          v-if="traceStackFrames.length && (caseDetail.testSourceFrames?.length || caseDetail.testSource)"
+          v-model="stackView"
+          :items="[
+            { label: `Full stack (${traceStackFrames.length})`, value: 'trace' },
+            { label: `Captured (${caseDetail.testSourceFrames?.length || 1})`, value: 'captured' },
+          ]"
+          size="xs"
+          variant="link"
+          class="mb-1.5"
+          :ui="{ list: 'gap-2', trigger: 'px-1.5' }"
+        />
         <div class="overflow-x-auto max-h-72">
+          <TraceCallStack
+            v-if="stackView === 'trace' && traceStackFrames.length"
+            :frames="traceStackFrames"
+            :project-key="projectKey"
+            :project-name="projectName"
+          />
           <TestSourceStack
-            v-if="caseDetail.testSourceFrames?.length"
+            v-else-if="caseDetail.testSourceFrames?.length"
             :frames="caseDetail.testSourceFrames"
             :project-key="projectKey"
             :project-name="projectName"
