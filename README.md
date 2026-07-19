@@ -14,7 +14,8 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@piwitests/reporter"><img src="https://img.shields.io/npm/v/@piwitests/reporter?logo=npm&labelColor=020420&color=CB3837" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/@piwitests/reporter"><img src="https://img.shields.io/npm/v/@piwitests/reporter?logo=npm&label=reporter&labelColor=020420&color=CB3837" alt="npm reporter"></a>
+  <a href="https://www.npmjs.com/package/@piwitests/server"><img src="https://img.shields.io/npm/v/@piwitests/server?logo=npm&label=server&labelColor=020420&color=CB3837" alt="npm server"></a>
   <a href="https://hub.docker.com/r/phenx/piwitests-server"><img src="https://img.shields.io/docker/v/phenx/piwitests-server?logo=docker&labelColor=020420&color=2496ED" alt="Docker"></a>
   <a href="https://github.com/PiwiTests/platform/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/PiwiTests/platform/ci.yml?branch=main&logo=githubactions&logoColor=white&labelColor=020420&label=CI" alt="CI status"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?labelColor=020420" alt="MIT license"></a>
@@ -77,6 +78,14 @@ docker run -p 3000:3000 -v ${PWD}/.data:/app/.data phenx/piwitests-server:latest
 ```
 
 Visit `http://localhost:3000`. A [`docker-compose.yml`](./docker-compose.yml) is also included.
+
+Prefer no Docker? With **Node.js 24+** you can run the server straight from npm — it creates its `.data/` in the current directory:
+
+```bash
+npx @piwitests/server
+```
+
+Docker stays the recommended path for production; see the [deployment guide](https://piwitests.github.io/deployment) for both.
 
 > **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker auto-creates `.data` owned by `root` and the container can't write to it. Windows and macOS (Docker Desktop) don't need this step. See [Troubleshooting](./DOCKER.md#troubleshooting) if you hit a permission error.
 

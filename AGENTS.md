@@ -22,6 +22,7 @@ application/            — Nuxt 4 dashboard app
 application/shared/     — Shared types, constants & utilities (import via `#shared/...`, not relative paths or `~~/shared/...`)
 application/tests/      — Functional tests (Playwright)
 packages/core/          — `@piwitests/core`: pure logic shared by the app AND the reporter (bundled into the reporter — see below)
+packages/server/        — `@piwitests/server`: published npm run-option for the server (bundles the app's built `.output/` + a `bin` launcher; `npx @piwitests/server`)
 plans/                  — Design docs, audit plans & roadmap (see below)
 reporter/               — Custom Playwright reporter package (TypeScript → bundled JS via tsup)
 ```

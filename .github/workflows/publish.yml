@@ -58,6 +58,53 @@ jobs:
           echo "npm install @piwitests/reporter" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
 
+  # Publish @piwitests/server: the dashboard server as an npm package (npx @piwitests/server).
+  # Kept as its own job so the heavy Nuxt build doesn't gate the reporter publish above.
+  # The bundled Nitro node-server output is built here and copied in by the package's
+  # `prepack` step (scripts/copy-output.mjs) at publish time.
+  publish-npm-server:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application (node-server preset)
+        run: npm run app:build --workspace=application
+        env:
+          NITRO_PRESET: node-server
+
+      - name: Publish to npm
+        run: npm publish --workspace @piwitests/server --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "## NPM Package Published :package:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package**: \`@piwitests/server\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: \`${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Run" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "npx @piwitests/server" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
   # Build each architecture on its own NATIVE runner and push it by digest.
   # Building linux/arm64 on a native arm runner (instead of QEMU emulation on an
   # amd64 runner) is the main speed-up: the heavy npm ci + nuxt build no longer

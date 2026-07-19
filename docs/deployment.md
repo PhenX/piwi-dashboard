@@ -212,6 +212,42 @@ spec:
   type: LoadBalancer
 ```
 
+## npm / npx (quick local run)
+
+For a quick local run without Docker, the server is published to npm as
+[`@piwitests/server`](https://www.npmjs.com/package/@piwitests/server). It bundles the
+prebuilt server and needs only **Node.js 24+**:
+
+```bash
+npx @piwitests/server
+```
+
+The dashboard will be available at `http://localhost:3000`.
+
+The server creates a `.data/` directory **in the current working directory** for the
+SQLite database (`.data/piwi.db`) and file storage (`.data/storage/`) — the same data
+layout the Docker image mounts at `/app/.data`. Run the command from the same directory
+each time to keep your data.
+
+Configuration uses the same environment variables as the Docker image (see the table
+above and the [configuration reference](/configuration)). For example, to change the port:
+
+::: code-group
+
+```bash [Linux / macOS]
+PORT=8080 npx @piwitests/server
+```
+
+```powershell [Windows (PowerShell)]
+$env:PORT='8080'; npx @piwitests/server
+```
+
+:::
+
+> **Docker remains the recommended path for production** — it ships a pinned Node runtime,
+> runs as a non-root user, and isolates the environment. The npm package is best for a
+> quick local trial or environments where Docker isn't available.
+
 ## Production build from source
 
 ```bash
