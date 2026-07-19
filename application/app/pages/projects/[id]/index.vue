@@ -417,13 +417,25 @@ const performanceQueryParams = computed(() => {
 
 // Only fetch when the trends tab is active; re-fetch when date filters change
 const performanceData = ref<PerformanceTrendPoint[] | null>(null);
+const performanceLoading = ref(false);
 const slowTests = ref<SlowTest[] | null>(null);
 const slowTestsError = ref(false);
+const slowTestsLoading = ref(false);
+
+// Show a loading state — not the chart's "no data" empty message — until the first
+// fetch settles. Without this, a refresh on ?tab=performance renders the empty state
+// while the async fetch is still in flight, so the tab reads as if it loaded broken.
+const performanceInitialLoading = computed(() => performanceLoading.value && performanceData.value === null);
 
 watch(
   [activeTab, performanceQueryParams, fullRunsOnly],
   async ([tab, params]) => {
     if (tab !== 'performance') return;
+    performanceLoading.value = true;
+    if (!slowTests.value) slowTestsLoading.value = true;
+    // The fetch result isn't awaited into the SSR render, so skip the wasted server
+    // round-trip; the immediate run on the client performs it (SSR still shows the loader).
+    if (import.meta.server) return;
     const qs = new URLSearchParams(params as Record<string, string>).toString();
     const fullParam = fullRunsOnly.value ? `${qs ? '&' : ''}fullRunsOnly=true` : '';
     const queryString = qs || fullParam ? `?${qs}${fullParam}` : '';
@@ -433,13 +445,15 @@ watch(
       console.warn('[PerformanceTab] Failed to fetch performance trend:', err);
       return null;
     });
-    if (!slowTests.value) {
+    performanceLoading.value = false;
+    if (slowTestsLoading.value) {
       slowTestsError.value = false;
       slowTests.value = await $fetch<SlowTest[]>(`/api/projects/${projectId}/slow-tests`).catch((err) => {
         slowTestsError.value = true;
         console.warn('[PerformanceTab] Failed to fetch slow tests:', err);
         return null;
       });
+      slowTestsLoading.value = false;
     }
   },
   { immediate: true },
@@ -933,7 +947,9 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
             </div>
 
             <ChartCard title="Performance trend" subtitle="Duration metrics over time" help="project.performance">
+              <LoadingState v-if="performanceInitialLoading" text="Loading performance trend…" />
               <PerformanceTrendChart
+                v-else
                 :data="performanceData || []"
                 :height="350"
                 :markers="visibleMarkers"
@@ -949,8 +965,10 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                 <p class="text-sm text-gray-600 mt-1">Top 20 slowest test cases across recent runs</p>
               </template>
 
+              <LoadingState v-if="slowTestsLoading && slowTests === null" text="Loading slowest tests…" />
+
               <UTable
-                v-if="slowTests && slowTests.length > 0"
+                v-else-if="slowTests && slowTests.length > 0"
                 :data="slowTests"
                 :columns="slowTestsColumns"
                 :ui="{
@@ -980,6 +998,10 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                   <span v-else class="text-gray-500">&mdash; Stable</span>
                 </template>
               </UTable>
+
+              <div v-else-if="slowTestsError" class="text-center py-8 text-red-500">
+                Couldn't load the slowest tests — try refreshing.
+              </div>
 
               <div v-else class="text-center py-8 text-gray-500">No slow test data available yet.</div>
             </UCard>
