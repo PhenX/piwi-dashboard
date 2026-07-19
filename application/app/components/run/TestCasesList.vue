@@ -126,6 +126,21 @@ function sortValue(tc: TestCaseResult, key: string): string | number {
   }
 }
 
+// Compact duration for the dense table cells ("5.3s", "340ms", "1m 5s") so the
+// Duration and Wasted columns stay on a single line.
+function formatDurationShort(ms?: number | null): string {
+  if (ms === null || ms === undefined) return '';
+  const abs = Math.round(Math.abs(ms));
+  if (abs === 0) return '0s';
+  const sign = ms < 0 ? '−' : '';
+  if (abs < 1000) return `${sign}${abs}ms`;
+  const seconds = abs / 1000;
+  if (seconds < 60) return `${sign}${Number.isInteger(seconds) ? seconds : seconds.toFixed(1)}s`;
+  const mins = Math.floor(seconds / 60);
+  const rem = Math.round(seconds % 60);
+  return rem ? `${sign}${mins}m ${rem}s` : `${sign}${mins}m`;
+}
+
 const sortedTestCases = computed<TestCaseResult[]>(() => {
   const cases = filteredTestCases.value;
   const key = sortKey.value;
@@ -144,19 +159,28 @@ const hasWastedTime = computed(() => props.testCases.some((tc) => (tc.wastedTime
 
 // Column layout — one grid template shared by the header and every row so the
 // columns stay aligned. Keep the cell order in the template in sync with this.
-const columns = computed<
-  Array<{ key: string; label: string; sortable: boolean; width: string; align: 'left' | 'right' }>
->(() => {
-  const cols: Array<{ key: string; label: string; sortable: boolean; width: string; align: 'left' | 'right' }> = [
-    { key: 'browser', label: 'Browser', sortable: true, width: '2.75rem', align: 'left' },
-    { key: 'title', label: 'Test case', sortable: true, width: 'minmax(14rem, 3fr)', align: 'left' },
-    { key: 'status', label: 'Status', sortable: true, width: '7rem', align: 'left' },
-    { key: 'duration', label: 'Duration', sortable: true, width: '6.5rem', align: 'left' },
-    { key: 'workerIndex', label: 'Worker', sortable: true, width: '5.5rem', align: 'left' },
-    { key: 'retries', label: 'Retries', sortable: true, width: '5.5rem', align: 'left' },
+// An `icon` header keeps an icon-only column (browser) from overflowing a label
+// into its neighbor while staying sortable.
+type Column = {
+  key: string;
+  label: string;
+  sortable: boolean;
+  width: string;
+  align: 'left' | 'right';
+  icon?: string;
+};
+
+const columns = computed<Column[]>(() => {
+  const cols: Column[] = [
+    { key: 'browser', label: 'Browser', sortable: true, width: '3.25rem', align: 'left', icon: 'i-lucide-monitor' },
+    { key: 'title', label: 'Test case', sortable: true, width: 'minmax(12rem, 3fr)', align: 'left' },
+    { key: 'status', label: 'Status', sortable: true, width: '6rem', align: 'left' },
+    { key: 'duration', label: 'Duration', sortable: true, width: '7rem', align: 'left' },
+    { key: 'workerIndex', label: 'Worker', sortable: true, width: '6rem', align: 'left' },
+    { key: 'retries', label: 'Retries', sortable: true, width: '6.5rem', align: 'left' },
   ];
   if (hasWastedTime.value) {
-    cols.push({ key: 'wastedTimeMs', label: 'Wasted', sortable: true, width: '6.5rem', align: 'left' });
+    cols.push({ key: 'wastedTimeMs', label: 'Wasted', sortable: true, width: '6rem', align: 'left' });
   }
   cols.push({ key: 'actions', label: 'Actions', sortable: false, width: '7.5rem', align: 'right' });
   return cols;
@@ -322,28 +346,45 @@ defineExpose({ scrollToCase });
         v-if="sortedTestCases.length > 0"
         class="flex-1 min-h-0 max-lg:h-[70dvh] overflow-x-auto overflow-y-hidden rounded-lg border border-default"
       >
-        <div class="flex flex-col h-full" :style="{ minWidth: gridMinWidth }">
+        <div
+          class="flex flex-col h-full"
+          role="table"
+          aria-label="Test cases"
+          :aria-rowcount="sortedTestCases.length + 1"
+          :style="{ minWidth: gridMinWidth }"
+        >
           <!-- Header -->
           <div
             class="grid shrink-0 bg-elevated/50 border-b border-default"
+            role="row"
             :style="{ gridTemplateColumns: gridTemplate }"
           >
             <template v-for="col in columns" :key="col.key">
               <button
                 v-if="col.sortable"
                 type="button"
-                class="flex items-center gap-1 px-3 py-2 text-sm font-semibold select-none cursor-pointer hover:text-highlighted transition-colors"
+                role="columnheader"
+                :aria-sort="sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"
+                :aria-label="col.icon ? col.label : undefined"
+                :title="col.icon ? col.label : undefined"
+                class="flex items-center gap-1 min-w-0 px-3 py-2 text-sm font-semibold select-none cursor-pointer hover:text-highlighted transition-colors"
                 :class="col.align === 'right' ? 'justify-end' : ''"
                 @click="toggleSort(col.key)"
               >
-                {{ col.label }}
+                <UIcon v-if="col.icon" :name="col.icon" class="shrink-0 size-4" />
+                <span v-else class="truncate">{{ col.label }}</span>
                 <UIcon
                   :name="sortIcon(col.key)"
                   class="shrink-0 size-3.5"
                   :class="sortKey === col.key ? '' : 'opacity-40'"
                 />
               </button>
-              <div v-else class="px-3 py-2 text-sm font-semibold" :class="col.align === 'right' ? 'text-right' : ''">
+              <div
+                v-else
+                role="columnheader"
+                class="px-3 py-2 text-sm font-semibold"
+                :class="col.align === 'right' ? 'text-right' : ''"
+              >
                 {{ col.label }}
               </div>
             </template>
@@ -356,6 +397,7 @@ defineExpose({ scrollToCase });
               :items="sortedTestCases"
               :min-item-size="44"
               key-field="id"
+              role="rowgroup"
               class="flex-1 min-h-0"
               @scroll.passive="onScrollerScroll"
             >
@@ -369,15 +411,16 @@ defineExpose({ scrollToCase });
                   <div
                     class="grid items-center border-b border-default text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-900/50"
                     :class="highlightedCaseId === item.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
+                    role="row"
                     :style="{ gridTemplateColumns: gridTemplate }"
                   >
                     <!-- browser -->
-                    <div class="px-3 py-2 flex items-center min-w-0">
+                    <div class="px-3 py-2 flex items-center min-w-0" role="cell">
                       <BrowserBadge :browser="item.browser" />
                     </div>
 
                     <!-- title -->
-                    <div class="px-3 py-2 min-w-0 space-y-0.5">
+                    <div class="px-3 py-2 min-w-0 space-y-0.5" role="cell">
                       <div class="flex items-center gap-1.5 min-w-0">
                         <UBadge
                           v-if="item.isNewRegression"
@@ -415,7 +458,7 @@ defineExpose({ scrollToCase });
                     </div>
 
                     <!-- status -->
-                    <div class="px-3 py-2 flex items-center">
+                    <div class="px-3 py-2 flex items-center" role="cell">
                       <UBadge
                         :color="
                           getStatusColor(
@@ -429,33 +472,33 @@ defineExpose({ scrollToCase });
                     </div>
 
                     <!-- duration -->
-                    <div class="px-3 py-2 flex items-center">
+                    <div class="px-3 py-2 flex items-center whitespace-nowrap" role="cell">
                       <span v-if="item.status === 'running'" class="text-info text-xs">In progress...</span>
-                      <span v-else>{{ formatDuration(item.duration) }}</span>
+                      <span v-else>{{ formatDurationShort(item.duration) }}</span>
                     </div>
 
                     <!-- worker -->
-                    <div class="px-3 py-2 flex items-center">
+                    <div class="px-3 py-2 flex items-center" role="cell">
                       <UBadge v-if="item.workerIndex != null" color="neutral" variant="soft" class="font-mono text-xs">
                         {{ item.workerIndex }}
                       </UBadge>
                     </div>
 
                     <!-- retries -->
-                    <div class="px-3 py-2 flex items-center tabular-nums">
+                    <div class="px-3 py-2 flex items-center tabular-nums" role="cell">
                       {{ item.retries && item.retries > 0 ? item.retries : '' }}
                     </div>
 
                     <!-- wasted -->
-                    <div v-if="hasWastedTime" class="px-3 py-2 flex items-center">
+                    <div v-if="hasWastedTime" class="px-3 py-2 flex items-center whitespace-nowrap" role="cell">
                       <span v-if="item.wastedTimeMs" class="text-amber-600 dark:text-amber-400">
-                        {{ formatDuration(item.wastedTimeMs) }}
+                        {{ formatDurationShort(item.wastedTimeMs) }}
                       </span>
                       <span v-else class="text-gray-400">&mdash;</span>
                     </div>
 
                     <!-- actions -->
-                    <div class="px-3 py-2 flex items-center justify-end">
+                    <div class="px-3 py-2 flex items-center justify-end" role="cell">
                       <UButton :to="`/test-run-cases/${item.id}`" size="sm" variant="outline"> View details </UButton>
                     </div>
                   </div>
