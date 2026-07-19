@@ -6,7 +6,7 @@
  * fixes land — a built-in before/after. Nothing here is a hard failure that would abort
  * the sweep.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import { waitForHydration } from '../utils';
 import { tabsToReach, resolveTargets, SCREEN_DIR, type AuditTargets } from './_audit';
@@ -40,7 +40,7 @@ test('command palette (Cmd/Ctrl+K) opens, searches, and closes', async ({ page }
 test('g-chord shortcuts navigate (regression: useDashboard is never called)', async ({ page }) => {
   await page.goto('/projects');
   await waitForHydration(page);
-  await page.locator('body').click({ position: { x: 2, y: 2 } }); // focus out of any input
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur()); // ensure no input has focus
   await page.keyboard.press('g');
   await page.keyboard.press('h');
   await page.waitForTimeout(500);
@@ -52,7 +52,7 @@ test('g-chord shortcuts navigate (regression: useDashboard is never called)', as
 test('g p / g a chords (new shortcuts)', async ({ page }) => {
   await page.goto('/');
   await waitForHydration(page);
-  await page.locator('body').click({ position: { x: 2, y: 2 } });
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur()); // ensure no input has focus
   await page.keyboard.press('g');
   await page.keyboard.press('p');
   await page.waitForTimeout(500);
@@ -130,4 +130,22 @@ test('in-viewport images carry non-empty alt text', async ({ page }) => {
   );
   await note('visible images missing alt', JSON.stringify(missing));
   expect.soft(missing, 'all visible images should have alt text').toEqual([]);
+});
+
+test('project tabs sync to the URL without pushing history entries', async ({ page }) => {
+  await page.goto(`/projects/${targets.projectId}`);
+  await waitForHydration(page);
+  const startLen = await page.evaluate(() => history.length);
+
+  await page.getByRole('tab', { name: 'Performance' }).click();
+  await page.waitForFunction(() => new URL(location.href).searchParams.get('tab') === 'performance').catch(() => {});
+  await page.getByRole('tab', { name: 'Spec health' }).click();
+  await page.waitForFunction(() => new URL(location.href).searchParams.get('tab') === 'spec-health').catch(() => {});
+
+  const endLen = await page.evaluate(() => history.length);
+  const tabParam = new URL(page.url()).searchParams.get('tab');
+  await note('tab in URL after switching', tabParam);
+  await note('history.length before -> after 2 tab switches', `${startLen} -> ${endLen}`);
+  expect.soft(tabParam, 'active tab should be reflected in ?tab=').toBe('spec-health');
+  expect.soft(endLen, 'switching tabs must use replace(), not push()').toBe(startLen);
 });

@@ -10,7 +10,13 @@ withDefaults(
 </script>
 
 <template>
-  <div class="flex items-center justify-center gap-2 text-gray-400" :class="padded && 'py-8'">
+  <div
+    role="status"
+    aria-live="polite"
+    aria-busy="true"
+    class="flex items-center justify-center gap-2 text-gray-400"
+    :class="padded && 'py-8'"
+  >
     <UIcon name="i-lucide-loader-2" class="size-4 animate-spin" />
     <span class="text-sm">{{ text }}</span>
   </div>

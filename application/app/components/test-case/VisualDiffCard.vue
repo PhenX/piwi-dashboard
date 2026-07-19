@@ -136,9 +136,14 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
       <img
         :src="overlaySrc"
         alt="Diff overlay (red = changed pixels)"
-        class="w-full max-h-96 object-contain cursor-zoom-in"
+        class="w-full max-h-96 object-contain cursor-zoom-in outline-none focus-visible:outline-2 focus-visible:outline-primary"
         loading="lazy"
+        role="button"
+        tabindex="0"
+        aria-label="Open diff overlay in lightbox"
         @click="lightboxIndex = 2"
+        @keydown.enter="lightboxIndex = 2"
+        @keydown.space.prevent="lightboxIndex = 2"
       />
       <p class="px-2 py-1 text-[10px] text-gray-500">Red pixels mark differences against the last passing run</p>
     </div>
@@ -150,9 +155,14 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
         <img
           :src="failingSrc"
           alt="Failing screenshot"
-          class="w-full max-h-80 object-contain cursor-zoom-in"
+          class="w-full max-h-80 object-contain cursor-zoom-in outline-none focus-visible:outline-2 focus-visible:outline-primary"
           loading="lazy"
+          role="button"
+          tabindex="0"
+          aria-label="Open failing screenshot in lightbox"
           @click="lightboxIndex = 0"
+          @keydown.enter="lightboxIndex = 0"
+          @keydown.space.prevent="lightboxIndex = 0"
         />
       </div>
       <div class="rounded overflow-hidden border border-green-200 dark:border-green-900 bg-gray-50 dark:bg-gray-900">
@@ -162,9 +172,14 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
         <img
           :src="baselineSrc"
           alt="Last passing screenshot"
-          class="w-full max-h-80 object-contain cursor-zoom-in"
+          class="w-full max-h-80 object-contain cursor-zoom-in outline-none focus-visible:outline-2 focus-visible:outline-primary"
           loading="lazy"
+          role="button"
+          tabindex="0"
+          aria-label="Open last passing screenshot in lightbox"
           @click="lightboxIndex = 1"
+          @keydown.enter="lightboxIndex = 1"
+          @keydown.space.prevent="lightboxIndex = 1"
         />
       </div>
     </div>

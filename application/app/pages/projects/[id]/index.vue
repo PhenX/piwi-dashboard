@@ -181,6 +181,16 @@ if (typeof queryTab === 'string' && validTabs.includes(queryTab as (typeof valid
   activeTab.value = queryTab as string;
 }
 
+// Reflect the active tab in the URL so it is bookmarkable/shareable and survives a
+// reload. Use replace() (not push()) so switching tabs does not stack history entries —
+// Back returns to the previous page, not the previously viewed tab. Mirrors the
+// test-runs/[id] and test-run-cases/[id] pages.
+watch(activeTab, (tab) => {
+  if (route.query.tab === tab) return;
+  if (!validTabs.includes(tab as (typeof validTabs)[number])) return;
+  router.replace({ query: { ...route.query, tab } });
+});
+
 const hasFailures = computed(() => project.value?.testRuns?.some((r) => r.failedTests > 0) ?? false);
 
 const tabItems = computed(() => [

@@ -66,6 +66,7 @@ export const PROJECT = {
   INLINE_HELP: 'inline-help-test',
   INSIGHTS_SPEC_HEALTH: 'insights-spec-health-test',
   INVALID_KEY: 'invalid-key-test',
+  KEYBOARD_NAV: 'keyboard-nav-test',
   LABEL_OVERRIDE: 'label-override-project',
   LATEST_RUN_TEST: 'latest-run-test',
   LIST_VISIBLE: 'list-visible-project',

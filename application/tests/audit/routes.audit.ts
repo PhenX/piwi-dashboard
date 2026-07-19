@@ -50,12 +50,10 @@ async function auditRoute(page: Page, route: string, label = route) {
     pageErrors: issues.pageErrors,
     failedRequests: issues.failedRequests,
   };
-  await test
-    .info()
-    .attach(`audit__${slug(label)}`, {
-      contentType: 'application/json',
-      body: Buffer.from(JSON.stringify(summary, null, 2)),
-    });
+  await test.info().attach(`audit__${slug(label)}`, {
+    contentType: 'application/json',
+    body: Buffer.from(JSON.stringify(summary, null, 2)),
+  });
 
   expect.soft(issues.pageErrors, `uncaught page error on ${route}`).toEqual([]);
   expect.soft(issues.failedRequests, `failed API request on ${route}`).toEqual([]);
