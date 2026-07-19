@@ -2,7 +2,7 @@
 import type { Component } from 'vue';
 import { ANALYTICS_WIDGETS, type AnalyticsWidgetId } from '#shared/analytics/registry';
 import { MAX_ANALYTICS_DAYS } from '#shared/analytics/scope';
-import type { TestRunForChart } from '~~/types/api';
+import type { ProjectMenuItem, TestRunForChart } from '~~/types/api';
 import {
   InsightsFeed,
   PortfolioScorecard,
@@ -19,6 +19,13 @@ import {
 useHead({ title: 'Analytics - Piwi Dashboard' });
 
 const { state, scopeQuery } = useAnalyticsScope();
+
+// Project options for the scope bar (slim list, same source as the sidebar menu).
+const { data: availableProjects } = await useFetch<ProjectMenuItem[]>('/api/projects/menu', {
+  lazy: true,
+  server: false,
+  default: () => [] as ProjectMenuItem[],
+});
 
 // Environment options for the scope bar (same source as the home filters).
 const { data: recentTestRuns } = await useFetch<TestRunForChart[]>('/api/test-runs/recent', {
@@ -85,9 +92,13 @@ const WIDGET_COMPONENTS: Record<AnalyticsWidgetId, Component> = {
     </template>
 
     <template #body>
-      <div class="p-6 space-y-6">
+      <div class="space-y-6">
         <FilterToolbar>
-          <AnalyticsScopeBar v-model="state" :available-environments="availableEnvironments" />
+          <AnalyticsScopeBar
+            v-model="state"
+            :available-projects="availableProjects"
+            :available-environments="availableEnvironments"
+          />
         </FilterToolbar>
 
         <UAlert

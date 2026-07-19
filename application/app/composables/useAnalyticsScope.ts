@@ -3,12 +3,15 @@ import type { AnalyticsWidgetId } from '#shared/analytics/registry';
 
 export interface AnalyticsScopeState {
   days: number;
+  /** Selected project ids; empty = every project the caller can see. */
+  projectIds: number[];
   environment: string | null;
   fullRunsOnly: boolean;
 }
 
-const DEFAULT_STATE: AnalyticsScopeState = {
+export const DEFAULT_ANALYTICS_SCOPE_STATE: AnalyticsScopeState = {
   days: DEFAULT_ANALYTICS_DAYS,
+  projectIds: [],
   environment: null,
   fullRunsOnly: true,
 };
@@ -19,19 +22,22 @@ const DEFAULT_STATE: AnalyticsScopeState = {
  */
 export function useAnalyticsScope() {
   const state = useCookie<AnalyticsScopeState>('piwi-analytics-scope', {
-    default: () => ({ ...DEFAULT_STATE }),
+    default: () => ({ ...DEFAULT_ANALYTICS_SCOPE_STATE }),
     encode: (v) => JSON.stringify(v),
     decode: (v) => {
       try {
-        return v ? { ...DEFAULT_STATE, ...(JSON.parse(v) as Partial<AnalyticsScopeState>) } : { ...DEFAULT_STATE };
+        return v
+          ? { ...DEFAULT_ANALYTICS_SCOPE_STATE, ...(JSON.parse(v) as Partial<AnalyticsScopeState>) }
+          : { ...DEFAULT_ANALYTICS_SCOPE_STATE };
       } catch {
-        return { ...DEFAULT_STATE };
+        return { ...DEFAULT_ANALYTICS_SCOPE_STATE };
       }
     },
   });
 
   const scope = computed<AnalyticsScope>(() => ({
     days: state.value.days,
+    projectIds: state.value.projectIds.length > 0 ? state.value.projectIds : undefined,
     environment: state.value.environment,
     fullRunsOnly: state.value.fullRunsOnly,
   }));
