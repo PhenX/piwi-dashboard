@@ -189,7 +189,7 @@ Nuxt file-based routing:
   - `files/` — `file-handler.ts`, `compression.ts`
   - `capture/` — `capture-fixtures.ts` (Playwright fixtures for network/web-vitals/console/locator capture; runs in the worker), `locator-healing.ts` (re-exports the pure generation/scoring/types from `@piwitests/core`, and keeps the reporter-only runtime: `captureCallerLocation`, snapshot dedupe, the fixture-proxy method surface, and `suggestLocatorsFromAria`'s same-style rendering), `attachments.ts` (the `piwi-*` attachment names)
   - `config/env.ts` — `PIWI_ENV_KEYS`, `resolveOptions`, `applyOptionsToEnv` (the `PIWI_*` ↔ option map)
-  - `support/` — `logger.ts` (`Logger`), `errors.ts` (`errorMessage`), `instance-id.ts`, `setup-file.ts`, `source-snippet.ts`, `cli-filters.ts`, `worker-index.ts`, `ci.ts`, `limiter.ts`
+  - `support/` — `logger.ts` (`Logger`), `errors.ts` (`errorMessage`), `instance-id.ts`, `setup-file.ts`, `source-snippet.ts`, `cli-filters.ts`, `worker-index.ts`, `ci.ts`, `run-url.ts`, `ci-output.ts` (`emitRunOutputs`: surfaces the dashboard run URL to CI after submit — universal JSON `outputFile`, GitHub Actions `$GITHUB_OUTPUT`/step-summary/annotation, GitLab dotenv report), `limiter.ts`
 - **`reporter/src/types/`** — `wire.ts` (EXTERNAL server contract; leaf shapes re-exported from `@piwitests/core/wire`, the per-case `WireTestCase`/stream union kept here and pinned to the server payloads by `wire-shared-drift.test.ts`) and `collected.ts` (INTERNAL in-process model); `reporter/src/types.ts` is a barrel over both
 - `reporter/package.json` — NPM package
 - Source is TypeScript (`.ts` in `src/`); compile with `npm run reporter:build` to produce `.js` + `.d.ts` in `dist/`

@@ -92,6 +92,7 @@ export default defineConfig({
 | `collectScmInfo`            | boolean  | `true`                    | Auto-collect git commit, branch, author                                |
 | `collectCiInfo`             | boolean  | `true`                    | Auto-collect CI environment info                                       |
 | `collectPerformanceMetrics` | boolean  | `true`                    | Collect step timings, network requests and web vitals from the fixture |
+| `outputFile`                | string   | —                         | Write a JSON file with the run URL/id/status so CI can consume it (see below) |
 | `apiKey`                    | string   | —                         | API key for authentication (preferred for CI)                          |
 | `username`                  | string   | —                         | Username for dashboard login (use `apiKey` instead when possible)      |
 | `password`                  | string   | —                         | Password for dashboard login (used with `username`)                    |
@@ -208,6 +209,51 @@ When `collectCiInfo` is enabled (default), the reporter auto-detects:
 - **CircleCI** — build number/URL, job name, workflow
 - **Travis CI** — build number/URL, job number
 - **Azure Pipelines** — build number, build ID/URL, job name
+
+## Publishing the run URL to CI
+
+After a run is submitted, the reporter surfaces the dashboard run URL so a later
+CI step (a custom email, a Slack message, a deploy gate) can pick it up without
+scraping the log. The URL is always printed as `View run: <url>`, and in
+addition:
+
+- **Any CI — JSON output file.** Set `outputFile` (or `PIWI_OUTPUT_FILE`) and the
+  reporter writes a small JSON file when the run lands:
+
+  ```json
+  { "runUrl": "https://piwi.example.com/test-runs/1234", "runId": 1234, "projectId": 5, "projectName": "checkout", "status": "passed", "ciBuildUrl": "https://ci.example.com/build/9" }
+  ```
+
+  Read it from any pipeline, e.g. `node -e "console.log(require('./piwi-run.json').runUrl)"`
+  (portable) or `cat piwi-run.json` and parse it in your email step. In Jenkins,
+  `def run = readJSON file: 'piwi-run.json'` then use `run.runUrl`.
+
+- **GitHub Actions (automatic).** When `GITHUB_ACTIONS` is set, the reporter
+  appends step outputs to `$GITHUB_OUTPUT` (`piwi_run_url`, `piwi_run_id`,
+  `piwi_project_id`, `piwi_run_status`), writes a markdown link to the job
+  summary, and prints a `::notice::` annotation. Give the test step an `id` and a
+  downstream step can read it:
+
+  ```yaml
+  - id: tests
+    run: npx playwright test
+  - run: echo "Results at ${{ steps.tests.outputs.piwi_run_url }}"
+  ```
+
+- **GitLab CI (automatic).** When `GITLAB_CI` is set, the reporter writes a
+  dotenv report (`piwi.env` by default, override with `PIWI_DOTENV_FILE`).
+  Declare it so later jobs inherit `$PIWI_RUN_URL`:
+
+  ```yaml
+  test:
+    script: npx playwright test
+    artifacts:
+      reports:
+        dotenv: piwi.env
+  email:
+    needs: [test]
+    script: ./send-email.sh "$PIWI_RUN_URL"
+  ```
 
 ## How It Works
 

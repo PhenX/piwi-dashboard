@@ -10,7 +10,19 @@ import { Logger } from '../support/logger.js';
 import { computePerformanceSummary } from '../collect/step-analyzer.js';
 import { resolveOverallStatus, serializeRun } from './serializer.js';
 import { runUrl } from '../support/run-url.js';
+import { emitRunOutputs, ciBuildUrlFromMetadata, type RunOutput } from '../support/ci-output.js';
 import type { CollectedTestCase, SetupStep, FilterDetails } from '../../types.js';
+
+/**
+ * Result of one rung of the submit ladder. `done` stops the ladder (the run
+ * landed, or the last rung was reached); `output` carries the run identity to
+ * surface to CI, and is `null` when a rung failed or the server returned no run
+ * id.
+ */
+interface SubmitOutcome {
+  done: boolean;
+  output: RunOutput | null;
+}
 
 /**
  * Snapshot of everything the reporter has collected by `onEnd`, handed off to
@@ -98,15 +110,39 @@ export class RunSubmitter {
       throw error;
     }
 
+    let outcome: SubmitOutcome = { done: false, output: null };
+
     if (sm?.enabled && sm?.runId != null) {
-      if (await this.tryFinishStreaming(run, overallStatus, duration, auth)) return;
+      outcome = await this.tryFinishStreaming(run, overallStatus, duration, auth);
     }
 
-    if (this.hasReports(run) || run.options.uploadTraces) {
-      if (await this.tryUploadWithFiles(run, overallStatus, duration, auth)) return;
+    if (!outcome.done && (this.hasReports(run) || run.options.uploadTraces)) {
+      outcome = await this.tryUploadWithFiles(run, overallStatus, duration, auth);
     }
 
-    await this.tryUploadJSON(run, overallStatus, duration, auth);
+    if (!outcome.done) {
+      outcome = await this.tryUploadJSON(run, overallStatus, duration, auth);
+    }
+
+    if (outcome.output) emitRunOutputs(outcome.output, this.logger, run.options.outputFile);
+  }
+
+  /** Assemble a CI-facing run output, or `null` when the server returned no run id. */
+  private buildOutput(
+    runId: number | string | undefined,
+    projectId: number | string | undefined,
+    run: CollectedRun,
+    status: string,
+  ): RunOutput | null {
+    if (runId == null) return null;
+    return {
+      runUrl: runUrl(this.httpClient.baseUrl, runId),
+      runId,
+      projectId,
+      projectName: run.options.projectName!,
+      status,
+      ciBuildUrl: ciBuildUrlFromMetadata(run.metadata),
+    };
   }
 
   private hasReports(run: CollectedRun): boolean {
@@ -153,7 +189,7 @@ export class RunSubmitter {
     overallStatus: string,
     duration: number,
     auth: string | null,
-  ): Promise<boolean> {
+  ): Promise<SubmitOutcome> {
     const sm = this.streamManager!;
     try {
       const flakyTests = run.testCases.filter((tc) => tc.status === 'passed' && (tc.retries || 0) > 0).length;
@@ -190,9 +226,6 @@ export class RunSubmitter {
       await this.httpClient.postJSON(`/api/test-runs/${sm.runId}/finish`, finishBody, auth);
 
       this.logger.info(`Successfully finalized streaming run #${sm.runId}`);
-      if (run.options.serverUrl) {
-        this.logger.info(`View run: ${runUrl(run.options.serverUrl, sm.runId!)}`);
-      }
       this.recovery.clear();
 
       if (this.hasReports(run)) {
@@ -208,11 +241,11 @@ export class RunSubmitter {
           this.logger.warn(`Failed to upload reports for streaming run: ${errorMessage(error)}`);
         }
       }
-      return true;
+      return { done: true, output: this.buildOutput(sm.runId!, undefined, run, overallStatus) };
     } catch (error) {
       this.logger.warn(`Failed to finalize streaming run: ${errorMessage(error)}`);
       this.logger.info('Falling back to batch upload...');
-      return false;
+      return { done: false, output: null };
     }
   }
 
@@ -221,15 +254,15 @@ export class RunSubmitter {
     overallStatus: string,
     duration: number,
     auth: string | null,
-  ): Promise<boolean> {
+  ): Promise<SubmitOutcome> {
     try {
-      await this.uploader.uploadWithFiles(
+      const response = await this.uploader.uploadWithFiles(
         this.buildRunPayload(run, overallStatus, duration),
         this.reportOptions(run),
         auth,
       );
       this.recovery.clear();
-      return true;
+      return { done: true, output: this.buildOutput(response?.testRunId, response?.projectId, run, overallStatus) };
     } catch (error) {
       if (error instanceof HttpError && error.status === 401 && !auth) {
         this.logAuthRequired(run.options.serverUrl);
@@ -237,7 +270,7 @@ export class RunSubmitter {
       }
       this.logger.warn(`Failed to upload with files: ${errorMessage(error)}`);
       this.logger.info('Falling back to JSON upload...');
-      return false;
+      return { done: false, output: null };
     }
   }
 
@@ -246,11 +279,12 @@ export class RunSubmitter {
     overallStatus: string,
     duration: number,
     auth: string | null,
-  ): Promise<void> {
+  ): Promise<SubmitOutcome> {
     const payload = this.buildRunPayload(run, overallStatus, duration);
     try {
-      await this.uploader.uploadJSON(payload, auth);
+      const response = await this.uploader.uploadJSON(payload, auth);
       this.recovery.clear();
+      return { done: true, output: this.buildOutput(response?.testRunId, response?.projectId, run, overallStatus) };
     } catch (error) {
       // If the server returned 401 and no auth was configured, this is a
       // configuration error — throw so the caller knows it's fatal.
@@ -266,6 +300,8 @@ export class RunSubmitter {
       // Save the wire-serialized form so the recovery file matches the
       // original submit payload (no raw attachments / internal fields).
       this.recovery.save(serializeRun(payload, { includeTestCases: true }));
+      // The ladder is exhausted; nothing to surface to CI.
+      return { done: true, output: null };
     }
   }
 
