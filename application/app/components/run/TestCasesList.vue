@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, watch, ref, onUnmounted } from 'vue';
-import type { TableColumn } from '@nuxt/ui';
+import { computed, nextTick, watch, ref } from 'vue';
 import type { TestCaseResult, SuiteInfo } from '~~/types/api';
 
 const { treeView, setTreeView } = useTreeViewCookie('test-cases');
@@ -85,103 +84,110 @@ const filteredTestCases = computed<TestCaseResult[]>(() => {
   return cases;
 });
 
-// Reset scroll lock when live mode ends
-watch(
-  () => props.isLive,
-  (live) => {
-    if (!live) userScrolledAway.value = false;
-  },
-);
+// Client-side sort (the old UTable sorting, re-implemented for the virtualized list).
+const sortKey = ref<string | null>(null);
+const sortDir = ref<'asc' | 'desc'>('asc');
 
-// Auto-scroll to bottom during live runs, unless user has scrolled away
-const tableScrollRef = ref<{ $el: HTMLElement } | null>(null);
-const userScrolledAway = ref(false);
-let scrollListenerCleanup: (() => void) | null = null;
-
-function getScrollEl(): HTMLElement | null {
-  return tableScrollRef.value?.$el ?? null;
-}
-
-function isAtBottom(el: HTMLElement): boolean {
-  return el.scrollHeight - el.scrollTop - el.clientHeight < 50;
-}
-
-function onTableScroll() {
-  const el = getScrollEl();
-  if (!el) return;
-  userScrolledAway.value = !isAtBottom(el);
-}
-
-watch(tableScrollRef, (instance) => {
-  scrollListenerCleanup?.();
-  const el = instance?.$el;
-  if (el) {
-    el.addEventListener('scroll', onTableScroll, { passive: true });
-    scrollListenerCleanup = () => el?.removeEventListener('scroll', onTableScroll);
+function toggleSort(key: string) {
+  if (sortKey.value !== key) {
+    sortKey.value = key;
+    sortDir.value = 'asc';
+  } else if (sortDir.value === 'asc') {
+    sortDir.value = 'desc';
+  } else {
+    // Third click clears the sort → natural (insertion) order.
+    sortKey.value = null;
   }
+}
+
+function sortIcon(key: string): string {
+  if (sortKey.value !== key) return 'i-lucide-chevrons-up-down';
+  return sortDir.value === 'asc' ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down';
+}
+
+function sortValue(tc: TestCaseResult, key: string): string | number {
+  switch (key) {
+    case 'browser':
+      return tc.browser?.projectName ?? '';
+    case 'title':
+      return tc.title ?? '';
+    case 'status':
+      return tc.status ?? '';
+    case 'duration':
+      return tc.duration ?? 0;
+    case 'workerIndex':
+      return tc.workerIndex ?? -1;
+    case 'retries':
+      return tc.retries ?? 0;
+    case 'wastedTimeMs':
+      return tc.wastedTimeMs ?? 0;
+    default:
+      return '';
+  }
+}
+
+// Compact duration for the dense table cells ("5.3s", "340ms", "1m 5s") so the
+// Duration and Wasted columns stay on a single line.
+function formatDurationShort(ms?: number | null): string {
+  if (ms === null || ms === undefined) return '';
+  const abs = Math.round(Math.abs(ms));
+  if (abs === 0) return '0s';
+  const sign = ms < 0 ? '−' : '';
+  if (abs < 1000) return `${sign}${abs}ms`;
+  const seconds = abs / 1000;
+  if (seconds < 60) return `${sign}${Number.isInteger(seconds) ? seconds : seconds.toFixed(1)}s`;
+  const mins = Math.floor(seconds / 60);
+  const rem = Math.round(seconds % 60);
+  return rem ? `${sign}${mins}m ${rem}s` : `${sign}${mins}m`;
+}
+
+const sortedTestCases = computed<TestCaseResult[]>(() => {
+  const cases = filteredTestCases.value;
+  const key = sortKey.value;
+  if (!key) return cases;
+  const dir = sortDir.value === 'asc' ? 1 : -1;
+  // Copy first — never sort the props array in place.
+  return [...cases].sort((a, b) => {
+    const va = sortValue(a, key);
+    const vb = sortValue(b, key);
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+    return String(va).localeCompare(String(vb)) * dir;
+  });
 });
 
-onUnmounted(() => {
-  scrollListenerCleanup?.();
-});
+const hasWastedTime = computed(() => props.testCases.some((tc) => (tc.wastedTimeMs ?? 0) > 0));
 
-// Auto-scroll to bottom when new items appear during a live run
-watch(
-  () => filteredTestCases.value.length,
-  () => {
-    if (!props.isLive || userScrolledAway.value) return;
-    nextTick(() => {
-      const el = getScrollEl();
-      if (el) el.scrollTop = el.scrollHeight;
-    });
-  },
-);
+// Column layout — one grid template shared by the header and every row so the
+// columns stay aligned. Keep the cell order in the template in sync with this.
+// An `icon` header keeps an icon-only column (browser) from overflowing a label
+// into its neighbor while staying sortable.
+type Column = {
+  key: string;
+  label: string;
+  sortable: boolean;
+  width: string;
+  align: 'left' | 'right';
+  icon?: string;
+};
 
-// Columns (without cell render functions — using template slots for custom cells)
-const testCasesColumns = computed<TableColumn<TestCaseResult>[]>(() => {
-  const cols: TableColumn<TestCaseResult>[] = [
-    {
-      id: 'browser',
-      accessorFn: (row: TestCaseResult) => row.browser?.projectName ?? '',
-      header: createSortHeader<TestCaseResult>('Browser'),
-    },
-    {
-      accessorKey: 'title',
-      header: createSortHeader<TestCaseResult>('Test case'),
-    },
-    {
-      accessorKey: 'status',
-      header: createSortHeader<TestCaseResult>('Status'),
-    },
-    {
-      accessorKey: 'duration',
-      header: createSortHeader<TestCaseResult>('Duration'),
-    },
-    {
-      accessorKey: 'workerIndex',
-      header: createSortHeader<TestCaseResult>('Worker'),
-    },
-    {
-      accessorKey: 'retries',
-      header: createSortHeader<TestCaseResult>('Retries'),
-    },
+const columns = computed<Column[]>(() => {
+  const cols: Column[] = [
+    { key: 'browser', label: 'Browser', sortable: true, width: '3.25rem', align: 'left', icon: 'i-lucide-monitor' },
+    { key: 'title', label: 'Test case', sortable: true, width: 'minmax(12rem, 3fr)', align: 'left' },
+    { key: 'status', label: 'Status', sortable: true, width: '6rem', align: 'left' },
+    { key: 'duration', label: 'Duration', sortable: true, width: '7rem', align: 'left' },
+    { key: 'workerIndex', label: 'Worker', sortable: true, width: '6rem', align: 'left' },
+    { key: 'retries', label: 'Retries', sortable: true, width: '6.5rem', align: 'left' },
   ];
   if (hasWastedTime.value) {
-    cols.push({
-      accessorKey: 'wastedTimeMs' as any,
-      header: createSortHeader<TestCaseResult>('Wasted'),
-    });
+    cols.push({ key: 'wastedTimeMs', label: 'Wasted', sortable: true, width: '6rem', align: 'left' });
   }
-  cols.push({
-    id: 'actions',
-    header: () => h('div', { class: 'text-right' }, 'Actions'),
-  });
+  cols.push({ key: 'actions', label: 'Actions', sortable: false, width: '7.5rem', align: 'right' });
   return cols;
 });
 
-const hasWastedTime = computed(() =>
-  props.testCases.some((tc) => (tc as any).wastedTimeMs && (tc as any).wastedTimeMs > 0),
-);
+const gridTemplate = computed(() => columns.value.map((c) => c.width).join(' '));
+const gridMinWidth = computed(() => (hasWastedTime.value ? '55rem' : '49rem'));
 
 const hasFilter = computed(
   () =>
@@ -191,26 +197,51 @@ const hasFilter = computed(
     props.failureClusterFilter != null,
 );
 
-const listRef = ref<HTMLElement | null>(null);
+// Virtualized scroller ref — only the exposed methods we call are typed.
+const scrollerRef = ref<{
+  scrollToItem: (index: number, options?: ScrollToOptions) => void;
+  scrollToBottom: () => void;
+} | null>(null);
+const userScrolledAway = ref(false);
 const highlightedCaseId = ref<number | null>(null);
 
+function isAtBottom(el: HTMLElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+}
+
+function onScrollerScroll(event: Event) {
+  const el = event.target as HTMLElement | null;
+  if (el) userScrolledAway.value = !isAtBottom(el);
+}
+
+// Reset scroll lock when live mode ends.
+watch(
+  () => props.isLive,
+  (live) => {
+    if (!live) userScrolledAway.value = false;
+  },
+);
+
+// Auto-scroll to the newest item during a live run, unless the user scrolled up.
+watch(
+  () => sortedTestCases.value.length,
+  () => {
+    if (!props.isLive || userScrolledAway.value) return;
+    nextTick(() => scrollerRef.value?.scrollToBottom());
+  },
+);
+
 function scrollToCase(id: number) {
-  // Switch to flat view so the row is visible and scrollable.
+  // Switch to the flat view so the row exists and can be scrolled to.
   setTreeView(false);
   highlightedCaseId.value = id;
+  const doScroll = () => {
+    const index = sortedTestCases.value.findIndex((tc) => tc.id === id);
+    if (index >= 0) scrollerRef.value?.scrollToItem(index, { behavior: 'smooth' });
+  };
   nextTick(() => {
-    const row = listRef.value?.querySelector<HTMLElement>(`tr:has(a[href="/test-run-cases/${id}"])`);
-    if (row) {
-      const container = row.closest('table')?.parentElement;
-      if (container) {
-        const containerTop = container.getBoundingClientRect().top;
-        const rowTop = row.getBoundingClientRect().top;
-        container.scrollBy({
-          top: rowTop - containerTop - container.clientHeight / 2 + row.clientHeight / 2,
-          behavior: 'smooth',
-        });
-      }
-    }
+    if (scrollerRef.value) doScroll();
+    else setTimeout(doScroll, 60);
     setTimeout(() => {
       highlightedCaseId.value = null;
     }, 3000);
@@ -221,7 +252,7 @@ defineExpose({ scrollToCase });
 </script>
 
 <template>
-  <div ref="listRef" class="flex flex-col overflow-y-auto">
+  <div class="flex flex-col min-h-0">
     <FilterToolbar class="mb-4 shrink-0">
       <template #start>
         <div class="flex items-center rounded-md border border-default overflow-hidden">
@@ -246,8 +277,8 @@ defineExpose({ scrollToCase });
           {{ testCases.length }} completed <HelpHint topic="run.live" />
         </span>
         <span v-else class="text-sm text-gray-500 tabular-nums inline-flex items-center gap-1">
-          {{ filteredTestCases.length
-          }}{{ filteredTestCases.length !== testCases.length ? ` / ${testCases.length}` : '' }} cases
+          {{ sortedTestCases.length
+          }}{{ sortedTestCases.length !== testCases.length ? ` / ${testCases.length}` : '' }} cases
           <HelpHint topic="run.test-cases" />
         </span>
       </template>
@@ -300,7 +331,7 @@ defineExpose({ scrollToCase });
     <!-- Tree view -->
     <TestCasesTree
       v-if="treeView && testCases.length > 0"
-      :test-cases="filteredTestCases"
+      :test-cases="sortedTestCases"
       :suites="suites"
       :has-filter="hasFilter"
       :highlighted-case-id="highlightedCaseId"
@@ -309,124 +340,190 @@ defineExpose({ scrollToCase });
       class="flex-1 min-h-0"
     />
 
-    <!-- Flat table view -->
+    <!-- Flat, virtualized table view -->
     <template v-else-if="!treeView">
-      <UTable
-        v-if="filteredTestCases.length > 0"
-        ref="tableScrollRef"
-        sticky
-        :data="filteredTestCases"
-        :columns="testCasesColumns"
-        class="flex-1 min-h-0"
-        :ui="{
-          base: 'table-fixed border-separate border-spacing-0',
-          thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-          tbody: '[&>tr]:last:[&>td]:border-b-0 [&>tr]:hover:bg-gray-50 dark:[&>tr]:hover:bg-gray-900/50',
-          th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-          td: 'border-b border-default',
-        }"
-        :meta="{
-          class: {
-            tr: (row: any) =>
-              highlightedCaseId === row.original.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : '',
-          },
-        }"
+      <div
+        v-if="sortedTestCases.length > 0"
+        class="flex-1 min-h-0 max-lg:h-[70dvh] overflow-x-auto overflow-y-hidden rounded-lg border border-default"
       >
-        <template #title-cell="{ row }">
-          <div class="min-w-0 space-y-0.5">
-            <div class="flex items-center gap-1.5 min-w-0">
-              <UBadge
-                v-if="row.original.isNewRegression"
-                color="error"
-                variant="solid"
-                size="xs"
-                class="uppercase tracking-wider"
-              >
-                NEW
-              </UBadge>
-              <UBadge
-                v-if="row.original.isNewFlaky"
-                color="info"
-                variant="solid"
-                size="xs"
-                class="uppercase tracking-wider"
-              >
-                FLAKY
-              </UBadge>
-              <a
-                :href="`/test-run-cases/${row.original.id}`"
-                class="text-primary hover:underline font-medium truncate"
-                :title="row.original.title"
-                @click.prevent="navigateTo(`/test-run-cases/${row.original.id}`)"
-                >{{ row.original.title }}</a
-              >
-            </div>
-            <OpenInIdeLink
-              v-if="row.original.location"
-              :location="row.original.location"
-              :project-key="projectKey"
-              :project-name="projectName"
-              class="text-xs text-gray-400 dark:text-gray-500"
-            />
-          </div>
-        </template>
-
-        <template #status-cell="{ row }">
-          <UBadge
-            :color="
-              getStatusColor(
-                row.original.status === 'timedOut' || row.original.status === 'timedout'
-                  ? 'failed'
-                  : row.original.status,
-              )
-            "
-            class="capitalize"
+        <div
+          class="flex flex-col h-full"
+          role="table"
+          aria-label="Test cases"
+          :aria-rowcount="sortedTestCases.length + 1"
+          :style="{ minWidth: gridMinWidth }"
+        >
+          <!-- Header -->
+          <div
+            class="grid shrink-0 bg-elevated/50 border-b border-default"
+            role="row"
+            :style="{ gridTemplateColumns: gridTemplate }"
           >
-            {{ formatStatusLabel(row.original.status) }}
-          </UBadge>
-        </template>
-
-        <template #duration-cell="{ row }">
-          <span v-if="row.original.status === 'running'" class="text-info text-xs">In progress...</span>
-          <span v-else>{{ formatDuration(row.original.duration) }}</span>
-        </template>
-
-        <template #workerIndex-cell="{ row }">
-          <UBadge v-if="row.original.workerIndex != null" color="neutral" variant="soft" class="font-mono text-xs">
-            {{ row.original.workerIndex }}
-          </UBadge>
-        </template>
-
-        <template #browser-cell="{ row }">
-          <BrowserBadge :browser="row.original.browser" />
-        </template>
-
-        <template #retries-cell="{ row }">
-          {{ row.original.retries && row.original.retries > 0 ? row.original.retries : '' }}
-        </template>
-
-        <template v-if="hasWastedTime" #wastedTimeMs-cell="{ row }">
-          <span v-if="(row.original as any).wastedTimeMs" class="text-amber-600 dark:text-amber-400">
-            {{ formatDuration((row.original as any).wastedTimeMs) }}
-          </span>
-          <span v-else class="text-gray-400">&mdash;</span>
-        </template>
-
-        <template #actions-cell="{ row }">
-          <div class="flex justify-end">
-            <UButton :to="`/test-run-cases/${row.original.id}`" size="sm" variant="outline"> View details </UButton>
+            <template v-for="col in columns" :key="col.key">
+              <button
+                v-if="col.sortable"
+                type="button"
+                role="columnheader"
+                :aria-sort="sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"
+                :aria-label="col.icon ? col.label : undefined"
+                :title="col.icon ? col.label : undefined"
+                class="flex items-center gap-1 min-w-0 px-3 py-2 text-sm font-semibold select-none cursor-pointer hover:text-highlighted transition-colors"
+                :class="col.align === 'right' ? 'justify-end' : ''"
+                @click="toggleSort(col.key)"
+              >
+                <UIcon v-if="col.icon" :name="col.icon" class="shrink-0 size-4" />
+                <span v-else class="truncate">{{ col.label }}</span>
+                <UIcon
+                  :name="sortIcon(col.key)"
+                  class="shrink-0 size-3.5"
+                  :class="sortKey === col.key ? '' : 'opacity-40'"
+                />
+              </button>
+              <div
+                v-else
+                role="columnheader"
+                class="px-3 py-2 text-sm font-semibold"
+                :class="col.align === 'right' ? 'text-right' : ''"
+              >
+                {{ col.label }}
+              </div>
+            </template>
           </div>
-        </template>
-      </UTable>
 
-      <div v-if="testCases.length > 0 && filteredTestCases.length === 0" class="text-center py-10 text-gray-500">
-        <UIcon name="i-lucide-search-x" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
-        <p>No test cases match your filters.</p>
+          <!-- Virtualized rows -->
+          <ClientOnly>
+            <DynamicScroller
+              ref="scrollerRef"
+              :items="sortedTestCases"
+              :min-item-size="44"
+              key-field="id"
+              role="rowgroup"
+              class="flex-1 min-h-0"
+              @scroll.passive="onScrollerScroll"
+            >
+              <template #default="{ item, index, active }">
+                <DynamicScrollerItem
+                  :item="item"
+                  :active="active"
+                  :size-dependencies="[item.title, item.location, item.isNewRegression, item.isNewFlaky]"
+                  :data-index="index"
+                >
+                  <div
+                    class="grid items-center border-b border-default text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-900/50"
+                    :class="highlightedCaseId === item.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
+                    role="row"
+                    :style="{ gridTemplateColumns: gridTemplate }"
+                  >
+                    <!-- browser -->
+                    <div class="px-3 py-2 flex items-center min-w-0" role="cell">
+                      <BrowserBadge :browser="item.browser" />
+                    </div>
+
+                    <!-- title -->
+                    <div class="px-3 py-2 min-w-0 space-y-0.5" role="cell">
+                      <div class="flex items-center gap-1.5 min-w-0">
+                        <UBadge
+                          v-if="item.isNewRegression"
+                          color="error"
+                          variant="solid"
+                          size="xs"
+                          class="uppercase tracking-wider"
+                        >
+                          NEW
+                        </UBadge>
+                        <UBadge
+                          v-if="item.isNewFlaky"
+                          color="info"
+                          variant="solid"
+                          size="xs"
+                          class="uppercase tracking-wider"
+                        >
+                          FLAKY
+                        </UBadge>
+                        <a
+                          :href="`/test-run-cases/${item.id}`"
+                          class="text-primary hover:underline font-medium truncate"
+                          :title="item.title"
+                          @click.prevent="navigateTo(`/test-run-cases/${item.id}`)"
+                          >{{ item.title }}</a
+                        >
+                      </div>
+                      <OpenInIdeLink
+                        v-if="item.location"
+                        :location="item.location"
+                        :project-key="projectKey"
+                        :project-name="projectName"
+                        class="text-xs text-gray-400 dark:text-gray-500"
+                      />
+                    </div>
+
+                    <!-- status -->
+                    <div class="px-3 py-2 flex items-center" role="cell">
+                      <UBadge
+                        :color="
+                          getStatusColor(
+                            item.status === 'timedOut' || item.status === 'timedout' ? 'failed' : item.status,
+                          )
+                        "
+                        class="capitalize"
+                      >
+                        {{ formatStatusLabel(item.status) }}
+                      </UBadge>
+                    </div>
+
+                    <!-- duration -->
+                    <div class="px-3 py-2 flex items-center whitespace-nowrap" role="cell">
+                      <span v-if="item.status === 'running'" class="text-info text-xs">In progress...</span>
+                      <span v-else>{{ formatDurationShort(item.duration) }}</span>
+                    </div>
+
+                    <!-- worker -->
+                    <div class="px-3 py-2 flex items-center" role="cell">
+                      <UBadge v-if="item.workerIndex != null" color="neutral" variant="soft" class="font-mono text-xs">
+                        {{ item.workerIndex }}
+                      </UBadge>
+                    </div>
+
+                    <!-- retries -->
+                    <div class="px-3 py-2 flex items-center tabular-nums" role="cell">
+                      {{ item.retries && item.retries > 0 ? item.retries : '' }}
+                    </div>
+
+                    <!-- wasted -->
+                    <div v-if="hasWastedTime" class="px-3 py-2 flex items-center whitespace-nowrap" role="cell">
+                      <span v-if="item.wastedTimeMs" class="text-amber-600 dark:text-amber-400">
+                        {{ formatDurationShort(item.wastedTimeMs) }}
+                      </span>
+                      <span v-else class="text-gray-400">&mdash;</span>
+                    </div>
+
+                    <!-- actions -->
+                    <div class="px-3 py-2 flex items-center justify-end" role="cell">
+                      <UButton :to="`/test-run-cases/${item.id}`" size="sm" variant="outline"> View details </UButton>
+                    </div>
+                  </div>
+                </DynamicScrollerItem>
+              </template>
+            </DynamicScroller>
+
+            <template #fallback>
+              <div class="flex-1 min-h-0 flex items-center justify-center py-10 text-sm text-gray-500">
+                <UIcon name="i-lucide-loader-circle" class="size-4 mr-2 animate-spin" />
+                Loading test cases…
+              </div>
+            </template>
+          </ClientOnly>
+        </div>
       </div>
 
       <div v-else-if="testCases.length === 0" class="text-center py-10 text-gray-500">
         <UIcon name="i-lucide-beaker" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
         <p>No test cases recorded for this run.</p>
+      </div>
+
+      <div v-else class="text-center py-10 text-gray-500">
+        <UIcon name="i-lucide-search-x" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+        <p>No test cases match your filters.</p>
       </div>
     </template>
   </div>

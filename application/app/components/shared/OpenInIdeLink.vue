@@ -1,10 +1,12 @@
 <script setup lang="ts">
 /**
- * Renders a source path (or a `file:line:col` location) as selectable text with
- * a revealed "open in IDE" affordance: the icon runs the configured default
- * (Auto by default), and a caret opens a chooser to pick a specific method or
- * copy the path. All launching/preferences live in `useOpenInIde`; this is a
- * thin, client-only trigger safe to drop in anywhere a path is shown today.
+ * Renders a source path (or a `file:line:col` location) as a fully-clickable
+ * "open in IDE" link: a dashed-underlined label runs the configured default
+ * (Auto by default) and reveals an external-link icon on hover; a caret opens a
+ * chooser to pick a specific method or copy the path. The chooser popover is
+ * mounted lazily on first use so lists of these stay cheap to render. All
+ * launching/preferences live in `useOpenInIde`; this is a thin, client-only
+ * trigger safe to drop in anywhere a path is shown today.
  */
 import { parseLocation } from '~/utils/ide-links';
 
@@ -50,6 +52,16 @@ const target = computed(() => ({
 }));
 
 const open = ref(false);
+// The chooser popover is heavy (a teleported menu of actions); keep it out of the
+// initial render and only instantiate it the first time the caret is activated.
+const menuMounted = ref(false);
+
+function mountMenu() {
+  menuMounted.value = true;
+  nextTick(() => {
+    open.value = true;
+  });
+}
 
 function run(action: () => void) {
   open.value = false;
@@ -59,32 +71,48 @@ function run(action: () => void) {
 
 <template>
   <span class="group/ide inline-flex items-center gap-1 min-w-0 max-w-full align-middle">
-    <span :class="[mono ? 'font-mono' : '', 'truncate']" :title="label">
-      <slot>{{ label }}</slot>
-    </span>
-
-    <span
-      v-if="resolvedPath"
-      class="inline-flex items-center shrink-0 opacity-100 sm:opacity-0 sm:group-hover/ide:opacity-100 focus-within:opacity-100 transition-opacity"
-    >
-      <UButton
-        icon="i-lucide-external-link"
-        size="xs"
-        variant="ghost"
-        color="neutral"
+    <template v-if="resolvedPath">
+      <button
+        type="button"
+        class="inline-flex items-center gap-1 min-w-0 max-w-full cursor-pointer text-left"
+        :title="`Open ${label} in IDE`"
         :aria-label="`Open ${label} in IDE`"
-        title="Open in IDE"
-        @click="run(() => openInIde(target))"
-      />
-      <UPopover v-model:open="open">
-        <UButton
-          icon="i-lucide-chevron-down"
-          size="xs"
-          variant="ghost"
-          color="neutral"
+        @click="openInIde(target)"
+      >
+        <span
+          :class="[
+            mono ? 'font-mono' : '',
+            'truncate underline decoration-dashed decoration-1 underline-offset-2 decoration-gray-400/70 dark:decoration-gray-500/70 transition-colors group-hover/ide:decoration-current',
+          ]"
+        >
+          <slot>{{ label }}</slot>
+        </span>
+        <UIcon
+          name="i-lucide-external-link"
+          class="size-3 shrink-0 opacity-0 transition-opacity group-hover/ide:opacity-100"
+        />
+      </button>
+
+      <!-- Chooser: mounted lazily on first activation so table rows stay cheap. -->
+      <button
+        v-if="!menuMounted"
+        type="button"
+        class="shrink-0 inline-flex items-center rounded p-0.5 text-muted cursor-pointer transition-opacity hover:bg-elevated/60 hover:text-default opacity-100 sm:opacity-0 sm:group-hover/ide:opacity-100 focus-visible:opacity-100"
+        aria-label="Choose how to open in IDE"
+        title="Choose how to open"
+        @click="mountMenu"
+      >
+        <UIcon name="i-lucide-chevron-down" class="size-3.5" />
+      </button>
+      <UPopover v-else v-model:open="open">
+        <button
+          type="button"
+          class="shrink-0 inline-flex items-center rounded p-0.5 text-muted cursor-pointer transition-colors hover:bg-elevated/60 hover:text-default"
           aria-label="Choose how to open in IDE"
           title="Choose how to open"
-        />
+        >
+          <UIcon name="i-lucide-chevron-down" class="size-3.5" />
+        </button>
         <template #content>
           <div class="w-56 p-1 space-y-0.5">
             <p class="text-xs font-medium text-muted px-2 pt-1 pb-1">Open in IDE</p>
@@ -183,6 +211,10 @@ function run(action: () => void) {
           </div>
         </template>
       </UPopover>
+    </template>
+
+    <span v-else :class="[mono ? 'font-mono' : '', 'truncate']">
+      <slot>{{ label }}</slot>
     </span>
   </span>
 </template>

@@ -59,6 +59,7 @@
     "postgres": "^3.4.9",
     "sharp": "^0.35.3",
     "sql.js": "^1.14.1",
+    "vue-virtual-scroller": "^3.0.4",
     "zod": "^4.1.13"
   },
   "devDependencies": {
