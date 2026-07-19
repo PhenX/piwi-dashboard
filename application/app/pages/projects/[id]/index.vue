@@ -947,7 +947,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
             </div>
 
             <ChartCard title="Performance trend" subtitle="Duration metrics over time" help="project.performance">
-              <LoadingState v-if="performanceInitialLoading" text="Loading performance trend…" />
+              <LoadingState v-if="performanceInitialLoading" text="Loading chart…" />
               <PerformanceTrendChart
                 v-else
                 :data="performanceData || []"
@@ -965,7 +965,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                 <p class="text-sm text-gray-600 mt-1">Top 20 slowest test cases across recent runs</p>
               </template>
 
-              <LoadingState v-if="slowTestsLoading && slowTests === null" text="Loading slowest tests…" />
+              <LoadingState v-if="slowTestsLoading && slowTests === null" text="Loading…" />
 
               <UTable
                 v-else-if="slowTests && slowTests.length > 0"
