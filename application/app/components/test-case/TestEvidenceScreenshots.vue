@@ -36,8 +36,13 @@ const currentIndex = ref<number | null>(null);
       <div
         v-for="(img, idx) in images"
         :key="img.src"
-        class="relative group cursor-pointer rounded overflow-hidden border border-default"
+        class="relative group cursor-pointer rounded overflow-hidden border border-default outline-none focus-visible:outline-2 focus-visible:outline-primary"
+        role="button"
+        tabindex="0"
+        :aria-label="`View screenshot ${img.name}`"
         @click="currentIndex = idx"
+        @keydown.enter="currentIndex = idx"
+        @keydown.space.prevent="currentIndex = idx"
       >
         <img
           :src="img.src"

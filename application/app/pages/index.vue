@@ -5,20 +5,32 @@ import { errorMessage } from '~/utils';
 
 useHead({ title: 'Piwi Dashboard' });
 
+// `lazy` so client-side navigation to Home is instant — the page renders a
+// skeleton immediately instead of blocking on the fetch (which felt like a hang).
+// On first SSR load the data still arrives in the payload, so there's no flash.
 const {
   data: overview,
   error: overviewError,
   refresh: refreshOverview,
-} = await useFetch<ProjectOverview[]>('/api/projects/overview', {
+  status: overviewStatus,
+} = useFetch<ProjectOverview[]>('/api/projects/overview', {
+  lazy: true,
   default: () => [] as ProjectOverview[],
 });
 const {
   data: recentTestRuns,
   error: recentRunsError,
   refresh: refreshRecentRuns,
-} = await useFetch<TestRunForChart[]>('/api/test-runs/recent');
+} = useFetch<TestRunForChart[]>('/api/test-runs/recent', { lazy: true });
 
 useRunStream(() => Promise.all([refreshOverview(), refreshRecentRuns()]));
+
+// True only before the first project-overview load resolves — drives the skeleton.
+// Gated on `overview` (which decides projects-vs-onboarding) so a slow load can't
+// flash the onboarding wizard, while a background SSE refetch (data already present)
+// never replaces the page with a skeleton. A genuine "no projects yet" state
+// resolves to success with empty data, so the wizard shows there.
+const isInitialLoad = computed(() => overviewStatus.value === 'pending' && !overview.value?.length);
 
 // A failed load must never be mistaken for "no projects yet" — that would
 // render the onboarding wizard over what's actually a broken DB/API.
@@ -221,6 +233,22 @@ const featureHighlights = [
             </UButton>
           </template>
         </ErrorState>
+      </div>
+
+      <!-- Skeleton while the first load resolves (client-side navigation to Home) -->
+      <div v-else-if="isInitialLoad" class="p-6 space-y-8" aria-busy="true">
+        <span class="sr-only" role="status">Loading dashboard…</span>
+        <USkeleton class="h-14 w-full rounded-xl" />
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+          <div class="xl:col-span-2 space-y-3">
+            <USkeleton class="h-7 w-40" />
+            <USkeleton class="h-72 w-full rounded-lg" />
+          </div>
+          <div class="space-y-3">
+            <USkeleton class="h-7 w-32" />
+            <USkeleton v-for="i in 5" :key="i" class="h-12 w-full rounded-lg" />
+          </div>
+        </div>
       </div>
 
       <div v-else class="p-6 space-y-8">

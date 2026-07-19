@@ -66,6 +66,10 @@ const { data: projects, refresh: refreshProjects } = await useFetch<ProjectWithS
 useRunStream(refreshProjects);
 useNotificationStream();
 
+// Register global "go to" keyboard chords (g h / g p / g a / g s). This is the only
+// caller of useDashboard(); without it the shortcuts never register.
+useDashboard();
+
 // Extract current project ID from route (if viewing a project page)
 const currentProjectId = computed(() => {
   // Check if route path starts with /projects/:id
@@ -251,6 +255,37 @@ const groups = computed<CommandPaletteGroup[]>(() => {
     },
   ];
 
+  // On a project page, surface its tab panels in the palette. Several of these
+  // (Spec health, Timeline, Flaky tests…) have no standalone route, so this is the
+  // fastest keyboard path to them. An unavailable-for-role tab (e.g. Members) is
+  // omitted; the project page also tolerates an unknown ?tab= by falling back.
+  if (currentProjectId.value) {
+    const pid = currentProjectId.value;
+    const projectTabs: [value: string, label: string, icon: string][] = [
+      ['test-runs', 'Test runs', 'i-lucide-play'],
+      ['failure-clusters', 'Failure clusters', 'i-lucide-layers'],
+      ['flaky-tests', 'Flaky tests', 'i-lucide-shuffle'],
+      ['performance', 'Performance', 'i-lucide-trending-up'],
+      ['test-cases', 'Test cases', 'i-lucide-flask-conical'],
+      ['compare', 'Compare', 'i-lucide-git-compare-arrows'],
+      ['spec-health', 'Spec health', 'i-lucide-table-2'],
+      ['timeline', 'Timeline', 'i-lucide-git-commit-horizontal'],
+    ];
+    staticGroups.unshift({
+      id: 'project-tabs',
+      label: 'This project',
+      items: projectTabs.map(([value, label, icon]) => ({
+        id: `project-tab-${value}`,
+        label,
+        icon,
+        to: `/projects/${pid}?tab=${value}`,
+        onSelect: () => {
+          open.value = false;
+        },
+      })),
+    });
+  }
+
   if (!searchResults.value) return staticGroups;
 
   const resultGroups: CommandPaletteGroup[] = [];
@@ -344,6 +379,14 @@ onMounted(async () => {
     unit="rem"
     style="top: var(--demo-banner-height, 0px); height: calc(100dvh - var(--demo-banner-height, 0px))"
   >
+    <!-- Keyboard skip link: first Tab stop, lets keyboard/AT users jump past the sidebar. -->
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-inverted focus:shadow-lg focus:outline-2 focus:outline-primary"
+    >
+      Skip to main content
+    </a>
+
     <UDashboardSidebar
       id="default"
       v-model:open="open"
@@ -389,6 +432,8 @@ onMounted(async () => {
 
     <UDashboardSearch v-model:search-term="searchTerm" :groups="groups" :preserve-group-order="!!searchResults" />
 
+    <!-- Focus target for the skip link; the next Tab lands inside the page panel. -->
+    <span id="main-content" tabindex="-1" class="sr-only">Main content</span>
     <slot />
 
     <!-- Global "Open in IDE" settings modal, toggled from file-path choosers and the user menu -->

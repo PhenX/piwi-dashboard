@@ -6,15 +6,24 @@ import type { ProjectWithStats, TagInfo, TagsResponse } from '~~/types/api';
 
 useHead({ title: 'Projects — Piwi Dashboard' });
 
-// Share the projects data already fetched by the layout (same key → single HTTP request, single SSE subscription)
-const { data: projects, refresh } = await useFetch<ProjectWithStats[]>('/api/projects', {
+// Share the projects data already fetched by the layout (same key → single HTTP request, single SSE subscription).
+// `lazy` so navigating to Projects is instant — a skeleton shows instead of blocking on the fetch.
+const {
+  data: projects,
+  refresh,
+  status: projectsStatus,
+} = useFetch<ProjectWithStats[]>('/api/projects', {
   key: 'projects',
+  lazy: true,
   default: () => [],
 });
-const { data: tagsData, refresh: refreshTags } = await useFetch<TagsResponse>('/api/tags');
+const { data: tagsData, refresh: refreshTags } = useFetch<TagsResponse>('/api/tags', { lazy: true });
 const toast = useToast();
 
 const allTags = computed(() => tagsData.value?.tags || []);
+
+// Show a skeleton (not the "No projects yet" empty state) while the first load resolves.
+const isInitialLoad = computed(() => projectsStatus.value === 'pending' && !projects.value?.length);
 
 // Search and filter state
 const searchQuery = ref('');
@@ -299,6 +308,12 @@ const columns: TableColumn<ProjectWithStats>[] = [
           </template>
         </UTable>
       </TableScroller>
+
+      <div v-else-if="isInitialLoad" class="space-y-2" aria-busy="true">
+        <span class="sr-only" role="status">Loading projects…</span>
+        <USkeleton class="h-10 w-full rounded-lg" />
+        <USkeleton v-for="i in 6" :key="i" class="h-14 w-full rounded-lg" />
+      </div>
 
       <div v-else-if="projects && projects.length > 0" class="text-center py-12 text-gray-500">
         <p class="text-lg mb-2">No projects match your search</p>

@@ -49,7 +49,7 @@ defineExpose({ setFolded, reveal });
         <div class="flex items-center justify-between gap-2">
           <!-- role=button (not <button>) so the nested HelpHint button stays valid HTML -->
           <div
-            class="flex items-center gap-2 min-w-0 flex-1 cursor-pointer select-none"
+            class="flex items-center gap-2 min-w-0 flex-1 cursor-pointer select-none rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-primary"
             role="button"
             tabindex="0"
             :aria-expanded="!folded"
