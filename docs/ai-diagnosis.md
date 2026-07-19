@@ -201,30 +201,7 @@ Tailor the analysis to your stack with **global** instructions (Settings → AI)
 
 Every piece of evidence sent to the model costs tokens. Piwi caps each input so diagnoses stay fast and affordable. Defaults live in `shared/ai-context-limits.ts`; override them in **Settings → AI** or via env (env wins; the UI then shows the field read-only).
 
-| Environment variable | Default | What it caps |
-|----------------------|--------:|--------------|
-| `PIWI_AI_MAX_SAMPLE_ERROR_CHARS` | 10000 | Characters of raw error text per error block |
-| `PIWI_AI_MAX_SCM_PATCH_BUDGET` | 15000 | Total characters of diff patches across changed files |
-| `PIWI_AI_MAX_AFFECTED_TESTS` | 30 | Affected tests listed |
-| `PIWI_AI_MAX_STEPS` | 50 | Recent test steps included |
-| `PIWI_AI_MAX_CONSOLE_ENTRIES` | 30 | Console error/warning entries |
-| `PIWI_AI_MAX_CONSOLE_ENTRY_CHARS` | 1000 | Characters per console entry |
-| `PIWI_AI_MAX_NETWORK_REQUESTS` | 25 | Failed network requests included |
-| `PIWI_AI_MAX_ARIA_SNAPSHOT_CHARS` | 12000 | Characters of the page ARIA snapshot |
-| `PIWI_AI_MAX_TEST_SOURCE_CHARS` | 8000 | Characters of the test source snippet |
-| `PIWI_AI_MAX_SOURCE_FILES` | 4 | Full source files fetched from SCM to ground patches (0 disables) |
-| `PIWI_AI_MAX_SOURCE_FILE_CHARS` | 12000 | Characters per fetched full source file |
-| `PIWI_AI_MAX_SERVER_LOG_ENTRIES` | 50 | Backend server log entries (from the `X-Piwi-Logs` header) |
-| `PIWI_AI_MAX_SERVER_LOG_ENTRY_CHARS` | 1000 | Characters per server log entry |
-| `PIWI_AI_MAX_IMAGES` | 5 | Screenshots auto-included in the context |
-| `PIWI_AI_MAX_PASSED_PEERS` | 20 | Passing peer tests in the same file listed |
-| `PIWI_AI_MAX_CONSOLE_WINDOW` | 50 | Console entries (any level) in the window before failure |
-| `PIWI_AI_SLOW_REQUEST_MS` | 1500 | Duration (ms) above which a network request is flagged as slow |
-| `PIWI_AI_MAX_TRACE_ACTIONS` | 10 | Actions extracted from the Playwright trace ZIP for failing-action context (0 disables) |
-| `PIWI_AI_TRACE_DOM_CHARS` | 6000 | Characters of the trace-derived DOM/ARIA excerpt |
-| `PIWI_AI_MAX_TRACE_STACK_FRAMES` | 10 | Call-stack frames (with embedded-source windows) from the trace's stacks index (0 disables) |
-| `PIWI_AI_MAX_TRACE_NETWORK_REQUESTS` | 20 | Requests included from the trace's network stream — failed / during-failure / slow prioritized (0 disables) |
-| `PIWI_AI_IMAGE_MAX_EDGE` | 1920 | Screenshots are downscaled so their long edge is at most this many pixels before being sent |
+The full list of `PIWI_AI_MAX_*` limit variables, their defaults and their clamping ranges lives in the [Configuration reference → AI context limits](./configuration#ai-context-limits) — generated from the same registry the server reads, so it can never drift from the code.
 
 ## Try it in the demo
 
