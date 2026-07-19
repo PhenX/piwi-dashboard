@@ -1,3 +1,4 @@
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vitepress'
 
 // https://vitepress.dev/reference/site-config
@@ -8,6 +9,19 @@ export default defineConfig({
   title: 'Piwi Dashboard',
   description: 'A modern dashboard for storing and visualising Playwright test results',
   base: '/',
+  // Example values in the generated configuration reference (PIWI_SITE_URL,
+  // Ollama base URLs) are intentionally unreachable localhost URLs.
+  ignoreDeadLinks: [/^https?:\/\/localhost/],
+  vite: {
+    resolve: {
+      alias: {
+        // The env-var registry and format emitters are imported straight from
+        // the application's shared modules — same alias the app uses, so the
+        // docs (reference page + generator) can never drift from the code.
+        '#shared': fileURLToPath(new URL('../../application/shared', import.meta.url)),
+      },
+    },
+  },
   head: [
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'Piwi Dashboard — A permanent home for your Playwright test results' }],
@@ -68,6 +82,7 @@ export default defineConfig({
         text: 'Configuration',
         items: [
           { text: 'Configuration reference', link: '/configuration' },
+          { text: 'Configuration generator', link: '/configuration/generator' },
           { text: 'Authentication', link: '/authentication' },
           { text: 'Storage configuration', link: '/storage' },
           { text: 'Deployment', link: '/deployment' },

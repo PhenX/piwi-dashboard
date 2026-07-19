@@ -54,3 +54,6 @@ application/public/demo/seed.sql
 
 # Plan documents
 plans/
+
+# Generated docs (rebuilt by docs:gen from application/shared/piwi-env-vars.ts)
+docs/configuration.md
