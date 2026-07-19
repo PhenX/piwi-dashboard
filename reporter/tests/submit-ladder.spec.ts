@@ -140,6 +140,38 @@ describe('PiwiDashboardReporter submit/fallback ladder', () => {
     expect('_filesUploaded' in submitBody.testCases[0]).toBe(false);
   });
 
+  it('writes the CI output file with the submitted run identity', async () => {
+    server = await startServer((req, res) => {
+      if (req.url === '/api/test-runs/submit') {
+        jsonRes(res, 200, { testRunId: 99, projectId: 5 });
+      } else {
+        textRes(res, 404, 'nope');
+      }
+    });
+
+    const outputFile = path.join(os.tmpdir(), `piwi-run-${process.pid}.json`);
+    try {
+      const reporter = new PiwiDashboardReporter({
+        serverUrl: server.url,
+        projectName,
+        streaming: false,
+        uploadReport: false,
+        uploadTraces: false,
+        liveFileUploads: false,
+        outputFile,
+      });
+      await runOneTest(reporter, 'output-file-test');
+
+      const parsed = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+      expect(parsed.runId).toBe(99);
+      expect(parsed.projectId).toBe(5);
+      expect(parsed.status).toBe('passed');
+      expect(parsed.runUrl).toBe(`${server.url}/test-runs/99`);
+    } finally {
+      fs.rmSync(outputFile, { force: true });
+    }
+  });
+
   it('streaming disabled, uploadReport=true: multipart /upload only (no /submit)', async () => {
     server = await startServer((req, res) => {
       if (req.url === '/api/test-runs/upload') {

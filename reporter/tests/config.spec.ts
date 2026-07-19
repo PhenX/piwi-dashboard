@@ -17,6 +17,7 @@ const PIWI_KEYS = [
   'PIWI_LIVE_FILE_UPLOADS',
   'PIWI_UPLOAD_TRACES',
   'PIWI_UPLOAD_REPORT',
+  'PIWI_OUTPUT_FILE',
 ];
 
 const SAVED_ENV: Record<string, string | undefined> = {};
@@ -139,5 +140,11 @@ describe('resolveOptions', () => {
     process.env.PIWI_VERBOSE = 'false';
     const opts = resolveOptions({});
     expect(opts.verbose).toBe(false);
+  });
+
+  it('reads PIWI_OUTPUT_FILE from env, and a user option wins over it', () => {
+    process.env.PIWI_OUTPUT_FILE = 'piwi-run.json';
+    expect(resolveOptions({}).outputFile).toBe('piwi-run.json');
+    expect(resolveOptions({ outputFile: 'explicit.json' }).outputFile).toBe('explicit.json');
   });
 });

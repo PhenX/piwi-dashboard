@@ -103,6 +103,15 @@ export interface PiwiDashboardOptions extends PlaywrightTestConfig {
   tags?: string[];
   /** Additional custom metadata as key-value pairs */
   customData?: Record<string, unknown>;
+  /**
+   * Write a JSON file with the submitted run's dashboard URL, id, project id and
+   * status after the run lands, so a CI pipeline can consume it (e.g. feed the
+   * run URL into a custom email step). Any CI can read the file. GitHub Actions
+   * step outputs / job summary and GitLab dotenv reports are emitted
+   * automatically when running under those systems, regardless of this option.
+   * Can also be set with `PIWI_OUTPUT_FILE`.
+   */
+  outputFile?: string;
   /** Enable verbose logging for debugging. Defaults to `false`. */
   verbose?: boolean;
 }

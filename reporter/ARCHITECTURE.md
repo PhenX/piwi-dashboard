@@ -77,8 +77,8 @@ src/
     files/      file-handler, compression
     capture/    capture-fixtures, locator-healing, attachments   ← runs in the worker
     config/     env (PIWI_* ↔ options)
-    support/    logger, limiter, ci, instance-id, cli-filters, setup-file,
-                source-snippet, worker-index, errors
+    support/    logger, limiter, ci, ci-output, run-url, instance-id,
+                cli-filters, setup-file, source-snippet, worker-index, errors
   types/
     wire.ts        EXTERNAL server contract
     collected.ts   INTERNAL in-process model

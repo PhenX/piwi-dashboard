@@ -49,6 +49,7 @@ export const PIWI_ENV_KEYS = {
   capturePageState: 'PIWI_CAPTURE_PAGE_STATE',
   inspectOnFailure: 'PIWI_INSPECT_ON_FAIL',
   pickLocatorOnFailure: 'PIWI_PICK_LOCATOR_ON_FAIL',
+  outputFile: 'PIWI_OUTPUT_FILE',
 } as const;
 
 function readBool(val: string | undefined): boolean | undefined {
@@ -96,6 +97,7 @@ const ENV_FALLBACK_SPECS: ReadonlyArray<{
   { option: 'capturePageState', env: PIWI_ENV_KEYS.capturePageState, kind: 'bool' },
   { option: 'inspectOnFailure', env: PIWI_ENV_KEYS.inspectOnFailure, kind: 'bool' },
   { option: 'pickLocatorOnFailure', env: PIWI_ENV_KEYS.pickLocatorOnFailure, kind: 'bool' },
+  { option: 'outputFile', env: PIWI_ENV_KEYS.outputFile, kind: 'string' },
 ];
 
 /**
