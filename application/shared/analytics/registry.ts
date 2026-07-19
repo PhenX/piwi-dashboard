@@ -23,18 +23,18 @@ export const ANALYTICS_WIDGETS = [
     id: 'insights',
     title: 'Insights',
     icon: 'i-lucide-lightbulb',
-    size: 'full',
-  },
-  {
-    id: 'portfolio',
-    title: 'Portfolio health',
-    icon: 'i-lucide-table-properties',
-    size: 'full',
+    size: 'half',
   },
   {
     id: 'pass-rate-heatmap',
     title: 'Pass rate heatmap',
     icon: 'i-lucide-grid-3x3',
+    size: 'half',
+  },
+  {
+    id: 'portfolio',
+    title: 'Portfolio health',
+    icon: 'i-lucide-table-properties',
     size: 'full',
   },
   {

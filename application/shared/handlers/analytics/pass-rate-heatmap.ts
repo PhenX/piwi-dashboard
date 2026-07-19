@@ -1,5 +1,5 @@
 import type { DrizzleDB } from '../db';
-import type { AnalyticsScope } from '../../analytics/scope';
+import { MAX_ANALYTICS_DAYS, type AnalyticsScope } from '../../analytics/scope';
 import type { AnalyticsHeatmap } from '../../analytics/types';
 import {
   fetchScopedProjects,
@@ -57,11 +57,17 @@ export async function getAnalyticsPassRateHeatmap(
     .filter((row) => row.cells.some((c) => c !== null))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // Trim leading all-empty columns so "All time" starts at the first real data.
-  const firstDataIndex = firstNonEmptyIndex(
-    buckets.keys.map((_, index) => index),
-    (index) => rows.every((row) => row.cells[index] === null),
-  );
+  // Bounded periods render the whole window the user selected, so the axis
+  // always spans the full period. Only the unbounded "All time" window trims its
+  // leading all-empty columns — otherwise it would show years of blank buckets
+  // before the first real data.
+  const firstDataIndex =
+    scope.days >= MAX_ANALYTICS_DAYS
+      ? firstNonEmptyIndex(
+          buckets.keys.map((_, index) => index),
+          (index) => rows.every((row) => row.cells[index] === null),
+        )
+      : 0;
 
   return {
     buckets: buckets.keys.slice(firstDataIndex),

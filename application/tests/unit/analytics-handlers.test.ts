@@ -19,7 +19,7 @@ const { getAnalyticsRegressionVelocity } = await import('../../shared/handlers/a
 const { getAnalyticsBrowserMatrix } = await import('../../shared/handlers/analytics/browser-matrix');
 const { getAnalyticsSlowEndpoints } = await import('../../shared/handlers/analytics/slow-endpoints');
 const { evaluateInsightRules } = await import('../../shared/analytics/insight-rules');
-const { parseAnalyticsScope } = await import('../../shared/analytics/scope');
+const { parseAnalyticsScope, MAX_ANALYTICS_DAYS } = await import('../../shared/analytics/scope');
 const { ANALYTICS_WIDGETS } = await import('../../shared/analytics/registry');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -273,12 +273,12 @@ describe('getAnalyticsPortfolio', () => {
 });
 
 describe('getAnalyticsPassRateHeatmap', () => {
-  test('buckets pass rates per project and drops run-less projects', async () => {
+  test('buckets pass rates over the full selected window and drops run-less projects', async () => {
     const heatmap = await getAnalyticsPassRateHeatmap(db, DEFAULT_SCOPE, 'all');
     expect(heatmap.bucketDays).toBe(1);
-    // Leading all-empty columns are trimmed: the oldest seeded run is 10 days old.
-    expect(heatmap.buckets.length).toBeLessThanOrEqual(30);
-    expect(heatmap.rows.some((r) => r.cells[0] !== null)).toBe(true);
+    // Bounded periods render the whole window, so the axis always spans the full
+    // 30 days the user selected — even though the oldest seeded run is 10 days old.
+    expect(heatmap.buckets.length).toBe(30);
     expect(heatmap.rows.map((r) => r.projectId).sort()).toEqual([1, 2]);
 
     const checkout = heatmap.rows.find((r) => r.projectId === 1)!;
@@ -291,6 +291,17 @@ describe('getAnalyticsPassRateHeatmap', () => {
     const heatmap = await getAnalyticsPassRateHeatmap(db, parseAnalyticsScope({ days: '365' }), 'all');
     expect(heatmap.bucketDays).toBeGreaterThan(1);
     expect(heatmap.buckets.length).toBeLessThanOrEqual(32);
+  });
+
+  test('trims leading empty buckets only for the unbounded All time window', async () => {
+    const heatmap = await getAnalyticsPassRateHeatmap(
+      db,
+      parseAnalyticsScope({ days: String(MAX_ANALYTICS_DAYS) }),
+      'all',
+    );
+    // All seeded runs are recent, so the years of leading blank buckets are
+    // dropped and the first rendered column already carries data.
+    expect(heatmap.rows.some((r) => r.cells[0] !== null)).toBe(true);
   });
 });
 
