@@ -25,7 +25,6 @@
     "app:test:unit:coverage": "vitest run --coverage",
     "app:test:ui": "playwright test --ui",
     "app:test:report": "playwright show-report",
-    "app:audit": "playwright test --config=playwright.audit.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

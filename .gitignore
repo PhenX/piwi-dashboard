@@ -32,8 +32,6 @@ test-results/
 playwright-report/
 monocart-report/
 blob-report/
-audit-report/
-audit-screens/
 coverage/
 
 .test-temp/

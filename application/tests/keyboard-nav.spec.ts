@@ -4,14 +4,11 @@ import { waitForHydration, retryPost } from './utils';
 import { PROJECT } from '#shared/test-project-names';
 
 /**
- * Regression guards for the usability-audit keyboard/navigation fixes:
+ * Regression guards for the keyboard/navigation fixes:
  *  - the global `g h` / `g p` "go to" chords (previously dead — `useDashboard()`
  *    was never called),
  *  - the skip link being the first Tab stop,
  *  - project tabs reflecting `?tab=` in the URL via replace() (no history growth).
- *
- * Focus-ring, keyboard-operable thumbnails and aria-live coverage live in the
- * audit harness (tests/audit/*), which runs against seeded failure data.
  */
 test.describe('Keyboard navigation & tab URL sync', () => {
   test.setTimeout(60000);
