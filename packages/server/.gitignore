@@ -1,0 +1,7 @@
+# Built server output copied in by prepack (scripts/copy-output.mjs) at publish time.
+.output/
+
+# The root .gitignore ignores every `bin/` dir (build output); this package's bin/
+# holds the committed launcher, so re-include it.
+!/bin/
+!/bin/**
