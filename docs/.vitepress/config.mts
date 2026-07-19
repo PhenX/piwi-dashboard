@@ -13,6 +13,14 @@ export default defineConfig({
   // Ollama base URLs) are intentionally unreachable localhost URLs.
   ignoreDeadLinks: [/^https?:\/\/localhost/],
   vite: {
+    // The #shared modules imported below live outside the docs root, and their
+    // nearest tsconfig (application/tsconfig.json) references Nuxt-generated
+    // .nuxt/tsconfig.*.json files that only exist after the app has been
+    // installed. Inline an empty tsconfig so the docs build never reads
+    // on-disk tsconfigs and stays independent of the app's install state.
+    esbuild: {
+      tsconfigRaw: '{}',
+    },
     resolve: {
       alias: {
         // The env-var registry and format emitters are imported straight from
