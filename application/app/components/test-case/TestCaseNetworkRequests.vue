@@ -406,7 +406,7 @@ function rowAccent(r: DecoratedRequest): string {
                 :style="{ left: `${span.offsetPct}%`, width: `${span.widthPct}%` }"
               />
             </div>
-            <span class="w-12 shrink-0 text-right tabular-nums text-gray-500">{{ formatDuration(span.durMs) }}</span>
+            <DurationValue :ms="span.durMs" class="w-12 shrink-0 text-right text-gray-500" />
           </div>
         </div>
 

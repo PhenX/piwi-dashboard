@@ -90,6 +90,21 @@ export function formatDuration(ms?: number | null) {
   return sign + formatDurationLib({ seconds: rounded / 1000 });
 }
 
+/**
+ * Split a duration into a compact numeric value and its unit (`ms`/`s`/`m`),
+ * for rendering the number and unit separately (e.g. the unit in a faded color).
+ * Returns null for null/undefined input.
+ */
+export function splitDuration(ms?: number | null): { value: string; unit: string } | null {
+  if (ms === null || ms === undefined) return null;
+  const n = Math.round(Math.abs(ms));
+  const sign = ms < 0 ? '−' : '';
+  if (n < 1000) return { value: sign + n, unit: 'ms' };
+  const seconds = n / 1000;
+  if (seconds < 60) return { value: sign + Math.round(seconds * 10) / 10, unit: 's' };
+  return { value: sign + Math.round((seconds / 60) * 10) / 10, unit: 'm' };
+}
+
 export function reportIcon(type: string): string {
   switch (type) {
     case 'html':

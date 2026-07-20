@@ -2,6 +2,7 @@ import { describe, test, expect, vi } from 'vitest';
 import {
   formatBytes,
   formatDuration,
+  splitDuration,
   prettyDateFormat,
   formatRelativeTime,
   getStatusColor,
@@ -57,6 +58,30 @@ describe('formatDuration', () => {
   test('renders zero durations as 0 seconds instead of an empty string', () => {
     expect(formatDuration(0)).toBe('0 seconds');
     expect(formatDuration(0.2)).toBe('0 seconds');
+  });
+});
+
+describe('splitDuration', () => {
+  test('returns null for nullish input', () => {
+    expect(splitDuration(null)).toBeNull();
+    expect(splitDuration(undefined)).toBeNull();
+  });
+
+  test('uses ms below one second (rounded)', () => {
+    expect(splitDuration(210)).toEqual({ value: '210', unit: 'ms' });
+    expect(splitDuration(0)).toEqual({ value: '0', unit: 'ms' });
+    expect(splitDuration(45.6)).toEqual({ value: '46', unit: 'ms' });
+  });
+
+  test('uses seconds from 1s to under a minute (one decimal)', () => {
+    expect(splitDuration(1240)).toEqual({ value: '1.2', unit: 's' });
+    expect(splitDuration(5000)).toEqual({ value: '5', unit: 's' });
+    expect(splitDuration(59900)).toEqual({ value: '59.9', unit: 's' });
+  });
+
+  test('uses minutes at or above 60s and prefixes negatives', () => {
+    expect(splitDuration(90000)).toEqual({ value: '1.5', unit: 'm' });
+    expect(splitDuration(-250)).toEqual({ value: '−250', unit: 'ms' });
   });
 });
 
