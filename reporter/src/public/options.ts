@@ -52,6 +52,16 @@ export interface PiwiDashboardOptions extends PlaywrightTestConfig {
    */
   capturePageState?: boolean;
   /**
+   * Capture server-side spans for each API/document request the test makes,
+   * read from the `X-Piwi-Trace` response header emitted by a Piwi
+   * instrumentation plugin (e.g. `@piwitests/instrumentation`). The spans show
+   * up next to the network request in the dashboard and feed AI diagnosis. Free
+   * when no instrumentation is present (the header is simply absent). Defaults
+   * to `true`; automatically disabled when `collectPerformanceMetrics` is
+   * `false`. Can also be forced off with `PIWI_CAPTURE_SERVER_TRACES=false`.
+   */
+  captureServerTraces?: boolean;
+  /**
    * Open Piwi's own failure-time overlay on the failing page — for inspecting
    * the page and picking a locator for any element (click an element → confirm
    * a ranked replacement locator). This is Piwi's own in-page overlay, not

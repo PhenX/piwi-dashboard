@@ -17,6 +17,7 @@ export function buildNetworkRequestItems(requests: unknown[] | null | undefined)
   resourceType: string | null;
   contentType: string | null;
   serverLogs: unknown;
+  serverTraces: unknown;
 }> {
   const rawReqs = requests as Array<Record<string, unknown>> | null | undefined;
 
@@ -41,6 +42,7 @@ export function buildNetworkRequestItems(requests: unknown[] | null | undefined)
     resourceType: (req.resourceType as string) ?? null,
     contentType: (req.contentType as string) ?? null,
     serverLogs: (req.serverLogs as unknown) ?? null,
+    serverTraces: (req.serverTraces as unknown) ?? null,
   }));
 }
 

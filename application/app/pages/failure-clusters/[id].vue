@@ -158,6 +158,7 @@ const sectionToCard: Record<string, () => { reveal: () => void } | null> = {
   failingSteps: () => evidenceSection.value,
   console: () => evidenceSection.value,
   networkRequests: () => evidenceSection.value,
+  serverTraces: () => evidenceSection.value,
   ariaSnapshot: () => evidenceSection.value,
   screenshots: () => evidenceSection.value,
   tracePointers: () => evidenceSection.value,

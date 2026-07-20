@@ -1046,6 +1046,18 @@ function instrumentPage(page: Page): void {
               /* ignore malformed header */
             }
           }
+
+          // Server-side spans emitted by a Piwi instrumentation plugin, in the
+          // same gzip+base64 form as the logs header. Skipped when trace capture
+          // is disabled; absent header (no instrumentation) is a no-op.
+          const traceHeader = headers['x-piwi-trace'];
+          if (traceHeader && process.env.PIWI_CAPTURE_SERVER_TRACES !== 'false') {
+            try {
+              entry.serverTraces = JSON.parse(gunzipSync(Buffer.from(traceHeader, 'base64')).toString('utf-8'));
+            } catch {
+              /* ignore malformed header */
+            }
+          }
         }
 
         sink.networkRequests.push(entry);

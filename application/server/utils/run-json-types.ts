@@ -1,5 +1,5 @@
 import type { BrowserConfig } from '#shared/types';
-import type { ServerLogEntry } from '~~/types/api';
+import type { ServerLogEntry, ServerSpanEntry } from '~~/types/api';
 
 /**
  * View-types for the JSON columns on `test_runs` / `test_runs_cases`, covering
@@ -37,6 +37,7 @@ export interface NetworkRequestEntry {
   contentType?: string;
   startTime?: number;
   serverLogs?: ServerLogEntry[];
+  serverTraces?: ServerSpanEntry[];
 }
 
 export interface WebVitals {
@@ -59,4 +60,4 @@ export interface RunMetadata {
   htmlReport?: { projects?: Array<{ use?: { browserName?: string | null } | null }> } | null;
 }
 
-export type { BrowserConfig, ServerLogEntry };
+export type { BrowserConfig, ServerLogEntry, ServerSpanEntry };

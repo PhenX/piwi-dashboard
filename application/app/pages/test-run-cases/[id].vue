@@ -428,6 +428,7 @@ const sectionToAction: Record<string, () => void> = {
   artifacts: () => evidenceCard.value?.reveal(),
   console: () => scrollToEl(consoleEl.value),
   networkRequests: () => scrollToEl(networkEl.value),
+  serverTraces: () => scrollToEl(networkEl.value),
   traceCallStack: () => testSourceCard.value?.reveal(),
   traceNetwork: () => {
     networkCard.value?.showTraceMode();

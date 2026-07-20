@@ -260,6 +260,13 @@
       "when": 1784402219086,
       "tag": "0036_ancient_amazoness",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1784582750229,
+      "tag": "0037_tired_hellion",
+      "breakpoints": true
     }
   ]
 }

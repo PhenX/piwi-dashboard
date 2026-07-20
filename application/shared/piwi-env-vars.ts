@@ -603,6 +603,15 @@ export const PIWI_ENV_VARS = {
     min: 50,
     max: 5000,
   },
+  PIWI_AI_MAX_SERVER_TRACE_SPANS: {
+    description: 'Max backend server spans (from X-Piwi-Trace header) included in AI diagnosis (0 disables).',
+    category: 'ai-limits',
+    type: 'number',
+    default: '40',
+    min: 0,
+    max: 500,
+    since: '0.16.0',
+  },
   PIWI_AI_MAX_IMAGES: {
     description: 'Max screenshots auto-included in the diagnosis context.',
     category: 'ai-limits',

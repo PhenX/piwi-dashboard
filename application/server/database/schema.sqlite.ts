@@ -463,6 +463,7 @@ export const networkRequests = sqliteTable(
     resourceType: text('resource_type'), // 'fetch', 'xhr', 'document', 'other'
     contentType: text('content_type'), // Response content-type header
     serverLogs: text('server_logs', { mode: 'json' }), // Backend server logs from X-Piwi-Logs header
+    serverTraces: text('server_traces', { mode: 'json' }), // Server-side spans from X-Piwi-Trace header
   },
   (t) => ({
     runIdx: index('idx_nr_run').on(t.testRunId),

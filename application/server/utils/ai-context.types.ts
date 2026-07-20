@@ -37,6 +37,7 @@ export type SectionId =
   | 'console'
   | 'networkRequests'
   | 'serverLogs'
+  | 'serverTraces'
   | 'webVitals'
   | 'ariaSnapshot'
   | 'screenshots'

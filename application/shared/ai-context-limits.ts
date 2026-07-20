@@ -41,6 +41,8 @@ export interface ContextLimits {
   serverLogEntries: number;
   /** Max characters per backend server log entry. */
   serverLogEntryChars: number;
+  /** Max backend server spans (from X-Piwi-Trace header) included (0 disables the section). */
+  serverTraceSpans: number;
   /** Max screenshots auto-included in the diagnosis context (D1). */
   maxImages: number;
   /** Max peer tests in the same file listed when they passed (D5). */
@@ -67,6 +69,7 @@ export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
   sourceFileChars: 12000,
   serverLogEntries: 50,
   serverLogEntryChars: 1000,
+  serverTraceSpans: 40,
   maxImages: 5,
   maxPassedPeers: 20,
   maxConsoleWindow: 50,
@@ -194,6 +197,14 @@ export const CONTEXT_LIMIT_FIELDS: ContextLimitField[] = [
     description: 'Max characters per backend server log entry.',
     min: 50,
     max: 5000,
+  },
+  {
+    key: 'serverTraceSpans',
+    label: 'Server trace spans',
+    envVar: 'PIWI_AI_MAX_SERVER_TRACE_SPANS',
+    description: 'Max backend server spans (from X-Piwi-Trace header) included (0 disables).',
+    min: 0,
+    max: 500,
   },
   {
     key: 'maxImages',
