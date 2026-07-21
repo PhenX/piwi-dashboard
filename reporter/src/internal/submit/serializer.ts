@@ -46,6 +46,7 @@ export function toWireTestCase(tc: CollectedTestCase): WireTestCase {
     location: rest.location,
     status: rest.status,
     duration: rest.duration,
+    timeout: rest.timeout ?? null,
     error: rest.error,
     retries: rest.retries,
     workerIndex: rest.workerIndex ?? null,

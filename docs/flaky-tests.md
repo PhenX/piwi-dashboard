@@ -82,6 +82,7 @@ Opening a failing execution surfaces the same signals in its **Verdict** card (s
 
 - **Duration trends** — average and **P90** over time, so a few slow outliers don't hide a real regression.
 - **Slowest tests** — the top offenders ranked by duration.
+- **Timeout opportunities** — tests whose configured per-test timeout dwarfs their real p95 duration (so a hang or failure waits far longer than necessary), plus tests still carrying a stale `test.slow()` mark they no longer need. Each row suggests a tighter timeout (or removing the mark) and the time reclaimable per failing run, ranked by impact. This relies on the per-test timeout the [reporter](./reporter#per-test-timeout) captures; runs reported before that shipped still surface stale `test.slow()` marks from annotations + durations alone. Thresholds are tunable via `PUT /api/settings/timeout-hygiene`.
 - **Run comparison** — a side-by-side delta of two runs with improved / regressed / unchanged summaries.
 - **Network analysis** — slow API calls grouped by method and normalized route (e.g. `/api/users/:id`).
 - **Browser Web Vitals** — TTFB, DOMContentLoaded, FCP and more, with color-coded thresholds.
@@ -109,7 +110,7 @@ Everything above is scoped to one project. The **Analytics** page (`/analytics`)
 - **Regression velocity** — new regressions and newly-flaky tests introduced per period (see [Regression signals](#regression-signals)), so you can see whether quality debt is growing or shrinking.
 - **Browser matrix** — pass rate per project × browser, to catch browser-specific breakage.
 - **Slow endpoints** — the backend calls captured during tests, aggregated across all projects by route (p50/p90 latency, error rate, projects affected).
-- **Insights** — an auto-generated, severity-ranked feed of the findings that matter (pass-rate drops, failing streaks, stale clusters, wasted time, regression surges, slow shared endpoints), each linking to the source.
+- **Insights** — an auto-generated, severity-ranked feed of the findings that matter (pass-rate drops, failing streaks, stale clusters, wasted time, oversized timeouts and stale `test.slow()` marks, regression surges, slow shared endpoints), each linking to the source.
 
 Each widget is served by `GET /api/analytics/:widget` and computed by a shared handler in `shared/handlers/analytics/`, so the same numbers back the dashboard, the demo, and any future API consumer.
 

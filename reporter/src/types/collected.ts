@@ -54,6 +54,8 @@ export interface CollectedTestCase {
   location: string;
   status?: string;
   duration?: number;
+  /** Effective per-test timeout in ms (`TestCase.timeout`); `0` means unbounded. */
+  timeout?: number | null;
   error?: string | null;
   retries?: number;
   workerIndex?: number | null;

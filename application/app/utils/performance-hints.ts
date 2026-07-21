@@ -1,3 +1,5 @@
+import { hasSlowMark } from '#shared/analytics/timeout-hygiene';
+
 interface PerformanceHint {
   type: 'warning' | 'info';
   message: string;
@@ -11,6 +13,9 @@ interface TestCaseData {
   steps?: Array<{ title: string; duration: number; category: string }> | null;
   slowestStep?: string | null;
   slowestStepDuration?: number | null;
+  /** Effective per-test timeout in ms (`TestCase.timeout`); `0`/null = unbounded/unknown. */
+  timeout?: number | null;
+  testAnnotations?: Array<{ type?: string; description?: string }> | null;
 }
 
 /**
@@ -61,6 +66,31 @@ export function getPerformanceHints(testCase: TestCaseData): PerformanceHint[] {
       type: 'info',
       message: 'Slow assertions detected',
       details: `"${slowest.title}" took ${(slowest.duration / 1000).toFixed(1)}s. The UI may be slow to render or the assertion timeout may need tuning.`,
+    });
+  }
+
+  // Stale test.slow() — marked slow but finished quickly
+  if (hasSlowMark(testCase.testAnnotations) && typeof testCase.duration === 'number' && testCase.duration < 10000) {
+    hints.push({
+      type: 'info',
+      message: 'test.slow() may be unnecessary',
+      details: `This run finished in ${(testCase.duration / 1000).toFixed(1)}s, yet the test is marked test.slow(), which triples its timeout budget. If it is consistently this fast, removing test.slow() lets a failure surface sooner.`,
+    });
+  }
+
+  // Oversized per-test timeout — the budget dwarfs the real runtime
+  if (
+    typeof testCase.timeout === 'number' &&
+    testCase.timeout > 0 &&
+    typeof testCase.duration === 'number' &&
+    testCase.duration > 0 &&
+    testCase.timeout >= 4 * testCase.duration &&
+    testCase.timeout - testCase.duration >= 30000
+  ) {
+    hints.push({
+      type: 'info',
+      message: 'Oversized timeout',
+      details: `The timeout is ${(testCase.timeout / 1000).toFixed(0)}s but this run took ${(testCase.duration / 1000).toFixed(1)}s. A large timeout means a hang or failure waits far longer than necessary — consider lowering it toward the test's real duration.`,
     });
   }
 

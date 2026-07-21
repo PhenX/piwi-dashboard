@@ -403,6 +403,7 @@ describe('insight rules', () => {
         deltaPct: null,
       },
       slowEndpoints: { endpoints: [], totalRequests: 0 },
+      timeoutHygiene: { rows: [], oversizedCount: 0, staleSlowCount: 0, totalEstimatedSavingMs: 0 },
     });
     expect(insights).toHaveLength(1);
     expect(insights[0]!.ruleId).toBe('ci-time-growth');
@@ -448,6 +449,7 @@ describe('insight rules', () => {
         ],
         totalRequests: 40,
       },
+      timeoutHygiene: { rows: [], oversizedCount: 0, staleSlowCount: 0, totalEstimatedSavingMs: 0 },
     });
     const ruleIds = insights.map((i) => i.ruleId);
     expect(ruleIds).toContain('regression-surge');
