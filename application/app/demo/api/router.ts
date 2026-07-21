@@ -27,6 +27,7 @@ import {
   getProjectTestCases,
   parseTestCasesQuery,
   getProjectSlowTests,
+  getProjectTimeoutOpportunities,
   getProjectFailureClusters,
   updateProject,
   createProject,
@@ -215,6 +216,14 @@ const routes: RouteEntry[] = [
     handler: async (m, _, q) => {
       const runs = q ? Number(q.get('runs')) || 10 : 10;
       return getProjectSlowTests(await getDemoDb(), +m[1]!, runs);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/timeout-opportunities$/,
+    handler: async (m, _, q) => {
+      const runs = q ? Number(q.get('runs')) || 20 : 20;
+      return getProjectTimeoutOpportunities(await getDemoDb(), +m[1]!, runs);
     },
   },
   {

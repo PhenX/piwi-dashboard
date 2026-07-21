@@ -702,12 +702,14 @@ for (const proj of DEMO_PROJECTS) {
       const steps = buildSteps(proj, caseDuration);
       const slowestStep = steps.reduce((a, b) => (a.duration > b.duration ? a : b));
 
-      // Test annotations — failures link to their cluster, designated flaky
-      // cases are marked slow, and one checkout case carries a smoke marker.
+      // Test annotations — failures link to their cluster, the designated slow
+      // case is always marked slow (so timeout hygiene can surface it as a stale
+      // test.slow() once its durations no longer justify the tripled budget),
+      // and one checkout case carries a smoke marker.
       let testAnnotations = null;
       if (isFailedCase && story) {
         testAnnotations = [{ type: 'fixme', description: `Known issue — see cluster ${story.clusterId}` }];
-      } else if (isFlakyCase) {
+      } else if (flakyCaseId && caseId === flakyCaseId) {
         testAnnotations = [{ type: 'slow' }];
       } else if (proj.id === 1 && j === 0) {
         testAnnotations = [{ type: 'smoke' }];
@@ -746,6 +748,16 @@ for (const proj of DEMO_PROJECTS) {
         }));
       }
 
+      // Effective per-test timeout (ms), stable per test case across runs. Most
+      // tests keep a healthy 20s budget that timeout-hygiene never flags (its
+      // headroom stays under the 20s floor); the designated slow case keeps a
+      // tripled 90s budget it no longer needs, and one non-slow case per project
+      // is deliberately oversized at 120s — so the demo shows both opportunity
+      // kinds (stale test.slow() and oversized-timeout).
+      const isSlowCase = Boolean(flakyCaseId) && caseId === flakyCaseId;
+      const isOversizedCase = !isSlowCase && caseId === caseIds[1];
+      const caseTimeout = isSlowCase ? 90000 : isOversizedCase ? 120000 : 20000;
+
       const trcIdVal = trcId++;
       TEST_RUNS_CASES.push({
         id: trcIdVal,
@@ -753,6 +765,7 @@ for (const proj of DEMO_PROJECTS) {
         test_case_id: caseId,
         status: caseStatus,
         duration: caseDuration,
+        timeout: caseTimeout,
         error: isFailedCase ? storyEntry.failingCase.error : null,
         failure_cluster_id: story?.clusterId ?? null,
         retries: isFlakyCase ? 1 : 0,
