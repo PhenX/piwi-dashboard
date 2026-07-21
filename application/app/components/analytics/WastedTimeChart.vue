@@ -48,6 +48,12 @@ const subtitle = computed(() => {
   const label = total < 60 ? `${Math.round(total)} min` : `${Math.round((total / 60) * 10) / 10} h`;
   return `${label} of CI time produced no signal`;
 });
+
+const reclaim = computed(() => wasted.value?.timeoutReclaimable ?? null);
+const reclaimLabel = computed(() => {
+  const m = reclaim.value?.estimatedMinutes ?? 0;
+  return m < 60 ? `${Math.round(m)} min` : `${Math.round((m / 60) * 10) / 10} h`;
+});
 </script>
 
 <template>
@@ -97,6 +103,25 @@ const subtitle = computed(() => {
           </div>
           <div><span class="text-amber-500">&#9679;</span> Wait steps: {{ tooltipData.waitMinutes }} min</div>
           <div><span class="text-red-500">&#9679;</span> Failed attempts: {{ tooltipData.failedExecMinutes }} min</div>
+        </div>
+      </div>
+
+      <div
+        v-if="reclaim"
+        class="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"
+      >
+        <UIcon name="i-lucide-scissors" class="mt-0.5 shrink-0 text-amber-500" />
+        <div class="text-gray-700 dark:text-gray-300">
+          Up to <span class="font-semibold">≈{{ reclaimLabel }}</span> of this is avoidable —
+          {{ reclaim.oversizedCount }} oversized {{ reclaim.oversizedCount === 1 ? 'timeout' : 'timeouts' }} and
+          {{ reclaim.staleSlowCount }} stale <code class="text-xs">test.slow()</code>
+          {{ reclaim.staleSlowCount === 1 ? 'mark' : 'marks' }} inflate the failed-attempt time above.
+          <NuxtLink
+            v-if="reclaim.topProjectId"
+            :to="`/projects/${reclaim.topProjectId}#performance`"
+            class="text-primary hover:underline"
+            >Review</NuxtLink
+          >
         </div>
       </div>
 

@@ -13,6 +13,7 @@ import {
   TERMINAL_RUN_STATUSES,
   type ProjectAccess,
 } from './common';
+import { getAnalyticsTimeoutHygiene } from './timeout-hygiene';
 
 const TOP_PROJECTS = 8;
 
@@ -33,6 +34,7 @@ export async function getAnalyticsWastedTime(
     totalWaitMinutes: 0,
     totalFailedExecMinutes: 0,
     byProject: [],
+    timeoutReclaimable: null,
   };
 
   const allowed = resolveAllowedProjects(scope, access);
@@ -98,6 +100,20 @@ export async function getAnalyticsWastedTime(
     };
   });
 
+  // Timeout-hygiene tie-in: how much of the wasted time above is reclaimable by
+  // tightening oversized timeouts / removing stale test.slow() marks. Reuses the
+  // same detection as the Insights feed so the numbers stay consistent.
+  const hygiene = await getAnalyticsTimeoutHygiene(db, scope, access);
+  const timeoutReclaimable =
+    hygiene.oversizedCount + hygiene.staleSlowCount > 0
+      ? {
+          estimatedMinutes: minutes(hygiene.totalEstimatedSavingMs),
+          oversizedCount: hygiene.oversizedCount,
+          staleSlowCount: hygiene.staleSlowCount,
+          topProjectId: hygiene.topProjectId,
+        }
+      : null;
+
   return {
     points: points.slice(firstNonEmptyIndex(points, (p) => p.waitMinutes === 0 && p.failedExecMinutes === 0)),
     bucketDays: buckets.bucketDays,
@@ -113,5 +129,6 @@ export async function getAnalyticsWastedTime(
       }))
       .sort((a, b) => b.waitMinutes + b.failedExecMinutes - (a.waitMinutes + a.failedExecMinutes))
       .slice(0, TOP_PROJECTS),
+    timeoutReclaimable,
   };
 }

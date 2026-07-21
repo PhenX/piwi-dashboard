@@ -104,6 +104,20 @@ export interface AnalyticsWastedTime {
     waitMinutes: number;
     failedExecMinutes: number;
   }>;
+  /**
+   * Timeout-hygiene tie-in: much of the "failed attempts" time is tests hitting
+   * an oversized timeout, so this is the wait reclaimable (upper bound) by
+   * tightening oversized timeouts and removing stale `test.slow()` marks in
+   * scope. Null when no opportunities were found.
+   */
+  timeoutReclaimable: {
+    /** Sum of per-failure savings across opportunities, in minutes. */
+    estimatedMinutes: number;
+    oversizedCount: number;
+    staleSlowCount: number;
+    /** Project of the highest-impact opportunity (for a deep link). */
+    topProjectId: number | null;
+  } | null;
 }
 
 // ── Global flaky leaderboard ─────────────────────────────────────────────────
@@ -245,4 +259,6 @@ export interface AnalyticsTimeoutHygiene {
   oversizedCount: number;
   staleSlowCount: number;
   totalEstimatedSavingMs: number;
+  /** Project of the highest-impact opportunity (for a deep link). */
+  topProjectId: number | null;
 }

@@ -50,5 +50,6 @@ export async function getAnalyticsTimeoutHygiene(
     oversizedCount: rows.filter((r) => r.kind === 'oversized-timeout').length,
     staleSlowCount: rows.filter((r) => r.kind === 'stale-slow').length,
     totalEstimatedSavingMs: rows.reduce((sum, r) => sum + r.estimatedSavingMs, 0),
+    topProjectId: rows[0]?.projectId ?? null,
   };
 }

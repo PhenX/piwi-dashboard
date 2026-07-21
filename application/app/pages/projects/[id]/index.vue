@@ -1006,7 +1006,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
               <div v-else class="text-center py-8 text-gray-500">No slow test data available yet.</div>
             </UCard>
 
-            <TimeoutOpportunitiesTable :project-id="String(projectId)" />
+            <TimeoutOpportunitiesTable :project-id="String(projectId)" :project-name="project?.name" />
 
             <UCard>
               <template #header>

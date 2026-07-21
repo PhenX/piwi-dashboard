@@ -104,7 +104,7 @@ Everything above is scoped to one project. The **Analytics** page (`/analytics`)
 
 - **Portfolio health** — every project's pass rate with its change vs the previous period, flaky volume, open failure clusters, and latest run, sorted worst-first.
 - **Pass rate heatmap** — projects × time, colored by pass rate, so you can see who degraded and when.
-- **CI time** and **Wasted CI time** — how many CI minutes your runs consume, and how many of those produce no signal (wait steps + failed attempts).
+- **CI time** and **Wasted CI time** — how many CI minutes your runs consume, and how many of those produce no signal (wait steps + failed attempts). Since a timed-out test burns its whole (often oversized) budget, the widget also calls out how much of that time is reclaimable by tightening oversized timeouts and removing stale `test.slow()` marks — the same [timeout opportunities](#performance) surfaced per project.
 - **Flakiest tests** — the global flaky leaderboard across all projects, using the [impact ranking](#impact-ranking) above.
 - **Failure clusters** — open root causes across all projects, by age and occurrences.
 - **Regression velocity** — new regressions and newly-flaky tests introduced per period (see [Regression signals](#regression-signals)), so you can see whether quality debt is growing or shrinking.

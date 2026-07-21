@@ -4,6 +4,7 @@ import type { TimeoutOpportunity } from '#shared/analytics/timeout-hygiene';
 
 const props = defineProps<{
   projectId: string | number;
+  projectName?: string | null;
 }>();
 
 const { data, pending } = await useFetch<TimeoutOpportunity[]>(
@@ -51,14 +52,22 @@ const columns: TableColumn<TimeoutOpportunity>[] = [
     <TableScroller v-else min-width="52rem" :bleed="false">
       <UTable :data="opportunities" :columns="columns" sticky class="max-h-[32rem]">
         <template #title-cell="{ row }">
-          <NuxtLink
-            :to="`/test-cases/${row.original.testCaseId}`"
-            class="flex flex-col min-w-0 text-primary hover:underline"
-            :title="row.original.filePath"
-          >
-            <span class="truncate">{{ row.original.title }}</span>
-            <span class="truncate font-mono text-xs text-gray-500">{{ row.original.filePath }}</span>
-          </NuxtLink>
+          <div class="min-w-0">
+            <NuxtLink
+              :to="`/test-cases/${row.original.testCaseId}`"
+              class="font-medium truncate block hover:text-primary hover:underline"
+            >
+              {{ row.original.title }}
+            </NuxtLink>
+            <div class="mt-1">
+              <OpenInIdeLink
+                :file-path="row.original.filePath"
+                :project-key="projectId"
+                :project-name="projectName"
+                class="text-xs"
+              />
+            </div>
+          </div>
         </template>
 
         <template #kind-cell="{ row }">
