@@ -86,6 +86,7 @@ const sectionsByCategory = computed(() => {
     'console',
     'networkRequests',
     'serverLogs',
+    'serverTraces',
     'webVitals',
     'ariaSnapshot',
   ];

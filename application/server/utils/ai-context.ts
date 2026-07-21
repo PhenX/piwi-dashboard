@@ -25,6 +25,7 @@ import type {
   ConsoleLogEntry,
   RunMetadata,
   ServerLogEntry,
+  ServerSpanEntry,
   TestStepInfo,
   WebVitals,
 } from './run-json-types';
@@ -132,6 +133,7 @@ const SECTION_ORDER: SectionId[] = [
   'networkRequests',
   'traceNetwork',
   'serverLogs',
+  'serverTraces',
   'webVitals',
   'appState',
   'retryProgression',
@@ -1702,6 +1704,31 @@ export function representativeExecutionSections(
     }
   }
 
+  // Server-side spans (aggregated from X-Piwi-Trace headers across all requests)
+  if (limits.serverTraceSpans > 0) {
+    const spanLines: string[] = [];
+    let shown = 0;
+    for (const req of nrItems) {
+      const spans = (req as any).serverTraces as ServerSpanEntry[] | undefined;
+      if (!Array.isArray(spans) || spans.length === 0) continue;
+      // Root span (no parent) first, then children in start order — a readable
+      // per-request tree for the model.
+      const sorted = [...spans].sort((a, b) => (a.parentId ? 1 : 0) - (b.parentId ? 1 : 0) || a.startMs - b.startMs);
+      for (const s of sorted) {
+        if (shown >= limits.serverTraceSpans) break;
+        const indent = s.parentId ? '  ' : '';
+        const kind = s.kind ? `[${s.kind}] ` : '';
+        const err = s.status === 'error' ? ' [error]' : '';
+        spanLines.push(`${indent}- ${kind}${s.name} (${s.durMs}ms)${err}`);
+        shown++;
+      }
+      if (shown >= limits.serverTraceSpans) break;
+    }
+    if (spanLines.length > 0) {
+      out.push({ id: 'serverTraces', markdown: `### Server Traces\n${spanLines.join('\n')}` });
+    }
+  }
+
   // Web vitals
   const webVitals = rep.webVitals as WebVitals | null;
   if (webVitals && (webVitals.navigation || webVitals.paint || webVitals.vitals)) {
@@ -1739,6 +1766,7 @@ const REP_SECTION_TITLES: Partial<Record<SectionId, string>> = {
   console: 'Console',
   networkRequests: 'Network Requests',
   serverLogs: 'Backend Server Logs',
+  serverTraces: 'Server Traces',
   webVitals: 'Web Vitals',
   ariaSnapshot: 'ARIA Snapshot',
 };
@@ -2762,6 +2790,10 @@ export async function buildDiagnosisContext(
   if (!sectionIds.has('networkRequests')) {
     absentReasons.networkRequests =
       'no network data captured — collectPerformanceMetrics may be disabled in reporter options';
+  }
+  if (!sectionIds.has('serverTraces')) {
+    absentReasons.serverTraces =
+      'no server-side spans captured — install a Piwi backend integration to emit the X-Piwi-Trace header';
   }
   if (!sectionIds.has('environmentDiff')) {
     absentReasons.environmentDiff = 'no passing baseline execution recorded for this test to compare against';

@@ -464,6 +464,7 @@ export const networkRequests = pgTable(
     resourceType: text('resource_type'),
     contentType: text('content_type'),
     serverLogs: jsonb('server_logs'),
+    serverTraces: jsonb('server_traces'),
   },
   (t) => ({
     runIdx: index('idx_nr_run').on(t.testRunId),

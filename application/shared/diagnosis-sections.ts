@@ -28,6 +28,7 @@ export const DIAGNOSIS_SECTIONS: DiagnosisSectionMeta[] = [
   { id: 'console', label: 'Browser console logs', short: 'Console' },
   { id: 'networkRequests', label: 'Network requests', short: 'Network' },
   { id: 'serverLogs', label: 'Backend server logs', short: 'Server logs' },
+  { id: 'serverTraces', label: 'Server traces (spans)', short: 'Traces' },
   { id: 'webVitals', label: 'Web vitals', short: 'Web vitals' },
   { id: 'appState', label: 'App state at test end (URL/storage/cookies)', short: 'App state' },
   { id: 'ariaSnapshot', label: 'ARIA snapshot', short: 'ARIA' },

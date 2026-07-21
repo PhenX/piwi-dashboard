@@ -318,6 +318,7 @@ async function persistRunCases(
       resourceType: string | null;
       contentType: string | null;
       serverLogs: unknown;
+      serverTraces: unknown;
     }>;
   }> = [];
   const rowFingerprints: Array<ErrorFingerprint | null> = [];

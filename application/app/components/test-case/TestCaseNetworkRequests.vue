@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { NetworkRequest, ServerLogEntry } from '~~/types/api';
+import type { NetworkRequest, ServerLogEntry, ServerSpanEntry } from '~~/types/api';
 
 const props = defineProps<{
   requests: NetworkRequest[];
@@ -78,10 +78,57 @@ function toggleStack(key: string) {
 interface DecoratedRequest extends NetworkRequest {
   _index: number;
   logs: ServerLogEntry[];
+  spans: ServerSpanEntry[];
+  serverMs: number | null;
   errorLogCount: number;
   warnLogCount: number;
   failed: boolean;
+  hasDetail: boolean;
   path: string;
+}
+
+interface SpanBar extends ServerSpanEntry {
+  offsetPct: number;
+  widthPct: number;
+  depth: number;
+}
+
+/** Lay spans out on a shared time axis (0–100%) with parent-chain indentation. */
+function buildWaterfall(spans: ServerSpanEntry[]): SpanBar[] {
+  if (spans.length === 0) return [];
+  const minStart = Math.min(...spans.map((s) => s.startMs));
+  const maxEnd = Math.max(...spans.map((s) => s.startMs + s.durMs));
+  const total = Math.max(1, maxEnd - minStart);
+  const byId = new Map(spans.map((s) => [s.id, s]));
+  const depthOf = (s: ServerSpanEntry): number => {
+    let depth = 0;
+    let cur: ServerSpanEntry | undefined = s;
+    const seen = new Set<string>();
+    while (cur?.parentId && byId.has(cur.parentId) && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      cur = byId.get(cur.parentId);
+      depth++;
+      if (depth > 8) break;
+    }
+    return depth;
+  };
+  return [...spans]
+    .sort((a, b) => a.startMs - b.startMs || b.durMs - a.durMs)
+    .map((s) => ({
+      ...s,
+      offsetPct: ((s.startMs - minStart) / total) * 100,
+      widthPct: Math.max(1.5, (s.durMs / total) * 100),
+      depth: depthOf(s),
+    }));
+}
+
+/** Bar color for a span by outcome, then kind. */
+function spanColor(s: ServerSpanEntry): string {
+  if (s.status === 'error') return 'bg-red-400 dark:bg-red-500';
+  if (s.kind === 'db') return 'bg-violet-400 dark:bg-violet-500';
+  if (s.kind === 'client') return 'bg-sky-400 dark:bg-sky-500';
+  if (s.kind === 'internal') return 'bg-gray-400 dark:bg-gray-500';
+  return 'bg-emerald-400 dark:bg-emerald-500';
 }
 
 /** Normalize a log level across integrations (".NET" uses Title case, Nitro lowercase). */
@@ -126,6 +173,7 @@ function fullTimestamp(ts?: number): string {
 const decorated = computed<DecoratedRequest[]>(() => {
   return props.requests.map((req, i) => {
     const logs = Array.isArray(req.serverLogs) ? req.serverLogs : [];
+    const spans = Array.isArray(req.serverTraces) ? req.serverTraces : [];
     let errorLogCount = 0;
     let warnLogCount = 0;
     for (const log of logs) {
@@ -133,13 +181,18 @@ const decorated = computed<DecoratedRequest[]>(() => {
       if (rank >= 2) errorLogCount++;
       else if (rank === 1) warnLogCount++;
     }
+    // Root request span (no parent) carries server-side processing time.
+    const rootSpan = spans.find((s) => !s.parentId) ?? spans[0];
     return {
       ...req,
       _index: i,
       logs: [...logs].sort((a, b) => a.timestamp - b.timestamp),
+      spans,
+      serverMs: rootSpan ? rootSpan.durMs : null,
       errorLogCount,
       warnLogCount,
       failed: req.status >= 400,
+      hasDetail: logs.length > 0 || spans.length > 0,
       path: toPath(req.url),
     };
   });
@@ -148,16 +201,20 @@ const decorated = computed<DecoratedRequest[]>(() => {
 const totals = computed(() => {
   let failed = 0;
   let withLogs = 0;
+  let withSpans = 0;
   let errorLogs = 0;
   let warnLogs = 0;
   for (const r of decorated.value) {
     if (r.failed) failed++;
     if (r.logs.length > 0) withLogs++;
+    if (r.spans.length > 0) withSpans++;
     errorLogs += r.errorLogCount;
     warnLogs += r.warnLogCount;
   }
-  return { total: decorated.value.length, failed, withLogs, errorLogs, warnLogs };
+  return { total: decorated.value.length, failed, withLogs, withSpans, errorLogs, warnLogs };
 });
+
+const hasServerTraces = computed(() => totals.value.withSpans > 0);
 
 const visibleRequests = computed<DecoratedRequest[]>(() => {
   let list = decorated.value;
@@ -248,12 +305,12 @@ function rowAccent(r: DecoratedRequest): string {
         <button
           type="button"
           class="w-full flex items-center gap-2 py-1.5 px-2 text-sm text-left"
-          :class="req.logs.length > 0 ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800' : 'cursor-default'"
-          :disabled="req.logs.length === 0"
-          @click="req.logs.length > 0 && toggle(req._index)"
+          :class="req.hasDetail ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800' : 'cursor-default'"
+          :disabled="!req.hasDetail"
+          @click="req.hasDetail && toggle(req._index)"
         >
           <UIcon
-            v-if="req.logs.length > 0"
+            v-if="req.hasDetail"
             :name="expanded.has(req._index) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
             class="size-3.5 shrink-0 text-gray-400"
           />
@@ -291,6 +348,14 @@ function rowAccent(r: DecoratedRequest): string {
           </span>
 
           <span
+            v-if="req.serverMs != null"
+            class="shrink-0 inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 tabular-nums"
+            :title="`Server-side processing time (${req.spans.length} span${req.spans.length === 1 ? '' : 's'})`"
+          >
+            <UIcon name="i-lucide-server" class="size-3.5" />{{ formatDuration(req.serverMs) }}
+          </span>
+
+          <span
             v-if="req.startTime"
             class="shrink-0 text-xs text-gray-400 hidden sm:inline"
             :title="fullTimestamp(req.startTime)"
@@ -309,6 +374,41 @@ function rowAccent(r: DecoratedRequest): string {
             >{{ formatDuration(req.duration) }}</span
           >
         </button>
+
+        <!-- Server-side span waterfall for this request -->
+        <div v-if="req.spans.length > 0 && expanded.has(req._index)" class="px-2 pt-1.5 pb-2 pl-7 space-y-1">
+          <div class="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400">
+            <UIcon name="i-lucide-waypoints" class="size-3.5" />Server trace
+          </div>
+          <div
+            v-for="span in buildWaterfall(req.spans)"
+            :key="span.id"
+            class="flex items-center gap-2 text-xs"
+            :title="span.status === 'error' ? `${span.name} (error)` : span.name"
+          >
+            <div
+              class="w-40 sm:w-56 shrink-0 flex items-center gap-1 min-w-0"
+              :style="{ paddingLeft: `${span.depth * 12}px` }"
+            >
+              <span v-if="span.kind" class="shrink-0 text-[10px] uppercase text-gray-400 font-mono hidden sm:inline">{{
+                span.kind
+              }}</span>
+              <span
+                class="truncate font-mono"
+                :class="span.status === 'error' ? 'text-red-600 dark:text-red-400' : 'text-gray-600 dark:text-gray-300'"
+                >{{ span.name }}</span
+              >
+            </div>
+            <div class="relative flex-1 h-3 rounded bg-gray-100 dark:bg-gray-800 min-w-0">
+              <div
+                class="absolute top-0 h-3 rounded"
+                :class="spanColor(span)"
+                :style="{ left: `${span.offsetPct}%`, width: `${span.widthPct}%` }"
+              />
+            </div>
+            <DurationValue :ms="span.durMs" class="w-12 shrink-0 text-right text-gray-500" />
+          </div>
+        </div>
 
         <!-- Backend logs for this request -->
         <div v-if="req.logs.length > 0 && expanded.has(req._index)" class="px-2 pb-2 pl-7 space-y-1.5">

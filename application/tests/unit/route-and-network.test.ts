@@ -5,6 +5,7 @@ import {
   TRACKED_RESOURCE_TYPES,
   type FilteredNetworkRequest,
 } from '#shared/utils/filter-network-requests';
+import { buildNetworkRequestItems } from '../../server/utils/network-request-helpers';
 
 describe('normalizeRoute', () => {
   test('replaces numeric path segments with :id', () => {
@@ -119,5 +120,31 @@ describe('filterAndCapNetworkRequests', () => {
       1,
     );
     expect(out.map((r) => r.url)).toEqual(['/dur']);
+  });
+});
+
+describe('buildNetworkRequestItems — serverTraces passthrough', () => {
+  test('carries serverTraces through to the insert row shape and strips the URL query', () => {
+    const spans = [{ id: 'r1', name: 'GET /api/x', kind: 'server', startMs: 0, durMs: 12, status: 'ok' }];
+    const items = buildNetworkRequestItems([
+      {
+        method: 'GET',
+        url: 'https://app.test/api/x?token=secret',
+        status: 500,
+        resourceType: 'fetch',
+        serverTraces: spans,
+      },
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.serverTraces).toEqual(spans);
+    // URL query is stripped by sanitizeUrl, so the secret never reaches the row.
+    expect(items[0]!.url).not.toContain('secret');
+  });
+
+  test('serverTraces defaults to null when absent', () => {
+    const items = buildNetworkRequestItems([
+      { method: 'GET', url: 'https://app.test/api/x', status: 200, resourceType: 'fetch' },
+    ]);
+    expect(items[0]!.serverTraces).toBeNull();
   });
 });

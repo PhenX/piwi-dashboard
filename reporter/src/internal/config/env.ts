@@ -14,6 +14,7 @@ const DEFAULTS: PiwiDashboardOptions = {
   collectPerformanceMetrics: true,
   captureLocators: true,
   capturePageState: true,
+  captureServerTraces: true,
   streaming: true,
   streamingBatchSize: 5,
   streamingBatchDelay: 2000,
@@ -47,6 +48,7 @@ export const PIWI_ENV_KEYS = {
   uploadReport: 'PIWI_UPLOAD_REPORT',
   captureLocators: 'PIWI_CAPTURE_LOCATORS',
   capturePageState: 'PIWI_CAPTURE_PAGE_STATE',
+  captureServerTraces: 'PIWI_CAPTURE_SERVER_TRACES',
   inspectOnFailure: 'PIWI_INSPECT_ON_FAIL',
   pickLocatorOnFailure: 'PIWI_PICK_LOCATOR_ON_FAIL',
   outputFile: 'PIWI_OUTPUT_FILE',
@@ -95,6 +97,7 @@ const ENV_FALLBACK_SPECS: ReadonlyArray<{
   { option: 'uploadReport', env: PIWI_ENV_KEYS.uploadReport, kind: 'bool' },
   { option: 'captureLocators', env: PIWI_ENV_KEYS.captureLocators, kind: 'bool' },
   { option: 'capturePageState', env: PIWI_ENV_KEYS.capturePageState, kind: 'bool' },
+  { option: 'captureServerTraces', env: PIWI_ENV_KEYS.captureServerTraces, kind: 'bool' },
   { option: 'inspectOnFailure', env: PIWI_ENV_KEYS.inspectOnFailure, kind: 'bool' },
   { option: 'pickLocatorOnFailure', env: PIWI_ENV_KEYS.pickLocatorOnFailure, kind: 'bool' },
   { option: 'outputFile', env: PIWI_ENV_KEYS.outputFile, kind: 'string' },
@@ -162,6 +165,11 @@ export function applyOptionsToEnv(options: PiwiDashboardOptions): void {
   if (options.capturePageState === false || options.collectPerformanceMetrics === false)
     env[PIWI_ENV_KEYS.capturePageState] = 'false';
   else if (options.capturePageState === true) env[PIWI_ENV_KEYS.capturePageState] = 'true';
+  // Server-trace capture rides the same bridge: off when either flag disables
+  // it, explicit true otherwise (unset keeps the fixture's default-on).
+  if (options.captureServerTraces === false || options.collectPerformanceMetrics === false)
+    env[PIWI_ENV_KEYS.captureServerTraces] = 'false';
+  else if (options.captureServerTraces === true) env[PIWI_ENV_KEYS.captureServerTraces] = 'true';
   // Failure-time inspection and the locator picker run in the worker fixture,
   // so bridge them into the env the same way (default-off: only an explicit
   // option value is written).

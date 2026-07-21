@@ -426,7 +426,61 @@ function buildNetwork(proj, storyEntry) {
     if (idx >= 0) base[idx] = { ...over };
     else base.push({ ...over });
   }
-  return base;
+  return base.map((req) => ({ ...req, serverTraces: buildServerTraces(req) }));
+}
+
+/**
+ * Synthesize a small server-side span tree for a captured request so the demo
+ * shows the X-Piwi-Trace waterfall. Pure arithmetic (no rng) to keep the seed
+ * reproducible; span ids are scoped per request. Returns null for static assets.
+ */
+function buildServerTraces(req) {
+  const rt = req.resourceType;
+  if (rt && !['fetch', 'xhr', 'document', 'other'].includes(rt)) return null;
+  const dur = Math.max(4, Math.round(req.duration ?? 20));
+  const status = req.status ?? 200;
+  const isErr = status >= 500;
+  let path;
+  try {
+    path = new URL(req.url).pathname;
+  } catch {
+    path = req.url;
+  }
+  const spans = [
+    {
+      id: 'root',
+      name: `${req.method} ${path}`,
+      kind: 'server',
+      startMs: 0,
+      durMs: dur,
+      status: isErr ? 'error' : 'ok',
+      attrs: { 'http.method': req.method, 'http.route': path, 'http.status_code': status },
+    },
+  ];
+  const isApi = !rt || rt === 'fetch' || rt === 'xhr';
+  if (isApi && dur >= 12) {
+    const leaf = path.split('/').filter(Boolean).slice(-1)[0] || 'rows';
+    spans.push({
+      id: 'db',
+      parentId: 'root',
+      name: `SELECT ${leaf}`,
+      kind: 'db',
+      startMs: Math.round(dur * 0.12),
+      durMs: Math.round(dur * 0.4),
+    });
+  }
+  if (isErr) {
+    spans.push({
+      id: 'handler',
+      parentId: 'root',
+      name: 'unhandled exception',
+      kind: 'internal',
+      startMs: Math.round(dur * 0.75),
+      durMs: Math.max(2, Math.round(dur * 0.2)),
+      status: 'error',
+    });
+  }
+  return spans;
 }
 
 /** Themed web vitals; failing pages render slower. */
@@ -744,6 +798,7 @@ for (const proj of DEMO_PROJECTS) {
             resource_type: req.resourceType ?? null,
             content_type: req.contentType ?? (req.resourceType === 'document' ? 'text/html' : 'application/json'),
             server_logs: req.serverLogs ?? null,
+            server_traces: req.serverTraces ?? null,
           });
         }
       }

@@ -21,6 +21,7 @@ const limits = {
   slowRequestMs: 2000,
   serverLogEntries: 20,
   serverLogEntryChars: 500,
+  serverTraceSpans: 40,
   ariaSnapshotChars: 4000,
 } as unknown as ContextLimits;
 
@@ -86,6 +87,38 @@ describe('representativeExecutionSections — id alignment (Tier 0.2)', () => {
     const sections = representativeExecutionSections(rep, null, limits);
     const err = sections.find((s) => s.id === 'executionError');
     expect(err?.markdown).toContain('something failed');
+  });
+
+  test('server traces section renders the per-request span tree from serverTraces', () => {
+    const rep = makeRep({
+      nrItems: [
+        {
+          method: 'POST',
+          url: '/api/checkout',
+          status: 500,
+          serverTraces: [
+            { id: 'r1', name: 'POST /api/checkout', kind: 'server', startMs: 1000, durMs: 120, status: 'error' },
+            { id: 'c1', parentId: 'r1', name: 'SELECT orders', kind: 'db', startMs: 1010, durMs: 90 },
+          ],
+        },
+      ],
+    });
+    const sections = representativeExecutionSections(rep, null, limits);
+    const traces = sections.find((s) => s.id === 'serverTraces');
+    expect(traces?.markdown).toContain('Server Traces');
+    // Root span first, error flagged, child span indented under it.
+    expect(traces?.markdown).toContain('- [server] POST /api/checkout (120ms) [error]');
+    expect(traces?.markdown).toContain('  - [db] SELECT orders (90ms)');
+  });
+
+  test('server traces section is omitted when the budget is zero', () => {
+    const rep = makeRep({
+      nrItems: [
+        { method: 'GET', url: '/', status: 200, serverTraces: [{ id: 'r1', name: 'GET /', startMs: 0, durMs: 5 }] },
+      ],
+    });
+    const sections = representativeExecutionSections(rep, null, { ...limits, serverTraceSpans: 0 });
+    expect(sections.find((s) => s.id === 'serverTraces')).toBeUndefined();
   });
 });
 

@@ -407,6 +407,23 @@ export interface ServerLogEntry {
 }
 
 /**
+ * A server-side span captured for a request via the `X-Piwi-Trace` header (from
+ * a Piwi instrumentation plugin). Mirrors the reporter/plugin `PiwiServerSpan`
+ * shape; the root span carries `traceId` and `attrs.http.*`.
+ */
+export interface ServerSpanEntry {
+  id: string;
+  parentId?: string;
+  name: string;
+  kind?: string;
+  startMs: number;
+  durMs: number;
+  status?: string;
+  traceId?: string;
+  attrs?: Record<string, string | number | boolean>;
+}
+
+/**
  * A single network request recorded during test execution (via dashboard fixture)
  */
 export interface NetworkRequest {
@@ -418,6 +435,7 @@ export interface NetworkRequest {
   contentType?: string | null;
   startTime?: number;
   serverLogs?: ServerLogEntry[];
+  serverTraces?: ServerSpanEntry[];
 }
 
 /** One frame of the trace-derived full call stack (innermost first). */
