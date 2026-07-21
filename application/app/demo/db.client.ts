@@ -15,7 +15,7 @@
  * the seed SQL file.
  */
 
-import type { Database as SqlJsDatabase } from 'sql.js';
+import type { Database as SqlJsDatabase, SqlJsStatic } from 'sql.js';
 import * as initSqlJsLib from 'sql.js';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import * as schema from '~~/server/database/schema.sqlite';
@@ -153,6 +153,65 @@ function schedulePersist(): void {
   persistTimer = setTimeout(doPersist, 500);
 }
 
+/**
+ * Fetch the current build's demo seed version hash from the deployed
+ * `seed.version.json`. That marker is regenerated alongside the seed on every
+ * build and its hash covers the schema + data, so it is the source of truth for
+ * what the running build expects. Fetched with `cache: 'no-cache'` so a
+ * returning visitor always compares against the freshly-deployed marker rather
+ * than a stale HTTP-cached one. Returns `null` when it can't be read (offline /
+ * missing), in which case the caller keeps the persisted copy as-is.
+ */
+async function fetchCurrentSeedVersion(base: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`${base}/demo/seed.version.json`, { cache: 'no-cache' });
+    if (!resp.ok) return null;
+    const info = (await resp.json()) as { hash?: string };
+    return typeof info.hash === 'string' && info.hash.length > 0 ? info.hash : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Seed a fresh in-memory database from the static `seed.sql` dump, persist it to
+ * IndexedDB, and record the build version it was seeded from.
+ */
+async function seedFreshDatabase(SQL: SqlJsStatic, base: string, version: string | null): Promise<void> {
+  const resp = await fetch(`${base}/demo/seed.sql`);
+  if (!resp.ok) {
+    throw new Error(`[Demo] Failed to load seed.sql: ${resp.status} ${resp.statusText}`);
+  }
+  const seedSql = await resp.text();
+  sqliteDb = new SQL.Database();
+  sqliteDb.run(seedSql);
+  await doPersist();
+  cachedStoredVersion = version;
+  if (idbInstance && version) {
+    await idbPut(idbInstance, IDB_VERSION_KEY, version);
+  }
+}
+
+/**
+ * Decide whether a persisted demo database may be reused as-is, or must be
+ * discarded and reseeded because its schema/data is obsolete.
+ *
+ * The in-browser demo DB is seeded once and then persisted to IndexedDB, so a
+ * returning visitor keeps whatever schema they were first seeded with. When the
+ * app later adds a column (or otherwise changes the seed), queries against that
+ * frozen schema fail with "no such column". Reuse the persisted copy ONLY when
+ * we can prove it was seeded by the current build (`stored === current`):
+ *   - a mismatch means the schema/seed changed since → reseed;
+ *   - a missing stored version (legacy data from before version tracking) is
+ *     treated as a mismatch → reseed;
+ *   - an unknown current version (the marker fetch failed, e.g. offline) can't
+ *     prove staleness, so keep the usable persisted copy rather than wiping it.
+ */
+export function canReusePersistedDemoDb(storedVersion: string | null, currentVersion: string | null): boolean {
+  if (currentVersion === null) return true;
+  return storedVersion === currentVersion;
+}
+
 async function initialize(): Promise<void> {
   const base = demoDbBaseUrl.replace(/\/$/, '');
 
@@ -162,33 +221,28 @@ async function initialize(): Promise<void> {
 
   idbInstance = await openIDB();
   const savedData = (await idbGet(idbInstance, IDB_DB_KEY)) as Uint8Array | undefined | null;
+  const hasSaved = savedData instanceof Uint8Array && savedData.length > 0;
 
-  if (savedData instanceof Uint8Array && savedData.length > 0) {
-    // Restore persisted database
-    sqliteDb = new SQL.Database(savedData);
-    // Read previously stored seed version
+  // The version the current build expects — the yardstick for staleness.
+  const currentVersion = await fetchCurrentSeedVersion(base);
+
+  if (hasSaved) {
     const v = await idbGet(idbInstance, IDB_VERSION_KEY);
-    cachedStoredVersion = typeof v === 'string' ? v : null;
-  } else {
-    // First run: seed from the static SQL dump
-    const resp = await fetch(`${base}/demo/seed.sql`);
-    if (!resp.ok) {
-      throw new Error(`[Demo] Failed to load seed.sql: ${resp.status} ${resp.statusText}`);
-    }
-    const seedSql = await resp.text();
-    sqliteDb = new SQL.Database();
-    sqliteDb.run(seedSql);
-    await doPersist();
+    const storedVersion = typeof v === 'string' ? v : null;
 
-    // Fetch the seed version hash and persist it alongside the database
-    const versionResp = await fetch(`${base}/demo/seed.version.json`);
-    if (versionResp.ok) {
-      const versionInfo = (await versionResp.json()) as { hash?: string };
-      if (versionInfo.hash) {
-        cachedStoredVersion = versionInfo.hash;
-        await idbPut(idbInstance, IDB_VERSION_KEY, cachedStoredVersion);
-      }
+    if (canReusePersistedDemoDb(storedVersion, currentVersion)) {
+      // Persisted schema matches the current build (or we can't verify) — reuse.
+      sqliteDb = new SQL.Database(savedData);
+      cachedStoredVersion = storedVersion;
+    } else {
+      // Persisted schema is obsolete (a column/table changed since it was
+      // seeded) — discard and reseed so the demo never queries a stale schema.
+      console.info('[Demo DB] seed version changed — reseeding with the latest demo data');
+      await seedFreshDatabase(SQL, base, currentVersion);
     }
+  } else {
+    // First run: seed from the static SQL dump.
+    await seedFreshDatabase(SQL, base, currentVersion);
   }
 
   drizzleDb = drizzle(

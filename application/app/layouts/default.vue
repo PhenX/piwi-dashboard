@@ -2,7 +2,7 @@
 import type { CommandPaletteGroup, CommandPaletteItem, NavigationMenuItem } from '@nuxt/ui';
 import type { ProjectWithStats } from '~~/types/api';
 import ProjectsMenu from '~/components/layout/ProjectsMenu.vue';
-import { getStoredDemoVersion, resetDemoDb } from '~/demo/db.client';
+import { getStoredDemoVersion } from '~/demo/db.client';
 
 const route = useRoute();
 const toast = useToast();
@@ -343,8 +343,14 @@ const isDemo = config.public.demoMode;
 const demoDataVersion = config.public.demoDataVersion as string;
 const appVersion = config.public.appVersion as string;
 
+const { resetDemo } = useDemoReset();
+
 onMounted(async () => {
   // ── Demo data staleness ──
+  // Note: the demo DB now self-heals on load — a changed seed version reseeds
+  // automatically (see db.client `canReusePersistedDemoDb`). This prompt is a
+  // belt-and-suspenders nudge; its "Refresh" runs the same window + service
+  // worker reset the toolbar button uses.
   if (isDemo && demoDataVersion) {
     const stored = await getStoredDemoVersion();
     if (stored !== null && stored !== demoDataVersion) {
@@ -359,7 +365,7 @@ onMounted(async () => {
             label: 'Refresh',
             color: 'warning',
             onClick: () => {
-              resetDemoDb().then(() => window.location.reload());
+              resetDemo();
             },
           },
           {
