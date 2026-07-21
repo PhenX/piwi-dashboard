@@ -9,6 +9,7 @@ import { getAnalyticsClusterLandscape } from './cluster-landscape';
 import { getAnalyticsFlakyLeaderboard } from './flaky-leaderboard';
 import { getAnalyticsRegressionVelocity } from './regression-velocity';
 import { getAnalyticsSlowEndpoints } from './slow-endpoints';
+import { getAnalyticsTimeoutHygiene } from './timeout-hygiene';
 import type { ProjectAccess } from './common';
 
 /**
@@ -21,15 +22,17 @@ export async function getAnalyticsInsights(
   scope: AnalyticsScope,
   access: ProjectAccess = 'all',
 ): Promise<AnalyticsInsight[]> {
-  const [portfolio, ciTime, wastedTime, clusters, flakyTests, regressionVelocity, slowEndpoints] = await Promise.all([
-    getAnalyticsPortfolio(db, scope, access),
-    getAnalyticsCiTimeTrend(db, scope, access),
-    getAnalyticsWastedTime(db, scope, access),
-    getAnalyticsClusterLandscape(db, scope, access),
-    getAnalyticsFlakyLeaderboard(db, scope, access),
-    getAnalyticsRegressionVelocity(db, scope, access),
-    getAnalyticsSlowEndpoints(db, scope, access),
-  ]);
+  const [portfolio, ciTime, wastedTime, clusters, flakyTests, regressionVelocity, slowEndpoints, timeoutHygiene] =
+    await Promise.all([
+      getAnalyticsPortfolio(db, scope, access),
+      getAnalyticsCiTimeTrend(db, scope, access),
+      getAnalyticsWastedTime(db, scope, access),
+      getAnalyticsClusterLandscape(db, scope, access),
+      getAnalyticsFlakyLeaderboard(db, scope, access),
+      getAnalyticsRegressionVelocity(db, scope, access),
+      getAnalyticsSlowEndpoints(db, scope, access),
+      getAnalyticsTimeoutHygiene(db, scope, access),
+    ]);
 
   return evaluateInsightRules({
     scope,
@@ -40,5 +43,6 @@ export async function getAnalyticsInsights(
     flakyTests,
     regressionVelocity,
     slowEndpoints,
+    timeoutHygiene,
   });
 }

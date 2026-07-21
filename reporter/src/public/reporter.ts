@@ -262,6 +262,9 @@ export class PiwiDashboardReporter {
       location: testLocation(test),
       status,
       duration: result.duration,
+      // Effective per-test timeout (reflects project config + describe-level
+      // overrides). `0` means unbounded; kept as-is so the dashboard can flag it.
+      timeout: test.timeout ?? null,
       error: buildErrorText(result),
       retries: result.retry,
       workerIndex: workerIndexOf(result),
@@ -355,6 +358,7 @@ export class PiwiDashboardReporter {
         location: testLocation(test),
         status: 'didnotrun',
         duration: 0,
+        timeout: test.timeout ?? null,
         error: null,
         retries: 0,
         workerIndex: null,

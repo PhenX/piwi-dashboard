@@ -178,6 +178,7 @@ describe('toWireTestCase', () => {
       'testAnnotations',
       'testSource',
       'testSourceFrames',
+      'timeout',
       'title',
       'type',
       'wastedTimeMs',

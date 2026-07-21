@@ -483,6 +483,7 @@ export default eventHandler(async (event) => {
         title: testCase.title as string,
         status: testCase.status as string,
         duration: testCase.duration as number | null | undefined,
+        timeout: testCase.timeout as number | null | undefined,
         error: testCase.error as string | null | undefined,
         retries: testCase.retries as number | undefined,
         line,

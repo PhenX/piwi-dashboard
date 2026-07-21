@@ -355,6 +355,7 @@ export const testRunsCases = pgTable(
       .references(() => testCases.id, { onDelete: 'cascade' }),
     status: text('status').notNull(), // 'passed', 'failed', 'timedout', 'skipped'
     duration: integer('duration'), // in milliseconds
+    timeout: integer('timeout'), // Effective per-test timeout in ms (TestCase.timeout); 0 = unbounded, null = unknown/legacy
     error: text('error'),
     failureClusterId: integer('failure_cluster_id').references(() => failureClusters.id), // set for failed rows with an error — groups rows sharing a fingerprint
     retries: integer('retries').default(0),

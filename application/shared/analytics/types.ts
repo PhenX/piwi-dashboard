@@ -220,3 +220,29 @@ export interface AnalyticsInsight {
   to?: string;
   projectId?: number;
 }
+
+// ── Timeout hygiene ───────────────────────────────────────────────────────────
+
+/** One cross-project timeout-reduction opportunity (see `timeout-hygiene.ts`). */
+export interface AnalyticsTimeoutRow {
+  projectId: number;
+  projectName: string;
+  projectLabel: string | null;
+  testCaseId: number;
+  title: string;
+  filePath: string;
+  kind: 'oversized-timeout' | 'stale-slow';
+  timeout: number | null;
+  p95: number;
+  recommendedTimeout: number | null;
+  estimatedSavingMs: number;
+  impact: number;
+  hasSlowAnnotation: boolean;
+}
+
+export interface AnalyticsTimeoutHygiene {
+  rows: AnalyticsTimeoutRow[];
+  oversizedCount: number;
+  staleSlowCount: number;
+  totalEstimatedSavingMs: number;
+}

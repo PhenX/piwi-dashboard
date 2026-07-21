@@ -52,6 +52,8 @@ export interface TestCasePayload {
   location: string;
   status: string;
   duration?: number | null;
+  /** Effective per-test timeout in ms (`TestCase.timeout`); `0` means unbounded. */
+  timeout?: number | null;
   error?: string | null;
   retries?: number | null;
   steps?: unknown;
@@ -129,6 +131,8 @@ export interface StreamEventPayload {
   location: string;
   status?: string;
   duration?: number | null;
+  /** Effective per-test timeout in ms (`TestCase.timeout`); `0` means unbounded. */
+  timeout?: number | null;
   error?: string | null;
   retries?: number | null;
   workerIndex?: number | null;

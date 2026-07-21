@@ -12,6 +12,7 @@ import type {
   AnalyticsPortfolioRow,
   AnalyticsRegressionVelocity,
   AnalyticsSlowEndpoints,
+  AnalyticsTimeoutHygiene,
   AnalyticsWastedTime,
 } from './types';
 import type { AnalyticsScope } from './scope';
@@ -25,6 +26,7 @@ export interface InsightContext {
   flakyTests: AnalyticsFlakyRow[];
   regressionVelocity: AnalyticsRegressionVelocity;
   slowEndpoints: AnalyticsSlowEndpoints;
+  timeoutHygiene: AnalyticsTimeoutHygiene;
 }
 
 export interface InsightRule {
@@ -197,6 +199,38 @@ const slowSharedEndpoint: InsightRule = {
       })),
 };
 
+/** Compact ms → human string for insight copy (e.g. 90000 → "90s"). */
+function fmtMs(ms: number): string {
+  if (ms >= 1000) return `${Math.round(ms / 1000)}s`;
+  return `${Math.round(ms)}ms`;
+}
+
+const timeoutHygiene: InsightRule = {
+  id: 'timeout-hygiene',
+  evaluate: ({ timeoutHygiene }) =>
+    timeoutHygiene.rows
+      // Only surface materially wasteful budgets in the cross-project feed;
+      // the per-project table shows the long tail.
+      .filter((r) => r.estimatedSavingMs >= 15_000)
+      .slice(0, 2)
+      .map((r) => ({
+        id: `timeout-hygiene:${r.testCaseId}`,
+        ruleId: 'timeout-hygiene',
+        severity: r.estimatedSavingMs >= 60_000 ? ('warning' as const) : ('info' as const),
+        message:
+          r.kind === 'stale-slow'
+            ? `"${r.title}" is still marked test.slow() but runs well under budget`
+            : `"${r.title}" has an oversized timeout (${fmtMs(r.timeout ?? 0)} vs p95 ${fmtMs(r.p95)})`,
+        detail:
+          `${projectDisplay({ name: r.projectName, label: r.projectLabel })} · ` +
+          (r.kind === 'stale-slow'
+            ? `remove test.slow() to reclaim ~${fmtMs(r.estimatedSavingMs)} per failing run.`
+            : `lower it toward ${fmtMs(r.recommendedTimeout ?? 0)} to reclaim ~${fmtMs(r.estimatedSavingMs)} per failing run.`),
+        to: `/test-cases/${r.testCaseId}`,
+        projectId: r.projectId,
+      })),
+};
+
 export const INSIGHT_RULES: InsightRule[] = [
   failingStreak,
   passRateDrop,
@@ -205,6 +239,7 @@ export const INSIGHT_RULES: InsightRule[] = [
   regressionSurge,
   slowSharedEndpoint,
   wastedCiTime,
+  timeoutHygiene,
   ciTimeGrowth,
   passRateRecovery,
 ];

@@ -146,6 +146,7 @@ export default eventHandler(async (event) => {
             title: testCase.title,
             status: testCase.status,
             duration: testCase.duration,
+            timeout: testCase.timeout,
             error: testCase.error,
             retries: testCase.retries,
             line,
@@ -264,6 +265,7 @@ export default eventHandler(async (event) => {
         title: string;
         status: string;
         duration?: number;
+        timeout?: number;
         error?: string;
         location?: string;
         retries?: number;
@@ -300,6 +302,7 @@ export default eventHandler(async (event) => {
           title: testCase.title,
           status: testCase.status,
           duration: testCase.duration,
+          timeout: testCase.timeout,
           error: testCase.error,
           retries: testCase.retries,
           line,

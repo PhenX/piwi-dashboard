@@ -18,6 +18,7 @@ export interface ParsedCompleteEvent {
   title?: string;
   status?: string;
   duration?: number | null;
+  timeout?: number | null;
   error?: string | null;
   retries?: number | null;
   steps?: unknown;
@@ -59,6 +60,7 @@ export function mapCompleteEventToRunCase(tc: ParsedCompleteEvent): RunCaseInput
     title: tc.title as string,
     status: tc.status as string,
     duration: tc.duration,
+    timeout: tc.timeout ?? null,
     error: tc.error,
     retries: tc.retries,
     line: tc.line,

@@ -13,6 +13,12 @@ import {
 import { asc, desc, eq, exists, sql, and, inArray, gte, lte, isNotNull, count } from 'drizzle-orm';
 
 import type { DrizzleDB } from './db';
+import {
+  detectTimeoutOpportunity,
+  hasSlowMark,
+  type TimeoutOpportunity,
+  type TimeoutThresholds,
+} from '../analytics/timeout-hygiene';
 
 type ProjectScope = 'all' | Set<number>;
 
@@ -811,6 +817,110 @@ export async function getProjectSlowTests(db: DrizzleDB, projectId: number, runs
     )
     .sort((a, b) => b.avgDuration - a.avgDuration)
     .slice(0, 20);
+}
+
+// ─── getProjectTimeoutOpportunities ──────────────────────────────
+
+/**
+ * Rank tests whose configured per-test timeout is far larger than their real
+ * duration (so failures/hangs waste time), or that still carry a `test.slow()`
+ * mark they no longer need. Pure detection lives in
+ * `#shared/analytics/timeout-hygiene`; this handler only assembles each test's
+ * duration history + latest timeout + latest annotations from recent runs.
+ */
+export async function getProjectTimeoutOpportunities(
+  db: DrizzleDB,
+  projectId: number,
+  runsCount: number,
+  thresholds?: TimeoutThresholds,
+): Promise<TimeoutOpportunity[]> {
+  const projectResults: any[] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId));
+  if (!projectResults[0]) throw new Error('Project not found');
+
+  const effectiveLimit = Math.min(runsCount, 100);
+
+  const recentRuns: any[] = await db
+    .select({ id: testRuns.id })
+    .from(testRuns)
+    .where(eq(testRuns.projectId, projectId))
+    .orderBy(desc(testRuns.startTime))
+    .limit(effectiveLimit);
+
+  const runIds: number[] = recentRuns.map((r: any) => r.id);
+  if (runIds.length === 0) return [];
+
+  const results: any[] = await db
+    .select({
+      testCaseId: testRunsCases.testCaseId,
+      duration: testRunsCases.duration,
+      timeout: testRunsCases.timeout,
+      status: testRunsCases.status,
+      testAnnotations: testRunsCases.testAnnotations,
+      startTime: testRuns.startTime,
+      title: testCases.title,
+      filePath: testCases.filePath,
+    })
+    .from(testRunsCases)
+    .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+    .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
+    .where(and(inArray(testRunsCases.testRunId, runIds), eq(testCases.projectId, projectId)));
+
+  type Acc = {
+    testCaseId: number;
+    title: string;
+    filePath: string;
+    durations: number[];
+    failCount: number;
+    latestTime: number;
+    timeout: number | null;
+    hasSlowAnnotation: boolean;
+  };
+  const byCase = new Map<number, Acc>();
+
+  for (const row of results) {
+    let acc = byCase.get(row.testCaseId);
+    if (!acc) {
+      acc = {
+        testCaseId: row.testCaseId,
+        title: row.title,
+        filePath: row.filePath,
+        durations: [],
+        failCount: 0,
+        latestTime: -Infinity,
+        timeout: null,
+        hasSlowAnnotation: false,
+      };
+      byCase.set(row.testCaseId, acc);
+    }
+    if (row.duration !== null && row.duration !== undefined) acc.durations.push(row.duration);
+    if (row.status === 'failed' || row.status === 'timedout' || row.status === 'timedOut') acc.failCount++;
+    // Latest execution wins for the "current" timeout + slow annotation state.
+    const t = new Date(row.startTime).getTime();
+    if (t >= acc.latestTime) {
+      acc.latestTime = t;
+      acc.timeout = row.timeout ?? null;
+      acc.hasSlowAnnotation = hasSlowMark(row.testAnnotations as Array<{ type?: string }> | null);
+    }
+  }
+
+  const opportunities: TimeoutOpportunity[] = [];
+  for (const acc of byCase.values()) {
+    const opp = detectTimeoutOpportunity(
+      {
+        testCaseId: acc.testCaseId,
+        title: acc.title,
+        filePath: acc.filePath,
+        durations: acc.durations,
+        timeout: acc.timeout,
+        hasSlowAnnotation: acc.hasSlowAnnotation,
+        failCount: acc.failCount,
+      },
+      thresholds,
+    );
+    if (opp) opportunities.push(opp);
+  }
+
+  return opportunities.sort((a, b) => b.impact - a.impact).slice(0, 50);
 }
 
 // ─── getProjectFailureClusters ───────────────────────────────────

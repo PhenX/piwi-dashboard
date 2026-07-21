@@ -35,6 +35,8 @@ export interface RunCaseInput {
   title: string;
   status: string;
   duration?: number | null;
+  /** Effective per-test timeout in ms (`TestCase.timeout`); `0` means unbounded, null when unknown. */
+  timeout?: number | null;
   error?: string | null;
   retries?: number | null;
   line: number | null;
@@ -283,6 +285,7 @@ export async function persistRunCases(
       testCaseId: caseId,
       status: c.status,
       duration: c.duration ?? null,
+      timeout: c.timeout ?? null,
       error: capErrorText(c.error, limits.errorChars),
       retries: c.retries ?? 0,
       line: c.line,
