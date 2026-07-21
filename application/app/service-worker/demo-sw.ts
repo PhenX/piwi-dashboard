@@ -18,7 +18,7 @@
  */
 
 import { handleDemoRequest } from '../demo/api/router';
-import { configureDemoDb } from '../demo/db.client';
+import { configureDemoDb, resetDemoDb } from '../demo/db.client';
 
 declare const self: ServiceWorkerGlobalScope & typeof globalThis;
 
@@ -43,6 +43,23 @@ self.addEventListener('install', () => {
 self.addEventListener('activate', (event) => {
   // Claim all open clients so existing tabs benefit from the SW right away.
   event.waitUntil(self.clients.claim());
+});
+
+// ── Reset handling ───────────────────────────────────────────────────────────
+// The page's "reset demo" action wipes IndexedDB from the window context, but
+// this service worker holds its OWN long-lived in-memory SQLite instance (a
+// separate db.client module copy) that would otherwise keep answering queries
+// with the old, possibly obsolete-schema data after the reload. Drop it here so
+// the next query re-seeds from the freshly-wiped IndexedDB, then acknowledge on
+// the message port so the page can reload only once the reset has taken effect.
+self.addEventListener('message', (event) => {
+  const data = event.data as { type?: string } | undefined;
+  if (data?.type !== 'piwi-demo-reset') return;
+  event.waitUntil(
+    resetDemoDb()
+      .catch((e) => console.error('[Demo SW] reset failed', e))
+      .then(() => event.ports?.[0]?.postMessage({ type: 'piwi-demo-reset-done' })),
+  );
 });
 
 // ── Fetch interception ─────────────────────────────────────────────────────
