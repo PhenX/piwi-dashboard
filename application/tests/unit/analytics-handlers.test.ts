@@ -391,6 +391,7 @@ describe('insight rules', () => {
         totalWaitMinutes: 0,
         totalFailedExecMinutes: 0,
         byProject: [],
+        timeoutReclaimable: null,
       },
       clusters: { totalOpen: 0, resolvedInPeriod: 0, byErrorType: [], clusters: [] },
       flakyTests: [],
@@ -423,7 +424,14 @@ describe('insight rules', () => {
         deltaPct: null,
         avgRunMinutes: null,
       },
-      wastedTime: { points: [], bucketDays: 1, totalWaitMinutes: 0, totalFailedExecMinutes: 0, byProject: [] },
+      wastedTime: {
+        points: [],
+        bucketDays: 1,
+        totalWaitMinutes: 0,
+        totalFailedExecMinutes: 0,
+        byProject: [],
+        timeoutReclaimable: null,
+      },
       clusters: { totalOpen: 0, resolvedInPeriod: 0, byErrorType: [], clusters: [] },
       flakyTests: [],
       regressionVelocity: {
