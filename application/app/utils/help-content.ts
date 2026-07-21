@@ -511,6 +511,11 @@ export const HELP_TOPICS = {
     doc: 'flaky-tests#performance',
     envVars: ['PIWI_WASTED_WAIT_PATTERNS'],
   },
+  'settings.timeout-hygiene': {
+    title: 'Timeout hygiene',
+    text: 'Thresholds for flagging oversized per-test timeouts and stale test.slow() marks. Opportunities are recomputed at read time, so changes apply to existing runs immediately.',
+    doc: 'flaky-tests#performance',
+  },
   'settings.auto-diagnose': {
     title: 'Auto-diagnose',
     text: 'When a run finishes, up to 3 new failure clusters are diagnosed automatically — each diagnosis is one research call (when a research model is configured) plus one diagnosis call — and new clusters get human-readable titles in one batched call. Requires the diagnosis model to be configured.',
