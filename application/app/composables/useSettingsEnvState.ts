@@ -34,6 +34,7 @@ export function useSettingsEnvState() {
     tags: false,
     storage: false,
     'wasted-time': false,
+    'timeout-hygiene': false,
     ai: false,
     about: false,
   });

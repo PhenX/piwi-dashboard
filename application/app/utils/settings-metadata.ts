@@ -25,6 +25,7 @@ export type SettingsPageId =
   | 'tags'
   | 'storage'
   | 'wasted-time'
+  | 'timeout-hygiene'
   | 'ai'
   | 'about';
 
@@ -119,6 +120,15 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     roles: [Role.ADMINISTRATOR],
     introHelp: 'settings.wasted-time',
     fields: [{ id: 'wasted-time.patterns', label: 'Wasted-time patterns', help: 'settings.wasted-time' }],
+  },
+  {
+    id: 'timeout-hygiene',
+    label: 'Timeout hygiene',
+    icon: 'i-lucide-scissors',
+    to: '/settings/timeout-hygiene',
+    roles: [Role.ADMINISTRATOR],
+    introHelp: 'settings.timeout-hygiene',
+    fields: [{ id: 'timeout-hygiene.thresholds', label: 'Detection thresholds', help: 'settings.timeout-hygiene' }],
   },
   {
     id: 'ai',

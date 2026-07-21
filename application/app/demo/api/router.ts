@@ -111,7 +111,7 @@ import {
 } from './ai';
 import { apiGetAdminStats } from './admin';
 import { apiDeleteTestRun } from './test-runs';
-import { apiGetWastedWaits, apiPutWastedWaits } from './settings';
+import { apiGetWastedWaits, apiPutWastedWaits, apiGetTimeoutHygiene, apiPutTimeoutHygiene } from './settings';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
@@ -863,6 +863,12 @@ routes.push(
     method: 'PUT',
     pattern: /^\/api\/settings\/wasted-waits$/,
     handler: (_, body) => apiPutWastedWaits(body as Parameters<typeof apiPutWastedWaits>[0]),
+  },
+  { method: 'GET', pattern: /^\/api\/settings\/timeout-hygiene$/, handler: () => apiGetTimeoutHygiene() },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/settings\/timeout-hygiene$/,
+    handler: (_, body) => apiPutTimeoutHygiene(body as Parameters<typeof apiPutTimeoutHygiene>[0]),
   },
 );
 
