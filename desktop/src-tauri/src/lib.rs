@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, RunEvent, WindowEvent};
 
 use tauri_plugin_autostart::MacosLauncher;
@@ -138,6 +138,54 @@ fn append_log(path: &std::path::Path, line: &str) {
     }
 }
 
+// ── Desktop service settings, exposed to the in-app Settings UI over IPC ───────
+// The bundled dashboard webview drives the same "run in background" and "start on
+// login" options as the tray. window.__TAURI__ is injected into the desktop
+// webview (withGlobalTauri) and reachable only there — a plain browser at the
+// same loopback URL has no native IPC bridge — and the `remote` capability grants
+// the loopback origin access. The webview feature-detects the bridge and falls
+// back to pointing at the tray when it is absent.
+
+#[derive(serde::Serialize)]
+struct ServiceSettings {
+    run_in_background: bool,
+    start_on_login: bool,
+}
+
+#[tauri::command]
+fn desktop_get_service_settings(app: tauri::AppHandle) -> ServiceSettings {
+    let run_in_background = app
+        .try_state::<RunInBackground>()
+        .map(|s| s.0.load(Ordering::SeqCst))
+        .unwrap_or(false);
+    let start_on_login = app.autolaunch().is_enabled().unwrap_or(false);
+    ServiceSettings {
+        run_in_background,
+        start_on_login,
+    }
+}
+
+#[tauri::command]
+fn desktop_set_run_in_background(app: tauri::AppHandle, enabled: bool) {
+    if let Some(state) = app.try_state::<RunInBackground>() {
+        state.0.store(enabled, Ordering::SeqCst);
+    }
+    if let Ok(store) = app.store(STORE_FILE) {
+        store.set(RUN_BG_KEY, json!(enabled));
+        let _ = store.save();
+    }
+}
+
+#[tauri::command]
+fn desktop_set_start_on_login(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let mgr = app.autolaunch();
+    if enabled {
+        mgr.enable().map_err(|e| e.to_string())
+    } else {
+        mgr.disable().map_err(|e| e.to_string())
+    }
+}
+
 pub fn run() {
     let launched_hidden = std::env::args().any(|a| a == "--hidden");
 
@@ -156,6 +204,11 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
+        .invoke_handler(tauri::generate_handler![
+            desktop_get_service_settings,
+            desktop_set_run_in_background,
+            desktop_set_start_on_login
+        ])
         .manage(ServerProcess::default())
         .setup(move |app| {
             // --- data locations (survive app updates; outside the read-only bundle) ---
@@ -338,9 +391,25 @@ pub fn run() {
             let menu_run_bg = run_bg.clone();
             let _tray = TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("Piwi Dashboard")
+                .tooltip("Piwi Dashboard (click to open)")
                 .menu(&menu)
+                // Left-click opens the window; right-click shows the menu. Without
+                // this a left-click did nothing, so the tray looked inert (and on
+                // Windows the icon hides in the overflow area by default).
                 .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        if let Some(w) = tray.app_handle().get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
+                })
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "open" => {
                         if let Some(w) = app.get_webview_window("main") {

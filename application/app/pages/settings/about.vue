@@ -52,6 +52,7 @@ const dbBackendLabel = computed(() => {
       <DataLocationCard v-if="stats" :database="stats.databaseLocation" :storage="stats.storageLocation" />
       <DesktopReporterCard v-if="reporterConfig" :url="reporterConfig.url" :token="reporterConfig.token" />
       <DesktopMcpCard v-if="reporterConfig" :url="reporterConfig.url" :token="reporterConfig.token" />
+      <DesktopServiceCard />
     </template>
 
     <SectionCard icon="i-lucide-book-open" title="Resources">
