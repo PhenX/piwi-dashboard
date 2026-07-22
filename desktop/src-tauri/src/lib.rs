@@ -119,6 +119,16 @@ fn load_or_create_token(app_data_dir: &PathBuf) -> String {
     token
 }
 
+/// Append a line to the server log. A release build is a windowed app with no
+/// console, so the sidecar's output and any startup errors would otherwise be
+/// invisible — this makes them readable via the data folder's `logs/server.log`.
+fn append_log(path: &std::path::Path, line: &str) {
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(f, "{line}");
+    }
+}
+
 pub fn run() {
     let launched_hidden = std::env::args().any(|a| a == "--hidden");
 
@@ -147,6 +157,14 @@ pub fn run() {
             // libSQL will not create the DB's parent dir — so create it here.
             std::fs::create_dir_all(&storage_dir)?;
             let db_path = data_dir.join("piwi.db");
+
+            // Server logs go to a file so failures are visible in a windowed
+            // (console-less) release build — read it via the "Open data folder"
+            // tray item, under logs/server.log.
+            let log_dir = app_data_dir.join("logs");
+            let _ = std::fs::create_dir_all(&log_dir);
+            let log_path = log_dir.join("server.log");
+            append_log(&log_path, "----- launch -----");
 
             let secret = load_or_create_secret(&app_data_dir);
             let token = load_or_create_token(&app_data_dir);
@@ -186,49 +204,70 @@ pub fn run() {
                 .find(|p| p.exists())
                 .cloned()
                 .unwrap_or_else(|| candidates[0].clone());
+            append_log(
+                &log_path,
+                &format!(
+                    "server entry: {} (exists: {}), port: {}",
+                    server_entry.display(),
+                    server_entry.exists(),
+                    port
+                ),
+            );
 
             // --- spawn the Node sidecar running the Nitro server ---
-            let sidecar = app
-                .shell()
-                .sidecar("node")
-                .expect("node sidecar is bundled")
-                .args([server_entry.to_string_lossy().to_string()])
-                .env("NODE_ENV", "production")
-                .env("NITRO_HOST", "127.0.0.1")
-                .env("NITRO_PORT", port.to_string())
-                .env("PIWI_DATABASE_PATH", db_path.to_string_lossy().to_string())
-                .env(
-                    "PIWI_STORAGE_PATH",
-                    storage_dir.to_string_lossy().to_string(),
-                )
-                .env("PIWI_SECRET_KEY", secret)
-                .env("PIWI_DESKTOP_TOKEN", token.clone());
+            // Best-effort: a spawn failure is logged and surfaces as a readiness
+            // timeout (the splash shows an error) instead of a silent panic.
+            match app.shell().sidecar("node") {
+                Err(e) => append_log(&log_path, &format!("sidecar 'node' not found: {e}")),
+                Ok(cmd) => {
+                    let cmd = cmd
+                        .args([server_entry.to_string_lossy().to_string()])
+                        .env("NODE_ENV", "production")
+                        .env("NITRO_HOST", "127.0.0.1")
+                        .env("NITRO_PORT", port.to_string())
+                        .env("PIWI_DATABASE_PATH", db_path.to_string_lossy().to_string())
+                        .env("PIWI_STORAGE_PATH", storage_dir.to_string_lossy().to_string())
+                        .env("PIWI_SECRET_KEY", secret)
+                        .env("PIWI_DESKTOP_TOKEN", token.clone());
 
-            let (mut rx, child) = sidecar.spawn().expect("failed to start the Piwi server");
-            app.state::<ServerProcess>()
-                .0
-                .lock()
-                .unwrap()
-                .replace(child);
+                    match cmd.spawn() {
+                        Err(e) => append_log(&log_path, &format!("failed to spawn server: {e}")),
+                        Ok((mut rx, child)) => {
+                            app.state::<ServerProcess>().0.lock().unwrap().replace(child);
 
-            // Drain sidecar output so the server's logs surface in the app's stdio.
-            tauri::async_runtime::spawn(async move {
-                use tauri_plugin_shell::process::CommandEvent;
-                while let Some(event) = rx.recv().await {
-                    match event {
-                        CommandEvent::Stdout(line) => {
-                            print!("[server] {}", String::from_utf8_lossy(&line));
+                            // Tee the sidecar's output to the log file (no console in release).
+                            let drain_log = log_path.clone();
+                            tauri::async_runtime::spawn(async move {
+                                use tauri_plugin_shell::process::CommandEvent;
+                                while let Some(event) = rx.recv().await {
+                                    match event {
+                                        CommandEvent::Stdout(line) => append_log(
+                                            &drain_log,
+                                            &format!("[server] {}", String::from_utf8_lossy(&line).trim_end()),
+                                        ),
+                                        CommandEvent::Stderr(line) => append_log(
+                                            &drain_log,
+                                            &format!("[server:err] {}", String::from_utf8_lossy(&line).trim_end()),
+                                        ),
+                                        CommandEvent::Error(err) => {
+                                            append_log(&drain_log, &format!("[server:proc] {err}"))
+                                        }
+                                        CommandEvent::Terminated(p) => append_log(
+                                            &drain_log,
+                                            &format!("[server] exited: code={:?} signal={:?}", p.code, p.signal),
+                                        ),
+                                        _ => {}
+                                    }
+                                }
+                            });
                         }
-                        CommandEvent::Stderr(line) => {
-                            eprint!("[server] {}", String::from_utf8_lossy(&line));
-                        }
-                        _ => {}
                     }
                 }
-            });
+            }
 
             // --- when the server is ready, navigate the window to it ---
             let nav_handle = app.handle().clone();
+            let ready_log = log_path.clone();
             let bootstrap_url = format!("http://127.0.0.1:{port}/__piwi/session?token={token}");
             std::thread::spawn(move || {
                 let deadline = Instant::now() + Duration::from_secs(READY_TIMEOUT_SECS);
@@ -240,6 +279,10 @@ pub fn run() {
                     }
                     std::thread::sleep(Duration::from_millis(250));
                 }
+                append_log(
+                    &ready_log,
+                    if ready { "server ready" } else { "server NOT ready within timeout" },
+                );
                 let inner = nav_handle.clone();
                 let _ = nav_handle.run_on_main_thread(move || {
                     if let Some(w) = inner.get_webview_window("main") {
