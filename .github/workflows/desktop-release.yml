@@ -41,6 +41,8 @@ jobs:
         with:
           name: app-output
           path: application/.output
+          # .output is dot-prefixed; upload-artifact@v4 skips hidden paths by default.
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
 
