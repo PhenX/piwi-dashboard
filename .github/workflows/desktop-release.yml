@@ -1,0 +1,115 @@
+name: Desktop Release
+
+# Builds the Tauri desktop app (Windows .msi + macOS .dmg) and attaches both
+# installers to the GitHub Release release-please created for the tag, so they
+# publish alongside the Docker image and npm packages (see publish.yml).
+on:
+  push:
+    tags:
+      - 'v*'
+  # Manual escape hatch / dry-run: build the installers without releasing.
+  workflow_dispatch:
+
+env:
+  # Match the runtime the app is built and tested against (application/engines).
+  PIWI_NODE_VERSION: 24.4.1
+
+jobs:
+  # Build the Nitro server bundle once on Linux (the proven path — the Windows
+  # Nuxt build carries a legacyExternals workaround and isn't exercised in CI).
+  # The .output is pure JS, so it's OS-agnostic; the per-OS native modules are
+  # added in the desktop job via stage-server.mjs.
+  build-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Build server bundle (node-server preset)
+        run: npm run app:build --workspace=application
+        env:
+          NITRO_PRESET: node-server
+          PIWI_BUILD_SHA: ${{ github.sha }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-output
+          path: application/.output
+          if-no-files-found: error
+          retention-days: 1
+
+  desktop:
+    needs: [build-server]
+    permissions:
+      contents: write # upload installers to the release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: msi
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            bundles: dmg
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Install desktop tooling
+        working-directory: desktop
+        run: npm install
+
+      - name: Download server bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: app-output
+          path: application/.output
+
+      - name: Fetch Node sidecar
+        working-directory: desktop
+        run: node scripts/fetch-node.mjs --target ${{ matrix.target }} --node ${{ env.PIWI_NODE_VERSION }}
+
+      - name: Stage server (native modules for this OS)
+        working-directory: desktop
+        run: node scripts/stage-server.mjs
+
+      - name: Generate app icons
+        working-directory: desktop
+        run: npx tauri icon ../docs/public/logo.svg
+
+      - name: Build & release desktop app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS signing + notarization — optional. If these secrets are absent
+          # the build is unsigned (users click through Gatekeeper). Add them to
+          # sign without any code change.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: desktop
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          # Attach to the release release-please already made for this tag. On a
+          # manual dispatch (no tag) tagName is empty, so tauri-action just builds.
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
