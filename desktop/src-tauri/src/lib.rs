@@ -119,6 +119,15 @@ fn load_or_create_token(app_data_dir: &PathBuf) -> String {
     token
 }
 
+/// Convert a path to a string Node can consume as a CLI arg / env value. On
+/// Windows, Tauri's resource + app-data paths come back with the `\\?\` verbatim
+/// prefix, which Node's module resolver mishandles (it splits `\\?\C:\...` wrong
+/// and dies with `EISDIR: lstat 'C:'`) — strip it. No-op on other platforms.
+fn node_path(p: &std::path::Path) -> String {
+    let s = p.to_string_lossy();
+    s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+}
+
 /// Append a line to the server log. A release build is a windowed app with no
 /// console, so the sidecar's output and any startup errors would otherwise be
 /// invisible — this makes them readable via the data folder's `logs/server.log`.
@@ -221,12 +230,12 @@ pub fn run() {
                 Err(e) => append_log(&log_path, &format!("sidecar 'node' not found: {e}")),
                 Ok(cmd) => {
                     let cmd = cmd
-                        .args([server_entry.to_string_lossy().to_string()])
+                        .args([node_path(&server_entry)])
                         .env("NODE_ENV", "production")
                         .env("NITRO_HOST", "127.0.0.1")
                         .env("NITRO_PORT", port.to_string())
-                        .env("PIWI_DATABASE_PATH", db_path.to_string_lossy().to_string())
-                        .env("PIWI_STORAGE_PATH", storage_dir.to_string_lossy().to_string())
+                        .env("PIWI_DATABASE_PATH", node_path(&db_path))
+                        .env("PIWI_STORAGE_PATH", node_path(&storage_dir))
                         .env("PIWI_SECRET_KEY", secret)
                         .env("PIWI_DESKTOP_TOKEN", token.clone());
 
