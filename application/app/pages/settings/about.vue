@@ -9,7 +9,7 @@ const { data: versionInfo } = await useFetch('/api/version');
 // Desktop build only: surface where data lives and how to connect the reporter
 // and MCP clients. These endpoints are admin-scoped / desktop-gated, so only
 // fetch them in the desktop shell (auth is off there → virtual admin).
-const { data: stats } = await useFetch<AdminStats>('/api/admin/stats', {
+const { data: stats } = await useFetch<AdminStats | null>('/api/admin/stats', {
   immediate: isDesktop,
   default: () => null,
 });
