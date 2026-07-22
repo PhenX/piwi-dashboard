@@ -7,6 +7,11 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      # Temporary: dry-run the installer build on this branch without releasing
+      # (no tag → tagName stays empty → tauri-action builds but does not publish).
+      # Remove before merge — tags + workflow_dispatch cover real releases.
+      - claude/desktop-version-feasibility-0krz6q
   # Manual escape hatch / dry-run: build the installers without releasing.
   workflow_dispatch:
 
@@ -123,6 +128,19 @@ jobs:
           projectPath: desktop
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
           # Attach to the release release-please already made for this tag. On a
-          # manual dispatch (no tag) tagName is empty, so tauri-action just builds.
+          # branch push / dispatch (no tag) tagName is empty, so tauri-action just builds.
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+
+      # Dry-run only: make the built installers downloadable as a workflow artifact
+      # (they are not attached to any release unless this was a tag build).
+      - name: Upload installers (dry-run)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: piwi-desktop-${{ matrix.target }}
+          path: |
+            desktop/src-tauri/target/**/release/bundle/**/*.msi
+            desktop/src-tauri/target/**/release/bundle/**/*.dmg
+          if-no-files-found: warn
+          retention-days: 7
