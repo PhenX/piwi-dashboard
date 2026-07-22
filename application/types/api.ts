@@ -900,6 +900,10 @@ export interface AdminStats {
   totalFiles: number;
   totalFileSize: number;
   storageSizeOnDisk: number | null;
+  /** Where the database lives: a resolved SQLite file path, or a label for PostgreSQL. */
+  databaseLocation: string;
+  /** Where files live: a resolved local storage path, or a label for S3. */
+  storageLocation: string;
 }
 
 // ============================================================================

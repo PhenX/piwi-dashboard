@@ -48,6 +48,7 @@ export type PiwiEnvVarCategory =
   | 'wasted-time'
   | 'demo'
   | 'build'
+  | 'desktop'
   | 'test';
 
 /** How a variable's string value is interpreted by the server. */
@@ -202,6 +203,7 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
   },
   demo: { title: 'Demo', order: 15, mergeInto: 'build' },
   test: { title: 'Test harness', order: 16, internal: true },
+  desktop: { title: 'Desktop app', order: 17, internal: true },
 };
 
 export const PIWI_ENV_VARS = {
@@ -233,6 +235,14 @@ export const PIWI_ENV_VARS = {
     description: 'Commit SHA baked into the build for provenance. Shown on Settings → About. Set as a build-time arg.',
     category: 'build',
     runtimeOnly: true,
+  },
+  PIWI_DESKTOP_TOKEN: {
+    description:
+      'Per-install access token the desktop (Tauri) app injects to gate its local server. Set automatically by the desktop shell — not user-configurable. Absent on the server build.',
+    category: 'desktop',
+    secret: true,
+    runtimeOnly: true,
+    since: '0.16.0',
   },
 
   // ── Database ─────────────────────────────────────────────────────────────
