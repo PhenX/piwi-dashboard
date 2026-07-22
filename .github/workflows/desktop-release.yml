@@ -111,7 +111,7 @@ jobs:
 
       - name: Generate app icons
         working-directory: desktop
-        run: npx tauri icon ../docs/public/logo.svg
+        run: npx tauri icon ../application/public/logo.svg
 
       - name: Build & release desktop app
         uses: tauri-apps/tauri-action@v0

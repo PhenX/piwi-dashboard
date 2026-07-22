@@ -35,7 +35,7 @@ npm run app:build --workspace=application
 cd desktop
 npm run fetch-node          # downloads the official Node binary for this OS
 npm run stage               # copies .output + installs native modules
-npx tauri icon ../docs/public/logo.svg   # generate icons (once)
+npx tauri icon ../application/public/logo.svg   # generate icons (once)
 
 # 3. Run in dev, or build an installer
 npm run dev                 # launches the app against the staged server
