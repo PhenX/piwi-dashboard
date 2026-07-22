@@ -58,17 +58,29 @@ By default, closing the window quits the app. From the tray icon you can enable:
 
 ## Sending results to it
 
-Point the [reporter](/reporter) at the local server while the app is running:
+The desktop app protects its local API with an **access token**, so the reporter
+must present it. Open **Settings → Storage → Send results to this app** to copy
+your token and a ready-made snippet, then set it as the reporter's `apiKey`:
 
 ```typescript
-['@piwitests/reporter', { serverUrl: 'http://localhost:3000', projectName: 'my-project' }]
+['@piwitests/reporter', {
+  serverUrl: 'http://localhost:3000',
+  projectName: 'my-project',
+  apiKey: 'pd_…', // from Settings → Storage (or the PIWI_API_KEY env var)
+}]
 ```
 
-The desktop app uses port **3000** by default (falling back to another local
-port only if 3000 is already taken — the window's address bar shows the actual
-one). Accepting results from *other* machines over the network is intentionally
-not supported in the desktop build — run the [Docker image](/deployment) for a
-shared, always-on server.
+The token is a **local secret** — prefer the `PIWI_API_KEY` env var over
+committing it. The app uses port **3000** by default (falling back to another
+local port only if 3000 is already taken — the window's address bar shows the
+actual one).
+
+> **Why a token?** The server binds `127.0.0.1`, which blocks other machines —
+> but loopback alone doesn't stop *other local processes* or *web pages open in
+> your browser* from reaching it. The token means only the app itself and tools
+> you've handed it to (your reporter) can submit or read. Accepting results from
+> *other machines* over the network is intentionally not supported in the desktop
+> build — run the [Docker image](/deployment) for a shared, always-on server.
 
 ## Building from source
 

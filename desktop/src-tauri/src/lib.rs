@@ -101,6 +101,24 @@ fn load_or_create_secret(app_data_dir: &PathBuf) -> String {
     secret
 }
 
+/// Read the persisted access token, or generate one on first run. Stable (not
+/// per-launch) so the Playwright reporter can be configured once, and prefixed
+/// `pd_` so the reporter's existing API-key path sends it as `Authorization:
+/// Bearer`. Both the window (via cookie) and the reporter (via bearer) present
+/// this same token; only someone who can open this app can read it.
+fn load_or_create_token(app_data_dir: &PathBuf) -> String {
+    let path = app_data_dir.join("reporter-token");
+    if let Ok(existing) = std::fs::read_to_string(&path) {
+        let trimmed = existing.trim().to_string();
+        if !trimmed.is_empty() {
+            return trimmed;
+        }
+    }
+    let token = format!("pd_{}", random_hex_32());
+    let _ = std::fs::write(&path, &token);
+    token
+}
+
 pub fn run() {
     let launched_hidden = std::env::args().any(|a| a == "--hidden");
 
@@ -131,7 +149,7 @@ pub fn run() {
             let db_path = data_dir.join("piwi.db");
 
             let secret = load_or_create_secret(&app_data_dir);
-            let token = random_hex_32();
+            let token = load_or_create_token(&app_data_dir);
             let port = pick_port();
 
             app.manage(DataDir(data_dir.clone()));
