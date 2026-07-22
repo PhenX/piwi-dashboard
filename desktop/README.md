@@ -12,7 +12,7 @@ Targets for v1: **Windows (`.msi`)** and **macOS (`.dmg`)**. Linux is deferred.
 1. On launch the Rust shell picks a free loopback port, resolves a per-user data
    dir (`app_data_dir()/.data`), and spawns the bundled server as a **Node
    sidecar** (`src-tauri/binaries/node-<triple>` running
-   `resources/app-server/.output/server/index.mjs`).
+   `src-tauri/resources/app-server/.output/server/index.mjs`).
 2. It polls `GET /api/health` (200 = database migrated) and then points the
    window at the server via a one-time token bootstrap (`/__piwi/session`).
 3. The tray offers **Run in background** (keep serving after the window closes),
@@ -43,7 +43,7 @@ npm run build               # produces the .msi / .dmg under src-tauri/target
 ```
 
 > The Node sidecar (`src-tauri/binaries/`), the staged server
-> (`resources/app-server/`), generated icons, and `src-tauri/target/` are all
+> (`src-tauri/resources/app-server/`), generated icons, and `src-tauri/target/` are all
 > git-ignored build artifacts — CI regenerates them (see
 > `.github/workflows/desktop-release.yml`).
 

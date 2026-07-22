@@ -165,12 +165,27 @@ pub fn run() {
             app.manage(RunInBackground(run_bg.clone()));
 
             // --- resolve the bundled server entry (shipped unpacked via resources) ---
+            // Tauri may place the resource at <res>/resources/app-server (preserving
+            // the config-relative path) or <res>/app-server — accept either.
             let resource_dir = app.path().resource_dir()?;
-            let server_entry = resource_dir
-                .join("app-server")
-                .join(".output")
-                .join("server")
-                .join("index.mjs");
+            let candidates = [
+                resource_dir
+                    .join("resources")
+                    .join("app-server")
+                    .join(".output")
+                    .join("server")
+                    .join("index.mjs"),
+                resource_dir
+                    .join("app-server")
+                    .join(".output")
+                    .join("server")
+                    .join("index.mjs"),
+            ];
+            let server_entry = candidates
+                .iter()
+                .find(|p| p.exists())
+                .cloned()
+                .unwrap_or_else(|| candidates[0].clone());
 
             // --- spawn the Node sidecar running the Nitro server ---
             let sidecar = app

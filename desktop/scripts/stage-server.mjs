@@ -25,7 +25,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const desktopDir = resolve(here, '..');
 const repoRoot = resolve(desktopDir, '..');
 const output = resolve(repoRoot, 'application/.output');
-const dest = resolve(desktopDir, 'resources/app-server');
+// Must live under src-tauri/ — tauri.conf.json resolves bundle.resources
+// relative to the src-tauri directory.
+const dest = resolve(desktopDir, 'src-tauri/resources/app-server');
 
 if (!existsSync(output)) {
   console.error(`[stage] application/.output not found at ${output}`);
