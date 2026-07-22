@@ -31,8 +31,21 @@ export default eventHandler(async (event) => {
     // S3 or other storage — skip disk size
   }
 
+  // Where the data physically resides (resolved absolute paths for the local
+  // SQLite + filesystem backends; a label for the remote ones so no credentials
+  // leak). Mirrors how storageSizeOnDisk is computed at the route level.
+  const databaseLocation = process.env.PIWI_DATABASE_URL
+    ? 'PostgreSQL (external database)'
+    : resolve(process.env.PIWI_DATABASE_PATH || '.data/piwi.db');
+  const storageLocation =
+    (process.env.PIWI_STORAGE_TYPE || 'local') === 's3'
+      ? `S3 bucket: ${process.env.PIWI_S3_BUCKET || '(not set)'}`
+      : resolve(process.env.PIWI_STORAGE_PATH || '.data/storage');
+
   return {
     ...stats,
     storageSizeOnDisk,
+    databaseLocation,
+    storageLocation,
   };
 });

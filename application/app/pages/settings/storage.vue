@@ -3,6 +3,7 @@ import type { AdminStats } from '~~/types/api';
 import { envVarsByCategory, getEnvVarMeta } from '#shared/piwi-env-vars';
 
 const toast = useToast();
+const { copy } = useCopy();
 
 const { data: stats, refresh, pending } = await useFetch<AdminStats>('/api/admin/stats');
 
@@ -57,6 +58,42 @@ async function handleCleanup() {
 
 <template>
   <div class="space-y-6">
+    <!-- Data location (resolved on-disk paths) -->
+    <SectionCard icon="i-lucide-folder-open" title="Data location">
+      <template #subtitle> Where this instance keeps its database and files on disk. </template>
+
+      <div v-if="stats" class="space-y-4 text-sm">
+        <div class="space-y-1">
+          <div class="text-muted">Database</div>
+          <div class="flex items-start gap-2">
+            <code class="text-xs break-all flex-1">{{ stats.databaseLocation }}</code>
+            <UButton
+              icon="i-lucide-copy"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              aria-label="Copy database location"
+              @click="copy(stats.databaseLocation, { toast: true })"
+            />
+          </div>
+        </div>
+        <div class="space-y-1">
+          <div class="text-muted">File storage</div>
+          <div class="flex items-start gap-2">
+            <code class="text-xs break-all flex-1">{{ stats.storageLocation }}</code>
+            <UButton
+              icon="i-lucide-copy"
+              color="neutral"
+              variant="ghost"
+              size="xs"
+              aria-label="Copy storage location"
+              @click="copy(stats.storageLocation, { toast: true })"
+            />
+          </div>
+        </div>
+      </div>
+    </SectionCard>
+
     <!-- Storage backend (env-only reference) -->
     <SectionCard icon="i-lucide-server" title="Storage backend" help="settings.storage-backend">
       <template #subtitle> Configured through environment variables. The active backend is shown read-only. </template>
