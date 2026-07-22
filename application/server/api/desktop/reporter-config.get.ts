@@ -17,7 +17,9 @@ defineRouteMeta({
 export default eventHandler(() => {
   const token = process.env.PIWI_DESKTOP_TOKEN;
   if (!token) {
-    throw createError({ statusCode: 404, statusMessage: 'Not found' });
+    // Not the desktop build — return null (rather than 404) so the settings
+    // page's useFetch resolves cleanly and simply hides the card.
+    return null;
   }
 
   const port = process.env.NITRO_PORT || process.env.PORT || '3000';
