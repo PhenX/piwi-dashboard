@@ -87,6 +87,8 @@ npx @piwitests/server
 
 Docker stays the recommended path for production; see the [deployment guide](https://piwitests.github.io/deployment) for both.
 
+**Prefer a desktop app?** A local **[desktop build](https://piwitests.github.io/desktop)** (Windows `.msi`, macOS `.dmg`) bundles the server and runs the whole dashboard on your machine — no Docker or Node required. Grab it from the [latest release](https://github.com/PiwiTests/platform/releases/latest).
+
 > **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker auto-creates `.data` owned by `root` and the container can't write to it. Windows and macOS (Docker Desktop) don't need this step. See [Troubleshooting](./DOCKER.md#troubleshooting) if you hit a permission error.
 
 > **Production tip:** set `PIWI_SECRET_KEY` (any long random string) so credentials you store in the dashboard — AI API keys, SCM tokens — are encrypted at rest. Generate one with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. See the [deployment guide](https://piwitests.github.io/deployment).

@@ -94,6 +94,7 @@ export default defineConfig({
           { text: 'Authentication', link: '/authentication' },
           { text: 'Storage configuration', link: '/storage' },
           { text: 'Deployment', link: '/deployment' },
+          { text: 'Desktop app', link: '/desktop' },
         ],
       },
       {
