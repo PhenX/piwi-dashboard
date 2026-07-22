@@ -85,4 +85,29 @@ execSync('npm install --omit=dev --ignore-scripts --no-audit --no-fund', {
   stdio: 'inherit',
 });
 
+// Trim assets not needed at runtime — smaller install, and no source maps that
+// would map the minified server/client bundles back to readable source:
+//   - the in-browser demo SPA (public/demo, unused by the desktop app)
+//   - every source map (*.map)
+//   - drizzle-kit migration snapshots (runtime only needs _journal.json + *.sql)
+const outDir = join(dest, '.output');
+let trimmed = 0;
+rmSync(join(outDir, 'public/demo'), { recursive: true, force: true });
+for (const rel of readdirSync(outDir, { recursive: true })) {
+  if (typeof rel === 'string' && rel.endsWith('.map')) {
+    rmSync(join(outDir, rel), { force: true });
+    trimmed++;
+  }
+}
+const metaDir = join(outDir, 'server/database/migrations/meta');
+if (existsSync(metaDir)) {
+  for (const f of readdirSync(metaDir)) {
+    if (f.endsWith('_snapshot.json')) {
+      rmSync(join(metaDir, f), { force: true });
+      trimmed++;
+    }
+  }
+}
+console.log(`[stage] Trimmed demo SPA + ${trimmed} source-map/snapshot files`);
+
 console.log(`[stage] Done — staged server at ${dest}`);

@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::json;
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Manager, RunEvent, WindowEvent};
 
 use tauri_plugin_autostart::MacosLauncher;
@@ -119,6 +119,73 @@ fn load_or_create_token(app_data_dir: &PathBuf) -> String {
     token
 }
 
+/// Convert a path to a string Node can consume as a CLI arg / env value. On
+/// Windows, Tauri's resource + app-data paths come back with the `\\?\` verbatim
+/// prefix, which Node's module resolver mishandles (it splits `\\?\C:\...` wrong
+/// and dies with `EISDIR: lstat 'C:'`) — strip it. No-op on other platforms.
+fn node_path(p: &std::path::Path) -> String {
+    let s = p.to_string_lossy();
+    s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+}
+
+/// Append a line to the server log. A release build is a windowed app with no
+/// console, so the sidecar's output and any startup errors would otherwise be
+/// invisible — this makes them readable via the data folder's `logs/server.log`.
+fn append_log(path: &std::path::Path, line: &str) {
+    use std::io::Write;
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(f, "{line}");
+    }
+}
+
+// ── Desktop service settings, exposed to the in-app Settings UI over IPC ───────
+// The bundled dashboard webview drives the same "run in background" and "start on
+// login" options as the tray. window.__TAURI__ is injected into the desktop
+// webview (withGlobalTauri) and reachable only there — a plain browser at the
+// same loopback URL has no native IPC bridge — and the `remote` capability grants
+// the loopback origin access. The webview feature-detects the bridge and falls
+// back to pointing at the tray when it is absent.
+
+#[derive(serde::Serialize)]
+struct ServiceSettings {
+    run_in_background: bool,
+    start_on_login: bool,
+}
+
+#[tauri::command]
+fn desktop_get_service_settings(app: tauri::AppHandle) -> ServiceSettings {
+    let run_in_background = app
+        .try_state::<RunInBackground>()
+        .map(|s| s.0.load(Ordering::SeqCst))
+        .unwrap_or(false);
+    let start_on_login = app.autolaunch().is_enabled().unwrap_or(false);
+    ServiceSettings {
+        run_in_background,
+        start_on_login,
+    }
+}
+
+#[tauri::command]
+fn desktop_set_run_in_background(app: tauri::AppHandle, enabled: bool) {
+    if let Some(state) = app.try_state::<RunInBackground>() {
+        state.0.store(enabled, Ordering::SeqCst);
+    }
+    if let Ok(store) = app.store(STORE_FILE) {
+        store.set(RUN_BG_KEY, json!(enabled));
+        let _ = store.save();
+    }
+}
+
+#[tauri::command]
+fn desktop_set_start_on_login(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let mgr = app.autolaunch();
+    if enabled {
+        mgr.enable().map_err(|e| e.to_string())
+    } else {
+        mgr.disable().map_err(|e| e.to_string())
+    }
+}
+
 pub fn run() {
     let launched_hidden = std::env::args().any(|a| a == "--hidden");
 
@@ -137,6 +204,11 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
+        .invoke_handler(tauri::generate_handler![
+            desktop_get_service_settings,
+            desktop_set_run_in_background,
+            desktop_set_start_on_login
+        ])
         .manage(ServerProcess::default())
         .setup(move |app| {
             // --- data locations (survive app updates; outside the read-only bundle) ---
@@ -147,6 +219,14 @@ pub fn run() {
             // libSQL will not create the DB's parent dir — so create it here.
             std::fs::create_dir_all(&storage_dir)?;
             let db_path = data_dir.join("piwi.db");
+
+            // Server logs go to a file so failures are visible in a windowed
+            // (console-less) release build — read it via the "Open data folder"
+            // tray item, under logs/server.log.
+            let log_dir = app_data_dir.join("logs");
+            let _ = std::fs::create_dir_all(&log_dir);
+            let log_path = log_dir.join("server.log");
+            append_log(&log_path, "----- launch -----");
 
             let secret = load_or_create_secret(&app_data_dir);
             let token = load_or_create_token(&app_data_dir);
@@ -186,49 +266,75 @@ pub fn run() {
                 .find(|p| p.exists())
                 .cloned()
                 .unwrap_or_else(|| candidates[0].clone());
+            append_log(
+                &log_path,
+                &format!(
+                    "server entry: {} (exists: {}), port: {}",
+                    server_entry.display(),
+                    server_entry.exists(),
+                    port
+                ),
+            );
 
             // --- spawn the Node sidecar running the Nitro server ---
-            let sidecar = app
-                .shell()
-                .sidecar("node")
-                .expect("node sidecar is bundled")
-                .args([server_entry.to_string_lossy().to_string()])
-                .env("NODE_ENV", "production")
-                .env("NITRO_HOST", "127.0.0.1")
-                .env("NITRO_PORT", port.to_string())
-                .env("PIWI_DATABASE_PATH", db_path.to_string_lossy().to_string())
-                .env(
-                    "PIWI_STORAGE_PATH",
-                    storage_dir.to_string_lossy().to_string(),
-                )
-                .env("PIWI_SECRET_KEY", secret)
-                .env("PIWI_DESKTOP_TOKEN", token.clone());
+            // Best-effort: a spawn failure is logged and surfaces as a readiness
+            // timeout (the splash shows an error) instead of a silent panic.
+            match app.shell().sidecar("node") {
+                Err(e) => append_log(&log_path, &format!("sidecar 'node' not found: {e}")),
+                Ok(cmd) => {
+                    let cmd = cmd
+                        .args([node_path(&server_entry)])
+                        .env("NODE_ENV", "production")
+                        .env("NITRO_HOST", "127.0.0.1")
+                        .env("NITRO_PORT", port.to_string())
+                        .env("PIWI_DATABASE_PATH", node_path(&db_path))
+                        .env("PIWI_STORAGE_PATH", node_path(&storage_dir))
+                        .env("PIWI_SECRET_KEY", secret)
+                        .env("PIWI_DESKTOP_TOKEN", token.clone())
+                        // Tell the bundled Nuxt app it is running in the desktop
+                        // shell so it hides account/user management (single-user,
+                        // auth off) and surfaces the local connection details
+                        // (data location, reporter token, MCP endpoint).
+                        .env("NUXT_PUBLIC_DESKTOP", "true");
 
-            let (mut rx, child) = sidecar.spawn().expect("failed to start the Piwi server");
-            app.state::<ServerProcess>()
-                .0
-                .lock()
-                .unwrap()
-                .replace(child);
+                    match cmd.spawn() {
+                        Err(e) => append_log(&log_path, &format!("failed to spawn server: {e}")),
+                        Ok((mut rx, child)) => {
+                            app.state::<ServerProcess>().0.lock().unwrap().replace(child);
 
-            // Drain sidecar output so the server's logs surface in the app's stdio.
-            tauri::async_runtime::spawn(async move {
-                use tauri_plugin_shell::process::CommandEvent;
-                while let Some(event) = rx.recv().await {
-                    match event {
-                        CommandEvent::Stdout(line) => {
-                            print!("[server] {}", String::from_utf8_lossy(&line));
+                            // Tee the sidecar's output to the log file (no console in release).
+                            let drain_log = log_path.clone();
+                            tauri::async_runtime::spawn(async move {
+                                use tauri_plugin_shell::process::CommandEvent;
+                                while let Some(event) = rx.recv().await {
+                                    match event {
+                                        CommandEvent::Stdout(line) => append_log(
+                                            &drain_log,
+                                            &format!("[server] {}", String::from_utf8_lossy(&line).trim_end()),
+                                        ),
+                                        CommandEvent::Stderr(line) => append_log(
+                                            &drain_log,
+                                            &format!("[server:err] {}", String::from_utf8_lossy(&line).trim_end()),
+                                        ),
+                                        CommandEvent::Error(err) => {
+                                            append_log(&drain_log, &format!("[server:proc] {err}"))
+                                        }
+                                        CommandEvent::Terminated(p) => append_log(
+                                            &drain_log,
+                                            &format!("[server] exited: code={:?} signal={:?}", p.code, p.signal),
+                                        ),
+                                        _ => {}
+                                    }
+                                }
+                            });
                         }
-                        CommandEvent::Stderr(line) => {
-                            eprint!("[server] {}", String::from_utf8_lossy(&line));
-                        }
-                        _ => {}
                     }
                 }
-            });
+            }
 
             // --- when the server is ready, navigate the window to it ---
             let nav_handle = app.handle().clone();
+            let ready_log = log_path.clone();
             let bootstrap_url = format!("http://127.0.0.1:{port}/__piwi/session?token={token}");
             std::thread::spawn(move || {
                 let deadline = Instant::now() + Duration::from_secs(READY_TIMEOUT_SECS);
@@ -240,6 +346,10 @@ pub fn run() {
                     }
                     std::thread::sleep(Duration::from_millis(250));
                 }
+                append_log(
+                    &ready_log,
+                    if ready { "server ready" } else { "server NOT ready within timeout" },
+                );
                 let inner = nav_handle.clone();
                 let _ = nav_handle.run_on_main_thread(move || {
                     if let Some(w) = inner.get_webview_window("main") {
@@ -281,9 +391,25 @@ pub fn run() {
             let menu_run_bg = run_bg.clone();
             let _tray = TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("Piwi Dashboard")
+                .tooltip("Piwi Dashboard (click to open)")
                 .menu(&menu)
+                // Left-click opens the window; right-click shows the menu. Without
+                // this a left-click did nothing, so the tray looked inert (and on
+                // Windows the icon hides in the overflow area by default).
                 .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        if let Some(w) = tray.app_handle().get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
+                })
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "open" => {
                         if let Some(w) = app.get_webview_window("main") {

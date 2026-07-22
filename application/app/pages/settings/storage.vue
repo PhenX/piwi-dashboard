@@ -3,26 +3,8 @@ import type { AdminStats } from '~~/types/api';
 import { envVarsByCategory, getEnvVarMeta } from '#shared/piwi-env-vars';
 
 const toast = useToast();
-const { copy } = useCopy();
 
 const { data: stats, refresh, pending } = await useFetch<AdminStats>('/api/admin/stats');
-
-// Desktop build only — 404s (→ null) on the server build, so the card below hides.
-const { data: reporterConfig } = await useFetch<{ url: string; token: string } | null>(
-  '/api/desktop/reporter-config',
-  { default: () => null },
-);
-const reporterSnippet = computed(() => {
-  const c = reporterConfig.value;
-  if (!c) return '';
-  return `reporter: [
-  ['@piwitests/reporter', {
-    serverUrl: '${c.url}',
-    projectName: 'my-project',
-    apiKey: '${c.token}',
-  }],
-],`;
-});
 
 // Storage-backend env vars, driven by the shared registry (single source of
 // truth). Excludes test-only vars (they are not runtime settings).
@@ -76,83 +58,7 @@ async function handleCleanup() {
 <template>
   <div class="space-y-6">
     <!-- Data location (resolved on-disk paths) -->
-    <SectionCard icon="i-lucide-folder-open" title="Data location">
-      <template #subtitle> Where this instance keeps its database and files on disk. </template>
-
-      <div v-if="stats" class="space-y-4 text-sm">
-        <div class="space-y-1">
-          <div class="text-muted">Database</div>
-          <div class="flex items-start gap-2">
-            <code class="text-xs break-all flex-1">{{ stats.databaseLocation }}</code>
-            <UButton
-              icon="i-lucide-copy"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              aria-label="Copy database location"
-              @click="copy(stats.databaseLocation, { toast: true })"
-            />
-          </div>
-        </div>
-        <div class="space-y-1">
-          <div class="text-muted">File storage</div>
-          <div class="flex items-start gap-2">
-            <code class="text-xs break-all flex-1">{{ stats.storageLocation }}</code>
-            <UButton
-              icon="i-lucide-copy"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              aria-label="Copy storage location"
-              @click="copy(stats.storageLocation, { toast: true })"
-            />
-          </div>
-        </div>
-      </div>
-    </SectionCard>
-
-    <!-- Desktop build only: how to point the reporter at this app -->
-    <SectionCard v-if="reporterConfig" icon="i-lucide-upload" title="Send results to this app">
-      <template #subtitle>
-        Point the Playwright reporter at this desktop app. The access token is a local secret —
-        prefer setting it via the <code>PIWI_API_KEY</code> env var over committing it.
-      </template>
-
-      <div class="space-y-3 text-sm">
-        <div class="space-y-1">
-          <div class="text-muted">Access token</div>
-          <div class="flex items-start gap-2">
-            <code class="text-xs break-all flex-1">{{ reporterConfig.token }}</code>
-            <UButton
-              icon="i-lucide-copy"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              aria-label="Copy access token"
-              @click="copy(reporterConfig.token, { toast: true })"
-            />
-          </div>
-        </div>
-
-        <div class="space-y-1">
-          <div class="text-muted">playwright.config.ts</div>
-          <div class="relative">
-            <pre
-              class="text-xs bg-gray-50 dark:bg-gray-900 rounded-md p-3 overflow-x-auto"
-            ><code>{{ reporterSnippet }}</code></pre>
-            <UButton
-              icon="i-lucide-copy"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              class="absolute top-2 right-2"
-              aria-label="Copy config snippet"
-              @click="copy(reporterSnippet, { toast: true })"
-            />
-          </div>
-        </div>
-      </div>
-    </SectionCard>
+    <DataLocationCard v-if="stats" :database="stats.databaseLocation" :storage="stats.storageLocation" />
 
     <!-- Storage backend (env-only reference) -->
     <SectionCard icon="i-lucide-server" title="Storage backend" help="settings.storage-backend">

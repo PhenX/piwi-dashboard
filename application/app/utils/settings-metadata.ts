@@ -47,6 +47,12 @@ export interface SettingsPageMeta {
   to: string;
   /** Roles that may access the page; omitted = any authenticated user. */
   roles?: Role[];
+  /**
+   * Pages that only make sense when authentication is enabled (managing your
+   * own account, managing users). Hidden in the desktop build, which is
+   * single-user with auth off — see `useSettingsNav` / `useIsDesktop`.
+   */
+  authOnly?: boolean;
   /** Fields on this page (used to aggregate env vars + drive tooltips). */
   fields: SettingFieldMeta[];
   /** Topic key for a page-level intro hint shown under the nav. */
@@ -59,6 +65,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     label: 'Account',
     icon: 'i-lucide-user-round',
     to: '/settings/account',
+    authOnly: true,
     fields: [
       { id: 'account.display-name', label: 'Display name', help: 'account.display-name' },
       { id: 'account.email', label: 'Email address', help: 'account.email' },
@@ -73,6 +80,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     icon: 'i-lucide-users',
     to: '/settings/users',
     roles: [Role.ADMINISTRATOR],
+    authOnly: true,
     introHelp: 'settings.users',
     fields: [
       { id: 'users.list', label: 'Users & roles', help: 'settings.users' },
