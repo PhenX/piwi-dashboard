@@ -117,15 +117,12 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # macOS signing + notarization — optional. If these secrets are absent
-          # the build is unsigned (users click through Gatekeeper). Add them to
-          # sign without any code change.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # macOS signing is intentionally OFF: passing an invalid/placeholder
+          # APPLE_CERTIFICATE secret makes tauri-action fail at `security import`.
+          # Builds ship unsigned (right-click -> Open). To enable signing, add
+          # valid Apple Developer ID + notarization secrets and re-introduce the
+          # APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY /
+          # APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID env here.
         with:
           projectPath: desktop
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
