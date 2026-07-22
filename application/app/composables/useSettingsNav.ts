@@ -18,11 +18,14 @@ export function useSettingsNav(envManaged?: MaybeRefOrGetter<Record<SettingsPage
   // When auth is disabled, every visitor is a virtual administrator — show all
   // pages (mirrors the per-page `isAdmin` fallback in users.vue/tags.vue).
   const canSeeAdmin = computed(() => !config.public.authEnabled || isAdmin.value);
+  // The desktop build is single-user with auth off, so account/user management
+  // (pages flagged `authOnly`) is meaningless there — hide it.
+  const isDesktop = useIsDesktop();
 
   const items = computed<NavigationMenuItem[]>(() => {
     const admin = canSeeAdmin.value;
     const managedMap = envManaged ? toValue(envManaged) : undefined;
-    return SETTINGS_PAGES.filter((page) => !page.roles || admin).map((page) => {
+    return SETTINGS_PAGES.filter((page) => (!page.roles || admin) && !(isDesktop && page.authOnly)).map((page) => {
       const managed = managedMap?.[page.id] ?? false;
       return {
         label: page.label,

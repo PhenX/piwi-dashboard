@@ -3,6 +3,15 @@ import { MCP_TOOL_DEFS } from '#shared/mcp-tools';
 
 const config = useRuntimeConfig();
 const isDemo = config.public.demoMode;
+const isDesktop = useIsDesktop();
+
+// Desktop build only: the local access token is enforced by the desktop guard
+// and doubles as the MCP Bearer token (auth is off, so the endpoint accepts any
+// caller once the guard has validated the token).
+const { data: reporterConfig } = await useFetch<{ url: string; token: string } | null>(
+  '/api/desktop/reporter-config',
+  { immediate: isDesktop, default: () => null },
+);
 
 const requestUrl = useRequestURL();
 const mcpUrl = computed(() => {
@@ -112,6 +121,9 @@ const windsurfSnippet = computed(() =>
           description="The MCP endpoint is not active in this demo — it requires a real Piwi backend. The tools and client setup shown below reflect what your own deployment exposes."
         />
 
+        <!-- Desktop build only: connect using this app's local access token -->
+        <DesktopMcpCard v-if="reporterConfig" :url="reporterConfig.url" :token="reporterConfig.token" />
+
         <!-- What it is -->
         <SectionCard icon="i-lucide-bot" title="What it provides" help="mcp.tools">
           <div class="flex flex-col gap-1.5">
@@ -136,13 +148,22 @@ const windsurfSnippet = computed(() =>
               MCP requests are authenticated with the same API keys used by the REST API. API keys start with
               <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_</code>.
             </p>
-            <p>
+            <p v-if="!isDesktop">
               Generate a key in <strong>Settings → Users → [your account] → API keys</strong>, then replace
               <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_YOUR_API_KEY</code> in the snippets below.
             </p>
-            <p class="text-xs text-gray-400">
+            <p v-else>
+              This app provides a local access token automatically — see <strong>Connect an AI assistant (MCP)</strong>
+              above. Use it wherever the snippets show
+              <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_YOUR_API_KEY</code>.
+            </p>
+            <p v-if="!isDesktop" class="text-xs text-gray-400">
               When authentication is disabled (<code class="font-mono">PIWI_AUTH_ENABLED</code> not set), any request is
               accepted without a key.
+            </p>
+            <p v-else class="text-xs text-gray-400">
+              This desktop app keeps sign-in off but still requires its own local access token on every request — use the
+              token shown above as the <code class="font-mono">Bearer</code> value. The endpoint is not open.
             </p>
           </div>
         </SectionCard>
@@ -150,8 +171,10 @@ const windsurfSnippet = computed(() =>
         <!-- Client setup -->
         <SectionCard icon="i-lucide-settings-2" title="Client setup" help="mcp.client-setup">
           <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            Replace <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_YOUR_API_KEY</code> with your actual
-            API key. The MCP URL shown below is auto-detected from your current browser origin.
+            Replace <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_YOUR_API_KEY</code> with
+            <template v-if="isDesktop">this app's access token (shown above)</template>
+            <template v-else>your actual API key</template>. The MCP URL shown below is auto-detected from your current
+            browser origin.
           </p>
 
           <UTabs :items="clientItems" :ui="{ list: 'mb-4' }">
@@ -264,8 +287,14 @@ const windsurfSnippet = computed(() =>
             </div>
             <p class="text-xs text-gray-400">
               This is your Piwi instance's MCP endpoint. It is also the server URL to paste into client configs above.
-              The server requires a valid Bearer token (or no auth if
-              <code class="font-mono">PIWI_AUTH_ENABLED</code> is not set).
+              <template v-if="isDesktop"
+                >This desktop app requires its local access token as the <code class="font-mono">Bearer</code> value on
+                every request.</template
+              >
+              <template v-else
+                >The server requires a valid Bearer token (or no auth if
+                <code class="font-mono">PIWI_AUTH_ENABLED</code> is not set).</template
+              >
             </p>
           </div>
         </SectionCard>

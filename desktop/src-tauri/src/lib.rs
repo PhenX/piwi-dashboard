@@ -237,7 +237,12 @@ pub fn run() {
                         .env("PIWI_DATABASE_PATH", node_path(&db_path))
                         .env("PIWI_STORAGE_PATH", node_path(&storage_dir))
                         .env("PIWI_SECRET_KEY", secret)
-                        .env("PIWI_DESKTOP_TOKEN", token.clone());
+                        .env("PIWI_DESKTOP_TOKEN", token.clone())
+                        // Tell the bundled Nuxt app it is running in the desktop
+                        // shell so it hides account/user management (single-user,
+                        // auth off) and surfaces the local connection details
+                        // (data location, reporter token, MCP endpoint).
+                        .env("NUXT_PUBLIC_DESKTOP", "true");
 
                     match cmd.spawn() {
                         Err(e) => append_log(&log_path, &format!("failed to spawn server: {e}")),

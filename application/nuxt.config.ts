@@ -128,6 +128,12 @@ export default defineNuxtConfig({
       buildSha: process.env.PIWI_BUILD_SHA || '',
       buildTime: new Date().toISOString(),
       nodeVersion: process.version,
+      // True only in the Tauri desktop build — the launcher starts the bundled
+      // server with NUXT_PUBLIC_DESKTOP=true (desktop/src-tauri/src/lib.rs),
+      // which Nuxt maps onto this key. Gates desktop-only UI (see useIsDesktop):
+      // single-user with auth off, so account/user management is hidden and the
+      // local connection details are surfaced.
+      desktop: false,
       oauthProviders: [
         ...(process.env.PIWI_OAUTH_GOOGLE_CLIENT_ID && process.env.PIWI_OAUTH_GOOGLE_CLIENT_SECRET
           ? (['google'] as const)

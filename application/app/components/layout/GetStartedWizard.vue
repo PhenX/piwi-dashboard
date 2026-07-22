@@ -3,6 +3,15 @@ import { docsUrl } from '#shared/docs';
 
 const config = useRuntimeConfig();
 const authEnabled = computed(() => !!config.public.authEnabled);
+const isDesktop = useIsDesktop();
+
+// Desktop build only: the reporter must send this app's local access token —
+// the desktop guard enforces it even though sign-in is off — so bake it into
+// the generated snippet instead of the PIWI_API_KEY env-var reference.
+const { data: reporterConfig } = useFetch<{ url: string; token: string } | null>('/api/desktop/reporter-config', {
+  immediate: isDesktop,
+  default: () => null,
+});
 
 // Reflect the actual dashboard URL so the generated config snippet is correct
 const serverUrl = ref('http://localhost:3000');
@@ -10,7 +19,10 @@ onMounted(() => {
   serverUrl.value = window.location.origin;
 });
 
-const apiKeyLine = computed(() => (authEnabled.value ? `\n      apiKey: process.env.PIWI_API_KEY,` : ''));
+const apiKeyLine = computed(() => {
+  if (isDesktop && reporterConfig.value) return `\n      apiKey: '${reporterConfig.value.token}',`;
+  return authEnabled.value ? `\n      apiKey: process.env.PIWI_API_KEY,` : '';
+});
 
 const configCode = computed(
   () => `import { defineConfig } from '@playwright/test'
@@ -107,7 +119,9 @@ const steps = computed<Array<WizardStep & { id: number }>>(() => {
   list.push(
     {
       title: 'Configure Playwright',
-      description: 'Add the reporter to your playwright.config.ts.',
+      description: isDesktop
+        ? "Add the reporter to your playwright.config.ts. The apiKey below is this app's local access token."
+        : 'Add the reporter to your playwright.config.ts.',
       code: configCode.value,
       lang: 'typescript',
     },
