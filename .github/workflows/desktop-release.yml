@@ -37,7 +37,7 @@ jobs:
         env:
           NITRO_PRESET: node-server
           PIWI_BUILD_SHA: ${{ github.sha }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: app-output
           path: application/.output
@@ -83,7 +83,7 @@ jobs:
         run: npm install
 
       - name: Download server bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: app-output
           path: application/.output
@@ -114,7 +114,7 @@ jobs:
         run: npx tauri icon ../application/public/logo.svg
 
       - name: Build & release desktop app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # macOS signing is intentionally OFF: passing an invalid/placeholder
@@ -135,7 +135,7 @@ jobs:
       # (they are not attached to any release unless this was a tag build).
       - name: Upload installers (dry-run)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: piwi-desktop-${{ matrix.target }}
           path: |
