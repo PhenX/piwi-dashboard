@@ -168,7 +168,7 @@ Then import `test` from your fixtures file in every spec — a spec that imports
 - **Console entries** — `warning`, `error`, and `assert` messages with their source location.
 - **Browser Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint — displayed with color-coded thresholds.
 - **ARIA snapshot** — captured automatically when a test fails, shown as failure evidence and fed to the AI diagnosis.
-- **Locator snapshots** — for each acted-on element, its attributes plus ranked alternative locators, stamped with the call site. These power locator healing; when a failing locator matches nothing, a fresh suggestion is attached as a Playwright annotation.
+- **Locator snapshots** — for each element a test proves resolvable (successful actions and passing `expect(locator)` assertions alike), its attributes plus ranked alternative locators, stamped with the call site. These power locator healing; when a failing locator matches nothing, a fresh suggestion is attached as a Playwright annotation.
 
 Capture works for the `page` fixture, `browser.newPage()`, `browser.newContext().newPage()`, and popups. Everything is only collected when `collectPerformanceMetrics` is `true` (the default); locator snapshots can be disabled separately with `captureLocators: false`.
 
