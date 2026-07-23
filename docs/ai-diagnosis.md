@@ -17,52 +17,7 @@ Failed test cases that share the same **error fingerprint** are grouped into a c
 - Every cluster has its own **detail page** with the affected tests, triage tools (status + notes), and the AI diagnosis panel.
 
 <figure>
-  <svg viewBox="0 0 900 252" role="img" aria-label="Diagram: a raw Playwright error is normalized and masked, then hashed into a fingerprint that routes the failure to its cluster" style="max-width:100%;height:auto;font-family:var(--vp-font-family-base)">
-    <defs>
-      <marker id="fp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--vp-c-text-3)"></path>
-      </marker>
-    </defs>
-    <rect x="10" y="36" width="272" height="172" rx="8" fill="var(--vp-c-bg-soft)" stroke="var(--vp-c-divider)"></rect>
-    <text x="26" y="62" font-size="12" font-weight="600" fill="var(--vp-c-text-2)">Raw error text</text>
-    <g font-family="var(--vp-font-family-mono)" font-size="11.5" fill="var(--vp-c-text-1)">
-      <text x="26" y="88">TimeoutError: locator.click:</text>
-      <text x="26" y="106">Timeout <tspan fill="var(--vp-c-brand-1)">30000</tspan>ms exceeded</text>
-      <text x="26" y="124">waiting for getByRole('row',</text>
-      <text x="26" y="142">  { name: <tspan fill="var(--vp-c-brand-1)">'Acme Corp'</tspan> })</text>
-      <text x="26" y="172" fill="var(--vp-c-text-3)">at checkout.spec.ts:42:11</text>
-    </g>
-    <line x1="290" y1="122" x2="322" y2="122" stroke="var(--vp-c-text-3)" stroke-width="1.5" marker-end="url(#fp-arrow)"></line>
-    <text x="306" y="106" font-size="11" fill="var(--vp-c-text-2)" text-anchor="middle">normalize</text>
-    <rect x="330" y="16" width="272" height="212" rx="8" fill="var(--vp-c-bg-soft)" stroke="var(--vp-c-divider)"></rect>
-    <text x="346" y="42" font-size="12" font-weight="600" fill="var(--vp-c-text-2)">Fingerprint input</text>
-    <rect x="346" y="54" width="66" height="20" rx="10" fill="var(--vp-c-brand-soft)"></rect>
-    <text x="379" y="68" font-size="11" font-weight="600" fill="var(--vp-c-brand-1)" text-anchor="middle">timeout</text>
-    <text x="420" y="68" font-size="11" fill="var(--vp-c-text-3)">error category</text>
-    <g font-family="var(--vp-font-family-mono)" font-size="11.5" fill="var(--vp-c-text-1)">
-      <text x="346" y="98">Timeout <tspan fill="var(--vp-c-brand-1)">&lt;N&gt;</tspan>ms exceeded</text>
-      <text x="346" y="116">waiting for getByRole('row',</text>
-      <text x="346" y="134">  { name: <tspan fill="var(--vp-c-brand-1)">&lt;STR&gt;</tspan> })</text>
-    </g>
-    <line x1="346" y1="152" x2="586" y2="152" stroke="var(--vp-c-divider)"></line>
-    <g font-size="11" fill="var(--vp-c-text-3)">
-      <text x="346" y="174">stack frame kept for display,</text>
-      <text x="346" y="190">volatile values masked —</text>
-      <text x="346" y="206">neither splits a cluster</text>
-    </g>
-    <line x1="610" y1="122" x2="642" y2="122" stroke="var(--vp-c-text-3)" stroke-width="1.5" marker-end="url(#fp-arrow)"></line>
-    <text x="626" y="106" font-size="11" fill="var(--vp-c-text-2)" text-anchor="middle">SHA-256</text>
-    <rect x="650" y="36" width="240" height="172" rx="8" fill="var(--vp-c-bg-soft)" stroke="var(--vp-c-divider)"></rect>
-    <text x="666" y="62" font-size="12" font-weight="600" fill="var(--vp-c-text-2)">Failure cluster</text>
-    <text x="666" y="90" font-family="var(--vp-font-family-mono)" font-size="11.5" fill="var(--vp-c-text-1)">fingerprint 3f9c1a…</text>
-    <g font-size="12" fill="var(--vp-c-text-2)">
-      <text x="666" y="120">Same fingerprint — or a</text>
-      <text x="666" y="138">recorded merge alias —</text>
-      <text x="666" y="156">joins the same cluster,</text>
-      <text x="666" y="174">across tests, spec files</text>
-      <text x="666" y="192">and runs.</text>
-    </g>
-  </svg>
+  <img src="/diagrams/failure-clustering-fingerprint.svg" alt="Diagram of the fingerprint pipeline: a raw Playwright error is normalized — volatile values masked, the error category and locator extracted — hashed with SHA-256, and routed to a failure_clusters row shared across tests, spec files and runs">
   <figcaption>From raw error to cluster: the category, the masked message head, and the masked locator are hashed; dynamic values and the call site never split a cluster.</figcaption>
 </figure>
 
@@ -84,48 +39,7 @@ When auto-diagnose is enabled, new clusters are also given a short **human-reada
 Pairs that fall in the **ambiguous band** (similarity between `PIWI_CLUSTER_SUGGEST_THRESHOLD`, default `0.80`, and the merge threshold) aren't merged automatically. Whenever AI is configured, a model adjudicates the pair ("same root cause?") — the **research** model when one is configured, the diagnosis model otherwise — and merges only on a high-confidence yes; when it's unsure (or no AI is configured at all), the pair becomes a **merge suggestion** on the project's Failure clusters tab, where a reporter or admin approves (merge) or dismisses it. The adjudicator sees more than the error text: each cluster's extracted locator, its most-affected tests, and how much the two clusters overlap (tests failing in both, runs where both fired) — signals that separate "one cause, reworded message" from "similar boilerplate, different problems". Adjudication is budget-capped per run to control cost.
 
 <figure>
-  <svg viewBox="0 0 900 332" role="img" aria-label="Diagram: new and backfilled clusters are embedded, compared to open clusters by cosine similarity, and land in one of three bands — kept separate below 0.80, adjudicated between 0.80 and 0.92, auto-merged at 0.92 and above" style="max-width:100%;height:auto;font-family:var(--vp-font-family-base)">
-    <defs>
-      <marker id="sm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--vp-c-text-3)"></path>
-      </marker>
-    </defs>
-    <rect x="10" y="18" width="280" height="58" rx="8" fill="var(--vp-c-bg-soft)" stroke="var(--vp-c-divider)"></rect>
-    <text x="26" y="42" font-size="12.5" fill="var(--vp-c-text-1)">Clusters first seen in this run</text>
-    <text x="26" y="60" font-size="11.5" fill="var(--vp-c-text-3)">+ backfill of older ones without a vector</text>
-    <line x1="298" y1="47" x2="336" y2="47" stroke="var(--vp-c-text-3)" stroke-width="1.5" marker-end="url(#sm-arrow)"></line>
-    <text x="317" y="32" font-size="11" fill="var(--vp-c-text-2)" text-anchor="middle">embed</text>
-    <rect x="344" y="18" width="250" height="58" rx="8" fill="var(--vp-c-bg-soft)" stroke="var(--vp-c-divider)"></rect>
-    <text x="360" y="42" font-size="12.5" fill="var(--vp-c-text-1)">Cleaned error text → vector</text>
-    <text x="360" y="60" font-size="11.5" fill="var(--vp-c-text-3)">ANSI, stack noise &amp; volatile values out</text>
-    <line x1="602" y1="47" x2="640" y2="47" stroke="var(--vp-c-text-3)" stroke-width="1.5" marker-end="url(#sm-arrow)"></line>
-    <rect x="648" y="18" width="242" height="58" rx="8" fill="var(--vp-c-bg-soft)" stroke="var(--vp-c-divider)"></rect>
-    <text x="664" y="42" font-size="12.5" fill="var(--vp-c-text-1)">Nearest open cluster</text>
-    <text x="664" y="60" font-size="11.5" fill="var(--vp-c-text-3)">cosine, same embedding model only</text>
-    <line x1="769" y1="76" x2="769" y2="98" stroke="var(--vp-c-text-3)" stroke-width="1.5"></line>
-    <line x1="769" y1="98" x2="450" y2="98" stroke="var(--vp-c-text-3)" stroke-width="1.5"></line>
-    <line x1="450" y1="98" x2="450" y2="120" stroke="var(--vp-c-text-3)" stroke-width="1.5" marker-end="url(#sm-arrow)"></line>
-    <text x="60" y="144" font-size="11.5" fill="var(--vp-c-text-3)">similarity of the closest pair</text>
-    <rect x="60" y="154" width="316" height="44" rx="6" fill="var(--vp-c-default-soft)"></rect>
-    <text x="218" y="180" font-size="12.5" fill="var(--vp-c-text-2)" text-anchor="middle">kept separate</text>
-    <rect x="380" y="154" width="276" height="44" rx="6" fill="var(--vp-c-yellow-soft)"></rect>
-    <text x="518" y="180" font-size="12.5" font-weight="600" fill="var(--vp-c-yellow-1)" text-anchor="middle">ambiguous band</text>
-    <rect x="660" y="154" width="230" height="44" rx="6" fill="var(--vp-c-green-soft)"></rect>
-    <text x="775" y="180" font-size="12.5" font-weight="600" fill="var(--vp-c-green-1)" text-anchor="middle">auto-merge</text>
-    <g font-family="var(--vp-font-family-mono)" font-size="11" fill="var(--vp-c-text-2)">
-      <text x="380" y="216" text-anchor="middle">0.80</text>
-      <text x="658" y="216" text-anchor="middle">0.92</text>
-    </g>
-    <line x1="518" y1="224" x2="518" y2="244" stroke="var(--vp-c-text-3)" stroke-width="1.5" marker-end="url(#sm-arrow)"></line>
-    <rect x="380" y="252" width="276" height="70" rx="8" fill="var(--vp-c-bg-soft)" stroke="var(--vp-c-divider)"></rect>
-    <text x="396" y="276" font-size="12.5" fill="var(--vp-c-text-1)">A model adjudicates the pair:</text>
-    <text x="396" y="294" font-size="12" fill="var(--vp-c-text-2)">high confidence → <tspan font-weight="600" fill="var(--vp-c-green-1)">merge</tspan></text>
-    <text x="396" y="312" font-size="12" fill="var(--vp-c-text-2)">unsure / no model → <tspan font-weight="600" fill="var(--vp-c-yellow-1)">suggestion</tspan> for review</text>
-    <line x1="775" y1="224" x2="775" y2="244" stroke="var(--vp-c-text-3)" stroke-width="1.5" marker-end="url(#sm-arrow)"></line>
-    <rect x="660" y="252" width="230" height="70" rx="8" fill="var(--vp-c-bg-soft)" stroke="var(--vp-c-divider)"></rect>
-    <text x="676" y="280" font-size="12" fill="var(--vp-c-text-2)">merged into the older cluster,</text>
-    <text x="676" y="298" font-size="12" fill="var(--vp-c-text-2)">fingerprint alias recorded</text>
-  </svg>
+  <img src="/diagrams/failure-clustering-semantic-merge.svg" alt="Diagram of the semantic merging flow: new and backfilled clusters are embedded from cleaned error text, compared to open clusters by cosine similarity, and depending on the score are kept separate, adjudicated by a model that can merge or file a suggestion, or auto-merged with a fingerprint alias recorded">
   <figcaption>The semantic layer: freshly embedded clusters seek their nearest neighbour; the cosine score decides between keeping them apart, asking a model (or a human), and merging outright. Thresholds are the <code>PIWI_CLUSTER_SUGGEST_THRESHOLD</code> and <code>PIWI_CLUSTER_SIMILARITY_THRESHOLD</code> defaults.</figcaption>
 </figure>
 
