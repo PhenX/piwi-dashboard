@@ -274,6 +274,36 @@ describe('reconcileNewClusters', () => {
     expect(clusters.map((c) => c.id)).toEqual([a]);
   });
 
+  test('adjudicates against an already-embedded cluster outside this pass (not fresh or backfilled)', async () => {
+    // X already carries a current-tag vector from an earlier pass, so it's
+    // neither a fresh cluster (firstSeenRunId != run2) nor a backfill
+    // candidate (backfill only selects clusters lacking a current-tag
+    // vector) — getDetails() must fall back to fetching it from the DB.
+    const run2 = await seedRun();
+    embedder.book.set('sig-x', BASE);
+    embedder.book.set('sig-y', AMBIG);
+    const x = await seedCluster({
+      fingerprint: 'fp-x',
+      signature: 'sig-x',
+      firstSeenRunId: run1,
+      embedding: BASE,
+      embeddingModel: TAG,
+    });
+    await seedCluster({ fingerprint: 'fp-y', signature: 'sig-y', firstSeenRunId: run2 });
+    adjudicator.result = { merge: true, confidence: 'high', reason: 'same cause' };
+
+    const stats = await reconcileNewClusters(dbc, 1, run2, { embeddingRole, reasoningRole });
+
+    expect(stats.merged).toBe(1);
+    expect(adjudicator.calls).toHaveLength(1);
+    // c (the pass's source, iterated from fresh/backfill) is Cluster A; the
+    // pool match resolved through getDetails' DB-fallback path is Cluster B.
+    const [, , second] = adjudicator.calls[0]! as [unknown, Record<string, unknown>, Record<string, unknown>];
+    expect(second).toMatchObject({ signature: 'sig-x' });
+    const clusters = await db.select().from(schema.failureClusters);
+    expect(clusters.map((c) => c.id)).toEqual([x]);
+  });
+
   test('a medium-confidence merge verdict records an llm suggestion instead of merging', async () => {
     const run2 = await seedRun();
     embedder.book.set('sig-a', BASE);
