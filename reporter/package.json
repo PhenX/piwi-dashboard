@@ -1,6 +1,6 @@
 {
   "name": "@piwitests/reporter",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "description": "Playwright reporter for sending test results to Piwi Dashboard",
   "url": "https://github.com/PiwiTests/platform",
   "homepage": "https://piwitests.github.io",
