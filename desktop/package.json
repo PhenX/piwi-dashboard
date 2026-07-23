@@ -9,9 +9,13 @@
     "stage": "node scripts/stage-server.mjs",
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "e2e": "playwright test --config e2e/playwright.config.ts"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.1.0"
+    "@playwright/test": "^1.61.1",
+    "@srsholmes/tauri-playwright": "^0.4.1",
+    "@tauri-apps/cli": "^2.1.0",
+    "@types/node": "^24.13.3"
   }
 }

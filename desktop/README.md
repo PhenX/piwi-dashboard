@@ -47,6 +47,34 @@ npm run build               # produces the .msi / .dmg under src-tauri/target
 > git-ignored build artifacts — CI regenerates them (see
 > `.github/workflows/desktop-release.yml`).
 
+## End-to-end tests
+
+`desktop/e2e/` drives the **real** shell webview with Playwright, via
+[`tauri-plugin-playwright`](https://crates.io/crates/tauri-plugin-playwright).
+This is the only layer that catches runtime issues the compiler can't — most
+importantly that the dashboard (served at a loopback origin) may actually call
+the shell's native commands, which Tauri gates per-origin via the capabilities.
+
+The plugin is compiled in **only** under the `e2e-testing` cargo feature (never
+in shipped installers), and the capability it needs is added at runtime, also
+behind that feature. Run it after building + staging the server:
+
+```bash
+# from the repo root: build the server the shell will bundle
+npm run app:build --workspace=application
+
+# from desktop/: stage the sidecar + server, then run the tests
+cd desktop
+npm install
+npm run fetch-node
+npm run stage
+npx tauri icon ../application/public/logo.svg   # once
+npm run e2e                                      # launches `tauri dev --features e2e-testing`
+```
+
+CI runs this on macOS (real webview, no display server needed) on desktop
+changes — see `.github/workflows/desktop-e2e.yml`.
+
 ## Signing
 
 Installers are **unsigned** unless code-signing secrets are configured, in which

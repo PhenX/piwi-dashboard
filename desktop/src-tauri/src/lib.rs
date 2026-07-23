@@ -239,10 +239,23 @@ fn desktop_save_download(
     Ok(node_path(&target))
 }
 
+/// e2e-only capability granting the Playwright plugin's `pw_result` callback
+/// command to the loopback origin the dashboard is served from. Added at runtime
+/// (see `add_capability`) so it never ships in production installers.
+#[cfg(feature = "e2e-testing")]
+const E2E_PLAYWRIGHT_CAPABILITY: &str = r#"{
+  "identifier": "e2e-playwright",
+  "description": "e2e test builds only: let the Playwright-driven dashboard post results back to the control plugin.",
+  "windows": ["main"],
+  "remote": { "urls": ["http://localhost:*", "http://127.0.0.1:*"] },
+  "permissions": ["playwright:default"]
+}"#;
+
 pub fn run() {
     let launched_hidden = std::env::args().any(|a| a == "--hidden");
 
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // A second launch just focuses the running window (never a 2nd server).
             if let Some(w) = app.get_webview_window("main") {
@@ -257,7 +270,17 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
-        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_notification::init());
+
+    // e2e builds embed the Playwright control plugin so a test runner can drive
+    // the real webview over a local socket. Gated behind the `e2e-testing`
+    // feature so it is never present in shipped installers.
+    #[cfg(feature = "e2e-testing")]
+    {
+        builder = builder.plugin(tauri_plugin_playwright::init());
+    }
+
+    builder
         .invoke_handler(tauri::generate_handler![
             desktop_get_service_settings,
             desktop_set_run_in_background,
@@ -505,6 +528,15 @@ pub fn run() {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.hide();
                 }
+            }
+
+            // e2e builds: grant the Playwright plugin's result-callback command to
+            // the loopback (remote) origin the dashboard runs at, so the driven
+            // page can post results back. Added at runtime so the permission only
+            // exists in test builds — the shipped ACL never references it.
+            #[cfg(feature = "e2e-testing")]
+            {
+                let _ = app.handle().add_capability(E2E_PLAYWRIGHT_CAPABILITY);
             }
 
             Ok(())
