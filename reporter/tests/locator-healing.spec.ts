@@ -10,6 +10,8 @@ import {
   resolveAriaRole,
   suggestLocatorsFromAria,
   CAPTURED_ATTRIBUTES,
+  EXPECT_CAPTURE_EXPRESSIONS,
+  EXPECT_METHOD,
   type AncestorAnchor,
   type ElementAttributes,
   type LocatorSnapshot,
@@ -803,5 +805,93 @@ describe('captureCallerLocation', () => {
       frame(`${process.cwd()}/tests/fixtures.ts`, 88),
     ].join('\n');
     expect(captureCallerLocation(stack)).toBe('tests/fixtures.ts:88:5');
+  });
+
+  it('skips bundled dist frames by self-file identity (published package layout)', () => {
+    // In the tsup bundle both this function and the proxy wrapper live in
+    // dist/index.js — the module-name rules can never match, so the self-file
+    // rule must consume them. The matcher frame mimics an expect() assertion.
+    const stack = [
+      'Error',
+      frame('/pkg/node_modules/@piwitests/reporter/dist/index.js', 3163),
+      frame('/pkg/node_modules/@piwitests/reporter/dist/index.js', 3100),
+      frame('/pkg/node_modules/playwright/lib/matchers/matchers.js', 131),
+      frame(`${process.cwd()}/tests/checkout.spec.ts`, 42),
+    ].join('\n');
+    expect(captureCallerLocation(stack)).toBe('tests/checkout.spec.ts:42:5');
+  });
+
+  it('skips bundle frames even when the dist import is not under node_modules', () => {
+    const stack = [
+      'Error',
+      frame('/repo/reporter/dist/index.js', 3163),
+      frame('/repo/reporter/dist/index.js', 3100),
+      frame(`${process.cwd()}/tests/integration/capture.spec.ts`, 84),
+    ].join('\n');
+    expect(captureCallerLocation(stack)).toBe('tests/integration/capture.spec.ts:84:5');
+  });
+
+  it("keeps a user's own fixtures file directly after bundled machinery frames", () => {
+    // The bundle consumed the proxy frame itself, so a fixtures-named USER
+    // file coming next is a genuine call site, not the capture proxy.
+    const stack = [
+      'Error',
+      frame('/pkg/node_modules/@piwitests/reporter/dist/index.js', 3163),
+      frame('/pkg/node_modules/@piwitests/reporter/dist/index.js', 3100),
+      frame(`${process.cwd()}/tests/fixtures.ts`, 88),
+    ].join('\n');
+    expect(captureCallerLocation(stack)).toBe('tests/fixtures.ts:88:5');
+  });
+});
+
+describe('EXPECT_CAPTURE_EXPRESSIONS', () => {
+  it('pins the assertion funnel method name', () => {
+    expect(EXPECT_METHOD).toBe('_expect');
+  });
+
+  it('covers the common presence-proving assertions', () => {
+    const presence = [
+      'to.be.visible',
+      'to.be.attached',
+      'to.be.checked',
+      'to.be.enabled',
+      'to.be.focused',
+      'to.have.text',
+      'to.contain.text',
+      'to.have.value',
+      'to.have.attribute',
+      'to.have.class',
+      'to.have.css',
+      'to.have.role',
+      'to.have.accessible.name',
+      'to.match.aria',
+    ];
+    for (const expression of presence) {
+      expect(EXPECT_CAPTURE_EXPRESSIONS.has(expression), expression).toBe(true);
+    }
+  });
+
+  it('excludes absence assertions — passing means the element may not exist', () => {
+    for (const expression of ['to.be.hidden', 'to.be.detached']) {
+      expect(EXPECT_CAPTURE_EXPRESSIONS.has(expression), expression).toBe(false);
+    }
+  });
+
+  it('excludes multi-element assertions — the single-element probe would only strict-mode', () => {
+    for (const expression of [
+      'to.have.count',
+      'to.have.text.array',
+      'to.contain.text.array',
+      'to.have.class.array',
+      'to.have.values',
+    ]) {
+      expect(EXPECT_CAPTURE_EXPRESSIONS.has(expression), expression).toBe(false);
+    }
+  });
+
+  it('excludes page-level assertions that run on the internal :root locator', () => {
+    for (const expression of ['to.have.title', 'to.have.url']) {
+      expect(EXPECT_CAPTURE_EXPRESSIONS.has(expression), expression).toBe(false);
+    }
   });
 });

@@ -1,4 +1,4 @@
-import { test as base } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
 import * as http from 'node:http';
 import { extendPiwiFixtures } from '../../dist/index.js';
 
@@ -82,6 +82,20 @@ test('captures locators, a network request, a console error, and web vitals', as
   await page.waitForTimeout(1000);
   const status = await page.locator('#status').textContent();
   if (status !== 'done') throw new Error(`expected #status to read "done", got "${status}"`);
+});
+
+// Assertion-only capture: this locator is never acted on — only web-first
+// assertions run against it — yet it must still produce an element-bearing
+// snapshot, via the proxy's `_expect` interception. The negated assertion on a
+// missing element passes too, and must NOT capture anything.
+test('assertion-only locators build healing history', async ({ page }) => {
+  await page.goto(baseUrl);
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Nonexistent button' })).not.toBeVisible();
+  // The element probe after a passing assertion is fire-and-forget (same
+  // 500ms-bounded race as after an action) — give it room to resolve before
+  // teardown, without contending for the page's evaluate channel.
+  await page.waitForTimeout(1000);
 });
 
 // Failure-only capture: the ARIA snapshot and the fresh locator suggestion are

@@ -13,12 +13,14 @@ import type { FullResult, Reporter, TestCase, TestResult } from '@playwright/tes
  * Test roles are keyed off `test.expectedStatus`/title:
  *   - `expectedStatus === 'failed'` → the failure-capture test (ARIA + suggestion);
  *   - title starting `teardown race guard` → the teardown-race stress runs;
+ *   - title starting `assertion-only` → the assertion-capture test (`_expect`);
  *   - otherwise → the main capture test (locators + network + console + web vitals).
  */
 export default class VerifyCaptureReporter implements Reporter {
   private failures: string[] = [];
   private sawMainCapture = false;
   private sawFailureCapture = false;
+  private sawAssertionCapture = false;
   private stressRuns = 0;
 
   onTestEnd(test: TestCase, result: TestResult): void {
@@ -64,6 +66,37 @@ export default class VerifyCaptureReporter implements Reporter {
       return;
     }
 
+    // ── Assertion-only capture: a passing expect() must record the element ───
+    if (test.title.startsWith('assertion-only')) {
+      const locators = byName('piwi-locators');
+      if (locators?.body) {
+        const snapshots = JSON.parse(locators.body.toString('utf8')) as Array<{
+          location: string;
+          used: { method: string; args: unknown[] };
+          element: { tagName: string; attributes: Record<string, unknown> } | null;
+          alternatives: unknown[];
+        }>;
+        const email = snapshots.find((s) => s.element?.attributes?.['id'] === 'email');
+        assert(!!email, 'expected an element-bearing snapshot for the asserted (never acted-on) Email field');
+        assert(email?.used.method === 'getByLabel', 'assertion snapshot should keep the locator the test used');
+        assert(email?.element?.tagName === 'input', 'assertion-captured element should record its tag name');
+        assert(
+          Array.isArray(email?.alternatives) && email!.alternatives.length > 0,
+          'assertion-captured element should have generated locator alternatives',
+        );
+        assert(
+          typeof email?.location === 'string' && email.location.includes('capture.spec.ts'),
+          'assertion snapshot should record the expect() call site',
+        );
+        assert(
+          !snapshots.some((s) => JSON.stringify(s.used).includes('Nonexistent')),
+          'a passing negated assertion must not capture its target',
+        );
+      }
+      this.sawAssertionCapture = true;
+      return;
+    }
+
     // ── Main capture test: assert the full passing-path attachment set ───────
     const locators = byName('piwi-locators');
     if (locators?.body) {
@@ -76,7 +109,12 @@ export default class VerifyCaptureReporter implements Reporter {
       const saveBtn = snapshots.find((s) => s.element?.attributes?.['data-testid'] === 'save-btn');
       assert(!!saveBtn, 'expected a captured snapshot for the save-btn locator');
       assert(saveBtn?.element?.tagName === 'button', 'captured element should record its tag name');
-      assert(typeof saveBtn?.location === 'string' && saveBtn.location.length > 0, 'snapshot should record a location');
+      // The exact spec file, not just any location — the bundled dist's own
+      // frames must never be mistaken for the call site (self-file skip).
+      assert(
+        typeof saveBtn?.location === 'string' && saveBtn.location.includes('capture.spec.ts'),
+        'snapshot should record the action call site in the spec file',
+      );
       assert(
         Array.isArray(saveBtn?.alternatives) && saveBtn!.alternatives.length > 0,
         'captured element should have generated locator alternatives',
@@ -124,6 +162,7 @@ export default class VerifyCaptureReporter implements Reporter {
   onEnd(_result: FullResult): { status: 'failed' } | void {
     if (!this.sawMainCapture) this.fail('the main capture test did not run — nothing verified its attachments');
     if (!this.sawFailureCapture) this.fail('the failure-capture test did not run — ARIA/suggestion unverified');
+    if (!this.sawAssertionCapture) this.fail('the assertion-capture test did not run — _expect capture unverified');
     if (this.stressRuns < 1) this.fail('the teardown-race stress tests did not run');
 
     if (this.failures.length > 0) {

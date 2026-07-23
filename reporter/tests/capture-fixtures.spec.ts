@@ -6,7 +6,8 @@ import {
   probeElementAttrs,
   CAPTURED_ATTRS_ARG,
 } from '../src/internal/capture/capture-fixtures.js';
-import { ATTACHMENT_NAMES } from '../src/internal/capture/attachments.js';
+import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from '../src/internal/capture/attachments.js';
+import type { LocatorSnapshot } from '../src/internal/capture/locator-healing.js';
 
 /**
  * Call the probe with the real shared role maps (CAPTURED_ATTRS_ARG) and just
@@ -411,5 +412,241 @@ describe('probeElementAttrs — structural probe (rolePosition + ancestors)', ()
     expect(probed.rolePosition).toBeNull();
     expect(probed.ancestors).toEqual([]);
     expect(probed.tagName).toBe('input');
+  });
+});
+
+describe('_expect assertion capture', () => {
+  // What the in-page probe would report for the asserted element. A role-less
+  // <div> keeps the capture path off the ARIA-snapshot branch, so the fake
+  // locator only needs `evaluate`.
+  const FAKE_ATTRS = {
+    tagName: 'div',
+    attributes: {},
+    textContent: 'Save changes',
+    center: { x: 10, y: 20 },
+    hasLabel: false,
+    selectorCounts: {},
+    rolePosition: null,
+    ancestors: [],
+  };
+
+  interface HarnessTestInfo {
+    status: string;
+    attach: ReturnType<typeof vi.fn>;
+    annotations: Array<{ type: string; description?: string }>;
+  }
+
+  /**
+   * Drive the real fixtures with a fake page whose locator factories all
+   * return `fakeLocator` — the same wiring as the teardown-race test above.
+   * The test body plays the role of Playwright's matcher layer by calling
+   * `locator._expect(expression, options)` directly on the wrapped locator.
+   */
+  async function runCaptureTest(opts: {
+    fakeLocator: Record<string, unknown>;
+    body: (page: Record<string, (...args: unknown[]) => unknown>) => Promise<void>;
+    finalStatus?: string;
+    rootAria?: string;
+  }): Promise<{ testInfo: HarnessTestInfo; snapshots: LocatorSnapshot[] | null }> {
+    const factory = () => opts.fakeLocator;
+    // flushSink reads page.locator(':root') for the failure-time ARIA snapshot.
+    const rootLocator = { ariaSnapshot: async () => opts.rootAria ?? null };
+    const fakePage = {
+      getByRole: factory,
+      getByTestId: factory,
+      getByText: factory,
+      getByLabel: factory,
+      getByPlaceholder: factory,
+      getByAltText: factory,
+      getByTitle: factory,
+      locator: (sel: string) => (sel === ':root' ? rootLocator : opts.fakeLocator),
+      on: () => {},
+      evaluate: async () => null,
+    };
+    const testInfo: HarnessTestInfo = { status: 'passed', attach: vi.fn(async () => {}), annotations: [] };
+
+    const pageFixture = piwiFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
+      (args: object, use: () => Promise<void>, testInfo: unknown) => Promise<void>,
+    ];
+
+    await captureFixture(
+      {},
+      () =>
+        pageFixture({ page: fakePage }, async (page) => {
+          await opts.body(page as unknown as Record<string, (...args: unknown[]) => unknown>);
+          if (opts.finalStatus) testInfo.status = opts.finalStatus;
+        }),
+      testInfo,
+    );
+
+    const call = testInfo.attach.mock.calls.find((c) => c[0] === ATTACHMENT_NAMES.locators);
+    const snapshots = call ? (JSON.parse((call[1] as { body: Buffer }).body.toString()) as LocatorSnapshot[]) : null;
+    return { testInfo, snapshots };
+  }
+
+  it('captures the element when a positive presence assertion passes', async () => {
+    const result = { matches: true, received: undefined };
+    const fakeLocator = {
+      _expect: vi.fn(async () => result),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+    let returned: unknown;
+
+    const { snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByTestId!('save') as { _expect: (...args: unknown[]) => Promise<unknown> };
+        returned = await loc._expect('to.be.visible', { isNot: false, timeout: 5000 });
+      },
+    });
+
+    // The assertion outcome is passed through untouched (same object).
+    expect(returned).toBe(result);
+    expect(fakeLocator._expect).toHaveBeenCalledExactlyOnceWith('to.be.visible', { isNot: false, timeout: 5000 });
+
+    expect(snapshots).not.toBeNull();
+    expect(snapshots).toHaveLength(1);
+    const snap = snapshots![0]!;
+    expect(snap.used).toEqual({ method: 'getByTestId', args: ['save'], raw: 'getByTestId(["save"])' });
+    // The call site is this spec file — the same first-user-frame the failing
+    // assertion's error stack would carry, so the exact-location rung matches.
+    expect(snap.location).toMatch(/tests\/capture-fixtures\.spec\.ts:\d+:\d+$/);
+    expect(snap.element).not.toBeNull();
+    expect(snap.element!.tagName).toBe('div');
+    expect(snap.element!.textContent).toBe('Save changes');
+    expect(snap.alternatives.map((a) => a.locator)).toContain("getByText('Save changes')");
+  });
+
+  it('skips negated assertions — a passing .not proves nothing resolvable', async () => {
+    const fakeLocator = {
+      _expect: vi.fn(async () => ({ matches: false })),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    const { snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByText!('gone') as { _expect: (...args: unknown[]) => Promise<unknown> };
+        await loc._expect('to.be.visible', { isNot: true, timeout: 100 });
+      },
+    });
+
+    expect(snapshots).toBeNull();
+    expect(fakeLocator.evaluate).not.toHaveBeenCalled();
+  });
+
+  it('skips absence, multi-element, and page-level expressions even when they pass', async () => {
+    const fakeLocator = {
+      _expect: vi.fn(async () => ({ matches: true })),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    const { snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.locator!('.rows') as { _expect: (...args: unknown[]) => Promise<unknown> };
+        for (const expression of ['to.be.hidden', 'to.have.count', 'to.have.text.array', 'to.have.title']) {
+          await loc._expect(expression, { isNot: false });
+        }
+      },
+    });
+
+    expect(snapshots).toBeNull();
+    expect(fakeLocator.evaluate).not.toHaveBeenCalled();
+  });
+
+  it('probes a repeated call site only once but attaches its snapshot', async () => {
+    const fakeLocator = {
+      _expect: vi.fn(async () => ({ matches: true })),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    const { snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByRole!('button', { name: 'Save' }) as {
+          _expect: (...args: unknown[]) => Promise<unknown>;
+        };
+        for (let i = 0; i < 3; i++) {
+          await loc._expect('to.be.visible', { isNot: false });
+        }
+      },
+    });
+
+    expect(fakeLocator._expect).toHaveBeenCalledTimes(3);
+    expect(fakeLocator.evaluate).toHaveBeenCalledTimes(1);
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots![0]!.element).not.toBeNull();
+  });
+
+  it('records a failed presence assertion for the fresh-locator suggestion', async () => {
+    const fakeLocator = {
+      _expect: vi.fn(async () => ({ matches: false, received: 'hidden' })),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    const { testInfo, snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByText!('Save') as { _expect: (...args: unknown[]) => Promise<unknown> };
+        await loc._expect('to.be.visible', { isNot: false, timeout: 100 });
+      },
+      finalStatus: 'failed',
+      rootAria: '- button "Save changes"',
+    });
+
+    // No element was captured (the assertion missed), but the call site is
+    // still marked exercised via its placeholder…
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots![0]!.element).toBeNull();
+    expect(fakeLocator.evaluate).not.toHaveBeenCalled();
+
+    // …and the miss fed the failed-locator signal: teardown suggested a fresh
+    // locator for the renamed element on the failing page.
+    const suggestion = testInfo.annotations.find((a) => a.type === LOCATOR_SUGGESTION_ANNOTATION);
+    expect(suggestion).toBeDefined();
+    expect(suggestion!.description).toContain("getByText('Save')");
+    expect(suggestion!.description).toContain('Save changes');
+  });
+
+  it('degrades to no capture when the result carries no matches flag', async () => {
+    const fakeLocator = {
+      _expect: vi.fn(async () => ({})),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    const { testInfo, snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByTestId!('save') as { _expect: (...args: unknown[]) => Promise<unknown> };
+        await loc._expect('to.be.visible', { isNot: false });
+      },
+    });
+
+    // Placeholder only: the location counts as exercised, no element claim,
+    // no failed-locator record.
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots![0]!.element).toBeNull();
+    expect(fakeLocator.evaluate).not.toHaveBeenCalled();
+    expect(testInfo.annotations).toEqual([]);
+  });
+
+  it('leaves the property untouched when the installed Playwright has no _expect', async () => {
+    const fakeLocator = {
+      click: async () => {},
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByTestId!('save') as { _expect?: unknown };
+        expect(loc._expect).toBeUndefined();
+      },
+    });
   });
 });
