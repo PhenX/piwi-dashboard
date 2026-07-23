@@ -4,18 +4,23 @@ import { MCP_TOOL_DEFS } from '#shared/mcp-tools';
 const config = useRuntimeConfig();
 const isDemo = config.public.demoMode;
 const isDesktop = useIsDesktop();
+const { copy } = useCopy();
 
 // Desktop build only: the local access token is enforced by the desktop guard
 // and doubles as the MCP Bearer token (auth is off, so the endpoint accepts any
-// caller once the guard has validated the token).
-const { data: reporterConfig } = await useFetch<{ url: string; token: string } | null>(
-  '/api/desktop/reporter-config',
-  { immediate: isDesktop, default: () => null },
-);
+// caller once the guard has validated the token). When present it fills the URL
+// and Bearer value into the client snippets below so there's nothing to swap.
+const { data: reporterConfig } = await useFetch<{ url: string; token: string } | null>('/api/desktop/reporter-config', {
+  immediate: isDesktop,
+  default: () => null,
+});
+
+const apiKeyPlaceholder = 'pd_YOUR_API_KEY';
+const bearerToken = computed(() => reporterConfig.value?.token ?? apiKeyPlaceholder);
 
 const requestUrl = useRequestURL();
 const mcpUrl = computed(() => {
-  const base = (config.public.siteUrl as string) || requestUrl.origin;
+  const base = reporterConfig.value?.url ?? (config.public.siteUrl as string) ?? requestUrl.origin;
   return `${base}/mcp`;
 });
 
@@ -35,7 +40,8 @@ const clientItems = [
 ];
 
 const claudeCodeSnippet = computed(
-  () => `claude mcp add --transport http piwi ${mcpUrl.value} \\\n  --header "Authorization: Bearer pd_YOUR_API_KEY"`,
+  () =>
+    `claude mcp add --transport http piwi ${mcpUrl.value} \\\n  --header "Authorization: Bearer ${bearerToken.value}"`,
 );
 
 const cursorSnippet = computed(() =>
@@ -44,7 +50,7 @@ const cursorSnippet = computed(() =>
       mcpServers: {
         piwi: {
           url: mcpUrl.value,
-          headers: { Authorization: 'Bearer pd_YOUR_API_KEY' },
+          headers: { Authorization: `Bearer ${bearerToken.value}` },
         },
       },
     },
@@ -60,7 +66,7 @@ const vscodeSnippet = computed(() =>
         piwi: {
           type: 'http',
           url: mcpUrl.value,
-          headers: { Authorization: 'Bearer pd_YOUR_API_KEY' },
+          headers: { Authorization: `Bearer ${bearerToken.value}` },
         },
       },
     },
@@ -76,7 +82,7 @@ const claudeDesktopSnippet = computed(() =>
         piwi: {
           type: 'http',
           url: mcpUrl.value,
-          headers: { Authorization: 'Bearer pd_YOUR_API_KEY' },
+          headers: { Authorization: `Bearer ${bearerToken.value}` },
         },
       },
     },
@@ -86,7 +92,8 @@ const claudeDesktopSnippet = computed(() =>
 );
 
 const geminiSnippet = computed(
-  () => `gemini mcp add --transport http piwi ${mcpUrl.value} \\\n  --header "Authorization: Bearer pd_YOUR_API_KEY"`,
+  () =>
+    `gemini mcp add --transport http piwi ${mcpUrl.value} \\\n  --header "Authorization: Bearer ${bearerToken.value}"`,
 );
 
 const windsurfSnippet = computed(() =>
@@ -95,7 +102,7 @@ const windsurfSnippet = computed(() =>
       mcpServers: {
         piwi: {
           serverUrl: mcpUrl.value,
-          headers: { Authorization: 'Bearer pd_YOUR_API_KEY' },
+          headers: { Authorization: `Bearer ${bearerToken.value}` },
         },
       },
     },
@@ -121,60 +128,54 @@ const windsurfSnippet = computed(() =>
           description="The MCP endpoint is not active in this demo — it requires a real Piwi backend. The tools and client setup shown below reflect what your own deployment exposes."
         />
 
-        <!-- Desktop build only: connect using this app's local access token -->
-        <DesktopMcpCard v-if="reporterConfig" :url="reporterConfig.url" :token="reporterConfig.token" />
-
-        <!-- What it is -->
-        <SectionCard icon="i-lucide-bot" title="What it provides" help="mcp.tools">
-          <div class="flex flex-col gap-1.5">
-            <div
-              v-for="t in tools"
-              :key="t.name"
-              class="flex items-start gap-3 px-3 py-2.5 rounded-md bg-elevated/50 border border-default hover:bg-elevated transition-colors"
-            >
-              <UIcon name="i-lucide-wrench" class="size-4 mt-0.5 shrink-0 text-primary" />
-              <div class="min-w-0">
-                <p class="text-sm font-mono font-semibold text-foreground">{{ t.name }}</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ t.description }}</p>
+        <!-- Client setup — the single place to connect any MCP client. On the
+             desktop build this also carries the real URL + local access token,
+             already baked into every snippet (no placeholder to swap). -->
+        <SectionCard icon="i-lucide-settings-2" title="Client setup" help="mcp.client-setup">
+          <div v-if="reporterConfig" class="mb-4 space-y-3 rounded-md border border-default bg-elevated/50 p-3">
+            <div class="space-y-1">
+              <div class="text-xs text-muted">MCP URL</div>
+              <div class="flex items-start gap-2">
+                <code class="text-xs break-all flex-1">{{ mcpUrl }}</code>
+                <UButton
+                  icon="i-lucide-copy"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  aria-label="Copy MCP URL"
+                  @click="copy(mcpUrl, { toast: true })"
+                />
               </div>
             </div>
-          </div>
-        </SectionCard>
-
-        <!-- Authentication -->
-        <SectionCard icon="i-lucide-key" title="Authentication" help="mcp.auth">
-          <div class="space-y-3 text-sm text-gray-600 dark:text-gray-400">
-            <p>
-              MCP requests are authenticated with the same API keys used by the REST API. API keys start with
-              <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_</code>.
-            </p>
-            <p v-if="!isDesktop">
-              Generate a key in <strong>Settings → Users → [your account] → API keys</strong>, then replace
-              <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_YOUR_API_KEY</code> in the snippets below.
-            </p>
-            <p v-else>
-              This app provides a local access token automatically — see <strong>Connect an AI assistant (MCP)</strong>
-              above. Use it wherever the snippets show
-              <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_YOUR_API_KEY</code>.
-            </p>
-            <p v-if="!isDesktop" class="text-xs text-gray-400">
-              When authentication is disabled (<code class="font-mono">PIWI_AUTH_ENABLED</code> not set), any request is
-              accepted without a key.
-            </p>
-            <p v-else class="text-xs text-gray-400">
-              This desktop app keeps sign-in off but still requires its own local access token on every request — use the
-              token shown above as the <code class="font-mono">Bearer</code> value. The endpoint is not open.
+            <div class="space-y-1">
+              <div class="text-xs text-muted">Access token</div>
+              <div class="flex items-start gap-2">
+                <code class="text-xs break-all flex-1">{{ bearerToken }}</code>
+                <UButton
+                  icon="i-lucide-copy"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  aria-label="Copy access token"
+                  @click="copy(bearerToken, { toast: true })"
+                />
+              </div>
+            </div>
+            <p class="text-xs text-muted">
+              This app authenticates with a local access token even though sign-in is off — it is the
+              <code class="font-mono">Bearer</code> value, already filled into the snippets below.
             </p>
           </div>
-        </SectionCard>
 
-        <!-- Client setup -->
-        <SectionCard icon="i-lucide-settings-2" title="Client setup" help="mcp.client-setup">
           <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-            Replace <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_YOUR_API_KEY</code> with
-            <template v-if="isDesktop">this app's access token (shown above)</template>
-            <template v-else>your actual API key</template>. The MCP URL shown below is auto-detected from your current
-            browser origin.
+            <template v-if="reporterConfig"
+              >Pick your client below — the URL and access token above are already baked into each snippet.</template
+            >
+            <template v-else
+              >Replace <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_YOUR_API_KEY</code> with your
+              actual API key. The MCP URL shown in the snippets is auto-detected from your current browser
+              origin.</template
+            >
           </p>
 
           <UTabs :items="clientItems" :ui="{ list: 'mb-4' }">
@@ -266,6 +267,49 @@ const windsurfSnippet = computed(() =>
               </div>
             </template>
           </UTabs>
+        </SectionCard>
+
+        <!-- What it is -->
+        <SectionCard icon="i-lucide-bot" title="What it provides" help="mcp.tools">
+          <div class="flex flex-col gap-1.5">
+            <div
+              v-for="t in tools"
+              :key="t.name"
+              class="flex items-start gap-3 px-3 py-2.5 rounded-md bg-elevated/50 border border-default hover:bg-elevated transition-colors"
+            >
+              <UIcon name="i-lucide-wrench" class="size-4 mt-0.5 shrink-0 text-primary" />
+              <div class="min-w-0">
+                <p class="text-sm font-mono font-semibold text-foreground">{{ t.name }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ t.description }}</p>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+
+        <!-- Authentication -->
+        <SectionCard icon="i-lucide-key" title="Authentication" help="mcp.auth">
+          <div class="space-y-3 text-sm text-gray-600 dark:text-gray-400">
+            <p>
+              MCP requests are authenticated with the same API keys used by the REST API. API keys start with
+              <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_</code>.
+            </p>
+            <p v-if="!isDesktop">
+              Generate a key in <strong>Settings → Users → [your account] → API keys</strong>, then replace
+              <code class="px-1 py-0.5 bg-muted rounded text-xs font-mono">pd_YOUR_API_KEY</code> in the snippets above.
+            </p>
+            <p v-else>
+              This app provides a local access token automatically — shown in <strong>Client setup</strong> above and
+              already filled into every snippet, so there is nothing to replace.
+            </p>
+            <p v-if="!isDesktop" class="text-xs text-gray-400">
+              When authentication is disabled (<code class="font-mono">PIWI_AUTH_ENABLED</code> not set), any request is
+              accepted without a key.
+            </p>
+            <p v-else class="text-xs text-gray-400">
+              This desktop app keeps sign-in off but still requires its own local access token on every request — it is
+              the <code class="font-mono">Bearer</code> value. The endpoint is not open.
+            </p>
+          </div>
         </SectionCard>
 
         <!-- MCP URL reference -->

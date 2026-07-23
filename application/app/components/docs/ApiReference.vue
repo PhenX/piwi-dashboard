@@ -7,8 +7,17 @@ const props = defineProps<{
 }>();
 
 const { copy, copied } = useCopy();
+const { isDesktop, download } = useDesktopDownload();
 
 const query = ref('');
+
+// In the desktop shell a `target="_blank"` link is inert, so save the spec to
+// disk instead of trying (and failing) to open it in a new window.
+function onSpecClick(event: MouseEvent) {
+  if (!isDesktop) return;
+  event.preventDefault();
+  download(props.specUrl, 'piwi-openapi.json');
+}
 
 const groups = computed(() => groupOperationsByTag(props.spec));
 
@@ -73,6 +82,7 @@ function tagAnchor(tag: string): string {
           size="xs"
           icon="i-lucide-file-json"
           label="Raw OpenAPI spec"
+          @click="onSpecClick"
         />
         <span class="text-xs text-dimmed">{{ operationCount }} endpoints</span>
       </div>

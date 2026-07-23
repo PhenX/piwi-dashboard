@@ -9,15 +9,6 @@
  * that predates it — it degrades to tray instructions rather than showing dead
  * switches.
  */
-interface TauriCore {
-  invoke: <T = unknown>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
-}
-
-function tauriCore(): TauriCore | null {
-  const g = globalThis as unknown as { __TAURI__?: { core?: TauriCore } };
-  return g.__TAURI__?.core ?? null;
-}
-
 const toast = useToast();
 
 const loading = ref(true);
