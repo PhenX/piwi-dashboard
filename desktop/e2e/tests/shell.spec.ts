@@ -14,6 +14,9 @@ import { test, expect } from '../fixtures';
  * binds a fixed loopback port, so the per-test fixture can't launch a second
  * app instance — a relaunch just focuses the first window and never stands up
  * its own control socket. One launch, both assertions.
+ *
+ * `evaluate()` runs its argument as `await (<script>)`, so each script must be a
+ * single expression; the plugin awaits it and hands back the resolved value.
  */
 test('the dashboard can reach the shell IPC commands', async ({ tauriPage }) => {
   // The shell boots the sidecar server then navigates the window to it; wait for
@@ -25,21 +28,13 @@ test('the dashboard can reach the shell IPC commands', async ({ tauriPage }) => 
   );
   expect(hasBridge, 'window.__TAURI__.core.invoke must exist in the desktop webview').toBe(true);
 
-  // Kick off the invoke and stash the outcome on the window; then wait for it,
-  // so we never depend on how `evaluate` handles a returned promise.
-  await tauriPage.evaluate(`
-    window.__PW_INVOKE__ = undefined;
+  // A single awaited expression: invoke the command and resolve to a plain object
+  // the plugin can serialize back. If the ACL rejected it we'd get `ok: false`.
+  const result = (await tauriPage.evaluate(`
     window.__TAURI__.core.invoke('desktop_get_service_settings')
-      .then((s) => { window.__PW_INVOKE__ = { ok: true, keys: Object.keys(s ?? {}) }; })
-      .catch((e) => { window.__PW_INVOKE__ = { ok: false, error: String(e) }; });
-  `);
-
-  await tauriPage.waitForFunction(`window.__PW_INVOKE__ !== undefined`, 15_000);
-  const result = (await tauriPage.evaluate(`window.__PW_INVOKE__`)) as {
-    ok: boolean;
-    error?: string;
-    keys?: string[];
-  };
+      .then((s) => ({ ok: true, keys: Object.keys(s || {}) }))
+      .catch((e) => ({ ok: false, error: String((e && e.message) || e) }))
+  `)) as { ok: boolean; error?: string; keys?: string[] };
 
   expect(result.ok, `invoke was rejected: ${result.error ?? 'unknown'}`).toBe(true);
   expect(result.keys).toEqual(expect.arrayContaining(['run_in_background', 'start_on_login']));
