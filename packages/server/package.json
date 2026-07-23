@@ -1,6 +1,6 @@
 {
   "name": "@piwitests/server",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "description": "Self-hosted Piwi Dashboard server — run with npx @piwitests/server",
   "type": "module",
   "bin": {
