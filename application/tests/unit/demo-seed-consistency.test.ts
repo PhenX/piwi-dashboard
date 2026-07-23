@@ -5,9 +5,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeErrorFingerprint } from '#shared/error-fingerprint';
+import { resolveHealingForCase } from '~~/server/utils/locator-healing';
 import { validatePatch } from '#shared/patch';
 import { allDemoSourceFiles } from '~~/app/demo/demo-scm';
-import { FAILURE_STORIES, SCM_REPOS, SIMULATOR_ERRORS } from '#shared/demo/failure-stories.mjs';
+import { FAILURE_STORIES, SCM_REPOS, SIMULATOR_ERRORS, storyForCase } from '#shared/demo/failure-stories.mjs';
+import { parseAriaCandidates } from '#shared/locator-fingerprint';
 import { computeDemoFingerprint } from '#shared/demo/demo-fingerprint.mjs';
 
 // Root of the Nuxt app (tests/unit/ -> ../..).
@@ -349,6 +351,95 @@ describe('cluster 6 (strict-mode) coherence', () => {
     expect(story.aria).toContain(attrs.accessibleName);
     expect(alternatives.some((a) => a.locator.includes(attrs.accessibleName))).toBe(true);
     expect(story.diagnosis.fix.patch).toContain(attrs.accessibleName);
+  });
+});
+
+describe('authored DOM snapshots (served as trace-extracted)', () => {
+  const authored = FAILURE_STORIES.filter((s) => s.domSnapshot);
+
+  test('the locator-centric stories carry an authored failure-time page', () => {
+    expect(authored.map((s) => s.clusterId).sort((a, b) => a - b)).toEqual([1, 2, 6, 9]);
+    for (const story of authored) {
+      expect(story.domSnapshot.viewport.width).toBeGreaterThan(0);
+      expect(story.domSnapshot.viewport.height).toBeGreaterThan(0);
+      expect(story.domSnapshot.html).toContain('<!DOCTYPE html>');
+    }
+  });
+
+  test('every named ARIA candidate appears in the authored page', () => {
+    for (const story of authored) {
+      const candidates = parseAriaCandidates(story.aria);
+      expect(candidates.length).toBeGreaterThan(0);
+      for (const c of candidates) {
+        // Row names are concatenated cell texts — the cells appear, the
+        // concatenation does not.
+        if (!c.name || c.role === 'row') continue;
+        expect(story.domSnapshot.html, `cluster ${story.clusterId}: ${c.role} "${c.name}"`).toContain(c.name);
+      }
+    }
+  });
+
+  test('cluster 9 keeps the hidden Export CSV button in the DOM but out of the ARIA tree', () => {
+    const story = FAILURE_STORIES.find((s) => s.clusterId === 9)!;
+    expect(story.domSnapshot.html).toContain('class="export-btn" hidden');
+    expect(story.domSnapshot.html).toContain('Export CSV');
+    expect(story.aria).not.toContain('Export CSV');
+  });
+
+  test('storyForCase resolves each authored story from its failing case identity', () => {
+    for (const story of authored) {
+      for (const fc of story.failingCases) {
+        expect(storyForCase(story.projectId, story.specFile, fc.title)).toBe(story);
+      }
+    }
+    expect(storyForCase(999, 'tests/nowhere.spec.ts', 'no such test')).toBeNull();
+  });
+});
+
+describe('cluster 9 (assertion-captured healing) coherence', () => {
+  test('the expect()-captured snapshot heals the dark-mode failure through the real ladder', async () => {
+    const story = FAILURE_STORIES.find((s) => s.clusterId === 9)!;
+    const rows = q(`
+      select * from locator_snapshots
+      where location = '${story.captureLocation}'
+    `);
+    expect(rows.length).toBe(1);
+    const raw = rows[0]!;
+
+    // The seeded row is keyed at the expect() call site — the same line the
+    // failing case's innermost stack frame points at.
+    const failing = story.failingCases[0]!;
+    expect(story.captureLocation).toBe(`${story.specFile}:${failing.failingLine}:${failing.column}`);
+
+    const row = {
+      id: raw.id,
+      testCaseId: raw.test_case_id,
+      location: raw.location,
+      usedMethod: raw.used_method,
+      usedArgs: raw.used_args,
+      usedArgsFp: raw.used_args_fp,
+      elementTag: raw.element_tag,
+      elementAttrs: raw.element_attrs,
+      elementText: raw.element_text,
+      alternatives: raw.alternatives,
+      lastSeenRunId: raw.last_seen_run_id,
+      lastSeenAt: null,
+    } as unknown as import('~~/server/database/schema').LocatorSnapshotRow;
+
+    const healing = await resolveHealingForCase({ error: failing.error, ariaSnapshot: story.aria }, [row], null);
+
+    // Exact-location rung hits, so the assertion-only locator has real
+    // prior-success history — the point of assertion capture.
+    expect(healing.source).toBe('prior-run');
+    expect(healing.location).toBe(story.captureLocation);
+
+    // The hidden button is absent from the failing page's ARIA snapshot, so
+    // the name-derived alternatives are flagged stale and the recommendation
+    // falls to the surviving class selector, with add-a-testid advice.
+    expect(healing.priorNameMayBeStale).toBe(true);
+    expect(healing.recommendation?.recommended?.locator).toBe("locator('.export-btn')");
+    expect(healing.recommendation?.suggestAddTestId).toBe(true);
+    expect(healing.fromAriaSnapshot?.length).toBeGreaterThan(0);
   });
 });
 

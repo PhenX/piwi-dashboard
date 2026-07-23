@@ -690,6 +690,163 @@ export function sourceText(path) {
   return lines.join('\n') + '\n';
 }
 
+// ── Authored failure-time DOM snapshots ─────────────────────────────────────
+// Full-page DOM snapshots for the locator-centric stories, served by the demo
+// dom-snapshot mirror as if they had been extracted from the case's trace ZIP
+// (source 'dom', with a viewport for the picker's proportional zoom). The
+// committed trace ZIPs are genuine recordings but of deliberately tiny fixture
+// pages — too bare for the locator picker to feel real — so each story that
+// showcases healing carries an authored page that matches its ARIA snapshot,
+// its captured element attributes, and its seeded alternative locators.
+// Coherence is enforced by tests/unit/demo-seed-consistency.test.ts (every
+// named ARIA candidate must appear in the page).
+
+/** Shared viewport for authored snapshots — the picker scales to fit. */
+const DOM_SNAPSHOT_VIEWPORT = { width: 1280, height: 720 };
+
+/** Cluster 1 — checkout page mid-payment: quote pending, Pay disabled. */
+const CHECKOUT_PAY_DOM = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Checkout — Shop</title><style>
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: #1f2430; background: #f6f7f9; }
+  header { background: #101828; color: #fff; padding: 14px 32px; font-weight: 600; }
+  .layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; max-width: 980px; margin: 32px auto; }
+  form { background: #fff; border: 1px solid #e4e7ec; border-radius: 10px; padding: 24px; }
+  label { display: block; font-weight: 600; margin: 14px 0 4px; }
+  input { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #cfd4dc; border-radius: 6px; font: inherit; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  button { margin-top: 20px; width: 100%; padding: 11px; border: 0; border-radius: 6px; background: #4353ff; color: #fff; font: inherit; font-weight: 600; }
+  button[disabled] { background: #b6bcf5; }
+  .quote { margin-top: 10px; color: #98652b; background: #fdf3e3; border: 1px solid #f5dcae; border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+  aside { background: #fff; border: 1px solid #e4e7ec; border-radius: 10px; padding: 20px; height: fit-content; }
+  aside h2 { margin: 0 0 12px; font-size: 16px; }
+  .line { display: flex; justify-content: space-between; padding: 4px 0; }
+  .total { font-weight: 700; border-top: 1px solid #e4e7ec; margin-top: 8px; padding-top: 10px; }
+</style></head><body>
+<header>Shop — Secure checkout</header>
+<div class="layout">
+  <form id="checkout" data-testid="checkout-form" aria-label="Checkout">
+    <label for="checkout-email">Email address</label>
+    <input id="checkout-email" data-testid="email-input" type="email" name="email" placeholder="your@email.com" autocomplete="email" />
+    <label for="card-number">Card number</label>
+    <input id="card-number" data-testid="card-number" name="cardNumber" placeholder="4242 4242 4242 4242" inputmode="numeric" />
+    <div class="row">
+      <div>
+        <label for="card-expiry">Expiry date</label>
+        <input id="card-expiry" data-testid="card-expiry" name="cardExpiry" placeholder="MM / YY" />
+      </div>
+      <div>
+        <label for="card-cvv">CVV</label>
+        <input id="card-cvv" data-testid="card-cvv" name="cardCvv" placeholder="123" />
+      </div>
+    </div>
+    <button type="submit" id="checkout-pay" data-testid="checkout-pay" disabled>Pay now</button>
+    <p class="quote">Waiting for the final price quote — payment unlocks once it arrives.</p>
+  </form>
+  <aside>
+    <h2>Order summary</h2>
+    <div class="line"><span>Wireless keyboard</span><span>$ 89.00</span></div>
+    <div class="line"><span>USB-C hub</span><span>$ 39.00</span></div>
+    <div class="line"><span>Shipping</span><span>$ 6.50</span></div>
+    <div class="line total"><span>Total</span><span>$ 134.50</span></div>
+  </aside>
+</div>
+</body></html>`;
+
+/** Cluster 2 — the restructured contact step: email input replaced by a contact-method combobox. */
+const CHECKOUT_CONTACT_DOM = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Checkout — Shop</title><style>
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: #1f2430; background: #f6f7f9; }
+  header { background: #101828; color: #fff; padding: 14px 32px; font-weight: 600; }
+  form { background: #fff; border: 1px solid #e4e7ec; border-radius: 10px; padding: 24px; max-width: 620px; margin: 32px auto; }
+  label { display: block; font-weight: 600; margin: 14px 0 4px; }
+  input, select { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #cfd4dc; border-radius: 6px; font: inherit; background: #fff; }
+  .field { padding: 2px 0; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  button { margin-top: 20px; width: 100%; padding: 11px; border: 0; border-radius: 6px; background: #4353ff; color: #fff; font: inherit; font-weight: 600; }
+</style></head><body>
+<header>Shop — Secure checkout</header>
+<form id="checkout" data-testid="checkout-form" aria-label="Checkout">
+  <div class="field" data-testid="email-field">
+    <label for="contact-method">Contact method</label>
+    <select id="contact-method" name="contactMethod">
+      <option>Email</option>
+      <option>Phone</option>
+      <option>SMS</option>
+    </select>
+  </div>
+  <label for="card-number">Card number</label>
+  <input id="card-number" data-testid="card-number" name="cardNumber" placeholder="4242 4242 4242 4242" inputmode="numeric" />
+  <div class="row">
+    <div>
+      <label for="card-expiry">Expiry date</label>
+      <input id="card-expiry" data-testid="card-expiry" name="cardExpiry" placeholder="MM / YY" />
+    </div>
+    <div>
+      <label for="card-cvv">CVV</label>
+      <input id="card-cvv" data-testid="card-cvv" name="cardCvv" placeholder="123" />
+    </div>
+  </div>
+  <button type="submit" id="checkout-pay" data-testid="checkout-pay">Pay now</button>
+</form>
+</body></html>`;
+
+/** Cluster 6 — the button gallery whose variants all match getByRole('button'). */
+const BUTTON_GALLERY_DOM = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Components / Button</title><style>
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: #23262f; background: #fff; }
+  header { border-bottom: 1px solid #e6e8ec; padding: 16px 32px; }
+  h1 { font-size: 18px; margin: 0; }
+  section { padding: 32px; display: flex; gap: 16px; align-items: center; }
+  .btn { padding: 10px 18px; border-radius: 8px; border: 1px solid transparent; font: inherit; font-weight: 600; }
+  .btn-primary { background: #4353ff; color: #fff; }
+  .btn[disabled] { background: #eceef2; color: #9aa0ab; }
+  .btn-loading { background: #4353ff66; color: #fff; }
+</style></head><body>
+<header><h1>Components / Button</h1></header>
+<section>
+  <button class="btn btn-primary" data-testid="primary-btn">Primary</button>
+  <button class="btn" disabled>Disabled</button>
+  <button class="btn btn-loading">Loading…</button>
+</section>
+</body></html>`;
+
+/** Cluster 9 — the admin reports page in dark mode; Export CSV is in the DOM but hidden. */
+const REPORTS_DARK_DOM = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Monthly report — Admin</title><style>
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; background: #0f1115; color: #e6e8ee; }
+  nav { background: #161a22; padding: 24px 0; }
+  nav a { display: block; padding: 10px 24px; color: #aab2c0; text-decoration: none; }
+  nav a[aria-current] { color: #fff; background: #232a36; }
+  main { padding: 28px 36px; }
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 0 auto 0 0; }
+  button { padding: 8px 14px; border-radius: 6px; border: 1px solid #2c3442; background: #1b212c; color: #e6e8ee; font: inherit; }
+  .export-btn { background: #2f6feb; border-color: #2f6feb; color: #fff; visibility: hidden; }
+  img { width: 100%; max-width: 720px; border-radius: 8px; background: #161a22; }
+  table { border-collapse: collapse; margin-top: 24px; min-width: 420px; }
+  caption { text-align: left; font-weight: 600; padding-bottom: 8px; }
+  th, td { border-bottom: 1px solid #232a36; padding: 8px 14px; text-align: left; }
+</style></head><body>
+<nav aria-label="Admin">
+  <a href="/dashboard">Dashboard</a>
+  <a href="/reports/monthly" aria-current="page">Reports</a>
+  <a href="/users">Users</a>
+</nav>
+<main>
+  <div class="toolbar">
+    <h1>Monthly report</h1>
+    <button type="button">Toggle theme</button>
+    <button type="button">Refresh data</button>
+    <button type="button" class="export-btn" hidden>Export CSV</button>
+  </div>
+  <img alt="Revenue chart" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='720' height='240'%3E%3Crect width='720' height='240' fill='%23161a22'/%3E%3Cpolyline points='20,200 140,150 260,170 380,110 500,120 620,60 700,80' fill='none' stroke='%232f6feb' stroke-width='4'/%3E%3C/svg%3E" />
+  <table>
+    <caption>Totals</caption>
+    <thead><tr><th>Month</th><th>Revenue</th></tr></thead>
+    <tbody>
+      <tr><td>June</td><td>$ 48,120</td></tr>
+      <tr><td>May</td><td>$ 44,930</td></tr>
+    </tbody>
+  </table>
+</main>
+</body></html>`;
+
 // ── Failure stories ─────────────────────────────────────────────────────────
 
 const checkoutPayLocator = "getByRole('button', { name: 'Pay' })";
@@ -750,6 +907,7 @@ export const FAILURE_STORIES = [
     aria:
       '- document:\n  - form "Checkout":\n    - textbox "Email address"\n    - textbox "Card number"\n' +
       '    - textbox "Expiry date"\n    - textbox "CVV"\n    - button "Pay now" [disabled]',
+    domSnapshot: { viewport: DOM_SNAPSHOT_VIEWPORT, html: CHECKOUT_PAY_DOM },
     evidence: {
       consoleOnFail: [
         {
@@ -819,6 +977,7 @@ export const FAILURE_STORIES = [
     aria:
       '- document:\n  - form "Checkout":\n    - combobox "Contact method"\n    - textbox "Card number"\n' +
       '    - textbox "Expiry date"\n    - textbox "CVV"\n    - button "Pay now"',
+    domSnapshot: { viewport: DOM_SNAPSHOT_VIEWPORT, html: CHECKOUT_CONTACT_DOM },
     evidence: {},
     appFiles: [],
     suspectSha: 'ee12ab34cd56ef7890a1b2c3d4e5f60718293a4c',
@@ -1065,6 +1224,7 @@ export const FAILURE_STORIES = [
       ),
     ],
     aria: '- document:\n  - section:\n    - button "Primary"\n    - button "Disabled" [disabled]\n    - button "Loading…"',
+    domSnapshot: { viewport: DOM_SNAPSHOT_VIEWPORT, html: BUTTON_GALLERY_DOM },
     evidence: {},
     appFiles: ['src/pages/components/button.vue'],
     suspectSha: '3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d',
@@ -1212,6 +1372,13 @@ export const FAILURE_STORIES = [
     projectId: 5,
     specFile: 'tests/admin/reports.spec.ts',
     locator: "getByRole('button', { name: 'Export CSV' })",
+    /**
+     * The locator is never acted on — it only ever appears in
+     * `expect(…).toBeVisible()` — so its healing snapshot comes from the
+     * reporter's assertion capture, keyed at the expect() call site (the
+     * error's innermost frame).
+     */
+    captureLocation: `tests/admin/reports.spec.ts:${lineOf(REPORTS_SPEC, "await expect(page.getByRole('button', { name: 'Export CSV' })).toBeVisible();")}:18`,
     failingCases: [
       failingCase(
         'exports the monthly report as CSV',
@@ -1236,7 +1403,11 @@ export const FAILURE_STORIES = [
           }),
       ),
     ],
-    aria: '- document:\n  - main:\n    - heading "Monthly report"\n    - img "Revenue chart"\n    - table "Totals"',
+    aria:
+      '- document:\n  - navigation "Admin":\n    - link "Dashboard"\n    - link "Reports"\n    - link "Users"\n' +
+      '  - main:\n    - heading "Monthly report" [level=1]\n    - button "Toggle theme"\n    - button "Refresh data"\n' +
+      '    - img "Revenue chart"\n    - table "Totals":\n      - row "Month Revenue"\n      - row "June $ 48,120"',
+    domSnapshot: { viewport: DOM_SNAPSHOT_VIEWPORT, html: REPORTS_DARK_DOM },
     evidence: {},
     appFiles: ['src/styles/theme.css'],
     suspectSha: '9a8b7c6d5e4f30211203f4e5d6c7b8a99a8b7c6d',
@@ -1368,6 +1539,19 @@ export const SIMULATOR_ERRORS = {
 /** Story lookup by cluster id. */
 export function storyByClusterId(clusterId) {
   return FAILURE_STORIES.find((s) => s.clusterId === clusterId) ?? null;
+}
+
+/**
+ * The story a seeded test case belongs to, resolved by the case's identity
+ * (project + spec file + title). Used by the demo dom-snapshot mirror to serve
+ * a story's authored failure-time DOM for any of its failing cases.
+ */
+export function storyForCase(projectId, filePath, title) {
+  return (
+    FAILURE_STORIES.find(
+      (s) => s.projectId === projectId && s.specFile === filePath && s.failingCases.some((fc) => fc.title === title),
+    ) ?? null
+  );
 }
 
 // ── Demo projects ───────────────────────────────────────────────────────────

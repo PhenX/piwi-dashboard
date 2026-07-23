@@ -1772,6 +1772,18 @@ const ALT_BUTTON_STRICT = [
 const PAY_CLICK_SITE = storyByClusterId(1).captureLocation;
 const EMAIL_FILL_SITE = storyByClusterId(2).captureLocation;
 const BUTTON_CLICK_SITE = storyByClusterId(6).captureLocation;
+const EXPORT_ASSERT_SITE = storyByClusterId(9).captureLocation;
+
+const ALT_EXPORT_CSV = [
+  {
+    locator: "getByRole('button', { name: 'Export CSV' })",
+    method: 'getByRole',
+    args: { role: 'button', name: 'Export CSV' },
+    score: 90,
+  },
+  { locator: "getByText('Export CSV')", method: 'getByText', args: { text: 'Export CSV' }, score: 75 },
+  { locator: "locator('.export-btn')", method: 'locator', args: { selector: '.export-btn' }, score: 40 },
+];
 
 let lsId = 1;
 const LOCATOR_SNAPSHOTS = [
@@ -2128,6 +2140,35 @@ const LOCATOR_SNAPSHOTS = [
     element_text: 'Primary',
     alternatives: ALT_BUTTON_STRICT,
     ...seenOnPass(3, 'tests/ui/button.spec.ts', 'Button primary variant renders correctly'),
+  },
+
+  // ── Cluster #9: Export CSV button hidden in dark mode ─────────────────────
+  // The locator is never acted on — it only appears in expect(…).toBeVisible()
+  // — so this snapshot comes from the reporter's ASSERTION capture, keyed at
+  // the expect() call site. On the failing (dark-mode) page the hidden button
+  // is absent from the ARIA snapshot, so healing flags the name-derived
+  // alternatives as stale, recommends the surviving class selector, and
+  // advises adding a data-testid.
+  {
+    id: lsId++,
+    test_case_id: caseIdByKey.get(`5\x00tests/admin/reports.spec.ts\x00exports the monthly report as CSV`),
+    location: EXPORT_ASSERT_SITE,
+    used_method: 'getByRole',
+    used_args: ['button', { name: 'Export CSV' }],
+    used_args_fp: locatorSig('getByRole', ['button', 'Export CSV']),
+    element_tag: 'button',
+    element_attrs: {
+      class: 'export-btn',
+      accessibleName: 'Export CSV',
+      center: { x: 1180, y: 96 },
+      // Three buttons at capture time (Toggle theme, Refresh data, Export
+      // CSV); only two remain visible on the failing dark-mode page, so the
+      // positional rename-rescue is correctly disqualified (count mismatch).
+      rolePosition: { role: 'button', count: 3, index: 2 },
+    },
+    element_text: 'Export CSV',
+    alternatives: ALT_EXPORT_CSV,
+    ...seenOnPass(5, 'tests/admin/reports.spec.ts', 'exports the monthly report as CSV'),
   },
 ];
 

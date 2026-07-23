@@ -54,7 +54,7 @@ That's the entire setup — there is nothing to start, wrap, or await inside you
 | **Console entries** — `warning`, `error`, and `assert` messages with source location (`console.log` noise is not collected) | as they happen | Console card on the [test case page](./ui-overview#test-case-detail); [AI diagnosis](./ai-diagnosis) evidence |
 | **Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint, plus LCP, CLS and INP (Chromium-only) | at test teardown | Web vitals card with color-coded thresholds; [performance trends](./flaky-tests#performance) |
 | **ARIA snapshot** of the final page state | on failure | Failure evidence on the test-case and cluster pages; [AI diagnosis](./ai-diagnosis) context |
-| **Locator snapshots** — element attributes, stable-ancestor anchors, and same-role position, plus ranked alternative locators (including rename-proof ancestor-scoped and name-free ones) for each acted-on element, stamped with the call site | after each successful action | [Locator healing](./reporter#locator-healing); when a failing name-based locator (`getByRole`, `getByText`, `getByLabel`, …) matches nothing, a fresh suggestion is attached to the test as a Playwright annotation |
+| **Locator snapshots** — element attributes, stable-ancestor anchors, and same-role position, plus ranked alternative locators (including rename-proof ancestor-scoped and name-free ones) for each element a test proves resolvable, stamped with the call site | after each successful action and each passing web-first assertion (`toBeVisible()`, `toHaveText()`, …) | [Locator healing](./reporter#locator-healing); when a failing name-based locator (`getByRole`, `getByText`, `getByLabel`, …) matches nothing, a fresh suggestion is attached to the test as a Playwright annotation |
 
 ::: tip Test source is captured without any fixture
 On a failure the reporter also reads the **call stack's in-project source** — the line that actually threw plus the callers above it (helpers, page objects), each as a small line-numbered snippet with the failing line marked. It needs no fixture (it comes from the stack trace plus the local source files) and renders as the **Test source** call stack on the [test-case](./ui-overview#test-case-detail) and cluster pages. `node_modules`/Playwright frames are skipped.
@@ -89,7 +89,8 @@ Semantics worth knowing:
 
 - **`beforeAll` / `afterAll` activity is intentionally not captured** — only what happens inside a test is attributed to that test.
 - **Multi-page tests** attribute Web Vitals and the failure ARIA snapshot to the most recently active page.
-- **Repeated call sites** (actions in loops) keep the latest capture per call site — the dashboard stores one locator snapshot per location.
+- **Repeated call sites** (actions in loops) keep the latest capture per call site — the dashboard stores one locator snapshot per location. Repeated *assertions* at one call site probe the element only once per test.
+- **Assertion capture is positive-presence only** — negated assertions (`.not.…`), absence checks (`toBeHidden`, `toBeDetached`), multi-element checks (`toHaveCount`, array forms) and page-level ones (`toHaveTitle`, `toHaveURL`) never probe.
 
 ## Composing with your own fixtures
 
@@ -118,14 +119,14 @@ Two rules:
 
 Capture is designed to never fail or noticeably slow down a test:
 
-- Per action: one DOM read, and occasionally a bounded ARIA snapshot (500 ms deadline).
+- Per action: one DOM read, and occasionally a bounded ARIA snapshot (500 ms deadline). Passing assertions pay the same, but at most once per call site per test.
 - At teardown: draining in-flight captures is capped at 2 seconds.
 - A capture that can't complete (mid-navigation, detached element) is dropped silently — it never throws into your test.
 
 | Option | Effect |
 |--------|--------|
 | `collectPerformanceMetrics: false` | Master switch — disables all fixture capture |
-| `captureLocators: false` (or `PIWI_CAPTURE_LOCATORS=false`) | Disables only the per-action locator snapshots; network, console, and Web Vitals stay on |
+| `captureLocators: false` (or `PIWI_CAPTURE_LOCATORS=false`) | Disables only the locator snapshots (action and assertion capture alike); network, console, and Web Vitals stay on |
 | `capturePageState: false` (or `PIWI_CAPTURE_PAGE_STATE=false`) | Disables only the test-end app-state capture (URL, storage key names, cookie flags — values are never captured) |
 | `inspectOnFailure: true` (or `PIWI_INSPECT_ON_FAIL=true`) | Opt-in local debugging aid — a failing test opens the Playwright Inspector on its still-open page (headed browsers only, never in CI). See [Inspect the failing page live](./reporter#inspect-the-failing-page-live-local-runs) |
 | `pickLocatorOnFailure: true` (or `PIWI_PICK_LOCATOR_ON_FAIL=true`) | Opt-in local debugging aid — after a locator failure, click the intended element on the still-open page and confirm a ranked replacement locator; the choice is recorded for the healing panel (headed browsers only, never in CI). See [Pick a replacement locator](./reporter#pick-a-replacement-locator-on-the-failing-page-local-runs) |

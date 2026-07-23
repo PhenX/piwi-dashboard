@@ -124,6 +124,62 @@ export const ACTION_METHODS: string[] = [
 /** Chain methods that create a new locator scope (origin tracks the chain call). */
 export const LOCATOR_CREATING_CHAINS: ReadonlySet<string> = new Set(LOCATOR_METHODS);
 
+/**
+ * The private `Locator` method every web-first assertion funnels through:
+ * `expect(locator).toBeVisible()` and friends all resolve to
+ * `locator._expect(expression, { isNot, timeout, … })` on the locator instance
+ * the test passed to `expect()` — which, under the capture fixtures, is the
+ * wrapped proxy. Intercepting it is what lets assertion-only locators build
+ * healing history. The funnel is unchanged across Playwright 1.40 → current;
+ * if a future version renames it the interception silently never fires and
+ * assertions behave exactly as without the proxy.
+ */
+export const EXPECT_METHOD = '_expect';
+
+/**
+ * Web-first assertion expressions whose PASS proves the target element
+ * resolved — the assertion-side equivalent of a successful action, and the
+ * capture hook for locators only ever used in `expect()`.
+ *
+ * Deliberately excluded:
+ *  - absence assertions (`to.be.hidden`, `to.be.detached`): passing means the
+ *    element may not exist at all — nothing to probe;
+ *  - multi-element assertions (`to.have.count`, the `*.array` text/class
+ *    forms, `to.have.values`): the single-element probe would only hit a
+ *    strict-mode violation;
+ *  - page-level assertions (`to.have.title`, `to.have.url`): they run on an
+ *    internal `:root` locator that carries no healing value.
+ * Negated calls (`.not.…`, `isNot: true`) are skipped at the call site — a
+ * passing negative assertion proves nothing about the element resolving.
+ */
+export const EXPECT_CAPTURE_EXPRESSIONS: ReadonlySet<string> = new Set([
+  'to.be.attached',
+  'to.be.checked',
+  'to.be.disabled',
+  'to.be.editable',
+  'to.be.empty',
+  'to.be.enabled',
+  'to.be.focused',
+  'to.be.in.viewport',
+  'to.be.readonly',
+  'to.be.visible',
+  'to.contain.class',
+  'to.contain.text',
+  'to.have.accessible.description',
+  'to.have.accessible.error.message',
+  'to.have.accessible.name',
+  'to.have.attribute',
+  'to.have.attribute.value',
+  'to.have.class',
+  'to.have.css',
+  'to.have.id',
+  'to.have.js.property',
+  'to.have.role',
+  'to.have.text',
+  'to.have.value',
+  'to.match.aria',
+]);
+
 // ── Accessible name extraction ───────────────────────────────────────────────
 
 /**
@@ -316,6 +372,12 @@ export function captureCallerLocation(stack: string = new Error().stack ?? ''): 
   // USER file named `fixtures.*` further down the stack must be kept, so the
   // fixtures-proxy frame is only skipped when it directly follows this module.
   let prevWasCaptureModule = false;
+  // The file this very function lives in, learned from its own frame (the
+  // first parseable one). In the published package that file is the tsup
+  // bundle (`dist/index.js`), where the module-name rules below can never
+  // match — but every frame in the same file as this function is capture
+  // machinery by definition, never a user call site.
+  let selfFile: string | null = null;
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!.trim();
     if (!line.startsWith('at')) continue;
@@ -333,6 +395,15 @@ export function captureCallerLocation(stack: string = new Error().stack ?? ''): 
     // Must look like a source file (has an extension).
     if (!/\.[a-z]+$/i.test(file)) {
       prevWasCaptureModule = false;
+      continue;
+    }
+    // This function's own file — internal by definition, bundled or not. The
+    // fixtures-proxy skip stays armed only in the unbundled layout (where the
+    // proxy lives in a separate `capture-fixtures.*`/`fixtures.*` file); in
+    // the bundle the proxy frame is this same file and is consumed right here.
+    if (selfFile === null || file === selfFile) {
+      selfFile ??= file;
+      prevWasCaptureModule = /[\\/]locator-healing\.[a-z]+$/i.test(file);
       continue;
     }
     // This module — always an internal frame; remember it so the immediately

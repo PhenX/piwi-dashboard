@@ -10,7 +10,8 @@
  * of `public/demo/traces/checkout-pay-timeout.zip`.
  */
 import { and, eq } from 'drizzle-orm';
-import { files, testRunsCases } from '~~/server/database/schema.sqlite';
+import { files, testCases, testRunsCases } from '~~/server/database/schema.sqlite';
+import { storyForCase } from '#shared/demo/failure-stories.mjs';
 import { renderAriaSnapshotHtml } from '~~/server/utils/dom-snapshot-aria';
 import { parseTraceTexts, traceFileRank } from '~~/server/utils/trace-events';
 import {
@@ -71,11 +72,14 @@ async function loadTraceDomSnapshot(path: string): Promise<DomSnapshotResult | n
 
 /**
  * GET /api/test-runs/:id/cases/:caseId/dom-snapshot — mirrors the server's
- * `resolveCaseDomSnapshot`: trace-derived DOM by default, the ARIA tree as a
- * fallback or on demand (`?source=aria`), and `availableSources` so the picker
- * can offer the view toggle. The case carrying the committed trace gets the
- * real trace-derived DOM parsed in the browser; every failed case's seeded
- * `ariaSnapshot` renders with the same browser-safe renderer the real app uses.
+ * `resolveCaseDomSnapshot`: DOM by default, the ARIA tree as a fallback or on
+ * demand (`?source=aria`), and `availableSources` so the picker can offer the
+ * view toggle. The DOM ladder is demo-specific: a story's **authored**
+ * failure-time page wins (served as if extracted from the case's trace — the
+ * committed trace ZIPs are recordings of deliberately tiny fixture pages, too
+ * bare for the locator picker), then the real trace-derived DOM parsed in the
+ * browser, then the seeded `ariaSnapshot` rendered with the same browser-safe
+ * renderer the real app uses.
  */
 export async function apiGetDemoDomSnapshot(testRunsCaseId: number, query?: URLSearchParams): Promise<unknown> {
   const db = await getDemoDb();
@@ -86,15 +90,27 @@ export async function apiGetDemoDomSnapshot(testRunsCaseId: number, query?: URLS
       .where(and(eq(files.testRunsCaseId, testRunsCaseId), eq(files.type, 'trace')))
       .limit(1),
     db
-      .select({ aria: testRunsCases.ariaSnapshot })
+      .select({
+        aria: testRunsCases.ariaSnapshot,
+        projectId: testCases.projectId,
+        filePath: testCases.filePath,
+        title: testCases.title,
+      })
       .from(testRunsCases)
+      .leftJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
       .where(eq(testRunsCases.id, testRunsCaseId))
       .limit(1),
   ]);
 
   const tracePath = traceRows[0]?.path;
-  const ariaHtml = caseRows[0]?.aria ? renderAriaSnapshotHtml(caseRows[0].aria) : null;
-  let domAvailable = !!tracePath;
+  const caseRow = caseRows[0];
+  const ariaHtml = caseRow?.aria ? renderAriaSnapshotHtml(caseRow.aria) : null;
+  const story =
+    caseRow?.projectId != null && caseRow.filePath && caseRow.title
+      ? storyForCase(caseRow.projectId, caseRow.filePath, caseRow.title)
+      : null;
+  const authored = story?.domSnapshot ?? null;
+  let domAvailable = !!authored || !!tracePath;
 
   const sources = (): DomSnapshotSource[] => [
     ...(domAvailable ? (['dom'] as const) : []),
@@ -109,8 +125,20 @@ export async function apiGetDemoDomSnapshot(testRunsCaseId: number, query?: URLS
     availableSources: sources(),
   });
 
-  // Explicit ARIA request — skip the trace entirely.
+  // Explicit ARIA request — skip the DOM ladder entirely.
   if (query?.get('source') === 'aria' && ariaHtml) return asAria();
+
+  if (authored) {
+    return {
+      status: 'ok',
+      html: authored.html,
+      truncated: false,
+      snapshotName: 'before@failure',
+      source: 'dom',
+      viewport: authored.viewport,
+      availableSources: sources(),
+    } satisfies DomSnapshotResult;
+  }
 
   if (tracePath) {
     const result = await getTraceDomSnapshot(tracePath);

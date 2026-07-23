@@ -68,6 +68,13 @@ export interface StoryFiring {
   requiresColorScheme?: string;
 }
 
+export interface StoryDomSnapshot {
+  /** The recorded page viewport, for the picker's proportion-preserving zoom. */
+  viewport: { width: number; height: number };
+  /** Self-contained full-page HTML, served as if extracted from the case's trace. */
+  html: string;
+}
+
 export interface FailureStory {
   key: string;
   clusterId: number;
@@ -78,6 +85,8 @@ export interface FailureStory {
   captureLocation?: string;
   failingCases: FailingCase[];
   aria: string | null;
+  /** Authored failure-time DOM for the locator picker / DOM snapshot card. */
+  domSnapshot?: StoryDomSnapshot;
   evidence: StoryEvidence;
   appFiles: string[];
   suspectSha: string;
@@ -217,4 +226,5 @@ export declare function buildSourceFrames(failing: {
   frames: Array<{ file: string; line: number }>;
 }): Array<{ file: string; line: number; snippet: string }>;
 export declare function storyByClusterId(clusterId: number): FailureStory | null;
+export declare function storyForCase(projectId: number, filePath: string, title: string): FailureStory | null;
 export declare function projectSourceFilePaths(projectId: number): string[];

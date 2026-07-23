@@ -26,6 +26,8 @@ import {
   CHAIN_METHODS,
   ACTION_METHODS,
   LOCATOR_CREATING_CHAINS,
+  EXPECT_METHOD,
+  EXPECT_CAPTURE_EXPRESSIONS,
   type LocatorSnapshot,
   type FailedLocatorInfo,
 } from '../../reporter/dist/internal/capture/locator-healing.js';
@@ -261,10 +263,73 @@ export const test = base.extend<{ page: Page }>({
     const capturedLocators: LocatorSnapshot[] = [];
     const capturePromises: Promise<void>[] = [];
     const failedLocators: FailedLocatorInfo[] = [];
+    // Call sites already captured via a passing assertion this test —
+    // assertions are denser than actions, so each site probes only once.
+    const expectCapturedLocations = new Set<string>();
 
     // Method-surface constants and the in-page probe are imported from the
     // reporter so this fixture stays in lockstep with the reporter's proxy
-    // (LOCATOR_METHODS, CHAIN_METHODS, ACTION_METHODS, probeElementAttrs).
+    // (LOCATOR_METHODS, CHAIN_METHODS, ACTION_METHODS, EXPECT_METHOD,
+    // EXPECT_CAPTURE_EXPRESSIONS, probeElementAttrs).
+
+    // Fire-and-forget element capture for a locator that proved it resolves —
+    // a successful action or a passing presence assertion (mirrors the
+    // reporter fixture's startElementCapture).
+    function startElementCapture(
+      target: any,
+      seq: number,
+      callerLocation: string | null,
+      used: LocatorSnapshot['used'],
+    ): void {
+      const resolveAttrs = (async () => {
+        let deadline: ReturnType<typeof setTimeout> | undefined;
+        try {
+          const attrs = (await Promise.race([
+            target.evaluate(probeElementAttrs, CAPTURED_ATTRS_ARG),
+            new Promise<null>((_, reject) => {
+              deadline = setTimeout(() => reject(new Error('locator capture timeout')), 500);
+            }),
+          ])) as any;
+
+          // Only pay for the ARIA snapshot when the accessible name will
+          // be used (role-based or form-field alternatives).
+          const role = resolveAriaRole({ ...attrs, accessibleName: null });
+          const isFormField = ['input', 'select', 'textarea'].includes(attrs.tagName);
+          // Bound with a timeout: without it, ariaSnapshot waits up to the
+          // test timeout when the page is mid-navigation, hanging the
+          // fixture teardown that drains these capture promises.
+          const aria = role || isFormField ? await ariaSnapshotBestEffort(target as any, 500) : null;
+
+          const accessibleName =
+            extractAccessibleName(aria) || approximateAccessibleName({ ...attrs, accessibleName: null });
+
+          capturedLocators[seq] = {
+            location: callerLocation,
+            used,
+            // hasLabel/selectorCounts inform alternative generation only —
+            // keep the stored element to the wire shape. rolePosition and
+            // ancestors ARE wire fields: the server's renamed-element
+            // match uses them at heal time.
+            element: {
+              tagName: attrs.tagName,
+              attributes: attrs.attributes,
+              textContent: attrs.textContent,
+              accessibleName,
+              center: attrs.center,
+              ...(attrs.rolePosition ? { rolePosition: attrs.rolePosition } : {}),
+              ...(attrs.ancestors && attrs.ancestors.length > 0 ? { ancestors: attrs.ancestors } : {}),
+            },
+            alternatives: generateAlternatives({ ...attrs, accessibleName }),
+          };
+        } catch {
+          // keep the placeholder
+        } finally {
+          clearTimeout(deadline);
+        }
+      })();
+
+      capturePromises.push(resolveAttrs);
+    }
 
     function wrapLocator(locator: any, originMethod: string, originArgs: unknown[]): any {
       return new Proxy(locator, {
@@ -279,6 +344,55 @@ export const test = base.extend<{ page: Page }>({
                 return wrapLocator(next, String(prop), args);
               }
               return wrapLocator(next, originMethod, originArgs);
+            };
+          }
+
+          if (prop === EXPECT_METHOD) {
+            return async (...callArgs: unknown[]) => {
+              const expression = typeof callArgs[0] === 'string' ? callArgs[0] : '';
+              const isNot = Boolean((callArgs[1] as { isNot?: boolean } | undefined)?.isNot);
+              // Only positive presence-proving assertions participate —
+              // negations, absence/count/page-level assertions, and any
+              // unknown future expression pass through untouched.
+              if (isNot || !EXPECT_CAPTURE_EXPRESSIONS.has(expression)) {
+                return original.apply(target, callArgs);
+              }
+
+              // Sync, before the await — the caller's frames are gone after it.
+              const callerLocation = captureCallerLocation();
+              const used = {
+                method: originMethod,
+                args: originArgs,
+                raw: `${originMethod}(${JSON.stringify(originArgs)})`,
+              };
+
+              // One probe per call site: assertions are far denser than
+              // actions (loops, toPass blocks re-assert the same line). The
+              // placeholder still marks the location as exercised this run.
+              const alreadyCaptured = callerLocation !== null && expectCapturedLocations.has(callerLocation);
+              let seq = -1;
+              if (!alreadyCaptured) {
+                seq = capturedLocators.length;
+                capturedLocators.push({ location: callerLocation, used, element: null, alternatives: [] });
+              }
+
+              const result = await original.apply(target, callArgs);
+
+              // `_expect` reports the outcome instead of throwing (the matcher
+              // layer above does the throw). A missing `matches` — a future
+              // result-shape change — degrades to no capture.
+              const matches = (result as { matches?: boolean } | null | undefined)?.matches;
+              if (matches === true && !alreadyCaptured) {
+                if (callerLocation) expectCapturedLocations.add(callerLocation);
+                startElementCapture(target, seq, callerLocation, used);
+              } else if (matches === false) {
+                // A presence assertion that missed is a failed-locator signal —
+                // feeds the failure-time picker and the fresh-locator
+                // suggestion, same as a failed action.
+                failedLocators.push({ method: originMethod, args: originArgs, location: callerLocation });
+              }
+
+              return result;
             };
           }
 
@@ -314,54 +428,7 @@ export const test = base.extend<{ page: Page }>({
               throw err;
             }
 
-            const resolveAttrs = (async () => {
-              let deadline: ReturnType<typeof setTimeout> | undefined;
-              try {
-                const attrs = (await Promise.race([
-                  target.evaluate(probeElementAttrs, CAPTURED_ATTRS_ARG),
-                  new Promise<null>((_, reject) => {
-                    deadline = setTimeout(() => reject(new Error('locator capture timeout')), 500);
-                  }),
-                ])) as any;
-
-                // Only pay for the ARIA snapshot when the accessible name will
-                // be used (role-based or form-field alternatives).
-                const role = resolveAriaRole({ ...attrs, accessibleName: null });
-                const isFormField = ['input', 'select', 'textarea'].includes(attrs.tagName);
-                // Bound with a timeout: without it, ariaSnapshot waits up to the
-                // test timeout when the page is mid-navigation, hanging the
-                // fixture teardown that drains these capture promises.
-                const aria = role || isFormField ? await ariaSnapshotBestEffort(target as any, 500) : null;
-
-                const accessibleName =
-                  extractAccessibleName(aria) || approximateAccessibleName({ ...attrs, accessibleName: null });
-
-                capturedLocators[seq] = {
-                  location: callerLocation,
-                  used,
-                  // hasLabel/selectorCounts inform alternative generation only —
-                  // keep the stored element to the wire shape. rolePosition and
-                  // ancestors ARE wire fields: the server's renamed-element
-                  // match uses them at heal time.
-                  element: {
-                    tagName: attrs.tagName,
-                    attributes: attrs.attributes,
-                    textContent: attrs.textContent,
-                    accessibleName,
-                    center: attrs.center,
-                    ...(attrs.rolePosition ? { rolePosition: attrs.rolePosition } : {}),
-                    ...(attrs.ancestors && attrs.ancestors.length > 0 ? { ancestors: attrs.ancestors } : {}),
-                  },
-                  alternatives: generateAlternatives({ ...attrs, accessibleName }),
-                };
-              } catch {
-                // keep the placeholder
-              } finally {
-                clearTimeout(deadline);
-              }
-            })();
-
-            capturePromises.push(resolveAttrs);
+            startElementCapture(target, seq, callerLocation, used);
 
             return result;
           };

@@ -26,6 +26,8 @@ import {
   CHAIN_METHODS,
   ACTION_METHODS,
   LOCATOR_CREATING_CHAINS,
+  EXPECT_METHOD,
+  EXPECT_CAPTURE_EXPRESSIONS,
   CAPTURED_ATTRIBUTES,
   TAG_TO_ROLE,
   INPUT_TYPE_TO_ROLE,
@@ -172,6 +174,10 @@ interface CaptureSink {
   capturedLocators: LocatorSnapshot[];
   capturePromises: Promise<void>[];
   failedLocators: FailedLocatorInfo[];
+  // Call sites already captured via a passing assertion this test. Assertions
+  // are far denser than actions (a loop can assert the same line dozens of
+  // times), so unlike actions they probe each call site only once per test.
+  expectCapturedLocations: Set<string>;
   // Most-recently-touched instrumented page — used at teardown for the failure
   // ARIA snapshot and web-vitals read when a test drives several pages.
   lastActivePage: Page | null;
@@ -199,6 +205,7 @@ function createSink(): CaptureSink {
     capturedLocators: [],
     capturePromises: [],
     failedLocators: [],
+    expectCapturedLocations: new Set(),
     lastActivePage: null,
     testInfo: null,
     stashedWebVitals: null,
@@ -806,6 +813,86 @@ export function probeElementAttrs(el: any, arg: ProbeArg): CapturedAttrs {
   };
 }
 
+/**
+ * Fire-and-forget element capture for a locator that just proved it resolves —
+ * a successful action or a passing presence assertion. Probes the element,
+ * generates ranked alternatives, and replaces the placeholder at `seq`. The
+ * snapshot wait is bounded by a 500ms deadline (evaluate can hang when the
+ * page navigates), but the probe's underlying protocol call is tracked in
+ * PENDING_PROBES so the close wrappers can drain it — and in capturePromises
+ * so flushSink outwaits it — even when the deadline abandons it. An evaluate
+ * still in flight when its page closes crashes the connection dispatcher with
+ * a global "not bound" error.
+ */
+function startElementCapture(
+  sink: CaptureSink,
+  target: Locator,
+  seq: number,
+  callerLocation: string | null,
+  used: LocatorSnapshot['used'],
+): void {
+  const probe = target.evaluate(probeElementAttrs, CAPTURED_ATTRS_ARG);
+  const settledProbe = probe.then(
+    () => undefined,
+    () => undefined,
+  );
+  PENDING_PROBES.add(settledProbe);
+  settledProbe.then(() => PENDING_PROBES.delete(settledProbe));
+  sink.capturePromises.push(settledProbe);
+
+  const resolveAttrs = (async () => {
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const attrs = await Promise.race([
+        probe,
+        new Promise<never>((_, reject) => {
+          deadline = setTimeout(() => reject(new Error('locator capture timeout')), 500);
+        }),
+      ]);
+
+      // The browser-computed accessible name only feeds role-based and
+      // form-field alternatives, so only pay for the extra ARIA
+      // snapshot when the element actually has a role or is a field.
+      const role = resolveAriaRole({ ...attrs, accessibleName: null });
+      const isFormField = FORM_FIELD_TAGS.has(attrs.tagName);
+      // Bound with a timeout: without it, ariaSnapshot waits up to the
+      // test timeout when the page is mid-navigation, which hangs the
+      // teardown that drains these capture promises.
+      // ariaSnapshotBestEffort adapts the options to the installed
+      // Playwright version and never throws (see its doc comment).
+      const aria = role || isFormField ? await ariaSnapshotBestEffort(target, 500) : null;
+
+      const accessibleName =
+        extractAccessibleName(aria) || approximateAccessibleName({ ...attrs, accessibleName: null });
+
+      sink.capturedLocators[seq] = {
+        location: callerLocation,
+        used,
+        // hasLabel/selectorCounts inform alternative generation only —
+        // keep the stored element to the wire shape. rolePosition and
+        // ancestors ARE wire fields: the server's renamed-element match
+        // uses them at heal time.
+        element: {
+          tagName: attrs.tagName,
+          attributes: attrs.attributes,
+          textContent: attrs.textContent,
+          accessibleName,
+          center: attrs.center,
+          ...(attrs.rolePosition ? { rolePosition: attrs.rolePosition } : {}),
+          ...(attrs.ancestors && attrs.ancestors.length > 0 ? { ancestors: attrs.ancestors } : {}),
+        },
+        alternatives: generateAlternatives({ ...attrs, accessibleName }),
+      };
+    } catch {
+      // element detached or timeout — keep the placeholder
+    } finally {
+      clearTimeout(deadline);
+    }
+  })();
+
+  sink.capturePromises.push(resolveAttrs);
+}
+
 // Chain methods that take args and define a new locator scope (not just narrow).
 // Origin method/args update to the chain call, e.g. .locator('.item') → locator('.item').
 // Positional/filter chains that narrow but don't change locator identity.
@@ -824,6 +911,59 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
             return wrapLocator(page, next, String(prop), args);
           }
           return wrapLocator(page, next, originMethod, originArgs);
+        };
+      }
+
+      if (prop === EXPECT_METHOD) {
+        return async (...callArgs: unknown[]): Promise<unknown> => {
+          const sink = currentSink;
+          const expression = typeof callArgs[0] === 'string' ? callArgs[0] : '';
+          const isNot = Boolean((callArgs[1] as { isNot?: boolean } | undefined)?.isNot);
+          // Only positive presence-proving assertions participate — negations,
+          // absence/count/page-level assertions, and any unknown future
+          // expression pass through untouched.
+          if (!sink || isNot || !EXPECT_CAPTURE_EXPRESSIONS.has(expression)) {
+            return fn.apply(target, callArgs);
+          }
+
+          sink.lastActivePage = page;
+          // Sync, before the await — the caller's frames are gone after it.
+          const callerLocation = captureCallerLocation();
+          const used = {
+            method: originMethod,
+            args: originArgs,
+            raw: `${originMethod}(${JSON.stringify(originArgs)})`,
+          };
+
+          // One probe per call site: assertions are far denser than actions
+          // (loops, toPass blocks re-assert the same line), and the server
+          // keeps one row per location anyway. The placeholder still marks
+          // the location as exercised this run.
+          const alreadyCaptured = callerLocation !== null && sink.expectCapturedLocations.has(callerLocation);
+          let seq = -1;
+          if (!alreadyCaptured) {
+            seq = sink.capturedLocators.length;
+            sink.capturedLocators.push({ location: callerLocation, used, element: null, alternatives: [] });
+          }
+
+          const result = await fn.apply(target, callArgs);
+
+          // `_expect` reports the outcome instead of throwing (the matcher
+          // layer above does the throw), so read it off the result. A missing
+          // `matches` — a future result-shape change — degrades to no capture,
+          // never to a broken assertion.
+          const matches = (result as { matches?: boolean } | null | undefined)?.matches;
+          if (matches === true && !alreadyCaptured) {
+            if (callerLocation) sink.expectCapturedLocations.add(callerLocation);
+            startElementCapture(sink, target, seq, callerLocation, used);
+          } else if (matches === false) {
+            // A presence assertion that missed is a failed-locator signal —
+            // feeds the failure-time picker and the fresh-locator suggestion,
+            // same as a failed action.
+            sink.failedLocators.push({ method: originMethod, args: originArgs, location: callerLocation });
+          }
+
+          return result;
         };
       }
 
@@ -868,73 +1008,8 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
           throw error;
         }
 
-        // Fire-and-forget: capture element data without blocking the test. The
-        // snapshot wait below is bounded by a 500ms deadline (evaluate can hang
-        // when the page navigates), but the probe's underlying protocol call is
-        // tracked in PENDING_PROBES so the close wrappers can drain it — and in
-        // capturePromises so flushSink outwaits it — even when the deadline
-        // abandons it. An evaluate still in flight when its page closes crashes
-        // the connection dispatcher with a global "not bound" error.
-        const probe = target.evaluate(probeElementAttrs, CAPTURED_ATTRS_ARG);
-        const settledProbe = probe.then(
-          () => undefined,
-          () => undefined,
-        );
-        PENDING_PROBES.add(settledProbe);
-        settledProbe.then(() => PENDING_PROBES.delete(settledProbe));
-        sink.capturePromises.push(settledProbe);
-
-        const resolveAttrs = (async () => {
-          let deadline: ReturnType<typeof setTimeout> | undefined;
-          try {
-            const attrs = await Promise.race([
-              probe,
-              new Promise<never>((_, reject) => {
-                deadline = setTimeout(() => reject(new Error('locator capture timeout')), 500);
-              }),
-            ]);
-
-            // The browser-computed accessible name only feeds role-based and
-            // form-field alternatives, so only pay for the extra ARIA
-            // snapshot when the element actually has a role or is a field.
-            const role = resolveAriaRole({ ...attrs, accessibleName: null });
-            const isFormField = FORM_FIELD_TAGS.has(attrs.tagName);
-            // Bound with a timeout: without it, ariaSnapshot waits up to the
-            // test timeout when the page is mid-navigation, which hangs the
-            // teardown that drains these capture promises.
-            // ariaSnapshotBestEffort adapts the options to the installed
-            // Playwright version and never throws (see its doc comment).
-            const aria = role || isFormField ? await ariaSnapshotBestEffort(target, 500) : null;
-
-            const accessibleName =
-              extractAccessibleName(aria) || approximateAccessibleName({ ...attrs, accessibleName: null });
-
-            sink.capturedLocators[seq] = {
-              location: callerLocation,
-              used,
-              // hasLabel/selectorCounts inform alternative generation only —
-              // keep the stored element to the wire shape. rolePosition and
-              // ancestors ARE wire fields: the server's renamed-element match
-              // uses them at heal time.
-              element: {
-                tagName: attrs.tagName,
-                attributes: attrs.attributes,
-                textContent: attrs.textContent,
-                accessibleName,
-                center: attrs.center,
-                ...(attrs.rolePosition ? { rolePosition: attrs.rolePosition } : {}),
-                ...(attrs.ancestors && attrs.ancestors.length > 0 ? { ancestors: attrs.ancestors } : {}),
-              },
-              alternatives: generateAlternatives({ ...attrs, accessibleName }),
-            };
-          } catch {
-            // element detached or timeout — keep the placeholder
-          } finally {
-            clearTimeout(deadline);
-          }
-        })();
-
-        sink.capturePromises.push(resolveAttrs);
+        // Fire-and-forget: capture element data without blocking the test.
+        startElementCapture(sink, target, seq, callerLocation, used);
 
         return result;
       };
