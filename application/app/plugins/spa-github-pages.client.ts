@@ -19,8 +19,14 @@ export default defineNuxtPlugin((nuxtApp) => {
 
   sessionStorage.removeItem('spa:redirect');
 
-  nuxtApp.hook('app:mounted', () => {
+  nuxtApp.hook('app:mounted', async () => {
     const router = useRouter();
-    router.replace(redirect);
+    // Wait for the router's initial navigation to settle before replacing it,
+    // otherwise the restore can race the initial route resolution and be lost
+    // (leaving the user on the home page).
+    await router.isReady();
+    if (router.currentRoute.value.fullPath !== redirect) {
+      await router.replace(redirect).catch(() => {});
+    }
   });
 });
