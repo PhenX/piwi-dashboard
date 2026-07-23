@@ -1,3 +1,25 @@
+use tauri_build::{AppManifest, Attributes};
+
+// Declare our custom (app) commands so Tauri autogenerates an `allow-<command>`
+// permission for each. The dashboard is served from a real loopback server, so
+// the webview runs at a *remote* origin (`http://127.0.0.1:<port>`) — and Tauri
+// refuses to expose app commands to remote content unless a capability
+// explicitly grants them (see `capabilities/remote.json`). Without this, every
+// `invoke(...)` from the window is rejected by the ACL.
+//
+// Command names here MUST stay in sync with `tauri::generate_handler!` in
+// `src/lib.rs` and the `allow-*` grants in the capability files; the
+// `desktop-acl-consistency` test enforces that.
 fn main() {
-    tauri_build::build()
+    tauri_build::try_build(
+        Attributes::new().app_manifest(AppManifest::new().commands(&[
+            "desktop_get_service_settings",
+            "desktop_set_run_in_background",
+            "desktop_set_start_on_login",
+            "desktop_open_external",
+            "desktop_notify",
+            "desktop_save_download",
+        ])),
+    )
+    .expect("failed to run tauri-build");
 }
