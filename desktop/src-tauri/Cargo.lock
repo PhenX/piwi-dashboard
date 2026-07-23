@@ -2503,7 +2503,7 @@ dependencies = [
 
 [[package]]
 name = "piwi-desktop"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "rand 0.8.7",
  "serde",
@@ -2513,6 +2513,7 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
+ "tauri-plugin-playwright",
  "tauri-plugin-shell",
  "tauri-plugin-single-instance",
  "tauri-plugin-store",
@@ -3660,6 +3661,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-playwright"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c7577aaa3dd19b31b2b5b378d6264861672d07c22bd2215069ed4238adac43a"
+dependencies = [
+ "cairo-rs",
+ "gio",
+ "glib",
+ "gtk",
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "tokio",
+ "webkit2gtk",
+]
+
+[[package]]
 name = "tauri-plugin-shell"
 version = "2.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3950,6 +3970,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",
