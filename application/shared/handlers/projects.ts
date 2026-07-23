@@ -43,24 +43,44 @@ async function getProjects(db: DrizzleDB, scope: ProjectScope = 'all') {
 export async function listProjects(db: DrizzleDB, scope: ProjectScope = 'all') {
   const { ids: projectIds, projects: allProjects } = await getProjects(db, scope);
 
-  // 1. Run counts + latest run per project (single GROUP BY query instead of loading all rows)
+  // 1. Run counts per project (single GROUP BY query instead of loading all rows)
   const runStats: any[] = await db
     .select({
       projectId: testRuns.projectId,
       count: count(),
-      latestRunId: sql<number>`MAX(id)`,
-      latestStartTime: sql<Date>`MAX(start_time)`,
     })
     .from(testRuns)
     .where(inArray(testRuns.projectId, projectIds))
     .groupBy(testRuns.projectId);
 
   const runCountByProjectId = new Map<number, number>();
-  const latestRunIds: number[] = [];
   for (const r of runStats) {
     runCountByProjectId.set(r.projectId, r.count);
-    if (r.latestRunId) latestRunIds.push(r.latestRunId);
   }
+
+  // Latest run id per project, ranked by start_time (id as a deterministic
+  // tiebreaker). Using start_time rather than MAX(id) keeps "latest run"
+  // correct even when rows are ingested out of chronological order — e.g.
+  // historical uploads on the server, or the demo seed which inserts runs
+  // newest-first (so MAX(id) would be the oldest run).
+  const rankedRuns = db.$with('ranked_latest_runs').as(
+    db
+      .select({
+        id: testRuns.id,
+        projectId: testRuns.projectId,
+        rn: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${testRuns.projectId} ORDER BY ${testRuns.startTime} DESC, ${testRuns.id} DESC)`.as(
+          'rn',
+        ),
+      })
+      .from(testRuns)
+      .where(inArray(testRuns.projectId, projectIds)),
+  );
+  const latestIdRows: any[] = await db
+    .with(rankedRuns)
+    .select({ id: rankedRuns.id })
+    .from(rankedRuns)
+    .where(eq(rankedRuns.rn, 1));
+  const latestRunIds: number[] = latestIdRows.map((r) => r.id);
 
   // 2. Fetch full latest run rows
   const latestRuns: any[] =
