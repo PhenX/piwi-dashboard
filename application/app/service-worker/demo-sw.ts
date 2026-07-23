@@ -28,6 +28,13 @@ declare const self: ServiceWorkerGlobalScope & typeof globalThis;
 //   API_PREFIX  = '/piwi-dashboard/demo/api/'
 const SW_DIR_URL = self.location.href.replace(/\/[^/]*$/, '/');
 const API_PREFIX = new URL(SW_DIR_URL).pathname.replace(/\/+$/, '') + '/api/';
+// The registration scope path (trailing slash), e.g. '/demo/'.
+const SCOPE_PATH = new URL(SW_DIR_URL).pathname;
+// The generated single-page app shell, served for in-scope navigations.
+const APP_SHELL_URL = SW_DIR_URL + 'index.html';
+// The bundled trace viewer has its own service worker + entry HTML; never
+// hand it the SPA shell.
+const TRACE_VIEWER_PREFIX = SCOPE_PATH + 'trace-viewer/';
 
 // Configure the db module to locate WASM + seed SQL relative to the SW.
 configureDemoDb(SW_DIR_URL);
@@ -66,6 +73,33 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
+
+  // Serve the SPA shell for top-level navigations within our scope. The demo
+  // is a static client-only SPA, so a deep-link reload (e.g. /demo/projects/123)
+  // has no matching static file — without this it would fall through to the
+  // static host's 404 handling and land the user back on the home page. Once the
+  // shell loads, Vue Router reads the URL and renders the correct page directly.
+  // API and trace-viewer paths are excluded (handled below / by their own SW).
+  if (
+    event.request.mode === 'navigate' &&
+    url.origin === self.location.origin &&
+    url.pathname.startsWith(SCOPE_PATH) &&
+    !url.pathname.startsWith(API_PREFIX) &&
+    !url.pathname.startsWith(TRACE_VIEWER_PREFIX)
+  ) {
+    event.respondWith(
+      (async () => {
+        try {
+          const shell = await fetch(APP_SHELL_URL, { credentials: 'same-origin' });
+          if (shell.ok) return shell;
+        } catch {
+          // Offline or fetch failure — fall back to the original request below.
+        }
+        return fetch(event.request);
+      })(),
+    );
+    return;
+  }
 
   // Only handle requests to the demo-scoped API prefix.
   if (!url.pathname.startsWith(API_PREFIX)) return;
