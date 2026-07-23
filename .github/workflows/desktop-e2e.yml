@@ -34,7 +34,12 @@ jobs:
         run: npm ci
 
       - name: Build the server bundle
+        # The Nuxt/Vite SSR build needs more heap than Node's default cap on the
+        # macOS runner (it OOMs at ~2 GB otherwise; the ubuntu builds get a higher
+        # default and don't need this).
         run: npm run app:build --workspace=application
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Install desktop deps
         working-directory: desktop
