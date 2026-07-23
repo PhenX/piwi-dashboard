@@ -138,82 +138,89 @@ export async function getOrCreateFailureClusters(
 export async function mergeFailureClusters(db: DrizzleDB, survivorId: number, victimId: number): Promise<void> {
   if (survivorId === victimId) return;
 
-  // Re-point per-run case links.
-  await db
-    .update(testRunsCases)
-    .set({ failureClusterId: survivorId })
-    .where(eq(testRunsCases.failureClusterId, victimId));
+  // All-or-nothing: a partially-applied merge (cases re-pointed but the victim
+  // still alive with stale counts, or the victim gone before its alias is
+  // recorded) would corrupt occurrence counts and mis-route future
+  // fingerprints. All supported drivers — libSQL, postgres.js, and the demo's
+  // sqlite-proxy over sql.js — implement `transaction`.
+  await db.transaction(async (tx) => {
+    // Re-point per-run case links.
+    await tx
+      .update(testRunsCases)
+      .set({ failureClusterId: survivorId })
+      .where(eq(testRunsCases.failureClusterId, victimId));
 
-  // Execution-scope diagnoses are keyed by test-run-case and stay meaningful —
-  // move them to the survivor. A cluster-scope diagnosis on the victim is
-  // redundant with the survivor's own, so drop it (cascade on delete) unless
-  // the survivor has none, in which case keep the victim's.
-  const [survivorClusterDiag] = await db
-    .select({ id: failureDiagnoses.id })
-    .from(failureDiagnoses)
-    .where(and(eq(failureDiagnoses.clusterId, survivorId), eq(failureDiagnoses.scope, 'cluster')));
+    // Execution-scope diagnoses are keyed by test-run-case and stay meaningful —
+    // move them to the survivor. A cluster-scope diagnosis on the victim is
+    // redundant with the survivor's own, so drop it (cascade on delete) unless
+    // the survivor has none, in which case keep the victim's.
+    const [survivorClusterDiag] = await tx
+      .select({ id: failureDiagnoses.id })
+      .from(failureDiagnoses)
+      .where(and(eq(failureDiagnoses.clusterId, survivorId), eq(failureDiagnoses.scope, 'cluster')));
 
-  await db
-    .update(failureDiagnoses)
-    .set({ clusterId: survivorId })
-    .where(
-      and(
-        eq(failureDiagnoses.clusterId, victimId),
-        survivorClusterDiag ? eq(failureDiagnoses.scope, 'execution') : sql`1 = 1`,
-      ),
-    );
-  await db
-    .update(failureDiagnosisVersions)
-    .set({ clusterId: survivorId })
-    .where(eq(failureDiagnosisVersions.clusterId, victimId));
-
-  // Recompute aggregates from both clusters' surviving links.
-  const [survivor] = await db
-    .select({
-      occurrences: failureClusters.occurrences,
-      firstSeenRunId: failureClusters.firstSeenRunId,
-      lastSeenRunId: failureClusters.lastSeenRunId,
-    })
-    .from(failureClusters)
-    .where(eq(failureClusters.id, survivorId));
-  const [victim] = await db
-    .select({
-      projectId: failureClusters.projectId,
-      fingerprint: failureClusters.fingerprint,
-      occurrences: failureClusters.occurrences,
-      firstSeenRunId: failureClusters.firstSeenRunId,
-      lastSeenRunId: failureClusters.lastSeenRunId,
-    })
-    .from(failureClusters)
-    .where(eq(failureClusters.id, victimId));
-
-  // Record the victim's fingerprint → survivor so future failures with that
-  // fingerprint attach to the survivor, and re-home any aliases that pointed
-  // at the victim (keeps chained merges consistent).
-  if (victim) {
-    await db
-      .insert(failureClusterAliases)
-      .values({ projectId: victim.projectId, fingerprint: victim.fingerprint, clusterId: survivorId })
-      .onConflictDoNothing();
-    await db
-      .update(failureClusterAliases)
+    await tx
+      .update(failureDiagnoses)
       .set({ clusterId: survivorId })
-      .where(eq(failureClusterAliases.clusterId, victimId));
-  }
+      .where(
+        and(
+          eq(failureDiagnoses.clusterId, victimId),
+          survivorClusterDiag ? eq(failureDiagnoses.scope, 'execution') : sql`1 = 1`,
+        ),
+      );
+    await tx
+      .update(failureDiagnosisVersions)
+      .set({ clusterId: survivorId })
+      .where(eq(failureDiagnosisVersions.clusterId, victimId));
 
-  if (survivor && victim) {
-    await db
-      .update(failureClusters)
-      .set({
-        occurrences: (survivor.occurrences ?? 0) + (victim.occurrences ?? 0),
-        firstSeenRunId: Math.min(survivor.firstSeenRunId, victim.firstSeenRunId),
-        lastSeenRunId: Math.max(survivor.lastSeenRunId, victim.lastSeenRunId),
-        updatedAt: new Date(),
+    // Recompute aggregates from both clusters' surviving links.
+    const [survivor] = await tx
+      .select({
+        occurrences: failureClusters.occurrences,
+        firstSeenRunId: failureClusters.firstSeenRunId,
+        lastSeenRunId: failureClusters.lastSeenRunId,
       })
+      .from(failureClusters)
       .where(eq(failureClusters.id, survivorId));
-  }
+    const [victim] = await tx
+      .select({
+        projectId: failureClusters.projectId,
+        fingerprint: failureClusters.fingerprint,
+        occurrences: failureClusters.occurrences,
+        firstSeenRunId: failureClusters.firstSeenRunId,
+        lastSeenRunId: failureClusters.lastSeenRunId,
+      })
+      .from(failureClusters)
+      .where(eq(failureClusters.id, victimId));
 
-  await db.delete(failureClusters).where(eq(failureClusters.id, victimId));
+    // Record the victim's fingerprint → survivor so future failures with that
+    // fingerprint attach to the survivor, and re-home any aliases that pointed
+    // at the victim (keeps chained merges consistent).
+    if (victim) {
+      await tx
+        .insert(failureClusterAliases)
+        .values({ projectId: victim.projectId, fingerprint: victim.fingerprint, clusterId: survivorId })
+        .onConflictDoNothing();
+      await tx
+        .update(failureClusterAliases)
+        .set({ clusterId: survivorId })
+        .where(eq(failureClusterAliases.clusterId, victimId));
+    }
+
+    if (survivor && victim) {
+      await tx
+        .update(failureClusters)
+        .set({
+          occurrences: (survivor.occurrences ?? 0) + (victim.occurrences ?? 0),
+          firstSeenRunId: Math.min(survivor.firstSeenRunId, victim.firstSeenRunId),
+          lastSeenRunId: Math.max(survivor.lastSeenRunId, victim.lastSeenRunId),
+          updatedAt: new Date(),
+        })
+        .where(eq(failureClusters.id, survivorId));
+    }
+
+    await tx.delete(failureClusters).where(eq(failureClusters.id, victimId));
+  });
 }
 
 /**
