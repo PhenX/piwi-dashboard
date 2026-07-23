@@ -5,6 +5,15 @@ const config = useRuntimeConfig();
 const isDemo = config.public.demoMode;
 const specUrl = isDemo ? '/demo/_openapi.json' : '/_openapi.json';
 
+// In the desktop shell a `target="_blank"` link is inert, so save the spec to
+// disk instead of trying (and failing) to open it in a new window.
+const { isDesktop, download } = useDesktopDownload();
+function onSpecClick(event: MouseEvent) {
+  if (!isDesktop) return;
+  event.preventDefault();
+  download(specUrl, 'piwi-openapi.json');
+}
+
 useHead({
   title: 'API Reference — Piwi Dashboard',
 });
@@ -47,7 +56,15 @@ const {
               <UButton size="sm" color="neutral" variant="outline" icon="i-lucide-refresh-cw" @click="() => refresh()">
                 Retry
               </UButton>
-              <UButton :to="specUrl" target="_blank" external size="sm" variant="outline" icon="i-lucide-file-json">
+              <UButton
+                :to="specUrl"
+                target="_blank"
+                external
+                size="sm"
+                variant="outline"
+                icon="i-lucide-file-json"
+                @click="onSpecClick"
+              >
                 Raw OpenAPI spec
               </UButton>
             </div>

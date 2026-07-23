@@ -22,6 +22,7 @@ use tauri::{Manager, RunEvent, WindowEvent};
 
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_autostart::ManagerExt as _;
+use tauri_plugin_notification::NotificationExt as _;
 use tauri_plugin_opener::OpenerExt as _;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt as _;
@@ -186,6 +187,58 @@ fn desktop_set_start_on_login(app: tauri::AppHandle, enabled: bool) -> Result<()
     }
 }
 
+// ── Webview-shell affordances the loopback dashboard drives over IPC ────────────
+// A webview has no browser chrome, so external links, native notifications, and
+// file downloads have to go through the shell. The bundled dashboard calls these
+// (only in the desktop build) instead of relying on `target="_blank"`, the Web
+// Notification API, or `download` links, none of which work inside the webview.
+
+/// Open a web/mail link in the user's default browser. Scheme-restricted so a
+/// stray call can't reveal a file path or launch an app URL.
+#[tauri::command]
+fn desktop_open_external(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let allowed = url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:");
+    if !allowed {
+        return Err("unsupported url scheme".into());
+    }
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// Show a native OS notification (the webview's own Notification API is
+/// unavailable / permission-denied there).
+#[tauri::command]
+fn desktop_notify(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())
+}
+
+/// Write a file the webview fetched to the user's Downloads folder and reveal it.
+/// Returns the saved path. The name is reduced to its base component so a caller
+/// can't traverse out of the Downloads directory.
+#[tauri::command]
+fn desktop_save_download(
+    app: tauri::AppHandle,
+    filename: String,
+    contents: String,
+) -> Result<String, String> {
+    let dir = app.path().download_dir().map_err(|e| e.to_string())?;
+    let name = std::path::Path::new(&filename)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| "download".to_string());
+    let target = dir.join(&name);
+    std::fs::write(&target, contents).map_err(|e| e.to_string())?;
+    let _ = app.opener().reveal_item_in_dir(&target);
+    Ok(node_path(&target))
+}
+
 pub fn run() {
     let launched_hidden = std::env::args().any(|a| a == "--hidden");
 
@@ -204,10 +257,14 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             desktop_get_service_settings,
             desktop_set_run_in_background,
-            desktop_set_start_on_login
+            desktop_set_start_on_login,
+            desktop_open_external,
+            desktop_notify,
+            desktop_save_download
         ])
         .manage(ServerProcess::default())
         .setup(move |app| {
