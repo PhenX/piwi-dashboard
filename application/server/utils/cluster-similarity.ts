@@ -5,6 +5,48 @@
  * a project's open clusters — fine given per-project cluster counts are small.
  */
 
+import { condenseErrorText, maskVolatile, stripAnsi } from '#shared/error-fingerprint';
+
+/**
+ * Bump when `buildEmbedText` changes what it feeds the embedder. The version is
+ * part of the stored model tag, so vectors built from an older recipe are
+ * treated as stale and re-embedded instead of being compared against fresh ones.
+ */
+export const EMBEDDING_INPUT_VERSION = 2;
+
+/**
+ * Value stored in `failure_clusters.embedding_model`: the model id plus the
+ * input-recipe version. Cosine scores are only meaningful between vectors from
+ * the same model AND the same input recipe, so both are part of the identity.
+ */
+export function embeddingModelTag(model: string): string {
+  return `${model}#v${EMBEDDING_INPUT_VERSION}`;
+}
+
+/** Chars of cleaned cluster text fed to the embedder. */
+const EMBED_TEXT_CAP = 2000;
+
+/**
+ * Build the text embedded for one cluster. The sample error is stripped of ANSI
+ * color codes, its internal stack frames are collapsed, and volatile tokens
+ * (received/expected values, URLs, ids, numbers) are masked — the vector should
+ * measure the failure's shape, not its per-occurrence noise. The error type,
+ * signature and locator lead the text so they carry weight even when the sample
+ * is long.
+ */
+export function buildEmbedText(cluster: {
+  signature: string;
+  errorType: string | null;
+  selector: string | null;
+  sampleError: string | null;
+}): string {
+  const condensed = condenseErrorText(stripAnsi(cluster.sampleError ?? ''));
+  const parts = [cluster.errorType, cluster.signature, cluster.selector, condensed].filter(
+    (p): p is string => typeof p === 'string' && p.length > 0,
+  );
+  return maskVolatile(parts.join('\n')).slice(0, EMBED_TEXT_CAP).trim();
+}
+
 /** Cosine similarity in [-1, 1]; 0 for mismatched/empty/zero vectors. */
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length === 0 || a.length !== b.length) return 0;

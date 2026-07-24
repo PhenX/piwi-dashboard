@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 430" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <defs>
+    <marker id="smArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#667085"/>
+    </marker>
+    <marker id="smArrAccent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#4353ff"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="920" height="430" rx="12" fill="#fcfcfd" stroke="#e4e7ec"/>
+  <text x="24" y="36" font-size="16" font-weight="700" fill="#101828">Semantic merging — the optional embedding layer</text>
+  <text x="24" y="56" font-size="12.5" fill="#475467">After each run, clusters without an up-to-date vector are embedded and compared to the project's open clusters.</text>
+
+  <!-- Pipeline -->
+  <rect x="24" y="84" width="272" height="64" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <text x="40" y="110" font-size="12.5" font-weight="600" fill="#344054">Clusters first seen in this run</text>
+  <text x="40" y="128" font-size="11.5" fill="#667085">+ backfill of older ones lacking a vector</text>
+  <line x1="296" y1="116" x2="342" y2="116" stroke="#4353ff" stroke-width="1.6" marker-end="url(#smArrAccent)"/>
+  <text x="319" y="106" font-size="11" fill="#4353ff" text-anchor="middle">embed</text>
+  <rect x="344" y="84" width="250" height="64" rx="8" fill="#eef1ff" stroke="#c7ceff"/>
+  <text x="469" y="110" font-size="13" font-weight="600" fill="#2a3aa8" text-anchor="middle">Cleaned error text → vector</text>
+  <text x="469" y="128" font-size="11.5" fill="#3f4b9e" text-anchor="middle">ANSI, stack noise &amp; volatile values out</text>
+  <line x1="594" y1="116" x2="640" y2="116" stroke="#4353ff" stroke-width="1.6" marker-end="url(#smArrAccent)"/>
+  <rect x="642" y="84" width="254" height="64" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <text x="658" y="110" font-size="12.5" font-weight="600" fill="#344054">Nearest open cluster</text>
+  <text x="658" y="128" font-size="11.5" fill="#667085">cosine · same embedding model only</text>
+  <line x1="769" y1="148" x2="769" y2="172" stroke="#667085" stroke-width="1.4"/>
+  <line x1="769" y1="172" x2="460" y2="172" stroke="#667085" stroke-width="1.4"/>
+  <line x1="460" y1="172" x2="460" y2="194" stroke="#667085" stroke-width="1.4" marker-end="url(#smArr)"/>
+
+  <!-- Similarity bands -->
+  <text x="24" y="216" font-size="12" font-weight="700" fill="#667085" letter-spacing="0.4">SIMILARITY OF THE CLOSEST PAIR · FIRST MATCH DECIDES</text>
+  <rect x="24" y="226" width="340" height="44" rx="8" fill="#f9fafb" stroke="#e4e7ec"/>
+  <text x="194" y="252" font-size="12.5" fill="#475467" text-anchor="middle">kept separate</text>
+  <rect x="368" y="226" width="272" height="44" rx="8" fill="#fffaeb" stroke="#fedf89"/>
+  <text x="504" y="252" font-size="12.5" font-weight="600" fill="#b54708" text-anchor="middle">ambiguous band</text>
+  <rect x="644" y="226" width="252" height="44" rx="8" fill="#ecfdf3" stroke="#abefc6"/>
+  <text x="770" y="252" font-size="12.5" font-weight="600" fill="#027a48" text-anchor="middle">auto-merge</text>
+  <g font-family="ui-monospace, monospace" font-size="11" fill="#667085">
+    <text x="368" y="288" text-anchor="middle">0.80</text>
+    <text x="642" y="288" text-anchor="middle">0.92</text>
+  </g>
+
+  <!-- Outcomes -->
+  <line x1="504" y1="274" x2="504" y2="304" stroke="#667085" stroke-width="1.4" marker-end="url(#smArr)"/>
+  <rect x="368" y="306" width="272" height="92" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <text x="384" y="330" font-size="12.5" font-weight="600" fill="#344054">A model adjudicates the pair</text>
+  <text x="384" y="350" font-size="11.5" fill="#475467">sees locators, affected tests &amp; overlap</text>
+  <text x="384" y="368" font-size="11.5" fill="#475467">high confidence → <tspan font-weight="600" fill="#027a48">merge</tspan></text>
+  <text x="384" y="386" font-size="11.5" fill="#475467">unsure or no model → <tspan font-weight="600" fill="#b54708">suggestion</tspan> to review</text>
+  <line x1="770" y1="274" x2="770" y2="304" stroke="#667085" stroke-width="1.4" marker-end="url(#smArr)"/>
+  <rect x="644" y="306" width="252" height="92" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <text x="660" y="330" font-size="12.5" font-weight="600" fill="#344054">Merged into the older cluster</text>
+  <text x="660" y="350" font-size="11.5" fill="#667085">keeps its triage status &amp; notes</text>
+  <text x="660" y="368" font-size="11.5" fill="#667085">fingerprint alias recorded, so future</text>
+  <text x="660" y="386" font-size="11.5" fill="#667085">occurrences land on the survivor</text>
+</svg>

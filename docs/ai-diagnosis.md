@@ -17,6 +17,11 @@ Failed test cases that share the same **error fingerprint** are grouped into a c
 - Every cluster has its own **detail page** with the affected tests, triage tools (status + notes), and the AI diagnosis panel.
 
 <figure>
+  <img src="/diagrams/failure-clustering-fingerprint.svg" alt="Diagram of the fingerprint pipeline: a raw Playwright error is normalized — volatile values masked, the error category and locator extracted — hashed with SHA-256, and routed to a failure_clusters row shared across tests, spec files and runs">
+  <figcaption>From raw error to cluster: the category, the masked message head, and the masked locator are hashed; dynamic values and the call site never split a cluster.</figcaption>
+</figure>
+
+<figure>
   <img src="/screenshots/failure-clusters.png" alt="Failure clusters tab grouping failures by normalized error signature">
   <figcaption>The Failure clusters tab — failures sharing an error fingerprint collapse into one row, with error type, occurrence count, and triage status.</figcaption>
 </figure>
@@ -27,9 +32,16 @@ Clustering is always on and requires no configuration. When the normalization al
 
 If an **embedding** model role is configured (Settings → AI), Piwi adds a semantic layer on top of the deterministic fingerprint. After a run, the clusters first seen in it are embedded and compared (cosine similarity) against the project's other open clusters; near-duplicates above `PIWI_CLUSTER_SIMILARITY_THRESHOLD` (default `0.92`) are merged into the longest-lived cluster. This catches failures that are the same root cause but phrased differently enough to dodge the fingerprint. Merges record a fingerprint alias so future occurrences attach to the survivor instead of re-forking. With no embedding role configured, clustering stays purely deterministic.
 
+The text fed to the embedder is cleaned first — ANSI color codes stripped, framework stack frames collapsed, and volatile tokens (URLs, ids, received/expected values) masked — so vectors measure a failure's shape rather than its per-occurrence noise. Each pass also backfills a bounded batch of older open clusters that don't have a usable vector yet (created before the embedding role existed, or embedded with a different model), so a pre-existing backlog of near-duplicates converges over the runs that follow. Vectors are only ever compared within one embedding model: after switching models, stale vectors are re-embedded by the same backfill instead of being scored against the new model's output.
+
 When auto-diagnose is enabled, new clusters are also given a short **human-readable title** (one cheap batched model call per run, using the research model when one is configured, otherwise the diagnosis model) shown in place of the raw normalized signature across the lists and the cluster page — the signature stays available on hover and below the title. Clusters fall back to the signature when no title has been generated.
 
-Pairs that fall in the **ambiguous band** (similarity between `PIWI_CLUSTER_SUGGEST_THRESHOLD`, default `0.80`, and the merge threshold) aren't merged automatically. Whenever AI is configured, a model adjudicates the pair ("same root cause?") — the **research** model when one is configured, the diagnosis model otherwise — and merges only on a high-confidence yes; when it's unsure (or no AI is configured at all), the pair becomes a **merge suggestion** on the project's Failure clusters tab, where a reporter or admin approves (merge) or dismisses it. Adjudication is budget-capped per run to control cost.
+Pairs that fall in the **ambiguous band** (similarity between `PIWI_CLUSTER_SUGGEST_THRESHOLD`, default `0.80`, and the merge threshold) aren't merged automatically. Whenever AI is configured, a model adjudicates the pair ("same root cause?") — the **research** model when one is configured, the diagnosis model otherwise — and merges only on a high-confidence yes; when it's unsure (or no AI is configured at all), the pair becomes a **merge suggestion** on the project's Failure clusters tab, where a reporter or admin approves (merge) or dismisses it. The adjudicator sees more than the error text: each cluster's extracted locator, its most-affected tests, and how much the two clusters overlap (tests failing in both, runs where both fired) — signals that separate "one cause, reworded message" from "similar boilerplate, different problems". Adjudication is budget-capped per run to control cost.
+
+<figure>
+  <img src="/diagrams/failure-clustering-semantic-merge.svg" alt="Diagram of the semantic merging flow: new and backfilled clusters are embedded from cleaned error text, compared to open clusters by cosine similarity, and depending on the score are kept separate, adjudicated by a model that can merge or file a suggestion, or auto-merged with a fingerprint alias recorded">
+  <figcaption>The semantic layer: freshly embedded clusters seek their nearest neighbour; the cosine score decides between keeping them apart, asking a model (or a human), and merging outright. Thresholds are the <code>PIWI_CLUSTER_SUGGEST_THRESHOLD</code> and <code>PIWI_CLUSTER_SIMILARITY_THRESHOLD</code> defaults.</figcaption>
+</figure>
 
 Embedding-based reconciliation runs after every finished run whenever an embedding role is configured — it is independent of the auto-diagnose toggle.
 
