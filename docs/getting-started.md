@@ -7,16 +7,18 @@ lang: en-US
 
 ## What is Piwi Dashboard?
 
-Piwi Dashboard is a self-hosted observability platform for [Playwright](https://playwright.dev) end-to-end tests. It replaces ephemeral CI reports with a permanent, searchable history — then goes further with live streaming, failure clustering, AI diagnosis, and cross-run analytics.
+Piwi Dashboard is a self-hosted home for [Playwright](https://playwright.dev) test results. Your CI
+deletes its HTML report on every build; Piwi keeps every run — with its traces, reports, and metadata —
+and then does the things a permanent history makes possible: grouping failures by root cause, scoring
+flaky tests, tracking performance, streaming runs live, and (optionally) diagnosing failures with an
+LLM you configure.
 
-**Key benefits:**
-- See test health trends across hundreds of runs with cross-run analytics
-- Stream results live from CI — investigate failures before the suite finishes
-- Failure clustering groups tests sharing the same root cause automatically
-- AI diagnosis analyzes clusters with full SCM diff context
-- Store HTML reports and trace files permanently for later debugging
-- Track performance regressions with avg/P90 duration charts
-- Self-hosted and open-source — your data stays on your infrastructure
+It is a **server plus a Playwright reporter**. The reporter runs inside `npx playwright test` and pushes
+results to the server; the server stores them and renders the dashboard. Two moving parts, and the rest
+of this page sets both of them up.
+
+New to the vocabulary — *run* vs *test case* vs *execution* vs *cluster*? [Core concepts](./concepts) is
+a five-minute read that makes the rest of the docs (and the UI) click.
 
 ## Requirements
 
@@ -192,44 +194,18 @@ The project `my-project` is created automatically if it doesn't exist yet. See t
 
 ## Running in CI
 
-Nothing Piwi-specific is required in CI — the reporter runs inside `npx playwright test` and pushes results to your dashboard. Point the reporter at your deployed instance (via the `PIWI_DASHBOARD_URL` env var or the `serverUrl` option) and pass an API key if [authentication](./authentication) is enabled. CI metadata (workflow, branch, commit, run URL) and [shard merging](./reporter#sharding) are detected automatically on GitHub Actions, GitLab CI, Jenkins, CircleCI, Azure DevOps, and more.
-
-**GitHub Actions:**
-
-```yaml
-name: e2e
-on: [push]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm ci
-      - run: npx playwright install --with-deps
-      - run: npx playwright test
-        env:
-          PIWI_DASHBOARD_URL: https://piwi.example.com
-          PIWI_API_KEY: ${{ secrets.PIWI_API_KEY }}
-```
-
-**GitLab CI:**
+Nothing Piwi-specific is required in CI — the same reporter runs inside `npx playwright test`. Point it
+at your deployed instance and pass an API key if [authentication](./authentication) is enabled:
 
 ```yaml
-e2e:
-  image: mcr.microsoft.com/playwright:v1.54.0-noble
-  script:
-    - npm ci
-    - npx playwright test
-  variables:
-    PIWI_DASHBOARD_URL: https://piwi.example.com
-    PIWI_API_KEY: $PIWI_API_KEY
+env:
+  PIWI_DASHBOARD_URL: https://piwi.example.com
+  PIWI_API_KEY: ${{ secrets.PIWI_API_KEY }}
 ```
 
-With live streaming enabled you can watch the run progress in the dashboard while CI is still executing — see [Reporter → Streaming](./reporter#live-streaming).
+Branch, commit, workflow, build URL and `--shard` merging are all detected automatically on GitHub
+Actions, GitLab CI, Jenkins, CircleCI, Azure DevOps and more. Full examples, sharding, and how to get
+the run URL back out into a later pipeline step: [CI & sharding](./ci).
 
 ## Dashboard navigation
 
@@ -247,24 +223,10 @@ After submitting results, the dashboard provides:
 
 See the [UI overview](./ui-overview) for a full map of every page and tab.
 
-## Development commands
+## Next steps
 
-Run these from the `application/` directory:
-
-| Command | Description |
-|---------|-------------|
-| `npm run app:dev` | Start development server with hot reload |
-| `npm run app:build` | Build for production |
-| `npm run app:preview` | Preview the production build locally |
-| `npm run app:typecheck` | TypeScript type checking |
-| `npm run app:lint` | Run oxlint (`app:lint:fix` to auto-fix) |
-| `npm run app:test:unit` | Run unit tests (Vitest) |
-| `npm run app:test` | Run Playwright end-to-end tests |
-| `npm test` | Run both unit and end-to-end tests |
-| `npm run db:generate` | Generate SQLite migration from schema changes |
-| `npm run db:generate:pg` | Generate PostgreSQL migration from schema changes |
-| `npm run db:studio` | Open Drizzle Studio to browse the SQLite database |
-| `npm run db:studio:pg` | Open Drizzle Studio to browse the PostgreSQL database |
-| `npm run app:seed:demo` | Regenerate demo seed data for the live demo |
-
-> **Migration workflow:** edit `server/database/schema.sqlite.ts` (and `schema.pg.ts` for the PostgreSQL equivalent — `schema.ts` is just a dialect-selecting re-export, don't edit it) → run `npm run db:generate` (SQLite) or `npm run db:generate:pg` (PostgreSQL) → review the generated `.sql` file → restart the app. Never create migration files or edit `meta/_journal.json` by hand — the Drizzle migrator depends on the journal to track which migrations have been applied, and manual entries cause it to silently skip the migration.
+- [Core concepts](./concepts) — the vocabulary the dashboard and these docs use
+- [Reporter](./reporter) — every option, streaming, sharding, and locator healing
+- [UI overview](./ui-overview) — a map of every page and tab
+- [Deployment](./deployment) — running it properly for a team
+- [Contributing](https://github.com/PiwiTests/platform/blob/main/CONTRIBUTING.md) — dev setup, tests, and commit conventions if you want to hack on Piwi itself
