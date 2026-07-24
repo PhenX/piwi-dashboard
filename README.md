@@ -3,14 +3,17 @@
 </p>
 
 <p align="center">
-  <b>A permanent home for your Playwright test results.</b><br>
-  CI reports vanish on every build. Piwi keeps them — and turns them into live dashboards,
-  failure clusters, AI diagnosis, and cross-run analytics. Self-hosted, no SaaS.
+  <b>Your Playwright results, kept and explained.</b><br>
+  CI throws away every report it makes. Piwi keeps them — every run, trace, and HTML report — then
+  groups the failures by root cause, scores the flaky tests, and tells you which locator to use
+  instead of the one that just broke. Self-hosted, MIT, zero telemetry.
 </p>
 
 <p align="center">
-  <a href="https://piwitests.github.io/demo/"><img src="https://img.shields.io/badge/▶_Live_demo-try_it_now-2496ED?style=for-the-badge" alt="Live demo"></a>
-  <a href="https://piwitests.github.io"><img src="https://img.shields.io/badge/📖_Documentation-read_the_docs-020420?style=for-the-badge" alt="Documentation"></a>
+  <a href="https://piwitests.github.io/demo/">Live demo</a> ·
+  <a href="https://piwitests.github.io">Documentation</a> ·
+  <a href="./ROADMAP.md">Roadmap</a> ·
+  <a href="https://github.com/PiwiTests/platform/discussions">Discussions</a>
 </p>
 
 <p align="center">
@@ -19,7 +22,6 @@
   <a href="https://hub.docker.com/r/phenx/piwitests-server"><img src="https://img.shields.io/docker/v/phenx/piwitests-server?logo=docker&labelColor=020420&color=2496ED" alt="Docker"></a>
   <a href="https://github.com/PiwiTests/platform/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/PiwiTests/platform/ci.yml?branch=main&logo=githubactions&logoColor=white&labelColor=020420&label=CI" alt="CI status"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?labelColor=020420" alt="MIT license"></a>
-  <a href="https://github.com/PiwiTests/platform/stargazers"><img src="https://img.shields.io/github/stars/PiwiTests/platform?logo=github&labelColor=020420&color=f59e0b" alt="GitHub stars"></a>
 </p>
 
 <p align="center">
@@ -29,38 +31,32 @@
 </p>
 
 <p align="center">
-  <sub>▶ <a href="https://piwitests.github.io/demo/">Click through to the live demo</a> — sample data, no install, runs entirely in your browser — or <a href="https://piwitests.github.io/#see-it-in-action">watch the 30-second clip</a>.</sub>
+  <sub>A run streaming in live. The <a href="https://piwitests.github.io/demo/">demo</a> is the real app on seeded data — it runs entirely in your browser, no install and no backend.</sub>
 </p>
 
-## Why Piwi?
+## The problem it solves
 
-Native Playwright HTML reports are great for local debugging — but they're ephemeral. Once the next CI run completes, the old report is gone. Piwi keeps every run and makes them connected, searchable, and actionable:
+Playwright's HTML report is excellent, and it lasts exactly until the next build. So the questions that
+actually matter get hard to answer: *Has this test always been flaky? Did my fix work? Which of these
+forty red tests are the same bug? What did we change the day the suite started failing?*
 
-- 🗄️ **Permanent history** — every run, trace, and report stored and browsable across time.
-- ⚡ **Live streaming** — watch runs in real time as CI executes; no polling, no waiting.
-- 🔗 **Failure clustering** — failures sharing a root cause are auto-grouped by error fingerprint.
-- 📈 **Performance & flaky tracking** — P90 duration trends, slowest tests, composite flakiness scores.
-- 📊 **Cross-project analytics** — a portfolio dashboard with pass-rate trends, a project × time heatmap, CI-time and wasted-time trends, a global flaky leaderboard, and an auto-generated insights feed for higher-level decisions.
-- 🩹 **Locator healing** — when a locator breaks, ranked replacement locators captured from prior passing runs, with a recommended fix.
-- 🎬 **Self-hosted trace viewer** — open the full Playwright trace viewer from any failure; the trace stays on your server.
-- 🔔 **Notifications** — email, Slack, webhook, and in-browser alerts for failed runs and new failure clusters.
-- 🔌 **Built for automation** — drop-in reporter, REST API, OpenAPI docs, and an MCP server for agent integrations.
-- ☁️ **Zero lock-in** — self-hosted with Docker; your data in SQLite/PostgreSQL and local/S3 storage.
-- 🔒 **Private by design** — zero telemetry, no phone-home. The only outbound calls are the ones you configure (your AI provider, SMTP, S3).
-- 🤖 **AI-assisted diagnosis** *(optional)* — LLM analysis of a failure cluster, grounded in your actual SCM diff, to speed up triage.
+Piwi keeps the runs so you can answer them.
 
-👉 **[Explore the live demo](https://piwitests.github.io/demo/)** — no install required.
+- **Permanent history** — every run, trace, and report, browsable long after CI deleted its artifacts.
+- **Failures grouped by cause** — an error fingerprint collapses forty red tests into the three root
+  causes behind them, each triaged once.
+- **Flaky tests, scored and costed** — a composite score, a root-cause class, and the CI minutes each
+  flake wastes, so you fix the expensive ones rather than the annoying ones.
+- **Locator healing** — when a selector breaks, ranked replacements captured from the last passing run,
+  with a recommended fix.
+- **Evidence in one place** — the trace viewer, screenshots, console, network calls, Web Vitals, and the
+  failing call stack with real source, all served by your own instance.
+- **AI diagnosis, if you want it** — an LLM *you* configure explains a cluster against your actual git
+  diff, and its suggested patch is checked against your source before you see it. Off by default.
 
-## A quick tour
-
-| | |
-|---|---|
-| [![Failure cluster with AI diagnosis](./docs/public/screenshots/failure-cluster.png)](https://piwitests.github.io/ai-diagnosis) | [![AI diagnosis grounded in your SCM diff](./docs/public/screenshots/ai-diagnosis.png)](https://piwitests.github.io/ai-diagnosis) |
-| **Failure clusters** — one root cause, one card | **AI diagnosis** — grounded in your actual git diff |
-| [![Flaky test detection](./docs/public/screenshots/flaky-detection.png)](https://piwitests.github.io/flaky-tests) | [![Test run detail with worker timeline](./docs/public/screenshots/test-run.png)](https://piwitests.github.io/ui-overview) |
-| **Flaky tests** — scored, classified, impact-ranked | **Run detail** — cases, timeline, traces, retry command |
-| [![Locator healing suggestions](./docs/public/screenshots/locator-healing.png)](https://piwitests.github.io/reporter#locator-healing) | [![Performance trends](./docs/public/screenshots/performance-trends.png)](https://piwitests.github.io/flaky-tests) |
-| **Locator healing** — ranked replacements from passing runs | **Performance** — P90 trends and slowest-test tracking |
+Also in the box: cross-project analytics, live run streaming, notifications (email, Slack, webhook,
+browser), a REST API with in-app OpenAPI docs, and an MCP server so your coding agent can ask about
+test health.
 
 ## Quick start
 
@@ -77,21 +73,19 @@ docker run -p 3000:3000 -v $(pwd)/.data:/app/.data phenx/piwitests-server:latest
 docker run -p 3000:3000 -v ${PWD}/.data:/app/.data phenx/piwitests-server:latest
 ```
 
-Visit `http://localhost:3000`. A [`docker-compose.yml`](./docker-compose.yml) is also included.
+Visit `http://localhost:3000`. A [`docker-compose.yml`](./docker-compose.yml) is included, and with
+**Node.js 24+** you can skip Docker entirely — `npx @piwitests/server` creates its `.data/` in the
+current directory. There's also a [desktop build](https://piwitests.github.io/desktop) (Windows `.msi`,
+macOS `.dmg`) that bundles the server for a single machine.
 
-Prefer no Docker? With **Node.js 24+** you can run the server straight from npm — it creates its `.data/` in the current directory:
+> **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker
+> auto-creates `.data` owned by `root` and the container can't write to it. Docker Desktop on Windows
+> and macOS handles this for you. See [Troubleshooting](./DOCKER.md#troubleshooting).
 
-```bash
-npx @piwitests/server
-```
-
-Docker stays the recommended path for production; see the [deployment guide](https://piwitests.github.io/deployment) for both.
-
-**Prefer a desktop app?** A local **[desktop build](https://piwitests.github.io/desktop)** (Windows `.msi`, macOS `.dmg`) bundles the server and runs the whole dashboard on your machine — no Docker or Node required. Grab it from the [latest release](https://github.com/PiwiTests/platform/releases/latest).
-
-> **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker auto-creates `.data` owned by `root` and the container can't write to it. Windows and macOS (Docker Desktop) don't need this step. See [Troubleshooting](./DOCKER.md#troubleshooting) if you hit a permission error.
-
-> **Production tip:** set `PIWI_SECRET_KEY` (any long random string) so credentials you store in the dashboard — AI API keys, SCM tokens — are encrypted at rest. Generate one with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. See the [deployment guide](https://piwitests.github.io/deployment).
+> **Before you expose it:** set `PIWI_SECRET_KEY` to a long random string so stored credentials (AI
+> keys, SCM tokens) are actually encrypted. Generate one with
+> `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. See the
+> [deployment guide](https://piwitests.github.io/deployment).
 
 **2. Add the reporter to your test project**
 
@@ -115,9 +109,11 @@ export default defineConfig({
 })
 ```
 
-**3. Run your tests** — `npx playwright test`. Results appear automatically; the project is created on first submission.
+**3. Run your tests** — `npx playwright test`. Results appear as they finish; the project is created on
+first submission.
 
-**4. Add the capture fixtures** *(recommended)* — one small file unlocks the richest features: locator healing, slow-endpoint analysis, Web Vitals, console capture, and failure-time ARIA snapshots.
+**4. Add the capture fixtures** *(recommended)* — one file, and the deeper features light up: locator
+healing, slow-endpoint analysis, Web Vitals, console capture, failure-time ARIA snapshots.
 
 ```typescript
 // tests/fixtures.ts
@@ -128,56 +124,68 @@ export const test = base.extend(piwiFixtures)
 export { expect }
 ```
 
-Import `test` from this file in your specs instead of `@playwright/test` — that's it. Full details in the **[capture fixtures guide](https://piwitests.github.io/capture-fixtures)**; a runnable example lives in [`examples/playwright-fixtures`](./examples/playwright-fixtures).
+Import `test` from this file in your specs instead of `@playwright/test` — that's the whole change.
+Details in the [capture fixtures guide](https://piwitests.github.io/capture-fixtures); a runnable
+project lives in [`examples/playwright-fixtures`](./examples/playwright-fixtures).
 
-➡️ Full setup, configuration, and CI integration in the **[Getting started guide](https://piwitests.github.io/getting-started)**.
+In CI, set `PIWI_DASHBOARD_URL` (and `PIWI_API_KEY` if auth is on) and you're done — branch, commit, CI
+metadata and `--shard` merging are detected automatically. See
+[CI & sharding](https://piwitests.github.io/ci).
 
-## How is this different from…?
+## A quick tour
 
-| | Piwi | Playwright HTML report | Allure Report | ReportPortal | Currents |
-|---|---|---|---|---|---|
-| Run history across builds | ✅ | ❌ per-run, ephemeral | ➖ manual history files | ✅ | ✅ |
-| Self-hosted | ✅ single container | — | ➖ static files | ✅ multi-service stack | ❌ SaaS |
-| Live run streaming | ✅ | ❌ | ❌ | ➖ | ✅ |
-| Playwright traces, first-class | ✅ | ✅ | ➖ | ➖ | ✅ |
-| Flaky scoring & failure clustering | ✅ | ❌ | ❌ | ✅ ML triage | ✅ |
-| AI failure diagnosis on your git diff | ✅ optional | ❌ | ❌ | ➖ | ➖ |
-| Locator healing suggestions | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Price | Free, MIT | Free | Free | Free (self-host) | Paid |
+| | |
+|---|---|
+| [![Failure cluster with AI diagnosis](./docs/public/screenshots/failure-cluster.png)](https://piwitests.github.io/ai-diagnosis) | [![AI diagnosis grounded in your SCM diff](./docs/public/screenshots/ai-diagnosis.png)](https://piwitests.github.io/ai-diagnosis) |
+| **Failure clusters** — forty red tests, three root causes | **AI diagnosis** — read against your actual git diff |
+| [![Flaky test detection](./docs/public/screenshots/flaky-detection.png)](https://piwitests.github.io/flaky-tests) | [![Test run detail with worker timeline](./docs/public/screenshots/test-run.png)](https://piwitests.github.io/ui-overview) |
+| **Flaky tests** — scored, classified, ranked by wasted CI time | **Run detail** — cases, worker timeline, traces, retry command |
+| [![Locator healing suggestions](./docs/public/screenshots/locator-healing.png)](https://piwitests.github.io/reporter#locator-healing) | [![Performance trends](./docs/public/screenshots/performance-trends.png)](https://piwitests.github.io/flaky-tests#performance) |
+| **Locator healing** — replacements from the last passing run | **Performance** — P90 trends and slowest-test tracking |
 
-Every tool in that table is good at what it targets — the honest version with trade-offs is in **[Comparison & FAQ](https://piwitests.github.io/comparison)**.
+## Where this fits
+
+Playwright's own HTML report is the right tool for debugging a run on your machine; Piwi is for the runs
+you can't open anymore. It's deliberately **Playwright-only** — that's what makes traces, step timing,
+and locator healing first-class rather than lowest-common-denominator. If you need one place for JUnit,
+pytest and Cypress results too, [ReportPortal](https://reportportal.io) or
+[Allure](https://allurereport.org) fit that better. If you'd rather someone else ran the server,
+[Currents](https://currents.dev) is the managed option. And if you only ever debug locally and never
+look back, you don't need any of this.
+
+The longer version, including where Piwi loses, is in
+[Why Piwi?](https://piwitests.github.io/comparison).
+
+## Project status
+
+Pre-1.0 and under active development: expect occasional breaking changes between minor versions, pin a
+version tag, and keep backups of `.data/`. Every commit runs a CI matrix across SQLite/PostgreSQL and
+local/S3 storage with a full Playwright E2E suite, and upgrades apply database migrations
+automatically. Direction and non-goals live in the [roadmap](./ROADMAP.md).
 
 ## Documentation
 
-| Topic | Link |
-|-------|------|
-| Getting started | [piwitests.github.io/getting-started](https://piwitests.github.io/getting-started) |
-| Comparison & FAQ | [piwitests.github.io/comparison](https://piwitests.github.io/comparison) |
-| Playwright reporter | [piwitests.github.io/reporter](https://piwitests.github.io/reporter) |
-| Capture fixtures | [piwitests.github.io/capture-fixtures](https://piwitests.github.io/capture-fixtures) |
-| UI overview | [piwitests.github.io/ui-overview](https://piwitests.github.io/ui-overview) |
-| AI diagnosis & clustering | [piwitests.github.io/ai-diagnosis](https://piwitests.github.io/ai-diagnosis) |
-| Flaky tests & analytics | [piwitests.github.io/flaky-tests](https://piwitests.github.io/flaky-tests) |
-| Notifications & alerts | [piwitests.github.io/notifications](https://piwitests.github.io/notifications) |
-| Configuration reference | [piwitests.github.io/configuration](https://piwitests.github.io/configuration) |
-| API reference (interactive) | [piwitests.github.io/demo/docs](https://piwitests.github.io/demo/docs) |
-| MCP server | [piwitests.github.io/mcp](https://piwitests.github.io/mcp) |
-| Authentication | [piwitests.github.io/authentication](https://piwitests.github.io/authentication) |
-| Storage configuration | [piwitests.github.io/storage](https://piwitests.github.io/storage) |
-| Deployment | [piwitests.github.io/deployment](https://piwitests.github.io/deployment) |
+Full docs at **[piwitests.github.io](https://piwitests.github.io)**. The usual entry points:
 
-The running dashboard also serves self-contained interactive API docs at `/docs`, rendered in-app from the OpenAPI spec — no external CDN, so they work offline / air-gapped.
+- [Getting started](https://piwitests.github.io/getting-started) — install, reporter, first run
+- [Core concepts](https://piwitests.github.io/concepts) — runs, test cases, executions, clusters
+- [Reporter](https://piwitests.github.io/reporter) and [CI & sharding](https://piwitests.github.io/ci) — getting results in
+- [Deployment](https://piwitests.github.io/deployment) and [Configuration](https://piwitests.github.io/configuration) — running your instance
+- [Privacy & data flow](https://piwitests.github.io/privacy) — exactly what leaves your server (nothing you didn't configure)
+
+A running dashboard also serves interactive API docs at `/docs`, rendered in-app from its own OpenAPI
+spec — no external CDN, so they work offline.
 
 ## Community & support
 
-- 💬 **[GitHub Discussions](https://github.com/PiwiTests/platform/discussions)** — questions, ideas, show & tell.
-- 🐛 **[Issues](https://github.com/PiwiTests/platform/issues)** — bug reports and feature requests.
-- 🗺️ **[Roadmap](./ROADMAP.md)** — what's shipped, what's next.
-- 🔐 **[Security policy](./SECURITY.md)** — how to report a vulnerability.
+- 💬 [Discussions](https://github.com/PiwiTests/platform/discussions) — questions, ideas, show & tell
+- 🐛 [Issues](https://github.com/PiwiTests/platform/issues) — bugs and feature requests
+- 🔐 [Security policy](./SECURITY.md) — how to report a vulnerability
 
 ## Contributing
 
-Contributions are welcome — see **[CONTRIBUTING.md](CONTRIBUTING.md)** for dev setup, tests, and commit conventions, and **[AGENTS.md](AGENTS.md)** for architecture and the full development guide.
+Contributions are welcome — [CONTRIBUTING.md](CONTRIBUTING.md) covers dev setup, tests, and commit
+conventions; [AGENTS.md](AGENTS.md) has the architecture tour.
 
 ```bash
 cd application && npm install && npm run app:dev   # http://localhost:3000

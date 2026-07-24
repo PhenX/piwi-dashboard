@@ -4,9 +4,8 @@ layout: home
 
 hero:
   name: "Piwi Dashboard"
-  text: "Self-hosted Playwright observability"
-  tagline: "Understand and fix failures — don't just watch them. Failure clustering, flaky-test scoring, locator healing, and optional AI diagnosis on top of your Playwright results. Self-hosted, no SaaS, no lock-in."
-  image: /logo-wide.svg
+  text: "Your Playwright results, kept and explained"
+  tagline: "CI throws away every report it makes. Piwi keeps them — then groups the failures by root cause, scores the flaky tests, and finds the locator you should have used. Self-hosted, MIT, zero telemetry."
 
   actions:
     - theme: brand
@@ -16,46 +15,37 @@ hero:
       text: Live demo
       link: https://piwitests.github.io/demo/
     - theme: alt
+      text: Core concepts
+      link: /concepts
+    - theme: alt
       text: GitHub
       link: https://github.com/PiwiTests/platform
 
 features:
+  - icon: 🗄️
+    title: History that outlives CI
+    details: Every run, trace, and HTML report kept and browsable long after the build agent deleted its artifacts — with pass-rate, duration, and stability trends computed across all of them.
   - icon: 🧩
     title: Failure clustering
-    details: Identical failures are grouped across specs by an error fingerprint, so one root cause is one thing to triage — not fifty scattered red tests.
-  - icon: 🤖
-    title: AI failure diagnosis
-    details: Optional, opt-in analysis grounded in your actual git diff since the last green run — with suggested-fix patches validated server-side. Runs against your own provider (or a local model); nothing leaves your server unless you configure it.
+    details: An error fingerprint collapses forty red tests into the three root causes behind them, grouped across specs and across runs, so one cause is one thing to triage.
   - icon: 📉
-    title: Flaky-test analytics
-    details: Composite flakiness score with root-cause classes (timing, network, assertion…) and CI-cost impact ranking, so you fix the flakes that actually waste the most CI minutes first.
+    title: Flaky tests, scored and costed
+    details: A composite flakiness score with a root-cause class (timing, network, assertion…) and the CI minutes each flake wastes — so you fix the expensive ones, not the annoying ones.
   - icon: 🩹
     title: Locator healing
-    details: When a locator breaks, get ranked replacement locators captured from prior passing runs — with a convention-preserving recommended fix and a data-testid nudge when nothing is stable.
-  - icon: 🎬
-    title: Self-hosted trace viewer
-    details: Open the full Playwright trace viewer straight from a failure — bundled and served by the dashboard, so traces never leave your server.
-  - icon: 🔔
-    title: Notifications & alerts
-    details: Email, Slack, webhook, and in-browser notifications for failed runs and new failure clusters, with per-project subscriptions, filters, and digest mode.
-  - icon: ⚡
-    title: Live run streaming
-    details: Watch a run update in real time over SSE as each test finishes — no polling, no waiting on CI to upload an artifact.
-  - icon: 📈
-    title: Performance tracking
-    details: Step-level timing, avg/P90 duration trends, slowest-tests analysis, and side-by-side run comparison.
-  - icon: 🌐
-    title: Network & Web Vitals
-    details: Slow API endpoints grouped by method and normalized route, plus Core Web Vitals (TTFB, FCP, CLS…) with color-coded thresholds.
-  - icon: 🔌
-    title: Drop-in reporter
-    details: Add one reporter to your Playwright config and results, HTML reports, and traces upload automatically after each run.
-  - icon: 🤝
-    title: MCP server for AI agents
-    details: Query runs, failures, clusters, and flaky tests from Claude Code or any MCP client — bring test health into your coding agent.
-  - icon: 🐳
-    title: Self-hosted, your data
-    details: One ~400 MB Docker image, SQLite or PostgreSQL, local or S3-compatible storage, optional role-based auth. Zero telemetry — nothing phones home.
+    details: When a selector breaks, ranked replacements captured from the last passing run, with a recommended fix that matches your existing conventions.
+  - icon: 🔬
+    title: Evidence in one place
+    details: The bundled Playwright trace viewer, screenshots, console, network calls, Web Vitals, and the failing call stack with real source — all served by your own instance.
+  - icon: 🤖
+    title: AI diagnosis, if you want it
+    details: Optional analysis by a provider you configure (a local model works), read against your actual git diff since the last green run, with suggested patches validated against your source. Off by default.
+  - icon: 📊
+    title: Cross-project analytics
+    details: Portfolio health, a pass-rate heatmap, wasted CI minutes, regression velocity, and an auto-generated insights feed — the view you need when someone asks how the suite is doing.
+  - icon: 🔒
+    title: Yours to run
+    details: One Docker container, SQLite or PostgreSQL, local or S3 storage, optional role-based auth. Zero telemetry — the only outbound calls are the ones you configure.
 ---
 
 <div class="screenshots">
@@ -104,13 +94,21 @@ features:
 
 </div>
 
-<div class="cta-footer">
-  <h2>Stop losing your test history.</h2>
-  <p>Self-hosted in one Docker command — your data, your infrastructure, nothing vanishes when CI finishes.</p>
-  <div class="cta-footer-actions">
-    <a class="cta-btn cta-btn-brand" href="/getting-started">Get started</a>
-    <a class="cta-btn cta-btn-alt" href="https://github.com/PiwiTests/platform">View on GitHub</a>
-  </div>
+<div class="next-steps">
+
+## Where to go next
+
+- **Setting it up** — [Getting started](/getting-started) walks from a Docker command to your first run in the dashboard.
+- **Wondering how it models your tests** — [Core concepts](/concepts) defines runs, test cases, executions, and clusters. Worth five minutes before the rest.
+- **Wiring up CI** — [CI & sharding](/ci): two environment variables, and why ten shards are one run.
+- **Comparing tools** — [Why Piwi?](/comparison) is an honest comparison, including when Piwi isn't the right choice.
+- **Running it for a team** — [Deployment](/deployment), [Configuration](/configuration), [Authentication](/authentication), and [Privacy & data flow](/privacy).
+
+Also here, without a card of their own: [live run streaming](/reporter#live-streaming),
+[notifications](/notifications) to Slack/email/webhooks, [timeline markers](/timeline-markers) for
+annotating trends, [backend log capture](/backend-logs), [Open in IDE](/ide-integration), and an
+[MCP server](/mcp) so a coding agent can ask about test health.
+
 </div>
 
 <style>
@@ -165,61 +163,26 @@ features:
   text-align: center;
 }
 
-.cta-footer {
+.next-steps {
   max-width: 1152px;
   margin: 0 auto 64px;
-  padding: 56px 24px;
-  text-align: center;
+  padding: 40px 24px 0;
   border-top: 1px solid var(--vp-c-divider);
 }
 
-.cta-footer h2 {
-  font-size: 1.75rem;
+.next-steps h2 {
+  font-size: 1.5rem;
   font-weight: 700;
-  margin-bottom: 12px;
+  margin-bottom: 20px;
 }
 
-.cta-footer p {
+.next-steps ul {
+  padding-left: 1.25rem;
+}
+
+.next-steps li {
+  margin-bottom: 10px;
   color: var(--vp-c-text-2);
-  font-size: 1rem;
-  margin-bottom: 28px;
-}
-
-.cta-footer-actions {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.vp-doc .cta-btn {
-  display: inline-block;
-  border-radius: 20px;
-  padding: 10px 24px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  border: 1px solid transparent;
-  text-decoration: none;
-  transition: border-color 0.25s, color 0.25s, background-color 0.25s;
-}
-
-.cta-btn-brand {
-  background-color: var(--vp-button-brand-bg);
-  color: var(--vp-button-brand-text);
-}
-
-.cta-btn-brand:hover {
-  background-color: var(--vp-button-brand-hover-bg);
-}
-
-.cta-btn-alt {
-  background-color: var(--vp-button-alt-bg);
-  color: var(--vp-button-alt-text);
-  border-color: var(--vp-button-alt-border);
-}
-
-.cta-btn-alt:hover {
-  background-color: var(--vp-button-alt-hover-bg);
 }
 
 @media (max-width: 768px) {
