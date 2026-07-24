@@ -10,6 +10,10 @@ export default defineConfig({
   description:
     'Self-hosted dashboard that keeps every Playwright run — then groups failures by root cause, scores flaky tests, and heals broken locators.',
   base: '/',
+  // AGENTS.md is the agent guide for this directory, not a page of the site:
+  // it links to sibling guides outside the docs root, so building it as a page
+  // both publishes the wrong thing and fails the dead-link check.
+  srcExclude: ['AGENTS.md'],
   // Example values in the generated configuration reference (PIWI_SITE_URL,
   // Ollama base URLs) are intentionally unreachable localhost URLs.
   ignoreDeadLinks: [/^https?:\/\/localhost/],
