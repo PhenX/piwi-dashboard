@@ -597,14 +597,17 @@ test.describe.serial('AI diagnosis — streaming success path', () => {
 // adjudication verdict by an `ADJ=` marker — both sit after the Playwright Call
 // log so they don't affect the deterministic fingerprint, only the embedding /
 // adjudication inputs.
+//
+// Components are letter-prefixed integers (`v2 v1 v0`), not bare numbers: the
+// embedder input is now cleaned by `buildEmbedText`, whose `maskVolatile` pass
+// rewrites bare digit runs to `<N>` (a digit is kept only when glued to a
+// preceding letter). Bare numbers here would all collapse to the fallback
+// vector and every cluster would look identical.
 
 function vecFor(input: string): number[] {
-  const m = /EMBVEC=([0-9.,\- ]+)/.exec(input);
+  const m = /EMBVEC=((?:v\d+[ ,]*)+)/i.exec(input);
   if (m) {
-    const nums = m[1]
-      .split(',')
-      .map((s) => Number(s.trim()))
-      .filter((n) => !Number.isNaN(n));
+    const nums = [...m[1].matchAll(/v(\d+)/gi)].map((x) => Number(x[1]));
     if (nums.length) return nums;
   }
   return [1, 1, 1];
@@ -740,14 +743,14 @@ test.describe.serial('Cluster reconciliation, suggestions & naming', () => {
         status: 'failed',
         duration: 1,
         location: 'tests/a.spec.ts:1:1',
-        error: err("getByTestId('alpha')", '1,0,0'),
+        error: err("getByTestId('alpha')", 'v1 v0 v0'),
       },
       {
         title: 'login b',
         status: 'failed',
         duration: 1,
         location: 'tests/b.spec.ts:1:1',
-        error: err("getByTestId('beta')", '1,0,0'),
+        error: err("getByTestId('beta')", 'v1 v0 v0'),
       },
     ]);
 
@@ -764,34 +767,36 @@ test.describe.serial('Cluster reconciliation, suggestions & naming', () => {
     await configureAi(request, { embedding: true, autoDiagnose: false });
     // Distinct, digit-free selectors → four distinct fingerprints (digits in a
     // selector are masked, which would otherwise collapse e.g. 'p1'/'p2').
+    // Two ambiguous-band pairs: cos(alpha,bravo) = cos(charlie,delta) =
+    // 2/√5 ≈ 0.894 (in [0.80, 0.92)); every cross pair is orthogonal.
     const { projectId } = await submitFailures(request, PROJECT.CLUSTER_SUGGEST, [
       {
         title: 'alpha',
         status: 'failed',
         duration: 1,
         location: 'tests/alpha.spec.ts:1:1',
-        error: err("getByTestId('alpha')", '1,0,0,0', 'ADJ=medium'),
+        error: err("getByTestId('alpha')", 'v1 v0 v0 v0', 'ADJ=medium'),
       },
       {
         title: 'bravo',
         status: 'failed',
         duration: 1,
         location: 'tests/bravo.spec.ts:1:1',
-        error: err("getByTestId('bravo')", '0.85,0.5268,0,0', 'ADJ=medium'),
+        error: err("getByTestId('bravo')", 'v2 v1 v0 v0', 'ADJ=medium'),
       },
       {
         title: 'charlie',
         status: 'failed',
         duration: 1,
         location: 'tests/charlie.spec.ts:1:1',
-        error: err("getByTestId('charlie')", '0,0,1,0', 'ADJ=medium'),
+        error: err("getByTestId('charlie')", 'v0 v0 v1 v0', 'ADJ=medium'),
       },
       {
         title: 'delta',
         status: 'failed',
         duration: 1,
         location: 'tests/delta.spec.ts:1:1',
-        error: err("getByTestId('delta')", '0,0,0.85,0.5268', 'ADJ=medium'),
+        error: err("getByTestId('delta')", 'v0 v0 v2 v1', 'ADJ=medium'),
       },
     ]);
 
@@ -826,7 +831,7 @@ test.describe.serial('Cluster reconciliation, suggestions & naming', () => {
         status: 'failed',
         duration: 1,
         location: 'tests/n.spec.ts:1:1',
-        error: err("getByTestId('name-me')", '1,0,0'),
+        error: err("getByTestId('name-me')", 'v1 v0 v0'),
       },
     ]);
 
