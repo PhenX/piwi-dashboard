@@ -8,6 +8,7 @@ import { Logger } from '../internal/support/logger.js';
 import { computeInstanceId } from '../internal/support/instance-id.js';
 import { detectCiRunLabel } from '../internal/support/ci.js';
 import { getSetupFilePath } from '../internal/support/setup-file.js';
+import { isUiMode } from '../internal/support/run-mode.js';
 
 /**
  * Create a Playwright `globalSetup` function that registers a test run on the
@@ -54,6 +55,16 @@ export function createGlobalSetup(
 
     const opts = resolveOptions({ ...inlineReporterOptions, ...options } as Record<string, any>);
     const logger = new Logger(opts.verbose ?? false);
+
+    // In Playwright's UI mode the reporter never runs to finish a registered
+    // run, so registering here would leave orphaned "initialising" runs (one at
+    // UI launch, one per manual run). Skip registration but still chain
+    // userSetup so the user's own setup keeps working under the UI.
+    if (isUiMode()) {
+      logger.debug('UI mode detected — skipping run registration.');
+      if (userSetup) return userSetup(config);
+      return;
+    }
 
     if (opts.enabled === false || !opts.serverUrl) {
       logger.info('Not enabled — set PIWI_DASHBOARD_URL or serverUrl to enable.');

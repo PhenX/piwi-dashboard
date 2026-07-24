@@ -267,6 +267,8 @@ globalSetup: createGlobalSetup(dashboard, async (config) => {
 
 Registration is best-effort: if the server is unreachable the error is non-fatal and the reporter simply creates the run normally once tests begin.
 
+In Playwright's **UI mode** (`playwright test --ui`) registration is skipped entirely. UI mode keeps one long-lived process and re-runs `globalSetup` every time you press play, but swaps the reporter out for its own internal one — so a run registered from `globalSetup` would never be finished, leaving orphaned "initialising" runs (one at launch, one per manual run). A chained `userSetup` still runs, so your own setup logic is unaffected.
+
 ## Multiple reports
 
 Attach multiple report types to a single test run. Each report appears as a separate button in the dashboard UI.
