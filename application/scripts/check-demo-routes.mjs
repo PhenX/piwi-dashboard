@@ -31,6 +31,7 @@ const INTENTIONALLY_EXCLUDED = new Set([
   'DELETE /api/tests/cleanup', // test-suite cleanup hook (server only)
   'POST /api/traces/check', // trace dedup check (server only)
   'POST /api/test-runs/:id/gate', // CI gate policy — there is no pipeline to gate in a browser demo
+  'GET /api/desktop/reporter-config', // desktop build only; returns null everywhere else, including the demo
 ]);
 
 // ── Derive all server routes from the file system ────────────────────────
