@@ -1,5 +1,5 @@
 import { ScmProvider, truncatePatch, MAX_SCM_FILES, MAX_FILE_BYTES, FETCH_TIMEOUT_MS } from './ScmProvider';
-import type { ScmCommitDetail, ScmChanges, ScmFileContent } from './ScmProvider';
+import type { ScmCommitDetail, ScmChanges, ScmFileContent, ScmPullRequest, ScmCommitStatus } from './ScmProvider';
 import { TtlCache } from './cache';
 
 const listBranchesCache = new TtlCache<string[]>(3 * 60 * 1000);
@@ -220,6 +220,90 @@ export class GitLabProvider extends ScmProvider {
       return `No commits found on ${branch ? `branch '${branch}'` : 'the default branch'}.`;
     } catch {
       return 'Could not reach the GitLab API. Check your network connection.';
+    }
+  }
+
+  // ── Merge-request feedback ─────────────────────────────────────────────────
+
+  private projectPath(): string {
+    return encodeURIComponent(this.repoPath);
+  }
+
+  override async findPullRequestForBranch(branch: string): Promise<ScmPullRequest | null> {
+    if (!branch) return null;
+    try {
+      const url = new URL(`https://${this.hostname}/api/v4/projects/${this.projectPath()}/merge_requests`);
+      url.searchParams.set('state', 'opened');
+      url.searchParams.set('source_branch', branch);
+      url.searchParams.set('per_page', '1');
+
+      const res = await fetch(url.toString(), {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as Array<{ iid?: number; web_url?: string }>;
+      const mr = data[0];
+      if (!mr?.iid) return null;
+      return {
+        number: mr.iid,
+        url: mr.web_url ?? `https://${this.hostname}/${this.repoPath}/-/merge_requests/${mr.iid}`,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  override async upsertPullRequestComment(prNumber: number, marker: string, body: string): Promise<boolean> {
+    if (!this.token) return false;
+    try {
+      const base = `https://${this.hostname}/api/v4/projects/${this.projectPath()}/merge_requests/${prNumber}/notes`;
+
+      const listUrl = new URL(base);
+      listUrl.searchParams.set('per_page', '100');
+      const listRes = await fetch(listUrl.toString(), {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+
+      let existingId: number | null = null;
+      if (listRes.ok) {
+        const notes = (await listRes.json()) as Array<{ id?: number; body?: string; system?: boolean }>;
+        existingId = notes.find((n) => !n.system && typeof n.body === 'string' && n.body.includes(marker))?.id ?? null;
+      }
+
+      const res = await fetch(existingId ? `${base}/${existingId}` : base, {
+        method: existingId ? 'PUT' : 'POST',
+        headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  override async postCommitStatus(sha: string, status: ScmCommitStatus): Promise<boolean> {
+    if (!this.token || !sha) return false;
+    try {
+      // GitLab has no `error` state; it splits GitHub's `failure` into
+      // `failed` and `canceled`. Map both non-success states onto `failed`.
+      const state = status.state === 'success' ? 'success' : status.state === 'pending' ? 'pending' : 'failed';
+      const url = new URL(`https://${this.hostname}/api/v4/projects/${this.projectPath()}/statuses/${sha}`);
+      url.searchParams.set('state', state);
+      url.searchParams.set('name', status.context);
+      url.searchParams.set('description', status.description);
+      url.searchParams.set('target_url', status.targetUrl);
+
+      const res = await fetch(url.toString(), {
+        method: 'POST',
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
   }
 }

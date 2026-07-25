@@ -56,6 +56,21 @@ export function shortHash(input: string): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
+/** An open pull request / merge request the run's branch belongs to. */
+export interface ScmPullRequest {
+  /** Number on GitHub / Bitbucket, `iid` on GitLab. */
+  number: number;
+  url: string;
+}
+
+/** A commit status (GitHub "status", GitLab "commit status", Bitbucket "build status"). */
+export interface ScmCommitStatus {
+  state: 'success' | 'failure' | 'error' | 'pending';
+  description: string;
+  targetUrl: string;
+  context: string;
+}
+
 export abstract class ScmProvider {
   abstract readonly provider: 'github' | 'gitlab' | 'bitbucket';
   protected readonly token: string | null;
@@ -94,4 +109,32 @@ export abstract class ScmProvider {
    * on failure; may be capped by the provider.
    */
   abstract fetchTree(ref: string): Promise<string[] | null>;
+
+  // ── Pull-request feedback (optional capability) ────────────────────────────
+  //
+  // A provider that cannot post feedback inherits these no-ops rather than
+  // declaring the methods and throwing, so `postRunPrFeedback` treats "this
+  // host doesn't support it" and "nothing to post" the same way. Every
+  // implementation swallows its own errors and reports failure by return value:
+  // feedback is best-effort decoration on a run that has already been stored,
+  // and must never surface as an ingest error.
+
+  /** The open pull request whose source branch is `branch`, if there is one. */
+  async findPullRequestForBranch(_branch: string): Promise<ScmPullRequest | null> {
+    return null;
+  }
+
+  /**
+   * Create the run-summary comment on a pull request, or edit the existing one.
+   * `marker` identifies Piwi's own comment; implementations must only ever edit
+   * a comment containing it. Returns true when something was posted.
+   */
+  async upsertPullRequestComment(_prNumber: number, _marker: string, _body: string): Promise<boolean> {
+    return false;
+  }
+
+  /** Attach a status to a commit. Returns true when it was accepted. */
+  async postCommitStatus(_sha: string, _status: ScmCommitStatus): Promise<boolean> {
+    return false;
+  }
 }

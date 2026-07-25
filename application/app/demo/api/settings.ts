@@ -19,6 +19,12 @@ import {
   resolveTimeoutThresholds,
   type TimeoutThresholds,
 } from '#shared/analytics/timeout-hygiene';
+import {
+  DEFAULT_PR_FEEDBACK,
+  PR_FEEDBACK_KEY,
+  resolvePrFeedbackSettings,
+  type PrFeedbackSettings,
+} from '#shared/pr-feedback';
 
 /** GET /api/settings/wasted-waits */
 export async function apiGetWastedWaits() {
@@ -61,4 +67,39 @@ export async function apiPutTimeoutHygiene(body: { thresholds?: Partial<TimeoutT
 
   const stored = await getAppSetting<Partial<TimeoutThresholds>>(db, TIMEOUT_THRESHOLDS_KEY);
   return { thresholds: resolveTimeoutThresholds(stored), defaults: DEFAULT_TIMEOUT_THRESHOLDS };
+}
+
+/**
+ * GET /api/settings/pr-feedback
+ *
+ * The demo has no SCM to post to, so `siteUrlConfigured` is always false —
+ * the page renders its "nothing will be posted" notice, which is the honest
+ * state for a dashboard running entirely in a browser tab.
+ */
+export async function apiGetPrFeedback() {
+  const db = await getDemoDb();
+  const stored = await getAppSetting<Partial<PrFeedbackSettings>>(db, PR_FEEDBACK_KEY);
+  return {
+    settings: stored ? resolvePrFeedbackSettings(stored) : { ...DEFAULT_PR_FEEDBACK },
+    defaults: DEFAULT_PR_FEEDBACK,
+    siteUrlConfigured: false,
+  };
+}
+
+/** PUT /api/settings/pr-feedback */
+export async function apiPutPrFeedback(body: { settings?: Partial<PrFeedbackSettings> | null }) {
+  const db = await getDemoDb();
+
+  if (body.settings === null) {
+    await deleteAppSetting(db, PR_FEEDBACK_KEY);
+  } else {
+    await setAppSetting(db, PR_FEEDBACK_KEY, resolvePrFeedbackSettings(body.settings));
+  }
+
+  const stored = await getAppSetting<Partial<PrFeedbackSettings>>(db, PR_FEEDBACK_KEY);
+  return {
+    settings: stored ? resolvePrFeedbackSettings(stored) : { ...DEFAULT_PR_FEEDBACK },
+    defaults: DEFAULT_PR_FEEDBACK,
+    siteUrlConfigured: false,
+  };
 }

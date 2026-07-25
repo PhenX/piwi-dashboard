@@ -10,6 +10,7 @@ import { runEventBus } from '../../utils/run-events';
 import { autoDiagnoseRun } from '../../utils/ai-diagnosis';
 import { cancelInstanceRuns } from '../../utils/cancel-instance-runs';
 import { emitRunNotifications } from '../../utils/notifications/run-notifications';
+import { postRunPrFeedbackInBackground } from '../../utils/scm/pr-feedback';
 import { getProjectScope, scopeAllows } from '../../utils/project-access';
 import { sumFailedAndTimedOut } from '#shared/utils/test-counts';
 
@@ -143,6 +144,8 @@ export default eventHandler(async (event) => {
             suitePath: testCase.suitePath ?? null,
             suiteConfig: testCase.suiteConfig ?? null,
             testAnnotations: testCase.testAnnotations ?? null,
+            tags: testCase.tags ?? null,
+            testMeta: testCase.testMeta ?? null,
             title: testCase.title,
             status: testCase.status,
             duration: testCase.duration,
@@ -288,6 +291,8 @@ export default eventHandler(async (event) => {
         suitePath?: string[] | null;
         suiteConfig?: unknown;
         testAnnotations?: unknown;
+        tags?: unknown;
+        testMeta?: unknown;
         locatorSnapshots?: unknown;
       }) => {
         const { filePath, line, column } = testCase.location
@@ -299,6 +304,8 @@ export default eventHandler(async (event) => {
           suitePath: testCase.suitePath ?? null,
           suiteConfig: testCase.suiteConfig ?? null,
           testAnnotations: testCase.testAnnotations ?? null,
+          tags: testCase.tags ?? null,
+          testMeta: testCase.testMeta ?? null,
           title: testCase.title,
           status: testCase.status,
           duration: testCase.duration,
@@ -351,6 +358,7 @@ export default eventHandler(async (event) => {
 
   autoDiagnoseRun(db, project.id, testRun.id).catch((e) => console.error('[ai-diagnosis] autoDiagnoseRun failed', e));
   emitRunNotifications(db, testRun.id).catch((e) => console.error('[notifications] emitRunNotifications failed', e));
+  postRunPrFeedbackInBackground(db, testRun.id);
 
   return {
     success: true,

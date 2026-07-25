@@ -13,6 +13,7 @@ import { tmpdir } from 'os';
 import { rm, mkdir, readdir } from 'fs/promises';
 import { parseLocation } from '../../utils/parse-location';
 import { persistRunCases, type RunCaseInput } from '../../utils/persist-run-cases';
+import { postRunPrFeedbackInBackground } from '../../utils/scm/pr-feedback';
 import { sanitizeMetadata } from '../../utils/sanitize';
 import { runEventBus } from '../../utils/run-events';
 import { autoDiagnoseRun } from '../../utils/ai-diagnosis';
@@ -442,6 +443,7 @@ export default eventHandler(async (event) => {
       autoDiagnoseRun(db, testRun.projectId, existingTestRunId!).catch((e) =>
         console.error('[ai-diagnosis] autoDiagnoseRun failed', e),
       );
+      postRunPrFeedbackInBackground(db, existingTestRunId!);
 
       // Cleanup event bus for this run
       runEventBus.cleanup(existingTestRunId!);
@@ -505,6 +507,8 @@ export default eventHandler(async (event) => {
         workerIndex: testCase.workerIndex as number | null | undefined,
         shardIndex: testCase.shardIndex as number | null | undefined,
         startedAt: testCase.startedAt as number | null | undefined,
+        tags: testCase.tags ?? null,
+        testMeta: testCase.testMeta ?? null,
         locatorSnapshots: (testCase as any).locatorSnapshots ?? null,
       };
     });

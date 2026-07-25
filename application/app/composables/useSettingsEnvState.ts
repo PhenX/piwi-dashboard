@@ -35,6 +35,7 @@ export function useSettingsEnvState() {
     storage: false,
     'wasted-time': false,
     'timeout-hygiene': false,
+    'pr-feedback': false,
     ai: false,
     about: false,
   });
