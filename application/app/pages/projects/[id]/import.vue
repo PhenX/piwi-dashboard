@@ -31,7 +31,6 @@ const {
   maxBytes,
   limitError,
   importing,
-  canHash,
   readyCount,
   importedCount,
   busy,
@@ -128,15 +127,6 @@ const finishedCount = computed(() => entries.value.filter((e) => ['imported', 'd
               variant="subtle"
               icon="i-lucide-circle-alert"
               :description="limitError"
-            />
-
-            <UAlert
-              v-else-if="!canHash"
-              color="warning"
-              variant="subtle"
-              icon="i-lucide-shield-off"
-              description="This page is not served over HTTPS, so the browser will not compute file digests. Archives you have already imported can only be recognised after they upload, not before."
-              :ui="{ description: 'text-xs' }"
             />
           </div>
         </SectionCard>

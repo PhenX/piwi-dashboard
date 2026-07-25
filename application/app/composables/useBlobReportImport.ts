@@ -9,6 +9,7 @@
  * actually hits are reported before the bytes move, not after.
  */
 
+import { Sha256, sha256Blob } from '#shared/utils/sha256';
 import type {
   ImportCheckResponse,
   ImportCheckResult,
@@ -81,13 +82,6 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
   const maxBytes = ref<number | null>(null);
   const limitError = ref<string | null>(null);
   const importing = ref(false);
-  /**
-   * Digests need `crypto.subtle`, which browsers withhold from pages served
-   * over plain HTTP. Without it the pre-flight cannot recognise an archive the
-   * project already has; the server still refuses the duplicate after upload,
-   * so the import stays correct, only less efficient.
-   */
-  const canHash = computed(() => typeof globalThis.crypto?.subtle?.digest === 'function');
 
   let nextId = 1;
 
@@ -158,18 +152,12 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
 
     if (withinLimit.length === 0) return;
 
-    if (!canHash.value) {
-      // No digest, so no duplicate pre-check — the server decides after upload.
-      for (const entry of withinLimit) entry.state = 'ready';
-      return;
-    }
-
-    // Sequential: hashing needs the whole file in memory, and several large
-    // archives at once is the one way this page can exhaust a tab.
+    // Sequential, so a batch of large archives reads one at a time rather than
+    // competing for the same disk.
     for (const entry of withinLimit) {
       try {
         entry.progress = 0;
-        entry.hash = await sha256(entry.file, (p) => {
+        entry.hash = await sha256Blob(entry.file, (p) => {
           entry.progress = p;
         });
         entry.state = 'checking';
@@ -270,7 +258,6 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
     maxBytes,
     limitError,
     importing,
-    canHash,
     readyCount,
     importedCount,
     busy,
@@ -291,47 +278,14 @@ function withAppBase(path: string): string {
 
 /**
  * A stable identity for one batch: the digest of its files' digests, order
- * independent. Returns null when the files were never hashed (no `crypto.subtle`
- * on an insecure origin), in which case each trace imports as its own run.
+ * independent. Returns null when nothing in the batch was hashed, in which case
+ * each trace imports as its own run.
  */
 async function groupKeyFor(entries: ImportFileEntry[]): Promise<string | null> {
   const hashes = entries.map((entry) => entry.hash).filter((hash): hash is string => Boolean(hash));
   if (hashes.length === 0) return null;
 
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode([...hashes].sort().join('')));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * Hex SHA-256 of a file's bytes, matching what the server computes on receipt.
- *
- * The file is streamed into one pre-allocated buffer rather than handed to
- * `File.arrayBuffer()`: reading a large archive is the slow half of this step,
- * so streaming is what makes progress reportable, and filling a buffer we sized
- * up front avoids holding the file twice at the moment of the copy.
- *
- * `crypto.subtle` has no incremental API, so the digest itself is one opaque
- * call at the end — fast next to the read (~165 MB/s measured), and reported as
- * the last slice of progress.
- */
-async function sha256(file: File, onProgress: (fraction: number) => void): Promise<string> {
-  const bytes = new Uint8Array(file.size);
-  const reader = file.stream().getReader();
-  let offset = 0;
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    bytes.set(value, offset);
-    offset += value.length;
-    // Hold back the last sliver for the digest, so the bar does not sit at 100%
-    // through a step that has not started.
-    onProgress(file.size ? (offset / file.size) * 0.9 : 0.9);
-  }
-
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  onProgress(1);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return new Sha256().update(new TextEncoder().encode([...hashes].sort().join(''))).hex();
 }
 
 /**

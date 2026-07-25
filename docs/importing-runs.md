@@ -72,9 +72,6 @@ The grouping is fixed when you *choose* the files, not when they upload, so retr
 its siblings. Two separate selections are two runs, even if you import them with one click — pick every trace that
 belongs to a run in one go.
 
-Grouping needs the browser to digest the files, which requires HTTPS (or localhost). Over plain HTTP each trace
-imports as its own single-test run; the page says so before you start.
-
 Two different traces for the same test in one selection are treated as **attempts**: the second becomes retry 1, so a
 test that failed then passed is recognised as flaky. Upload order is attempt order.
 
@@ -133,9 +130,9 @@ Two differences from a self-hosted instance:
 - **The size limit comes from your browser, not from a server.** The demo asks how much storage the origin has free
   and offers a quarter of it, so the figure on the page reflects your machine rather than a fixed number — typically a
   few hundred megabytes. Anything larger is refused before it is read, because exceeding the quota would otherwise fail
-  part-way through and leave a half-imported run behind. The limit is about *storage*, not memory: a ZIP is a
-  random-access format, so the demo reads the directory out of the file you picked and then slices out one entry at a
-  time, and the archive is never held in the page.
+  part-way through and leave a half-imported run behind. The limit is about *storage*, not memory: the archive is
+  hashed as a stream and a ZIP is a random-access format, so the demo reads the directory out of the file you picked
+  and then slices out one entry at a time. It is never held whole.
 - **Imported data is local and temporary.** It never leaves your machine, and it is cleared when you reset the demo or
   when the demo's sample dataset is refreshed to a new version.
 
@@ -147,6 +144,9 @@ the effective limit and rejects anything larger before uploading it.
 If a reverse proxy in front of Piwi enforces a smaller body limit, set
 [`PIWI_IMPORT_MAX_BYTES`](./configuration#ingest-limits) to match, so the page rejects the same archives your proxy would
 instead of failing mid-upload.
+
+The limit is the server's to set: the page reads each archive as a stream to fingerprint it, so the browser holds a
+chunk at a time rather than the whole file, however large the server is willing to accept.
 
 ## Limitations
 

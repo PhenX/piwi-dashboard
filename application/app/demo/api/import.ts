@@ -35,6 +35,7 @@ import {
   type ImportPort,
 } from '#shared/handlers/import-runs';
 import { formatBytes } from '#shared/utils/format-bytes';
+import { Sha256, sha256Blob } from '#shared/utils/sha256';
 import type { ImportCheckResponse, ImportRunResponse } from '#shared/import.types';
 
 /**
@@ -57,7 +58,7 @@ const FALLBACK_MAX_IMPORT_BYTES = 100 * 1024 * 1024;
 /** Never refuse below this — a modest blob report should always be importable. */
 const MIN_MAX_IMPORT_BYTES = 25 * 1024 * 1024;
 
-/** Never allow above this, whatever the disk says; it all passes through memory. */
+/** Never allow above this, whatever the disk says; a demo is a demo. */
 const MAX_MAX_IMPORT_BYTES = 1024 * 1024 * 1024;
 
 /** The share of free storage one archive may claim, clamped to sane bounds. */
@@ -84,21 +85,9 @@ const SHA256_RE = /^[0-9a-f]{64}$/;
 
 type DemoDb = Awaited<ReturnType<typeof getDemoDb>>;
 
-async function sha256Hex(bytes: BufferSource): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * The archive's digest, which identifies the import.
- *
- * The one point where the whole archive must exist as a contiguous buffer:
- * `crypto.subtle.digest` has no incremental form, so there is nothing to stream
- * into. It is read, digested and dropped in this one call — everything after it
- * works from slices of the blob.
- */
-async function digestBlob(blob: Blob): Promise<string> {
-  return await sha256Hex(await blob.arrayBuffer());
+/** Digest of one archive entry, which is bounded and already in hand. */
+function sha256Hex(bytes: Uint8Array): string {
+  return new Sha256().update(bytes).hex();
 }
 
 /** Get-or-create the project an import targets, mirroring the server. */
@@ -157,7 +146,7 @@ export async function apiDemoImport(form: FormData): Promise<ImportRunResponse> 
 
   const groupRaw = String(form.get('importGroup') ?? '').toLowerCase();
   const importGroup = SHA256_RE.test(groupRaw) ? groupRaw : null;
-  const importHash = await digestBlob(file);
+  const importHash = await sha256Blob(file);
 
   const db = await getDemoDb();
   const project = await resolveProject(db, projectName);
@@ -221,7 +210,7 @@ function createDemoImportPort(): ImportPort {
       // uploaded twice resolves to one path — which is how a repeat is spotted.
       // A digest the caller already has spares us reading the whole archive
       // again, which is what keeps a `Blob` from being materialised here.
-      const hash = digest ?? (await sha256Hex((await toBytes(bytes)) as Uint8Array<ArrayBuffer>));
+      const hash = digest ?? sha256Hex(await toBytes(bytes));
       const extension = entryName.split('.').pop() || 'bin';
       const path = `project-${projectId}/imported/${hash}.${extension}`;
       // IndexedDB stores a Blob by reference, so an imported archive goes to
