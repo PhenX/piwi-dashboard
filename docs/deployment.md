@@ -57,7 +57,8 @@ unreleased fix; don't run it in production — it has had no release testing and
 | `0` | Latest release of the major version | ✅ | ✅ |
 | `edge` | Built from `main`, unreleased | — | ✅ |
 
-Pin a specific version in production. Browse the published tags on
+Pin a specific version in production — and read [Upgrading](./upgrading) before you bump it, because
+migrations are forward-only. Browse the published tags on
 [Docker Hub](https://hub.docker.com/r/phenx/piwitests-server/tags) or
 [GHCR](https://github.com/PiwiTests/platform/pkgs/container/platform).
 
@@ -353,6 +354,8 @@ Compress-Archive -Path .data -DestinationPath piwi-backup.zip
 :::
 
 With PostgreSQL: `pg_dump` the database and copy `.data/storage/` (or rely on your S3 bucket's own durability/versioning).
+
+Take one before every version bump: migrations are forward-only, so a backup is the only rollback path. See [Upgrading](./upgrading).
 
 ## Resource requirements
 

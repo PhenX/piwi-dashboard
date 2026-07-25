@@ -78,14 +78,22 @@ Visit `http://localhost:3000`. A [`docker-compose.yml`](./docker-compose.yml) is
 current directory. There's also a [desktop build](https://piwitests.github.io/desktop) (Windows `.msi`,
 macOS `.dmg`) that bundles the server for a single machine.
 
+It's one Node process: **~300 MB RAM idle** (1 GB comfortable), **1 vCPU**, `linux/amd64` or
+`linux/arm64`. Disk is the variable — traces and reports dominate, so budget roughly 50–200 MB per run
+and set a retention window. Your test project only needs a Node version Playwright supports; Node 24 is
+the *dashboard's* requirement.
+
 > **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker
 > auto-creates `.data` owned by `root` and the container can't write to it. Docker Desktop on Windows
 > and macOS handles this for you. See [Troubleshooting](./DOCKER.md#troubleshooting).
 
-> **Before you expose it:** set `PIWI_SECRET_KEY` to a long random string so stored credentials (AI
-> keys, SCM tokens) are actually encrypted. Generate one with
-> `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. See the
-> [deployment guide](https://piwitests.github.io/deployment).
+> **Before you expose it:** authentication is **off by default** — the command above gives you an open
+> dashboard, which is fine on localhost and not fine on a network. Set `PIWI_AUTH_ENABLED=true`
+> ([guide](https://piwitests.github.io/authentication)) and set `PIWI_SECRET_KEY` to a long random
+> string so stored credentials (AI keys, SCM tokens) are actually encrypted — generate one with
+> `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. Put it behind HTTPS;
+> see the [deployment guide](https://piwitests.github.io/deployment). Found a vulnerability? Please
+> report it privately via the [security policy](./SECURITY.md).
 
 **2. Add the reporter to your test project**
 
@@ -178,8 +186,12 @@ same images; use whichever your organization prefers.
 
 Pre-1.0 and under active development: expect occasional breaking changes between minor versions, pin a
 version tag, and keep backups of `.data/`. Every commit runs a CI matrix across SQLite/PostgreSQL and
-local/S3 storage with a full Playwright E2E suite, and upgrades apply database migrations
-automatically. Direction and non-goals live in the [roadmap](./ROADMAP.md).
+local/S3 storage with a full Playwright E2E suite.
+
+Upgrades apply database migrations automatically on startup — and those migrations are **forward-only**,
+so rolling back means restoring a backup, not pulling the old tag. Read
+[Upgrading](https://piwitests.github.io/upgrading) before your first version bump. Direction and
+non-goals live in the [roadmap](./ROADMAP.md).
 
 ## Documentation
 
@@ -189,6 +201,7 @@ Full docs at **[piwitests.github.io](https://piwitests.github.io)**. The usual e
 - [Core concepts](https://piwitests.github.io/concepts) — runs, test cases, executions, clusters
 - [Reporter](https://piwitests.github.io/reporter) and [CI & sharding](https://piwitests.github.io/ci) — getting results in
 - [Deployment](https://piwitests.github.io/deployment) and [Configuration](https://piwitests.github.io/configuration) — running your instance
+- [Upgrading](https://piwitests.github.io/upgrading) — what a version bump does, and why downgrading isn't a thing
 - [Privacy & data flow](https://piwitests.github.io/privacy) — exactly what leaves your server (nothing you didn't configure)
 
 A running dashboard also serves interactive API docs at `/docs`, rendered in-app from its own OpenAPI
