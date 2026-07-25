@@ -1,11 +1,11 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { getDatabase } from '../../../database';
-import { projects, testRuns } from '../../../database/schema';
+import { projects } from '../../../database/schema';
 import { requireAuth } from '../../../utils/auth';
 import { getProjectScope, scopeAllows } from '../../../utils/project-access';
 import { resolveMaxUploadBytes } from '../../../utils/upload-limits';
-import { formatBytes } from '#shared/utils/format-bytes';
-import type { ImportCheckFile, ImportCheckResponse, ImportCheckResult } from '#shared/import.types';
+import { findImportedHashes, judgeImportFiles } from '#shared/handlers/import-runs';
+import type { ImportCheckResponse } from '#shared/import.types';
 
 defineRouteMeta({
   openAPI: {
@@ -42,7 +42,6 @@ defineRouteMeta({
   },
 });
 
-const SHA256_RE = /^[0-9a-f]{64}$/;
 /** Guards the batch against a client asking about an unreasonable number of files. */
 const MAX_FILES_PER_CHECK = 500;
 
@@ -73,60 +72,16 @@ export default eventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Cannot create a new project — no global access' });
   }
 
-  // Normalize first so a malformed entry gets a verdict instead of a 400 that
-  // would sink the whole batch.
-  const files: Array<ImportCheckFile | null> = requested.map((raw) => {
-    const entry = (raw ?? {}) as Record<string, unknown>;
-    const name = typeof entry.name === 'string' ? entry.name : '';
-    const size = typeof entry.size === 'number' ? entry.size : -1;
-    const hash = typeof entry.hash === 'string' ? entry.hash.toLowerCase() : '';
-    if (!name || size < 0 || !SHA256_RE.test(hash)) return null;
-    return { name, size, hash };
-  });
+  const hashes = requested
+    .map((raw) => (raw as { hash?: unknown } | null)?.hash)
+    .filter((hash): hash is string => typeof hash === 'string')
+    .map((hash) => hash.toLowerCase());
 
-  // One lookup for the whole batch: which of these hashes this project already has.
-  const hashes = [...new Set(files.filter((f): f is ImportCheckFile => f !== null).map((f) => f.hash))];
-  const alreadyImported = new Map<string, number>();
-  if (project && hashes.length > 0) {
-    const rows = await db
-      .select({ id: testRuns.id, importHash: testRuns.importHash })
-      .from(testRuns)
-      .where(and(eq(testRuns.projectId, project.id), inArray(testRuns.importHash, hashes)));
-    for (const row of rows) {
-      if (row.importHash) alreadyImported.set(row.importHash, row.id);
-    }
-  }
-
-  const results: ImportCheckResult[] = files.map((file, index) => {
-    const name = file?.name || String((requested[index] as Record<string, unknown> | undefined)?.name ?? 'file');
-
-    if (!file) {
-      return { name, status: 'invalid', message: 'Missing a readable name, size or SHA-256.' };
-    }
-    if (file.size === 0) {
-      return { name, status: 'invalid', message: 'The file is empty.' };
-    }
-    if (!file.name.toLowerCase().endsWith('.zip')) {
-      return {
-        name,
-        status: 'invalid',
-        message: 'Expected a .zip blob report (blob-report/report-*.zip).',
-      };
-    }
-    if (file.size > maxBytes) {
-      return {
-        name,
-        status: 'too-large',
-        message: `${formatBytes(file.size)} exceeds this server's ${formatBytes(maxBytes)} limit.`,
-      };
-    }
-
-    const existingRunId = alreadyImported.get(file.hash);
-    if (existingRunId !== undefined) {
-      return { name, status: 'duplicate', message: 'Already imported into this project.', testRunId: existingRunId };
-    }
-
-    return { name, status: 'ok' };
+  const alreadyImported = project ? await findImportedHashes(db, project.id, hashes) : new Map<string, number>();
+  const results = judgeImportFiles(requested, {
+    maxBytes,
+    alreadyImported,
+    tooLargeSuffix: " — this server's limit.",
   });
 
   return { maxBytes, results } satisfies ImportCheckResponse;

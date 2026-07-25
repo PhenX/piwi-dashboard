@@ -272,6 +272,11 @@ the trace views work on them unchanged. Two rules keep a backfill from behaving 
   `autoDiagnoseRun` or `computeRegressionSignals` — back-dated failures must not page the team, burn AI credits, or be
   labelled new regressions. Any new post-ingest side effect added to `submit`/`upload`/`finish` must stay out of the
   import path unless it is genuinely time-independent.
+- **The import itself lives in `#shared/handlers/import-runs.ts`, not in either endpoint.** Creating the run,
+  persisting executions, linking files and rolling a trace group's counters up are the same database work in both
+  runtimes. The four things that genuinely differ arrive as an `ImportPort` (persist, file storage, trace-console
+  reading, run-submitted event); `server/api/test-runs/import.post.ts` and `app/demo/api/import.ts` are each just
+  auth/limits plus a port. Add behaviour to the handler, not to a caller.
 - **The parsers stay `node:`-free.** `blob-report.ts` and `trace-import.ts` read entries through an injected
   `ArchiveEntryReader` and use `#shared/utils/posix-path` rather than `node:path`, because demo mode runs them in a
   service worker against `DecompressionStream`. The server's ZIP half lives in `server/utils/archive-reader.ts`, the
