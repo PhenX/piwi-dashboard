@@ -14,4 +14,5 @@ export * from './error-text';
 export * from './locator-methods';
 export * from './status-classify';
 export * from './step-analysis';
+export * from './test-meta';
 export * from './wire';

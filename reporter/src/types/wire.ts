@@ -16,11 +16,20 @@ import type {
   FilterDetails,
   SuiteConfigEntry,
   TestAnnotation,
+  TestMetadata,
   TestSourceFrame,
   TestStepEvent,
 } from '@piwitests/core/wire';
 
-export type { BrowserConfig, FilterDetails, SuiteConfigEntry, TestAnnotation, TestSourceFrame, TestStepEvent };
+export type {
+  BrowserConfig,
+  FilterDetails,
+  SuiteConfigEntry,
+  TestAnnotation,
+  TestMetadata,
+  TestSourceFrame,
+  TestStepEvent,
+};
 
 // ── Per-case wire shape ──────────────────────────────────────────────────────
 
@@ -58,6 +67,10 @@ export interface WireTestCase {
   suitePath?: string[] | null;
   suiteConfig?: SuiteConfigEntry[] | null;
   testAnnotations?: TestAnnotation[] | null;
+  /** Normalized `TestCase.tags`, `@` stripped. */
+  tags?: string[] | null;
+  /** Ownership metadata parsed from `piwi:` annotations. */
+  testMeta?: TestMetadata | null;
   /** Step-event discriminant (only for `step-begin`/`step-end` events). */
   stepCategory?: string | null;
   parentTitle?: string | null;
@@ -94,6 +107,8 @@ export interface CompleteStreamEvent {
   suitePath?: string[] | null;
   suiteConfig?: SuiteConfigEntry[] | null;
   testAnnotations?: TestAnnotation[] | null;
+  tags?: string[] | null;
+  testMeta?: TestMetadata | null;
   steps?: unknown;
   stepEvents?: TestStepEvent[] | null;
   slowestStep?: string | null;

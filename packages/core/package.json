@@ -13,6 +13,7 @@
     "./locator-methods": "./src/locator-methods.ts",
     "./status-classify": "./src/status-classify.ts",
     "./step-analysis": "./src/step-analysis.ts",
+    "./test-meta": "./src/test-meta.ts",
     "./wire": "./src/wire.ts"
   },
   "scripts": {
