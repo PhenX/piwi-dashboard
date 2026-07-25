@@ -51,4 +51,21 @@ describe.runIf(existsSync(dist('index.js')))('built entry (requires a build)', (
     expect(source).toContain('piwiFixtures');
     expect(source).toContain('extendPiwiFixtures');
   });
+
+  it('exports the options type from the published .d.ts', () => {
+    const types = readFileSync(dist('index.d.ts'), 'utf-8');
+    expect(types).toMatch(/interface PiwiDashboardOptions\b/);
+    // Consumers `import type { PiwiDashboardOptions } from '@piwitests/reporter'`,
+    // so the declaration must also be re-exported from the entry.
+    expect(types).toMatch(/export \{[^}]*\bPiwiDashboardOptions\b/s);
+  });
+
+  it('keeps Playwright config options out of PiwiDashboardOptions', () => {
+    const types = readFileSync(dist('index.d.ts'), 'utf-8');
+    // It used to `extends PlaywrightTestConfig`, which made editors complete
+    // `testDir` / `use` / `timeout` on the reporter's own options object and let
+    // them typecheck there even though the reporter ignores them. The Playwright
+    // config goes in `wrapConfig`'s first argument, not its second.
+    expect(types).not.toMatch(/interface PiwiDashboardOptions\s+extends/);
+  });
 });
