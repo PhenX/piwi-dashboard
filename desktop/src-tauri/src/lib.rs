@@ -10,7 +10,7 @@
 // and "start on login". Everything binds 127.0.0.1 — nothing is exposed to the
 // network.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -34,6 +34,10 @@ const READY_TIMEOUT_SECS: u64 = 60;
 /// Preferred loopback port — stable so the reporter can target it; falls back to
 /// a free port if it's already in use (see `pick_port`).
 const PREFERRED_PORT: u16 = 3000;
+/// Home-relative location of the file the Playwright reporter reads to find this
+/// app: `~/.piwi/desktop.json` (see `write_discovery_file`).
+const DISCOVERY_DIR: &str = ".piwi";
+const DISCOVERY_FILE: &str = "desktop.json";
 
 /// Holds the running Node sidecar so it can be stopped cleanly on quit.
 #[derive(Default)]
@@ -44,6 +48,9 @@ struct RunInBackground(Arc<AtomicBool>);
 
 /// The user's data directory — used by the "Open data folder" tray item.
 struct DataDir(PathBuf);
+
+/// The reporter discovery file, removed on quit so it never outlives the server.
+struct DiscoveryFile(PathBuf);
 
 fn random_hex_32() -> String {
     use rand::RngCore;
@@ -86,6 +93,19 @@ fn health_ok(port: u16) -> bool {
     }
 }
 
+/// Restrict a file holding a secret to its owner (0600). Unix only — on Windows
+/// the per-user profile is already ACL-protected and `std::fs` cannot express
+/// ACLs. Best-effort: a filesystem that ignores modes must not block startup.
+fn restrict_to_owner(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+}
+
 /// Read the persisted master encryption key, or generate + persist one on first
 /// run. Kept stable so secrets stored in the DB (AI keys, SCM tokens) stay
 /// readable across launches. Lives in the user-scoped app-data dir.
@@ -99,6 +119,7 @@ fn load_or_create_secret(app_data_dir: &PathBuf) -> String {
     }
     let secret = random_hex_32();
     let _ = std::fs::write(&key_path, &secret);
+    restrict_to_owner(&key_path);
     secret
 }
 
@@ -117,7 +138,28 @@ fn load_or_create_token(app_data_dir: &PathBuf) -> String {
     }
     let token = format!("pd_{}", random_hex_32());
     let _ = std::fs::write(&path, &token);
+    restrict_to_owner(&path);
     token
+}
+
+/// Publish the loopback URL and access token to `~/.piwi/desktop.json` so the
+/// Playwright reporter can find this app with no configuration at all — it reads
+/// this file only when nothing else sets a server URL or API key.
+///
+/// Written on every launch because the port is not guaranteed (`pick_port` falls
+/// back when 3000 is taken) and removed on quit, so the file's presence means
+/// "this app is up at this address". Mode 0600: the token is a full-access local
+/// credential, and `$HOME` itself is world-readable on most systems.
+fn write_discovery_file(home: &Path, port: u16, token: &str) -> std::io::Result<PathBuf> {
+    let dir = home.join(DISCOVERY_DIR);
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(DISCOVERY_FILE);
+    // 127.0.0.1 rather than localhost: the server binds v4 loopback only, and
+    // localhost resolves to ::1 first on some systems.
+    let body = json!({ "url": format!("http://127.0.0.1:{port}"), "token": token }).to_string();
+    std::fs::write(&path, body)?;
+    restrict_to_owner(&path);
+    Ok(path)
 }
 
 /// Convert a path to a string Node can consume as a CLI arg / env value. On
@@ -313,6 +355,19 @@ pub fn run() {
             let port = pick_port();
 
             app.manage(DataDir(data_dir.clone()));
+
+            // --- publish connection details for the Playwright reporter ---
+            match app.path().home_dir().map_err(|e| e.to_string()).and_then(|home| {
+                write_discovery_file(&home, port, &token).map_err(|e| e.to_string())
+            }) {
+                Ok(path) => {
+                    append_log(&log_path, &format!("reporter discovery file: {}", path.display()));
+                    app.manage(DiscoveryFile(path));
+                }
+                // Not fatal: the reporter can still be pointed here by hand with
+                // the URL and token shown in Settings.
+                Err(e) => append_log(&log_path, &format!("failed to write reporter discovery file: {e}")),
+            }
 
             // --- run-in-background flag (persisted across launches) ---
             let run_bg_initial = app
@@ -561,6 +616,11 @@ pub fn run() {
                 // Best-effort: stop the bundled server so no orphan process lingers.
                 if let Some(child) = app_handle.state::<ServerProcess>().0.lock().unwrap().take() {
                     let _ = child.kill();
+                }
+                // Withdraw the reporter discovery file with the server it points
+                // at, so a later test run does not try a dead port.
+                if let Some(discovery) = app_handle.try_state::<DiscoveryFile>() {
+                    let _ = std::fs::remove_file(&discovery.0);
                 }
             }
         });

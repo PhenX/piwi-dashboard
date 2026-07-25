@@ -1,4 +1,5 @@
 import type { PiwiDashboardOptions } from '../../public/options.js';
+import { defaultDesktopConfigPath, readDesktopConfig } from './desktop.js';
 
 /**
  * Built-in option defaults, merged *under* any user-provided or env-derived
@@ -54,6 +55,13 @@ export const PIWI_ENV_KEYS = {
   outputFile: 'PIWI_OUTPUT_FILE',
 } as const;
 
+/**
+ * Relocates the file `resolveOptions` reads the desktop app's connection details
+ * from. Not part of `PIWI_ENV_KEYS` because it maps to no option — it only moves
+ * the lookup off `defaultDesktopConfigPath()`.
+ */
+export const PIWI_DESKTOP_CONFIG_ENV = 'PIWI_DESKTOP_CONFIG';
+
 function readBool(val: string | undefined): boolean | undefined {
   if (val === undefined) return undefined;
   return val === 'true';
@@ -103,9 +111,21 @@ const ENV_FALLBACK_SPECS: ReadonlyArray<{
   { option: 'outputFile', env: PIWI_ENV_KEYS.outputFile, kind: 'string' },
 ];
 
+let desktopDiscovered = false;
+
+/**
+ * Whether the last `resolveOptions` call took its server URL and API key from
+ * the running desktop app. The reporter logs this, so results never land in a
+ * dashboard the user did not visibly configure.
+ */
+export function usedDesktopDiscovery(): boolean {
+  return desktopDiscovered;
+}
+
 /**
  * Merge raw user options with defaults, reading from `PIWI_*` env vars when
- * options are not provided.
+ * options are not provided, and falling back to the running desktop app when
+ * nothing points at a server at all.
  *
  * Env semantics: env vars fill in values the caller didn't provide (fallback).
  * They're applied to `raw` *before* the `DEFAULTS` merge so a built-in default
@@ -126,6 +146,23 @@ export function resolveOptions(raw: Record<string, any>): PiwiDashboardOptions {
       if (value !== undefined) mergedRaw[spec.option] = readBool(value);
     } else if (value) {
       mergedRaw[spec.option] = spec.kind === 'number' ? Number(value) : value;
+    }
+  }
+
+  // Last resort, below every option and env var: adopt the desktop app running
+  // on this machine. URL and token move together and only when *neither* is
+  // configured anywhere else, so an explicit config or a CI secret is never
+  // redirected at the local app, and a hosted `serverUrl` can never be paired
+  // with the desktop's local token.
+  desktopDiscovered = false;
+  const serverUrlUnset = mergedRaw.serverUrl === undefined;
+  const apiKeyUnset = mergedRaw.apiKey === undefined || mergedRaw.apiKey === null;
+  if (serverUrlUnset && apiKeyUnset) {
+    const desktop = readDesktopConfig(env[PIWI_DESKTOP_CONFIG_ENV] || defaultDesktopConfigPath());
+    if (desktop) {
+      mergedRaw.serverUrl = desktop.url;
+      mergedRaw.apiKey = desktop.token;
+      desktopDiscovered = true;
     }
   }
 

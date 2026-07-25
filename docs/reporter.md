@@ -118,7 +118,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 
 ### Environment variables
 
-Every option above can also be set via a `PIWI_*` environment variable. Env vars are fallbacks — an option passed in the reporter config takes precedence. The one exception is `PIWI_VERBOSE`, which wins over both the default and an explicit option (useful for toggling debug output without editing the config). The mapping is centralized in `src/config.ts` (`PIWI_ENV_KEYS`):
+Every option above can also be set via a `PIWI_*` environment variable. Env vars are fallbacks — an option passed in the reporter config takes precedence. The one exception is `PIWI_VERBOSE`, which wins over both the default and an explicit option (useful for toggling debug output without editing the config). The mapping is centralized in `src/internal/config/env.ts` (`PIWI_ENV_KEYS`):
 
 | Env var                         | Option                  | Format          |
 |---------------------------------|-------------------------|-----------------|
@@ -142,6 +142,22 @@ Every option above can also be set via a `PIWI_*` environment variable. Env vars
 | `PIWI_VERBOSE`                  | `verbose`               | `true`/`false`  |
 
 `wrapConfig` forwards the same `PIWI_*` vars into the isolated `global-setup` process so the run registration step shares the reporter's server/auth config.
+
+### Finding the desktop app automatically
+
+If nothing sets a server at all — no `serverUrl`, no `apiKey`, and neither `PIWI_DASHBOARD_URL` nor `PIWI_API_KEY` in the environment — the reporter looks for a running [desktop app](/desktop) on the same machine and uploads there:
+
+```typescript
+reporter: [
+  ['@piwitests/reporter', { projectName: 'my-project' }],
+],
+```
+
+While it runs, the desktop app publishes its loopback URL and access token to `~/.piwi/desktop.json` (`%USERPROFILE%\.piwi\desktop.json` on Windows), owner-readable only. It rewrites the file on every launch — the port can change — and deletes it on quit, so results only go there while the app is actually up. The reporter prints the address it picked at the start of the run.
+
+This is the **lowest** precedence step, below every option and env var, and the URL and token are only ever adopted together. A project pointed at a hosted dashboard, or a CI job with `PIWI_API_KEY` set, is never redirected at a local app. It also means CI is unaffected: the file does not exist there. To opt out on a machine that does run the app, set `enabled: false` (or point `serverUrl` where you want the results).
+
+`PIWI_DESKTOP_CONFIG` overrides the path the reporter reads.
 
 ## Sharding
 
