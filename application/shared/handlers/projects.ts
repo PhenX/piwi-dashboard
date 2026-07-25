@@ -11,6 +11,8 @@ import {
   casePayloads,
 } from '../../server/database/schema';
 import { asc, desc, eq, exists, sql, and, inArray, gte, lte, isNotNull, count } from 'drizzle-orm';
+import { jsonArrayContainsAll, parseTagFilter } from '../utils/tag-filter';
+import { TEST_PRIORITIES } from '@piwitests/core/test-meta';
 
 import type { DrizzleDB } from './db';
 import {
@@ -490,6 +492,10 @@ export interface TestCasesQuery {
   offset: number;
   q?: string;
   statuses?: string[];
+  /** Every tag here must be present on a case for it to match. */
+  tags?: string[];
+  owner?: string;
+  priority?: string;
   maxAgeDays: number;
   sort: TestCasesSort;
   dir: 'asc' | 'desc';
@@ -517,11 +523,17 @@ export function parseTestCasesQuery(input?: URLSearchParams | Record<string, unk
     .map((s) => s.trim())
     .filter((s) => (TEST_CASE_STATUS_FILTERS as readonly string[]).includes(s));
   const rawSort = get('sort') ?? '';
+  const tags = parseTagFilter(get('tags'));
+  const rawPriority = (get('priority') ?? '').trim().toLowerCase();
+  const priorities = TEST_PRIORITIES as readonly string[];
   return {
     limit: Math.min(1000, Math.max(1, Math.floor(num('limit', 50)))),
     offset: Math.max(0, Math.floor(num('offset', 0))),
     q: get('q')?.trim() || undefined,
     statuses: statuses.length > 0 ? statuses : undefined,
+    tags: tags.length > 0 ? tags : undefined,
+    owner: get('owner')?.trim() || undefined,
+    priority: priorities.includes(rawPriority) ? rawPriority : undefined,
     maxAgeDays: Math.max(0, num('maxAgeDays', 0)),
     sort: (TEST_CASE_SORTS as readonly string[]).includes(rawSort) ? (rawSort as TestCasesSort) : 'lastRun',
     dir: get('dir') === 'asc' ? 'asc' : 'desc',
@@ -554,7 +566,18 @@ function toEpochMs(value: unknown): number | null {
  * latest run's status (timeouts shown as failed), or `never-run`.
  */
 export async function getProjectTestCases(db: DrizzleDB, projectId: number, options: Partial<TestCasesQuery> = {}) {
-  const { limit = 50, offset = 0, q, statuses, maxAgeDays = 0, sort = 'lastRun', dir = 'desc' } = options;
+  const {
+    limit = 50,
+    offset = 0,
+    q,
+    statuses,
+    tags,
+    owner,
+    priority,
+    maxAgeDays = 0,
+    sort = 'lastRun',
+    dir = 'desc',
+  } = options;
 
   const passed = sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'passed' THEN 1 ELSE 0 END)`;
   const failed = sql<number>`SUM(CASE WHEN ${testRunsCases.status} IN ('failed', 'timedOut', 'timedout') THEN 1 ELSE 0 END)`;
@@ -602,6 +625,15 @@ export async function getProjectTestCases(db: DrizzleDB, projectId: number, opti
   if (statuses && statuses.length > 0) {
     conditions.push(inArray(category, statuses));
   }
+  if (tags && tags.length > 0) {
+    conditions.push(...jsonArrayContainsAll(testCases.tags, tags));
+  }
+  if (owner) {
+    conditions.push(eq(testCases.owner, owner));
+  }
+  if (priority) {
+    conditions.push(eq(testCases.priority, priority));
+  }
   const where = and(...conditions);
 
   // Every predicate above is per-case (correlated on testCases.id only), so the
@@ -624,6 +656,11 @@ export async function getProjectTestCases(db: DrizzleDB, projectId: number, opti
       filePath: testCases.filePath,
       suitePath: testCases.suitePath,
       title: testCases.title,
+      tags: testCases.tags,
+      owner: testCases.owner,
+      priority: testCases.priority,
+      feature: testCases.feature,
+      link: testCases.link,
       status: category,
       totalRuns: sql<number>`COUNT(${testRunsCases.id})`,
       passedRuns: passed,
@@ -1034,11 +1071,42 @@ export async function getProjectFailureClusters(db: DrizzleDB, projectId: number
 
 const TERMINAL_STATUSES = ['passed', 'failed', 'timedout', 'interrupted'];
 
+/**
+ * Resolve the `test_cases.id`s in a project matching a tag/owner/priority
+ * filter, or `null` when no filter was requested (meaning "no restriction").
+ */
+async function resolveFilteredCaseIds(
+  db: DrizzleDB,
+  projectId: number,
+  filter?: FlakyTestsFilter,
+): Promise<Set<number> | null> {
+  const conditions = [eq(testCases.projectId, projectId)];
+  if (filter?.tags?.length) conditions.push(...jsonArrayContainsAll(testCases.tags, filter.tags));
+  if (filter?.owner) conditions.push(eq(testCases.owner, filter.owner));
+  if (filter?.priority) conditions.push(eq(testCases.priority, filter.priority));
+  if (conditions.length === 1) return null;
+
+  const rows: any[] = await db
+    .select({ id: testCases.id })
+    .from(testCases)
+    .where(and(...conditions));
+  return new Set(rows.map((r) => r.id as number));
+}
+
+/** Narrow the flaky leaderboard to the tests a team actually owns. */
+export interface FlakyTestsFilter {
+  /** Every tag must be present on the case. */
+  tags?: string[];
+  owner?: string;
+  priority?: string;
+}
+
 export async function getProjectFlakyTests(
   db: DrizzleDB,
   projectId: number,
   runsLimit: number,
   environment?: string | null,
+  filter?: FlakyTestsFilter,
 ) {
   const projectResults: any[] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId));
   const project = projectResults[0];
@@ -1222,7 +1290,12 @@ export async function getProjectFlakyTests(
     impact: number;
   }> = [];
 
+  // Applied before ranking so the top-N slice is taken from matching tests
+  // only — filtering the slice afterwards would return fewer than N rows.
+  const allowedCaseIds = await resolveFilteredCaseIds(db, projectId, filter);
+
   for (const [testCaseId, agg] of caseAggMap) {
+    if (allowedCaseIds && !allowedCaseIds.has(testCaseId)) continue;
     if (agg.totalRuns < 3) continue;
     if (agg.retryPassRuns < 1 && agg.alternations < 2) continue;
 
@@ -1268,6 +1341,9 @@ export async function getProjectFlakyTests(
       title: testCases.title,
       filePath: testCases.filePath,
       flakyRootCause: testCases.flakyRootCause,
+      tags: testCases.tags,
+      owner: testCases.owner,
+      priority: testCases.priority,
     })
     .from(testCases)
     .where(inArray(testCases.id, testCaseIds));
@@ -1288,6 +1364,9 @@ export async function getProjectFlakyTests(
       score: c.score,
       lastFlakeAt: c.lastFlakeAt,
       rootCause: tc?.flakyRootCause ?? null,
+      tags: (tc?.tags as string[] | null) ?? null,
+      owner: tc?.owner ?? null,
+      priority: tc?.priority ?? null,
       impact: c.impact,
       wastedCiMinutes: c.wastedCiMinutes,
       avgFailedDurationMs: c.avgFailedDurationMs,

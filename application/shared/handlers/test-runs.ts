@@ -113,6 +113,8 @@ export async function getTestRun(
       filePath: testCases.filePath,
       suitePath: testCases.suitePath,
       testAnnotations: testRunsCases.testAnnotations,
+      tags: testRunsCases.tags,
+      testMeta: testRunsCases.testMeta,
       isNewRegression: testRunsCases.isNewRegression,
       isNewFlaky: testRunsCases.isNewFlaky,
     })
@@ -136,6 +138,8 @@ export async function getTestRun(
     filePath: tc.filePath,
     suitePath: splitSuitePath(tc.suitePath),
     testAnnotations: (tc.testAnnotations as any) ?? null,
+    tags: (tc.tags as string[] | null) ?? null,
+    testMeta: (tc.testMeta as any) ?? null,
     status: tc.status,
     duration: tc.duration,
     location: tc.line && tc.column ? `${tc.filePath}:${tc.line}:${tc.column}` : tc.filePath,

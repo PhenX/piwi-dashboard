@@ -39,6 +39,28 @@ defineRouteMeta({
         description: 'Comma-separated status categories to include: passed, failed, flaky, skipped, didnotrun',
       },
       {
+        name: 'tags',
+        in: 'query',
+        required: false,
+        schema: { type: 'string' },
+        description:
+          'Comma-separated tags; a case must carry every one of them to match. A leading `@` is optional (`@smoke` and `smoke` are the same tag).',
+      },
+      {
+        name: 'owner',
+        in: 'query',
+        required: false,
+        schema: { type: 'string' },
+        description: 'Exact owner declared via the `piwi:owner` annotation',
+      },
+      {
+        name: 'priority',
+        in: 'query',
+        required: false,
+        schema: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
+        description: 'Priority declared via the `piwi:priority` annotation',
+      },
+      {
         name: 'maxAgeDays',
         in: 'query',
         required: false,

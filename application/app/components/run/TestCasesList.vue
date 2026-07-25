@@ -447,6 +447,7 @@ defineExpose({ scrollToCase });
                           @click.prevent="navigateTo(`/test-run-cases/${item.id}`)"
                           >{{ item.title }}</a
                         >
+                        <SharedTestMetaBadges :tags="item.tags" :meta="item.testMeta" :max-tags="3" />
                       </div>
                       <OpenInIdeLink
                         v-if="item.location"

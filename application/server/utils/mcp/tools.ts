@@ -7,6 +7,7 @@ import {
   getProjectTestCases,
   getProjectSpecHealth,
 } from '#shared/handlers/projects';
+import { parseTagFilter } from '#shared/utils/tag-filter';
 import { getNetworkRequests, getFailureGroups } from '#shared/handlers/test-runs';
 import { getTestCase, getTestRunCaseTraces, getTestCaseStabilityTrend } from '#shared/handlers/test-cases';
 import {
@@ -545,6 +546,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
           retryPassCount: t.retryPassRuns || null,
           alternationCount: t.alternations || null,
           rootCause: t.rootCause || null,
+          tags: t.tags?.length ? t.tags : null,
+          owner: t.owner || null,
+          priority: t.priority || null,
           impact: t.impact || null,
           wastedCiMinutes: t.wastedCiMinutes || null,
           avgFailedDurationMs: t.avgFailedDurationMs || null,
@@ -1353,7 +1357,14 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     const pageSize = clampPageSize(params.pageSize);
     const offset = Math.max(0, Number(params.offset) || 0);
     const query = typeof params.query === 'string' && params.query.trim() ? params.query.trim() : undefined;
-    const page = await getProjectTestCases(db, projectId, { limit: pageSize, offset, q: query });
+    const page = await getProjectTestCases(db, projectId, {
+      limit: pageSize,
+      offset,
+      q: query,
+      tags: parseTagFilter(typeof params.tags === 'string' ? params.tags : undefined),
+      owner: typeof params.owner === 'string' && params.owner.trim() ? params.owner.trim() : undefined,
+      priority: typeof params.priority === 'string' ? params.priority.trim().toLowerCase() : undefined,
+    });
     return {
       total: page.total,
       offset,
@@ -1367,6 +1378,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
           failed: t.failedRuns || null,
           flaky: t.flakyRuns || null,
           lastStatus: t.lastStatus || null,
+          tags: t.tags?.length ? t.tags : null,
+          owner: t.owner || null,
+          priority: t.priority || null,
           avgDuration: t.avgDuration != null ? Math.round(t.avgDuration) : null,
         }),
       ),
