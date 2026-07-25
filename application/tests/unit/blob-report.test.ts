@@ -1,11 +1,15 @@
 import { describe, test, expect } from 'vitest';
-import { parseBlobReport, readBlobEntry, BlobReportError } from '../../server/utils/blob-report';
+import { parseBlobReport, BlobReportError } from '../../server/utils/blob-report';
+import { openArchive, ArchiveError } from '../../server/utils/archive-reader';
 import { buildZip } from '../../server/utils/trace-zip';
 import { buildBlobReport } from '../utils/blob-report-fixture';
 
+/** The parser reads entries through an injected reader; on the server that is the ZIP. */
+const parse = (archive: Buffer) => parseBlobReport(openArchive(archive).readEntry);
+
 describe('parseBlobReport', () => {
   test('maps a run and its executions onto the ingest shape', async () => {
-    const parsed = await parseBlobReport(
+    const parsed = await parse(
       buildBlobReport({
         runStatus: 'failed',
         startTime: 1_700_000_000_000,
@@ -66,7 +70,7 @@ describe('parseBlobReport', () => {
   });
 
   test('records spec paths relative to the config directory, as the reporter does', async () => {
-    const parsed = await parseBlobReport(
+    const parsed = await parse(
       buildBlobReport({
         rootDir: '/repo/tests',
         configFile: '../playwright.config.ts',
@@ -81,7 +85,7 @@ describe('parseBlobReport', () => {
   });
 
   test('keeps the spec path as-is when the config sits at the test root', async () => {
-    const parsed = await parseBlobReport(
+    const parsed = await parse(
       buildBlobReport({
         rootDir: '/repo',
         configFile: 'playwright.config.ts',
@@ -94,7 +98,7 @@ describe('parseBlobReport', () => {
   });
 
   test('separates a deliberate skip from a test that never ran', async () => {
-    const parsed = await parseBlobReport(
+    const parsed = await parse(
       buildBlobReport({
         tests: [
           {
@@ -127,7 +131,7 @@ describe('parseBlobReport', () => {
   });
 
   test('carries step metrics and splits attachments from traces', async () => {
-    const parsed = await parseBlobReport(
+    const parsed = await parse(
       buildBlobReport({
         tests: [
           {
@@ -158,12 +162,11 @@ describe('parseBlobReport', () => {
     expect(Array.isArray(entry.case.steps)).toBe(true);
 
     // Attachment bytes stay in the archive until the caller asks for them.
-    const bytes = await readBlobEntry(Buffer.from([]), parsed.entries, 'missing');
-    expect(bytes).toBeNull();
+    expect(entry.traces[0]!.entry).toMatch(/^resources\//);
   });
 
   test('tags every execution with the shard the archive covers', async () => {
-    const parsed = await parseBlobReport(
+    const parsed = await parse(
       buildBlobReport({
         shard: { current: 2, total: 4 },
         tests: [{ testId: 't', title: 'a', attempts: [{ status: 'passed' }] }],
@@ -176,8 +179,8 @@ describe('parseBlobReport', () => {
 
   test('rejects an archive that is not a blob report', async () => {
     const notABlobReport = buildZip([{ name: 'index.html', data: Buffer.from('<html></html>') }]);
-    await expect(parseBlobReport(notABlobReport)).rejects.toThrow(BlobReportError);
-    await expect(parseBlobReport(notABlobReport)).rejects.toThrow(/report\.jsonl/);
+    await expect(parse(notABlobReport)).rejects.toThrow(BlobReportError);
+    await expect(parse(notABlobReport)).rejects.toThrow(/report\.jsonl/);
   });
 
   test('rejects a blob version it cannot read rather than importing garbage', async () => {
@@ -185,20 +188,21 @@ describe('parseBlobReport', () => {
       blobVersion: 99,
       tests: [{ testId: 't', title: 'a', attempts: [{ status: 'passed' }] }],
     });
-    await expect(parseBlobReport(future)).rejects.toThrow(/Unsupported blob report version 99/);
+    await expect(parse(future)).rejects.toThrow(/Unsupported blob report version 99/);
   });
 
-  test('rejects bytes that are not a ZIP at all', async () => {
-    await expect(parseBlobReport(Buffer.from('not a zip'))).rejects.toThrow(BlobReportError);
+  test('rejects bytes that are not a ZIP at all', () => {
+    // Recognising the container is the reader's job, not the parser's.
+    expect(() => openArchive(Buffer.from('not a zip'))).toThrow(ArchiveError);
   });
 
   test('skips malformed event lines instead of failing the import', async () => {
     const valid = buildBlobReport({ tests: [{ testId: 't', title: 'a', attempts: [{ status: 'passed' }] }] });
-    const parsed = await parseBlobReport(valid);
+    const parsed = await parse(valid);
     expect(parsed.cases).toHaveLength(1);
 
     // A run killed mid-write leaves a truncated final line.
-    const truncated = await parseBlobReport(
+    const truncated = await parse(
       buildZip([
         {
           name: 'report.jsonl',

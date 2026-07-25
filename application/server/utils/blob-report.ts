@@ -15,13 +15,19 @@
  * a reported one wherever the data exists.
  */
 
-import { posix } from 'node:path';
-import { parseZipDirectory, decompressEntry, type ZipEntryMeta } from './trace-zip';
 import { collectStepMetrics, extractTestStepEvents, extractWaitEvents } from '#shared/step-analysis';
+import { dirnamePosix, isAbsolutePosix, joinPosix, normalizePosix, relativePosix } from '#shared/utils/posix-path';
 import { classifyStatus, mergeAnnotations } from '#shared/status-classify';
 import { joinErrorMessages, appendErrorLocation } from '#shared/error-text';
 import type { TestAnnotation } from '#shared/types';
 import type { RunCaseInput } from './persist-run-cases';
+
+/**
+ * Reads one entry out of the archive, or null when it is absent or unreadable.
+ * Injected so the same parser serves the server (node zlib) and demo mode (the
+ * browser's `DecompressionStream`).
+ */
+export type ArchiveEntryReader = (name: string) => Promise<Uint8Array | null>;
 
 /**
  * `onBlobReportMetadata.version` values this parser understands. Playwright
@@ -70,8 +76,6 @@ export interface ParsedBlobReport {
   /** Playwright project (browser) names present in the archive. */
   projectNames: string[];
   cases: ImportedRunCase[];
-  /** Central-directory metadata keyed by entry name, for lazy resource reads. */
-  entries: Map<string, ZipEntryMeta>;
 }
 
 /** A step being assembled from its `onStepBegin` / `onStepEnd` pair. */
@@ -126,12 +130,12 @@ function createPathResolver(config: Record<string, unknown>, pathSeparator: stri
 
   const rootDir = typeof config.rootDir === 'string' ? toPosix(config.rootDir) : '';
   const configFile = typeof config.configFile === 'string' ? toPosix(config.configFile) : null;
-  const baseDir = configFile ? posix.normalize(posix.join(rootDir, posix.dirname(configFile))) : rootDir;
+  const baseDir = configFile ? normalizePosix(joinPosix(rootDir, dirnamePosix(configFile))) : rootDir;
 
   /** Make a path relative to `baseDir`, keeping the input when it escapes it. */
   const relativize = (absolute: string, fallback: string) => {
     if (!baseDir) return fallback;
-    const rel = posix.relative(baseDir, absolute);
+    const rel = relativePosix(baseDir, absolute);
     return !rel || rel.startsWith('..') ? fallback : rel;
   };
 
@@ -139,8 +143,8 @@ function createPathResolver(config: Record<string, unknown>, pathSeparator: stri
     /** A test/step location, recorded relative to `rootDir`. */
     fromRoot(file: string): string {
       const normalized = toPosix(file);
-      if (posix.isAbsolute(normalized)) return relativize(normalized, normalized);
-      return relativize(posix.join(rootDir, normalized), normalized);
+      if (isAbsolutePosix(normalized)) return relativize(normalized, normalized);
+      return relativize(joinPosix(rootDir, normalized), normalized);
     },
     /** An error location, recorded as an absolute path. */
     fromAbsolute(file: string): string {
@@ -153,15 +157,15 @@ function createPathResolver(config: Record<string, unknown>, pathSeparator: stri
 type PathResolver = ReturnType<typeof createPathResolver>;
 
 /** Read and JSON-parse `report.jsonl`, skipping lines that do not parse. */
-async function readEvents(data: Buffer, entries: Map<string, ZipEntryMeta>): Promise<Record<string, unknown>[]> {
-  const meta = entries.get('report.jsonl');
-  if (!meta) {
+async function readEvents(readEntry: ArchiveEntryReader): Promise<Record<string, unknown>[]> {
+  const bytes = await readEntry('report.jsonl');
+  if (!bytes) {
     throw new BlobReportError(
       'No report.jsonl found in the archive. Upload a Playwright blob report (blob-report/report-*.zip), not an HTML report or a trace file.',
     );
   }
 
-  const text = (await decompressEntry(data, meta)).toString('utf-8');
+  const text = new TextDecoder().decode(bytes);
   const events: Record<string, unknown>[] = [];
   for (const line of text.split('\n')) {
     if (!line) continue;
@@ -306,16 +310,8 @@ function buildErrorText(errors: unknown, resolver: PathResolver): string | null 
  * Attachment bytes stay in the archive: the returned refs name their entries so
  * the caller can read them one at a time and keep peak memory bounded.
  */
-export async function parseBlobReport(data: Buffer): Promise<ParsedBlobReport> {
-  let directory: ZipEntryMeta[];
-  try {
-    directory = parseZipDirectory(data);
-  } catch (error) {
-    throw new BlobReportError(`Not a readable ZIP archive: ${(error as Error).message}`);
-  }
-
-  const entries = new Map(directory.map((meta) => [meta.name, meta]));
-  const events = await readEvents(data, entries);
+export async function parseBlobReport(readEntry: ArchiveEntryReader): Promise<ParsedBlobReport> {
+  const events = await readEvents(readEntry);
 
   const metadataEvent = events.find((e) => e.method === 'onBlobReportMetadata');
   const blobVersion = Number((metadataEvent?.params as Record<string, unknown> | undefined)?.version ?? 1);
@@ -521,21 +517,5 @@ export async function parseBlobReport(data: Buffer): Promise<ParsedBlobReport> {
     shard,
     projectNames,
     cases,
-    entries,
   };
-}
-
-/** Read one archive entry by name, or null when it is absent. */
-export async function readBlobEntry(
-  data: Buffer,
-  entries: Map<string, ZipEntryMeta>,
-  name: string,
-): Promise<Buffer | null> {
-  const meta = entries.get(name);
-  if (!meta) return null;
-  try {
-    return await decompressEntry(data, meta);
-  } catch {
-    return null;
-  }
 }

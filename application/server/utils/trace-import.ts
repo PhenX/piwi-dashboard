@@ -14,8 +14,8 @@
  * imported from a report — bar the fields no trace ever held.
  */
 
-import { parseZipDirectory, decompressEntry } from './trace-zip';
 import { parseTraceTexts, traceFileRank, type ParsedTraceData, type TraceContextOptions } from './trace-events';
+import type { ArchiveEntryReader } from './blob-report';
 import { consoleLogsFromTrace } from './import-evidence';
 import { collectStepMetrics } from '#shared/step-analysis';
 import { joinErrorMessages, appendErrorLocation } from '#shared/error-text';
@@ -168,28 +168,23 @@ function stepsFromActions(parsed: ParsedTraceData, wallTime: number, monotonicTi
  * title, no clock anchor and no browser, which would leave an execution too
  * hollow to be worth storing.
  */
-export async function parseTraceArchive(data: Buffer): Promise<ParsedTraceImport> {
-  let directory;
-  try {
-    directory = parseZipDirectory(data);
-  } catch (error) {
-    throw new TraceImportError(`Not a readable ZIP archive: ${(error as Error).message}`);
-  }
-
-  const traceEntries = directory.filter((meta) => meta.name.endsWith('.trace'));
+export async function parseTraceArchive(
+  entryNames: string[],
+  readEntry: ArchiveEntryReader,
+): Promise<ParsedTraceImport> {
+  const traceEntries = entryNames.filter((name) => name.endsWith('.trace'));
   if (traceEntries.length === 0) {
     throw new TraceImportError('The archive contains no Playwright trace data.');
   }
 
-  traceEntries.sort((a, b) => traceFileRank(a.name) - traceFileRank(b.name));
+  traceEntries.sort((a, b) => traceFileRank(a) - traceFileRank(b));
 
+  const decoder = new TextDecoder();
   const texts: string[] = [];
-  for (const meta of traceEntries) {
-    try {
-      texts.push((await decompressEntry(data, meta)).toString('utf-8'));
-    } catch {
-      // A corrupt stream costs its events, not the whole import.
-    }
+  for (const name of traceEntries) {
+    // A corrupt stream costs its events, not the whole import.
+    const bytes = await readEntry(name);
+    if (bytes) texts.push(decoder.decode(bytes));
   }
 
   const parsed = parseTraceTexts(texts);

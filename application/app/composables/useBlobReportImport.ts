@@ -69,6 +69,14 @@ const STATE_BY_VERDICT: Record<ImportCheckStatus, ImportFileState> = {
 };
 
 export function useBlobReportImport(projectName: Ref<string | undefined>) {
+  /**
+   * `$fetch` applies the app's base URL for us; a raw `XMLHttpRequest` does
+   * not. The demo is served under a sub-path, and its service worker only
+   * intercepts requests beneath it — an unprefixed `/api/...` would sail past
+   * it to the static host.
+   */
+  const importUrl = withAppBase('/api/test-runs/import');
+
   const entries = ref<ImportFileEntry[]>([]);
   const maxBytes = ref<number | null>(null);
   const limitError = ref<string | null>(null);
@@ -228,7 +236,7 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
         entry.progress = 0;
 
         try {
-          const result = await uploadArchive(projectName.value, entry, entry.group ?? null, (p) => {
+          const result = await uploadArchive(importUrl, projectName.value, entry, entry.group ?? null, (p) => {
             entry.progress = p;
           });
           entry.result = result;
@@ -271,6 +279,12 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
     remove,
     clearFinished,
   };
+}
+
+/** Prefix a path with the app's base URL, as `$fetch` does automatically. */
+function withAppBase(path: string): string {
+  const base = useRuntimeConfig().app.baseURL || '/';
+  return `${base.replace(/\/$/, '')}${path}`;
 }
 
 /**
@@ -323,6 +337,7 @@ async function sha256(file: File, onProgress: (fraction: number) => void): Promi
  * these bodies are large enough that a silent multi-minute wait reads as a hang.
  */
 function uploadArchive(
+  url: string,
   projectName: string,
   entry: ImportFileEntry,
   group: string | null,
@@ -335,7 +350,7 @@ function uploadArchive(
     body.append('archive', entry.file, entry.name);
 
     const request = new XMLHttpRequest();
-    request.open('POST', '/api/test-runs/import');
+    request.open('POST', url);
     request.responseType = 'json';
 
     request.upload.addEventListener('progress', (event) => {

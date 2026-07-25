@@ -272,6 +272,10 @@ the trace views work on them unchanged. Two rules keep a backfill from behaving 
   `autoDiagnoseRun` or `computeRegressionSignals` — back-dated failures must not page the team, burn AI credits, or be
   labelled new regressions. Any new post-ingest side effect added to `submit`/`upload`/`finish` must stay out of the
   import path unless it is genuinely time-independent.
+- **The parsers stay `node:`-free.** `blob-report.ts` and `trace-import.ts` read entries through an injected
+  `ArchiveEntryReader` and use `#shared/utils/posix-path` rather than `node:path`, because demo mode runs them in a
+  service worker against `DecompressionStream`. The server's ZIP half lives in `server/utils/archive-reader.ts`, the
+  demo's in `app/demo/api/import.ts`. Adding a `node:` import to either parser breaks the demo build silently.
 - **Derived fields come from the shared helpers, never re-implemented.** Statuses go through `classifyStatus`, error
   text through `joinErrorMessages` / `appendErrorLocation`, step metrics through `collectStepMetrics` — all in
   `@piwitests/core`, which is also what the reporter uses. Re-deriving any of them locally would let an imported run

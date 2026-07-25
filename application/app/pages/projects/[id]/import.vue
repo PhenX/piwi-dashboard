@@ -18,9 +18,10 @@ useHead(
 );
 
 /**
- * The demo runs entirely in the browser against a fixed seed — no server to
- * receive an upload, no storage to put a trace in. The affordance is hidden on
- * the project page, so this only catches a deep link.
+ * In the demo the whole import runs in the browser — the archive is parsed by
+ * the service worker and stored in IndexedDB, so nothing is uploaded anywhere.
+ * Worth saying plainly, since a visitor is being asked to hand over their own
+ * test results.
  */
 const isDemoMode = useRuntimeConfig().public.demoMode;
 
@@ -42,9 +43,7 @@ const {
   clearFinished,
 } = useBlobReportImport(projectName);
 
-onMounted(() => {
-  if (!isDemoMode) loadLimit();
-});
+onMounted(loadLimit);
 
 const fileInput = ref<HTMLInputElement | null>(null);
 const dragging = ref(false);
@@ -84,25 +83,7 @@ const finishedCount = computed(() => entries.value.filter((e) => ['imported', 'd
     </template>
 
     <template #body>
-      <div v-if="isDemoMode" class="p-4">
-        <SectionCard title="Import past runs" icon="i-lucide-import">
-          <EmptyState
-            icon="i-lucide-cloud-off"
-            text="Importing is not available in the demo — it runs entirely in your browser, with no server to upload archives to and a fixed set of sample data."
-          >
-            <UButton
-              label="Read how importing works"
-              icon="i-lucide-book-open"
-              variant="outline"
-              size="sm"
-              to="https://piwitests.github.io/importing-runs"
-              target="_blank"
-            />
-          </EmptyState>
-        </SectionCard>
-      </div>
-
-      <div v-else class="p-4 space-y-4">
+      <div class="p-4 space-y-4">
         <SectionCard
           title="Import past runs"
           icon="i-lucide-import"
@@ -121,6 +102,16 @@ const finishedCount = computed(() => entries.value.filter((e) => ['imported', 'd
                 archive twice does nothing, so an interrupted batch is safe to repeat.
               </p>
             </div>
+
+            <UAlert
+              v-if="isDemoMode"
+              color="primary"
+              variant="subtle"
+              icon="i-lucide-monitor-smartphone"
+              title="Nothing leaves your browser"
+              description="This is the demo: the archive is read by a service worker and stored in your browser, not uploaded. It is cleared when the demo's sample data is refreshed, or when you reset the demo."
+              :ui="{ description: 'text-xs' }"
+            />
 
             <UAlert
               color="neutral"

@@ -30,11 +30,6 @@ const INTENTIONALLY_EXCLUDED = new Set([
   'POST /api/test-runs/:id/case-files', // file upload during live run (server only)
   'DELETE /api/tests/cleanup', // test-suite cleanup hook (server only)
   'POST /api/traces/check', // trace dedup check (server only)
-  // Importing needs a server: multi-megabyte multipart bodies, ZIP parsing
-  // and blob storage. The demo has none of those, and its data is a fixed
-  // seed rather than something a visitor adds to.
-  'POST /api/test-runs/import', // blob-report / trace import (server only)
-  'POST /api/test-runs/import/check', // import pre-flight (server only)
 ]);
 
 // ── Derive all server routes from the file system ────────────────────────

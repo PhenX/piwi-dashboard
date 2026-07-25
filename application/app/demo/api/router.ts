@@ -111,6 +111,7 @@ import {
 } from './ai';
 import { apiGetAdminStats } from './admin';
 import { apiDeleteTestRun } from './test-runs';
+import { apiCheckDemoImport, apiDemoImport } from './import';
 import { apiGetWastedWaits, apiPutWastedWaits, apiGetTimeoutHygiene, apiPutTimeoutHygiene } from './settings';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
@@ -284,6 +285,18 @@ const routes: RouteEntry[] = [
       if (!b?.testCaseId) throw new Error('testCaseId is required');
       return classifyAndPersistFlakyRootCause(await getDemoDb(), +m[1]!, b.testCaseId);
     },
+  },
+
+  // Importing past runs — parsed and stored entirely in the browser
+  {
+    method: 'POST',
+    pattern: /^\/api\/test-runs\/import\/check$/,
+    handler: (_, body) => apiCheckDemoImport(body as Parameters<typeof apiCheckDemoImport>[0]),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/test-runs\/import$/,
+    handler: (_, body) => apiDemoImport(body as FormData),
   },
 
   // Reporter streaming protocol (used by the demo run simulator)

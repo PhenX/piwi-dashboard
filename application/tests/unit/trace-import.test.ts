@@ -6,8 +6,15 @@ import {
   looksLikeTrace,
   TraceImportError,
 } from '../../server/utils/trace-import';
+import { openArchive, ArchiveError } from '../../server/utils/archive-reader';
 import { buildZip } from '../../server/utils/trace-zip';
 import { buildTraceArchive, buildBlobReport } from '../utils/blob-report-fixture';
+
+/** The parser reads entries through an injected reader; on the server that is the ZIP. */
+const parse = (archive: Buffer) => {
+  const { entryNames, readEntry } = openArchive(archive);
+  return parseTraceArchive(entryNames, readEntry);
+};
 
 describe('parseTraceTitle', () => {
   test('splits file, line, describe blocks and test title', () => {
@@ -79,7 +86,7 @@ describe('looksLikeTrace', () => {
 
 describe('parseTraceArchive', () => {
   test('rebuilds a passing execution from the trace headers', async () => {
-    const parsed = await parseTraceArchive(
+    const parsed = await parse(
       buildTraceArchive({
         title: 'checkout.spec.ts:14 › checkout › completes',
         wallTime: 1_700_000_000_000,
@@ -117,7 +124,7 @@ describe('parseTraceArchive', () => {
   });
 
   test('rebuilds a failing execution with its error and stack frame', async () => {
-    const parsed = await parseTraceArchive(
+    const parsed = await parse(
       buildTraceArchive({
         error: {
           message: "Error: expect(locator).toBeVisible() failed\n\nLocator: getByRole('button')",
@@ -135,14 +142,12 @@ describe('parseTraceArchive', () => {
   });
 
   test('records a timeout as its own status', async () => {
-    const parsed = await parseTraceArchive(
-      buildTraceArchive({ error: { message: 'Test timeout of 30000ms exceeded.' } }),
-    );
+    const parsed = await parse(buildTraceArchive({ error: { message: 'Test timeout of 30000ms exceeded.' } }));
     expect(parsed.case.status).toBe('timedOut');
   });
 
   test('carries the browser console through', async () => {
-    const parsed = await parseTraceArchive(
+    const parsed = await parse(
       buildTraceArchive({
         wallTime: 1_700_000_000_000,
         monotonicTime: 1000,
@@ -161,17 +166,18 @@ describe('parseTraceArchive', () => {
 
   test('refuses a trace with no test title', async () => {
     const archive = buildTraceArchive({ omitLibraryContext: true });
-    await expect(parseTraceArchive(archive)).rejects.toThrow(TraceImportError);
-    await expect(parseTraceArchive(archive)).rejects.toThrow(/no test title/i);
+    await expect(parse(archive)).rejects.toThrow(TraceImportError);
+    await expect(parse(archive)).rejects.toThrow(/no test title/i);
   });
 
   test('refuses an archive holding no trace stream', async () => {
     const blob = buildBlobReport({ tests: [{ testId: 't', title: 'a', attempts: [{ status: 'passed' }] }] });
-    await expect(parseTraceArchive(blob)).rejects.toThrow(/no Playwright trace data/i);
+    await expect(parse(blob)).rejects.toThrow(/no Playwright trace data/i);
   });
 
-  test('refuses bytes that are not a ZIP', async () => {
-    await expect(parseTraceArchive(Buffer.from('not a zip'))).rejects.toThrow(TraceImportError);
+  test('refuses bytes that are not a ZIP', () => {
+    // Recognising the container is the reader's job, not the parser's.
+    expect(() => openArchive(Buffer.from('not a zip'))).toThrow(ArchiveError);
   });
 
   test('survives a corrupt stream alongside a readable one', async () => {
@@ -182,7 +188,7 @@ describe('parseTraceArchive', () => {
       { name: 'junk.trace', data: Buffer.from('{not json\n') },
     ]);
 
-    const parsed = await parseTraceArchive(withJunk);
+    const parsed = await parse(withJunk);
     expect(parsed.case.title).toBe('works');
   });
 });

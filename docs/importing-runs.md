@@ -121,6 +121,19 @@ Piwi therefore matches it against the paths the project already knows: a stored 
 imported `checkout.spec.ts`. Import a blob report — or let the reporter run once — before importing traces for a
 project, and the traces will attach to the right test cases.
 
+## Trying it in the demo
+
+The [live demo](https://piwitests.github.io/demo/) supports importing, and nothing you drop on it is uploaded: the demo
+has no server. The archive is read by a service worker, parsed in the page, and stored in your browser's IndexedDB
+alongside the sample data — so you can point the dashboard at one of your own blob reports and see your suite in it
+before installing anything.
+
+Two differences from a self-hosted instance:
+
+- **Archives are capped at 50 MB**, well below the server's default, because everything is held in the browser.
+- **Imported data is local and temporary.** It never leaves your machine, and it is cleared when you reset the demo or
+  when the demo's sample dataset is refreshed to a new version.
+
 ## Size limits
 
 Each archive is uploaded whole, so it must fit under the server's limit — **500 MB** by default. The import page shows
@@ -138,5 +151,3 @@ instead of failing mid-upload.
   videos — a trace holds only itself.
 - **Administrators only.** Importing can create projects and back-dates history, so it is not open to the reporter role.
 - **One archive per request.** There is no bulk endpoint; the page handles batching for you.
-- **Not available in the [live demo](https://piwitests.github.io/demo/).** The demo runs entirely in the browser
-  against a fixed sample dataset, with no server to upload to.

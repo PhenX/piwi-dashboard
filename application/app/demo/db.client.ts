@@ -29,6 +29,13 @@ const IDB_NAME = 'piwi-dashboard-demo';
 const IDB_STORE = 'state';
 const IDB_DB_KEY = 'sqlite';
 const IDB_VERSION_KEY = 'seed-version';
+/**
+ * Key prefix for files an imported run brought with it (traces, screenshots).
+ * They live beside the database rather than inside it: the SQLite image is
+ * serialized whole on every persist, so megabytes of binary in a column would
+ * be rewritten on each save.
+ */
+const IDB_BLOB_PREFIX = 'import-file:';
 
 function adoptConnection(db: IDBDatabase): IDBDatabase {
   // Auto-close when another context (window vs service worker) runs an
@@ -89,6 +96,15 @@ function idbPut(idb: IDBDatabase, key: string, value: unknown): Promise<void> {
     tx.objectStore(IDB_STORE).put(value, key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+  });
+}
+
+function idbKeys(idb: IDBDatabase): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const tx = idb.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).getAllKeys();
+    req.onsuccess = () => resolve(req.result.map(String));
+    req.onerror = () => reject(req.error);
   });
 }
 
@@ -308,6 +324,22 @@ export async function getStoredDemoVersion(): Promise<string | null> {
  * Wipes the persisted database from IndexedDB so the next call to
  * getDemoDb() re-seeds from the original seed.sql.
  */
+/**
+ * Store the bytes of a file an import brought in, under the same storage path
+ * the run's `files` rows point at, so serving it is a straight lookup.
+ */
+export async function putDemoImportedFile(path: string, bytes: Uint8Array): Promise<void> {
+  idbInstance ??= await openIDB();
+  await idbPut(idbInstance, IDB_BLOB_PREFIX + path, bytes);
+}
+
+/** Read back a file an import stored, or null when the demo never had it. */
+export async function getDemoImportedFile(path: string): Promise<Uint8Array | null> {
+  idbInstance ??= await openIDB();
+  const value = await idbGet(idbInstance, IDB_BLOB_PREFIX + path);
+  return value instanceof Uint8Array ? value : null;
+}
+
 export async function resetDemoDb(): Promise<void> {
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = null;
@@ -319,6 +351,11 @@ export async function resetDemoDb(): Promise<void> {
   if (idbInstance) {
     await idbDelete(idbInstance, IDB_DB_KEY);
     await idbDelete(idbInstance, IDB_VERSION_KEY);
+    // Imported files belong to the database that referenced them; a reset that
+    // left them behind would leak megabytes no run can reach.
+    for (const key of await idbKeys(idbInstance)) {
+      if (key.startsWith(IDB_BLOB_PREFIX)) await idbDelete(idbInstance, key);
+    }
     idbInstance.close();
     idbInstance = null;
   }

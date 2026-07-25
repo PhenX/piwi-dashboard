@@ -33,8 +33,7 @@ const confirmDeleteRunId = ref<number | null>(null);
 const { isAdmin, isReporter } = useAuth();
 const runtimeConfig = useRuntimeConfig();
 const canDelete = computed(() => !runtimeConfig.public.authEnabled || isAdmin.value);
-// The demo has no server to receive an upload, so importing is not offered there.
-const canImport = computed(() => !runtimeConfig.public.demoMode && canDelete.value);
+const canImport = canDelete;
 const showDeleteProjectModal = ref(false);
 const deleteProjectConfirmInput = ref('');
 const deletingProject = ref(false);

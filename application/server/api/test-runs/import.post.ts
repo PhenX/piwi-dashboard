@@ -11,13 +11,17 @@ import { sanitizeFilename } from '../../utils/sanitize-filename';
 import { sanitizeMetadata } from '../../utils/sanitize';
 import { persistRunCases } from '../../utils/persist-run-cases';
 import { upsertTraceBlob } from '../../utils/trace-blobs';
-import { parseBlobReport, readBlobEntry, BlobReportError, type ImportedRunCase } from '../../utils/blob-report';
+import {
+  parseBlobReport,
+  BlobReportError,
+  type ArchiveEntryReader,
+  type ImportedRunCase,
+} from '../../utils/blob-report';
 import { parseTraceArchive, looksLikeTrace, resolveSpecPath, TraceImportError } from '../../utils/trace-import';
-import { parseZipDirectory } from '../../utils/trace-zip';
+import { openArchive, ArchiveError } from '../../utils/archive-reader';
 import { parseErrorContext, consoleLogsFromTrace } from '../../utils/import-evidence';
 import { parseTraceEvents } from '../../utils/trace-parser';
 import { runEventBus } from '../../utils/run-events';
-import type { ZipEntryMeta } from '../../utils/trace-zip';
 import { durationStats } from '#shared/utils/stats';
 import { sumFailedAndTimedOut } from '#shared/utils/test-counts';
 import { joinSuitePath } from '#shared/utils/suites';
@@ -130,12 +134,14 @@ export default eventHandler(async (event) => {
   if (duplicate) return duplicate;
 
   // Both kinds of archive are ZIPs; only their contents tell them apart.
-  let entryNames: string[];
+  let opened;
   try {
-    entryNames = parseZipDirectory(archive.data).map((meta) => meta.name);
+    opened = openArchive(archive.data);
   } catch (error) {
-    throw createError({ statusCode: 400, message: `Not a readable ZIP archive: ${(error as Error).message}` });
+    if (error instanceof ArchiveError) throw createError({ statusCode: 400, message: error.message });
+    throw error;
   }
+  const { entryNames, readEntry } = opened;
 
   if (!entryNames.includes('report.jsonl')) {
     if (!looksLikeTrace(entryNames)) {
@@ -149,6 +155,8 @@ export default eventHandler(async (event) => {
       db,
       project,
       archive,
+      entryNames,
+      readEntry,
       importHash,
       importGroup,
       environment,
@@ -158,7 +166,7 @@ export default eventHandler(async (event) => {
 
   let parsed;
   try {
-    parsed = await parseBlobReport(archive.data);
+    parsed = await parseBlobReport(readEntry);
   } catch (error) {
     if (error instanceof BlobReportError) throw createError({ statusCode: 400, message: error.message });
     throw createError({ statusCode: 400, message: `Could not read the archive: ${(error as Error).message}` });
@@ -175,11 +183,11 @@ export default eventHandler(async (event) => {
   // here means each archive entry is decompressed exactly once.
   const storedTraces = new Map<number, StoredTrace[]>();
   for (const [index, entry] of parsed.cases.entries()) {
-    await recoverErrorContext(archive.data, parsed.entries, entry);
+    await recoverErrorContext(readEntry, entry);
 
     const traces: StoredTrace[] = [];
     for (const [traceIndex, ref] of entry.traces.entries()) {
-      const bytes = await readBlobEntry(archive.data, parsed.entries, ref.entry);
+      const bytes = await readEntry(ref.entry);
       if (!bytes) continue;
       // The first trace covers the execution itself; read it once and take both
       // the console entries and the stored blob from the same bytes.
@@ -278,7 +286,7 @@ export default eventHandler(async (event) => {
       }
 
       for (const ref of entry.attachments) {
-        const bytes = await readBlobEntry(archive.data, parsed.entries, ref.entry);
+        const bytes = await readEntry(ref.entry);
         if (!bytes) continue;
         try {
           const dir = `${runPath}/${testRunsCaseId}`;
@@ -359,6 +367,8 @@ async function importTraceArchive(input: {
   db: Awaited<ReturnType<typeof getDatabase>>;
   project: Project;
   archive: { filename: string; data: Buffer };
+  entryNames: string[];
+  readEntry: ArchiveEntryReader;
   importHash: string;
   importGroup: string | null;
   environment: string | null;
@@ -366,11 +376,11 @@ async function importTraceArchive(input: {
 }): Promise<ImportRunResponse> {
   // No storage handle: a trace goes straight into the deduped blob store, which
   // owns its own paths — nothing lands under the run directory.
-  const { db, project, archive, importHash, importGroup, environment, label } = input;
+  const { db, project, archive, entryNames, readEntry, importHash, importGroup, environment, label } = input;
 
   let parsed;
   try {
-    parsed = await parseTraceArchive(archive.data);
+    parsed = await parseTraceArchive(entryNames, readEntry);
   } catch (error) {
     if (error instanceof TraceImportError) throw createError({ statusCode: 400, message: error.message });
     throw createError({ statusCode: 400, message: `Could not read the trace: ${(error as Error).message}` });
@@ -668,18 +678,14 @@ async function findImportedRun(
  * Recover the ARIA snapshot and source snippet from Playwright's
  * `error-context` attachment, which it writes alongside every failure.
  */
-async function recoverErrorContext(
-  archive: Buffer,
-  entries: Map<string, ZipEntryMeta>,
-  entry: ImportedRunCase,
-): Promise<void> {
+async function recoverErrorContext(readEntry: ArchiveEntryReader, entry: ImportedRunCase): Promise<void> {
   const contextRef = entry.attachments.find((a) => a.name === 'error-context');
   if (!contextRef) return;
 
-  const bytes = await readBlobEntry(archive, entries, contextRef.entry);
+  const bytes = await readEntry(contextRef.entry);
   if (!bytes) return;
 
-  const evidence = parseErrorContext(bytes.toString('utf-8'), {
+  const evidence = parseErrorContext(new TextDecoder().decode(bytes), {
     declLine: entry.case.line,
     failingLine: failingLineOf(entry.case.error),
   });
