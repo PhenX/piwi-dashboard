@@ -1,6 +1,6 @@
 # Piwi Dashboard
 
-**Self-hosted Playwright test results dashboard.** Collect, store, and visualize your end-to-end test results over time — failures, performance trends, flaky tests, and live run streaming — without sending data to any third party.
+**Your Playwright results, kept and explained.** A self-hosted dashboard that keeps every run — traces, HTML reports, history — then groups failures by root cause, scores flaky tests, and tracks performance over time. Zero telemetry: the only outbound calls are the ones you configure.
 
 📖 [Full documentation](https://piwitests.github.io) · 🎮 [Live demo](https://piwitests.github.io/demo/) · 💬 [GitHub](https://github.com/PiwiTests/platform)
 
@@ -47,9 +47,12 @@ Open `http://localhost:3000`. The SQLite database and file storage are created a
 | Tag       | Description                            |
 |-----------|----------------------------------------|
 | `latest`  | Latest stable release                  |
-| `0.11.0`  | Exact version (pinned, recommended)    |
-| `0.11`    | Latest patch for a minor version       |
+| `0.18.2`  | Exact version (pinned, recommended)    |
+| `0.18`    | Latest patch for a minor version       |
 | `0`       | Latest release for a major version     |
+
+The same image is mirrored to the GitHub Container Registry as `ghcr.io/piwitests/platform`, which also
+carries an `edge` tag built from `main`.
 
 ---
 

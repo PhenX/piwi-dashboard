@@ -46,7 +46,7 @@ In the **Fault0** column, ➖ marks a capability we did not find in its public d
 
 ### Is my data safe? Does Piwi phone home?
 
-**Zero telemetry.** Piwi makes no outbound calls except the ones you explicitly configure: your AI provider (if you enable diagnosis), your SMTP server, your S3 endpoint, your Slack/webhook URLs, and your git host (if you connect a repository). No analytics, no update pings, no crash reporting. Your test results live in your SQLite file or PostgreSQL database, on your infrastructure.
+**Zero telemetry.** The full inventory is in [Privacy & data flow](./privacy). Piwi makes no outbound calls except the ones you explicitly configure: your AI provider (if you enable diagnosis), your SMTP server, your S3 endpoint, your Slack/webhook URLs, and your git host (if you connect a repository). No analytics, no update pings, no crash reporting. Your test results live in your SQLite file or PostgreSQL database, on your infrastructure.
 
 ### Does AI diagnosis send my code to a third party?
 

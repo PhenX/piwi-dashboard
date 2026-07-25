@@ -137,6 +137,29 @@ other `curl` examples may stay bash-only. `.env` file contents are not shell com
 - User-facing docs live in `docs/` (VitePress → GitHub Pages); `README.md` is the landing page.
 - API reference is **generated** — never hand-write endpoint docs. See [`docs/AGENTS.md`](docs/AGENTS.md).
 
+#### One canonical positioning line (MUST follow)
+
+Piwi is not a product being sold. Copy is informative, specific and honest — never promotional. The project describes
+itself the same way everywhere:
+
+> **Your Playwright results, kept and explained.** CI throws away every report it makes. Piwi keeps them — then groups
+> the failures by root cause, scores the flaky tests, and finds the locator you should have used. Self-hosted, MIT,
+> zero telemetry.
+
+Seven surfaces carry it, and they drift the moment one changes alone. Update them **in the same commit**:
+
+| Surface | Where |
+|---|---|
+| README subtitle | `README.md` |
+| Docs hero (`text` + `tagline`) | `docs/index.md` frontmatter |
+| Site description (meta + search index) | `docs/.vitepress/config.mts` → `description` |
+| Social cards | `docs/.vitepress/config.mts` → `og:`/`twitter:` title + description |
+| Docker Hub overview | `DOCKER_HUB.md` first paragraph |
+| npm package descriptions | `packages/server/package.json`, `reporter/package.json` |
+| GitHub repo description + topics | Repository settings — not in the repo, so check it by hand |
+
+Voice rules for all of them, and for `docs/`: see [`docs/AGENTS.md`](docs/AGENTS.md#voice).
+
 ### Tests
 
 - **Vitest** for unit tests (pure functions, no server/browser): `application/tests/unit/*.test.ts` and

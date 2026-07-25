@@ -225,6 +225,8 @@ API keys are encrypted at rest with [`PIWI_SECRET_KEY`](./configuration#general)
 
 ## See also
 
+- [Core concepts](./concepts#error-fingerprint-failure-cluster) — fingerprints, clusters, and baselines in one place
+- [Privacy & data flow](./privacy) — exactly what a diagnosis sends, and where
 - [Configuration reference](./configuration) — all environment variables
 - [Notifications](./notifications) — subscribe to `cluster.new` and `diagnosis.completed` to get alerted when a new cluster appears or a diagnosis completes (browser, email, Slack, or webhook)
 - [MCP server](./mcp) — let AI agents query clusters and diagnoses directly

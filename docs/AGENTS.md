@@ -35,6 +35,34 @@ When documenting a feature here, link to `[API docs](/docs)` (self-hosted) or th
 authored in the handler's `defineRouteMeta({ openAPI: … })` block — see
 [`../application/AGENTS.md`](../application/AGENTS.md#openapi-annotations).
 
+## Site structure (MUST follow)
+
+The sidebar in `.vitepress/config.mts` is ordered by the **reader's journey**, not by feature. A new page goes in the
+group matching what the reader is doing, and each page stays single-purpose:
+
+| Group | Covers | Pages |
+|---|---|---|
+| Start here | what it is, first run, vocabulary | `getting-started`, `concepts`, `comparison` |
+| Sending results | getting data in | `reporter`, `capture-fixtures`, `ci`, `backend-logs` |
+| Reading the results | using the dashboard | `ui-overview`, `ai-diagnosis`, `flaky-tests`, `analytics`, `timeline-markers`, `notifications`, `ide-integration` |
+| Running your instance | operating it | `deployment`, `configuration`, `configuration/generator`, `authentication`, `storage`, `privacy`, `desktop` |
+| Integrate | other tools | in-app API docs (external link), `mcp` |
+
+Extend an existing page before adding a new one.
+
+- **`concepts.md` is the vocabulary source of truth** — project / test run / **test case** (a test's identity across
+  time) / **execution** (one attempt, one browser — the `test_runs_cases` row) / failure cluster / fingerprint /
+  baseline. Use those words consistently in docs *and* UI copy; link the anchor instead of redefining a term.
+- **`ui-overview.md` is a map, not a manual** — one short paragraph per view plus a link to the page that explains the
+  concept. Feature explanations belong on the feature page.
+- **Contributor material does not belong on this site.** Build steps, source layout, migration workflow and dev
+  commands live in `CONTRIBUTING.md` / `AGENTS.md` / `reporter/ARCHITECTURE.md`. The site is for people *using* Piwi.
+- **Every user-visible reporter option** must appear in `reporter.md`'s options table (and its `PIWI_*` var in the
+  table below it) in the same change that adds it to `reporter/src/public/options.ts`.
+- **In-app help links point here.** `application/app/utils/help-content.ts` builds docs URLs from `doc:` string
+  literals that nothing validates — renaming a heading breaks them silently. Grep for the old anchor when you rename
+  one.
+
 ## Writing conventions
 
 - Update the affected page **in the same commit** as the code change; commit scope `docs`.
@@ -43,9 +71,20 @@ authored in the handler's `defineRouteMeta({ openAPI: … })` block — see
   portable single form.
 - Diagrams are theme-aware SVG assets under `docs/public/` — commit the asset rather than embedding a large inline
   `<svg>` in prose.
-- Subject-matter pages that already exist: getting started, deployment, configuration, storage, authentication,
-  notifications, reporter, capture fixtures, AI diagnosis, flaky tests, timeline markers, MCP, IDE integration,
-  desktop, backend logs, UI overview, comparison. Extend one before adding a new page.
+
+### Voice
+
+Informative, specific, honest — never promotional. Piwi is not a product being sold. The canonical positioning line
+and the seven surfaces that must carry it are in the [root guide](../AGENTS.md#documentation).
+
+- **Banned**: conversion CTA blocks ("Stop losing your…" + buttons), `for-the-badge` call-to-action badges, "try it
+  now" / pointing-hand CTAs, competitor feature tables with a **Price** row in the README (honest prose comparison
+  belongs in `comparison.md`), vanity badges (stars), superlatives ("powerful", "seamless", "unlock",
+  "best-in-class"), and more than ~8 feature bullets or cards on any one page — past that nobody reads them.
+- **Prefer the concrete over the categorical**: "groups forty red tests into three root causes" beats "observability
+  platform". Name a number, a behavior, or a limit.
+- **State limits plainly.** Playwright-only, pre-1.0, and "not the right tool if…" belong in the README and on the
+  landing page. Trust is the point, not a caveat to bury.
 
 ## Marketing screenshots
 

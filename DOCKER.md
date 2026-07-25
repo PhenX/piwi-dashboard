@@ -33,7 +33,7 @@ The dashboard will be available at `http://localhost:3000`.
 - **Build Type**: Multistage build (builder + production stages)
 - **Image Size**: ~400 MB
 - **Architecture**: Multi-platform (linux/amd64, linux/arm64)
-- **Registry**: Docker Hub (`phenx/piwitests-server`)
+- **Registries**: Docker Hub (`phenx/piwitests-server`) and GHCR (`ghcr.io/piwitests/platform`)
 
 ## Building the Image Locally
 
@@ -159,10 +159,22 @@ Best practices:
 
 ## Available Tags
 
+The same multi-arch image is published to both Docker Hub and the GitHub Container Registry:
+
+```bash
+docker pull phenx/piwitests-server:latest        # Docker Hub
+docker pull ghcr.io/piwitests/platform:latest    # GHCR
+```
+
 - `latest` — Latest stable release
-- `0.9.0` — Specific version (semver)
-- `0.9` — Latest patch of a minor version
+- `0.18.2` — Specific version (semver)
+- `0.18` — Latest patch of a minor version
 - `0` — Latest release of the major version
+- `edge` — **GHCR only**; rebuilt from every push to `main`. Handy for trying an unreleased fix, but it
+  has had no release testing — don't run it in production.
+
+Pin a specific version in production. GHCR also lists `buildcache-linux-*` tags: those are BuildKit
+layer caches, not runnable images.
 
 ## Troubleshooting
 

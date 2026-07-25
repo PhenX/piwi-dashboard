@@ -9,6 +9,8 @@ The [reporter](./reporter) uploads complete test results — statuses, errors, t
 
 If you do one thing beyond installing the reporter, do this.
 
+(What a captured [locator snapshot](./concepts#locator-snapshot) actually stores — and doesn't — is in Core concepts.)
+
 ## Setup
 
 **Option A — extend your existing fixtures:**

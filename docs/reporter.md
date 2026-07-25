@@ -89,6 +89,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 
 | Option                      | Type     | Default                   | Description                                                                                 |
 |-----------------------------|----------|---------------------------|---------------------------------------------------------------------------------------------|
+| `enabled`                   | boolean  | `true` when `serverUrl` is set | Explicitly turn the reporter off without removing it from the config                   |
 | `serverUrl`                 | string   | `'http://localhost:3000'` | URL of the Piwi Dashboard server                                                            |
 | `projectName`               | string   | `'default-project'`       | Name of the project to report results under                                                 |
 | `uploadTraces`              | boolean  | `true`                    | Upload trace files to the dashboard                                                         |
@@ -100,6 +101,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 | `liveFileUploads`           | boolean  | `true`                    | Upload each test's trace and attachments as soon as the test finishes (streaming mode only) |
 | `projectDescription`        | string   | —                         | Description of the project                                                                  |
 | `environment`               | string   | —                         | Deployment environment for this run, e.g. `"production"`, `"staging"`, `"integration"`      |
+| `label`                     | string   | —                         | Display label for this run, e.g. `"v2.3.1 release"`                                         |
 | `relatedIssue`              | string   | —                         | Related issue reference, e.g. `"JIRA-123"`                                                  |
 | `ciInfo`                    | string   | —                         | CI job information                                                                          |
 | `tags`                      | string[] | —                         | Tags to categorize the test run                                                             |
@@ -108,17 +110,20 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 | `collectCiInfo`             | boolean  | `true`                    | Auto-collect CI environment info                                                            |
 | `collectPerformanceMetrics` | boolean  | `true`                    | Collect step timings, network requests and web vitals                                       |
 | `captureLocators`           | boolean  | `true`                    | Capture element snapshots from successful actions and passing assertions — these power [locator healing](#locator-healing). Auto-disabled when `collectPerformanceMetrics` is `false` |
+| `capturePageState`          | boolean  | `true`                    | Record the page's state at test end: URL, history state, storage **key names** and value *lengths*, cookie names and flags. Values are never captured. Auto-disabled when `collectPerformanceMetrics` is `false` |
+| `captureServerTraces`       | boolean  | `true`                    | Read server-side spans from the `X-Piwi-Trace` response header emitted by a Piwi [instrumentation plugin](./backend-logs), and show them next to the network request. Free when no instrumentation is present. Auto-disabled when `collectPerformanceMetrics` is `false` |
 | `inspectOnFailure`          | boolean  | `false`                   | Open Piwi's own inspector overlay on the failing page after a local headed failure — inspect any element and pick a locator for it (see [Inspect the failing page live](#inspect-the-failing-page-live-local-runs)). Never activates under CI |
 | `pickLocatorOnFailure`      | boolean  | `false`                   | Open Piwi's locator picker on the failing page after a local headed locator failure (see [Pick a replacement locator](#pick-a-replacement-locator-on-the-failing-page-local-runs)). Never activates under CI |
 | `username`                  | string   | —                         | Username for dashboard login (use `apiKey` instead when possible)                           |
 | `password`                  | string   | —                         | Password for dashboard login (used with `username`)                                         |
 | `apiKey`                    | string   | —                         | API key for authentication (preferred over `username`/`password` for CI)                    |
 | `runLabel`                  | string   | auto-detected from CI     | Stable label tying shards together (e.g. CI run ID). Auto-detected from CI env; override if needed |
+| `outputFile`                | string   | —                         | Write a JSON file with the submitted run's dashboard URL, id, project id and status, for a later CI step to consume (see [CI → Getting the run URL back out](./ci#getting-the-run-url-back-out-of-ci)) |
 | `verbose`                   | boolean  | `false`                   | Enable verbose logging for debugging                                                        |
 
 ### Environment variables
 
-Every option above can also be set via a `PIWI_*` environment variable. Env vars are fallbacks — an option passed in the reporter config takes precedence. The one exception is `PIWI_VERBOSE`, which wins over both the default and an explicit option (useful for toggling debug output without editing the config). The mapping is centralized in `src/config.ts` (`PIWI_ENV_KEYS`):
+Every option above can also be set via a `PIWI_*` environment variable. Env vars are fallbacks — an option passed in the reporter config takes precedence. The one exception is `PIWI_VERBOSE`, which wins over both the default and an explicit option (useful for toggling debug output without editing the config). The mapping is centralized in `src/internal/config/env.ts` (`PIWI_ENV_KEYS`):
 
 | Env var                         | Option                  | Format          |
 |---------------------------------|-------------------------|-----------------|
@@ -137,6 +142,9 @@ Every option above can also be set via a `PIWI_*` environment variable. Env vars
 | `PIWI_UPLOAD_TRACES`            | `uploadTraces`          | `true`/`false`  |
 | `PIWI_UPLOAD_REPORT`            | `uploadReport`          | `true`/`false`  |
 | `PIWI_CAPTURE_LOCATORS`         | `captureLocators`       | `true`/`false`  |
+| `PIWI_CAPTURE_PAGE_STATE`       | `capturePageState`      | `true`/`false`  |
+| `PIWI_CAPTURE_SERVER_TRACES`    | `captureServerTraces`   | `true`/`false`  |
+| `PIWI_OUTPUT_FILE`              | `outputFile`            | string (path)   |
 | `PIWI_INSPECT_ON_FAIL`          | `inspectOnFailure`      | `true`/`false`  |
 | `PIWI_PICK_LOCATOR_ON_FAIL`     | `pickLocatorOnFailure`  | `true`/`false`  |
 | `PIWI_VERBOSE`                  | `verbose`               | `true`/`false`  |
@@ -145,49 +153,10 @@ Every option above can also be set via a `PIWI_*` environment variable. Env vars
 
 ## Sharding
 
-When using Playwright's built-in test execution sharding (`--shard=1/3`), the reporter automatically groups
-all shards into a single logical test run on the dashboard.
-
-### How it works
-
-1. Each shard detects the **run label** — a stable CI pipeline/workflow identifier — from environment
-   variables (`GITHUB_RUN_ID`, `CI_PIPELINE_ID`, `CIRCLE_WORKFLOW_ID`, `TRAVIS_BUILD_ID`,
-   `BUILD_BUILDID`, `BUILD_ID`, `BUILDKITE_BUILD_ID`, `TEAMCITY_BUILD_ID`, `BITBUCKET_BUILD_NUMBER`,
-   `SEMAPHORE_WORKFLOW_ID`, `APPVEYOR_BUILD_ID`, `DRONE_BUILD_NUMBER`).
-
-2. All shards on the same CI run produce the same `instanceId` (derived from `runLabel + projectName`),
-   so the server groups them into one run.
-
-3. Each shard gets an independent stream token. The server keeps the run in `running` status
-   until **all** shards have called `/finish`.
-
-4. Counters (passed, failed, skipped, total) are **accumulated** across shards. The final status is
-   `failed` if any shard reported failures, otherwise `passed`.
-
-5. The dashboard shows a shard progress badge (e.g. `2/3`) on the run detail page while shards are
-   still running.
-
-### Zero-config CI
-
-For most CI platforms, no configuration is needed — the run label is auto-detected from environment
-variables. Ensure all shards use the same `projectName`.
-
-### Manual override
-
-If auto-detection doesn't work for your CI setup, set `runLabel` manually to a value common to all shards:
-
-```typescript
-['@piwitests/reporter', {
-  serverUrl: 'http://localhost:3000',
-  projectName: 'my-project',
-  runLabel: process.env.BUILD_TAG || 'my-custom-label',
-}]
-```
-
-### Playwright shard config
-
-The reporter reads `config.shard` (set by `--shard=1/3`) automatically — no extra config needed.
-All batch (`submit`/`upload`) and streaming paths support sharding.
+Playwright's `--shard` jobs are merged back into a single dashboard run automatically — no
+configuration beyond every shard using the same `projectName`. The `runLabel` option below is the
+manual override when your CI isn't auto-detected. Full detail, including the CI examples and how the
+merge works, is in [CI & sharding](./ci#sharding).
 
 ## Live streaming
 
@@ -549,29 +518,8 @@ The reporter calls `/api/auth/login` automatically before each upload.
 
 See [Authentication](/authentication) for details on enabling auth, creating users, and managing API keys.
 
-## Development
+## Working on the reporter itself
 
-The reporter source uses TypeScript (`.ts`) in `src/` and compiles to CommonJS JavaScript (`.js`) with type declarations (`.d.ts`) in `dist/` via the TypeScript compiler.
-
-### Building
-
-```bash
-cd reporter
-npm install
-npm run reporter:build   # compile TypeScript from src/ to dist/
-npm run reporter:dev     # watch mode — auto-recompile on changes
-```
-
-This produces one `.js` + one `.d.ts` per `.ts` source, mirroring the `src/` folder structure under `dist/`.
-
-The compiled output is what Playwright loads at runtime. The package has a single entry point (`@piwitests/reporter`) — the reporter, the config helpers, and the capture fixtures are all imported from it.
-
-### Source layout
-
-The package separates its **public API** (`src/index.ts` and `src/public/`) from internal plumbing (`src/internal/<domain>/` — `submit`, `transport`, `streaming`, `collect`, `files`, `capture`, `config`, `support`) and the type model (`src/types/`, where `wire.ts` is the server contract and `collected.ts` the in-process model).
-
-See **`reporter/ARCHITECTURE.md`** in the repository for the full map: the public/internal split, the two-process collect-and-submit data flow, the fallback ladder, and the package conventions.
-
-### Shared types
-
-Wire contract types are defined in `application/shared/types.ts` and used by the server for request validation. The reporter does not import them directly — it keeps its own structurally-compatible interfaces in `src/types.ts` (`CollectedTestCase`, `WireTestCase`, `StreamEvent`) so the monorepo path isn't leaked into the published `.d.ts`. When making changes, keep the two sides consistent: the reporter's wire shapes must match the server's `TestCasePayload`, `StreamEventPayload`, and `TestRunFinishPayload`.
+Building the package, its public/internal source layout, and the wire-contract conventions are covered
+in [`reporter/ARCHITECTURE.md`](https://github.com/PiwiTests/platform/blob/main/reporter/ARCHITECTURE.md)
+and [`CONTRIBUTING.md`](https://github.com/PiwiTests/platform/blob/main/CONTRIBUTING.md).
