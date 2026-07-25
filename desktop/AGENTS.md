@@ -19,6 +19,9 @@ Linux is deferred.
 - **Everything binds `127.0.0.1`.** Local access is gated by a per-launch token enforced by
   `application/server/middleware/desktop-guard.ts` — so only the app, not other local processes or browser pages, can
   reach the bundled API. Any new desktop-only route must stay behind that guard.
+- **The reporter discovery file is a cross-package contract.** The shell publishes `{ url, token }` to
+  `~/.piwi/desktop.json` while it runs and deletes it on quit; `@piwitests/reporter` reads it from
+  `src/internal/config/desktop.ts`. The two ship separately, so changing the path or the shape means changing both.
 - Front-end code that behaves differently inside the shell uses the `useIsDesktop` / `useTauri` composables and the
   `app/components/desktop/` cards — do not sniff user agents.
 - The sidecar layout (`src-tauri/binaries/node-<triple>`, `src-tauri/resources/app-server/.output/`) is what the

@@ -14,6 +14,9 @@ per-directory responsibilities.
    together.
 3. **Side effects** — `PIWI_*` env vars (`internal/config/env.ts`), `piwi-*` attachment names
    (`internal/capture/attachments.ts`), temp files in `os.tmpdir()`, and `[Piwi Dashboard]`-prefixed log output.
+4. **The desktop discovery file** — `~/.piwi/desktop.json` and its `{ url, token }` shape
+   (`internal/config/desktop.ts`). The desktop shell writes it (`desktop/src-tauri/src/lib.rs`) and this package reads
+   it, on independent release cycles, so path and shape changes must land in both.
 
 ## Conventions
 

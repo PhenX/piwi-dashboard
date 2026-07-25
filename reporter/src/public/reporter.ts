@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import type { FullConfig, Suite, TestCase, TestResult, FullResult } from '@playwright/test/reporter';
-import { resolveOptions } from '../internal/config/env.js';
+import { resolveOptions, usedDesktopDiscovery } from '../internal/config/env.js';
 import type { PiwiDashboardOptions, ShardInfo } from './options.js';
 import { HttpClient } from '../internal/transport/http-client.js';
 import { Uploader } from '../internal/submit/uploader.js';
@@ -65,6 +65,8 @@ export class PiwiDashboardReporter {
   private shardInfo: ShardInfo | null = null;
   private metadata: Record<string, any> = {};
   private enabled: boolean;
+  /** True when the server URL and API key came from the desktop app, not from config. */
+  private viaDesktopApp: boolean;
   private isFullRun = true;
   private filterDetails: FilterDetails | null = null;
 
@@ -83,6 +85,7 @@ export class PiwiDashboardReporter {
   constructor(rawOptions: Record<string, any> = {}) {
     this.options = resolveOptions(rawOptions);
     this.enabled = this.options.enabled !== false && !!this.options.serverUrl;
+    this.viaDesktopApp = usedDesktopDiscovery();
     this.runLabel = this.options.runLabel || detectCiRunLabel();
     this.instanceId = computeInstanceId(this.options.projectName!, this.runLabel);
 
@@ -117,6 +120,11 @@ export class PiwiDashboardReporter {
     if (!this.enabled) {
       this.logger.info('Not enabled — set PIWI_DASHBOARD_URL or serverUrl to enable.');
       return;
+    }
+    // Nothing in the config pointed at a server, so results are going to the
+    // desktop app found on this machine — say so rather than uploading silently.
+    if (this.viaDesktopApp) {
+      this.logger.info(`Using the desktop app running at ${this.options.serverUrl} (no serverUrl configured).`);
     }
     this.startTime = new Date().toISOString();
     this.playwrightVersion = config.version;
