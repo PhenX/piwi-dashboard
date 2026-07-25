@@ -51,4 +51,20 @@ describe.runIf(existsSync(dist('index.js')))('built entry (requires a build)', (
     expect(source).toContain('piwiFixtures');
     expect(source).toContain('extendPiwiFixtures');
   });
+
+  it('exports the options type from the published .d.ts', () => {
+    const types = readFileSync(dist('index.d.ts'), 'utf-8');
+    expect(types).toMatch(/interface PiwiDashboardOptions\b/);
+    // Consumers `import type { PiwiDashboardOptions } from '@piwitests/reporter'`,
+    // so the declaration must also be re-exported from the entry.
+    expect(types).toMatch(/export \{[^}]*\bPiwiDashboardOptions\b/s);
+  });
+
+  it('keeps Playwright config options out of PiwiDashboardOptions', () => {
+    const types = readFileSync(dist('index.d.ts'), 'utf-8');
+    // The reporter's options are Piwi-only: inheriting a Playwright config type
+    // would complete and accept `testDir` / `use` / `timeout` on an options
+    // object the reporter never reads them from.
+    expect(types).not.toMatch(/interface PiwiDashboardOptions\s+extends/);
+  });
 });

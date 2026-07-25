@@ -97,8 +97,13 @@ Run typecheck, lint and tests **once at the end** before the final commit — no
 
 - **Never reference plans or specs.** No plan IDs (`A1`, `B3`), plan file names or plan titles in code. Strip all
   plan-track metadata before writing code — comments say what the code does, not where the requirement came from.
-- **Never write before/after comparisons.** No "was X, now Y", "replaced A with B", "better than the old approach".
-  Comments describe the current state only. Git holds the history.
+- **Never write before/after comparisons.** No "was X, now Y", "used to", "previously", "no longer", "replaced A with
+  B", "better than the old approach". Comments describe the current state only. Git holds the history.
+- **Never justify a change.** A reader of the code does not care what it looked like before or which alternative was
+  rejected — no "deliberately not X, because X caused Y", no bug-report retelling, no "this is why we changed it".
+  State the rule the code follows ("Piwi options only — the Playwright config goes in `defineConfig`"), not the story
+  behind it. The reasoning belongs in the commit message and the PR.
+- These rules apply to **every** comment: doc/JSDoc comments, inline comments and comments inside tests.
 
 ### Commits & PR titles (MUST follow — CI lints every commit)
 
