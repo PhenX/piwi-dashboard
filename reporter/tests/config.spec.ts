@@ -1,3 +1,5 @@
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { describe, it, beforeEach, afterEach, expect } from 'vitest';
 import { resolveOptions } from '../src/internal/config/env.js';
 
@@ -18,7 +20,12 @@ const PIWI_KEYS = [
   'PIWI_UPLOAD_TRACES',
   'PIWI_UPLOAD_REPORT',
   'PIWI_OUTPUT_FILE',
+  'PIWI_DESKTOP_CONFIG',
 ];
+
+// Point desktop discovery at a path that cannot exist, so these expectations do
+// not change on a machine that happens to be running the desktop app.
+const NO_DESKTOP_APP = path.join(os.tmpdir(), 'piwi-no-desktop-app', 'desktop.json');
 
 const SAVED_ENV: Record<string, string | undefined> = {};
 function saveEnv(): void {
@@ -38,6 +45,7 @@ describe('resolveOptions', () => {
   beforeEach(() => {
     saveEnv();
     deletePiwiEnv();
+    process.env.PIWI_DESKTOP_CONFIG = NO_DESKTOP_APP;
   });
   afterEach(() => restoreEnv());
 

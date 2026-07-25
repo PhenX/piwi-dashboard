@@ -5,24 +5,28 @@ const config = useRuntimeConfig();
 const authEnabled = computed(() => !!config.public.authEnabled);
 const isDesktop = useIsDesktop();
 
-// Desktop build only: the reporter must send this app's local access token —
-// the desktop guard enforces it even though sign-in is off — so bake it into
-// the generated snippet instead of the PIWI_API_KEY env-var reference.
-const { data: reporterConfig } = useFetch<{ url: string; token: string } | null>('/api/desktop/reporter-config', {
-  immediate: isDesktop,
-  default: () => null,
-});
-
 // Reflect the actual dashboard URL so the generated config snippet is correct
 const serverUrl = ref('http://localhost:3000');
 onMounted(() => {
   serverUrl.value = window.location.origin;
 });
 
-const apiKeyLine = computed(() => {
-  if (isDesktop && reporterConfig.value) return `\n      apiKey: '${reporterConfig.value.token}',`;
-  return authEnabled.value ? `\n      apiKey: process.env.PIWI_API_KEY,` : '';
-});
+/**
+ * The reporter options for the generated snippets, at the given indentation.
+ *
+ * On desktop the reporter discovers this app's URL and access token from
+ * `~/.piwi/desktop.json`, but only when *neither* is configured — so the desktop
+ * snippet omits both. Setting just one would suppress discovery and leave the
+ * reporter without the token the desktop guard requires.
+ */
+function reporterOptions(indent: string): string {
+  const lines = [`projectName: 'my-project',`];
+  if (!isDesktop) {
+    lines.unshift(`serverUrl: '${serverUrl.value}',`);
+    if (authEnabled.value) lines.push(`apiKey: process.env.PIWI_API_KEY,`);
+  }
+  return lines.map((line) => `${indent}${line}`).join('\n');
+}
 
 const configCode = computed(
   () => `import { defineConfig } from '@playwright/test'
@@ -31,8 +35,7 @@ export default defineConfig({
   reporter: [
     ['list'],
     ['@piwitests/reporter', {
-      serverUrl: '${serverUrl.value}',
-      projectName: 'my-project',${apiKeyLine.value}
+${reporterOptions('      ')}
     }],
   ],
   use: {
@@ -53,8 +56,7 @@ export default PiwiDashboard.wrapConfig(
     },
   }),
   {
-    serverUrl: '${serverUrl.value}',
-    projectName: 'my-project',${apiKeyLine.value}
+${reporterOptions('    ')}
   },
 )`,
 );
@@ -120,7 +122,7 @@ const steps = computed<Array<WizardStep & { id: number }>>(() => {
     {
       title: 'Configure Playwright',
       description: isDesktop
-        ? "Add the reporter to your playwright.config.ts. The apiKey below is this app's local access token."
+        ? 'Add the reporter to your playwright.config.ts. While this app is running it needs no URL or token — the reporter finds it automatically.'
         : 'Add the reporter to your playwright.config.ts.',
       code: configCode.value,
       lang: 'typescript',

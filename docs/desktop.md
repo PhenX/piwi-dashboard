@@ -58,9 +58,26 @@ By default, closing the window quits the app. From the tray icon you can enable:
 
 ## Sending results to it
 
-The desktop app protects its local API with an **access token**, so the reporter
-must present it. Open **Settings → Storage → Send results to this app** to copy
-your token and a ready-made snippet, then set it as the reporter's `apiKey`:
+While the app is running, the reporter finds it by itself — no URL and no token
+in your config:
+
+```typescript
+['@piwitests/reporter', { projectName: 'my-project' }]
+```
+
+The app publishes its address and access token to `~/.piwi/desktop.json`
+(`%USERPROFILE%\.piwi\desktop.json` on Windows) while it runs, rewriting the file
+on each launch and deleting it on quit. The reporter reads it **only** when your
+config and environment set no `serverUrl` and no `apiKey`, so a project already
+pointed at a shared dashboard — or a CI job with `PIWI_API_KEY` set — is never
+redirected here. See [Finding the desktop app automatically](/reporter#finding-the-desktop-app-automatically).
+
+### Configuring it by hand
+
+Discovery needs the tests and the app to run as the same user on the same
+machine. When they don't — a container, a different account, or a config that
+already sets `serverUrl` — open **Settings → Storage → Send results to this app**
+to copy the token and a ready-made snippet:
 
 ```typescript
 ['@piwitests/reporter', {

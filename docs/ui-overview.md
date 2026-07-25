@@ -5,7 +5,7 @@ lang: en-US
 
 # UI overview
 
-This page is a **map of the dashboard** — where each view lives and what it's for. For the concepts behind a feature, follow the links to the dedicated pages ([Flaky tests & analytics](./flaky-tests), [AI diagnosis & clustering](./ai-diagnosis), [Reporter](./reporter)).
+This page is a **map of the dashboard** — where each view lives and what it's for. For the concepts behind a feature, follow the links to the dedicated pages ([Core concepts](./concepts), [Flaky tests](./flaky-tests), [AI diagnosis & clustering](./ai-diagnosis), [Reporter](./reporter)).
 
 The dashboard is a single-page app built with [Nuxt UI](https://ui.nuxt.com). It updates itself in real time over Server-Sent Events — pages refresh automatically when runs start or finish, so you never reload manually.
 
@@ -24,7 +24,7 @@ The sidebar gives access to the top-level sections:
 | Section | Path | Purpose |
 |---------|------|---------|
 | Home | `/` | Aggregate stats and activity across all projects |
-| Analytics | `/analytics` | Cross-project trends, portfolio health, and insights over a chosen time window |
+| Analytics | `/analytics` | Cross-project trends, portfolio health, and insights over a chosen time window (see [Analytics](./analytics)) |
 | Projects | `/projects` | Full project listing with search and tag filters |
 | Settings | `/settings` | Configuration — general, account, users, storage, tags, wasted time, AI, notifications |
 | API docs | `/docs` | Self-contained OpenAPI 3.1 reference (no external CDN) — browse endpoints and schemas, try requests live, copy cURL / fetch snippets |
@@ -47,20 +47,11 @@ A quick health check across all projects: **stats cards** (projects, runs, activ
 
 ## Analytics
 
-A cross-project decision view — where Home answers *"what's happening now"*, Analytics answers *"across projects, over time"*. A **scope bar** at the top sets the period (last 7 / 30 / 90 days, last year, or all time), an optional environment, and a full-runs-only toggle; every widget re-aggregates against that scope. The widgets:
+A cross-project decision view — where Home answers *"what's happening now"*, Analytics answers *"across projects, over time"*. A **scope bar** at the top sets the period (last 7 / 30 / 90 days, last year, or all time), an optional environment, and a full-runs-only toggle; every widget re-aggregates against that scope.
 
-- **Insights** — auto-generated, severity-ranked findings over the period (pass-rate drops, failing streaks, stale failure clusters, wasted CI time, CI-time growth). Each links straight to the project, run, cluster, or test case it's about.
-- **Portfolio health** — every project's pass rate (with its change vs the previous period), flaky volume, open failure clusters, average run duration, and latest run, in one sortable table with trend bars. Worst health sorts first.
-- **Pass rate heatmap** — a projects × time grid colored by daily (or, for longer periods, weekly) pass rate, so a project that degraded — and when — jumps out.
-- **CI time** — total CI minutes your runs consumed over the period, with the growth vs the previous period.
-- **Wasted CI time** — minutes that produced no signal: time inside wait steps plus time executing attempts that ended failed or timed out, split by project.
-- **Flakiest tests** — the worst flaky tests across all projects, using the same scoring as each project's Flaky tests tab, ranked by wasted-CI impact.
-- **Failure clusters** — open root causes across all projects, with age, occurrences, and error-type mix; the oldest unresolved cluster is highlighted.
-- **Regression velocity** — new regressions (tests that passed in a baseline and now fail) and newly-flaky tests introduced per period, as a stacked bar with the change vs the previous period. Rising bars mean quality debt is accumulating.
-- **Browser matrix** — pass rate per project × browser, so a suite that's green on one browser but failing on another stands out at a glance.
-- **Slow endpoints** — backend calls captured during tests, aggregated across all projects by route: p50/p90 latency, error rate, and how many projects hit each one, so a shared endpoint regressing surfaces before it's obvious in any single suite.
+Widgets: an **insights** feed, **portfolio health**, a **pass-rate heatmap**, **CI time** and **wasted CI time**, the global **flakiest tests** leaderboard, open **failure clusters**, **regression velocity**, a **browser matrix**, and cross-project **slow endpoints**. [Timeline markers](./timeline-markers) overlay your deploys and infrastructure changes on the trend charts.
 
-The analytics surface is **widget-driven**: each widget is a registry entry (`shared/analytics/registry.ts`) backed by a shared handler (`shared/handlers/analytics/`) and served by one generic endpoint, `GET /api/analytics/:widget`. See [Flaky tests & analytics](./flaky-tests).
+See [Analytics](./analytics) for what each widget answers and how the periods are compared.
 
 ## Projects
 
@@ -71,7 +62,7 @@ The primary hub: instant **text search**, **tag filters**, and a table showing e
 The complete history for one project, organized into tabs:
 
 - **Test runs** — every run with status, start time, duration, test counts, and browser badges; select two runs to compare. Runs with a shared failure signature roll up into **Failure clusters** here (see [AI diagnosis & clustering](./ai-diagnosis)).
-- **Flaky tests** — intermittent tests scored by a composite flakiness metric, with root-cause classification and impact ranking. See [Flaky tests & analytics](./flaky-tests#flaky-test-detection).
+- **Flaky tests** — intermittent tests scored by a composite flakiness metric, with root-cause classification and impact ranking. See [Flaky tests](./flaky-tests#flaky-test-detection).
 - **Performance** — average/P90 duration trends and a slowest-tests table. See [Performance](./flaky-tests#performance).
 - **Test cases** — every unique test with status, executed-only pass rate, result breakdown, average duration, and last run; searchable, filterable by status and last-run age (stale cases hidden by default), paginated, with flat and per-spec tree views.
 - **Compare** — side-by-side delta between two runs (new failures, recovered, duration changes).

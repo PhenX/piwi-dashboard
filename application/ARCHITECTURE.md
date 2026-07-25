@@ -90,35 +90,35 @@ is only the shape of it.
 
 Key server utilities (`server/utils/`):
 
-| File / folder          | Purpose                                                                                                           |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `persist-run-cases.ts` | The single write path for run cases — every ingest site goes through it                                           |
-| `blob-report.ts`       | Reads a Playwright blob report (`report.jsonl` + `resources/`) into run + `RunCaseInput`s for the import endpoint |
-| `trace-import.ts`      | Rebuilds one execution from a bare `trace.zip` — title, browser, timing and error from the trace's own headers    |
-| `archive-reader.ts`    | The server's ZIP half of the import parsers (the demo supplies its own), inflating entries on demand              |
+| File / folder                                                 | Purpose                                                                                                                                            |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `persist-run-cases.ts`                                        | The single write path for run cases — every ingest site goes through it                                                                            |
+| `blob-report.ts`                                              | Reads a Playwright blob report (`report.jsonl` + `resources/`) into run + `RunCaseInput`s for the import endpoint                                  |
+| `trace-import.ts`                                             | Rebuilds one execution from a bare `trace.zip` — title, browser, timing and error from the trace's own headers                                     |
+| `archive-reader.ts`                                           | The server's ZIP half of the import parsers (the demo supplies its own), inflating entries on demand                                               |
+| `import-evidence.ts`                                          | Recovers ARIA snapshot / source snippet from `error-context`, and console entries from the trace, for imported executions                          |
+| `upload-limits.ts`                                            | Effective multipart ceiling (`PIWI_IMPORT_MAX_BYTES`), shared by `upload` and `import` and surfaced to the import page                             |
+| `case-payloads.ts`                                            | Content-addressed payload upsert/inline/resolve                                                                                                    |
+| `locator-healing.ts`                                          | Shared `upsertLocatorSnapshots`, `getLocatorHealing`, `saveLocatorPick` (server + demo)                                                            |
+| `project-access.ts`                                           | `getProjectScope`, `requireProjectAccess`, `requireResolvedProjectAccess`, entity resolvers                                                        |
+| `route-required-roles.ts`, `route-roles-match.ts`             | Read `x-required-roles` from compiled route metas; rou3 matching                                                                                   |
+| `ai-*.ts`                                                     | Provider abstraction, diagnosis, context building + limits, research stage, embeddings, images, system prompt                                      |
+| `cluster-*.ts`                                                | Similarity, semantic adjudication, naming, reconciliation                                                                                          |
+| `scm/`                                                        | Repo history, diffs and patch validation for AI diagnosis                                                                                          |
+| `notifications/`                                              | `match.ts` (subscription matching → outbox rows), `dispatch.ts` (`sweepOutbox`, HMAC-SHA256 `X-Piwi-Signature`), `emit.ts`, `run-notifications.ts` |
+| `email.ts`, `account-tokens.ts`, `rate-limit.ts`, `crypto.ts` | SMTP transport + templates, single-use tokens (reset 1 h / verify 24 h / invite 72 h), in-memory sliding window, AES-256-GCM                       |
+| `retention.ts`                                                | Nightly pruning of runs, notification history, diagnosis versions and orphan payloads                                                              |
+| `compute-regression-signals.ts`, `flaky-classify.ts`          | `isNewRegression` / `isNewFlaky` signals; flaky root-cause classification                                                                          |
+| `server/tasks/notifications/sweep.ts`                         | Nitro scheduled task — sweeps the outbox every minute                                                                                              |
 
-Import orchestration is shared, not mirrored: `shared/handlers/import-runs.ts` owns everything after parsing, with the
-server and demo supplying an `ImportPort` for the parts that genuinely differ.
-| `import-evidence.ts` | Recovers ARIA snapshot / source snippet from `error-context`, and console entries from the trace, for imported executions |
-| `upload-limits.ts` | Effective multipart ceiling (`PIWI_IMPORT_MAX_BYTES`), shared by `upload` and `import` and surfaced to the import page |
-| `case-payloads.ts` | Content-addressed payload upsert/inline/resolve |
-| `locator-healing.ts` | Shared `upsertLocatorSnapshots`, `getLocatorHealing`, `saveLocatorPick` (server + demo) |
-| `project-access.ts` | `getProjectScope`, `requireProjectAccess`, `requireResolvedProjectAccess`, entity resolvers |
-| `route-required-roles.ts`, `route-roles-match.ts` | Read `x-required-roles` from compiled route metas; rou3 matching |
-| `ai-*.ts` | Provider abstraction, diagnosis, context building + limits, research stage, embeddings, images, system prompt |
-| `cluster-*.ts` | Similarity, semantic adjudication, naming, reconciliation |
-| `scm/` | Repo history, diffs and patch validation for AI diagnosis |
-| `notifications/` | `match.ts` (subscription matching → outbox rows), `dispatch.ts` (`sweepOutbox`, HMAC-SHA256 `X-Piwi-Signature`), `emit.ts`, `run-notifications.ts` |
-| `email.ts`, `account-tokens.ts`, `rate-limit.ts`, `crypto.ts` | SMTP transport + templates, single-use tokens (reset 1 h / verify 24 h / invite 72 h), in-memory sliding window, AES-256-GCM |
-| `retention.ts` | Nightly pruning of runs, notification history, diagnosis versions and orphan payloads |
-| `compute-regression-signals.ts`, `flaky-classify.ts` | `isNewRegression` / `isNewFlaky` signals; flaky root-cause classification |
-| `server/tasks/notifications/sweep.ts` | Nitro scheduled task — sweeps the outbox every minute |
+Import orchestration is shared, not mirrored: `shared/handlers/import-runs.ts` owns everything after parsing, with
+the server and demo supplying an `ImportPort` for the parts that genuinely differ.
 
 ## Front end
 
 ### Pages (`app/pages/`)
 
-`/` dashboard home · `/projects` + `/projects/[id]` (+ `/edit`, `/import`) · `/test-runs/[id]` · `/test-cases/[id]` (stable case across runs)
+`/` dashboard home · `/projects` + `/projects/[id]` · `/test-runs/[id]` · `/test-cases/[id]` (stable case across runs)
 · `/test-run-cases/[id]` (one execution) · `/failure-clusters/[id]` · `/analytics` · `/settings/*` · `/docs` (in-app API
 reference) · `/mcp` · `/login`, `/forgot-password`, `/reset-password` (public, layout-free).
 

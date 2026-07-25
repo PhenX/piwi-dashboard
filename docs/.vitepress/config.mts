@@ -7,8 +7,13 @@ const siteUrl = 'https://piwitests.github.io'
 
 export default defineConfig({
   title: 'Piwi Dashboard',
-  description: 'A modern dashboard for storing and visualising Playwright test results',
+  description:
+    'Self-hosted dashboard that keeps every Playwright run — then groups failures by root cause, scores flaky tests, and heals broken locators.',
   base: '/',
+  // AGENTS.md is the agent guide for this directory, not a page of the site:
+  // it links to sibling guides outside the docs root, so building it as a page
+  // both publishes the wrong thing and fails the dead-link check.
+  srcExclude: ['AGENTS.md'],
   // Example values in the generated configuration reference (PIWI_SITE_URL,
   // Ollama base URLs) are intentionally unreachable localhost URLs.
   ignoreDeadLinks: [/^https?:\/\/localhost/],
@@ -32,13 +37,13 @@ export default defineConfig({
   },
   head: [
     ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:title', content: 'Piwi Dashboard — A permanent home for your Playwright test results' }],
+    ['meta', { property: 'og:title', content: 'Piwi Dashboard — Your Playwright results, kept and explained' }],
     [
       'meta',
       {
         property: 'og:description',
         content:
-          'Live dashboards, failure clustering, and flaky-test tracking for your whole team — self-hosted, no SaaS.',
+          'CI throws away every report it makes. Piwi keeps them — then groups failures by root cause, scores flaky tests, and finds the locator you should have used. Self-hosted, MIT, zero telemetry.',
       },
     ],
     ['meta', { property: 'og:image', content: ogImage }],
@@ -46,13 +51,13 @@ export default defineConfig({
     ['meta', { property: 'og:image:height', content: '630' }],
     ['meta', { property: 'og:url', content: siteUrl }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:title', content: 'Piwi Dashboard — A permanent home for your Playwright test results' }],
+    ['meta', { name: 'twitter:title', content: 'Piwi Dashboard — Your Playwright results, kept and explained' }],
     [
       'meta',
       {
         name: 'twitter:description',
         content:
-          'Live dashboards, failure clustering, and flaky-test tracking for your whole team — self-hosted, no SaaS.',
+          'CI throws away every report it makes. Piwi keeps them — then groups failures by root cause, scores flaky tests, and finds the locator you should have used. Self-hosted, MIT, zero telemetry.',
       },
     ],
     ['meta', { name: 'twitter:image', content: ogImage }],
@@ -71,30 +76,49 @@ export default defineConfig({
       { text: 'Demo', link: 'https://piwitests.github.io/demo/' },
     ],
 
+    // Sidebar order follows the reader's journey: understand it → get results
+    // in → read them → run the instance → wire it into other tools.
     sidebar: [
-      { text: 'Getting started', link: '/getting-started' },
-      { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
-      { text: 'UI overview', link: '/ui-overview' },
-      { text: 'Reporter', link: '/reporter' },
-      { text: 'Capture fixtures', link: '/capture-fixtures' },
-      { text: 'Importing past runs', link: '/importing-runs' },
       {
-        text: 'Features',
+        text: 'Start here',
         items: [
-          { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
-          { text: 'Flaky tests & analytics', link: '/flaky-tests' },
-          { text: 'Timeline markers', link: '/timeline-markers' },
-          { text: 'Notifications & alerts', link: '/notifications' },
+          { text: 'Getting started', link: '/getting-started' },
+          { text: 'Core concepts', link: '/concepts' },
+          { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
         ],
       },
       {
-        text: 'Configuration',
+        text: 'Sending results',
         items: [
+          { text: 'Reporter', link: '/reporter' },
+          { text: 'Capture fixtures', link: '/capture-fixtures' },
+          { text: 'CI & sharding', link: '/ci' },
+          { text: 'Backend logs', link: '/backend-logs' },
+          { text: 'Importing past runs', link: '/importing-runs' },
+        ],
+      },
+      {
+        text: 'Reading the results',
+        items: [
+          { text: 'UI overview', link: '/ui-overview' },
+          { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
+          { text: 'Flaky tests', link: '/flaky-tests' },
+          { text: 'Analytics', link: '/analytics' },
+          { text: 'Timeline markers', link: '/timeline-markers' },
+          { text: 'Notifications & alerts', link: '/notifications' },
+          { text: 'Open in IDE', link: '/ide-integration' },
+        ],
+      },
+      {
+        text: 'Running your instance',
+        items: [
+          { text: 'Deployment', link: '/deployment' },
+          { text: 'Upgrading', link: '/upgrading' },
           { text: 'Configuration reference', link: '/configuration' },
           { text: 'Configuration generator', link: '/configuration/generator' },
           { text: 'Authentication', link: '/authentication' },
           { text: 'Storage configuration', link: '/storage' },
-          { text: 'Deployment', link: '/deployment' },
+          { text: 'Privacy & data flow', link: '/privacy' },
           { text: 'Desktop app', link: '/desktop' },
         ],
       },
@@ -103,8 +127,6 @@ export default defineConfig({
         items: [
           { text: 'API docs (interactive)', link: 'https://piwitests.github.io/demo/docs' },
           { text: 'MCP server', link: '/mcp' },
-          { text: 'Open in IDE', link: '/ide-integration' },
-          { text: 'Backend logs', link: '/backend-logs' },
         ],
       },
     ],

@@ -190,15 +190,15 @@ tokens) — recommended in production even without auth, falling back to an inse
 
 Where to add things in subsystems whose wiring spans several files:
 
-| Change                        | Touch                                                                                                                                                                                                      |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Flaky root-cause category     | `classifyFlakyRootCause()` + keyword arrays in `server/utils/flaky-classify.ts`; `rootCause` on `FlakyTest` (`types/api.ts`); `FlakyTestsList.vue` colour map                                              |
-| Flaky impact scoring          | `getProjectFlakyTests` (`shared/handlers/projects.ts`) — sorts by impact desc; `impact`, `wastedCiMinutes`, `avgFailedDurationMs` on `FlakyTest`                                                           |
-| Regression signals            | `computeRegressionSignals()` (`server/utils/compute-regression-signals.ts`), called from `finish.post.ts`; surfaced by `getTestRun` / `getTestRunCase` mappers                                             |
-| A computed AI-context section | Update the `SectionId` union (`ai-context.types.ts`), `DIAGNOSIS_SECTIONS` (`diagnosis-sections.ts`) and `DiagnosisContextCoverage` (`types/api.ts`) **in one batch** before writing the section builder   |
-| Sharding behaviour            | See the sharding invariants below                                                                                                                                                                          |
-| Blob-report import            | `server/utils/blob-report.ts` (parse) + `import-evidence.ts` (recovered evidence); endpoints `test-runs/import[.post]` and `import/check.post.ts`; page `projects/[id]/import.vue` + `useBlobReportImport` |
-| Trace-file import             | `server/utils/trace-import.ts` — reconstructs an execution from a trace's `context-options`/`error` events; grouped into one run by the `importGroup` field on `test-runs/import.post.ts`                  |
+| Change                        | Touch                                                                                                                                                                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Flaky root-cause category     | `classifyFlakyRootCause()` + keyword arrays in `server/utils/flaky-classify.ts`; `rootCause` on `FlakyTest` (`types/api.ts`); `FlakyTestsList.vue` colour map                                                                                                            |
+| Flaky impact scoring          | `getProjectFlakyTests` (`shared/handlers/projects.ts`) — sorts by impact desc; `impact`, `wastedCiMinutes`, `avgFailedDurationMs` on `FlakyTest`                                                                                                                         |
+| Regression signals            | `computeRegressionSignals()` (`server/utils/compute-regression-signals.ts`), called from `finish.post.ts`; surfaced by `getTestRun` / `getTestRunCase` mappers                                                                                                           |
+| A computed AI-context section | Update the `SectionId` union (`ai-context.types.ts`), `DIAGNOSIS_SECTIONS` (`diagnosis-sections.ts`) and `DiagnosisContextCoverage` (`types/api.ts`) **in one batch** before writing the section builder                                                                 |
+| Sharding behaviour            | See the sharding invariants below                                                                                                                                                                                                                                        |
+| Blob-report import            | `server/utils/blob-report.ts` (parse) + `import-evidence.ts` (recovered evidence); everything after parsing in `shared/handlers/import-runs.ts`; endpoints `test-runs/import[.post]` and `import/check.post.ts`; page `projects/[id]/import.vue` + `useBlobReportImport` |
+| Trace-file import             | `server/utils/trace-import.ts` — reconstructs an execution from a trace's `context-options`/`error` events; grouped into one run by the `importGroup` field on `test-runs/import.post.ts`                                                                                |
 
 ## Subsystem invariants
 
@@ -262,32 +262,6 @@ Rules when touching it:
   cannot be keyed returns `not-persisted` (surfaced as a toast) rather than being silently dropped. Any authenticated
   project member may save one, so the endpoint deliberately carries no role list.
 - Re-run `npm run app:seed:demo` after changing the captured or stored shape.
-
-### Importing historical runs
-
-Imported blob reports go through the same `persistRunCases` funnel as reported ones, so clustering, flaky detection and
-the trace views work on them unchanged. Two rules keep a backfill from behaving like a live run:
-
-- **Imports stay silent.** `test-runs/import.post.ts` deliberately does NOT call `emitRunNotifications`,
-  `autoDiagnoseRun` or `computeRegressionSignals` — back-dated failures must not page the team, burn AI credits, or be
-  labelled new regressions. Any new post-ingest side effect added to `submit`/`upload`/`finish` must stay out of the
-  import path unless it is genuinely time-independent.
-- **The import itself lives in `#shared/handlers/import-runs.ts`, not in either endpoint.** Creating the run,
-  persisting executions, linking files and rolling a trace group's counters up are the same database work in both
-  runtimes. The four things that genuinely differ arrive as an `ImportPort` (persist, file storage, trace-console
-  reading, run-submitted event); `server/api/test-runs/import.post.ts` and `app/demo/api/import.ts` are each just
-  auth/limits plus a port. Add behaviour to the handler, not to a caller.
-- **The parsers stay `node:`-free.** `blob-report.ts` and `trace-import.ts` read entries through an injected
-  `ArchiveEntryReader` and use `#shared/utils/posix-path` rather than `node:path`, because demo mode runs them in a
-  service worker against `DecompressionStream`. The server's ZIP half lives in `server/utils/archive-reader.ts`, the
-  demo's in `app/demo/api/import.ts`. Adding a `node:` import to either parser breaks the demo build silently.
-- **Derived fields come from the shared helpers, never re-implemented.** Statuses go through `classifyStatus`, error
-  text through `joinErrorMessages` / `appendErrorLocation`, step metrics through `collectStepMetrics` — all in
-  `@piwitests/core`, which is also what the reporter uses. Re-deriving any of them locally would let an imported run
-  drift from a reported one for the same test.
-
-Idempotency is the `test_runs.import_hash` column (SHA-256 of the archive) with a unique `(project_id, import_hash)`
-index; the hash is always computed server-side, never trusted from the client.
 
 ### Sharding
 

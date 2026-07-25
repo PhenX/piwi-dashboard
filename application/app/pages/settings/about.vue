@@ -58,7 +58,7 @@ const dbBackendLabel = computed(() => {
     <SectionCard icon="i-lucide-book-open" title="Resources">
       <div class="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
         <DocLink to="">Documentation</DocLink>
-        <DocLink to="api">API reference</DocLink>
+        <ULink to="/docs" class="inline-flex items-center gap-1 text-primary hover:underline"> API reference </ULink>
         <ULink
           to="https://github.com/piwitests/platform"
           target="_blank"

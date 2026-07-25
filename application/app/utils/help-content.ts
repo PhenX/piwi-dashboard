@@ -39,17 +39,17 @@ export const HELP_TOPICS = {
   'home.trend-bars': {
     title: 'Run history bars',
     text: 'One bar per full run (up to 20), oldest left → newest right. Green = pass, red = fail, amber = passed with flaky tests, gray = skipped/unknown. Click a bar to open that run.',
-    doc: 'ui-overview#home-page',
+    doc: 'ui-overview#home',
   },
   'home.tendency': {
     title: 'Tendency',
     text: 'Derived from the last 5 full runs. Failing = latest run failed; flaky = pass/fail mixed or flaky tests seen in the window; passing = all recent runs green.',
-    doc: 'ui-overview#home-page',
+    doc: 'ui-overview#home',
   },
   'home.project-health': {
     title: 'Project health',
     text: 'Every project at a glance — run history bars and a tendency badge so you can immediately see which project needs attention. Only full runs count.',
-    doc: 'ui-overview#home-page',
+    doc: 'ui-overview#home',
   },
   'home.get-started': {
     title: 'Get started',
@@ -86,7 +86,7 @@ export const HELP_TOPICS = {
   'analytics.cluster-landscape': {
     title: 'Failure clusters',
     text: 'Open failure clusters across all projects — the biggest and oldest unresolved root causes. Clusters outlive run retention, so this works on long horizons.',
-    doc: 'failure-clustering',
+    doc: 'ai-diagnosis#failure-clustering',
   },
   'analytics.regression-velocity': {
     title: 'Regression velocity',
@@ -110,7 +110,7 @@ export const HELP_TOPICS = {
   'projects.table': {
     title: 'Projects',
     text: 'Every project that has reported results, with its latest run, pass rate and activity. Click a row to drill in.',
-    doc: 'ui-overview#projects-page',
+    doc: 'ui-overview#projects',
   },
   'project.import': {
     title: 'Importing past runs',
@@ -149,7 +149,7 @@ export const HELP_TOPICS = {
   'project.slowest-tests': {
     title: 'Slowest tests',
     text: 'The tests taking the most time, ranked. Optimizing the top entries shortens your overall run the fastest.',
-    doc: 'ui-overview#performance-page',
+    doc: 'flaky-tests#performance',
   },
   'project.run-compare': {
     title: 'Run comparison',
@@ -572,7 +572,7 @@ export const HELP_TOPICS = {
   'account.connected-accounts': {
     title: 'Connected accounts',
     text: 'Sign in with an OAuth provider (Google or GitHub). Providers are configured by an operator through environment variables; one provider can be linked per account.',
-    doc: 'authentication#oauth-sign-in',
+    doc: 'authentication#oauth-google-github',
     envVars: [
       'PIWI_OAUTH_GOOGLE_CLIENT_ID',
       'PIWI_OAUTH_GOOGLE_CLIENT_SECRET',

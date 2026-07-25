@@ -1,11 +1,15 @@
 ---
-title: Flaky tests & analytics
+title: Flaky tests
 lang: en-US
 ---
 
-# Flaky tests & analytics
+# Flaky tests
 
-Once Piwi has a few runs of history, it turns them into cross-run intelligence: which tests are flaky, what's regressing, where time is wasted, and how performance trends over time. This page covers the analytics features beyond a single run.
+A single run tells you what failed. A few dozen runs tell you what's *unreliable* — and that's a
+different, more expensive problem. This page covers what Piwi computes for one project once it has some
+history: flaky scoring, regression signals, performance trends, and spec health.
+
+For the same signals aggregated across every project, see [Analytics](./analytics).
 
 ## Flaky test detection
 
@@ -98,24 +102,16 @@ Network analysis and Web Vitals require the [capture fixtures](./capture-fixture
 
 A project-level overview groups test cases by spec file and colors each by pass rate, so an unhealthy area of the suite jumps out. Cells link straight to the filtered test-case list.
 
-## Cross-project analytics
+## Across every project
 
-Everything above is scoped to one project. The **Analytics** page (`/analytics`) lifts the same signals to the whole portfolio over a time window you choose (last 7 / 30 / 90 days, last year, or all time — plus an optional environment and a full-runs-only toggle). It answers the higher-level questions a single project page can't:
-
-- **Portfolio health** — every project's pass rate with its change vs the previous period, flaky volume, open failure clusters, and latest run, sorted worst-first.
-- **Pass rate heatmap** — projects × time, colored by pass rate, so you can see who degraded and when.
-- **CI time** and **Wasted CI time** — how many CI minutes your runs consume, and how many of those produce no signal (wait steps + failed attempts). Since a timed-out test burns its whole (often oversized) budget, the widget also calls out how much of that time is reclaimable by tightening oversized timeouts and removing stale `test.slow()` marks — the same [timeout opportunities](#performance) surfaced per project.
-- **Flakiest tests** — the global flaky leaderboard across all projects, using the [impact ranking](#impact-ranking) above.
-- **Failure clusters** — open root causes across all projects, by age and occurrences.
-- **Regression velocity** — new regressions and newly-flaky tests introduced per period (see [Regression signals](#regression-signals)), so you can see whether quality debt is growing or shrinking.
-- **Browser matrix** — pass rate per project × browser, to catch browser-specific breakage.
-- **Slow endpoints** — the backend calls captured during tests, aggregated across all projects by route (p50/p90 latency, error rate, projects affected).
-- **Insights** — an auto-generated, severity-ranked feed of the findings that matter (pass-rate drops, failing streaks, stale clusters, wasted time, oversized timeouts and stale `test.slow()` marks, regression surges, slow shared endpoints), each linking to the source.
-
-Each widget is served by `GET /api/analytics/:widget` and computed by a shared handler in `shared/handlers/analytics/`, so the same numbers back the dashboard, the demo, and any future API consumer.
+Everything above is scoped to one project. The **Analytics** page lifts the same signals to your whole
+portfolio over a time window you choose — portfolio health, a pass-rate heatmap, wasted CI minutes,
+regression velocity, a global flaky leaderboard, and an auto-generated insights feed. See
+[Analytics](./analytics).
 
 ## See also
 
+- [Analytics](./analytics) — the same signals across every project
 - [UI overview](./ui-overview) — where each of these views lives in the dashboard
 - [Reporter](./reporter) — how retries, traces, and run metadata get captured
 - [Capture fixtures](./capture-fixtures) — the test-side setup behind network analysis and Web Vitals

@@ -31,6 +31,18 @@ Run from `application/` unless noted:
 
 If an E2E test creates a project, use a static name registered in `application/shared/test-project-names.ts` (see the conventions in [AGENTS.md](AGENTS.md)).
 
+## Database & demo data
+
+| Command | What it does |
+|---|---|
+| `npm run db:generate` | Generate a SQLite migration from schema changes |
+| `npm run db:generate:pg` | Generate a PostgreSQL migration from schema changes |
+| `npm run db:studio` | Browse the SQLite database in Drizzle Studio |
+| `npm run db:studio:pg` | Browse the PostgreSQL database in Drizzle Studio |
+| `npm run app:seed:demo` | Regenerate the demo seed data used by the live demo |
+
+**Migration workflow:** edit `server/database/schema.sqlite.ts` (and `schema.pg.ts` for the PostgreSQL equivalent — `schema.ts` is just a dialect-selecting re-export, don't edit it) → run `npm run db:generate` (SQLite) or `npm run db:generate:pg` (PostgreSQL) → review the generated `.sql` file → restart the app. Never create migration files or edit `meta/_journal.json` by hand — the Drizzle migrator depends on the journal to track which migrations have been applied, and manual entries cause it to silently skip the migration.
+
 ## What to work on
 
 - Check [open issues](https://github.com/PiwiTests/platform/issues) and the [roadmap](ROADMAP.md).

@@ -112,6 +112,7 @@ Send a test email from **Settings → Notifications** to confirm delivery.
 
 ## See also
 
+- [CI & sharding](./ci) — the alternative: pull the run URL into your pipeline instead
 - [Authentication](./authentication) — required for non-browser notifications
 - [Configuration reference](./configuration) — all environment variables
 - [AI diagnosis & failure clustering](./ai-diagnosis) — what triggers `cluster.new` and `diagnosis.completed`
