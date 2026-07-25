@@ -409,6 +409,62 @@ In the dashboard UI, the test run detail page offers a **Tree** view that groups
 
 The reporter captures Playwright test marks set via `test.info().annotations` (e.g. `@fixme`, `@slow`, `@skip`) and sends them as `testAnnotations` in every test case payload. These are stored per-run on the `test_runs_cases` table and rendered as badges on the test case row and test case detail page. A `@slow` mark combined with a test's duration history powers the **stale `test.slow()`** detection in [Timeout opportunities](./flaky-tests#performance).
 
+### Test tags
+
+The reporter reads each test's tags (`TestCase.tags`) and sends them as `tags`. Playwright already folds together both
+ways of declaring one, so either works:
+
+```typescript
+test('checkout applies the discount @smoke', async ({ page }) => { /* … */ })
+
+test('checkout applies the discount', { tag: ['@smoke', '@critical'] }, async ({ page }) => { /* … */ })
+```
+
+Tags are stored twice: on the execution (`test_runs_cases.tags`, what that run saw) and on the test case
+(`test_cases.tags`, the latest declaration). The leading `@` is stripped on the way in, so a tag reads the same however
+it was written — filter for `smoke` or `@smoke` and you get the same rows. Removing a tag from a spec clears it on the
+next run that reports the test.
+
+Tags drive the tag filter on a project's **Test cases** tab, the same filter on the flaky leaderboard, and the
+`requireTags` rule of the [CI gate](./ci#blocking-a-merge).
+
+### Ownership metadata (`piwi:` annotations)
+
+Four `piwi:`-prefixed annotations attach ownership to a test. They are ordinary Playwright annotations, so no new API is
+involved:
+
+```typescript
+test(
+  'checkout applies the discount',
+  {
+    tag: '@critical',
+    annotation: [
+      { type: 'piwi:owner', description: '@checkout-team' },
+      { type: 'piwi:priority', description: 'critical' },
+      { type: 'piwi:feature', description: 'Checkout' },
+      { type: 'piwi:link', description: 'https://issues.example.com/PROJ-412' },
+    ],
+  },
+  async ({ page }) => {
+    /* … */
+  },
+)
+```
+
+| Field | Accepts |
+|---|---|
+| `piwi:owner` | Any text — a team handle, a squad name, an email |
+| `piwi:priority` | `critical`, `high`, `medium` or `low` (anything else is ignored) |
+| `piwi:feature` | Any text — the product area, for grouping across spec files |
+| `piwi:link` | An absolute `http(s)` URL; other schemes are dropped rather than stored |
+
+Metadata shows as badges next to the test wherever it is listed, is filterable by owner and priority on the **Test
+cases** tab, and is carried into [pull-request feedback](./ci#pull-request-feedback) so a failure comment names the team
+that owns it. Unknown `piwi:` fields and unparseable values are ignored — a typo costs you the field, not the run.
+
+The values are also re-validated server-side, because a payload can reach the ingest API without passing through the
+reporter.
+
 ### Per-test timeout
 
 The reporter records each test's effective per-test timeout (`TestCase.timeout`) and sends it as `timeout` (milliseconds) on every test case payload, stored on `test_runs_cases.timeout`. `0` means the test has no timeout (unbounded); runs reported by an older reporter that predates this field store `null`.

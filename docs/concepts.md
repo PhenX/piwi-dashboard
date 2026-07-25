@@ -124,6 +124,23 @@ reporter's `environment` option or `PIWI_ENVIRONMENT`. It's a **scoping** dimens
 configuration one: flaky analysis, analytics, and timeline markers can all be narrowed to a single
 environment so a staging suite's noise doesn't blend into production's numbers.
 
+## Tags & ownership
+
+Two ways to say what a test *is*, both declared in the spec file and both read by the reporter.
+
+**Tags** come from Playwright itself — `@smoke` in a title or the `{ tag: [...] }` option. Piwi stores them with the
+leading `@` stripped, on the execution (what that run saw) and on the test case (the latest declaration). They are how
+you slice the test-case catalog and the flaky leaderboard, and what the [CI gate](./ci#blocking-a-merge)'s
+`--require-tag` rule matches on.
+
+**Ownership metadata** comes from four `piwi:` annotations — `owner`, `priority`, `feature` and `link`. Where a tag
+groups tests, this says who answers for one. It shows as badges wherever the test is listed and is carried into
+[pull-request feedback](./ci#pull-request-feedback), so a failure comment names the team rather than leaving a reviewer
+to guess.
+
+Both are optional and neither changes how a test runs. Details and the exact accepted values are in
+[Reporter → Test tags](./reporter#test-tags).
+
 ## Where each concept lives in the UI
 
 | Concept | URL | Docs |

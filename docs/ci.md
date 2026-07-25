@@ -168,6 +168,90 @@ e2e:
 - run: cat piwi-run.json   # { runUrl, runId, projectId, projectName, status, ciBuildUrl }
 ```
 
+## Pull-request feedback
+
+The run URL above is a link somebody has to click. Piwi can instead post the result onto the pull request itself, which
+is where the person who broke the test already is.
+
+Turn it on in **Settings → Pull requests** (off by default). Two things get posted when a run finishes on a branch with
+an open pull request:
+
+- **A summary comment** — one comment per pull request, edited on each later run rather than appended, so a busy branch
+  doesn't collect a comment per push.
+- **A commit status** — passed/failed against the run's commit, so the pull request shows the result in its checks list.
+  Required for a branch-protection rule.
+
+What the comment says, in this order:
+
+1. **New failures** — failing now, passing in the last green run. This change caused them.
+2. **Pre-existing failures** — already broken before this change. Separated so nobody debugs someone else's bug.
+3. **Flaky** — passed only on a retry.
+4. **New failure clusters** — root causes never seen before in this project.
+
+Each failure carries its error, its owner and tags when the test declares them (see
+[ownership metadata](./reporter#ownership-metadata-piwi-annotations)), and — when a locator broke — the
+[replacement locator](./reporter#locator-healing) captured from the last passing run. The footer reports the CI minutes
+the run spent on waits and failed attempts.
+
+### What it needs
+
+- **`PIWI_SITE_URL`** set on the dashboard. Every link in the comment is built from it; without it nothing is posted,
+  because a comment full of unreachable links is worse than no comment.
+- **An SCM token with write access** to the repository — set globally, or per project on the project's edit page. The
+  same token the [AI diagnosis](./ai-diagnosis) SCM integration uses, but it now needs write scope: `repo` on GitHub,
+  `api` on GitLab.
+- **Branch and commit metadata on the run**, which the reporter [detects automatically](#what-gets-detected).
+
+GitHub and GitLab are supported. On Bitbucket the settings page still saves, but nothing is posted — the provider has no
+implementation yet.
+
+Piwi only ever edits a comment it wrote itself (identified by a hidden marker), so a human comment is never overwritten.
+Everything here is best-effort: the run is already stored by the time it runs, and a missing token or an unreachable
+host is logged rather than failing your pipeline.
+
+## Blocking a merge
+
+`npx playwright test` exits non-zero when anything failed. That is the only question it can answer. A merge policy
+usually asks harder ones — *did this change break something that was working*, *did a critical test fail*, *did a new
+failure cause appear* — and those need the run history, so the dashboard evaluates them.
+
+```yaml
+- run: npx playwright test
+  env:
+    PIWI_DASHBOARD_URL: https://piwi.example.com
+    PIWI_OUTPUT_FILE: piwi-run.json      # records which run to gate on
+
+- run: npx piwi gate --require-tag @critical --max-new-regressions 0
+  if: always()
+  env:
+    PIWI_DASHBOARD_URL: https://piwi.example.com
+    PIWI_API_KEY: ${{ secrets.PIWI_API_KEY }}
+```
+
+The command reads the run id from `PIWI_OUTPUT_FILE` (or `--run-id`, or `./piwi-run.json`), asks the dashboard to
+evaluate the policy, prints every violation, and exits.
+
+| Rule | Fails the build when |
+|---|---|
+| `--require-tag <tags>` | Any test carrying one of these tags failed |
+| `--max-failed <n>` | More than `n` tests failed |
+| `--max-new-regressions <n>` | More than `n` tests newly started failing versus the last green run |
+| `--max-new-flaky <n>` | More than `n` tests newly started passing only on retry |
+| `--fail-on-new-cluster` | This run introduced a failure cluster never seen before |
+
+At least one rule is required — an empty policy is rejected rather than passing. Exit codes are part of the contract:
+**0** satisfied, **1** violated, **2** could not evaluate. A gate that cannot run never reports success, so a
+misconfigured pipeline fails loudly instead of waving every merge through.
+
+Two behaviors worth knowing:
+
+- **A test that failed and then passed on retry satisfies `--require-tag`.** Flakiness is what `--max-new-flaky` is
+  for; treating a recovered test as a failure would make the rule unsatisfiable on any suite with retries.
+- **A required tag that matches no test in the run is a violation.** A misspelled `--require-tag @critcal` would
+  otherwise pass silently, which is the worst outcome for a rule meant to block merges.
+
+`npx piwi gate --help` lists every option. Add `--json` to get the raw result for a pipeline to parse.
+
 ## Notifying people instead
 
 If all you want is "tell the team when main goes red", you don't need any of the above — configure a
@@ -199,3 +283,4 @@ job really died. Those runs are excluded by the **full runs only** filter in
 - [Authentication](./authentication) — creating the API key CI uses
 - [Concepts → Test run](./concepts#test-run) — why shards are one run
 - [Notifications](./notifications) — alerting without touching the pipeline
+- [Test tags & ownership](./reporter#test-tags) — what `--require-tag` matches on
