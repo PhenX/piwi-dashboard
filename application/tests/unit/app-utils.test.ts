@@ -10,6 +10,7 @@ import {
   testCaseCategoryColor,
   clusterStatusColor,
   clusterErrorTypeColor,
+  fixVerificationBadge,
   getFileApiPath,
   getTraceViewerUrl,
   errorMessage,
@@ -158,6 +159,29 @@ describe('cluster color helpers', () => {
     expect(clusterErrorTypeColor('navigation')).toBe('secondary');
     expect(clusterErrorTypeColor('crash')).toBe('error');
     expect(clusterErrorTypeColor(null)).toBe('neutral');
+  });
+
+  describe('fixVerificationBadge', () => {
+    // Null is what keeps the resolution block off the clusters nobody fixed.
+    test('is null until a fix has landed', () => {
+      expect(fixVerificationBadge(null)).toBeNull();
+      expect(fixVerificationBadge(undefined)).toBeNull();
+      expect(fixVerificationBadge('something-else')).toBeNull();
+    });
+
+    test('only the corroborated verdict claims the fix was verified', () => {
+      expect(fixVerificationBadge('diagnosis-verified')).toMatchObject({ label: 'Fix verified', color: 'success' });
+      // "Stopped failing" must not read as a verified fix — nothing says which
+      // change did it.
+      expect(fixVerificationBadge('stopped-failing')).toMatchObject({ label: 'Stopped failing', color: 'info' });
+      expect(fixVerificationBadge('regressed')).toMatchObject({ label: 'Regressed', color: 'error' });
+    });
+
+    test('every verdict explains itself', () => {
+      for (const verdict of ['diagnosis-verified', 'stopped-failing', 'regressed']) {
+        expect(fixVerificationBadge(verdict)!.hint.length, verdict).toBeGreaterThan(20);
+      }
+    });
   });
 });
 

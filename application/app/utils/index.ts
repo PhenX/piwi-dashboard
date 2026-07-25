@@ -180,6 +180,48 @@ export function clusterStatusColor(status: string | null | undefined): 'success'
   return (status && map[status]) || 'neutral';
 }
 
+/**
+ * How a landed fix should be presented.
+ *
+ * The three verdicts are deliberately not interchangeable: only
+ * `diagnosis-verified` claims the change is the one that fixed it, so it is the
+ * only one shown in a confident colour. `stopped-failing` says nothing more
+ * than that the tests went green, and the wording has to stay that modest or
+ * the badge over-claims.
+ *
+ * Returns null when nothing has landed, which is what keeps the resolution
+ * block absent rather than empty on the clusters nobody has fixed yet.
+ */
+export function fixVerificationBadge(
+  verification: string | null | undefined,
+): { label: string; color: 'success' | 'info' | 'error'; icon: string; hint: string } | null {
+  switch (verification) {
+    case 'diagnosis-verified':
+      return {
+        label: 'Fix verified',
+        color: 'success',
+        icon: 'i-lucide-badge-check',
+        hint: 'The tests went green and the change touched the files the diagnosis named.',
+      };
+    case 'stopped-failing':
+      return {
+        label: 'Stopped failing',
+        color: 'info',
+        icon: 'i-lucide-check',
+        hint: 'The tests went green. Nothing corroborates which change did it.',
+      };
+    case 'regressed':
+      return {
+        label: 'Regressed',
+        color: 'error',
+        icon: 'i-lucide-undo-2',
+        hint: 'A fix was recorded for this cluster and it did not hold — the failure came back.',
+      };
+    default:
+      return null;
+  }
+}
+
 /** Badge color for a normalized failure-cluster error type (timeout/assertion/…). */
 export function clusterErrorTypeColor(
   type: string | null | undefined,

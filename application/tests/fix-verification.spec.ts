@@ -129,4 +129,23 @@ test.describe.serial('Fix verification', () => {
     const after = (await clusters(request, projectId)).find((c) => c.id === before.id)!;
     expect(after.fixVerification).toBe('regressed');
   });
+
+  // The verdict is only worth recording if someone can see it: for most of its
+  // life this feature wrote columns no page ever read.
+  test('the cluster page shows the verdict and how long the cluster was open', async ({ page, request }) => {
+    const cluster = (await clusters(request, projectId)).find((c) => c.fixVerification === 'regressed')!;
+
+    await page.goto(`/failure-clusters/${cluster.id}`);
+    await expect(page.getByText('Regressed').first()).toBeVisible();
+    await expect(page.getByText(/open for /).first()).toBeVisible();
+    await expect(page.getByText(new RegExp(`run #${cluster.fixLandedRunId}`)).first()).toBeVisible();
+  });
+
+  test('the project cluster list shows the verdict next to the triage status', async ({ page, request }) => {
+    const cluster = (await clusters(request, projectId)).find((c) => c.fixVerification === 'regressed')!;
+
+    await page.goto(`/projects/${projectId}?tab=failure-clusters`);
+    const row = page.locator('tr', { hasText: cluster.signature.slice(0, 30) }).first();
+    await expect(row.getByText('Regressed')).toBeVisible();
+  });
 });
