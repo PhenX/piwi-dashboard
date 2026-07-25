@@ -136,3 +136,23 @@ export async function withResolvedOwners<T extends OwnableTest>(
     return { ...row, owner: entry.owner, ownerSource: entry.source };
   });
 }
+
+/**
+ * Fill in a fix plan's owner from CODEOWNERS when the tests declared none.
+ *
+ * Lives here rather than in `fix-plan.ts` so that module stays free of the SCM
+ * client (and its node-only crypto), which is what lets the in-browser demo
+ * serve fix plans at all.
+ */
+export async function enrichFixPlanOwnership<
+  T extends { ownership: { owner: string | null; source: string | null }; failingTests: Array<{ filePath: string }> },
+>(db: DbClient, projectId: number, plan: T): Promise<T> {
+  if (plan.ownership.owner || plan.failingTests.length === 0) return plan;
+
+  const resolved = await resolveOwners(db, projectId, plan.failingTests).catch(() => new Map());
+  for (const test of plan.failingTests) {
+    const owner = resolved.get(test)?.owner;
+    if (owner) return { ...plan, ownership: { owner, source: 'codeowners' } };
+  }
+  return plan;
+}

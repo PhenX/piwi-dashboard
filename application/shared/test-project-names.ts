@@ -56,6 +56,7 @@ export const PROJECT = {
   AI_DIAGNOSIS: 'ai-diagnosis-test',
   EXTRACT_CASES: 'extract-cases-test',
   FAILURE_CLUSTERS: 'failure-clusters-test',
+  FIX_PLAN: 'fix-plan-test',
   FIX_VERIFICATION: 'fix-verification-test',
   FLAKY_BOARD: 'flaky-board-test',
   GATE_POLICY: 'gate-policy-test',

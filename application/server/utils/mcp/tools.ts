@@ -8,6 +8,8 @@ import {
   getProjectSpecHealth,
 } from '#shared/handlers/projects';
 import { parseTagFilter } from '#shared/utils/tag-filter';
+import { buildFixPlan } from '../fix-plan';
+import { enrichFixPlanOwnership } from '../scm/ownership';
 import { getNetworkRequests, getFailureGroups } from '#shared/handlers/test-runs';
 import { getTestCase, getTestRunCaseTraces, getTestCaseStabilityTrend } from '#shared/handlers/test-cases';
 import {
@@ -754,6 +756,21 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       ),
       locatorHealing: healingResults.length > 0 ? healingResults : null,
     });
+  },
+
+  // ── get_fix_plan ───────────────────────────────────────────────────────────
+  async get_fix_plan(db, params, ctx) {
+    const clusterId = numericParam(params.clusterId, 'clusterId');
+    const [cluster] = await db
+      .select({ projectId: failureClusters.projectId })
+      .from(failureClusters)
+      .where(eq(failureClusters.id, clusterId));
+    if (!cluster) throw new Error('Cluster not found');
+    assertProject(ctx, cluster.projectId);
+
+    const plan = await buildFixPlan(db, clusterId);
+    if (!plan) throw new Error('Cluster not found');
+    return enrichFixPlanOwnership(db, cluster.projectId, plan);
   },
 
   // ── get_cluster_diagnosis ──────────────────────────────────────────────────

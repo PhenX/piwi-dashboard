@@ -17,6 +17,7 @@ import {
 } from '#shared/handlers/project-assignments';
 import { getDemoDb } from '../db.client';
 import { getLocatorHealing, saveLocatorPick } from '~~/server/utils/locator-healing';
+import { buildFixPlan } from '~~/server/utils/fix-plan';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
 import { apiGetDemoTraceStacks, apiGetDemoTraceNetwork, apiGetDemoTraceNetworkBody } from './trace-insights';
@@ -648,6 +649,14 @@ const routes: RouteEntry[] = [
     method: 'DELETE',
     pattern: /^\/api\/markers\/(\d+)$/,
     handler: async (m) => deleteMarker(await getDemoDb(), +m[1]!),
+  },
+
+  // Fix plan. Ownership stays annotation-only here — CODEOWNERS resolution
+  // needs an SCM client the browser has no way to reach.
+  {
+    method: 'GET',
+    pattern: /^\/api\/failure-clusters\/(\d+)\/fix-plan$/,
+    handler: async (m) => buildFixPlan(await getDemoDb(), +m[1]!),
   },
 
   // Quarantine. The demo has no CI to gate, so candidates are omitted — the
