@@ -47,9 +47,12 @@ Open `http://localhost:3000`. The SQLite database and file storage are created a
 | Tag       | Description                            |
 |-----------|----------------------------------------|
 | `latest`  | Latest stable release                  |
-| `0.11.0`  | Exact version (pinned, recommended)    |
-| `0.11`    | Latest patch for a minor version       |
+| `0.18.2`  | Exact version (pinned, recommended)    |
+| `0.18`    | Latest patch for a minor version       |
 | `0`       | Latest release for a major version     |
+
+The same image is mirrored to the GitHub Container Registry as `ghcr.io/piwitests/platform`, which also
+carries an `edge` tag built from `main`.
 
 ---
 

@@ -156,6 +156,24 @@ look back, you don't need any of this.
 The longer version, including where Piwi loses, is in
 [Why Piwi?](https://piwitests.github.io/comparison).
 
+## Published artifacts
+
+Everything below is built and published from this repository on each release.
+
+| Artifact | Registry | What it is |
+|---|---|---|
+| [`@piwitests/reporter`](https://www.npmjs.com/package/@piwitests/reporter) | npm | The Playwright reporter — add it to `playwright.config.ts` |
+| [`@piwitests/server`](https://www.npmjs.com/package/@piwitests/server) | npm | The dashboard server, runnable with `npx @piwitests/server` |
+| [`phenx/piwitests-server`](https://hub.docker.com/r/phenx/piwitests-server) | Docker Hub | The server container (`linux/amd64`, `linux/arm64`) |
+| [`ghcr.io/piwitests/platform`](https://github.com/PiwiTests/platform/pkgs/container/platform) | GHCR | The same container, mirrored — plus an `edge` tag built from `main` |
+| [`@piwitests/instrumentation`](https://www.npmjs.com/package/@piwitests/instrumentation) | npm | Optional: sends your Nitro/Nuxt backend's logs into a test run |
+| [`PiwiTests.Instrumentation.AspNetCore`](https://www.nuget.org/packages/PiwiTests.Instrumentation.AspNetCore) | NuGet | Optional: the same for an ASP.NET Core backend |
+| Desktop app (`.msi`, `.dmg`) | [GitHub Releases](https://github.com/PiwiTests/platform/releases/latest) | The server bundled in a native window — no Docker or Node |
+
+The two instrumentation packages are optional and only needed for
+[backend log capture](https://piwitests.github.io/backend-logs). Both container registries carry the
+same images; use whichever your organization prefers.
+
 ## Project status
 
 Pre-1.0 and under active development: expect occasional breaking changes between minor versions, pin a

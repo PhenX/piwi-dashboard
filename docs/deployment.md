@@ -28,16 +28,43 @@ The dashboard will be available at `http://localhost:3000`.
 
 > **Linux hosts:** without the `chown`, Docker auto-creates `.data` owned by `root` and the container (non-root UID 1001) can't write to it. Docker Desktop on Windows/macOS handles this automatically. See [Permission issues with volumes](#permission-issues-with-volumes) if you hit a permission error.
 
+### Registries
+
+The same multi-arch image is published to two registries — use whichever your organization prefers:
+
+::: code-group
+
+```bash [Docker Hub]
+docker pull phenx/piwitests-server:latest
+```
+
+```bash [GHCR]
+docker pull ghcr.io/piwitests/platform:latest
+```
+
+:::
+
+GHCR additionally carries an **`edge`** tag rebuilt from every push to `main`. It's useful for trying an
+unreleased fix; don't run it in production — it has had no release testing and can change under you.
+
 ### Available tags
 
-| Tag | Description |
-|-----|-------------|
-| `latest` | Latest stable release |
-| `0.9.0` | Specific version (semver) |
-| `0.9` | Latest patch of a minor version |
-| `0` | Latest release of the major version |
+| Tag | Description | Docker Hub | GHCR |
+|-----|-------------|:---:|:---:|
+| `latest` | Latest stable release | ✅ | ✅ |
+| `0.18.2` | Specific version (semver) | ✅ | ✅ |
+| `0.18` | Latest patch of a minor version | ✅ | ✅ |
+| `0` | Latest release of the major version | ✅ | ✅ |
+| `edge` | Built from `main`, unreleased | — | ✅ |
 
-Pin a specific version in production; [tags on Docker Hub](https://hub.docker.com/r/phenx/piwitests-server/tags).
+Pin a specific version in production. Browse the published tags on
+[Docker Hub](https://hub.docker.com/r/phenx/piwitests-server/tags) or
+[GHCR](https://github.com/PiwiTests/platform/pkgs/container/platform).
+
+::: tip
+GHCR also lists `buildcache-linux-amd64` / `buildcache-linux-arm64`. Those are BuildKit layer caches for
+the build itself, not runnable images — ignore them.
+:::
 
 ### Image details
 
@@ -47,7 +74,7 @@ Pin a specific version in production; [tags on Docker Hub](https://hub.docker.co
 | Build type | Multistage (builder + production stages) |
 | Image size | ~400 MB |
 | Platforms | `linux/amd64`, `linux/arm64` |
-| Registry | `phenx/piwitests-server` |
+| Registries | `phenx/piwitests-server`, `ghcr.io/piwitests/platform` |
 
 ### Volumes
 
