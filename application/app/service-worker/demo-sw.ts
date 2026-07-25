@@ -117,8 +117,13 @@ self.addEventListener('fetch', (event) => {
     (async () => {
       let body: unknown;
       if (method !== 'GET') {
+        // The import endpoint uploads an archive, so multipart bodies reach the
+        // router as `FormData`; everything else is JSON.
+        const contentType = event.request.headers.get('content-type') ?? '';
         try {
-          body = await event.request.clone().json();
+          body = contentType.includes('multipart/form-data')
+            ? await event.request.clone().formData()
+            : await event.request.clone().json();
         } catch {
           body = undefined;
         }

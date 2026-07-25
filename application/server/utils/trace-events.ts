@@ -30,7 +30,8 @@ export interface TraceConsoleEntry {
   type: string;
   text: string;
   timestamp: number;
-  location?: string;
+  /** Legacy traces carry a preformatted string; modern ones a structured location. */
+  location?: string | { url?: string; lineNumber?: number; columnNumber?: number };
 }
 
 export interface TraceNetworkRequest {
@@ -61,6 +62,32 @@ export interface TraceFrameSnapshot {
   viewport?: { width: number; height: number };
 }
 
+/**
+ * A `context-options` header. Every trace opens with one per recorded context:
+ * `origin: 'testRunner'` carries the test-level facts (timeout, start), while
+ * `origin: 'library'` carries the browser context (name, viewport, locale) and
+ * the display title `file:line › suite › … › test`.
+ */
+export interface TraceContextOptions {
+  origin?: string;
+  browserName?: string;
+  title?: string;
+  /** Epoch ms when the context opened — the anchor for the monotonic clock. */
+  wallTime?: number;
+  /** Monotonic ms at the same instant as `wallTime`. */
+  monotonicTime?: number;
+  playwrightVersion?: string;
+  platform?: string;
+  testTimeout?: number;
+  options?: Record<string, unknown>;
+}
+
+/** A top-level `error` event: the failure the trace was recorded for. */
+export interface TraceErrorEvent {
+  message?: string;
+  stack?: Array<{ file?: string; line?: number; column?: number }>;
+}
+
 export interface ParsedTraceData {
   actions: TraceAction[];
   consoleEntries: TraceConsoleEntry[];
@@ -71,6 +98,10 @@ export interface ParsedTraceData {
   failingAction: TraceAction | null;
   /** Failing action index in `actions` array for nearby context. */
   failingActionIndex: number;
+  /** `context-options` headers in trace order (runner context first). */
+  contexts: TraceContextOptions[];
+  /** Top-level `error` events — present when the trace recorded a failure. */
+  errors: TraceErrorEvent[];
   /** All parsed events (raw), for building the summary. */
   eventCount: number;
   /** True when the failing action was identified by timeout fallback (no action had an error). */
@@ -121,6 +152,8 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
   const consoleEntries: TraceConsoleEntry[] = [];
   const networkRequests: TraceNetworkRequest[] = [];
   const frameSnapshots: TraceFrameSnapshot[] = [];
+  const contexts: TraceContextOptions[] = [];
+  const errors: TraceErrorEvent[] = [];
 
   // Map callId → beforeSnapshot/afterSnapshot from before/after events
   const beforeSnapshots = new Map<string, string>();
@@ -194,8 +227,34 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
       if (action && message) (action.log ??= []).push(message);
     }
 
+    if (type === 'context-options') {
+      contexts.push(evt as TraceContextOptions);
+    }
+
+    if (type === 'error' && (typeof evt.message === 'string' || Array.isArray(evt.stack))) {
+      errors.push(evt as TraceErrorEvent);
+    }
+
     if (type === 'frame-snapshot' && evt.snapshot && typeof evt.snapshot === 'object') {
       frameSnapshots.push(evt.snapshot as TraceFrameSnapshot);
+    }
+
+    // Modern traces emit console messages as their own top-level event; older
+    // ones wrap them in a generic `event` with `method: 'console'` (below).
+    if (type === 'console') {
+      const text =
+        (evt.text as string) ??
+        (Array.isArray(evt.args)
+          ? (evt.args as Array<Record<string, unknown>>).map((a) => String(a?.value ?? a?.preview ?? '')).join(' ')
+          : '');
+      if (text) {
+        consoleEntries.push({
+          type: (evt.messageType as string) || 'log',
+          text,
+          timestamp: (evt.time as number) ?? 0,
+          location: evt.location as TraceConsoleEntry['location'],
+        });
+      }
     }
 
     if (type === 'action') {
@@ -305,6 +364,8 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
     consoleEntries,
     networkRequests,
     frameSnapshots,
+    contexts,
+    errors,
     failingAction,
     failingActionIndex: failingAction ? failingIndex : -1,
     eventCount: events.length,

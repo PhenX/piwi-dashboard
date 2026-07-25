@@ -33,6 +33,7 @@ import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fi
 import { durationStats } from '#shared/utils/stats';
 import { countFailedFromTally, sumFailedAndTimedOut } from '#shared/utils/test-counts';
 import { syncAutoMarkersForRun } from '#shared/handlers/markers';
+import { joinSuitePath } from '#shared/utils/suites';
 import {
   cancelInstanceRuns as sharedCancelInstanceRuns,
   getOrCreateFailureClusters,
@@ -253,9 +254,15 @@ export async function apiBeginTestRun(
 
 // ── persistRunCases (mirrors server/utils/persist-run-cases.ts) ────────────
 
-interface RunCaseInput {
+export interface RunCaseInput {
   filePath: string;
+  /** Describe blocks wrapping the test; part of a case's identity. */
+  suitePath?: string[] | null;
   title: string;
+  timeout?: number | null;
+  wastedTimeMs?: number | null;
+  testSource?: string | null;
+  testAnnotations?: unknown;
   status: string;
   duration?: number | null;
   error?: string | null;
@@ -278,7 +285,7 @@ interface RunCaseInput {
   locatorSnapshots?: unknown;
 }
 
-async function persistRunCases(
+export async function persistRunCases(
   db: DemoDb,
   projectId: number,
   testRunId: number,
@@ -295,7 +302,7 @@ async function persistRunCases(
 
   const existingCaseMap = new Map<string, (typeof existingCaseRows)[0]>();
   for (const tc of existingCaseRows) {
-    existingCaseMap.set(`${tc.filePath}::${tc.title}`, tc);
+    existingCaseMap.set(`${tc.filePath}::${tc.suitePath ?? ''}::${tc.title}`, tc);
   }
 
   let existingRunCaseSet: Set<string> | null = null;
@@ -330,7 +337,8 @@ async function persistRunCases(
   }> = [];
 
   for (const c of cases) {
-    const cacheKey = `${c.filePath}::${c.title}`;
+    const suitePath = joinSuitePath(c.suitePath);
+    const cacheKey = `${c.filePath}::${suitePath}::${c.title}`;
     let shared = existingCaseMap.get(cacheKey);
 
     if (!shared) {
@@ -339,6 +347,7 @@ async function persistRunCases(
         .values({
           projectId,
           filePath: c.filePath,
+          suitePath,
           title: c.title,
         })
         .returning();
@@ -400,7 +409,11 @@ async function persistRunCases(
           DEFAULT_INGEST_LIMITS,
         ) ?? null,
       ariaSnapshot: capText(c.ariaSnapshot, DEFAULT_INGEST_LIMITS.ariaSnapshotChars),
+      testSource: capText(c.testSource, DEFAULT_INGEST_LIMITS.testSourceChars),
       browser: c.browser ?? null,
+      timeout: c.timeout ?? null,
+      wastedTimeMs: c.wastedTimeMs ?? null,
+      testAnnotations: (c.testAnnotations as never) ?? null,
       workerIndex: c.workerIndex ?? null,
       shardIndex: c.shardIndex ?? null,
       startedAt: c.startedAt ?? null,

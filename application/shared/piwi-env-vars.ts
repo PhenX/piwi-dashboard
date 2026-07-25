@@ -712,6 +712,16 @@ export const PIWI_ENV_VARS = {
     min: 10,
     max: 5000,
   },
+  PIWI_IMPORT_MAX_BYTES: {
+    description:
+      'Max size of a single multipart upload (report upload or blob-report import), in bytes. Lower it to match a reverse proxy that rejects large bodies, so the import page rejects an oversized archive before uploading it.',
+    category: 'ingest',
+    type: 'number',
+    default: String(500 * 1024 * 1024),
+    min: 1024 * 1024,
+    max: 5 * 1024 * 1024 * 1024,
+    since: '0.19.0',
+  },
   PIWI_INGEST_MAX_CONSOLE_ENTRY_CHARS: {
     description: 'Max characters stored per console entry.',
     category: 'ingest',

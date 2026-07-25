@@ -190,13 +190,15 @@ tokens) — recommended in production even without auth, falling back to an inse
 
 Where to add things in subsystems whose wiring spans several files:
 
-| Change                        | Touch                                                                                                                                                                                                    |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Flaky root-cause category     | `classifyFlakyRootCause()` + keyword arrays in `server/utils/flaky-classify.ts`; `rootCause` on `FlakyTest` (`types/api.ts`); `FlakyTestsList.vue` colour map                                            |
-| Flaky impact scoring          | `getProjectFlakyTests` (`shared/handlers/projects.ts`) — sorts by impact desc; `impact`, `wastedCiMinutes`, `avgFailedDurationMs` on `FlakyTest`                                                         |
-| Regression signals            | `computeRegressionSignals()` (`server/utils/compute-regression-signals.ts`), called from `finish.post.ts`; surfaced by `getTestRun` / `getTestRunCase` mappers                                           |
-| A computed AI-context section | Update the `SectionId` union (`ai-context.types.ts`), `DIAGNOSIS_SECTIONS` (`diagnosis-sections.ts`) and `DiagnosisContextCoverage` (`types/api.ts`) **in one batch** before writing the section builder |
-| Sharding behaviour            | See the sharding invariants below                                                                                                                                                                        |
+| Change                        | Touch                                                                                                                                                                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Flaky root-cause category     | `classifyFlakyRootCause()` + keyword arrays in `server/utils/flaky-classify.ts`; `rootCause` on `FlakyTest` (`types/api.ts`); `FlakyTestsList.vue` colour map                                                                                                            |
+| Flaky impact scoring          | `getProjectFlakyTests` (`shared/handlers/projects.ts`) — sorts by impact desc; `impact`, `wastedCiMinutes`, `avgFailedDurationMs` on `FlakyTest`                                                                                                                         |
+| Regression signals            | `computeRegressionSignals()` (`server/utils/compute-regression-signals.ts`), called from `finish.post.ts`; surfaced by `getTestRun` / `getTestRunCase` mappers                                                                                                           |
+| A computed AI-context section | Update the `SectionId` union (`ai-context.types.ts`), `DIAGNOSIS_SECTIONS` (`diagnosis-sections.ts`) and `DiagnosisContextCoverage` (`types/api.ts`) **in one batch** before writing the section builder                                                                 |
+| Sharding behaviour            | See the sharding invariants below                                                                                                                                                                                                                                        |
+| Blob-report import            | `server/utils/blob-report.ts` (parse) + `import-evidence.ts` (recovered evidence); everything after parsing in `shared/handlers/import-runs.ts`; endpoints `test-runs/import[.post]` and `import/check.post.ts`; page `projects/[id]/import.vue` + `useBlobReportImport` |
+| Trace-file import             | `server/utils/trace-import.ts` — reconstructs an execution from a trace's `context-options`/`error` events; grouped into one run by the `importGroup` field on `test-runs/import.post.ts`                                                                                |
 
 ## Subsystem invariants
 

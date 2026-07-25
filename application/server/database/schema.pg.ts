@@ -67,6 +67,7 @@ export const testRuns = pgTable(
     instanceId: text('instance_id'), // Unique identifier for the reporter instance that created this run
     playwrightVersion: text('playwright_version'), // Playwright framework version used for this run
     reporterVersion: text('reporter_version'), // Piwi reporter package version that produced this run
+    importHash: text('import_hash'), // SHA-256 of the imported archive; null for reported runs. Makes re-importing a no-op.
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -77,6 +78,7 @@ export const testRuns = pgTable(
     projectStartTimeIdx: index('idx_test_runs_project_start').on(table.projectId, table.startTime),
     startTimeIdx: index('idx_test_runs_start_time').on(table.startTime),
     statusIdx: index('idx_test_runs_status').on(table.status),
+    importHashIdx: uniqueIndex('idx_test_runs_import_hash').on(table.projectId, table.importHash),
   }),
 );
 

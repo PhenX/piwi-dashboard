@@ -94,6 +94,7 @@ export default defineConfig({
           { text: 'Capture fixtures', link: '/capture-fixtures' },
           { text: 'CI & sharding', link: '/ci' },
           { text: 'Backend logs', link: '/backend-logs' },
+          { text: 'Importing past runs', link: '/importing-runs' },
         ],
       },
       {

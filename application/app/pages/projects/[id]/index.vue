@@ -33,6 +33,7 @@ const confirmDeleteRunId = ref<number | null>(null);
 const { isAdmin, isReporter } = useAuth();
 const runtimeConfig = useRuntimeConfig();
 const canDelete = computed(() => !runtimeConfig.public.authEnabled || isAdmin.value);
+const canImport = canDelete;
 const showDeleteProjectModal = ref(false);
 const deleteProjectConfirmInput = ref('');
 const deletingProject = ref(false);
@@ -643,6 +644,16 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                         deleteProjectConfirmInput = '';
                         showDeleteProjectModal = true;
                       },
+                    },
+                  ]
+                : []),
+              ...(canImport
+                ? [
+                    {
+                      label: 'Import',
+                      icon: 'i-lucide-import',
+                      variant: 'outline' as const,
+                      to: `/projects/${projectId}/import`,
                     },
                   ]
                 : []),
