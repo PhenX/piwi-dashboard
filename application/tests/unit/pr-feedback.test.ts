@@ -34,6 +34,7 @@ function summary(overrides: Partial<PrSummaryInput> = {}): PrSummaryInput {
     preExisting: [],
     flaky: [],
     newClusters: [],
+    fixedClusters: [],
     wastedMinutes: null,
     hasBaseline: true,
     ...overrides,
@@ -167,6 +168,52 @@ describe('buildPrComment', () => {
     // no origin to build one from.
     expect(body).toContain('- plain — `tests/checkout.spec.ts`');
     expect(body).not.toContain('test-run-cases');
+  });
+});
+
+describe('buildPrComment — fixed clusters', () => {
+  test('reports what this change closed, which is the answer to "did my fix work?"', () => {
+    const body = buildPrComment(
+      summary({
+        fixedClusters: [
+          {
+            id: 9,
+            label: 'Timeout waiting for #pay',
+            testCount: 4,
+            verification: 'stopped-failing',
+            timeToResolutionMs: 3 * 60 * 60 * 1000,
+          },
+        ],
+      }),
+    );
+    expect(body).toContain('Fixed by this change (1)');
+    expect(body).toContain('https://piwi.example.com/failure-clusters/9');
+    expect(body).toContain('4 tests');
+    expect(body).toContain('open 3h');
+  });
+
+  test('calls out when the change matched the diagnosed file', () => {
+    const body = buildPrComment(
+      summary({
+        fixedClusters: [
+          { id: 9, label: 'Timeout', testCount: 1, verification: 'diagnosis-verified', timeToResolutionMs: null },
+        ],
+      }),
+    );
+    expect(body).toContain('matches the diagnosed change');
+  });
+
+  test('says nothing when no cluster was closed', () => {
+    expect(buildPrComment(summary())).not.toContain('Fixed by this change');
+    expect(buildPrComment(summary({ fixedClusters: [] }))).not.toContain('Fixed by this change');
+  });
+
+  // Several call sites build this shape; a summary without the field must
+  // render rather than throw.
+  test('tolerates a summary built without the field', () => {
+    const withoutField = summary();
+    delete (withoutField as { fixedClusters?: unknown }).fixedClusters;
+    expect(() => buildPrComment(withoutField)).not.toThrow();
   });
 });
 

@@ -38,6 +38,12 @@ export interface RunFinishedPayload {
   isDefaultBranch?: boolean;
   flakinessRate?: number; // 0-1
   topFailures?: TopFailure[];
+  /**
+   * Distinct owners of the run's failing tests — from `piwi:owner` where a test
+   * declares one, otherwise CODEOWNERS. Lets a subscription route a run only to
+   * the team responsible for what broke.
+   */
+  owners?: string[];
 }
 
 export interface ClusterNewPayload {

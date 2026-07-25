@@ -4,6 +4,15 @@ Piwi Dashboard is under active development (pre-1.0). This page shows direction,
 
 ## Recently shipped
 
+- **Fix verification** — a cluster whose every affected test passes again is recorded as fixed, with the commit and how
+  long it was open, and distinguishes "stopped failing" from "the diagnosed change is what fixed it". A fix that does
+  not hold is marked regressed.
+- **Quarantine with an exit ramp** — a quarantined test keeps running and keeps reporting; it is only excluded from the
+  CI gate's verdict. Passing streaks accumulate, a release is proposed once earned, and the debt is reported.
+- **Ownership from CODEOWNERS** — who answers for a failing test, derived from the repository with no test edits, used
+  in pull-request comments, the flaky leaderboard and notification routing.
+- **Fix plans for agents** — one call returning the diagnosis, validated patch, locator replacement, failing tests and
+  the command that verifies the work.
 - **Pull-request feedback** — when a run finishes on a branch with an open pull request, Piwi posts a summary comment
   (new failures separated from pre-existing ones, each with its owner and the suggested replacement locator) and a
   commit status. GitHub and GitLab; off by default.

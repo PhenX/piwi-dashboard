@@ -56,6 +56,8 @@ export interface RunScmMetadata {
 /** `test_runs.metadata` JSON — the fields the server reads. */
 export interface RunMetadata {
   scm?: RunScmMetadata | null;
+  /** The repository's default branch, recorded at the top level by the reporter. */
+  defaultBranch?: string | null;
   ci?: { provider?: string | null } | null;
   htmlReport?: { projects?: Array<{ use?: { browserName?: string | null } | null }> } | null;
 }

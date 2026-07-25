@@ -1,16 +1,19 @@
 import { eq, and, inArray } from 'drizzle-orm';
+
+/** Failures scanned for ownership; well past what any comment or digest lists. */
+const OWNER_LOOKUP_LIMIT = 200;
 import { projects, testRuns, failureClusters, testRunsCases, testCases } from '../../database/schema';
 import { emitNotification } from './emit';
 import { buildTopFailures, truncateExcerpt, TOP_FAILURES_LIMIT } from '#shared/notification-events';
-import type { LibSQLDatabase } from 'drizzle-orm/libsql';
+import { resolveOwners } from '../scm/ownership';
+import type { DbClient } from '../../database';
 
 /**
  * Emit run.finished / run.failed / run.failed.default_branch notifications for a completed run,
  * plus cluster.new for any failure clusters first seen in this run.
  * Call this after the run status is finalized.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function emitRunNotifications(db: LibSQLDatabase<any>, runId: number): Promise<void> {
+export async function emitRunNotifications(db: DbClient, runId: number): Promise<void> {
   try {
     const [runRow] = await db.select().from(testRuns).where(eq(testRuns.id, runId));
     if (!runRow) return;
@@ -33,12 +36,23 @@ export async function emitRunNotifications(db: LibSQLDatabase<any>, runId: numbe
         error: testRunsCases.error,
         testCaseId: testRunsCases.testCaseId,
         executionId: testRunsCases.id,
+        owner: testCases.owner,
       })
       .from(testRunsCases)
       .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
       .where(and(eq(testRunsCases.testRunId, runId), inArray(testRunsCases.status, ['failed', 'timedout'])))
-      .limit(TOP_FAILURES_LIMIT);
-    const topFailures = buildTopFailures(failedRows);
+      .limit(OWNER_LOOKUP_LIMIT);
+
+    // The notification still names only the first few failures, but ownership
+    // is resolved across all of them — a subscription scoped to one team must
+    // not miss a run just because that team's failure ranked seventh.
+    const topFailures = buildTopFailures(failedRows.slice(0, TOP_FAILURES_LIMIT));
+    const resolvedOwners = await resolveOwners(db, runRow.projectId, failedRows).catch(() => new Map());
+    const owners = [
+      ...new Set(
+        failedRows.map((row) => resolvedOwners.get(row)?.owner).filter((owner): owner is string => Boolean(owner)),
+      ),
+    ];
 
     const runPayload = {
       runId,
@@ -52,6 +66,7 @@ export async function emitRunNotifications(db: LibSQLDatabase<any>, runId: numbe
       branch,
       isDefaultBranch,
       topFailures,
+      owners,
     };
 
     await emitNotification(db, 'run.finished', runPayload);

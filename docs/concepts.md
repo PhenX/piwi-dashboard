@@ -141,6 +141,15 @@ to guess.
 Both are optional and neither changes how a test runs. Details and the exact accepted values are in
 [Reporter → Test tags](./reporter#test-tags).
 
+**When a test declares no owner, Piwi reads your repository's CODEOWNERS instead.** Asking every team to annotate every
+test is how ownership features die; the repository already records who owns which files, and Piwi can read it because it
+runs inside your network with a token it already has. So ownership works on day one with no test edits, and a
+`piwi:owner` annotation still wins wherever a team wants to be explicit.
+
+That derived owner is used in [pull-request comments](./ci#pull-request-feedback), on the flaky leaderboard, and by the
+`owners` [notification filter](./notifications#subscriptions), which routes a run only to the team whose tests broke.
+It needs an [SCM token](./ai-diagnosis#scm-grounded-context); without one, ownership falls back to annotations alone.
+
 ## Where each concept lives in the UI
 
 | Concept | URL | Docs |

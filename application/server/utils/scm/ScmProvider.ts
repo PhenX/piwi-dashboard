@@ -1,3 +1,10 @@
+import {
+  CODEOWNERS_PATHS,
+  compileCodeowners,
+  parseCodeowners,
+  type CompiledCodeowners,
+} from '@piwitests/core/codeowners';
+
 export interface ChangedFile {
   filename: string;
   status: string;
@@ -136,5 +143,21 @@ export abstract class ScmProvider {
   /** Attach a status to a commit. Returns true when it was accepted. */
   async postCommitStatus(_sha: string, _status: ScmCommitStatus): Promise<boolean> {
     return false;
+  }
+
+  /**
+   * The repository's CODEOWNERS, compiled and ready to match, or `null` when
+   * the repository has none.
+   *
+   * Implemented once here rather than per provider: every host serves the file
+   * through `fetchFileAtRef`, which already caches, so this inherits caching
+   * and needs no provider-specific request.
+   */
+  async fetchCodeowners(ref: string): Promise<CompiledCodeowners | null> {
+    for (const path of CODEOWNERS_PATHS) {
+      const file = await this.fetchFileAtRef(path, ref);
+      if (file?.content?.trim()) return compileCodeowners(parseCodeowners(file.content));
+    }
+    return null;
   }
 }

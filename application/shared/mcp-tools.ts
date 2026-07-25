@@ -164,6 +164,18 @@ export const MCP_TOOL_DEFS = [
     },
   },
   {
+    name: 'get_fix_plan',
+    description:
+      'Everything needed to fix one failure cluster, in a single answer: the diagnosis and its validated patch, ranked locator replacements with the exact file and line to edit, the failing tests, the owning team, and the command that verifies the work. `verify.expectation` states what the dashboard records once those tests pass, so you can confirm the fix landed rather than guessing. Prefer this over assembling get_cluster + get_cluster_diagnosis + get_locator_healing yourself.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        clusterId: { type: 'number', description: 'Cluster ID from list_clusters or list_open_clusters' },
+      },
+      required: ['clusterId'],
+    },
+  },
+  {
     name: 'get_cluster_diagnosis',
     description:
       'Get the stored AI diagnosis for a failure cluster. Returns category, confidence, root cause, evidence, and suggested fix. Returns null if no diagnosis has been run yet.',

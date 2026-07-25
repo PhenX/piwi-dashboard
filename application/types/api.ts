@@ -1348,6 +1348,13 @@ export interface FlakyTest {
   score: number;
   lastFlakeAt: string | Date | null;
   rootCause: string | null;
+  /** Tags declared on the test, `@` stripped. */
+  tags?: string[] | null;
+  /** Effective owner — the `piwi:owner` annotation, else CODEOWNERS. */
+  owner?: string | null;
+  /** Which of the two the owner came from, or null when nothing owns it. */
+  ownerSource?: 'annotation' | 'codeowners' | null;
+  priority?: string | null;
   impact: number;
   wastedCiMinutes: number;
   avgFailedDurationMs: number;

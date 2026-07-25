@@ -50,6 +50,7 @@ Policy (at least one is required):
   --max-failed <n>         Fail when more than n tests failed
   --max-new-regressions <n>  Fail when more than n tests newly started failing
   --max-new-flaky <n>      Fail when more than n tests newly became flaky
+  --max-quarantined <n>    Fail when more than n tests are quarantined
   --fail-on-new-cluster    Fail when this run introduced a new failure cluster
 
 Other:
@@ -113,6 +114,7 @@ export function parseGateArgs(argv: string[], env: NodeJS.ProcessEnv): GateArgs 
     maxFailed: readCount(argv, '--max-failed'),
     maxNewRegressions: readCount(argv, '--max-new-regressions'),
     maxNewFlaky: readCount(argv, '--max-new-flaky'),
+    maxQuarantined: readCount(argv, '--max-quarantined'),
     failOnNewCluster: argv.includes('--fail-on-new-cluster'),
   };
 

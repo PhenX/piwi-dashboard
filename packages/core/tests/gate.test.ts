@@ -14,6 +14,8 @@ function facts(overrides: Partial<GateFacts> = {}): GateFacts {
     newClusters: 0,
     failingByTag: {},
     unmatchedTags: [],
+    quarantinedFailures: 0,
+    quarantinedTotal: 0,
     ...overrides,
   };
 }
@@ -113,6 +115,33 @@ describe('evaluateGatePolicy', () => {
   test('carries the facts through for the caller to render', () => {
     const result = evaluateGatePolicy(facts({ failedTests: 1 }), { maxFailed: 0 });
     expect(result.facts.runId).toBe(42);
+  });
+});
+
+describe('quarantine', () => {
+  test('caps how much quarantine debt a suite may carry', () => {
+    expect(evaluateGatePolicy(facts({ quarantinedTotal: 3 }), { maxQuarantined: 3 }).passed).toBe(true);
+    const over = evaluateGatePolicy(facts({ quarantinedTotal: 4 }), { maxQuarantined: 3 });
+    expect(over.passed).toBe(false);
+    expect(over.violations[0]?.rule).toBe('max-quarantined');
+  });
+
+  test('a quarantine ceiling on its own is a real policy', () => {
+    expect(isEmptyPolicy({ maxQuarantined: 0 })).toBe(false);
+  });
+
+  // A green gate that silently ignored failures would be untrustworthy, so the
+  // exclusion is always stated in the log.
+  test('reports failures excluded by quarantine', () => {
+    const output = formatGateResult(
+      evaluateGatePolicy(facts({ quarantinedFailures: 2, quarantinedTotal: 5 }), { maxFailed: 0 }),
+    );
+    expect(output).toContain('2 failing tests are quarantined and did not count');
+  });
+
+  test('says nothing about quarantine when none was excluded', () => {
+    const output = formatGateResult(evaluateGatePolicy(facts(), { maxFailed: 0 }));
+    expect(output).not.toContain('quarantined');
   });
 });
 

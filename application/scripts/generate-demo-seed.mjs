@@ -244,6 +244,39 @@ const caseIdByKey = new Map(); // `${projectId}\x00${file}\x00${title}` → case
 
 // Cases that are prone to flake (retry-pass) — their `flaky_root_cause` is set
 // coherently instead of at random.
+/**
+ * Test tags and `piwi:` ownership for the demo, derived from the spec's path so
+ * the assignment is deterministic and reads like a real suite: a team owns a
+ * directory, smoke tests are the first case in each file, and the checkout flow
+ * carries the priority that makes the CI gate's `--require-tag` example real.
+ */
+const DEMO_OWNERS = [
+  { match: /\/checkout\//, owner: '@checkout-team', feature: 'Checkout' },
+  { match: /\/api\//, owner: '@platform-team', feature: 'API' },
+  { match: /\/ui\//, owner: '@design-systems', feature: 'Design system' },
+  { match: /\/auth\//, owner: '@identity-team', feature: 'Identity' },
+];
+
+function demoTestMeta(filePath, index) {
+  const match = DEMO_OWNERS.find((entry) => entry.match.test(`/${filePath}`));
+  if (!match) return null;
+  const meta = { owner: match.owner, feature: match.feature };
+  // Only the first case of a checkout spec is critical — a suite where
+  // everything is critical teaches nothing about filtering.
+  if (match.owner === '@checkout-team') meta.priority = index === 0 ? 'critical' : 'high';
+  else if (index === 0) meta.priority = 'medium';
+  return meta;
+}
+
+function demoTags(filePath, index) {
+  const tags = [];
+  if (index === 0) tags.push('smoke');
+  if (/\/checkout\//.test(`/${filePath}`)) tags.push('critical');
+  if (/\/api\//.test(`/${filePath}`)) tags.push('api');
+  if (index % 3 === 0) tags.push('regression');
+  return tags;
+}
+
 const FLAKY_CASES = {
   1: { title: 'should apply discount code', rootCause: 'timing' },
   2: { title: 'GET /search handles empty query', rootCause: 'network' },
@@ -280,6 +313,11 @@ for (const proj of DEMO_PROJECTS) {
       suite_id: suiteLookup[proj.id][c.file] ?? null,
       title: c.title,
       flaky_root_cause: flaky?.rootCause ?? null,
+      tags: JSON.stringify(demoTags(c.file, proj.cases.indexOf(c))),
+      owner: demoTestMeta(c.file, proj.cases.indexOf(c))?.owner ?? null,
+      priority: demoTestMeta(c.file, proj.cases.indexOf(c))?.priority ?? null,
+      feature: demoTestMeta(c.file, proj.cases.indexOf(c))?.feature ?? null,
+      link: null,
       created_at: suiteNow,
       updated_at: suiteNow,
     });
@@ -778,6 +816,8 @@ for (const proj of DEMO_PROJECTS) {
         browser,
         browser_name: browser.projectName ?? null,
         test_annotations: testAnnotations,
+        tags: JSON.stringify(demoTags(caseDef.file, j)),
+        test_meta: demoTestMeta(caseDef.file, j),
         steps,
         step_events: stepEvents,
         wasted_time_ms: wastedMs,
@@ -1080,6 +1120,16 @@ const CLUSTER_TRIAGE = {
   },
 };
 
+/**
+ * Clusters whose fix landed, so the demo shows the loop closing rather than
+ * only the failures. One is corroborated against the diagnosed change; the
+ * other merely stopped failing, which is the weaker (and more common) verdict.
+ */
+const CLUSTER_FIXES = {
+  2: { verification: 'diagnosis-verified', openHours: 26 },
+  5: { verification: 'stopped-failing', openHours: 9 },
+};
+
 for (const story of FAILURE_STORIES) {
   const stats = clusterStats[story.clusterId];
   const fp = storyFingerprints.get(story.clusterId);
@@ -1099,9 +1149,62 @@ for (const story of FAILURE_STORIES) {
     first_seen_run_id: stats.firstRunId ?? firstRunByProject[story.projectId],
     last_seen_run_id: stats.lastRunId ?? lastRunByProject[story.projectId],
     occurrences: stats.occurrences || 1,
+    ...(CLUSTER_FIXES[story.clusterId]
+      ? {
+          fix_landed_run_id: stats.lastRunId ?? lastRunByProject[story.projectId],
+          fix_landed_at: updatedAt,
+          fix_commit: `demo${String(story.clusterId).padStart(3, '0')}`,
+          time_to_resolution_ms: CLUSTER_FIXES[story.clusterId].openHours * 3600 * 1000,
+          fix_verification: CLUSTER_FIXES[story.clusterId].verification,
+        }
+      : {}),
     created_at: createdAt,
     updated_at: updatedAt,
   });
+}
+
+// ── Demo quarantine ───────────────────────────────────────────────────────
+// Three entries covering the states the tab exists to distinguish: one that has
+// earned its way out, one part-way through its streak, and one still failing.
+// Without all three the exit ramp looks like a list that only grows.
+const QUARANTINED_TESTS = [];
+{
+  const quarantineSpec = [
+    { projectId: 1, streakState: 'ready', reason: 'Times out on CI only — see cluster 1' },
+    { projectId: 2, streakState: 'partial', reason: 'Search index warm-up races the assertion' },
+    { projectId: 3, streakState: 'failing', reason: 'Pagination flakes under parallel load' },
+  ];
+
+  let qId = 1;
+  for (const spec of quarantineSpec) {
+    const flaky = FLAKY_CASES[spec.projectId];
+    if (!flaky) continue;
+    const proj = DEMO_PROJECTS.find((candidate) => candidate.id === spec.projectId);
+    const caseDef = proj?.cases.find((candidate) => candidate.title === flaky.title);
+    if (!caseDef) continue;
+    const caseId = caseIdByKey.get(`${spec.projectId}\x00${caseDef.file}\x00${caseDef.title}`);
+    if (!caseId) continue;
+
+    // Anchoring to an early run lets the executions already in the seed count
+    // toward the streak, which is what produces the three different states.
+    const anchorRunId =
+      spec.streakState === 'failing'
+        ? (lastRunByProject[spec.projectId] ?? null)
+        : (firstRunByProject[spec.projectId] ?? null);
+
+    QUARANTINED_TESTS.push({
+      id: qId++,
+      project_id: spec.projectId,
+      test_case_id: caseId,
+      reason: spec.reason,
+      source: spec.streakState === 'ready' ? 'proposed' : 'manual',
+      quarantined_at_run_id: anchorRunId,
+      created_by: null,
+      created_at: ts('2025-05-02T09:00:00'),
+      released_at: null,
+      released_reason: null,
+    });
+  }
 }
 
 // ── Demo AI diagnoses ─────────────────────────────────────────────────────
@@ -2336,6 +2439,9 @@ const lines = [
   '',
   '-- Network requests (child table, references test_runs_cases)',
   insert('network_requests', NETWORK_REQUESTS),
+  '',
+  '-- Quarantined tests (references test_cases)',
+  insert('quarantined_tests', QUARANTINED_TESTS),
   '',
   '-- Locator healing snapshots (references test_cases)',
   insert('locator_snapshots', LOCATOR_SNAPSHOTS),

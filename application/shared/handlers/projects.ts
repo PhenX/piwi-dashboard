@@ -1006,6 +1006,11 @@ export async function getProjectFailureClusters(db: DrizzleDB, projectId: number
       firstSeenRunId: failureClusters.firstSeenRunId,
       lastSeenRunId: failureClusters.lastSeenRunId,
       occurrences: failureClusters.occurrences,
+      fixLandedRunId: failureClusters.fixLandedRunId,
+      fixLandedAt: failureClusters.fixLandedAt,
+      fixCommit: failureClusters.fixCommit,
+      timeToResolutionMs: failureClusters.timeToResolutionMs,
+      fixVerification: failureClusters.fixVerification,
     })
     .from(failureClusters)
     .where(and(...whereClauses))

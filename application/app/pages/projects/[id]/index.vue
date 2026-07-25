@@ -174,6 +174,7 @@ const validTabs = [
   'test-cases',
   'compare',
   'spec-health',
+  'quarantine',
   'timeline',
   'members',
 ] as const;
@@ -221,6 +222,7 @@ const tabItems = computed(() => [
   },
   { label: 'Compare', icon: 'i-lucide-git-compare-arrows', value: 'compare', slot: 'compare' },
   { label: 'Spec health', icon: 'i-lucide-table-2', value: 'spec-health', slot: 'spec-health' },
+  { label: 'Quarantine', icon: 'i-lucide-shield-alert', value: 'quarantine', slot: 'quarantine' },
   {
     label: `Timeline${markers.value.length ? ` (${markers.value.length})` : ''}`,
     icon: 'i-lucide-milestone',
@@ -1312,6 +1314,11 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
           <!-- SPEC HEALTH TAB -->
           <template #spec-health>
             <SpecHealthTable :project-id="String(projectId)" />
+          </template>
+
+          <!-- QUARANTINE TAB -->
+          <template #quarantine>
+            <QuarantineTable :project-id="String(projectId)" :project-name="project?.name" />
           </template>
 
           <!-- MEMBERS TAB -->

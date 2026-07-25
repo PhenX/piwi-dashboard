@@ -2,6 +2,7 @@ import { requireProjectAccess, requireRouteId } from '../../../utils/project-acc
 import { getDatabase } from '../../../database';
 import { getProjectFlakyTests } from '#shared/handlers/projects';
 import { parseTagFilter } from '#shared/utils/tag-filter';
+import { withResolvedOwners } from '../../../utils/scm/ownership';
 import { TEST_PRIORITIES } from '@piwitests/core/test-meta';
 
 defineRouteMeta({
@@ -60,7 +61,10 @@ export default eventHandler(async (event) => {
   const db = await getDatabase();
 
   try {
-    return await getProjectFlakyTests(db, projectId, runsLimit, environment, filter);
+    const rows = await getProjectFlakyTests(db, projectId, runsLimit, environment, filter);
+    // Fill in the owner from CODEOWNERS for tests that declare none, so the
+    // leaderboard can be read per team without anyone annotating a test.
+    return await withResolvedOwners(db, projectId, rows);
   } catch (e: any) {
     if (e?.message === 'Project not found') {
       throw createError({ statusCode: 404, message: 'Project not found' });

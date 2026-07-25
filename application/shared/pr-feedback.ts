@@ -90,6 +90,15 @@ export interface PrSummaryInput {
   flaky: PrFailureEntry[];
   /** Failure clusters first seen in this run. */
   newClusters: Array<{ id: number; signature: string; caseCount: number }>;
+  /** Clusters this run stopped failing — the answer to "did my fix work?". */
+  fixedClusters?: Array<{
+    id: number;
+    label: string;
+    testCount: number;
+    /** `diagnosis-verified` means the change touched the file the diagnosis named. */
+    verification: 'stopped-failing' | 'diagnosis-verified';
+    timeToResolutionMs: number | null;
+  }>;
   /** CI minutes this run spent on waits and failed attempts, when known. */
   wastedMinutes: number | null;
   /** True when no previous green run existed to compare against. */
@@ -112,6 +121,15 @@ function formatDuration(ms: number | null): string {
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
   const minutes = Math.floor(seconds / 60);
   return `${minutes}m ${Math.round(seconds % 60)}s`;
+}
+
+/** Coarse age for a cluster's lifetime — days, hours, or minutes. */
+function formatAge(ms: number): string {
+  const minutes = Math.round(ms / 60000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
 }
 
 function statusEmoji(status: string, failedTests: number): string {
@@ -199,6 +217,23 @@ export function buildPrComment(input: PrSummaryInput): string {
       })
       .join('\n');
     sections.push(`#### 🧩 New failure clusters (${input.newClusters.length})\n${list}`);
+  }
+
+  const fixedClusters = input.fixedClusters ?? [];
+  if (fixedClusters.length > 0) {
+    const origin = originOf(input.runUrl);
+    const list = fixedClusters
+      .slice(0, MAX_LISTED)
+      .map((cluster) => {
+        const label = escapeCell(cluster.label);
+        const link = origin ? `[${label}](${origin}/failure-clusters/${cluster.id})` : label;
+        const tests = `${cluster.testCount} ${cluster.testCount === 1 ? 'test' : 'tests'}`;
+        const age = cluster.timeToResolutionMs != null ? `, open ${formatAge(cluster.timeToResolutionMs)}` : '';
+        const verified = cluster.verification === 'diagnosis-verified' ? ' — matches the diagnosed change' : '';
+        return `- ${link} — ${tests}${age}${verified}`;
+      })
+      .join('\n');
+    sections.push(`#### 🟢 Fixed by this change (${fixedClusters.length})\n${list}`);
   }
 
   if (!input.hasBaseline && input.failedTests > 0) {
