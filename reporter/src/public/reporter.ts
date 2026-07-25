@@ -21,10 +21,11 @@ import { createGlobalSetup } from './global-setup.js';
 import { wrapConfig } from './config-wrapper.js';
 import { toWireTestCase } from '../internal/submit/serializer.js';
 import { mergeAnnotations, classifyStatus } from '../internal/collect/skip-classify.js';
+import { collectTestMetadata, collectTestTags } from '../internal/collect/test-meta.js';
 import { buildErrorText } from '../internal/collect/error-text.js';
 import { RunSubmitter } from '../internal/submit/run-submitter.js';
 import { Logger } from '../internal/support/logger.js';
-import type { CollectedTestCase, StreamEvent, SetupStep, FilterDetails } from '../types.js';
+import type { CollectedTestCase, StreamEvent, SetupStep, FilterDetails, TestAnnotation } from '../types.js';
 
 /**
  * Relative `file:line:column` location string for a test, normalized to POSIX
@@ -264,6 +265,7 @@ export class PiwiDashboardReporter {
     const { suitePath, suiteConfig } = this.metadataCollector.getSuiteInfo(test);
     const annotations = mergeAnnotations(test, result);
     const status = classifyStatus(result.status, annotations);
+    const tags = collectTestTags(test);
     const testCase: CollectedTestCase = {
       type: 'complete',
       title: test.title,
@@ -283,6 +285,8 @@ export class PiwiDashboardReporter {
       suitePath,
       suiteConfig,
       testAnnotations: annotations.length ? annotations : null,
+      tags: tags.length ? tags : null,
+      testMeta: collectTestMetadata(annotations),
     };
 
     if (result.status === 'failed' || result.status === 'timedOut') {
@@ -360,6 +364,8 @@ export class PiwiDashboardReporter {
       if (this.reportedTestIds.has(test.id)) continue;
 
       const { suitePath, suiteConfig } = this.metadataCollector.getSuiteInfo(test);
+      const declaredAnnotations = (test.annotations ?? []) as TestAnnotation[];
+      const tags = collectTestTags(test);
       const testCase: CollectedTestCase = {
         type: 'complete',
         title: test.title,
@@ -376,7 +382,9 @@ export class PiwiDashboardReporter {
         browser: this.metadataCollector.getBrowserConfig(test) || undefined,
         suitePath,
         suiteConfig,
-        testAnnotations: test.annotations?.length ? (test.annotations as any) : null,
+        testAnnotations: declaredAnnotations.length ? declaredAnnotations : null,
+        tags: tags.length ? tags : null,
+        testMeta: collectTestMetadata(declaredAnnotations),
       };
 
       this.testCases.push(testCase);

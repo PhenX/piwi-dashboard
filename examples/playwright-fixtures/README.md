@@ -37,6 +37,7 @@ Results appear at `http://localhost:3000` under the `playwright-fixtures-example
 | `skipped.spec.ts` | Skipped tests produce no capture attachments |
 | `before-all.spec.ts` | `beforeAll` activity is intentionally **not** captured |
 | `custom-fixtures.spec.ts` | Dashboard capture composed with your own fixtures (`fixtures-composed.ts`) |
+| `tags-and-ownership.spec.ts` | Test tags (both declaration styles) and `piwi:` owner / priority / feature / link annotations |
 
 ## The two setup options
 

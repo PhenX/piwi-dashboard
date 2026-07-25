@@ -522,6 +522,12 @@ export const HELP_TOPICS = {
     text: 'Thresholds for flagging oversized per-test timeouts and stale test.slow() marks. Opportunities are recomputed at read time, so changes apply to existing runs immediately.',
     doc: 'flaky-tests#performance',
   },
+  'settings.pr-feedback': {
+    title: 'Pull-request feedback',
+    text: 'When a run finishes on a branch with an open pull request, Piwi can post a summary comment — new failures separated from pre-existing ones, with suggested locators — and set a commit status. Needs PIWI_SITE_URL and an SCM token with write access.',
+    doc: 'ci#pull-request-feedback',
+    envVars: ['PIWI_SITE_URL'],
+  },
   'settings.auto-diagnose': {
     title: 'Auto-diagnose',
     text: 'When a run finishes, up to 3 new failure clusters are diagnosed automatically — each diagnosis is one research call (when a research model is configured) plus one diagnosis call — and new clusters get human-readable titles in one batched call. Requires the diagnosis model to be configured.',

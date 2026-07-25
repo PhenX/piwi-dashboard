@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./gate": "./src/gate.ts",
     "./locator-generation": "./src/locator-generation.ts",
     "./locator-fingerprint": "./src/locator-fingerprint.ts",
     "./locator-healing-types": "./src/locator-healing-types.ts",
@@ -13,6 +14,7 @@
     "./locator-methods": "./src/locator-methods.ts",
     "./status-classify": "./src/status-classify.ts",
     "./step-analysis": "./src/step-analysis.ts",
+    "./test-meta": "./src/test-meta.ts",
     "./wire": "./src/wire.ts"
   },
   "scripts": {

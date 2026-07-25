@@ -64,7 +64,7 @@ The complete history for one project, organized into tabs:
 - **Test runs** — every run with status, start time, duration, test counts, and browser badges; select two runs to compare. Runs with a shared failure signature roll up into **Failure clusters** here (see [AI diagnosis & clustering](./ai-diagnosis)).
 - **Flaky tests** — intermittent tests scored by a composite flakiness metric, with root-cause classification and impact ranking. See [Flaky tests](./flaky-tests#flaky-test-detection).
 - **Performance** — average/P90 duration trends and a slowest-tests table. See [Performance](./flaky-tests#performance).
-- **Test cases** — every unique test with status, executed-only pass rate, result breakdown, average duration, and last run; searchable, filterable by status and last-run age (stale cases hidden by default), paginated, with flat and per-spec tree views.
+- **Test cases** — every unique test with status, executed-only pass rate, result breakdown, average duration, and last run; searchable, filterable by status, [tag](./reporter#test-tags), owner, priority and last-run age (stale cases hidden by default), paginated, with flat and per-spec tree views.
 - **Compare** — side-by-side delta between two runs (new failures, recovered, duration changes).
 - **Spec health** — a heatmap grouping test cases by spec file and coloring each by pass rate, so an unhealthy area of the suite jumps out. See [Spec health heatmap](./flaky-tests#spec-health-heatmap).
 - **Members** *(admins, when auth is enabled)* — grant or scope project access per user. See [Project access](./authentication#project-access).
@@ -143,6 +143,7 @@ Each cluster (`/failure-clusters/:id`) opens on a summary — signature, affecte
 | Users | `/settings/users` | User accounts, roles, project access, and API keys (shown once, stored hashed) — see [Authentication](./authentication) |
 | Storage | `/settings/storage` | Storage stats and cleanup (bulk-delete runs older than N days) — see [Storage](./storage#storage-management) |
 | Tags | `/settings/tags` | Create, color, edit, and delete the tags used to organize projects |
+| Pull requests | `/settings/pr-feedback` | What Piwi posts back to a pull request when a run finishes — see [Pull-request feedback](./ci#pull-request-feedback) |
 | Wasted time | `/settings/wasted-time` | Patterns that classify which Playwright waits count as "wasted time" on the timeline — see [Configuration](./configuration#wasted-time) |
 | AI | `/settings/ai` | Provider/model roles, auto-diagnose, global instructions, and context limits — see [AI diagnosis](./ai-diagnosis#enabling-ai-diagnosis) |
 | Notifications | `/settings/notifications` | Channels, subscriptions, and SMTP — see [Notifications & alerts](./notifications) |

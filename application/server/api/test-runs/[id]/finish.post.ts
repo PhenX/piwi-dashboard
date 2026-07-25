@@ -7,6 +7,7 @@ import { validateAndReviveRun } from '../../../utils/revive-run';
 import { autoDiagnoseRun } from '../../../utils/ai-diagnosis';
 import { readShardTokensFromMeta, removeStoredShardToken } from '../../../utils/shard-tokens';
 import { emitRunNotifications } from '../../../utils/notifications/run-notifications';
+import { postRunPrFeedbackInBackground } from '../../../utils/scm/pr-feedback';
 import { computeRegressionSignals } from '../../../utils/compute-regression-signals';
 import { syncAutoMarkersForRun } from '#shared/handlers/markers';
 import { sumFailedAndTimedOut } from '#shared/utils/test-counts';
@@ -208,6 +209,7 @@ export default eventHandler(async (event) => {
         console.error('[ai-diagnosis] autoDiagnoseRun failed', e),
       );
       emitRunNotifications(db, id).catch((e) => console.error('[notifications] emitRunNotifications failed', e));
+      postRunPrFeedbackInBackground(db, id);
 
       runEventBus.cleanup(id);
     } else {
@@ -332,6 +334,7 @@ export default eventHandler(async (event) => {
     syncAutoMarkersForRun(db, id).catch((e) => console.error('[markers] syncAutoMarkersForRun failed', e));
     autoDiagnoseRun(db, testRun.projectId, id).catch((e) => console.error('[ai-diagnosis] autoDiagnoseRun failed', e));
     emitRunNotifications(db, id).catch((e) => console.error('[notifications] emitRunNotifications failed', e));
+    postRunPrFeedbackInBackground(db, id);
 
     runEventBus.cleanup(id);
   }

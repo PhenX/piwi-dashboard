@@ -119,6 +119,14 @@ export const testCases = pgTable(
     suiteId: integer('suite_id').references(() => testSuites.id), // FK to immediate parent describe block (null for root-level tests)
     title: text('title').notNull(),
     flakyRootCause: text('flaky_root_cause'), // 'timing' | 'network' | 'assertion' | 'environment' | 'other'
+    // Latest-known test-level tags and `piwi:` metadata, refreshed on every run
+    // that reports this test. Per-execution truth lives on test_runs_cases;
+    // these denormalized columns let project-wide views filter without a join.
+    tags: jsonb('tags'), // string[] — normalized, '@' stripped
+    owner: text('owner'),
+    priority: text('priority'), // 'critical' | 'high' | 'medium' | 'low'
+    feature: text('feature'),
+    link: text('link'), // absolute http(s) URL
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -135,6 +143,7 @@ export const testCases = pgTable(
       table.title,
     ),
     suiteIdIdx: index('idx_test_cases_suite').on(table.suiteId),
+    ownerIdx: index('idx_test_cases_owner').on(table.projectId, table.owner),
   }),
 );
 
@@ -383,6 +392,8 @@ export const testRunsCases = pgTable(
     browser: jsonb('browser'), // Playwright project/browser config: { projectName, browserName, channel, viewport }
     browserName: text('browser_name'), // Scalar browser identity (projectName) for index efficiency
     testAnnotations: jsonb('test_annotations'), // Array<{ type, description? }> — runtime test marks (@fixme, @slow …)
+    tags: jsonb('tags'), // string[] — tags this execution declared ('@' stripped)
+    testMeta: jsonb('test_meta'), // { owner?, priority?, feature?, link? } from `piwi:` annotations
     workerIndex: integer('worker_index'), // Parallel worker index (from Playwright's parallelIndex)
     shardIndex: integer('shard_index'), // Shard index (1-based) for sharded runs; null = not sharded
     startedAt: bigint('started_at', { mode: 'number' }), // Unix timestamp in ms when the test started (exceeds 32-bit int range)

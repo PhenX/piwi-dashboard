@@ -7,7 +7,14 @@
  * the external server contract, see `./wire.ts`.
  */
 
-import type { BrowserConfig, SuiteConfigEntry, TestAnnotation, TestSourceFrame, TestStepEvent } from './wire.js';
+import type {
+  BrowserConfig,
+  SuiteConfigEntry,
+  TestAnnotation,
+  TestMetadata,
+  TestSourceFrame,
+  TestStepEvent,
+} from './wire.js';
 import type { LocatorSnapshot } from '../internal/capture/locator-healing.js';
 
 /**
@@ -67,6 +74,10 @@ export interface CollectedTestCase {
   suitePath?: string[] | null;
   suiteConfig?: SuiteConfigEntry[] | null;
   testAnnotations?: TestAnnotation[] | null;
+  /** Normalized `TestCase.tags`, `@` stripped (see `@piwitests/core/test-meta`). */
+  tags?: string[] | null;
+  /** Ownership metadata parsed from `piwi:` annotations. */
+  testMeta?: TestMetadata | null;
   /** Source snippet around the failing line (failed/timedOut only). */
   testSource?: string;
   /** In-project call-stack frames (innermost first): the failing line + its callers. */

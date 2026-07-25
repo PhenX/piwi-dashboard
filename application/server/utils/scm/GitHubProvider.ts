@@ -1,5 +1,5 @@
 import { ScmProvider, truncatePatch, MAX_SCM_FILES, MAX_FILE_BYTES, FETCH_TIMEOUT_MS } from './ScmProvider';
-import type { ScmCommitDetail, ScmChanges, ScmFileContent } from './ScmProvider';
+import type { ScmCommitDetail, ScmChanges, ScmFileContent, ScmPullRequest, ScmCommitStatus } from './ScmProvider';
 import { TtlCache } from './cache';
 
 const listBranchesCache = new TtlCache<string[]>(3 * 60 * 1000);
@@ -211,6 +211,87 @@ export class GitHubProvider extends ScmProvider {
       return `No commits found on ${branch ? `branch '${branch}'` : 'the default branch'}.`;
     } catch {
       return 'Could not reach the GitHub API. Check your network connection.';
+    }
+  }
+
+  // ── Pull-request feedback ──────────────────────────────────────────────────
+
+  override async findPullRequestForBranch(branch: string): Promise<ScmPullRequest | null> {
+    if (!branch) return null;
+    try {
+      // `head` needs the owner prefix; the owner is the first repoPath segment.
+      const owner = this.repoPath.split('/')[0] ?? '';
+      const url = new URL(`https://api.github.com/repos/${this.repoPath}/pulls`);
+      url.searchParams.set('state', 'open');
+      url.searchParams.set('head', `${owner}:${branch}`);
+      url.searchParams.set('per_page', '1');
+
+      const res = await fetch(url.toString(), {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as Array<{ number?: number; html_url?: string }>;
+      const pr = data[0];
+      if (!pr?.number) return null;
+      return { number: pr.number, url: pr.html_url ?? `https://github.com/${this.repoPath}/pull/${pr.number}` };
+    } catch {
+      return null;
+    }
+  }
+
+  override async upsertPullRequestComment(prNumber: number, marker: string, body: string): Promise<boolean> {
+    if (!this.token) return false;
+    try {
+      // A PR comment is an issue comment; list the most recent page and look
+      // for one we previously wrote. Only a comment carrying the marker is ever
+      // edited, so a human comment can never be overwritten.
+      const listUrl = new URL(`https://api.github.com/repos/${this.repoPath}/issues/${prNumber}/comments`);
+      listUrl.searchParams.set('per_page', '100');
+      const listRes = await fetch(listUrl.toString(), {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+
+      let existingId: number | null = null;
+      if (listRes.ok) {
+        const comments = (await listRes.json()) as Array<{ id?: number; body?: string }>;
+        existingId = comments.find((c) => typeof c.body === 'string' && c.body.includes(marker))?.id ?? null;
+      }
+
+      const target = existingId
+        ? `https://api.github.com/repos/${this.repoPath}/issues/comments/${existingId}`
+        : `https://api.github.com/repos/${this.repoPath}/issues/${prNumber}/comments`;
+
+      const res = await fetch(target, {
+        method: existingId ? 'PATCH' : 'POST',
+        headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  override async postCommitStatus(sha: string, status: ScmCommitStatus): Promise<boolean> {
+    if (!this.token || !sha) return false;
+    try {
+      const res = await fetch(`https://api.github.com/repos/${this.repoPath}/statuses/${sha}`, {
+        method: 'POST',
+        headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          state: status.state,
+          description: status.description,
+          target_url: status.targetUrl,
+          context: status.context,
+        }),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
   }
 }

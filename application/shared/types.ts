@@ -4,13 +4,22 @@ import type {
   FilterDetails,
   SuiteConfigEntry,
   TestAnnotation,
+  TestMetadata,
   TestSourceFrame,
   TestStepEvent,
 } from '@piwitests/core/wire';
 
 // The wire leaf shapes live in @piwitests/core (shared with the reporter);
 // re-export them so `#shared/types` consumers keep importing them from here.
-export type { BrowserConfig, FilterDetails, SuiteConfigEntry, TestAnnotation, TestSourceFrame, TestStepEvent };
+export type {
+  BrowserConfig,
+  FilterDetails,
+  SuiteConfigEntry,
+  TestAnnotation,
+  TestMetadata,
+  TestSourceFrame,
+  TestStepEvent,
+};
 
 // ── Test status types ──────────────────────────────────────────────────────────
 // These mirror the values stored in the test_runs.status column and the
@@ -73,6 +82,10 @@ export interface TestCasePayload {
   suitePath?: string[] | null;
   suiteConfig?: SuiteConfigEntry[] | null;
   testAnnotations?: TestAnnotation[] | null;
+  /** Tags declared on the test (`TestCase.tags`), normalized with `@` stripped. */
+  tags?: string[] | null;
+  /** Ownership metadata declared via `piwi:` annotations. */
+  testMeta?: TestMetadata | null;
   /** Per-element locator snapshots with ranked alternatives (transient — not stored as a column). */
   locatorSnapshots?: LocatorSnapshot[] | null;
   /** Source snippet around the failing line of the spec file (captured on failure only). */
@@ -155,6 +168,8 @@ export interface StreamEventPayload {
   suitePath?: string[] | null;
   suiteConfig?: SuiteConfigEntry[] | null;
   testAnnotations?: TestAnnotation[] | null;
+  tags?: string[] | null;
+  testMeta?: TestMetadata | null;
   locatorSnapshots?: LocatorSnapshot[] | null;
   /** Source snippet around the failing line of the spec file (captured on failure only). */
   testSource?: string | null;

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { isPiwiAnnotation } from '@piwitests/core/test-meta';
 import type { TestCaseResult, SuiteInfo } from '~~/types/api';
 
 const props = defineProps<{
@@ -79,6 +80,15 @@ function annotationIcon(type: string): string | null {
 
 function annotationLabel(ann: { type: string; description?: string }): string {
   return ann.type === 'tag' ? (ann.description ?? ann.type) : ann.type;
+}
+
+/**
+ * Playwright test marks only. `piwi:` annotations carry ownership metadata and
+ * are rendered by `TestMetaBadges`, so showing them here too would duplicate
+ * every owner and priority on the row.
+ */
+function testMarks(annotations: Array<{ type: string; description?: string }> | null | undefined) {
+  return (annotations ?? []).filter((ann) => !isPiwiAnnotation(ann.type));
 }
 
 function computeStats(tests: TestCaseResult[]): Stats {
@@ -309,7 +319,7 @@ const flatRows = computed<FlatRow[]>(() => {
             {{ formatStatusLabel(row.test.status) }}
           </UBadge>
           <UBadge
-            v-for="ann in row.test.testAnnotations ?? []"
+            v-for="ann in testMarks(row.test.testAnnotations)"
             :key="`${ann.type}:${ann.description ?? ''}`"
             :color="annotationColor(ann.type)"
             variant="soft"
@@ -320,6 +330,7 @@ const flatRows = computed<FlatRow[]>(() => {
             <UIcon v-if="annotationIcon(ann.type)" :name="annotationIcon(ann.type)!" class="size-2.5 shrink-0" />
             {{ annotationLabel(ann) }}
           </UBadge>
+          <SharedTestMetaBadges :tags="row.test.tags" :meta="row.test.testMeta" :max-tags="3" class="shrink-0" />
           <a
             :href="`/test-run-cases/${row.test.id}`"
             class="text-primary hover:underline truncate flex-1 min-w-0"

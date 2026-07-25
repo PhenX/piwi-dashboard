@@ -11,6 +11,9 @@ export default defineConfig({
   entry: [
     'src/index.ts',
     'src/global-setup-module.ts',
+    // `piwi` CLI (package.json `bin`) — its own entry so the reporter's main
+    // bundle stays free of CLI-only code.
+    'src/cli/index.ts',
     // The dashboard dogfoods the reporter by deep-importing these internal
     // capture modules from `dist/` (see application/tests/fixtures.ts), so they
     // must keep their own emitted files at the same paths tsc produced.

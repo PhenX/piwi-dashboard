@@ -18,6 +18,7 @@
 import { collectStepMetrics, extractTestStepEvents, extractWaitEvents } from '#shared/step-analysis';
 import { dirnamePosix, isAbsolutePosix, joinPosix, normalizePosix, relativePosix } from '#shared/utils/posix-path';
 import { classifyStatus, mergeAnnotations } from '#shared/status-classify';
+import { normalizeTestTags, parseTestMetadata } from '@piwitests/core/test-meta';
 import { joinErrorMessages, appendErrorLocation } from '#shared/error-text';
 import type { TestAnnotation } from '#shared/types';
 import type { RunCaseInput } from './persist-run-cases';
@@ -109,6 +110,7 @@ interface PlannedTest {
   column: number | null;
   suitePath: string[];
   annotations: TestAnnotation[];
+  tags: string[];
   timeout: number | null;
   projectName: string;
   browser: Record<string, unknown>;
@@ -218,6 +220,7 @@ function collectPlannedTests(
           column: typeof location.column === 'number' ? location.column : null,
           suitePath,
           annotations: Array.isArray(child.annotations) ? (child.annotations as TestAnnotation[]) : [],
+          tags: normalizeTestTags(child.tags),
           timeout: typeof child.timeout === 'number' ? child.timeout : projectTimeout,
           projectName,
           browser,
@@ -410,6 +413,8 @@ export async function parseBlobReport(readEntry: ArchiveEntryReader): Promise<Pa
           filePath: plan?.filePath ?? 'unknown',
           suitePath: plan?.suitePath ?? null,
           testAnnotations: annotations.length ? annotations : null,
+          tags: plan?.tags.length ? plan.tags : null,
+          testMeta: parseTestMetadata(annotations),
           title: plan?.title ?? '',
           status,
           duration: typeof result.duration === 'number' ? result.duration : null,
@@ -456,6 +461,8 @@ export async function parseBlobReport(readEntry: ArchiveEntryReader): Promise<Pa
         filePath: plan.filePath,
         suitePath: plan.suitePath,
         testAnnotations: plan.annotations.length ? plan.annotations : null,
+        tags: plan.tags.length ? plan.tags : null,
+        testMeta: parseTestMetadata(plan.annotations),
         title: plan.title,
         status: 'didnotrun',
         duration: 0,

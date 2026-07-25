@@ -1,5 +1,5 @@
 import { testCases, testRunsCases, testSuites, networkRequests } from '../database/schema';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { buildNetworkRequestItems, buildNetworkRequestInsertValues } from './network-request-helpers';
 import {
   capArray,
@@ -14,6 +14,12 @@ import {
 import { resolveIngestLimits } from './ingest-limits';
 import { upsertCasePayloads } from './case-payloads';
 import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fingerprint';
+import {
+  normalizeTestTags,
+  parseTestMetadata,
+  sanitizeTestMetadata,
+  type TestMetadata,
+} from '@piwitests/core/test-meta';
 import { testCaseCache } from './test-case-cache';
 import { testSuiteCache } from './test-suite-cache';
 import { SUITE_PATH_SEP, joinSuitePath } from '#shared/utils/suites';
@@ -32,6 +38,10 @@ export interface RunCaseInput {
   suitePath?: string[] | null;
   suiteConfig?: Array<{ mode: string; annotations: Array<{ type: string; description?: string }> }> | null;
   testAnnotations?: Array<{ type: string; description?: string }> | null;
+  /** Tags declared on the test — re-normalized here, so raw reporter input is fine. */
+  tags?: unknown;
+  /** `piwi:` metadata; re-derived from `testAnnotations` when absent. */
+  testMeta?: unknown;
   title: string;
   status: string;
   duration?: number | null;
@@ -156,6 +166,80 @@ async function resolveSuites(db: DB, projectId: number, cases: RunCaseInput[]): 
   return suiteIdMap;
 }
 
+/** Latest-known tags + `piwi:` metadata for one test case, as stored. */
+interface CaseMetaSnapshot {
+  tags: string[];
+  meta: TestMetadata | null;
+}
+
+function sameSnapshot(stored: CaseMetaSnapshot, incoming: CaseMetaSnapshot): boolean {
+  if (stored.tags.length !== incoming.tags.length) return false;
+  if (stored.tags.some((tag, i) => tag !== incoming.tags[i])) return false;
+  const a = stored.meta ?? {};
+  const b = incoming.meta ?? {};
+  return a.owner === b.owner && a.priority === b.priority && a.feature === b.feature && a.link === b.link;
+}
+
+/**
+ * Mirror each reported test's tags and `piwi:` metadata onto its `test_cases`
+ * row, so project-wide views can filter by tag or owner without joining every
+ * run. The per-execution values on `test_runs_cases` stay the record of what a
+ * given run saw; these columns only track the most recent declaration.
+ *
+ * Reads the current values first and writes only the rows that actually
+ * changed — in steady state a run costs one SELECT and no UPDATEs, and a tag
+ * removed from a spec still propagates (the incoming empty value differs from
+ * the stored one).
+ */
+async function syncTestCaseMetadata(db: DB, incoming: Map<number, CaseMetaSnapshot>): Promise<void> {
+  if (incoming.size === 0) return;
+
+  const ids = [...incoming.keys()];
+  const stored = await db
+    .select({
+      id: testCases.id,
+      tags: testCases.tags,
+      owner: testCases.owner,
+      priority: testCases.priority,
+      feature: testCases.feature,
+      link: testCases.link,
+    })
+    .from(testCases)
+    .where(inArray(testCases.id, ids));
+
+  const storedById = new Map<number, CaseMetaSnapshot>(
+    stored.map((row) => [
+      row.id,
+      {
+        tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+        meta: sanitizeTestMetadata({
+          owner: row.owner,
+          priority: row.priority,
+          feature: row.feature,
+          link: row.link,
+        }),
+      },
+    ]),
+  );
+
+  for (const [caseId, next] of incoming) {
+    const current = storedById.get(caseId);
+    if (current && sameSnapshot(current, next)) continue;
+
+    await db
+      .update(testCases)
+      .set({
+        tags: next.tags.length ? next.tags : null,
+        owner: next.meta?.owner ?? null,
+        priority: next.meta?.priority ?? null,
+        feature: next.meta?.feature ?? null,
+        link: next.meta?.link ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(testCases.id, caseId));
+  }
+}
+
 /**
  * Get-or-create the shared `test_cases` rows for a batch and insert the per-run
  * `test_runs_cases` rows in a single statement. Network requests, web vitals and
@@ -224,6 +308,10 @@ export async function persistRunCases(
     snapshots: LocatorSnapshot[] | null | undefined;
     purge?: boolean;
   }> = [];
+  // Latest tags/metadata per resolved test case, mirrored onto test_cases once
+  // the batch is built. A test appearing twice (retries, browsers) declares the
+  // same values, so last-write-wins is safe.
+  const caseMetaSnapshots = new Map<number, CaseMetaSnapshot>();
 
   for (let i = 0; i < cases.length; i++) {
     const c = cases[i]!;
@@ -253,6 +341,14 @@ export async function persistRunCases(
     }
 
     if (caseId === undefined) continue;
+
+    // Re-normalize on arrival: a payload can reach the ingest API without ever
+    // passing through the reporter, so the reporter's normalization is a
+    // convenience rather than a guarantee. Annotations win over a supplied
+    // `testMeta` because they are the declared source.
+    const tags = normalizeTestTags(c.tags);
+    const testMeta = parseTestMetadata(c.testAnnotations) ?? sanitizeTestMetadata(c.testMeta);
+    caseMetaSnapshots.set(caseId, { tags, meta: testMeta });
 
     // Collect locator snapshots; upserted in one batch after the case insert.
     // Only a passed case may purge stale locations — a failed run can stop
@@ -306,6 +402,8 @@ export async function persistRunCases(
       testSource: null,
       testSourceFrames: null,
       testAnnotations: (c.testAnnotations as any) ?? null,
+      tags: tags.length ? tags : null,
+      testMeta,
       browser: c.browser ?? null,
       browserName: resolveBrowserName(c.browser),
       workerIndex: c.workerIndex ?? null,
@@ -350,6 +448,7 @@ export async function persistRunCases(
   }
 
   await upsertLocatorSnapshots(db, perCaseLocators, testRunId);
+  await syncTestCaseMetadata(db, caseMetaSnapshots);
 
   return insertedCases;
 }

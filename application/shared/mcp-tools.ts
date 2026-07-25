@@ -442,6 +442,16 @@ export const MCP_TOOL_DEFS = [
         pageSize: { type: 'number', description: 'Results per page (default 10, max 50)' },
         offset: { type: 'number', description: 'Row offset for paging (default 0)' },
         query: { type: 'string', description: 'Optional case-insensitive substring filter on title or file path' },
+        tags: {
+          type: 'string',
+          description: 'Comma-separated tags; a test must carry every one of them. A leading @ is optional.',
+        },
+        owner: { type: 'string', description: 'Exact owner declared via the piwi:owner annotation' },
+        priority: {
+          type: 'string',
+          enum: ['critical', 'high', 'medium', 'low'],
+          description: 'Priority declared via the piwi:priority annotation',
+        },
       },
       required: ['projectId'],
     },
@@ -614,6 +624,11 @@ export interface McpFlakyTestItem {
   testCaseId: number;
   title: string;
   filePath: string;
+  /** Tags declared on the test, `@` stripped. */
+  tags?: string[];
+  /** Owner declared via the `piwi:owner` annotation. */
+  owner?: string;
+  priority?: string;
   flakyScore: number;
   failureRate?: number;
   runCount: number;

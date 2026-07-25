@@ -281,6 +281,13 @@
       "when": 1784968971921,
       "tag": "0039_remarkable_jean_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1784991115147,
+      "tag": "0040_organic_phalanx",
+      "breakpoints": true
     }
   ]
 }

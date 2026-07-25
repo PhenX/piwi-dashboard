@@ -20,6 +20,8 @@ export interface TestAnnotation {
   description?: string;
 }
 
+export type { TestMetadata } from './test-meta';
+
 /**
  * Filter that narrowed a run to a subset of tests, recorded when `isFullRun`
  * is false.

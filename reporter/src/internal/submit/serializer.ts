@@ -35,8 +35,8 @@ export function resolveOverallStatus(
  *   default), so a `begin` event yields `undefined` for those fields.
  * - Numeric/array fields use `|| null` (so `0` and `''` collapse to `null`),
  *   while `workerIndex`/`shardIndex`/`startedAt`/`suitePath`/`suiteConfig`/
- *   `testAnnotations` use `?? null` (so `0` survives). Note: an empty array
- *   is truthy, so `steps: []` is preserved as `[]`, not `null`.
+ *   `testAnnotations`/`tags`/`testMeta` use `?? null` (so `0` survives). Note:
+ *   an empty array is truthy, so `steps: []` is preserved as `[]`, not `null`.
  */
 export function toWireTestCase(tc: CollectedTestCase): WireTestCase {
   const { type, ...rest } = tc as any;
@@ -68,6 +68,8 @@ export function toWireTestCase(tc: CollectedTestCase): WireTestCase {
     suitePath: rest.suitePath ?? null,
     suiteConfig: rest.suiteConfig ?? null,
     testAnnotations: rest.testAnnotations ?? null,
+    tags: rest.tags ?? null,
+    testMeta: rest.testMeta ?? null,
     locatorSnapshots: rest.locatorSnapshots || null,
   };
 }

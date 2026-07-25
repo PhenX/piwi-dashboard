@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isPiwiAnnotation } from '@piwitests/core/test-meta';
 import type { TestCaseResult, EntityLinkInfo, TestRunScmMetadata, TestRunCiMetadata } from '~~/types/api';
 import type { BrowserConfig } from '#shared/types';
 
@@ -41,7 +42,10 @@ const signalBadges = computed(() => {
   return out;
 });
 
-const annotations = computed(() => props.testCase?.testAnnotations ?? []);
+// Playwright test marks only — `piwi:` annotations become ownership badges.
+const annotations = computed(() =>
+  (props.testCase?.testAnnotations ?? []).filter((ann) => !isPiwiAnnotation(ann.type)),
+);
 
 const startedAtMs = computed<number | null>(() => props.testCase?.startedAt ?? null);
 
@@ -111,6 +115,7 @@ const { summaryColSpanClass, blockColSpanClass } = useDetailGrid(() => {
                   >
                     @{{ ann.type }}
                   </UBadge>
+                  <SharedTestMetaBadges :tags="testCase?.tags" :meta="testCase?.testMeta" />
                 </div>
                 <p class="text-xs text-gray-500 mt-0.5">
                   <span v-if="testCase?.location">{{ testCase.location }}</span>

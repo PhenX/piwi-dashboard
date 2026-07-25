@@ -4,6 +4,13 @@ Piwi Dashboard is under active development (pre-1.0). This page shows direction,
 
 ## Recently shipped
 
+- **Pull-request feedback** — when a run finishes on a branch with an open pull request, Piwi posts a summary comment
+  (new failures separated from pre-existing ones, each with its owner and the suggested replacement locator) and a
+  commit status. GitHub and GitLab; off by default.
+- **CI gate** — `npx piwi gate` fails a build on the dashboard's analysis rather than on the raw exit code: required
+  tags, new regressions, newly flaky tests, or a failure cluster never seen before.
+- **Test tags & ownership** — Playwright's own test tags plus `piwi:owner` / `priority` / `feature` / `link`
+  annotations, filterable across the test-case catalog and the flaky leaderboard.
 - **Import of existing history** — backfill runs recorded before Piwi from Playwright's own blob reports or bare trace
   files, with traces and screenshots, from a page in the dashboard. Imports are idempotent and deliberately silent (no
   notifications, AI diagnosis or regression signals).
@@ -23,7 +30,6 @@ Piwi Dashboard is under active development (pre-1.0). This page shows direction,
 
 ## Exploring
 
-- Deeper CI feedback (PR annotations / status summaries).
 - More backend-log instrumentation packages beyond ASP.NET Core and Nitro.
 - Merging imported shards of one CI run into a single run (today each shard imports separately).
 - A dual ESM/CJS reporter build (the package is CommonJS-only today; named imports work everywhere, but a native ESM default import needs an interop shim).

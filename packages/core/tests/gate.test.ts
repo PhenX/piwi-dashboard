@@ -1,0 +1,134 @@
+import { describe, test, expect } from 'vitest';
+import { evaluateGatePolicy, formatGateResult, isEmptyPolicy, type GateFacts, type GatePolicy } from '../src/gate';
+
+function facts(overrides: Partial<GateFacts> = {}): GateFacts {
+  return {
+    runId: 42,
+    runUrl: 'https://piwi.example.com/test-runs/42',
+    projectName: 'checkout',
+    status: 'passed',
+    totalTests: 100,
+    failedTests: 0,
+    newRegressions: 0,
+    newFlaky: 0,
+    newClusters: 0,
+    failingByTag: {},
+    unmatchedTags: [],
+    ...overrides,
+  };
+}
+
+describe('isEmptyPolicy', () => {
+  test('an empty policy protects nothing and must be rejected by callers', () => {
+    expect(isEmptyPolicy({})).toBe(true);
+    expect(isEmptyPolicy({ requireTags: [] })).toBe(true);
+    expect(isEmptyPolicy({ failOnNewCluster: false })).toBe(true);
+  });
+
+  test('any single rule makes it non-empty', () => {
+    const policies: GatePolicy[] = [
+      { requireTags: ['critical'] },
+      { maxFailed: 0 },
+      { maxNewRegressions: 0 },
+      { maxNewFlaky: 0 },
+      { failOnNewCluster: true },
+    ];
+    for (const policy of policies) expect(isEmptyPolicy(policy)).toBe(false);
+  });
+
+  test('a zero threshold is a real rule, not an absent one', () => {
+    expect(isEmptyPolicy({ maxFailed: 0 })).toBe(false);
+  });
+});
+
+describe('evaluateGatePolicy', () => {
+  test('passes when nothing is violated', () => {
+    const result = evaluateGatePolicy(facts(), { maxFailed: 0, failOnNewCluster: true });
+    expect(result.passed).toBe(true);
+    expect(result.violations).toEqual([]);
+  });
+
+  test('a threshold is a maximum, not a target', () => {
+    expect(evaluateGatePolicy(facts({ failedTests: 3 }), { maxFailed: 3 }).passed).toBe(true);
+    expect(evaluateGatePolicy(facts({ failedTests: 4 }), { maxFailed: 3 }).passed).toBe(false);
+  });
+
+  test('reports a required tag whose tests failed', () => {
+    const result = evaluateGatePolicy(
+      facts({
+        failedTests: 1,
+        failingByTag: { critical: [{ title: 'checkout works', filePath: 'tests/a.spec.ts', executionId: 7 }] },
+      }),
+      { requireTags: ['critical'] },
+    );
+    expect(result.passed).toBe(false);
+    expect(result.violations[0]).toMatchObject({ rule: 'required-tag', actual: 1 });
+    expect(result.violations[0]!.message).toContain('checkout works');
+  });
+
+  test('truncates a long required-tag failure list', () => {
+    const failing = Array.from({ length: 6 }, (_, i) => ({
+      title: `test ${i}`,
+      filePath: 'tests/a.spec.ts',
+      executionId: i,
+    }));
+    const result = evaluateGatePolicy(facts({ failingByTag: { critical: failing } }), { requireTags: ['critical'] });
+    expect(result.violations[0]!.message).toContain('+3 more');
+  });
+
+  // A misspelled tag that matches nothing would otherwise pass silently, which
+  // is the worst possible outcome for a rule meant to block merges.
+  test('an unmatched required tag is itself a violation', () => {
+    const result = evaluateGatePolicy(facts({ unmatchedTags: ['critcal'] }), { requireTags: ['critcal'] });
+    expect(result.passed).toBe(false);
+    expect(result.violations[0]!.rule).toBe('unmatched-tag');
+    expect(result.violations[0]!.message).toContain('@critcal');
+  });
+
+  test('reports every violation rather than stopping at the first', () => {
+    const result = evaluateGatePolicy(facts({ failedTests: 9, newRegressions: 4, newFlaky: 2, newClusters: 1 }), {
+      maxFailed: 0,
+      maxNewRegressions: 0,
+      maxNewFlaky: 0,
+      failOnNewCluster: true,
+    });
+    expect(result.violations.map((v) => v.rule)).toEqual([
+      'max-failed',
+      'max-new-regressions',
+      'max-new-flaky',
+      'new-cluster',
+    ]);
+  });
+
+  test('an unset threshold is not enforced', () => {
+    const result = evaluateGatePolicy(facts({ failedTests: 50, newFlaky: 9 }), { maxNewRegressions: 0 });
+    expect(result.passed).toBe(true);
+  });
+
+  test('failOnNewCluster only fires when a cluster is new', () => {
+    expect(evaluateGatePolicy(facts({ newClusters: 0 }), { failOnNewCluster: true }).passed).toBe(true);
+    expect(evaluateGatePolicy(facts({ newClusters: 2 }), { failOnNewCluster: true }).passed).toBe(false);
+  });
+
+  test('carries the facts through for the caller to render', () => {
+    const result = evaluateGatePolicy(facts({ failedTests: 1 }), { maxFailed: 0 });
+    expect(result.facts.runId).toBe(42);
+  });
+});
+
+describe('formatGateResult', () => {
+  test('leads with the verdict and ends with the run URL', () => {
+    const output = formatGateResult(evaluateGatePolicy(facts(), { maxFailed: 0 }));
+    expect(output.split('\n')[0]).toContain('✔ Piwi gate passed');
+    expect(output.trimEnd().endsWith('https://piwi.example.com/test-runs/42')).toBe(true);
+  });
+
+  test('lists each violation', () => {
+    const output = formatGateResult(
+      evaluateGatePolicy(facts({ failedTests: 2, newClusters: 1 }), { maxFailed: 0, failOnNewCluster: true }),
+    );
+    expect(output).toContain('✖ Piwi gate failed');
+    expect(output).toContain('2 failing tests (limit 0)');
+    expect(output).toContain('1 new failure cluster');
+  });
+});

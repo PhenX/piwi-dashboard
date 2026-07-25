@@ -112,7 +112,14 @@ import {
 import { apiGetAdminStats } from './admin';
 import { apiDeleteTestRun } from './test-runs';
 import { apiCheckDemoImport, apiDemoImport } from './import';
-import { apiGetWastedWaits, apiPutWastedWaits, apiGetTimeoutHygiene, apiPutTimeoutHygiene } from './settings';
+import {
+  apiGetWastedWaits,
+  apiPutWastedWaits,
+  apiGetTimeoutHygiene,
+  apiPutTimeoutHygiene,
+  apiGetPrFeedback,
+  apiPutPrFeedback,
+} from './settings';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
@@ -882,6 +889,12 @@ routes.push(
     method: 'PUT',
     pattern: /^\/api\/settings\/timeout-hygiene$/,
     handler: (_, body) => apiPutTimeoutHygiene(body as Parameters<typeof apiPutTimeoutHygiene>[0]),
+  },
+  { method: 'GET', pattern: /^\/api\/settings\/pr-feedback$/, handler: () => apiGetPrFeedback() },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/settings\/pr-feedback$/,
+    handler: (_, body) => apiPutPrFeedback(body as Parameters<typeof apiPutPrFeedback>[0]),
   },
 );
 

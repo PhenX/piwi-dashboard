@@ -52,6 +52,8 @@ const q = ref(typeof init.q === 'string' ? init.q : '');
 const searchInput = ref(q.value);
 const statuses = ref<string[]>(typeof init.status === 'string' ? init.status.split(',').filter(Boolean) : []);
 const age = ref(typeof init.age === 'string' && init.age !== '' ? Math.max(0, Number(init.age) || 0) : defaultAge);
+const tagsFilter = ref(typeof init.tags === 'string' ? init.tags : '');
+const tagsInput = ref(tagsFilter.value);
 const sort = ref<TestCasesSort>(typeof init.sort === 'string' ? (init.sort as TestCasesSort) : 'lastRun');
 const dir = ref<'asc' | 'desc'>(init.dir === 'asc' ? 'asc' : 'desc');
 const initialPageSize = Number(init.pageSize);
@@ -63,7 +65,13 @@ watch(
     q.value = value.trim();
   }, 300),
 );
-watch([q, statuses, age, sort, dir, pageSize, treeView], () => {
+watch(
+  tagsInput,
+  useDebounceFn((value: string) => {
+    tagsFilter.value = value.trim();
+  }, 300),
+);
+watch([q, statuses, tagsFilter, age, sort, dir, pageSize, treeView], () => {
   page.value = 1;
 });
 
@@ -72,6 +80,7 @@ const query = computed(() => ({
   offset: treeView.value ? 0 : (page.value - 1) * pageSize.value,
   ...(q.value ? { q: q.value } : {}),
   ...(statuses.value.length > 0 ? { status: statuses.value.join(',') } : {}),
+  ...(tagsFilter.value ? { tags: tagsFilter.value } : {}),
   maxAgeDays: age.value,
   sort: sort.value,
   dir: dir.value,
@@ -90,12 +99,13 @@ watch(
 );
 
 if (props.syncQuery) {
-  watch([q, statuses, age, sort, dir, page, pageSize], () => {
+  watch([q, statuses, tagsFilter, age, sort, dir, page, pageSize], () => {
     router.replace({
       query: {
         ...route.query,
         q: q.value || undefined,
         status: statuses.value.length > 0 ? statuses.value.join(',') : undefined,
+        tags: tagsFilter.value || undefined,
         age: age.value !== defaultAge ? String(age.value) : undefined,
         sort: sort.value !== 'lastRun' ? sort.value : undefined,
         dir: dir.value !== 'desc' ? dir.value : undefined,
@@ -213,6 +223,15 @@ defineExpose({ refresh });
         class="min-w-48 max-sm:flex-1"
         aria-label="Search test cases"
       />
+      <UInput
+        v-model="tagsInput"
+        placeholder="Tags (comma-separated)…"
+        icon="i-lucide-tag"
+        size="sm"
+        class="min-w-44 max-sm:flex-1"
+        aria-label="Filter by tag"
+        title="Show only cases carrying every listed tag. A leading @ is optional."
+      />
       <div class="flex flex-wrap items-center gap-1">
         <button
           v-for="opt in STATUS_OPTIONS"
@@ -324,6 +343,16 @@ defineExpose({ refresh });
                   >
                     {{ row.original.title }}
                   </NuxtLink>
+                  <SharedTestMetaBadges
+                    :tags="row.original.tags"
+                    :meta="{
+                      owner: row.original.owner ?? undefined,
+                      priority: row.original.priority ?? undefined,
+                      feature: row.original.feature ?? undefined,
+                      link: row.original.link ?? undefined,
+                    }"
+                    :max-tags="4"
+                  />
                   <div class="flex items-center gap-1 text-xs text-muted">
                     <UIcon name="i-lucide-file-code" class="size-3 shrink-0" />
                     <OpenInIdeLink

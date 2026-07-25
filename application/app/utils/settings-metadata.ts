@@ -26,6 +26,7 @@ export type SettingsPageId =
   | 'storage'
   | 'wasted-time'
   | 'timeout-hygiene'
+  | 'pr-feedback'
   | 'ai'
   | 'about';
 
@@ -137,6 +138,15 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     roles: [Role.ADMINISTRATOR],
     introHelp: 'settings.timeout-hygiene',
     fields: [{ id: 'timeout-hygiene.thresholds', label: 'Detection thresholds', help: 'settings.timeout-hygiene' }],
+  },
+  {
+    id: 'pr-feedback',
+    label: 'Pull requests',
+    icon: 'i-lucide-git-pull-request',
+    to: '/settings/pr-feedback',
+    roles: [Role.ADMINISTRATOR],
+    introHelp: 'settings.pr-feedback',
+    fields: [{ id: 'pr-feedback.settings', label: 'Pull-request feedback', help: 'settings.pr-feedback' }],
   },
   {
     id: 'ai',

@@ -3,8 +3,8 @@
  * These types are used by both the server API and the app frontend
  */
 
-import type { Role, FilterDetails, TestSourceFrame } from '#shared/types';
-export type { TestSourceFrame };
+import type { Role, FilterDetails, TestMetadata, TestSourceFrame } from '#shared/types';
+export type { TestMetadata, TestSourceFrame };
 
 // ============================================================================
 // Metadata types
@@ -615,6 +615,10 @@ export interface TestCaseResult {
   filePath?: string;
   suitePath?: string[];
   testAnnotations?: Array<{ type: string; description?: string }> | null;
+  /** Tags declared on the test, normalized with `@` stripped. */
+  tags?: string[] | null;
+  /** Ownership metadata from `piwi:` annotations. */
+  testMeta?: TestMetadata | null;
   status: string;
   duration?: number | null;
   location?: string;
@@ -753,6 +757,12 @@ export interface TestCaseWithStats {
   filePath: string;
   suitePath: string;
   title: string;
+  /** Latest-known tags and `piwi:` metadata declared on the test. */
+  tags: string[] | null;
+  owner: string | null;
+  priority: string | null;
+  feature: string | null;
+  link: string | null;
   status: string;
   totalRuns: number;
   passedRuns: number;
