@@ -142,7 +142,9 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
     for (const entry of added) {
       if (maxBytes.value != null && entry.size > maxBytes.value) {
         entry.state = 'too-large';
-        entry.message = `${formatBytes(entry.size)} exceeds this server's ${formatBytes(maxBytes.value)} limit.`;
+        // Deliberately says nothing about *where* the limit comes from: the
+        // same page runs against a server and against the demo, which has none.
+        entry.message = `${formatBytes(entry.size)} exceeds the ${formatBytes(maxBytes.value)} limit.`;
       } else if (entry.size === 0) {
         entry.state = 'invalid';
         entry.message = 'The file is empty.';

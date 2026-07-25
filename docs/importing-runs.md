@@ -130,7 +130,10 @@ before installing anything.
 
 Two differences from a self-hosted instance:
 
-- **Archives are capped at 50 MB**, well below the server's default, because everything is held in the browser.
+- **The size limit comes from your browser, not from a server.** The demo asks how much storage the origin has free
+  and offers a quarter of it, so the figure on the page reflects your machine rather than a fixed number — typically a
+  few hundred megabytes. Anything larger is refused before it is read, because exceeding the quota would otherwise fail
+  part-way through and leave a half-imported run behind.
 - **Imported data is local and temporary.** It never leaves your machine, and it is cleared when you reset the demo or
   when the demo's sample dataset is refreshed to a new version.
 

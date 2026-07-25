@@ -1,16 +1,29 @@
 /**
  * Minimal browser-side ZIP reader for the demo's committed trace archives.
  *
- * Mirrors the server's `trace-zip.ts` central-directory walk, but built on
- * DataView + DecompressionStream('deflate-raw') instead of Buffer + node:zlib
- * so it runs inside the demo service worker. Only what the demo needs: read a
- * filtered subset of entries; corrupt or unsupported entries are skipped
- * rather than crashing (same posture as the server's `parseZip`).
+ * Mirrors the server's `trace-zip.ts`, including its split: walk the central
+ * directory first, then inflate individual entries on demand. Importing a
+ * multi-hundred-megabyte archive in a service worker makes that split matter —
+ * inflating every entry up front would hold the whole archive twice.
+ *
+ * Built on DataView + DecompressionStream('deflate-raw') instead of Buffer +
+ * node:zlib so it runs in the worker. Corrupt or unsupported entries are
+ * skipped rather than crashing (same posture as the server's `parseZip`).
  */
 
 export interface DemoZipEntry {
   name: string;
   data: Uint8Array;
+}
+
+/** Central-directory metadata for one entry — no decompression performed. */
+export interface DemoZipEntryMeta {
+  name: string;
+  /** Compression method: 0 = stored, 8 = deflated. */
+  method: number;
+  compressedSize: number;
+  /** Byte offset in the source buffer where compressed data begins. */
+  dataStart: number;
 }
 
 const EOCD_SIGNATURE = 0x06054b50;
@@ -23,15 +36,10 @@ async function inflateRaw(compressed: Uint8Array<ArrayBuffer>): Promise<Uint8Arr
 }
 
 /**
- * Read the entries of a ZIP archive whose names pass `include`, with their
- * decompressed data. Reads via the central directory so data descriptors and
- * flag variations don't affect correctness. Throws when the buffer is not a
- * ZIP at all.
+ * Walk the central directory and return entry metadata, decompressing nothing.
+ * Throws when the buffer is not a ZIP at all.
  */
-export async function readZipEntries(
-  bytes: Uint8Array<ArrayBuffer>,
-  include: (name: string) => boolean,
-): Promise<DemoZipEntry[]> {
+export function readZipDirectory(bytes: Uint8Array<ArrayBuffer>): DemoZipEntryMeta[] {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const decoder = new TextDecoder();
 
@@ -49,7 +57,7 @@ export async function readZipEntries(
   const entryCount = view.getUint16(eocdOffset + 10, true);
   const cdOffset = view.getUint32(eocdOffset + 16, true);
 
-  const entries: DemoZipEntry[] = [];
+  const metas: DemoZipEntryMeta[] = [];
   let pos = cdOffset;
 
   for (let i = 0; i < entryCount; i++) {
@@ -66,29 +74,55 @@ export async function readZipEntries(
 
     pos += 46 + nameLen + extraLen + commentLen;
 
-    // Directories and ZIP64 sentinels are never trace entries.
+    // Directories and ZIP64 sentinels are never entries we can read.
     if (name.endsWith('/') || compressedSize === 0xffffffff) continue;
-    if (!include(name)) continue;
 
-    try {
-      if (localOffset + 30 > bytes.length) continue;
-      if (view.getUint32(localOffset, true) !== LOCAL_SIGNATURE) continue;
-      const localNameLen = view.getUint16(localOffset + 26, true);
-      const localExtraLen = view.getUint16(localOffset + 28, true);
-      const dataStart = localOffset + 30 + localNameLen + localExtraLen;
-      if (dataStart + compressedSize > bytes.length) continue;
+    if (localOffset + 30 > bytes.length) continue;
+    if (view.getUint32(localOffset, true) !== LOCAL_SIGNATURE) continue;
+    const localNameLen = view.getUint16(localOffset + 26, true);
+    const localExtraLen = view.getUint16(localOffset + 28, true);
+    const dataStart = localOffset + 30 + localNameLen + localExtraLen;
+    if (dataStart + compressedSize > bytes.length) continue;
 
-      const compressed = bytes.subarray(dataStart, dataStart + compressedSize);
-      if (method === 0) {
-        entries.push({ name, data: compressed });
-      } else if (method === 8) {
-        entries.push({ name, data: await inflateRaw(compressed) });
-      }
-      // Other compression methods: skip the entry.
-    } catch {
-      // Corrupt entry — skip rather than crash.
-    }
+    metas.push({ name, method, compressedSize, dataStart });
   }
 
+  return metas;
+}
+
+/**
+ * Decompress one entry. A stored entry is returned as a view into the archive,
+ * so reading it costs nothing until the caller keeps it. Returns null for a
+ * corrupt entry or a compression method this reader does not implement.
+ */
+export async function inflateZipEntry(
+  bytes: Uint8Array<ArrayBuffer>,
+  meta: DemoZipEntryMeta,
+): Promise<Uint8Array | null> {
+  try {
+    const compressed = bytes.subarray(meta.dataStart, meta.dataStart + meta.compressedSize);
+    if (meta.method === 0) return compressed;
+    if (meta.method === 8) return await inflateRaw(compressed as Uint8Array<ArrayBuffer>);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read the entries whose names pass `include`, with their decompressed data.
+ * Convenience over the two functions above, for callers reading a small
+ * filtered subset — an import reads on demand instead.
+ */
+export async function readZipEntries(
+  bytes: Uint8Array<ArrayBuffer>,
+  include: (name: string) => boolean,
+): Promise<DemoZipEntry[]> {
+  const entries: DemoZipEntry[] = [];
+  for (const meta of readZipDirectory(bytes)) {
+    if (!include(meta.name)) continue;
+    const data = await inflateZipEntry(bytes, meta);
+    if (data) entries.push({ name: meta.name, data });
+  }
   return entries;
 }

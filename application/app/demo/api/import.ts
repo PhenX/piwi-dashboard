@@ -16,7 +16,7 @@
 
 import { eq } from 'drizzle-orm';
 import { getDemoDb, putDemoImportedFile } from '../db.client';
-import { readZipEntries } from '../trace-zip.client';
+import { readZipDirectory, inflateZipEntry, readZipEntries } from '../trace-zip.client';
 import { publishDemoGlobalEvent } from '../run-events';
 import { persistRunCases, type RunCaseInput } from './reporter';
 import { projects } from '~~/server/database/schema.sqlite';
@@ -37,23 +37,67 @@ import { formatBytes } from '#shared/utils/format-bytes';
 import type { ImportCheckResponse, ImportRunResponse } from '#shared/import.types';
 
 /**
- * Demo archives are held in IndexedDB and inflated in a service worker, so the
- * ceiling is far below the server's — enough for a real run's report, not for
- * a CI artifact bundle.
+ * How much of the origin's free storage one archive may claim.
+ *
+ * The demo writes an import into IndexedDB, so the real ceiling is the browser
+ * storage quota — and exceeding it fails *during* the write, leaving a
+ * half-imported run behind. Checking against actual free space up front turns
+ * that into a clean refusal, which is the whole point of the pre-flight.
+ *
+ * A fraction rather than all of it: an import needs room for the archive, the
+ * files it unpacks, and the database that grows alongside them, and a demo has
+ * no business filling someone's disk.
  */
-const DEMO_MAX_IMPORT_BYTES = 50 * 1024 * 1024;
+const QUOTA_SHARE = 0.25;
+
+/** Used when the browser will not report a quota (older Safari, private mode). */
+const FALLBACK_MAX_IMPORT_BYTES = 100 * 1024 * 1024;
+
+/** Never refuse below this — a modest blob report should always be importable. */
+const MIN_MAX_IMPORT_BYTES = 25 * 1024 * 1024;
+
+/** Never allow above this, whatever the disk says; it all passes through memory. */
+const MAX_MAX_IMPORT_BYTES = 1024 * 1024 * 1024;
+
+/** The share of free storage one archive may claim, clamped to sane bounds. */
+export function demoImportLimitFor(freeBytes: number): number {
+  if (!Number.isFinite(freeBytes) || freeBytes <= 0) return MIN_MAX_IMPORT_BYTES;
+  return Math.min(MAX_MAX_IMPORT_BYTES, Math.max(MIN_MAX_IMPORT_BYTES, Math.floor(freeBytes * QUOTA_SHARE)));
+}
+
+/**
+ * The largest archive this browser can be expected to take, from what it
+ * reports as free rather than from a number picked in advance.
+ */
+async function resolveDemoMaxBytes(): Promise<number> {
+  try {
+    const { quota, usage } = await navigator.storage.estimate();
+    if (typeof quota !== 'number' || quota <= 0) return FALLBACK_MAX_IMPORT_BYTES;
+    return demoImportLimitFor(quota - (usage ?? 0));
+  } catch {
+    return FALLBACK_MAX_IMPORT_BYTES;
+  }
+}
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 
 type DemoDb = Awaited<ReturnType<typeof getDemoDb>>;
 
-/** Read the whole archive once, then serve entries from memory. */
-async function openDemoArchive(bytes: Uint8Array): Promise<{ entryNames: string[]; readEntry: ArchiveEntryReader }> {
-  const entries = await readZipEntries(bytes as Uint8Array<ArrayBuffer>, () => true);
-  const byName = new Map(entries.map((entry) => [entry.name, entry.data]));
+/**
+ * Walk the archive's directory, then inflate entries only as the parser asks
+ * for them — the same shape as the server's reader, and the reason a large
+ * archive is not held twice.
+ */
+function openDemoArchive(bytes: Uint8Array): { entryNames: string[]; readEntry: ArchiveEntryReader } {
+  const directory = readZipDirectory(bytes as Uint8Array<ArrayBuffer>);
+  const byName = new Map(directory.map((meta) => [meta.name, meta]));
+
   return {
-    entryNames: entries.map((entry) => entry.name),
-    readEntry: async (name) => byName.get(name) ?? null,
+    entryNames: directory.map((meta) => meta.name),
+    async readEntry(name) {
+      const meta = byName.get(name);
+      return meta ? await inflateZipEntry(bytes as Uint8Array<ArrayBuffer>, meta) : null;
+    },
   };
 }
 
@@ -90,14 +134,15 @@ export async function apiCheckDemoImport(body: {
     .filter((hash): hash is string => typeof hash === 'string')
     .map((hash) => hash.toLowerCase());
 
+  const maxBytes = await resolveDemoMaxBytes();
   const alreadyImported = project ? await findImportedHashes(db, project.id, hashes) : new Map<string, number>();
   const results = judgeImportFiles(body.files ?? [], {
-    maxBytes: DEMO_MAX_IMPORT_BYTES,
+    maxBytes,
     alreadyImported,
-    tooLargeSuffix: ' — the demo keeps everything in your browser.',
+    tooLargeSuffix: ' — the demo stores everything in this browser, and that is what it has room for.',
   });
 
-  return { maxBytes: DEMO_MAX_IMPORT_BYTES, results };
+  return { maxBytes, results };
 }
 
 /** Import one archive, dispatching on what the ZIP turns out to hold. */
@@ -110,8 +155,10 @@ export async function apiDemoImport(form: FormData): Promise<ImportRunResponse> 
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (bytes.length === 0) throw new Error('The uploaded archive is empty');
-  if (bytes.length > DEMO_MAX_IMPORT_BYTES) {
-    throw new Error(`Archive too large (max ${formatBytes(DEMO_MAX_IMPORT_BYTES)} in the demo)`);
+
+  const maxBytes = await resolveDemoMaxBytes();
+  if (bytes.length > maxBytes) {
+    throw new Error(`Archive too large: ${formatBytes(bytes.length)} against ${formatBytes(maxBytes)} of free storage`);
   }
 
   const groupRaw = String(form.get('importGroup') ?? '').toLowerCase();
@@ -126,7 +173,7 @@ export async function apiDemoImport(form: FormData): Promise<ImportRunResponse> 
 
   let archive;
   try {
-    archive = await openDemoArchive(bytes);
+    archive = openDemoArchive(bytes);
   } catch (error) {
     throw new Error(`Not a readable ZIP archive: ${(error as Error).message}`);
   }
