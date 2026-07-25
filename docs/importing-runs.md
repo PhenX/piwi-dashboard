@@ -68,6 +68,13 @@ test failed — the error with its call log, so it clusters like any other failu
 selection as the run — which is what you want when the files came from a single CI job. Upload a trace on its own and
 it becomes a single-test run instead.
 
+The grouping is fixed when you *choose* the files, not when they upload, so retrying one that failed puts it back with
+its siblings. Two separate selections are two runs, even if you import them with one click — pick every trace that
+belongs to a run in one go.
+
+Grouping needs the browser to digest the files, which requires HTTPS (or localhost). Over plain HTTP each trace
+imports as its own single-test run; the page says so before you start.
+
 Two different traces for the same test in one selection are treated as **attempts**: the second becomes retry 1, so a
 test that failed then passed is recognised as flaky. Upload order is attempt order.
 
@@ -131,3 +138,5 @@ instead of failing mid-upload.
   videos — a trace holds only itself.
 - **Administrators only.** Importing can create projects and back-dates history, so it is not open to the reporter role.
 - **One archive per request.** There is no bulk endpoint; the page handles batching for you.
+- **Not available in the [live demo](https://piwitests.github.io/demo/).** The demo runs entirely in the browser
+  against a fixed sample dataset, with no server to upload to.

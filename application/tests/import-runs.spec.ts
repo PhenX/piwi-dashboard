@@ -262,6 +262,10 @@ test.describe('Trace file import', () => {
     error: { message: "Error: expect(locator).toBeVisible() failed\n\nLocator: getByRole('row')" },
   });
 
+  const groupA = buildTraceArchive({ title: 'batch.spec.ts:1 › alpha', wallTime: 1_700_000_100_000 });
+  const groupB = buildTraceArchive({ title: 'batch.spec.ts:2 › beta', wallTime: 1_700_000_200_000 });
+  const groupC = buildTraceArchive({ title: 'batch.spec.ts:3 › gamma', wallTime: 1_700_000_300_000 });
+
   function post(request: APIRequestContext, projectName: string, archive: Buffer, group?: string) {
     return request.post('/api/test-runs/import', {
       multipart: {
@@ -325,6 +329,47 @@ test.describe('Trace file import', () => {
     // Both failures reach the same cluster.
     expect(attempts[0].failureClusterId).toBeTruthy();
     expect(attempts[1].failureClusterId).toBe(attempts[0].failureClusterId);
+  });
+
+  test('a retried upload rejoins the run its siblings went to', async ({ page, request }) => {
+    // Seed the project so the import page has one to open.
+    const seed = await post(request, PROJECT.IMPORT_TRACE_RETRY, passing);
+    const projectId = (await seed.json()).projectId;
+
+    // Fail the second upload once, so the batch finishes with one failure the
+    // user then retries — the case where a per-click grouping key would send
+    // the retry to a run of its own.
+    let uploads = 0;
+    await page.route('**/api/test-runs/import', async (route) => {
+      uploads++;
+      if (uploads === 2) {
+        await route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"try again"}' });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.goto(`/projects/${projectId}/import`);
+    await expect(page.getByText(/Up to .* per archive/)).toBeVisible({ timeout: 30000 });
+
+    await page.locator('input[type=file]').setInputFiles([
+      { name: 'a.zip', mimeType: 'application/zip', buffer: groupA },
+      { name: 'b.zip', mimeType: 'application/zip', buffer: groupB },
+      { name: 'c.zip', mimeType: 'application/zip', buffer: groupC },
+    ]);
+
+    await page.getByRole('button', { name: /^Import 3 archives$/ }).click();
+    await expect(page.getByText('Failed', { exact: true })).toBeVisible({ timeout: 30000 });
+
+    // Retry just the failure.
+    await page.getByRole('button', { name: /^Import 1 archive$/ }).click();
+    await expect(page.getByText('Failed', { exact: true })).toBeHidden({ timeout: 30000 });
+
+    // All three executions belong to one run, retry included. Assert the count
+    // first so the read waits for the retried row to render its link.
+    const runLink = page.getByRole('link', { name: /^View run #\d+$/ });
+    await expect(runLink).toHaveCount(3);
+    expect(new Set(await runLink.allTextContents()).size).toBe(1);
   });
 
   test('refuses a trace whose test cannot be identified', async ({ request }) => {

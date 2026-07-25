@@ -66,6 +66,7 @@ export const PROJECT = {
   IMPORT_BLOB_UI: 'import-blob-ui-test',
   IMPORT_TRACE: 'import-trace-test',
   IMPORT_TRACE_GROUP: 'import-trace-group-test',
+  IMPORT_TRACE_RETRY: 'import-trace-retry-test',
   INCOMPLETE: 'incomplete-project',
   INLINE_HELP: 'inline-help-test',
   INSIGHTS_SPEC_HEALTH: 'insights-spec-health-test',

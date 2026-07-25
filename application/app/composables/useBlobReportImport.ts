@@ -39,6 +39,13 @@ export interface ImportFileEntry {
   /** Fraction 0–1 of the current phase, while `hashing` or `uploading`. */
   progress: number;
   hash?: string;
+  /**
+   * Identity of the selection this file arrived in, sent with the upload so
+   * traces chosen together land in one run. Fixed when the file is added, not
+   * when it is uploaded, so retrying a failure rejoins the run its siblings
+   * went to instead of starting a second one.
+   */
+  group?: string;
   result?: ImportRunResponse;
 }
 
@@ -164,6 +171,13 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
       }
     }
 
+    // Traces carry no run of their own, so the selection is the run: every file
+    // chosen together shares one key. Derived from the digests rather than
+    // generated, so re-importing the same selection reuses that run instead of
+    // building a second copy of it. Blob reports ignore it.
+    const group = await groupKeyFor(withinLimit);
+    for (const entry of withinLimit) entry.group = group ?? undefined;
+
     await runPreflight(withinLimit.filter((e) => e.state === 'checking'));
   }
 
@@ -207,12 +221,6 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
     const queued = entries.value.filter((e) => UPLOADABLE.includes(e.state));
     batch.value = { done: 0, total: queued.length };
 
-    // Traces carry no run of their own, so the batch itself is the run: every
-    // trace uploaded under one group joins a single run. Derived from the file
-    // digests rather than generated, so re-importing the same selection reuses
-    // that run instead of building a second copy of it. Blob reports ignore it.
-    const group = await groupKeyFor(queued);
-
     try {
       for (const entry of queued) {
         entry.state = 'uploading';
@@ -220,7 +228,7 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
         entry.progress = 0;
 
         try {
-          const result = await uploadArchive(projectName.value, entry, group, (p) => {
+          const result = await uploadArchive(projectName.value, entry, entry.group ?? null, (p) => {
             entry.progress = p;
           });
           entry.result = result;

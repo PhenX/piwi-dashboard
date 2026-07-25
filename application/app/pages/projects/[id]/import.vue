@@ -17,6 +17,13 @@ useHead(
   })),
 );
 
+/**
+ * The demo runs entirely in the browser against a fixed seed — no server to
+ * receive an upload, no storage to put a trace in. The affordance is hidden on
+ * the project page, so this only catches a deep link.
+ */
+const isDemoMode = useRuntimeConfig().public.demoMode;
+
 const projectName = computed(() => project.value?.name);
 const {
   entries,
@@ -35,7 +42,9 @@ const {
   clearFinished,
 } = useBlobReportImport(projectName);
 
-onMounted(loadLimit);
+onMounted(() => {
+  if (!isDemoMode) loadLimit();
+});
 
 const fileInput = ref<HTMLInputElement | null>(null);
 const dragging = ref(false);
@@ -75,7 +84,25 @@ const finishedCount = computed(() => entries.value.filter((e) => ['imported', 'd
     </template>
 
     <template #body>
-      <div class="p-4 space-y-4">
+      <div v-if="isDemoMode" class="p-4">
+        <SectionCard title="Import past runs" icon="i-lucide-import">
+          <EmptyState
+            icon="i-lucide-cloud-off"
+            text="Importing is not available in the demo — it runs entirely in your browser, with no server to upload archives to and a fixed set of sample data."
+          >
+            <UButton
+              label="Read how importing works"
+              icon="i-lucide-book-open"
+              variant="outline"
+              size="sm"
+              to="https://piwitests.github.io/importing-runs"
+              target="_blank"
+            />
+          </EmptyState>
+        </SectionCard>
+      </div>
+
+      <div v-else class="p-4 space-y-4">
         <SectionCard
           title="Import past runs"
           icon="i-lucide-import"
