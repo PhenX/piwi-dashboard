@@ -16,7 +16,7 @@
  * model is whatever the operator configured, and the patch was validated
  * against their own source. That is the whole point of doing this locally.
  */
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { failureClusters, failureDiagnoses, testCases, testRunsCases } from '../database/schema';
 import { getLocatorHealingBatch } from './locator-healing';
 import { validatePatch, type PatchValidation } from '#shared/patch';

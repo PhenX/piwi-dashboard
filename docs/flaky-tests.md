@@ -71,6 +71,31 @@ The **Insights** tab on a run compares it against its last passing baseline and 
   <figcaption>The Insights tab on a run — pass-rate and duration deltas versus the last passing baseline, with new regressions and newly flaky tests called out.</figcaption>
 </figure>
 
+## Quarantine, with a way out
+
+Detecting a flaky test doesn't stop it blocking merges. Quarantine does — without hiding it.
+
+The usual approach is `--grep-invert @quarantine`: the test stops running, so nothing ever proves it's fixed, and the
+list only grows. A year later nobody remembers why half of it is there.
+
+**A quarantined test in Piwi keeps running and keeps reporting.** It is excluded from the [CI gate](./ci#blocking-a-merge)'s
+verdict and nothing else. That single difference is what makes the exit possible:
+
+- Passing runs after quarantine accumulate as a **streak**, and one failure resets it.
+- After five consecutive passes the test is flagged **ready to release** — the dashboard tells you, rather than waiting
+  to be asked.
+- **Candidates** are proposed from the flaky analysis, ranked by *wasted CI minutes* rather than flakiness score. A test
+  that flakes constantly but finishes in 200 ms costs nothing; one that flakes weekly and burns a four-minute timeout is
+  what actually hurts.
+- **Debt** is reported in aggregate: how many are quarantined, how many are ready to release, how long the oldest has
+  been in, and how many still have no passing streak at all.
+
+The gate always states how many failures quarantine excluded — a green gate that silently ignored failures would be
+worthless — and `--max-quarantined` sets a ceiling so the list can't grow unbounded.
+
+Manage it from the project's **Quarantine** tab, or over the API (`GET`/`POST /api/projects/:id/quarantine`,
+`DELETE /api/projects/:id/quarantine/:testCaseId`).
+
 ## Regression signals
 
 Individual test cases in a run carry at-a-glance badges:

@@ -135,6 +135,11 @@ export const HELP_TOPICS = {
     text: 'Tests that fail intermittently across runs. Impact estimates wasted CI time; the score (0–100) rates severity and root cause explains why.',
     doc: 'flaky-tests#flaky-test-detection',
   },
+  'project.quarantine': {
+    title: 'Quarantine',
+    text: 'A quarantined test still runs and still reports — it is only excluded from the CI gate’s verdict. Passing runs accumulate as a streak, so a test that recovers is flagged ready to release instead of staying quarantined forever.',
+    doc: 'flaky-tests#quarantine-with-a-way-out',
+  },
   'project.performance': {
     title: 'Performance',
     text: 'Duration trends for the suite — average and P90 (the slowest 10% threshold). Use it to catch tests getting steadily slower.',

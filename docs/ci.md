@@ -187,6 +187,8 @@ What the comment says, in this order:
 2. **Pre-existing failures** — already broken before this change. Separated so nobody debugs someone else's bug.
 3. **Flaky** — passed only on a retry.
 4. **New failure clusters** — root causes never seen before in this project.
+5. **Fixed by this change** — clusters this pull request closed, with how long they were open. See
+   [Did the fix work?](./ai-diagnosis#did-the-fix-work)
 
 Each failure carries its error, its owner and tags when the test declares them (see
 [ownership metadata](./reporter#ownership-metadata-piwi-annotations)), and — when a locator broke — the
@@ -237,13 +239,17 @@ evaluate the policy, prints every violation, and exits.
 | `--max-failed <n>` | More than `n` tests failed |
 | `--max-new-regressions <n>` | More than `n` tests newly started failing versus the last green run |
 | `--max-new-flaky <n>` | More than `n` tests newly started passing only on retry |
+| `--max-quarantined <n>` | More than `n` tests are [quarantined](./flaky-tests#quarantine-with-a-way-out) — a ceiling on quarantine debt |
 | `--fail-on-new-cluster` | This run introduced a failure cluster never seen before |
 
 At least one rule is required — an empty policy is rejected rather than passing. Exit codes are part of the contract:
 **0** satisfied, **1** violated, **2** could not evaluate. A gate that cannot run never reports success, so a
 misconfigured pipeline fails loudly instead of waving every merge through.
 
-Two behaviors worth knowing:
+Three behaviors worth knowing:
+
+- **A quarantined test's failure does not count**, but the gate always reports how many it excluded — a green gate that
+  silently ignored failures would be worthless.
 
 - **A test that failed and then passed on retry satisfies `--require-tag`.** Flakiness is what `--max-new-flaky` is
   for; treating a recovered test as a failure would make the rule unsatisfiable on any suite with retries.

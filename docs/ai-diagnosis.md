@@ -45,6 +45,31 @@ Pairs that fall in the **ambiguous band** (similarity between `PIWI_CLUSTER_SUGG
 
 Embedding-based reconciliation runs after every finished run whenever an embedding role is configured — it is independent of the auto-diagnose toggle.
 
+## Did the fix work?
+
+A cluster used to go quiet and stay open forever — nothing ever confirmed it was actually fixed. Now every full run
+answers that.
+
+When a run executes every test a cluster covers and they all pass, Piwi records the fix: the run, the commit, and how
+long the cluster was open. Two verdicts, because they are not the same claim:
+
+| Verdict | Means |
+|---|---|
+| **Stopped failing** | The tests pass again. A flaky test can achieve this by accident. |
+| **Diagnosis verified** | The commits since the last failing run touched a file the [suggested patch](#what-a-diagnosis-contains) named — the change Piwi pointed at is the change that fixed it. |
+| **Regressed** | A fix was recorded, and the cluster is failing again. A fix that didn't hold is worth knowing about. |
+
+Two rules keep the verdict honest:
+
+- **Partial runs are ignored.** A test that didn't execute hasn't been shown to pass, so a `--grep`-filtered run never
+  closes a cluster.
+- **Every affected test must pass**, not just some — a cluster is one root cause, and half of it passing means it isn't
+  fixed.
+
+When [pull-request feedback](./ci#pull-request-feedback) is on, the comment gains a **Fixed by this change** section
+naming what the pull request closed. That section is worth a comment on its own, so a green run that closed a cluster
+still gets one even with *only comment on failures* set.
+
 ## Enabling AI diagnosis
 
 Configure a provider via **Settings → AI**, or with environment variables (env always takes precedence over values stored through the UI, and the UI shows env-managed fields read-only).
@@ -204,6 +229,22 @@ When the failure is a broken locator, the context includes an **Alternative Loca
 </figure>
 
 This evidence is generated from the locator snapshots recorded by the [capture fixtures](./capture-fixtures) while tests run — make sure your specs import `test` from a fixtures file that extends `piwiFixtures`. Capture is gated by the default-on `captureLocators` reporter option. The same data drives the standalone **Alternative locators** panel on the test-case and cluster pages.
+
+## Fix plans for coding agents
+
+Everything above is assembled into one answer at `GET /api/failure-clusters/:id/fix-plan`, and as the `get_fix_plan`
+[MCP tool](./mcp): the diagnosis and its validated patch, the ranked locator replacement with the exact file and line to
+edit, the failing tests, the owning team, and the command that verifies the work.
+
+The last part is what makes it a loop rather than a lookup. The plan states which Playwright command runs exactly the
+affected tests, and that Piwi will record the fix once they pass — so an agent can confirm its own work instead of
+leaving a human to decide whether it landed.
+
+Every section degrades on its own. A cluster with no AI diagnosis still returns its failing tests, its locator
+suggestions and its verification command, so the plan is useful without an AI provider configured at all.
+
+Worth stating plainly: none of this leaves your machine. The dashboard is yours, the model is whichever one you
+configured (including a local one), and the patch was validated against your own source before you saw it.
 
 ## Custom instructions
 
