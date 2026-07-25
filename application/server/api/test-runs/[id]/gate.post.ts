@@ -5,6 +5,7 @@ import { requireProjectAccess } from '../../../utils/project-access';
 import { computeRunInsights } from '#shared/handlers/run-insights';
 import { evaluateGatePolicy, isEmptyPolicy, type GateFacts, type GatePolicy } from '@piwitests/core/gate';
 import { parseTagFilter } from '#shared/utils/tag-filter';
+import { getQuarantinedCaseIds } from '#shared/handlers/quarantine';
 
 defineRouteMeta({
   openAPI: {
@@ -25,6 +26,7 @@ defineRouteMeta({
               maxNewRegressions: { type: 'integer', minimum: 0 },
               maxNewFlaky: { type: 'integer', minimum: 0 },
               failOnNewCluster: { type: 'boolean' },
+              maxQuarantined: { type: 'integer', minimum: 0 },
             },
           },
         },
@@ -58,6 +60,7 @@ export default eventHandler(async (event) => {
     maxFailed: optionalCount(body?.maxFailed),
     maxNewRegressions: optionalCount(body?.maxNewRegressions),
     maxNewFlaky: optionalCount(body?.maxNewFlaky),
+    maxQuarantined: optionalCount(body?.maxQuarantined),
     failOnNewCluster: body?.failOnNewCluster === true,
   };
 
@@ -65,7 +68,7 @@ export default eventHandler(async (event) => {
     throw createError({
       statusCode: 400,
       message:
-        'Gate policy is empty — pass at least one of requireTags, maxFailed, maxNewRegressions, maxNewFlaky or failOnNewCluster',
+        'Gate policy is empty — pass at least one of requireTags, maxFailed, maxNewRegressions, maxNewFlaky, maxQuarantined or failOnNewCluster',
     });
   }
 
@@ -97,6 +100,18 @@ export default eventHandler(async (event) => {
     if (row.status === 'passed') passedCaseIds.add(row.testCaseId);
   }
 
+  // A quarantined test still ran and still reported — it is only excluded from
+  // the verdict. Counting it would defeat the point; hiding that it failed
+  // would make a green gate untrustworthy, so the count is reported instead.
+  const quarantined = await getQuarantinedCaseIds(db, run.projectId);
+  const failingCaseIds = new Set(
+    caseRows
+      .filter((row) => FAIL_STATUSES.includes(row.status) && !passedCaseIds.has(row.testCaseId))
+      .map((row) => row.testCaseId),
+  );
+  const quarantinedFailures = [...failingCaseIds].filter((id) => quarantined.has(id)).length;
+  const countedFailures = Math.max(0, failingCaseIds.size - quarantinedFailures);
+
   const failingByTag: GateFacts['failingByTag'] = {};
   const unmatchedTags: string[] = [];
 
@@ -114,6 +129,7 @@ export default eventHandler(async (event) => {
       .filter((row) => {
         if (!FAIL_STATUSES.includes(row.status)) return false;
         if (passedCaseIds.has(row.testCaseId)) return false;
+        if (quarantined.has(row.testCaseId)) return false;
         if (reported.has(row.testCaseId)) return false;
         reported.add(row.testCaseId);
         return true;
@@ -136,12 +152,14 @@ export default eventHandler(async (event) => {
     projectName: project?.label || project?.name || 'unknown',
     status: run.status,
     totalTests: run.totalTests,
-    failedTests: run.failedTests,
+    failedTests: countedFailures,
     newRegressions: insights?.newRegressions.length ?? 0,
     newFlaky: insights?.newFlaky.length ?? 0,
     newClusters: newClusters.length,
     failingByTag,
     unmatchedTags,
+    quarantinedFailures,
+    quarantinedTotal: quarantined.size,
   };
 
   return evaluateGatePolicy(facts, policy);

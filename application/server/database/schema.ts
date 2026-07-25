@@ -18,6 +18,7 @@ export const {
   testRunsCases,
   failureClusters,
   failureClusterAliases,
+  quarantinedTests,
   clusterMergeSuggestions,
   failureDiagnoses,
   failureDiagnosisVersions,

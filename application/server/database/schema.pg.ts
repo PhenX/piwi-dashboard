@@ -147,6 +147,45 @@ export const testCases = pgTable(
   }),
 );
 
+// Quarantined tests — a test that still runs but no longer blocks a merge.
+//
+// Skipping a flaky test hides it: it stops running, so nothing ever proves it
+// is fixed and the quarantine becomes permanent. Here a quarantined test keeps
+// executing and keeps reporting; it is only excluded from the CI gate's
+// verdict. That makes the exit ramp possible — consecutive passes are counted,
+// and a release is proposed once the test has earned it.
+export const quarantinedTests = pgTable(
+  'quarantined_tests',
+  {
+    id: serial('id').primaryKey(),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    testCaseId: integer('test_case_id')
+      .notNull()
+      .references(() => testCases.id, { onDelete: 'cascade' }),
+    reason: text('reason'),
+    source: text('source').notNull().default('manual'), // 'manual' | 'proposed'
+    /** Run id at quarantine time — passes are counted from after this run. */
+    quarantinedAtRunId: integer('quarantined_at_run_id'),
+    createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { mode: 'date' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    /** Null while active; set when the test is let back out. */
+    releasedAt: timestamp('released_at', { mode: 'date' }),
+    releasedReason: text('released_reason'),
+  },
+  (table) => ({
+    projectIdx: index('idx_quarantined_tests_project').on(table.projectId, table.releasedAt),
+    createdByIdx: index('idx_quarantined_tests_created_by').on(table.createdBy),
+    // One active quarantine per test; released rows stay as history.
+    activeUnique: uniqueIndex('idx_quarantined_tests_active')
+      .on(table.testCaseId)
+      .where(sql`released_at IS NULL`),
+  }),
+);
+
 // Failure clusters table - failed run cases grouped by normalized error fingerprint
 export const failureClusters = pgTable(
   'failure_clusters',

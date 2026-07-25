@@ -91,6 +91,7 @@ export const PROJECT = {
   PG_CONCURRENT: 'pg-concurrent-project',
   PG_TEST: 'pg-test-project',
   PROJECT_MEMBERS: 'project-members-test',
+  QUARANTINE: 'quarantine-test',
   REGRESSION_CONTEXT: 'regression-context-test',
   REPORTER_API_KEY_E2E: 'reporter-api-key-e2e-test',
   REPORTER_API_KEY_LIB: 'reporter-api-key-lib-test',

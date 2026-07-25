@@ -23,6 +23,11 @@ export interface GatePolicy {
   maxNewFlaky?: number;
   /** Fail when this run introduced a failure cluster never seen before. */
   failOnNewCluster?: boolean;
+  /**
+   * Fail when more than this many tests are quarantined. Quarantine is a debt,
+   * not a solution — this is the ceiling on how much of it a suite may carry.
+   */
+  maxQuarantined?: number;
 }
 
 /** What the server measured about the run, independent of any policy. */
@@ -40,11 +45,22 @@ export interface GateFacts {
   failingByTag: Record<string, Array<{ title: string; filePath: string; executionId: number }>>;
   /** Required tags that matched no test in this run at all. */
   unmatchedTags: string[];
+  /** Failing tests excluded from the verdict because they are quarantined. */
+  quarantinedFailures: number;
+  /** Tests currently quarantined in this project. */
+  quarantinedTotal: number;
 }
 
 export interface GateViolation {
   /** Stable identifier, so a pipeline can branch on the kind of failure. */
-  rule: 'required-tag' | 'unmatched-tag' | 'max-failed' | 'max-new-regressions' | 'max-new-flaky' | 'new-cluster';
+  rule:
+    | 'required-tag'
+    | 'unmatched-tag'
+    | 'max-failed'
+    | 'max-new-regressions'
+    | 'max-new-flaky'
+    | 'new-cluster'
+    | 'max-quarantined';
   message: string;
   /** Observed value and the limit it exceeded, when the rule is a threshold. */
   actual?: number;
@@ -64,6 +80,7 @@ export function isEmptyPolicy(policy: GatePolicy): boolean {
     policy.maxFailed == null &&
     policy.maxNewRegressions == null &&
     policy.maxNewFlaky == null &&
+    policy.maxQuarantined == null &&
     !policy.failOnNewCluster
   );
 }
@@ -121,6 +138,14 @@ export function evaluateGatePolicy(facts: GateFacts, policy: GatePolicy): GateRe
   ];
   for (const violation of thresholds) if (violation) violations.push(violation);
 
+  const quarantineViolation = overLimit(
+    'max-quarantined',
+    'quarantined tests',
+    facts.quarantinedTotal,
+    policy.maxQuarantined,
+  );
+  if (quarantineViolation) violations.push(quarantineViolation);
+
   if (policy.failOnNewCluster && facts.newClusters > 0) {
     violations.push({
       rule: 'new-cluster',
@@ -142,6 +167,11 @@ export function formatGateResult(result: GateResult): string {
       : `✖ Piwi gate failed — ${facts.projectName} run #${facts.runId}`,
     `  ${facts.totalTests} tests, ${facts.failedTests} failed, ${facts.newRegressions} new, ${facts.newFlaky} newly flaky`,
   ];
+  if (facts.quarantinedFailures > 0) {
+    lines.push(
+      `  ${facts.quarantinedFailures} failing ${facts.quarantinedFailures === 1 ? 'test is' : 'tests are'} quarantined and did not count`,
+    );
+  }
   for (const violation of result.violations) lines.push(`  ✖ ${violation.message}`);
   lines.push(`  ${facts.runUrl}`);
   return lines.join('\n');

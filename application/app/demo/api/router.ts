@@ -40,6 +40,12 @@ import {
 import { listTags, createTag, updateTag, deleteTag } from '#shared/handlers/tags';
 import { listProjectMarkers, createMarker, updateMarker, deleteMarker } from '#shared/handlers/markers';
 import {
+  addQuarantine,
+  listQuarantine,
+  releaseQuarantine,
+  RELEASE_AFTER_CONSECUTIVE_PASSES,
+} from '#shared/handlers/quarantine';
+import {
   getTestCase,
   getTestRunCase,
   getTestCaseHistory,
@@ -642,6 +648,39 @@ const routes: RouteEntry[] = [
     method: 'DELETE',
     pattern: /^\/api\/markers\/(\d+)$/,
     handler: async (m) => deleteMarker(await getDemoDb(), +m[1]!),
+  },
+
+  // Quarantine. The demo has no CI to gate, so candidates are omitted — the
+  // proposal query is derived from flaky analysis and would only add work the
+  // browser cannot act on.
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/quarantine$/,
+    handler: async (m) => ({
+      ...(await listQuarantine(await getDemoDb(), +m[1]!)),
+      candidates: [],
+      releaseAfterConsecutivePasses: RELEASE_AFTER_CONSECUTIVE_PASSES,
+    }),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/projects\/(\d+)\/quarantine$/,
+    handler: async (m, body) => {
+      const b = body as { testCaseId: number; reason?: string | null; source?: string };
+      const result = await addQuarantine(await getDemoDb(), +m[1]!, Number(b.testCaseId), {
+        reason: b.reason ?? null,
+        source: b.source,
+      });
+      return { success: true, ...result };
+    },
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/projects\/(\d+)\/quarantine\/(\d+)$/,
+    handler: async (m) => {
+      const result = await releaseQuarantine(await getDemoDb(), +m[1]!, +m[2]!);
+      return { success: true, ...result };
+    },
   },
 
   // Users
