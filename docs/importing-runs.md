@@ -133,7 +133,9 @@ Two differences from a self-hosted instance:
 - **The size limit comes from your browser, not from a server.** The demo asks how much storage the origin has free
   and offers a quarter of it, so the figure on the page reflects your machine rather than a fixed number — typically a
   few hundred megabytes. Anything larger is refused before it is read, because exceeding the quota would otherwise fail
-  part-way through and leave a half-imported run behind.
+  part-way through and leave a half-imported run behind. The limit is about *storage*, not memory: a ZIP is a
+  random-access format, so the demo reads the directory out of the file you picked and then slices out one entry at a
+  time, and the archive is never held in the page.
 - **Imported data is local and temporary.** It never leaves your machine, and it is cleared when you reset the demo or
   when the demo's sample dataset is refreshed to a new version.
 

@@ -16,7 +16,7 @@
 
 import { eq } from 'drizzle-orm';
 import { getDemoDb, putDemoImportedFile } from '../db.client';
-import { readZipDirectory, inflateZipEntry, readZipEntries } from '../trace-zip.client';
+import { openZipBlob, readZipEntries } from '../trace-zip.client';
 import { publishDemoGlobalEvent } from '../run-events';
 import { persistRunCases, type RunCaseInput } from './reporter';
 import { projects } from '~~/server/database/schema.sqlite';
@@ -30,7 +30,8 @@ import {
   judgeImportFiles,
   importBlobReportRun,
   importTraceRun,
-  type ArchiveEntryReader,
+  byteLengthOf,
+  toBytes,
   type ImportPort,
 } from '#shared/handlers/import-runs';
 import { formatBytes } from '#shared/utils/format-bytes';
@@ -83,27 +84,21 @@ const SHA256_RE = /^[0-9a-f]{64}$/;
 
 type DemoDb = Awaited<ReturnType<typeof getDemoDb>>;
 
-/**
- * Walk the archive's directory, then inflate entries only as the parser asks
- * for them — the same shape as the server's reader, and the reason a large
- * archive is not held twice.
- */
-function openDemoArchive(bytes: Uint8Array): { entryNames: string[]; readEntry: ArchiveEntryReader } {
-  const directory = readZipDirectory(bytes as Uint8Array<ArrayBuffer>);
-  const byName = new Map(directory.map((meta) => [meta.name, meta]));
-
-  return {
-    entryNames: directory.map((meta) => meta.name),
-    async readEntry(name) {
-      const meta = byName.get(name);
-      return meta ? await inflateZipEntry(bytes as Uint8Array<ArrayBuffer>, meta) : null;
-    },
-  };
+async function sha256Hex(bytes: BufferSource): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+/**
+ * The archive's digest, which identifies the import.
+ *
+ * The one point where the whole archive must exist as a contiguous buffer:
+ * `crypto.subtle.digest` has no incremental form, so there is nothing to stream
+ * into. It is read, digested and dropped in this one call — everything after it
+ * works from slices of the blob.
+ */
+async function digestBlob(blob: Blob): Promise<string> {
+  return await sha256Hex(await blob.arrayBuffer());
 }
 
 /** Get-or-create the project an import targets, mirroring the server. */
@@ -153,17 +148,16 @@ export async function apiDemoImport(form: FormData): Promise<ImportRunResponse> 
     throw new Error('Missing required fields: projectName, archive');
   }
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (bytes.length === 0) throw new Error('The uploaded archive is empty');
+  if (file.size === 0) throw new Error('The uploaded archive is empty');
 
   const maxBytes = await resolveDemoMaxBytes();
-  if (bytes.length > maxBytes) {
-    throw new Error(`Archive too large: ${formatBytes(bytes.length)} against ${formatBytes(maxBytes)} of free storage`);
+  if (file.size > maxBytes) {
+    throw new Error(`Archive too large: ${formatBytes(file.size)} against ${formatBytes(maxBytes)} of free storage`);
   }
 
   const groupRaw = String(form.get('importGroup') ?? '').toLowerCase();
   const importGroup = SHA256_RE.test(groupRaw) ? groupRaw : null;
-  const importHash = await sha256Hex(bytes);
+  const importHash = await digestBlob(file);
 
   const db = await getDemoDb();
   const project = await resolveProject(db, projectName);
@@ -171,9 +165,11 @@ export async function apiDemoImport(form: FormData): Promise<ImportRunResponse> 
   const existing = await findImportedRun(db, project.id, importHash);
   if (existing) return existing;
 
+  // From here the archive is only ever sliced. The blob stays where the browser
+  // put it, so what the import costs the heap is one entry at a time.
   let archive;
   try {
-    archive = openDemoArchive(bytes);
+    archive = await openZipBlob(file);
   } catch (error) {
     throw new Error(`Not a readable ZIP archive: ${(error as Error).message}`);
   }
@@ -191,7 +187,7 @@ export async function apiDemoImport(form: FormData): Promise<ImportRunResponse> 
     return await importTraceRun(db, port, {
       projectId: project.id,
       parsed,
-      bytes,
+      bytes: file,
       importHash,
       importGroup,
       source: importGroup ? 'trace files' : 'trace file',
@@ -220,13 +216,18 @@ function createDemoImportPort(): ImportPort {
     persistRunCases: (db, projectId, testRunId, cases) =>
       persistRunCases(db as never, projectId, testRunId, cases as RunCaseInput[]),
 
-    async storeFile({ projectId, entryName, bytes }) {
+    async storeFile({ projectId, entryName, bytes, digest }) {
       // Content-addressed like the server's blob store, so the same trace
       // uploaded twice resolves to one path — which is how a repeat is spotted.
+      // A digest the caller already has spares us reading the whole archive
+      // again, which is what keeps a `Blob` from being materialised here.
+      const hash = digest ?? (await sha256Hex((await toBytes(bytes)) as Uint8Array<ArrayBuffer>));
       const extension = entryName.split('.').pop() || 'bin';
-      const path = `project-${projectId}/imported/${await sha256Hex(bytes)}.${extension}`;
+      const path = `project-${projectId}/imported/${hash}.${extension}`;
+      // IndexedDB stores a Blob by reference, so an imported archive goes to
+      // disk without passing through the heap.
       await putDemoImportedFile(path, bytes);
-      return { path, size: bytes.length };
+      return { path, size: byteLengthOf(bytes) };
     },
 
     async readTraceConsole(bytes, startedAt) {

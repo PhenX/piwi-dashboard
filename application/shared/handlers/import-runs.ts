@@ -33,6 +33,26 @@ export interface StoredImportFile {
   blobId?: number | null;
 }
 
+/**
+ * Bytes handed to the host for storage.
+ *
+ * A `Blob` is allowed so a host that never materialised the archive does not
+ * have to: in the browser the uploaded `File` is engine-managed, and both the
+ * ZIP reader and IndexedDB take it as-is. Everything read *out* of an archive
+ * is a plain buffer — only the whole archive is big enough for this to matter.
+ */
+export type StorableBytes = Uint8Array | Blob;
+
+/** Length of either form, without copying a `Blob` to find out. */
+export function byteLengthOf(value: StorableBytes): number {
+  return value instanceof Uint8Array ? value.byteLength : value.size;
+}
+
+/** A buffer either way, materialising a `Blob` only when the host needs one. */
+export async function toBytes(value: StorableBytes): Promise<Uint8Array> {
+  return value instanceof Uint8Array ? value : new Uint8Array(await value.arrayBuffer());
+}
+
 /** What an import needs from its host runtime. */
 export interface ImportPort {
   /**
@@ -59,7 +79,12 @@ export interface ImportPort {
     kind: 'trace' | 'attachment';
     /** Archive entry name, for deriving a filename or extension. */
     entryName: string;
-    bytes: Uint8Array;
+    bytes: StorableBytes;
+    /**
+     * SHA-256 of `bytes` when the caller already knows it, so a host that
+     * content-addresses its storage need not read them again to find out.
+     */
+    digest?: string;
   }): Promise<StoredImportFile | null>;
 
   /** Console entries recovered from a trace archive's bytes. */
@@ -350,7 +375,7 @@ export async function importTraceRun(
   input: {
     projectId: number;
     parsed: ParsedTraceImport;
-    bytes: Uint8Array;
+    bytes: StorableBytes;
     importHash: string;
     importGroup: string | null;
     source: string;
@@ -422,6 +447,9 @@ export async function importTraceRun(
     kind: 'trace',
     entryName: `${importHash}.zip`,
     bytes,
+    // The archive's own digest is what identifies this import, so the store can
+    // address it by that instead of reading the whole thing a second time.
+    digest: importHash,
   });
 
   if (stored) {

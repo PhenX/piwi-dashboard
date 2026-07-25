@@ -328,8 +328,10 @@ export async function getStoredDemoVersion(): Promise<string | null> {
  * Store the bytes of a file an import brought in, under the same storage path
  * the run's `files` rows point at, so serving it is a straight lookup.
  */
-export async function putDemoImportedFile(path: string, bytes: Uint8Array): Promise<void> {
+export async function putDemoImportedFile(path: string, bytes: Uint8Array | Blob): Promise<void> {
   idbInstance ??= await openIDB();
+  // A Blob is stored by reference rather than copied through the heap, so an
+  // imported archive can be handed over exactly as it was uploaded.
   await idbPut(idbInstance, IDB_BLOB_PREFIX + path, bytes);
 }
 
@@ -337,7 +339,9 @@ export async function putDemoImportedFile(path: string, bytes: Uint8Array): Prom
 export async function getDemoImportedFile(path: string): Promise<Uint8Array | null> {
   idbInstance ??= await openIDB();
   const value = await idbGet(idbInstance, IDB_BLOB_PREFIX + path);
-  return value instanceof Uint8Array ? value : null;
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof Blob) return new Uint8Array(await value.arrayBuffer());
+  return null;
 }
 
 export async function resetDemoDb(): Promise<void> {

@@ -20,6 +20,7 @@ import {
   findImportedRun,
   importBlobReportRun,
   importTraceRun,
+  toBytes,
   type ImportPort,
   type StoredImportFile,
 } from '#shared/handlers/import-runs';
@@ -208,15 +209,18 @@ function createServerImportPort(): ImportPort {
       kind,
       entryName,
       bytes,
+      digest,
     }): Promise<StoredImportFile | null> {
-      const data = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      // Always a buffer here: only the browser half ever passes a `Blob`.
+      const raw = await toBytes(bytes);
+      const data = Buffer.from(raw.buffer, raw.byteOffset, raw.byteLength);
 
       try {
         if (kind === 'trace') {
           // Content-addressed, so a trace shared by several runs is stored once
           // and lands on the same path every time it is imported — which is
           // what lets a repeated upload be recognised.
-          const hash = createHash('sha256').update(data).digest('hex');
+          const hash = digest ?? createHash('sha256').update(data).digest('hex');
           const blob = await upsertTraceBlob(projectId, hash, data);
           return { path: blob.path.replace(/\\/g, '/'), size: blob.size, blobId: blob.id };
         }
