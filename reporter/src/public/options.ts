@@ -15,13 +15,9 @@ export interface ShardInfo {
 /**
  * Options for configuring the Piwi Dashboard reporter.
  *
- * Deliberately **not** an extension of `PlaywrightTestConfig`: these options are
- * the reporter's own, passed either as the second argument of `wrapConfig` or as
- * the reporter entry's options (`['@piwitests/reporter', { … }]`). Inheriting
- * Playwright's config made every Playwright option (`testDir`, `use`,
- * `timeout`, …) show up in editor completion here and silently typecheck, even
- * though the reporter ignores all of them — the Playwright config belongs in the
- * first argument of `wrapConfig` / in `defineConfig`.
+ * Piwi options only — the Playwright config belongs in `defineConfig` (i.e. in
+ * `wrapConfig`'s first argument). These go in `wrapConfig`'s second argument or
+ * in the reporter entry's options (`['@piwitests/reporter', { … }]`).
  */
 export interface PiwiDashboardOptions {
   /** Explicitly enable or disable the reporter. Defaults to `true` when `serverUrl` is set. Set to `false` to disable even if `serverUrl` is provided. */

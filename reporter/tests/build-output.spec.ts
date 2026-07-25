@@ -62,10 +62,9 @@ describe.runIf(existsSync(dist('index.js')))('built entry (requires a build)', (
 
   it('keeps Playwright config options out of PiwiDashboardOptions', () => {
     const types = readFileSync(dist('index.d.ts'), 'utf-8');
-    // It used to `extends PlaywrightTestConfig`, which made editors complete
-    // `testDir` / `use` / `timeout` on the reporter's own options object and let
-    // them typecheck there even though the reporter ignores them. The Playwright
-    // config goes in `wrapConfig`'s first argument, not its second.
+    // The reporter's options are Piwi-only: inheriting a Playwright config type
+    // would complete and accept `testDir` / `use` / `timeout` on an options
+    // object the reporter never reads them from.
     expect(types).not.toMatch(/interface PiwiDashboardOptions\s+extends/);
   });
 });
