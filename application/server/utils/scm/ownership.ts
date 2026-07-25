@@ -1,0 +1,138 @@
+/**
+ * Effective test ownership: who answers for a failing test.
+ *
+ * Two sources, in priority order:
+ *
+ * 1. A `piwi:owner` annotation on the test — explicit, and always wins.
+ * 2. The repository's CODEOWNERS, matched against the spec's file path.
+ *
+ * The second is the point. Asking every team to annotate every test is how
+ * ownership features die; the repository already records who owns which files,
+ * and Piwi can read it because it runs inside the network with an SCM token it
+ * already has. That makes ownership work on day one with zero test edits.
+ *
+ * Resolution happens at read time against a short TTL cache rather than being
+ * stored on the test case. CODEOWNERS changes without any test changing, so a
+ * persisted copy would be wrong until the next run reported that spec.
+ */
+import { eq, desc } from 'drizzle-orm';
+import { testRuns } from '../../database/schema';
+import { createScmProvider } from './index';
+import { normalizeGitUrl } from '../regression-context';
+import { TtlCache } from './cache';
+import { primaryOwnerForPath, type CompiledCodeowners } from '@piwitests/core/codeowners';
+import type { RunMetadata } from '../run-json-types';
+import type { DbClient } from '../../database';
+
+/** CODEOWNERS changes on merge, not on every run — an hour is plenty. */
+const codeownersCache = new TtlCache<CompiledCodeowners | null>(60 * 60 * 1000);
+
+/**
+ * The repository coordinates for a project, read from its most recent run that
+ * carried SCM metadata. Projects have no repository column of their own; the
+ * reporter records it per run.
+ */
+async function resolveRepository(
+  db: DbClient,
+  projectId: number,
+): Promise<{ repositoryUrl: string; ref: string } | null> {
+  const rows = await db
+    .select({ metadata: testRuns.metadata })
+    .from(testRuns)
+    .where(eq(testRuns.projectId, projectId))
+    .orderBy(desc(testRuns.startTime))
+    .limit(20);
+
+  for (const row of rows) {
+    const meta = (row.metadata as RunMetadata | null) ?? null;
+    const repositoryUrl = normalizeGitUrl(meta?.scm?.remoteUrl ?? null);
+    if (!repositoryUrl) continue;
+    // Prefer the default branch over the run's own branch: a feature branch's
+    // CODEOWNERS is a proposal, not yet the repository's answer.
+    const ref = meta?.defaultBranch || meta?.scm?.branch || 'HEAD';
+    return { repositoryUrl, ref };
+  }
+  return null;
+}
+
+/**
+ * Load and cache the project's CODEOWNERS. Returns `null` when the project has
+ * no reachable repository or the repository has no CODEOWNERS file — both are
+ * ordinary, and callers fall back to annotation-only ownership.
+ */
+export async function getProjectCodeowners(db: DbClient, projectId: number): Promise<CompiledCodeowners | null> {
+  const repo = await resolveRepository(db, projectId);
+  if (!repo) return null;
+
+  const key = `${projectId}:${repo.repositoryUrl}:${repo.ref}`;
+  const hit = codeownersCache.get(key);
+  if (hit !== undefined) return hit;
+
+  try {
+    const provider = await createScmProvider(repo.repositoryUrl, db, projectId);
+    const compiled = provider ? await provider.fetchCodeowners(repo.ref) : null;
+    codeownersCache.set(key, compiled);
+    return compiled;
+  } catch {
+    // A rate limit or an outage must not break the page that asked; cache the
+    // miss briefly so one bad token does not retry on every request.
+    codeownersCache.set(key, null);
+    return null;
+  }
+}
+
+/** One test's declared owner and file path, as stored. */
+export interface OwnableTest {
+  filePath: string;
+  /** From the `piwi:owner` annotation; wins when present. */
+  owner?: string | null;
+}
+
+export interface ResolvedOwner {
+  owner: string | null;
+  source: 'annotation' | 'codeowners' | null;
+}
+
+/**
+ * Resolve owners for a batch of tests. Takes the batch rather than one test so
+ * the CODEOWNERS file is fetched once per call, not once per row.
+ */
+export async function resolveOwners<T extends OwnableTest>(
+  db: DbClient,
+  projectId: number,
+  tests: T[],
+): Promise<Map<T, ResolvedOwner>> {
+  const result = new Map<T, ResolvedOwner>();
+  if (tests.length === 0) return result;
+
+  const needsCodeowners = tests.some((test) => !test.owner);
+  const compiled = needsCodeowners ? await getProjectCodeowners(db, projectId) : null;
+
+  for (const test of tests) {
+    if (test.owner) {
+      result.set(test, { owner: test.owner, source: 'annotation' });
+      continue;
+    }
+    const derived = compiled ? primaryOwnerForPath(compiled, test.filePath) : null;
+    result.set(test, derived ? { owner: derived, source: 'codeowners' } : { owner: null, source: null });
+  }
+
+  return result;
+}
+
+/**
+ * Attach the effective owner to each row of a list, leaving the row's own
+ * `owner` field authoritative when it already has one. Shaped for the read
+ * paths (flaky leaderboard, pull-request comment) that need the answer inline.
+ */
+export async function withResolvedOwners<T extends OwnableTest>(
+  db: DbClient,
+  projectId: number,
+  rows: T[],
+): Promise<Array<T & { owner: string | null; ownerSource: ResolvedOwner['source'] }>> {
+  const resolved = await resolveOwners(db, projectId, rows);
+  return rows.map((row) => {
+    const entry = resolved.get(row) ?? { owner: row.owner ?? null, source: null };
+    return { ...row, owner: entry.owner, ownerSource: entry.source };
+  });
+}

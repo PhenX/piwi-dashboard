@@ -17,6 +17,7 @@ import { getAppSetting } from '../app-settings';
 import { createScmProvider } from './index';
 import { normalizeGitUrl } from '../regression-context';
 import { getLocatorHealingBatch } from '../locator-healing';
+import { resolveOwners } from './ownership';
 import { computeRunInsights } from '#shared/handlers/run-insights';
 import {
   buildCommitStatus,
@@ -78,6 +79,7 @@ interface CaseRow {
  */
 async function buildFailureEntries(
   db: DbClient,
+  projectId: number,
   rows: CaseRow[],
   newRegressionIds: Set<number>,
 ): Promise<{ newRegressions: PrFailureEntry[]; preExisting: PrFailureEntry[] }> {
@@ -96,6 +98,10 @@ async function buildFailureEntries(
     rows.map((r) => r.id),
   ).catch(() => new Map());
 
+  // Falls back to CODEOWNERS when a test carries no `piwi:owner`, so a comment
+  // can name the owning team on a suite nobody has annotated.
+  const owners = await resolveOwners(db, projectId, rows).catch(() => new Map());
+
   const toEntry = (row: CaseRow): PrFailureEntry => ({
     title: row.title,
     filePath: row.filePath,
@@ -105,7 +111,7 @@ async function buildFailureEntries(
     clusterSignature: row.failureClusterId ? (clusterSignatures.get(row.failureClusterId) ?? null) : null,
     suggestedLocator: healing.get(row.id)?.recommendation?.recommended?.locator ?? null,
     tags: Array.isArray(row.tags) ? (row.tags as string[]) : null,
-    owner: row.owner,
+    owner: owners.get(row)?.owner ?? row.owner,
   });
 
   const newRegressions: PrFailureEntry[] = [];
@@ -154,7 +160,7 @@ export async function buildRunPrSummary(db: DbClient, runId: number, siteUrl: st
   const insights = await computeRunInsights(db, runId).catch(() => null);
   const newRegressionIds = new Set<number>((insights?.newRegressions ?? []).map((entry) => entry.testRunsCaseId));
 
-  const { newRegressions, preExisting } = await buildFailureEntries(db, failingRows, newRegressionIds);
+  const { newRegressions, preExisting } = await buildFailureEntries(db, run.projectId, failingRows, newRegressionIds);
 
   const newClusters = await db
     .select({ id: failureClusters.id, signature: failureClusters.signature })

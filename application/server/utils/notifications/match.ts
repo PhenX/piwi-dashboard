@@ -8,6 +8,8 @@ interface SubscriptionFilters {
   tags?: string[];
   statuses?: string[];
   defaultBranchOnly?: boolean;
+  /** Only deliver when one of these owns a failing test in the run. */
+  owners?: string[];
   flakinessThreshold?: number;
   perfRegressionPct?: number;
 }
@@ -47,6 +49,12 @@ function passesFilters(
   }
   if (filters.statuses?.length && event.startsWith('run.') && runPayload.status) {
     if (!filters.statuses.includes(runPayload.status)) return false;
+  }
+  if (filters.owners?.length && event.startsWith('run.')) {
+    // No owner on the payload means nothing failed, or ownership could not be
+    // resolved. Either way an owner-scoped subscription has nothing to say.
+    const runOwners = runPayload.owners ?? [];
+    if (!runOwners.some((owner) => filters.owners!.includes(owner))) return false;
   }
   if (filters.flakinessThreshold != null && event === 'flakiness.spike') {
     const rate = runPayload.flakinessRate ?? 0;
