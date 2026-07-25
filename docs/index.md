@@ -99,6 +99,7 @@ features:
 ## Where to go next
 
 - **Setting it up** — [Getting started](/getting-started) walks from a Docker command to your first run in the dashboard.
+- **Just want it on your laptop** — the [desktop app](/desktop) bundles the whole server in a native window: no Docker, no Node, your data in a local folder.
 - **Wondering how it models your tests** — [Core concepts](/concepts) defines runs, test cases, executions, and clusters. Worth five minutes before the rest.
 - **Wiring up CI** — [CI & sharding](/ci): two environment variables, and why ten shards are one run.
 - **Comparing tools** — [Why Piwi?](/comparison) is an honest comparison, including when Piwi isn't the right choice.

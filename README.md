@@ -60,6 +60,23 @@ test health.
 
 ## Quick start
 
+Four ways in, depending on what you already have:
+
+| Path | Start here if | What it costs |
+|---|---|---|
+| **[Live demo](https://piwitests.github.io/demo/)** | You just want to look around first | Nothing — seeded data, runs entirely in your browser |
+| **[Desktop app](https://piwitests.github.io/desktop)** | You run Playwright locally and don't want to run a server | Download an installer — no Docker, no Node |
+| **Docker** *(below)* | You have Docker, or you're setting up a shared instance | One command |
+| **`npx @piwitests/server`** | You have Node.js 24+ and would rather skip Docker | One command |
+
+The desktop app is the shortest path from "curious" to "looking at my own test history" — it bundles the
+same server in a native window. Two caveats worth knowing before you download: the installers are
+**not yet code-signed**, so the first launch needs a click-through (macOS: right-click → **Open**;
+Windows: SmartScreen → **More info** → **Run anyway**), and builds exist for **Windows x64 and
+Apple-silicon macOS** only — on Linux or an Intel Mac, use Docker or `npx`.
+
+The rest of this section sets up the server; the desktop app replaces step 1 only.
+
 **1. Start the dashboard**
 
 ```bash

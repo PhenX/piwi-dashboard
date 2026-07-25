@@ -20,11 +20,35 @@ of this page sets both of them up.
 New to the vocabulary — *run* vs *test case* vs *execution* vs *cluster*? [Core concepts](./concepts) is
 a five-minute read that makes the rest of the docs (and the UI) click.
 
-## Requirements
+## Pick a path
 
-- **Node.js 24+** — only for running the dashboard **from source** (CI and the Docker image both use Node 24). With Docker, your test project just needs a Node version supported by Playwright
-- **npm** — for package management
-- **PostgreSQL 14+** — optional; required only when using the PostgreSQL backend
+The dashboard is one Node process, and there are four ways to get one running:
+
+| Path | Best for | Notes |
+|---|---|---|
+| [Live demo](https://piwitests.github.io/demo/) | Looking around before installing anything | Seeded data, runs in your browser, no backend |
+| [Desktop app](./desktop) | A single developer running Playwright locally | No Docker or Node needed; Windows x64 and Apple-silicon macOS only, and the installers are not yet signed |
+| Docker *(below)* | A shared instance for a team | The recommended path for anything long-lived |
+| [`npx @piwitests/server`](./deployment#npm-npx-quick-local-run) | A quick local run with Node 24+ already installed | Same server, no container |
+
+If you only want your own history, flaky scores and locator healing on a laptop, the
+[desktop app](./desktop) is the least setup: install it, copy its access token from **Settings →
+Storage**, and skip to [the reporter](#using-the-piwi-dashboard-reporter). Everything below about the
+reporter, CI and fixtures applies identically whichever path you pick.
+
+### Requirements
+
+Only the dashboard side has requirements — and only for some paths:
+
+| | Needs |
+|---|---|
+| Desktop app | Nothing; the runtime is bundled |
+| Docker | Docker; ~300 MB RAM, 1 vCPU, `linux/amd64` or `linux/arm64` |
+| `npx` / from source | **Node.js 24+** and npm |
+| PostgreSQL backend *(optional)* | PostgreSQL 14+ — otherwise SQLite is built in and needs no setup |
+
+Your **test project** is unaffected by all of this: it just needs a Node version Playwright supports.
+Node 24 is the dashboard's requirement, not your suite's.
 
 ## Quick start with Docker
 
@@ -229,4 +253,6 @@ See the [UI overview](./ui-overview) for a full map of every page and tab.
 - [Reporter](./reporter) — every option, streaming, sharding, and locator healing
 - [UI overview](./ui-overview) — a map of every page and tab
 - [Deployment](./deployment) — running it properly for a team
+- [Desktop app](./desktop) — the same dashboard as a local app, if you skipped it above
+- [Upgrading](./upgrading) — what a version bump does before you pull a new tag
 - [Contributing](https://github.com/PiwiTests/platform/blob/main/CONTRIBUTING.md) — dev setup, tests, and commit conventions if you want to hack on Piwi itself
