@@ -43,6 +43,14 @@ export interface ImportCheckResponse {
 /** Summary of one imported archive, shown per file on the import page. */
 export interface ImportRunResponse {
   status: 'imported' | 'duplicate';
+  /**
+   * What the archive was. A blob report is a whole run, so its counts describe
+   * the archive; a trace is one execution added to a run that may still be
+   * growing, so the same counts describe the run, not the file.
+   */
+  kind: 'blob-report' | 'trace';
+  /** The execution a trace archive contributed, as `suite › test`. */
+  caseTitle?: string;
   testRunId: number;
   projectId: number;
   /** Final status of the imported run (`passed`, `failed`, …). */

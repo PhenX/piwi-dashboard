@@ -26,6 +26,15 @@ const spinning = computed(() => ['hashing', 'checking', 'uploading'].includes(pr
 const result = computed(() => props.entry.result);
 /** A summary only exists for an archive this request actually imported. */
 const summary = computed(() => (props.entry.state === 'imported' ? result.value : null));
+/**
+ * A trace contributes one execution to a run that later uploads keep growing,
+ * so the run's counts are not this file's story — its test is.
+ */
+const isTrace = computed(() => summary.value?.kind === 'trace');
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
 </script>
 
 <template>
@@ -53,7 +62,11 @@ const summary = computed(() => (props.entry.state === 'imported' ? result.value 
       </div>
     </div>
 
-    <UProgress v-if="entry.state === 'uploading'" :model-value="Math.round(entry.progress * 100)" size="sm" />
+    <UProgress
+      v-if="entry.state === 'uploading' || entry.state === 'hashing'"
+      :model-value="Math.round(entry.progress * 100)"
+      size="sm"
+    />
 
     <p v-if="entry.message" class="text-xs" :class="entry.state === 'failed' ? 'text-error' : 'text-gray-500'">
       {{ entry.message }}
@@ -66,14 +79,18 @@ const summary = computed(() => (props.entry.state === 'imported' ? result.value 
     </div>
 
     <template v-if="summary">
-      <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-        <span>{{ summary.totalTests }} executions</span>
+      <p v-if="isTrace" class="text-xs text-gray-500">
+        Added <span class="text-default">{{ summary.caseTitle }}</span> to this run.
+      </p>
+
+      <div v-else class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+        <span>{{ plural(summary.totalTests, 'execution') }}</span>
         <span>{{ summary.passedTests }} passed</span>
         <span>{{ summary.failedTests }} failed</span>
         <span v-if="summary.skippedTests">{{ summary.skippedTests }} skipped</span>
         <span v-if="summary.flakyTests">{{ summary.flakyTests }} flaky</span>
-        <span v-if="summary.traceCount">{{ summary.traceCount }} traces</span>
-        <span v-if="summary.attachmentCount">{{ summary.attachmentCount }} attachments</span>
+        <span v-if="summary.traceCount">{{ plural(summary.traceCount, 'trace') }}</span>
+        <span v-if="summary.attachmentCount">{{ plural(summary.attachmentCount, 'attachment') }}</span>
       </div>
 
       <UAlert
@@ -85,7 +102,7 @@ const summary = computed(() => (props.entry.state === 'imported' ? result.value 
         :ui="{ description: 'text-xs' }"
       />
 
-      <div v-if="summary.filePaths.length" class="text-xs text-gray-500">
+      <div v-if="summary.filePaths.length && !isTrace" class="text-xs text-gray-500">
         <p class="mb-1">
           Spec files recorded as
           <span class="text-gray-400">(these must match the paths your live runs report for history to line up)</span>:

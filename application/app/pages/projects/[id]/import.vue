@@ -27,6 +27,7 @@ const {
   readyCount,
   importedCount,
   busy,
+  batch,
   loadLimit,
   addFiles,
   startImport,
@@ -125,8 +126,11 @@ const finishedCount = computed(() => entries.value.filter((e) => ['imported', 'd
         <SectionCard title="Archives" icon="i-lucide-files" :count="entries.length || null">
           <template #actions>
             <div class="flex items-center gap-2">
+              <span v-if="importing" class="text-xs text-gray-500 tabular-nums">
+                {{ batch.done }} of {{ batch.total }} done
+              </span>
               <UButton
-                v-if="finishedCount > 0"
+                v-if="finishedCount > 0 && !importing"
                 label="Clear finished"
                 icon="i-lucide-eraser"
                 color="neutral"

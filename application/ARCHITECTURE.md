@@ -94,6 +94,7 @@ Key server utilities (`server/utils/`):
 | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `persist-run-cases.ts`                                        | The single write path for run cases — every ingest site goes through it                                                                            |
 | `blob-report.ts`                                              | Reads a Playwright blob report (`report.jsonl` + `resources/`) into run + `RunCaseInput`s for the import endpoint                                  |
+| `trace-import.ts`                                             | Rebuilds one execution from a bare `trace.zip` — title, browser, timing and error from the trace's own headers                                     |
 | `import-evidence.ts`                                          | Recovers ARIA snapshot / source snippet from `error-context`, and console entries from the trace, for imported executions                          |
 | `upload-limits.ts`                                            | Effective multipart ceiling (`PIWI_IMPORT_MAX_BYTES`), shared by `upload` and `import` and surfaced to the import page                             |
 | `case-payloads.ts`                                            | Content-addressed payload upsert/inline/resolve                                                                                                    |

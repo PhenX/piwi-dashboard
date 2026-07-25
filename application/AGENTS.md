@@ -198,6 +198,7 @@ Where to add things in subsystems whose wiring spans several files:
 | A computed AI-context section | Update the `SectionId` union (`ai-context.types.ts`), `DIAGNOSIS_SECTIONS` (`diagnosis-sections.ts`) and `DiagnosisContextCoverage` (`types/api.ts`) **in one batch** before writing the section builder   |
 | Sharding behaviour            | See the sharding invariants below                                                                                                                                                                          |
 | Blob-report import            | `server/utils/blob-report.ts` (parse) + `import-evidence.ts` (recovered evidence); endpoints `test-runs/import[.post]` and `import/check.post.ts`; page `projects/[id]/import.vue` + `useBlobReportImport` |
+| Trace-file import             | `server/utils/trace-import.ts` — reconstructs an execution from a trace's `context-options`/`error` events; grouped into one run by the `importGroup` field on `test-runs/import.post.ts`                  |
 
 ## Subsystem invariants
 

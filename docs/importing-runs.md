@@ -8,9 +8,12 @@ lang: en-US
 Piwi's analysis gets better the more history it has: flaky detection needs repeated executions, failure clusters need
 several failures to group, and trend charts need runs to plot. A team adopting Piwi starts with none of that.
 
-If you already run Playwright in CI, you can backfill it. Playwright's **blob reporter** writes a complete, replayable
-record of a run — results, steps, errors, traces, screenshots and videos — and Piwi imports those archives as finished
-runs.
+If you already run Playwright in CI, you can backfill it. Piwi imports two of Playwright's own artifacts:
+
+- **Blob reports** — a complete, replayable record of a run (results, steps, errors, traces, screenshots and videos).
+  This is the richer source; prefer it when you have it.
+- **Trace files** — a single test's `trace.zip`. Less complete, but enough to rebuild the execution, and often the only
+  artifact a team kept.
 
 ## Producing the archives
 
@@ -30,8 +33,8 @@ release to date. An archive written in a format a given Piwi build does not know
 in the message — never imported half-understood.
 
 ::: tip
-Piwi only reads blob reports — not HTML reports, JSON reporter output, or bare `trace.zip` files. The blob report is
-the only Playwright artifact that carries a whole run's results *and* its attachments in one file.
+HTML reports and JSON reporter output are not importable. The blob report is the only Playwright artifact that carries
+a whole run's results *and* its attachments in one file.
 :::
 
 ## Importing them
@@ -53,6 +56,24 @@ the server would have rejected, and nothing that is already there is uploaded tw
 
 Importing is **idempotent**: an archive is identified by the SHA-256 of its bytes, so re-uploading one changes nothing.
 An interrupted batch is safe to simply repeat.
+
+## Importing trace files
+
+If you kept `test-results/` from a CI job rather than a blob report, upload the `trace.zip` files inside it. Each one
+rebuilds its execution from what the trace itself recorded: the test's title and describe blocks, its spec file and
+line, its timeout, browser and viewport, its start time and duration, its steps, its browser console, and — when the
+test failed — the error with its call log, so it clusters like any other failure.
+
+**Traces you select together become one run.** A trace carries no notion of the run it belonged to, so Piwi treats the
+selection as the run — which is what you want when the files came from a single CI job. Upload a trace on its own and
+it becomes a single-test run instead.
+
+Two different traces for the same test in one selection are treated as **attempts**: the second becomes retry 1, so a
+test that failed then passed is recognised as flaky. Upload order is attempt order.
+
+One kind of trace cannot be imported: Playwright writes the test's title alongside the *browser context*, so a test
+that never opened a page — skipped, or failed in a hook — produces a trace with no title in it. Those files are
+reported as not importable and skipped; the rest of the batch is unaffected.
 
 ## What imported runs carry
 
@@ -76,8 +97,9 @@ label an old failure a new regression.
 
 ## Making history line up
 
-Imported runs only join your existing history when the spec paths match. Piwi records paths the same way the reporter
-does — relative to the directory holding your Playwright config — and the import summary lists them so you can check:
+Imported runs only join your existing history when the spec paths match. For a blob report, Piwi records paths the same
+way the reporter does — relative to the directory holding your Playwright config — and the import summary lists them so
+you can check:
 
 ```
 Spec files recorded as (these must match the paths your live runs report for history to line up):
@@ -86,6 +108,11 @@ Spec files recorded as (these must match the paths your live runs report for his
 
 If those look different from the paths on your existing test cases, the archive was produced from a different working
 directory, and the imported executions will land on separate test cases.
+
+A trace records only the path Playwright displays (`checkout.spec.ts`), with no way to recover the directory it sits in.
+Piwi therefore matches it against the paths the project already knows: a stored `tests/checkout.spec.ts` claims an
+imported `checkout.spec.ts`. Import a blob report — or let the reporter run once — before importing traces for a
+project, and the traces will attach to the right test cases.
 
 ## Size limits
 
@@ -98,7 +125,9 @@ instead of failing mid-upload.
 
 ## Limitations
 
-- **Sharded runs import separately.** An archive that is one shard of a larger run becomes its own run in Piwi — shards
-  are not merged. The import summary flags this when it detects one.
+- **Sharded runs import separately.** A blob report that is one shard of a larger run becomes its own run in Piwi —
+  shards are not merged. The import summary flags this when it detects one.
+- **Traces carry less than reports.** No annotations, no worker index, no `didnotrun` tests, and no screenshots or
+  videos — a trace holds only itself.
 - **Administrators only.** Importing can create projects and back-dates history, so it is not open to the reporter role.
 - **One archive per request.** There is no bulk endpoint; the page handles batching for you.

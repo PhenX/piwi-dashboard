@@ -1,9 +1,11 @@
 import { test, expect } from './fixtures';
+import type { APIRequestContext } from '@playwright/test';
+import { buildZip } from '../server/utils/trace-zip';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { createHash } from 'node:crypto';
 import { join } from 'path';
 import { PROJECT } from '#shared/test-project-names';
-import { buildBlobReport, errorContextMarkdown } from './utils/blob-report-fixture';
+import { buildBlobReport, buildTraceArchive, errorContextMarkdown } from './utils/blob-report-fixture';
 
 /**
  * End-to-end cover for importing historical blob reports: the pre-flight that
@@ -234,6 +236,117 @@ test.describe('Blob report import', () => {
     await expect(page.getByText('Not importable')).toBeVisible();
     await expect(page.getByText('Expected a .zip blob report', { exact: false })).toBeVisible();
     expect(importRequests).toBe(0);
+  });
+});
+
+test.describe('Trace file import', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  /** One trace per attempt, as Playwright writes them under test-results/. */
+  const passing = buildTraceArchive({
+    title: 'orders.spec.ts:8 › orders › lists orders',
+    wallTime: 1_700_000_000_000,
+    monotonicTime: 1000,
+    actions: [{ apiName: 'page.goto', startTime: 1100, endTime: 1500 }],
+  });
+  const failingFirst = buildTraceArchive({
+    title: 'orders.spec.ts:20 › orders › opens an order',
+    wallTime: 1_700_000_010_000,
+    monotonicTime: 2000,
+    error: { message: "Error: expect(locator).toBeVisible() failed\n\nLocator: getByRole('row')" },
+  });
+  const failingRetry = buildTraceArchive({
+    title: 'orders.spec.ts:20 › orders › opens an order',
+    wallTime: 1_700_000_020_000,
+    monotonicTime: 3000,
+    error: { message: "Error: expect(locator).toBeVisible() failed\n\nLocator: getByRole('row')" },
+  });
+
+  function post(request: APIRequestContext, projectName: string, archive: Buffer, group?: string) {
+    return request.post('/api/test-runs/import', {
+      multipart: {
+        projectName,
+        ...(group ? { importGroup: group } : {}),
+        archive: { name: 'trace.zip', mimeType: 'application/zip', buffer: archive },
+      },
+    });
+  }
+
+  test('imports a lone trace as its own single-test run', async ({ request }) => {
+    const response = await post(request, PROJECT.IMPORT_TRACE, passing);
+    expect(response.status()).toBe(200);
+
+    const body = await response.json();
+    expect(body.kind).toBe('trace');
+    expect(body.status).toBe('imported');
+    expect(body.totalTests).toBe(1);
+    expect(body.passedTests).toBe(1);
+    expect(body.traceCount).toBe(1);
+    expect(body.caseTitle).toBe('orders › lists orders');
+    expect(body.startTime).toBe(new Date(1_700_000_000_000).toISOString());
+
+    const run = await (await request.get(`/api/test-runs/${body.testRunId}`)).json();
+    const execution = run.testCases[0];
+    expect(execution.title).toBe('lists orders');
+    expect(execution.status).toBe('passed');
+  });
+
+  test('re-importing the same trace changes nothing', async ({ request }) => {
+    const body = await (await post(request, PROJECT.IMPORT_TRACE, passing)).json();
+    expect(body.status).toBe('duplicate');
+    expect(body.totalTests).toBe(1);
+  });
+
+  test('gathers a group of traces into one run, with retries in order', async ({ request }) => {
+    const group = 'f'.repeat(64);
+
+    const first = await (await post(request, PROJECT.IMPORT_TRACE_GROUP, passing, group)).json();
+    const second = await (await post(request, PROJECT.IMPORT_TRACE_GROUP, failingFirst, group)).json();
+    const third = await (await post(request, PROJECT.IMPORT_TRACE_GROUP, failingRetry, group)).json();
+
+    // Every trace lands in the same run, which grows as they arrive.
+    expect(second.testRunId).toBe(first.testRunId);
+    expect(third.testRunId).toBe(first.testRunId);
+    expect(third.totalTests).toBe(3);
+    expect(third.passedTests).toBe(1);
+    expect(third.failedTests).toBe(2);
+    // A failing execution makes the whole run failed.
+    expect(third.runStatus).toBe('failed');
+    // The run spans from the earliest trace to the end of the latest.
+    expect(third.startTime).toBe(new Date(1_700_000_000_000).toISOString());
+
+    const run = await (await request.get(`/api/test-runs/${first.testRunId}`)).json();
+    const attempts = run.testCases
+      .filter((c: { title: string }) => c.title === 'opens an order')
+      .sort((a: { retries: number }, b: { retries: number }) => a.retries - b.retries);
+
+    // Two distinct traces for one test are its two attempts, not a duplicate.
+    expect(attempts.map((a: { retries: number }) => a.retries)).toEqual([0, 1]);
+    // Both failures reach the same cluster.
+    expect(attempts[0].failureClusterId).toBeTruthy();
+    expect(attempts[1].failureClusterId).toBe(attempts[0].failureClusterId);
+  });
+
+  test('refuses a trace whose test cannot be identified', async ({ request }) => {
+    const response = await post(request, PROJECT.IMPORT_TRACE, buildTraceArchive({ omitLibraryContext: true }));
+    expect(response.status()).toBe(400);
+    expect((await response.json()).message).toMatch(/no test title/i);
+  });
+
+  test('refuses an archive that is neither a report nor a trace', async ({ request }) => {
+    const response = await request.post('/api/test-runs/import', {
+      multipart: {
+        projectName: PROJECT.IMPORT_TRACE,
+        archive: {
+          name: 'plain.zip',
+          mimeType: 'application/zip',
+          buffer: buildZip([{ name: 'notes.txt', data: Buffer.from('hello') }]),
+        },
+      },
+    });
+
+    expect(response.status()).toBe(400);
+    expect((await response.json()).message).toMatch(/blob report.*trace/i);
   });
 });
 

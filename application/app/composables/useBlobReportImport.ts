@@ -36,10 +36,18 @@ export interface ImportFileEntry {
   state: ImportFileState;
   /** Why this file is not `ready`, or what went wrong during upload. */
   message?: string;
-  /** Upload progress 0–1, while `uploading`. */
+  /** Fraction 0–1 of the current phase, while `hashing` or `uploading`. */
   progress: number;
   hash?: string;
   result?: ImportRunResponse;
+}
+
+/** Aggregate progress across a running import, for the batch counter. */
+export interface ImportBatchProgress {
+  /** Archives already resolved this run — imported, duplicate or failed. */
+  done: number;
+  /** Archives this run set out to upload. */
+  total: number;
 }
 
 /** States that still consume an upload when the user starts the import. */
@@ -71,6 +79,13 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
   const readyCount = computed(() => entries.value.filter((e) => UPLOADABLE.includes(e.state)).length);
   const importedCount = computed(() => entries.value.filter((e) => e.state === 'imported').length);
   const busy = computed(() => entries.value.some((e) => e.state === 'hashing' || e.state === 'checking'));
+
+  /**
+   * Aggregate progress for the batch counter. A long import is a sequence of
+   * per-row states; without a running total the page gives no sense of how much
+   * of the batch is left.
+   */
+  const batch = ref<ImportBatchProgress>({ done: 0, total: 0 });
 
   /**
    * Fetch the server's size limit before any file is read, so an oversized
@@ -136,11 +151,16 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
     // archives at once is the one way this page can exhaust a tab.
     for (const entry of withinLimit) {
       try {
-        entry.hash = await sha256(entry.file);
+        entry.progress = 0;
+        entry.hash = await sha256(entry.file, (p) => {
+          entry.progress = p;
+        });
         entry.state = 'checking';
       } catch (error) {
         entry.state = 'failed';
         entry.message = errorMessage(error, 'Could not read the file.');
+      } finally {
+        entry.progress = 0;
       }
     }
 
@@ -184,16 +204,23 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
     if (importing.value || !projectName.value) return;
     importing.value = true;
 
-    try {
-      for (const entry of entries.value) {
-        if (!UPLOADABLE.includes(entry.state)) continue;
+    const queued = entries.value.filter((e) => UPLOADABLE.includes(e.state));
+    batch.value = { done: 0, total: queued.length };
 
+    // Traces carry no run of their own, so the batch itself is the run: every
+    // trace uploaded under one group joins a single run. Derived from the file
+    // digests rather than generated, so re-importing the same selection reuses
+    // that run instead of building a second copy of it. Blob reports ignore it.
+    const group = await groupKeyFor(queued);
+
+    try {
+      for (const entry of queued) {
         entry.state = 'uploading';
         entry.message = undefined;
         entry.progress = 0;
 
         try {
-          const result = await uploadArchive(projectName.value, entry, (p) => {
+          const result = await uploadArchive(projectName.value, entry, group, (p) => {
             entry.progress = p;
           });
           entry.result = result;
@@ -204,6 +231,7 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
           entry.message = errorMessage(error, 'The import failed.');
         } finally {
           entry.progress = 0;
+          batch.value = { ...batch.value, done: batch.value.done + 1 };
         }
       }
     } finally {
@@ -228,6 +256,7 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
     readyCount,
     importedCount,
     busy,
+    batch,
     loadLimit,
     addFiles,
     startImport,
@@ -236,9 +265,48 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
   };
 }
 
-/** Hex SHA-256 of a file's bytes, matching what the server computes on receipt. */
-async function sha256(file: File): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+/**
+ * A stable identity for one batch: the digest of its files' digests, order
+ * independent. Returns null when the files were never hashed (no `crypto.subtle`
+ * on an insecure origin), in which case each trace imports as its own run.
+ */
+async function groupKeyFor(entries: ImportFileEntry[]): Promise<string | null> {
+  const hashes = entries.map((entry) => entry.hash).filter((hash): hash is string => Boolean(hash));
+  if (hashes.length === 0) return null;
+
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode([...hashes].sort().join('')));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Hex SHA-256 of a file's bytes, matching what the server computes on receipt.
+ *
+ * The file is streamed into one pre-allocated buffer rather than handed to
+ * `File.arrayBuffer()`: reading a large archive is the slow half of this step,
+ * so streaming is what makes progress reportable, and filling a buffer we sized
+ * up front avoids holding the file twice at the moment of the copy.
+ *
+ * `crypto.subtle` has no incremental API, so the digest itself is one opaque
+ * call at the end — fast next to the read (~165 MB/s measured), and reported as
+ * the last slice of progress.
+ */
+async function sha256(file: File, onProgress: (fraction: number) => void): Promise<string> {
+  const bytes = new Uint8Array(file.size);
+  const reader = file.stream().getReader();
+  let offset = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes.set(value, offset);
+    offset += value.length;
+    // Hold back the last sliver for the digest, so the bar does not sit at 100%
+    // through a step that has not started.
+    onProgress(file.size ? (offset / file.size) * 0.9 : 0.9);
+  }
+
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  onProgress(1);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -249,11 +317,13 @@ async function sha256(file: File): Promise<string> {
 function uploadArchive(
   projectName: string,
   entry: ImportFileEntry,
+  group: string | null,
   onProgress: (fraction: number) => void,
 ): Promise<ImportRunResponse> {
   return new Promise((resolve, reject) => {
     const body = new FormData();
     body.append('projectName', projectName);
+    if (group) body.append('importGroup', group);
     body.append('archive', entry.file, entry.name);
 
     const request = new XMLHttpRequest();

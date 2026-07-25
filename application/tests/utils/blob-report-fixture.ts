@@ -194,6 +194,116 @@ function buildProject(projectName: string, file: string, tests: FixtureTest[]) {
   return { name: projectName, timeout: 30000, retries: 1, suites: [fileSuite], use: {} };
 }
 
+export interface TraceFixtureOptions {
+  /** Display title Playwright writes: `file:line › suite › … › test`. */
+  title?: string;
+  browserName?: string;
+  /** Epoch ms the context opened — the anchor for every monotonic timestamp. */
+  wallTime?: number;
+  monotonicTime?: number;
+  testTimeout?: number;
+  playwrightVersion?: string;
+  /** Failure recorded by the runner; omit for a passing trace. */
+  error?: { message: string; file?: string; line?: number; column?: number };
+  actions?: Array<{ apiName: string; startTime: number; endTime?: number; error?: string }>;
+  consoleEntries?: Array<{ messageType: string; text: string; time: number }>;
+  /** Drop the library context, as a test that never opened a page does. */
+  omitLibraryContext?: boolean;
+}
+
+/**
+ * Build a bare Playwright trace archive: the runner stream (`test.trace`) plus
+ * the browser-context stream (`0-trace.trace`) that carries the display title.
+ */
+export function buildTraceArchive(options: TraceFixtureOptions = {}): Buffer {
+  const {
+    title = 'demo.spec.ts:12 › checkout › completes',
+    browserName = 'chromium',
+    wallTime = 1_700_000_000_000,
+    monotonicTime = 1000,
+    testTimeout = 30000,
+    playwrightVersion = '1.61.1',
+    error,
+    actions = [{ apiName: 'locator.click', startTime: monotonicTime + 10, endTime: monotonicTime + 60 }],
+    consoleEntries = [],
+    omitLibraryContext = false,
+  } = options;
+
+  const runner: unknown[] = [
+    {
+      version: 8,
+      type: 'context-options',
+      origin: 'testRunner',
+      browserName: '',
+      playwrightVersion,
+      options: {},
+      wallTime,
+      monotonicTime,
+      sdkLanguage: 'javascript',
+      testTimeout,
+    },
+  ];
+
+  if (error) {
+    runner.push({
+      type: 'error',
+      message: error.message,
+      stack: error.file ? [{ file: error.file, line: error.line ?? 1, column: error.column ?? 1 }] : [],
+    });
+  }
+
+  const library: unknown[] = omitLibraryContext
+    ? []
+    : [
+        {
+          version: 8,
+          type: 'context-options',
+          origin: 'library',
+          browserName,
+          playwrightVersion,
+          options: { viewport: { width: 1280, height: 720 }, locale: 'en-US', isMobile: false },
+          wallTime: wallTime + 100,
+          monotonicTime: monotonicTime + 100,
+          sdkLanguage: 'javascript',
+          title,
+        },
+      ];
+
+  for (const [index, action] of actions.entries()) {
+    const callId = `call@${index}`;
+    library.push({
+      type: 'before',
+      callId,
+      apiName: action.apiName,
+      class: 'Locator',
+      method: action.apiName.split('.').pop(),
+      startTime: action.startTime,
+    });
+    library.push({
+      type: 'after',
+      callId,
+      ...(action.endTime != null ? { endTime: action.endTime } : {}),
+      ...(action.error ? { error: { message: action.error } } : {}),
+    });
+  }
+
+  for (const entry of consoleEntries) {
+    library.push({ type: 'console', messageType: entry.messageType, text: entry.text, time: entry.time });
+  }
+
+  const entries: ZipEntry[] = [
+    { name: 'test.trace', data: Buffer.from(runner.map((line) => JSON.stringify(line)).join('\n'), 'utf-8') },
+  ];
+  if (library.length > 0) {
+    entries.push({
+      name: '0-trace.trace',
+      data: Buffer.from(library.map((line) => JSON.stringify(line)).join('\n'), 'utf-8'),
+    });
+  }
+
+  return buildZip(entries);
+}
+
 /** An `error-context` attachment body, as Playwright writes it on failure. */
 export function errorContextMarkdown(options: { snapshot: string; source: Array<[number, string]> }): string {
   const source = options.source.map(([line, text]) => `  ${String(line).padStart(2)} | ${text}`).join('\n');
