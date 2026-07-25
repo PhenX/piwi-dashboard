@@ -30,6 +30,7 @@ const INTENTIONALLY_EXCLUDED = new Set([
   'POST /api/test-runs/:id/case-files', // file upload during live run (server only)
   'DELETE /api/tests/cleanup', // test-suite cleanup hook (server only)
   'POST /api/traces/check', // trace dedup check (server only)
+  'POST /api/test-runs/:id/gate', // CI gate policy — there is no pipeline to gate in a browser demo
 ]);
 
 // ── Derive all server routes from the file system ────────────────────────

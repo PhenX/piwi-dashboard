@@ -11,6 +11,7 @@ export * from './locator-healing-types';
 export * from './locator-generation';
 export * from './locator-fingerprint';
 export * from './error-text';
+export * from './gate';
 export * from './locator-methods';
 export * from './status-classify';
 export * from './step-analysis';

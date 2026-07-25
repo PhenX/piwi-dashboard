@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./gate": "./src/gate.ts",
     "./locator-generation": "./src/locator-generation.ts",
     "./locator-fingerprint": "./src/locator-fingerprint.ts",
     "./locator-healing-types": "./src/locator-healing-types.ts",
