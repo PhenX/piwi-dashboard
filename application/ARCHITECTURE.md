@@ -43,14 +43,14 @@ Drizzle ORM over **SQLite (libSQL)** or **PostgreSQL (postgres.js)**, chosen at 
 
 Tables, by area:
 
-| Area | Tables |
-|---|---|
-| Core results | `projects`, `test_runs`, `test_suites`, `test_cases`, `test_runs_cases`, `network_requests` |
-| Failure analysis | `failure_clusters`, `failure_cluster_aliases`, `cluster_merge_suggestions`, `failure_diagnoses`, `failure_diagnosis_versions` |
-| Evidence & storage | `files`, `trace_resources`, `trace_blobs`, `case_payloads`, `locator_snapshots` |
-| Metadata | `tags`, `project_tags`, `markers`, `entity_links`, `app_settings` |
-| Identity | `users`, `api_keys`, `account_tokens`, `project_assignments` |
-| Notifications | `notification_channels`, `subscriptions`, `notification_deliveries` |
+| Area               | Tables                                                                                                                        |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| Core results       | `projects`, `test_runs`, `test_suites`, `test_cases`, `test_runs_cases`, `network_requests`                                   |
+| Failure analysis   | `failure_clusters`, `failure_cluster_aliases`, `cluster_merge_suggestions`, `failure_diagnoses`, `failure_diagnosis_versions` |
+| Evidence & storage | `files`, `trace_resources`, `trace_blobs`, `case_payloads`, `locator_snapshots`                                               |
+| Metadata           | `tags`, `project_tags`, `markers`, `entity_links`, `app_settings`                                                             |
+| Identity           | `users`, `api_keys`, `account_tokens`, `project_assignments`                                                                  |
+| Notifications      | `notification_channels`, `subscriptions`, `notification_deliveries`                                                           |
 
 Non-obvious ones:
 
@@ -73,44 +73,47 @@ Nitro file-based routing under `server/api/`, plus `server/routes/` for non-`/ap
 **OpenAPI 3.1** spec at `/_openapi.json` and the in-app reference at `/docs` are the authoritative endpoint list — this
 is only the shape of it.
 
-| Family | What it covers |
-|---|---|
-| `test-runs/` | Ingest (`submit`, `upload`), the streaming protocol (`setup`, `start`, `[id]/events`, `[id]/finish`, `[id]/case-files`), run detail, SSE `stream`, network requests, comparison, deletion |
-| `test-cases/`, `test-run-cases/` | Stable test-case detail/history/traces; per-execution detail, execution-scoped diagnosis (`diagnose`, `diagnosis`, `diagnosis-context`), locator healing, DOM snapshots |
-| `projects/` | List (heavy stats), `menu` (slim sidebar list, one SELECT), `overview`, detail, CRUD, members, flaky tests, spec health, trends, SCM |
-| `failure-clusters/`, `cluster-merge-suggestions/`, `failure-diagnoses/` | Cluster detail and triage, AI diagnosis (`diagnose`, `context`, `commits`, `commit-diff`, `base-commit`), semantic merge suggestions, diagnosis version history and feedback |
-| `analytics/[widget]` | Cross-project analytics widgets backing `/analytics` |
-| `auth/`, `users/` | Login/logout/me/setup, OAuth, password reset & change, email verification, invites, user + API-key management |
-| `channels/`, `subscriptions/`, `notifications/stream` | Notification destinations, per-project subscriptions, SSE delivery stream |
-| `settings/` | AI, SMTP and other admin settings (secrets never returned; env-managed flags exposed) |
-| `files/`, `traces/`, `markers/`, `links/`, `tags/`, `search`, `admin/` | Artifact download, trace checks, timeline markers, entity links, tags, global search, admin stats/cleanup |
-| `health`, `version`, `desktop/` | Readiness probe (200/503 with DB check), build info, desktop-shell helpers |
-| `server/routes/mcp.post.ts` | The MCP server endpoint (tool defs in `shared/mcp-tools.ts`, handlers in `server/utils/mcp/`) |
-| `server/routes/__piwi/` | Desktop session bootstrap, guarded by `server/middleware/desktop-guard.ts` |
+| Family                                                                  | What it covers                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test-runs/`                                                            | Ingest (`submit`, `upload`, `import` + `import/check`), the streaming protocol (`setup`, `start`, `[id]/events`, `[id]/finish`, `[id]/case-files`), run detail, SSE `stream`, network requests, comparison, deletion |
+| `test-cases/`, `test-run-cases/`                                        | Stable test-case detail/history/traces; per-execution detail, execution-scoped diagnosis (`diagnose`, `diagnosis`, `diagnosis-context`), locator healing, DOM snapshots                                              |
+| `projects/`                                                             | List (heavy stats), `menu` (slim sidebar list, one SELECT), `overview`, detail, CRUD, members, flaky tests, spec health, trends, SCM                                                                                 |
+| `failure-clusters/`, `cluster-merge-suggestions/`, `failure-diagnoses/` | Cluster detail and triage, AI diagnosis (`diagnose`, `context`, `commits`, `commit-diff`, `base-commit`), semantic merge suggestions, diagnosis version history and feedback                                         |
+| `analytics/[widget]`                                                    | Cross-project analytics widgets backing `/analytics`                                                                                                                                                                 |
+| `auth/`, `users/`                                                       | Login/logout/me/setup, OAuth, password reset & change, email verification, invites, user + API-key management                                                                                                        |
+| `channels/`, `subscriptions/`, `notifications/stream`                   | Notification destinations, per-project subscriptions, SSE delivery stream                                                                                                                                            |
+| `settings/`                                                             | AI, SMTP and other admin settings (secrets never returned; env-managed flags exposed)                                                                                                                                |
+| `files/`, `traces/`, `markers/`, `links/`, `tags/`, `search`, `admin/`  | Artifact download, trace checks, timeline markers, entity links, tags, global search, admin stats/cleanup                                                                                                            |
+| `health`, `version`, `desktop/`                                         | Readiness probe (200/503 with DB check), build info, desktop-shell helpers                                                                                                                                           |
+| `server/routes/mcp.post.ts`                                             | The MCP server endpoint (tool defs in `shared/mcp-tools.ts`, handlers in `server/utils/mcp/`)                                                                                                                        |
+| `server/routes/__piwi/`                                                 | Desktop session bootstrap, guarded by `server/middleware/desktop-guard.ts`                                                                                                                                           |
 
 Key server utilities (`server/utils/`):
 
-| File / folder | Purpose |
-|---|---|
-| `persist-run-cases.ts` | The single write path for run cases — every ingest site goes through it |
-| `case-payloads.ts` | Content-addressed payload upsert/inline/resolve |
-| `locator-healing.ts` | Shared `upsertLocatorSnapshots`, `getLocatorHealing`, `saveLocatorPick` (server + demo) |
-| `project-access.ts` | `getProjectScope`, `requireProjectAccess`, `requireResolvedProjectAccess`, entity resolvers |
-| `route-required-roles.ts`, `route-roles-match.ts` | Read `x-required-roles` from compiled route metas; rou3 matching |
-| `ai-*.ts` | Provider abstraction, diagnosis, context building + limits, research stage, embeddings, images, system prompt |
-| `cluster-*.ts` | Similarity, semantic adjudication, naming, reconciliation |
-| `scm/` | Repo history, diffs and patch validation for AI diagnosis |
-| `notifications/` | `match.ts` (subscription matching → outbox rows), `dispatch.ts` (`sweepOutbox`, HMAC-SHA256 `X-Piwi-Signature`), `emit.ts`, `run-notifications.ts` |
-| `email.ts`, `account-tokens.ts`, `rate-limit.ts`, `crypto.ts` | SMTP transport + templates, single-use tokens (reset 1 h / verify 24 h / invite 72 h), in-memory sliding window, AES-256-GCM |
-| `retention.ts` | Nightly pruning of runs, notification history, diagnosis versions and orphan payloads |
-| `compute-regression-signals.ts`, `flaky-classify.ts` | `isNewRegression` / `isNewFlaky` signals; flaky root-cause classification |
-| `server/tasks/notifications/sweep.ts` | Nitro scheduled task — sweeps the outbox every minute |
+| File / folder                                                 | Purpose                                                                                                                                            |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `persist-run-cases.ts`                                        | The single write path for run cases — every ingest site goes through it                                                                            |
+| `blob-report.ts`                                              | Reads a Playwright blob report (`report.jsonl` + `resources/`) into run + `RunCaseInput`s for the import endpoint                                  |
+| `import-evidence.ts`                                          | Recovers ARIA snapshot / source snippet from `error-context`, and console entries from the trace, for imported executions                          |
+| `upload-limits.ts`                                            | Effective multipart ceiling (`PIWI_IMPORT_MAX_BYTES`), shared by `upload` and `import` and surfaced to the import page                             |
+| `case-payloads.ts`                                            | Content-addressed payload upsert/inline/resolve                                                                                                    |
+| `locator-healing.ts`                                          | Shared `upsertLocatorSnapshots`, `getLocatorHealing`, `saveLocatorPick` (server + demo)                                                            |
+| `project-access.ts`                                           | `getProjectScope`, `requireProjectAccess`, `requireResolvedProjectAccess`, entity resolvers                                                        |
+| `route-required-roles.ts`, `route-roles-match.ts`             | Read `x-required-roles` from compiled route metas; rou3 matching                                                                                   |
+| `ai-*.ts`                                                     | Provider abstraction, diagnosis, context building + limits, research stage, embeddings, images, system prompt                                      |
+| `cluster-*.ts`                                                | Similarity, semantic adjudication, naming, reconciliation                                                                                          |
+| `scm/`                                                        | Repo history, diffs and patch validation for AI diagnosis                                                                                          |
+| `notifications/`                                              | `match.ts` (subscription matching → outbox rows), `dispatch.ts` (`sweepOutbox`, HMAC-SHA256 `X-Piwi-Signature`), `emit.ts`, `run-notifications.ts` |
+| `email.ts`, `account-tokens.ts`, `rate-limit.ts`, `crypto.ts` | SMTP transport + templates, single-use tokens (reset 1 h / verify 24 h / invite 72 h), in-memory sliding window, AES-256-GCM                       |
+| `retention.ts`                                                | Nightly pruning of runs, notification history, diagnosis versions and orphan payloads                                                              |
+| `compute-regression-signals.ts`, `flaky-classify.ts`          | `isNewRegression` / `isNewFlaky` signals; flaky root-cause classification                                                                          |
+| `server/tasks/notifications/sweep.ts`                         | Nitro scheduled task — sweeps the outbox every minute                                                                                              |
 
 ## Front end
 
 ### Pages (`app/pages/`)
 
-`/` dashboard home · `/projects` + `/projects/[id]` · `/test-runs/[id]` · `/test-cases/[id]` (stable case across runs)
+`/` dashboard home · `/projects` + `/projects/[id]` (+ `/edit`, `/import`) · `/test-runs/[id]` · `/test-cases/[id]` (stable case across runs)
 · `/test-run-cases/[id]` (one execution) · `/failure-clusters/[id]` · `/analytics` · `/settings/*` · `/docs` (in-app API
 reference) · `/mcp` · `/login`, `/forgot-password`, `/reset-password` (public, layout-free).
 
@@ -123,15 +126,15 @@ page `provide`s a section locator so an AI citation can reveal and scroll to the
 
 Domain subfolders, all auto-imported **without a folder prefix** (`pathPrefix: false`), so names are globally unique:
 
-| Folder | Scope |
-|---|---|
-| `shared/` | Cross-page primitives and widgets — see below |
-| `run/` | Run detail: summary, cases table, workers timeline, comparison, slow endpoints, failure groups, reports |
-| `test-case/` | Single-execution detail: summary, verdict, cluster card, AI card, evidence, console/network, DOM/ARIA, history |
-| `cluster/` | Failure-cluster detail: summary, per-case evidence tabs, investigation + baseline picker, commit browser |
-| `diagnosis/` | AI diagnosis panel: context preview + coverage strip, result with evidence citations, export |
-| `project/` | Project detail charts, flaky list, cluster list, SCM changes, subscribe bell |
-| `analytics/` | Cross-project widgets: scorecard, heatmaps, leaderboards, trend charts, insights feed |
+| Folder                                                        | Scope                                                                                                                |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `shared/`                                                     | Cross-page primitives and widgets — see below                                                                        |
+| `run/`                                                        | Run detail: summary, cases table, workers timeline, comparison, slow endpoints, failure groups, reports              |
+| `test-case/`                                                  | Single-execution detail: summary, verdict, cluster card, AI card, evidence, console/network, DOM/ARIA, history       |
+| `cluster/`                                                    | Failure-cluster detail: summary, per-case evidence tabs, investigation + baseline picker, commit browser             |
+| `diagnosis/`                                                  | AI diagnosis panel: context preview + coverage strip, result with evidence citations, export                         |
+| `project/`                                                    | Project detail charts, flaky list, cluster list, SCM changes, subscribe bell                                         |
+| `analytics/`                                                  | Cross-project widgets: scorecard, heatmaps, leaderboards, trend charts, insights feed                                |
 | `home/`, `layout/`, `settings/`, `desktop/`, `docs/`, `demo/` | Home filters; app shell/nav; settings surfaces; desktop-only cards; in-app API reference; demo-only banner/simulator |
 
 Shared building blocks worth knowing before writing new markup (`AGENTS.md` makes reuse a rule):

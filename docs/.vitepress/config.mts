@@ -77,6 +77,7 @@ export default defineConfig({
       { text: 'UI overview', link: '/ui-overview' },
       { text: 'Reporter', link: '/reporter' },
       { text: 'Capture fixtures', link: '/capture-fixtures' },
+      { text: 'Importing past runs', link: '/importing-runs' },
       {
         text: 'Features',
         items: [

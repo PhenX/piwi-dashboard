@@ -112,6 +112,12 @@ export const HELP_TOPICS = {
     text: 'Every project that has reported results, with its latest run, pass rate and activity. Click a row to drill in.',
     doc: 'ui-overview#projects-page',
   },
+  'project.import': {
+    title: 'Importing past runs',
+    text: 'Upload the archives Playwright writes to blob-report/ to backfill runs from before you adopted Piwi. One archive becomes one run, complete with traces and screenshots, and re-uploading the same archive changes nothing. Imports are silent by design — no notifications, AI diagnosis or regression signals, so a backfill never pages the team about months-old failures.',
+    doc: 'importing-runs',
+    envVars: ['PIWI_IMPORT_MAX_BYTES'],
+  },
 
   // ── Project detail ────────────────────────────────────────────────────
   'project.run-scope': {

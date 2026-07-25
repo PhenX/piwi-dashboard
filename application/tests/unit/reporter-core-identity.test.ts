@@ -1,8 +1,10 @@
 import { describe, test, expect } from 'vitest';
 import * as core from '@piwitests/core/locator-generation';
 import { LOCATOR_BUILDER_METHODS } from '@piwitests/core/locator-methods';
+import * as coreSteps from '@piwitests/core/step-analysis';
 // Imported from the reporter's *source* (vitest transpiles it), not dist/.
 import * as reporter from '../../../reporter/src/internal/capture/locator-healing';
+import * as reporterSteps from '../../../reporter/src/internal/collect/step-analyzer';
 
 /**
  * Replaces the old reporter↔shared drift-guard test. The reporter now bundles
@@ -26,5 +28,14 @@ describe('reporter re-exports @piwitests/core (no local re-implementation)', () 
 
   test('the reporter method surface derives from the shared builder-method list', () => {
     expect(reporter.LOCATOR_METHODS).toEqual([...LOCATOR_BUILDER_METHODS]);
+  });
+
+  test('step-analysis helpers are the same references as core', () => {
+    expect(reporterSteps.categorizeStep).toBe(coreSteps.categorizeStep);
+    expect(reporterSteps.flattenSteps).toBe(coreSteps.flattenSteps);
+    expect(reporterSteps.collectStepMetrics).toBe(coreSteps.collectStepMetrics);
+    expect(reporterSteps.extractTestStepEvents).toBe(coreSteps.extractTestStepEvents);
+    expect(reporterSteps.extractWaitEvents).toBe(coreSteps.extractWaitEvents);
+    expect(reporterSteps.computePerformanceSummary).toBe(coreSteps.computePerformanceSummary);
   });
 });

@@ -18,7 +18,9 @@ import { runEventBus } from '../../utils/run-events';
 import { autoDiagnoseRun } from '../../utils/ai-diagnosis';
 import { computeRegressionSignals } from '../../utils/compute-regression-signals';
 import { getProjectScope, scopeAllows } from '../../utils/project-access';
+import { resolveMaxUploadBytes } from '../../utils/upload-limits';
 import { sumFailedAndTimedOut } from '#shared/utils/test-counts';
+import { formatBytes } from '#shared/utils/format-bytes';
 
 defineRouteMeta({
   openAPI: {
@@ -58,15 +60,14 @@ function getReportLabel(type: string, override?: string): string {
   return REPORT_TYPE_LABELS[type] ?? `${type.charAt(0).toUpperCase() + type.slice(1)} Report`;
 }
 
-const MAX_UPLOAD_BYTES = 500 * 1024 * 1024; // 500 MB
-
 export default eventHandler(async (event) => {
   // Require reporter or administrator role for uploading test results
   const user = await requireAuth(event);
 
+  const maxUploadBytes = resolveMaxUploadBytes();
   const contentLength = parseInt(getRequestHeader(event, 'content-length') ?? '0', 10);
-  if (contentLength > MAX_UPLOAD_BYTES) {
-    throw createError({ statusCode: 413, message: 'Upload too large (max 500 MB)' });
+  if (contentLength > maxUploadBytes) {
+    throw createError({ statusCode: 413, message: `Upload too large (max ${formatBytes(maxUploadBytes)})` });
   }
 
   const formData = await readMultipartFormData(event);

@@ -4,6 +4,9 @@ Piwi Dashboard is under active development (pre-1.0). This page shows direction,
 
 ## Recently shipped
 
+- **Import of existing history** — backfill runs recorded before Piwi from Playwright's own blob reports, with traces
+  and screenshots, from a page in the dashboard. Imports are idempotent and deliberately silent (no notifications, AI
+  diagnosis or regression signals).
 - **Automatic data retention & storage efficiency** — opt-in nightly pruning of old runs (`PIWI_RETENTION_DAYS`), notification-outbox and diagnosis-history housekeeping, ingest size caps, and content-addressed dedup of per-failure evidence payloads.
 - **AI diagnosis, grounded** — failure-cluster analysis fed by your actual SCM diff, with suggested patches validated server-side against your source; optional two-stage (research → final) pipeline; works with Anthropic, OpenAI, or any OpenAI-compatible endpoint including local models.
 - **Locator healing** — element attributes captured on passing runs power ranked replacement locators when a selector breaks.
@@ -22,7 +25,7 @@ Piwi Dashboard is under active development (pre-1.0). This page shows direction,
 
 - Deeper CI feedback (PR annotations / status summaries).
 - More backend-log instrumentation packages beyond ASP.NET Core and Nitro.
-- Import of existing Playwright JSON reports for teams with history to migrate.
+- Merging imported shards of one CI run into a single run (today each shard imports separately).
 - A dual ESM/CJS reporter build (the package is CommonJS-only today; named imports work everywhere, but a native ESM default import needs an interop shim).
 
 ## Non-goals

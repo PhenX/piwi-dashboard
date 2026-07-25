@@ -30,7 +30,8 @@ export interface TraceConsoleEntry {
   type: string;
   text: string;
   timestamp: number;
-  location?: string;
+  /** Legacy traces carry a preformatted string; modern ones a structured location. */
+  location?: string | { url?: string; lineNumber?: number; columnNumber?: number };
 }
 
 export interface TraceNetworkRequest {
@@ -196,6 +197,24 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
 
     if (type === 'frame-snapshot' && evt.snapshot && typeof evt.snapshot === 'object') {
       frameSnapshots.push(evt.snapshot as TraceFrameSnapshot);
+    }
+
+    // Modern traces emit console messages as their own top-level event; older
+    // ones wrap them in a generic `event` with `method: 'console'` (below).
+    if (type === 'console') {
+      const text =
+        (evt.text as string) ??
+        (Array.isArray(evt.args)
+          ? (evt.args as Array<Record<string, unknown>>).map((a) => String(a?.value ?? a?.preview ?? '')).join(' ')
+          : '');
+      if (text) {
+        consoleEntries.push({
+          type: (evt.messageType as string) || 'log',
+          text,
+          timestamp: (evt.time as number) ?? 0,
+          location: evt.location as TraceConsoleEntry['location'],
+        });
+      }
     }
 
     if (type === 'action') {
