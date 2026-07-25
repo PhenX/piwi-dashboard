@@ -190,13 +190,13 @@ tokens) — recommended in production even without auth, falling back to an inse
 
 Where to add things in subsystems whose wiring spans several files:
 
-| Change | Touch |
-|---|---|
-| Flaky root-cause category | `classifyFlakyRootCause()` + keyword arrays in `server/utils/flaky-classify.ts`; `rootCause` on `FlakyTest` (`types/api.ts`); `FlakyTestsList.vue` colour map |
-| Flaky impact scoring | `getProjectFlakyTests` (`shared/handlers/projects.ts`) — sorts by impact desc; `impact`, `wastedCiMinutes`, `avgFailedDurationMs` on `FlakyTest` |
-| Regression signals | `computeRegressionSignals()` (`server/utils/compute-regression-signals.ts`), called from `finish.post.ts`; surfaced by `getTestRun` / `getTestRunCase` mappers |
+| Change                        | Touch                                                                                                                                                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Flaky root-cause category     | `classifyFlakyRootCause()` + keyword arrays in `server/utils/flaky-classify.ts`; `rootCause` on `FlakyTest` (`types/api.ts`); `FlakyTestsList.vue` colour map                                            |
+| Flaky impact scoring          | `getProjectFlakyTests` (`shared/handlers/projects.ts`) — sorts by impact desc; `impact`, `wastedCiMinutes`, `avgFailedDurationMs` on `FlakyTest`                                                         |
+| Regression signals            | `computeRegressionSignals()` (`server/utils/compute-regression-signals.ts`), called from `finish.post.ts`; surfaced by `getTestRun` / `getTestRunCase` mappers                                           |
 | A computed AI-context section | Update the `SectionId` union (`ai-context.types.ts`), `DIAGNOSIS_SECTIONS` (`diagnosis-sections.ts`) and `DiagnosisContextCoverage` (`types/api.ts`) **in one batch** before writing the section builder |
-| Sharding behaviour | See the sharding invariants below |
+| Sharding behaviour            | See the sharding invariants below                                                                                                                                                                        |
 
 ## Subsystem invariants
 
@@ -325,7 +325,7 @@ Any feature adding a DB column, an API response field or a UI-visible change upd
 
 **`shared/demo/failure-stories.mjs` is the single source of truth for every seeded failure**: one story per cluster
 carries the failing spec line, a reporter-faithful error string, the app source files it traces to, and a suggested-fix
-patch *derived* from those same lines — so error, snippet, patch and demo SCM source cannot drift. Locator-centric
+patch _derived_ from those same lines — so error, snippet, patch and demo SCM source cannot drift. Locator-centric
 stories also carry an authored failure-time DOM snapshot served by `app/demo/api/dom-snapshot.ts` with precedence over
 the committed trace ZIPs (whose recorded pages are too bare for the locator picker); the ZIP-parse path stays the
 fallback. Demo AI diagnosis is **data-grounded, not canned prose** — rebuilt from the seeded DB and each cluster's real
@@ -340,7 +340,7 @@ JSON consumed by AI coding agents; consistency saves the agent from guessing.
 
 **Authorization** — every handler is `(db, params, ctx)` with `ctx: McpContext = { user, scope }` (the route resolves
 `scope = getProjectScope(db, user)` once). Every project- or entity-scoped tool MUST enforce scope: `assertProject(ctx, projectId)`
-when the arg *is* a project id, or `checkEntityScope(db, ctx, id, resolveXProjectId)` for run/case/cluster/diagnosis ids
+when the arg _is_ a project id, or `checkEntityScope(db, ctx, id, resolveXProjectId)` for run/case/cluster/diagnosis ids
 (`'not-found'` → return null/empty; out of scope → throws). Cross-project feeds filter by `ctx.scope`. Write/triage
 tools MUST also call `assertWriteRole(ctx)`.
 
@@ -392,7 +392,7 @@ app with Playwright — `scripts/take-demo-screenshots.mjs` is a working harness
 Demo screenshots (`public/demo/screenshots/*.png`), trace ZIPs (`public/demo/traces/*.zip`) and failure videos
 (`public/demo/videos/*.webm`) are **real Playwright artifacts**, captured against the small self-contained
 app-under-test pages in `scripts/demo-pages.mjs` — never a real app, and never the Piwi dashboard itself (traces embed
-full page snapshots, and a screenshot of the *results UI* is not believable evidence of a failing *test*). Each page
+full page snapshots, and a screenshot of the _results UI_ is not believable evidence of a failing _test_). Each page
 mirrors one story in `shared/demo/failure-stories.mjs` closely enough (headings, labels, button names) that the evidence
 reads as the same app the seeded data describes.
 
