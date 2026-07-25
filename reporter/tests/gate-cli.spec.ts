@@ -141,6 +141,122 @@ describe('parseGateArgs', () => {
   });
 });
 
+/** Stub `fetch` with one canned response, restoring the original afterwards. */
+function stubFetch(response: { ok: boolean; status?: number; json: () => unknown }) {
+  const original = globalThis.fetch;
+  const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    calls.push({ url: String(url), init });
+    return { ok: response.ok, status: response.status ?? 200, json: async () => response.json() } as Response;
+  }) as typeof fetch;
+  return { calls, restore: () => void (globalThis.fetch = original) };
+}
+
+function gateResult(passed: boolean) {
+  return {
+    passed,
+    violations: passed ? [] : [{ rule: 'max-failed', message: '2 failing tests (limit 0)', actual: 2, limit: 0 }],
+    facts: {
+      runId: 7,
+      runUrl: 'https://piwi.example.com/test-runs/7',
+      projectName: 'checkout',
+      status: passed ? 'passed' : 'failed',
+      totalTests: 10,
+      failedTests: passed ? 0 : 2,
+      newRegressions: 0,
+      newFlaky: 0,
+      newClusters: 0,
+      failingByTag: {},
+      unmatchedTags: [],
+      quarantinedFailures: 0,
+      quarantinedTotal: 0,
+    },
+  };
+}
+
+const PASSING_ARGS = ['--server-url', 'https://piwi.example.com', '--run-id', '7', '--max-failed', '0'];
+
+// The exit codes are the command's whole contract with CI, so each one is
+// pinned rather than inferred.
+describe('runGate against a responding dashboard', () => {
+  it('exits 0 when the policy is satisfied', async () => {
+    const stub = stubFetch({ ok: true, json: () => gateResult(true) });
+    try {
+      expect(await runGate(PASSING_ARGS, EMPTY_ENV)).toBe(0);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it('exits 1 when the policy is violated', async () => {
+    const stub = stubFetch({ ok: true, json: () => gateResult(false) });
+    try {
+      expect(await runGate(PASSING_ARGS, EMPTY_ENV)).toBe(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it('posts the policy to the run being gated', async () => {
+    const stub = stubFetch({ ok: true, json: () => gateResult(true) });
+    try {
+      await runGate([...PASSING_ARGS, '--require-tag', '@critical'], EMPTY_ENV);
+      expect(stub.calls[0]?.url).toBe('https://piwi.example.com/api/test-runs/7/gate');
+      expect(JSON.parse(String(stub.calls[0]?.init?.body))).toMatchObject({
+        maxFailed: 0,
+        requireTags: ['critical'],
+      });
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it('sends the API key when one is configured', async () => {
+    const stub = stubFetch({ ok: true, json: () => gateResult(true) });
+    try {
+      await runGate([...PASSING_ARGS, '--api-key', 'secret'], EMPTY_ENV);
+      const headers = stub.calls[0]?.init?.headers as Record<string, string> | undefined;
+      expect(headers?.['X-API-Key']).toBe('secret');
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it('still reports the verdict as an exit code in --json mode', async () => {
+    const stub = stubFetch({ ok: true, json: () => gateResult(false) });
+    try {
+      expect(await runGate([...PASSING_ARGS, '--json'], EMPTY_ENV)).toBe(1);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  // A dashboard that rejects the request is "could not evaluate", never a pass.
+  it('exits 2 when the dashboard returns an error', async () => {
+    const stub = stubFetch({ ok: false, status: 409, json: () => ({ message: 'Run #7 has not finished yet' }) });
+    try {
+      expect(await runGate(PASSING_ARGS, EMPTY_ENV)).toBe(2);
+    } finally {
+      stub.restore();
+    }
+  });
+
+  it('exits 2 when the error body is unreadable', async () => {
+    const stub = stubFetch({
+      ok: false,
+      status: 500,
+      json: () => {
+        throw new Error('not json');
+      },
+    });
+    try {
+      expect(await runGate(PASSING_ARGS, EMPTY_ENV)).toBe(2);
+    } finally {
+      stub.restore();
+    }
+  });
+});
+
 describe('runGate exit codes', () => {
   // The contract CI depends on: a gate that cannot be evaluated must never
   // report success, or a misconfigured pipeline waves every merge through.
