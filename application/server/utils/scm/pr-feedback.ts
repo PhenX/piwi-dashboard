@@ -18,6 +18,7 @@ import { createScmProvider } from './index';
 import { normalizeGitUrl } from '../regression-context';
 import { getLocatorHealingBatch } from '../locator-healing';
 import { resolveOwners } from './ownership';
+import { verifyClusterFixes } from '../fix-verification';
 import { computeRunInsights } from '#shared/handlers/run-insights';
 import {
   buildCommitStatus,
@@ -30,6 +31,7 @@ import {
   type PrFeedbackSettings,
   type PrSummaryInput,
 } from '#shared/pr-feedback';
+import type { VerifiedFix } from '../fix-verification';
 import type { RunMetadata } from '../run-json-types';
 import type { DbClient } from '../../database';
 
@@ -126,7 +128,12 @@ async function buildFailureEntries(
  * Build the summary for a finished run. Exported so the gate endpoint and the
  * tests can read the same numbers the comment shows.
  */
-export async function buildRunPrSummary(db: DbClient, runId: number, siteUrl: string): Promise<PrSummaryInput | null> {
+export async function buildRunPrSummary(
+  db: DbClient,
+  runId: number,
+  siteUrl: string,
+  fixedClusters: VerifiedFix[] = [],
+): Promise<PrSummaryInput | null> {
   const [run] = await db.select().from(testRuns).where(eq(testRuns.id, runId));
   if (!run) return null;
 
@@ -206,6 +213,13 @@ export async function buildRunPrSummary(db: DbClient, runId: number, siteUrl: st
       signature: cluster.signature,
       caseCount: clusterCaseCounts.get(cluster.id) ?? 0,
     })),
+    fixedClusters: fixedClusters.map((fix) => ({
+      id: fix.clusterId,
+      label: fix.title || fix.signature,
+      testCount: fix.testCount,
+      verification: fix.verification,
+      timeToResolutionMs: fix.timeToResolutionMs,
+    })),
     wastedMinutes: wastedTotalMs > 0 ? wastedTotalMs / 60000 : null,
     hasBaseline: insights?.hasBaseline ?? false,
   };
@@ -218,6 +232,7 @@ export async function buildRunPrSummary(db: DbClient, runId: number, siteUrl: st
 export async function postRunPrFeedback(
   db: DbClient,
   runId: number,
+  fixedClusters: VerifiedFix[] = [],
 ): Promise<{ posted: boolean; comment: boolean; status: boolean; reason?: string }> {
   const none = (reason: string) => ({ posted: false, comment: false, status: false, reason });
 
@@ -240,10 +255,12 @@ export async function postRunPrFeedback(
   const provider = await createScmProvider(repositoryUrl, db, run.projectId);
   if (!provider) return none(`unsupported SCM host for ${repositoryUrl}`);
 
-  const summary = await buildRunPrSummary(db, runId, siteUrl);
+  const summary = await buildRunPrSummary(db, runId, siteUrl, fixedClusters);
   if (!summary) return none('could not build the run summary');
 
-  const quiet = settings.onlyOnFailure && summary.failedTests === 0;
+  // `onlyOnFailure` silences routine green runs, but a run that closed a
+  // cluster is news — that is the answer somebody was waiting for.
+  const quiet = settings.onlyOnFailure && summary.failedTests === 0 && (summary.fixedClusters?.length ?? 0) === 0;
 
   let commentPosted = false;
   if (settings.comment && branch && !quiet) {
@@ -267,9 +284,20 @@ export async function postRunPrFeedback(
   return { posted: commentPosted || statusPosted, comment: commentPosted, status: statusPosted };
 }
 
-/** Fire-and-forget wrapper for the run-finalize paths. */
+/**
+ * Fire-and-forget wrapper for the run-finalize paths.
+ *
+ * Fix verification runs first and its result is handed to the comment, so the
+ * two stay in one order rather than racing: a comment that omitted the cluster
+ * this run just closed would be reporting the wrong news.
+ */
 export function postRunPrFeedbackInBackground(db: DbClient, runId: number): void {
-  postRunPrFeedback(db, runId)
+  verifyClusterFixes(db, runId)
+    .catch((e) => {
+      console.error('[fix-verification] verifyClusterFixes failed', e);
+      return [] as VerifiedFix[];
+    })
+    .then((fixed) => postRunPrFeedback(db, runId, fixed))
     .then((result) => {
       if (!result.posted && result.reason && result.reason !== 'disabled') {
         console.warn(`[pr-feedback] nothing posted for run #${runId}: ${result.reason}`);
