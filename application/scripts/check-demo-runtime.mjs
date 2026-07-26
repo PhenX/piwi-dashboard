@@ -104,6 +104,15 @@ async function main() {
     process.exit(1);
   }
 
+  // seed.sql is gitignored and generated on demand. Without it the page loads
+  // and the worker installs, but every query answers 500 — say which step is
+  // missing rather than leaving a bare error to interpret.
+  const seedPaths = [join(ROOT, 'demo', 'seed.sql'), join(ROOT, 'seed.sql')];
+  if (!seedPaths.some((p) => existsSync(p))) {
+    console.error(`No seed at ${seedPaths[0]}. Run "npm run app:seed:demo" and then "npm run app:generate:demo".`);
+    process.exit(1);
+  }
+
   const require = createRequire(import.meta.url);
   const { chromium } = require('playwright');
 
