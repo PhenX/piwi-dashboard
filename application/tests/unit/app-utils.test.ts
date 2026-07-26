@@ -153,13 +153,13 @@ describe('status icon helpers', () => {
   });
 
   test('gives each outcome its own colour, and one colour to the in-flight three', () => {
-    expect(getStatusTextClass('passed')).toContain('green');
-    expect(getStatusTextClass('failed')).toContain('red');
+    expect(getStatusTextClass('passed')).toContain('emerald');
+    expect(getStatusTextClass('failed')).toContain('rose');
     expect(getStatusTextClass('didnotrun')).toContain('amber');
     expect(getStatusTextClass('running')).toContain('blue');
     expect(getStatusTextClass('initialising')).toBe(getStatusTextClass('running'));
     expect(getStatusTextClass('finalizing')).toBe(getStatusTextClass('running'));
-    expect(getStatusTextClass('skipped')).toContain('gray');
+    expect(getStatusTextClass('skipped')).toContain('zinc');
   });
 
   test('only the in-flight statuses spin', () => {

@@ -265,7 +265,7 @@ const flatRows = computed<FlatRow[]>(() => {
         <!-- Test row -->
         <div
           v-else
-          class="flex flex-wrap items-center gap-x-2 gap-y-1 pr-3 py-2 sm:py-1.5 border-b border-default last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors"
+          class="flex flex-wrap items-center gap-x-2 gap-y-1 pr-3 py-2 sm:py-1.5 border-b border-default last:border-b-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors"
           :class="highlightedCaseId === row.test.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
           :style="{ paddingLeft: `${row.depth * 20 + 12}px` }"
         >
@@ -276,8 +276,9 @@ const flatRows = computed<FlatRow[]>(() => {
           <BrowserBadge :browser="row.test.browser" size="sm" />
           <!--
             The status rides on the row's leading icon (it replaces a purely
-            decorative flask), so the row still reads at a glance on mobile
-            where the badge's wording is dropped for width.
+            decorative flask). The icon is the row's ONLY status encoding —
+            a per-row "Passed" badge repeated ten times carries no information,
+            it just buries the one failed row in green ink.
           -->
           <UIcon
             :name="getStatusIcon(row.test.status)"
@@ -287,17 +288,6 @@ const flatRows = computed<FlatRow[]>(() => {
             :aria-label="`Status: ${formatStatusLabel(row.test.status)}`"
             :title="formatStatusLabel(row.test.status)"
           />
-          <UBadge
-            :color="
-              getStatusColor(
-                row.test.status === 'timedOut' || row.test.status === 'timedout' ? 'failed' : row.test.status,
-              )
-            "
-            size="xs"
-            class="capitalize shrink-0 max-sm:hidden"
-          >
-            {{ formatStatusLabel(row.test.status) }}
-          </UBadge>
           <TestRowBadges
             :is-new-regression="Boolean(row.test.isNewRegression)"
             :is-new-flaky="Boolean(row.test.isNewFlaky)"
@@ -314,9 +304,14 @@ const flatRows = computed<FlatRow[]>(() => {
             `min-w-32` floor stops a tagged test from squeezing its own title to
             nothing on a phone: the numbers wrap to a second line instead.
           -->
+          <!--
+            Neutral title: primary-green titles read as "passed" — on the one
+            row that failed, a green title actively lies. Status stays on the
+            icon; the link affordance shows on hover.
+          -->
           <a
             :href="`/test-run-cases/${row.test.id}`"
-            class="text-primary hover:underline flex-1 min-w-32 self-stretch flex items-center"
+            class="text-highlighted hover:text-primary hover:underline flex-1 min-w-32 self-stretch flex items-center"
             :title="row.test.title"
             @click.prevent="navigateTo(`/test-run-cases/${row.test.id}`)"
           >
@@ -351,7 +346,7 @@ const flatRows = computed<FlatRow[]>(() => {
       </template>
 
       <div v-if="flatRows.length === 0" class="text-center py-8 text-muted">
-        <UIcon name="i-lucide-search-x" class="size-6 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+        <UIcon name="i-lucide-search-x" class="size-6 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
         <p class="text-sm">No test cases match your filters.</p>
       </div>
     </div>

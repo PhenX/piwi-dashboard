@@ -122,11 +122,14 @@ for (const story of FAILURE_STORIES) {
 // ── Demo data ─────────────────────────────────────────────────────────────
 
 // Tags
+// Colors come from the curated TAG_COLOR_PALETTE (Tailwind 500 shades) so the
+// demo shows the same tag styling users get. Keep them hex — TagBadge accepts
+// any CSS color, but hex is what the tag editor stores.
 const TAGS = [
-  { id: 1, text: 'smoke', color: 'green', created_at: ts('2025-03-01'), updated_at: ts('2025-03-01') },
-  { id: 2, text: 'regression', color: 'blue', created_at: ts('2025-03-01'), updated_at: ts('2025-03-01') },
-  { id: 3, text: 'critical', color: 'red', created_at: ts('2025-03-15'), updated_at: ts('2025-03-15') },
-  { id: 4, text: 'performance', color: 'yellow', created_at: ts('2025-04-01'), updated_at: ts('2025-04-01') },
+  { id: 1, text: 'smoke', color: '#14b8a6', created_at: ts('2025-03-01'), updated_at: ts('2025-03-01') },
+  { id: 2, text: 'regression', color: '#6366f1', created_at: ts('2025-03-01'), updated_at: ts('2025-03-01') },
+  { id: 3, text: 'critical', color: '#ef4444', created_at: ts('2025-03-15'), updated_at: ts('2025-03-15') },
+  { id: 4, text: 'performance', color: '#f59e0b', created_at: ts('2025-04-01'), updated_at: ts('2025-04-01') },
 ];
 
 // Projects

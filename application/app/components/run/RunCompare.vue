@@ -239,13 +239,13 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
             >
               <template #statusA-cell="{ row }">
                 <span v-if="!row.original.statusA" class="text-gray-400">&mdash;</span>
-                <UBadge v-else :color="getStatusColor(row.original.statusA)" class="capitalize">{{
+                <UBadge v-else :color="getStatusColor(row.original.statusA)" variant="subtle" class="capitalize">{{
                   row.original.statusA
                 }}</UBadge>
               </template>
               <template #statusB-cell="{ row }">
                 <span v-if="!row.original.statusB" class="text-gray-400">&mdash;</span>
-                <UBadge v-else :color="getStatusColor(row.original.statusB)" class="capitalize">{{
+                <UBadge v-else :color="getStatusColor(row.original.statusB)" variant="subtle" class="capitalize">{{
                   row.original.statusB
                 }}</UBadge>
               </template>

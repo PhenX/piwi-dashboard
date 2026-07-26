@@ -257,10 +257,10 @@ defineExpose({ scrollToCase });
             <UIcon name="i-lucide-folder-tree" class="size-3.5" />
           </button>
         </div>
-        <span v-if="isLive" class="text-sm text-gray-500 tabular-nums inline-flex items-center gap-1">
+        <span v-if="isLive" class="text-sm text-zinc-500 tabular-nums inline-flex items-center gap-1">
           {{ testCases.length }} completed <HelpHint topic="run.live" />
         </span>
-        <span v-else class="text-sm text-gray-500 tabular-nums inline-flex items-center gap-1">
+        <span v-else class="text-sm text-zinc-500 tabular-nums inline-flex items-center gap-1">
           {{ sortedTestCases.length
           }}{{ sortedTestCases.length !== testCases.length ? ` / ${testCases.length}` : '' }} cases
           <HelpHint topic="run.test-cases" />
@@ -282,13 +282,13 @@ defineExpose({ scrollToCase });
           :class="
             activeStatuses.includes(opt.value)
               ? opt.color === 'green'
-                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                 : opt.color === 'red'
-                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
                   : opt.color === 'orange'
                     ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-                    : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-              : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300'
+              : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
           "
           @click="toggleStatus(opt.value)"
         >
@@ -296,12 +296,12 @@ defineExpose({ scrollToCase });
             class="size-2 rounded-full shrink-0"
             :class="
               opt.color === 'green'
-                ? 'bg-green-500'
+                ? 'bg-emerald-500'
                 : opt.color === 'red'
-                  ? 'bg-red-500'
+                  ? 'bg-rose-500'
                   : opt.color === 'orange'
                     ? 'bg-orange-500'
-                    : 'bg-gray-400'
+                    : 'bg-zinc-400'
             "
           />
           {{ opt.label }}
@@ -400,7 +400,7 @@ defineExpose({ scrollToCase });
                   :data-index="index"
                 >
                   <div
-                    class="grid items-center border-b border-default text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-900/50"
+                    class="grid items-center border-b border-default text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
                     :class="highlightedCaseId === item.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
                     role="row"
                     :style="{ gridTemplateColumns: gridTemplate }"
@@ -423,9 +423,10 @@ defineExpose({ scrollToCase });
                           :max-tags="3"
                           class="shrink-0"
                         />
+                        <!-- Neutral title: green titles read as "passed" even on failed rows. -->
                         <a
                           :href="`/test-run-cases/${item.id}`"
-                          class="text-primary hover:underline font-medium truncate"
+                          class="text-highlighted hover:text-primary hover:underline font-medium truncate"
                           :title="item.title"
                           @click.prevent="navigateTo(`/test-run-cases/${item.id}`)"
                           >{{ item.title }}</a
@@ -436,11 +437,11 @@ defineExpose({ scrollToCase });
                         :location="item.location"
                         :project-key="projectKey"
                         :project-name="projectName"
-                        class="text-xs text-gray-400 dark:text-gray-500"
+                        class="text-xs text-zinc-400 dark:text-zinc-500"
                       />
                     </div>
 
-                    <!-- status -->
+                    <!-- status — the flat view's only status encoding, so it keeps a chip (subtle, not solid) -->
                     <div class="px-3 py-2 flex items-center" role="cell">
                       <UBadge
                         :color="
@@ -448,6 +449,7 @@ defineExpose({ scrollToCase });
                             item.status === 'timedOut' || item.status === 'timedout' ? 'failed' : item.status,
                           )
                         "
+                        variant="subtle"
                         class="capitalize"
                       >
                         {{ formatStatusLabel(item.status) }}
@@ -480,7 +482,7 @@ defineExpose({ scrollToCase });
                         class="text-amber-600 dark:text-amber-400"
                         unit-class="opacity-60"
                       />
-                      <span v-else class="text-gray-400">&mdash;</span>
+                      <span v-else class="text-zinc-400">&mdash;</span>
                     </div>
                   </div>
                 </DynamicScrollerItem>
@@ -488,7 +490,7 @@ defineExpose({ scrollToCase });
             </DynamicScroller>
 
             <template #fallback>
-              <div class="flex-1 min-h-0 flex items-center justify-center py-10 text-sm text-gray-500">
+              <div class="flex-1 min-h-0 flex items-center justify-center py-10 text-sm text-zinc-500">
                 <UIcon name="i-lucide-loader-circle" class="size-4 mr-2 animate-spin" />
                 Loading test cases…
               </div>
@@ -497,13 +499,13 @@ defineExpose({ scrollToCase });
         </div>
       </div>
 
-      <div v-else-if="testCases.length === 0" class="text-center py-10 text-gray-500">
-        <UIcon name="i-lucide-beaker" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+      <div v-else-if="testCases.length === 0" class="text-center py-10 text-zinc-500">
+        <UIcon name="i-lucide-beaker" class="size-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
         <p>No test cases recorded for this run.</p>
       </div>
 
-      <div v-else class="text-center py-10 text-gray-500">
-        <UIcon name="i-lucide-search-x" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+      <div v-else class="text-center py-10 text-zinc-500">
+        <UIcon name="i-lucide-search-x" class="size-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
         <p>No test cases match your filters.</p>
       </div>
     </template>

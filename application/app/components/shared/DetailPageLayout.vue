@@ -4,6 +4,8 @@ export interface DetailTabItem {
   icon?: string;
   value: string;
   slot?: string;
+  /** Kept visible but not selectable — a tab that has nothing to show for this record. */
+  disabled?: boolean;
 }
 
 const props = defineProps<{

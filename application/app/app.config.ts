@@ -3,6 +3,13 @@ export default defineAppConfig({
     colors: {
       primary: 'green',
       neutral: 'zinc',
+      // Statuses use calmer hues than the raw defaults: the brand green scale
+      // (see main.css) is too neon for a "passed" chip, and pure red/yellow
+      // read harsh next to it. Emerald/rose/amber keep the same meaning with
+      // a softer, more even palette.
+      success: 'emerald',
+      error: 'rose',
+      warning: 'amber',
     },
     card: {
       slots: {
