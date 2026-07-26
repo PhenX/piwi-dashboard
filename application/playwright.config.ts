@@ -56,8 +56,10 @@ const baseConfig = defineConfig({
   // a tight cap turns two flakes into a red shard full of phantom failures.
   maxFailures: process.env.CI ? 12 : 0,
 
-  /* Run tests in parallel across projects */
-  workers: 3,
+  // Sharding is where CI gets its parallelism now, so each shard can afford one
+  // browser fewer: three workers plus the three app servers oversubscribe a
+  // four-core runner, and the browsers are the ones that die under it.
+  workers: process.env.CI ? 2 : 3,
 
   globalSetup: './tests/globalSetup',
   globalTeardown: './tests/globalTeardown',
@@ -75,6 +77,13 @@ const baseConfig = defineConfig({
 
     /* Capture screenshot on first retry for failure diagnostics */
     screenshot: 'only-on-failure',
+
+    // Chromium puts its shared renderer memory in /dev/shm, which is small on a
+    // CI runner. When it fills the renderer is killed mid-test and Playwright
+    // surfaces it as "Target page, context or browser has been closed" or an
+    // unbound protocol object rather than as a real assertion failure. Backing
+    // it with /tmp instead costs a little speed and removes that failure mode.
+    launchOptions: { args: ['--disable-dev-shm-usage'] },
   },
 
   /* Configure projects for major browsers */
