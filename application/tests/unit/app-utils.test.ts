@@ -9,6 +9,7 @@ import {
   getStatusIcon,
   getStatusTextClass,
   isStatusInFlight,
+  toTestPriority,
   formatStatusLabel,
   testCaseCategoryColor,
   clusterStatusColor,
@@ -151,12 +152,33 @@ describe('status icon helpers', () => {
     expect(getStatusIcon('skipped')).toBe('i-lucide-minus-circle');
   });
 
+  test('gives each outcome its own colour, and one colour to the in-flight three', () => {
+    expect(getStatusTextClass('passed')).toContain('green');
+    expect(getStatusTextClass('failed')).toContain('red');
+    expect(getStatusTextClass('didnotrun')).toContain('amber');
+    expect(getStatusTextClass('running')).toContain('blue');
+    expect(getStatusTextClass('initialising')).toBe(getStatusTextClass('running'));
+    expect(getStatusTextClass('finalizing')).toBe(getStatusTextClass('running'));
+    expect(getStatusTextClass('skipped')).toContain('gray');
+  });
+
   test('only the in-flight statuses spin', () => {
     expect(isStatusInFlight('running')).toBe(true);
     expect(isStatusInFlight('initialising')).toBe(true);
     expect(isStatusInFlight('finalizing')).toBe(true);
     expect(isStatusInFlight('passed')).toBe(false);
     expect(isStatusInFlight('timedOut')).toBe(false);
+  });
+});
+
+describe('toTestPriority', () => {
+  test('keeps a declared priority and drops anything the DB happens to hold', () => {
+    expect(toTestPriority('critical')).toBe('critical');
+    expect(toTestPriority('low')).toBe('low');
+    expect(toTestPriority('urgent')).toBeUndefined();
+    expect(toTestPriority('')).toBeUndefined();
+    expect(toTestPriority(null)).toBeUndefined();
+    expect(toTestPriority(undefined)).toBeUndefined();
   });
 });
 
