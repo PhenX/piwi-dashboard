@@ -9,11 +9,22 @@ const props = defineProps<{
 const { download } = useDesktopDownload();
 const open = ref(false);
 
+/**
+ * These URLs are opened directly rather than going through `$fetch`, so the
+ * app's base path has to be applied by hand — the demo is served from `/demo/`
+ * and its service worker only intercepts requests under that prefix. A
+ * root-relative `/api/...` would escape the scope entirely and 404.
+ */
+const base = computed(() => (useRuntimeConfig().app?.baseURL ?? '/').replace(/\/$/, ''));
+
+function exportUrl(query: string): string {
+  return `${base.value}${props.endpoint}?${query}`;
+}
+
 async function run(format: 'html' | 'zip' | 'json' | 'md') {
   open.value = false;
-  const url = `${props.endpoint}?format=${format}`;
   // ZIP is the only binary format; the rest are text the shell can write directly.
-  await download(url, `${props.baseName}.${format}`, { binary: format === 'zip' });
+  await download(exportUrl(`format=${format}`), `${props.baseName}.${format}`, { binary: format === 'zip' });
 }
 
 /**
@@ -22,7 +33,7 @@ async function run(format: 'html' | 'zip' | 'json' | 'md') {
  */
 function printReport() {
   open.value = false;
-  window.open(`${props.endpoint}?format=html&print=1`, '_blank');
+  window.open(exportUrl('format=html&print=1'), '_blank');
 }
 </script>
 

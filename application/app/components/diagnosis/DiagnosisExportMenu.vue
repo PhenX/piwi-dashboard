@@ -164,13 +164,13 @@ function copySuggestedPatch() {
 
 <template>
   <UPopover v-model:open="exportOpen">
-    <UButton icon="i-lucide-download" size="xs" color="neutral" variant="outline" title="Copy / export">
-      Export
+    <UButton icon="i-lucide-clipboard-copy" size="xs" color="neutral" variant="outline" title="Copy to clipboard">
+      Copy
     </UButton>
 
     <template #content>
       <div class="w-56 p-1 space-y-0.5">
-        <p class="text-xs font-medium text-gray-500 px-2 pt-1 pb-1">Copy / export</p>
+        <p class="text-xs font-medium text-gray-500 px-2 pt-1 pb-1">Copy to clipboard</p>
 
         <UButton
           block
