@@ -39,12 +39,14 @@ jobs:
 
       # Restored after the install so the postinstall `nuxt prepare` cannot
       # clobber it. `experimental.buildCache` reuses whatever still matches.
+      # npm hoists the workspace, so the build cache lands in the root
+      # node_modules; the application copy holds the font and jiti caches.
       - name: Cache Nuxt build
         uses: actions/cache@v4
         with:
           path: |
+            node_modules/.cache
             application/node_modules/.cache
-            application/.nuxt/cache
           key: nuxt-build-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
           restore-keys: |
             nuxt-build-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
@@ -157,11 +159,14 @@ jobs:
       matrix:
         storage: [local, s3]
         database: [sqlite, postgres]
-        shard: [1, 2, 3, 4, 5, 6]
+        # Five shards across four backends fill the 20 concurrent job slots
+        # exactly; a sixth pushes four jobs into a queue that costs more than
+        # the extra parallelism buys.
+        shard: [1, 2, 3, 4, 5]
 
     env:
       # Keep in step with the shard list above.
-      SHARD_TOTAL: 6
+      SHARD_TOTAL: 5
 
     steps:
       - name: Checkout
