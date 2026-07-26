@@ -63,7 +63,12 @@ import {
   getExecutionDiagnosis,
 } from '#shared/handlers/failure-clusters';
 import { getClusterCommits, getClusterCommitDiff, getClusterBranches } from './scm';
-import { getClusterContext, getExecutionContext } from './diagnosis-context';
+import {
+  getClusterContext,
+  getClusterContextPrompt,
+  getExecutionContext,
+  getExecutionContextPrompt,
+} from './diagnosis-context';
 import { listClusterDiagnosisVersions, apiSubmitDiagnosisFeedback } from './diagnoses';
 import {
   listMergeSuggestions,
@@ -439,7 +444,13 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/context$/,
-    handler: async (m, _, q) => getClusterContext(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined),
+    handler: async (m, _, q) => {
+      const query = q as URLSearchParams | undefined;
+      const db = await getDemoDb();
+      return query?.get('format') === 'prompt'
+        ? getClusterContextPrompt(db, +m[1]!, query)
+        : getClusterContext(db, +m[1]!, query);
+    },
   },
   {
     method: 'GET',
@@ -544,7 +555,13 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/test-run-cases\/(\d+)\/diagnosis-context$/,
-    handler: async (m, _, q) => getExecutionContext(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined),
+    handler: async (m, _, q) => {
+      const query = q as URLSearchParams | undefined;
+      const db = await getDemoDb();
+      return query?.get('format') === 'prompt'
+        ? getExecutionContextPrompt(db, +m[1]!, query)
+        : getExecutionContext(db, +m[1]!, query);
+    },
   },
   {
     method: 'GET',

@@ -492,7 +492,6 @@ provide(clusterSectionLocatorKey, {
           <ExportMenu
             v-if="testCase"
             :endpoint="`/api/test-run-cases/${testCase.id}/export`"
-            :context-endpoint="`/api/test-run-cases/${testCase.id}/diagnosis-context`"
             :base-name="`piwi-execution-${testCase.id}`"
             class="mr-2"
           />

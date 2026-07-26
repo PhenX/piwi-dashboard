@@ -4,8 +4,6 @@ const props = defineProps<{
   endpoint: string;
   /** Used only for the desktop shell's fallback filename; the server names the file. */
   baseName: string;
-  /** API path of the AI-context endpoint, when this entity has one. */
-  contextEndpoint?: string;
 }>();
 
 const { download } = useDesktopDownload();
@@ -64,19 +62,6 @@ async function copyFrom(path: string, label: string, pick?: (text: string) => st
 
 function copyReport() {
   return copyFrom(`${props.endpoint}?format=md`, 'Report');
-}
-
-function copyContext() {
-  if (!props.contextEndpoint) return;
-  // The context endpoint answers with JSON; the prompt text is the useful part.
-  return copyFrom(props.contextEndpoint, 'AI context', (text) => {
-    try {
-      const parsed = JSON.parse(text) as { text?: string; context?: string };
-      return parsed.text ?? parsed.context ?? text;
-    } catch {
-      return text;
-    }
-  });
 }
 </script>
 
@@ -173,21 +158,6 @@ function copyContext() {
           @click="copyReport"
         >
           Report (Markdown)
-        </UButton>
-
-        <UButton
-          v-if="contextEndpoint"
-          block
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          class="justify-start"
-          icon="i-lucide-brain"
-          :loading="busy === 'AI context'"
-          title="The evidence bundle Piwi sends to the model, for your own AI tool"
-          @click="copyContext"
-        >
-          AI context
         </UButton>
       </div>
     </template>

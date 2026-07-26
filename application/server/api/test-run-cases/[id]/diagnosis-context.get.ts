@@ -1,6 +1,9 @@
 import { testRunsCases } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
 import { buildDiagnosisContext } from '../../../utils/ai-context';
+import { loadDiagnosisSystemPrompt } from '../../../utils/ai-diagnosis';
+import { buildPromptPreview } from '#shared/ai-prompt-preview';
+import { DIAGNOSIS_JSON_SCHEMA } from '#shared/ai-diagnosis';
 import {
   requireResolvedProjectAccess,
   requireRouteId,
@@ -12,10 +15,10 @@ defineRouteMeta({
     tags: ['Test Run Cases'],
     summary: 'Get execution-scoped diagnosis context preview',
     description:
-      'Returns a preview of the full AI context that would be sent for diagnosing a specific test-run-case. Supports ?format=json for a structured response with per-section breakdown.',
+      'Returns a preview of the full AI context that would be sent for diagnosing a specific test-run-case. `?format=json` gives a structured response with per-section breakdown; `?format=prompt` gives the exact request payload as plain text — system prompt, user message, image count and response schema — for pasting into another assistant or auditing what is sent.',
     parameters: [
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
-      { name: 'format', in: 'query', required: false, schema: { type: 'string', enum: ['json'] } },
+      { name: 'format', in: 'query', required: false, schema: { type: 'string', enum: ['json', 'prompt'] } },
     ],
     'x-required-roles': ['administrator', 'reporter', 'user'],
   },
@@ -23,7 +26,7 @@ defineRouteMeta({
 
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'test run case ID');
-  const { db } = await requireResolvedProjectAccess(event, id, resolveTestRunCaseProjectId, 'Test run case');
+  const { db, projectId } = await requireResolvedProjectAccess(event, id, resolveTestRunCaseProjectId, 'Test run case');
 
   const [trc] = await db
     .select({ id: testRunsCases.id, failureClusterId: testRunsCases.failureClusterId })
@@ -51,6 +54,16 @@ export default eventHandler(async (event) => {
     selectedCommitShas,
     includeImages,
   });
+
+  if (format === 'prompt') {
+    setResponseHeader(event, 'Content-Type', 'text/plain; charset=utf-8');
+    return buildPromptPreview({
+      system: await loadDiagnosisSystemPrompt(db, { projectId }),
+      user: ctx.text,
+      imageCount: ctx.images?.length ?? 0,
+      jsonSchema: DIAGNOSIS_JSON_SCHEMA,
+    });
+  }
 
   if (format === 'json') {
     return {

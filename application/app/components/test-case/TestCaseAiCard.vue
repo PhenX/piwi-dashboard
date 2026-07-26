@@ -147,6 +147,10 @@ const showRunning = computed(
 
 <template>
   <SectionCard icon="i-lucide-sparkles" icon-class="text-primary" title="AI diagnosis" help="case.ai">
+    <template #actions>
+      <CopyAiPromptButton :context-endpoint="`/api/test-run-cases/${testRunsCaseId}/diagnosis-context`" />
+    </template>
+
     <div class="space-y-3">
       <p class="text-xs text-gray-400 inline-flex items-center gap-1">
         <UIcon name="i-lucide-triangle-alert" class="size-3 shrink-0" />
