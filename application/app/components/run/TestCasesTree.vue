@@ -91,6 +91,18 @@ function testMarks(annotations: Array<{ type: string; description?: string }> | 
   return (annotations ?? []).filter((ann) => !isPiwiAnnotation(ann.type));
 }
 
+/** Order the per-group tallies are shown in — failures first, they matter most. */
+const GROUP_STAT_KEYS = ['failed', 'passed', 'skipped', 'didnotrun', 'running'] as const;
+
+/** The non-zero tallies of a group row, ready to render. */
+function visibleStats(stats: Stats) {
+  return GROUP_STAT_KEYS.filter((key) => stats[key] > 0).map((key) => ({
+    key,
+    count: stats[key],
+    label: formatStatusLabel(key),
+  }));
+}
+
 function computeStats(tests: TestCaseResult[]): Stats {
   const stats: Stats = { passed: 0, failed: 0, skipped: 0, didnotrun: 0, running: 0, total: 0 };
   for (const t of tests) {
@@ -284,29 +296,46 @@ const flatRows = computed<FlatRow[]>(() => {
             </UBadge>
           </div>
           <div class="flex-1" />
-          <div class="flex items-center gap-2 shrink-0 tabular-nums">
-            <span v-if="row.stats.failed > 0" class="text-xs text-red-600 dark:text-red-400 font-medium">
-              {{ row.stats.failed }} failed
+          <!--
+            Counts stay visible at every width. Below `sm` the wording drops to
+            `sr-only` — still announced, still on the hover title — and a status
+            icon takes its place so the tally never reads on colour alone. That
+            is what gives the spec path room to breathe on a phone.
+          -->
+          <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 tabular-nums">
+            <span
+              v-for="stat in visibleStats(row.stats)"
+              :key="stat.key"
+              class="text-xs inline-flex items-center gap-0.5"
+              :class="[getStatusTextClass(stat.key), stat.key === 'failed' ? 'font-medium' : '']"
+              :title="`${stat.count} ${stat.label}`"
+            >
+              <UIcon :name="getStatusIcon(stat.key)" class="size-3 shrink-0 sm:hidden" />
+              {{ stat.count }}<span class="max-sm:sr-only"> {{ stat.label }}</span>
             </span>
-            <span v-if="row.stats.passed > 0" class="text-xs text-green-600 dark:text-green-400">
-              {{ row.stats.passed }} passed
-            </span>
-            <span v-if="row.stats.skipped > 0" class="text-xs text-muted">{{ row.stats.skipped }} skipped</span>
-            <span v-if="row.stats.didnotrun > 0" class="text-xs text-amber-600 dark:text-amber-400">
-              {{ row.stats.didnotrun }} didn't run
-            </span>
-            <span v-if="row.stats.running > 0" class="text-xs text-info">{{ row.stats.running }} running</span>
           </div>
         </div>
 
         <!-- Test row -->
         <div
           v-else
-          class="flex items-center gap-2 pr-3 py-1.5 border-b border-default last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors"
+          class="flex items-center gap-2 pr-3 py-2 sm:py-1.5 border-b border-default last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors"
           :class="highlightedCaseId === row.test.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
           :style="{ paddingLeft: `${row.depth * 20 + 12}px` }"
         >
-          <UIcon name="i-lucide-flask-conical" class="size-3.5 text-muted shrink-0" />
+          <!--
+            The status rides on the row's leading icon (it replaces a purely
+            decorative flask), so the row still reads at a glance on mobile
+            where the badge's wording is dropped for width.
+          -->
+          <UIcon
+            :name="getStatusIcon(row.test.status)"
+            class="size-4 shrink-0"
+            :class="[getStatusTextClass(row.test.status), isStatusInFlight(row.test.status) ? 'animate-spin' : '']"
+            role="img"
+            :aria-label="`Status: ${formatStatusLabel(row.test.status)}`"
+            :title="formatStatusLabel(row.test.status)"
+          />
           <UBadge
             :color="
               getStatusColor(
@@ -314,7 +343,7 @@ const flatRows = computed<FlatRow[]>(() => {
               )
             "
             size="xs"
-            class="capitalize shrink-0"
+            class="capitalize shrink-0 max-sm:hidden"
           >
             {{ formatStatusLabel(row.test.status) }}
           </UBadge>
@@ -331,18 +360,22 @@ const flatRows = computed<FlatRow[]>(() => {
             {{ annotationLabel(ann) }}
           </UBadge>
           <SharedTestMetaBadges :tags="row.test.tags" :meta="row.test.testMeta" :max-tags="3" class="shrink-0" />
+          <!--
+            The title is the row's only navigation — a separate "View" button
+            pointed at the same page and just ate width. `self-stretch` keeps the
+            tap target the full height of the row on touch screens.
+          -->
           <a
             :href="`/test-run-cases/${row.test.id}`"
-            class="text-primary hover:underline truncate flex-1 min-w-0"
+            class="text-primary hover:underline flex-1 min-w-0 self-stretch flex items-center"
+            :title="row.test.title"
             @click.prevent="navigateTo(`/test-run-cases/${row.test.id}`)"
           >
-            {{ row.test.title }}
+            <span class="truncate">{{ row.test.title }}</span>
           </a>
-          <div class="flex items-center gap-2 shrink-0">
+          <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <span v-if="row.test.status === 'running'" class="text-xs text-info">In progress...</span>
-            <span v-else-if="row.test.duration" class="text-xs text-muted tabular-nums">
-              {{ formatDuration(row.test.duration) }}
-            </span>
+            <DurationValue v-else-if="row.test.duration" :ms="row.test.duration" class="text-xs text-muted" />
             <UBadge
               v-if="row.test.workerIndex != null"
               color="neutral"
@@ -356,7 +389,6 @@ const flatRows = computed<FlatRow[]>(() => {
             <UBadge v-if="(row.test.retries ?? 0) > 0" color="warning" variant="soft" size="xs">
               {{ row.test.retries }}x
             </UBadge>
-            <UButton :to="`/test-run-cases/${row.test.id}`" size="xs" variant="outline"> View </UButton>
           </div>
         </div>
       </template>

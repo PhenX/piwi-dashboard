@@ -362,7 +362,7 @@ const featureHighlights = [
                 </div>
                 <div class="text-right tabular-nums shrink-0">
                   <div :class="passRateClass(run)">{{ passRate(run) }}%</div>
-                  <div v-if="run.duration" class="text-xs text-gray-400">{{ formatDuration(run.duration) }}</div>
+                  <DurationValue v-if="run.duration" :ms="run.duration" class="block text-xs text-gray-400" />
                 </div>
               </NuxtLink>
             </div>

@@ -158,6 +158,58 @@ export function getStatusColor(status: string) {
   }
 }
 
+/** Playwright reports `timedOut`; the DB and the UI both store `timedout`. */
+function normalizeStatusKey(status: string): string {
+  return status === 'timedOut' ? 'timedout' : status;
+}
+
+/**
+ * Lucide icon for a test/run status, so a status drawn as an icon (the run
+ * tree, `StatusBlock`) always looks the same.
+ */
+export function getStatusIcon(status: string): string {
+  switch (normalizeStatusKey(status)) {
+    case 'passed':
+      return 'i-lucide-check-circle-2';
+    case 'failed':
+    case 'timedout':
+      return 'i-lucide-x-circle';
+    case 'didnotrun':
+      return 'i-lucide-circle-slash';
+    case 'running':
+    case 'initialising':
+    case 'finalizing':
+      return 'i-lucide-loader-circle';
+    default:
+      return 'i-lucide-minus-circle';
+  }
+}
+
+/** Text colour classes matching `getStatusIcon`, for an icon drawn without a chip. */
+export function getStatusTextClass(status: string): string {
+  switch (normalizeStatusKey(status)) {
+    case 'passed':
+      return 'text-green-600 dark:text-green-400';
+    case 'failed':
+    case 'timedout':
+      return 'text-red-600 dark:text-red-400';
+    case 'didnotrun':
+      return 'text-amber-600 dark:text-amber-400';
+    case 'running':
+    case 'initialising':
+    case 'finalizing':
+      return 'text-blue-600 dark:text-blue-400';
+    default:
+      return 'text-gray-400 dark:text-gray-500';
+  }
+}
+
+/** Whether a status icon should spin (the run is still in flight). */
+export function isStatusInFlight(status: string): boolean {
+  const s = normalizeStatusKey(status);
+  return s === 'running' || s === 'initialising' || s === 'finalizing';
+}
+
 /**
  * Human-readable label for a test-case status badge. Normalizes Playwright's
  * `timedOut` to `failed` (as the UI treats timeouts as failures) and renders

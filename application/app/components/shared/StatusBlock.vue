@@ -3,18 +3,6 @@ defineProps<{
   status: string;
   size?: 'sm' | 'md';
 }>();
-
-function iconName(status: string): string {
-  if (status === 'passed') return 'i-lucide-check-circle-2';
-  if (status === 'failed' || status === 'timedout') return 'i-lucide-x-circle';
-  if (status === 'didnotrun') return 'i-lucide-circle-slash';
-  if (status === 'running' || status === 'initialising' || status === 'finalizing') return 'i-lucide-loader-circle';
-  return 'i-lucide-minus-circle';
-}
-
-function isSpinning(status: string): boolean {
-  return status === 'running' || status === 'initialising' || status === 'finalizing';
-}
 </script>
 
 <template>
@@ -35,12 +23,12 @@ function isSpinning(status: string): boolean {
       ]"
     >
       <UIcon
-        :name="iconName(status)"
-        :class="[size === 'sm' ? 'size-3.5' : 'size-4.5', { 'animate-spin': isSpinning(status) }]"
+        :name="getStatusIcon(status)"
+        :class="[size === 'sm' ? 'size-3.5' : 'size-4.5', { 'animate-spin': isStatusInFlight(status) }]"
       />
     </div>
     <UBadge :color="getStatusColor(status)" class="capitalize gap-1 items-center">
-      <UIcon v-if="isSpinning(status)" name="i-lucide-loader-circle" class="size-3 animate-spin shrink-0" />
+      <UIcon v-if="isStatusInFlight(status)" name="i-lucide-loader-circle" class="size-3 animate-spin shrink-0" />
       {{ formatStatusLabel(status) }}
     </UBadge>
   </div>

@@ -67,7 +67,7 @@ function formatCount(n: number): string {
                 {{ formatCount(row.outputTokens) }}
               </td>
               <td class="text-right px-2 py-2">
-                {{ row.avgDurationMs === null ? '—' : formatDuration(row.avgDurationMs) }}
+                <DurationValue :ms="row.avgDurationMs" />
               </td>
             </tr>
           </tbody>

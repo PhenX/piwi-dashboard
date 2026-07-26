@@ -396,10 +396,7 @@ defineExpose({ refresh });
               </template>
 
               <template #avgDuration-cell="{ row }">
-                <span v-if="row.original.avgDuration != null" class="text-sm text-muted tabular-nums">
-                  {{ formatDuration(row.original.avgDuration) }}
-                </span>
-                <span v-else class="text-sm text-muted">&mdash;</span>
+                <DurationValue :ms="row.original.avgDuration" class="text-sm text-muted" />
               </template>
 
               <template #lastRun-cell="{ row }">
@@ -463,9 +460,7 @@ defineExpose({ refresh });
               <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                 <PassRateIndicator :rate="tc.passRate" />
                 <span class="text-xs text-muted tabular-nums">{{ tc.totalRuns }} runs</span>
-                <span v-if="tc.avgDuration != null" class="text-xs text-muted tabular-nums">
-                  {{ formatDuration(tc.avgDuration) }}
-                </span>
+                <DurationValue v-if="tc.avgDuration != null" :ms="tc.avgDuration" class="text-xs text-muted" />
                 <span class="text-xs text-muted" :title="prettyDateFormat(tc.lastRun)">
                   {{ tc.lastRun != null ? formatRelativeTime(tc.lastRun) : '—' }}
                 </span>
