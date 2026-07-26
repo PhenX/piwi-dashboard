@@ -198,7 +198,6 @@ function showResult() {
           </span>
         </div>
         <div class="flex items-center gap-1.5">
-          <DiagnosisExportMenu :context-text="contextText" :diagnosis="diagnosis" :screenshots="allImages" />
           <UButton
             :icon="showAiContext ? 'i-lucide-eye-off' : 'i-lucide-eye'"
             size="xs"

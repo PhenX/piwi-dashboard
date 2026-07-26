@@ -4,27 +4,34 @@ const props = defineProps<{
   endpoint: string;
   /** Used only for the desktop shell's fallback filename; the server names the file. */
   baseName: string;
+  /** API path of the AI-context endpoint, when this entity has one. */
+  contextEndpoint?: string;
 }>();
 
 const { download } = useDesktopDownload();
+const { copy } = useCopy();
+const toast = useToast();
 const open = ref(false);
+const busy = ref('');
 
 /**
- * These URLs are opened directly rather than going through `$fetch`, so the
- * app's base path has to be applied by hand — the demo is served from `/demo/`
- * and its service worker only intercepts requests under that prefix. A
+ * These URLs are opened or fetched directly rather than going through `$fetch`,
+ * so the app's base path has to be applied by hand — the demo is served from
+ * `/demo/` and its service worker only intercepts requests under that prefix. A
  * root-relative `/api/...` would escape the scope entirely and 404.
  */
 const base = computed(() => (useRuntimeConfig().app?.baseURL ?? '/').replace(/\/$/, ''));
 
-function exportUrl(query: string): string {
-  return `${base.value}${props.endpoint}?${query}`;
+function withBase(path: string): string {
+  return `${base.value}${path}`;
 }
 
 async function run(format: 'html' | 'zip' | 'json' | 'md') {
   open.value = false;
   // ZIP is the only binary format; the rest are text the shell can write directly.
-  await download(exportUrl(`format=${format}`), `${props.baseName}.${format}`, { binary: format === 'zip' });
+  await download(withBase(`${props.endpoint}?format=${format}`), `${props.baseName}.${format}`, {
+    binary: format === 'zip',
+  });
 }
 
 /**
@@ -33,20 +40,56 @@ async function run(format: 'html' | 'zip' | 'json' | 'md') {
  */
 function printReport() {
   open.value = false;
-  window.open(exportUrl('format=html&print=1'), '_blank');
+  window.open(withBase(`${props.endpoint}?format=html&print=1`), '_blank');
+}
+
+/**
+ * The clipboard actions read the same endpoints the downloads do, so copying
+ * and downloading can never describe the investigation differently.
+ */
+async function copyFrom(path: string, label: string, pick?: (text: string) => string) {
+  busy.value = label;
+  try {
+    const response = await fetch(withBase(path));
+    if (!response.ok) throw new Error(`Request failed (${response.status})`);
+    const text = await response.text();
+    copy(pick ? pick(text) : text, { toast: `${label} copied` });
+    open.value = false;
+  } catch (error) {
+    toast.add({ title: `Could not copy ${label.toLowerCase()}`, description: errorMessage(error), color: 'error' });
+  } finally {
+    busy.value = '';
+  }
+}
+
+function copyReport() {
+  return copyFrom(`${props.endpoint}?format=md`, 'Report');
+}
+
+function copyContext() {
+  if (!props.contextEndpoint) return;
+  // The context endpoint answers with JSON; the prompt text is the useful part.
+  return copyFrom(props.contextEndpoint, 'AI context', (text) => {
+    try {
+      const parsed = JSON.parse(text) as { text?: string; context?: string };
+      return parsed.text ?? parsed.context ?? text;
+    } catch {
+      return text;
+    }
+  });
 }
 </script>
 
 <template>
   <UPopover v-model:open="open">
-    <UButton icon="i-lucide-download" size="xs" color="neutral" variant="outline" title="Export for offline reading">
+    <UButton icon="i-lucide-share" size="xs" color="neutral" variant="outline" title="Take this investigation away">
       Export
     </UButton>
 
     <template #content>
       <div class="w-64 p-1 space-y-0.5">
         <div class="flex items-center justify-between px-2 pt-1 pb-1">
-          <p class="text-xs font-medium text-gray-500">Offline export</p>
+          <p class="text-xs font-medium text-gray-500">Download</p>
           <HelpHint topic="export.offline" />
         </div>
 
@@ -89,8 +132,6 @@ function printReport() {
           PDF — via print
         </UButton>
 
-        <USeparator class="my-1" />
-
         <UButton
           block
           size="sm"
@@ -98,7 +139,7 @@ function printReport() {
           variant="ghost"
           class="justify-start"
           icon="i-lucide-file-text"
-          title="Text summary for pasting into an issue"
+          title="The Markdown report as a file"
           @click="run('md')"
         >
           Markdown
@@ -115,6 +156,38 @@ function printReport() {
           @click="run('json')"
         >
           JSON
+        </UButton>
+
+        <USeparator class="my-1" />
+        <p class="text-xs font-medium text-gray-500 px-2 pt-1 pb-1">Copy to clipboard</p>
+
+        <UButton
+          block
+          size="sm"
+          color="neutral"
+          variant="ghost"
+          class="justify-start"
+          icon="i-lucide-clipboard-list"
+          :loading="busy === 'Report'"
+          title="The whole investigation as Markdown, for an issue or a chat"
+          @click="copyReport"
+        >
+          Report (Markdown)
+        </UButton>
+
+        <UButton
+          v-if="contextEndpoint"
+          block
+          size="sm"
+          color="neutral"
+          variant="ghost"
+          class="justify-start"
+          icon="i-lucide-brain"
+          :loading="busy === 'AI context'"
+          title="The evidence bundle Piwi sends to the model, for your own AI tool"
+          @click="copyContext"
+        >
+          AI context
         </UButton>
       </div>
     </template>
