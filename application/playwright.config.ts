@@ -45,7 +45,7 @@ const baseConfig = defineConfig({
   forbidOnly: !!process.env.CI,
 
   /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 1 : 0,
 
   /* Cap the number of failures to 3 on CI to avoid wasting resources, but allow unlimited failures locally for debugging. */
   maxFailures: process.env.CI ? 3 : 0,
