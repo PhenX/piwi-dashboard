@@ -113,6 +113,12 @@ jobs:
           name: Reporter
           file-coverage-mode: changes
 
+      # locator-generate-drift.test.ts compares the app copy of the locator
+      # helpers against the reporter's compiled one, so it needs the dist.
+      - name: Build reporter
+        working-directory: ./reporter
+        run: npm run reporter:build
+
       - name: Test application unit tests
         run: npm run app:test:unit:coverage
 
