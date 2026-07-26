@@ -108,7 +108,7 @@ watch(
             <span v-if="entry.transferSize != null" :title="'Bytes on the wire'"
               >{{ formatBytes(entry.transferSize) }} transferred</span
             >
-            <span class="tabular-nums">{{ formatDuration(entry.duration) }}</span>
+            <DurationValue :ms="entry.duration" />
             <UBadge v-if="entry.duringFailure" color="error" variant="subtle" size="xs">During failing action</UBadge>
           </div>
         </div>
@@ -128,7 +128,7 @@ watch(
           <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1.5 text-xs text-gray-500">
             <span v-for="p in phases" :key="p.key" class="inline-flex items-center gap-1">
               <span class="size-2 rounded-full" :class="p.color" />
-              {{ p.label }} <span class="tabular-nums">{{ formatDuration(p.value) }}</span>
+              {{ p.label }} <DurationValue :ms="p.value" no-title />
             </span>
           </div>
         </div>

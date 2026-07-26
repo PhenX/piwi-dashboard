@@ -224,9 +224,11 @@ const flatRows = computed<FlatRow[]>(() => {
           <span class="text-xs text-muted tabular-nums max-sm:hidden" :title="`${row.testCase.totalRuns} runs`">
             {{ row.testCase.totalRuns }}&times;
           </span>
-          <span v-if="row.testCase.avgDuration != null" class="text-xs text-muted tabular-nums max-sm:hidden">
-            {{ formatDuration(row.testCase.avgDuration) }}
-          </span>
+          <DurationValue
+            v-if="row.testCase.avgDuration != null"
+            :ms="row.testCase.avgDuration"
+            class="text-xs text-muted max-sm:hidden"
+          />
           <span class="text-xs text-muted max-sm:hidden" :title="prettyDateFormat(row.testCase.lastRun)">
             {{ formatRelativeTime(row.testCase.lastRun) }}
           </span>

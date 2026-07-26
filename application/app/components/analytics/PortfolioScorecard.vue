@@ -121,7 +121,7 @@ function deltaMeta(delta: number | null): { icon: string; class: string } | null
                   {{ row.flakyTests }}
                 </td>
                 <td class="py-2.5 pr-4 text-right tabular-nums text-gray-500 dark:text-gray-400">
-                  {{ row.avgRunDurationMs ? formatDuration(row.avgRunDurationMs) : '—' }}
+                  <DurationValue :ms="row.avgRunDurationMs" />
                 </td>
                 <td
                   class="py-2.5 pr-4 text-right tabular-nums"

@@ -6,6 +6,10 @@ import {
   prettyDateFormat,
   formatRelativeTime,
   getStatusColor,
+  getStatusIcon,
+  getStatusTextClass,
+  isStatusInFlight,
+  toTestPriority,
   formatStatusLabel,
   testCaseCategoryColor,
   clusterStatusColor,
@@ -130,6 +134,51 @@ describe('formatStatusLabel', () => {
     expect(formatStatusLabel('didnotrun')).toBe("didn't run");
     expect(formatStatusLabel('never-run')).toBe('never run');
     expect(formatStatusLabel('passed')).toBe('passed');
+  });
+});
+
+describe('status icon helpers', () => {
+  test('maps both spellings of a timeout to the failed icon and color', () => {
+    expect(getStatusIcon('timedOut')).toBe(getStatusIcon('failed'));
+    expect(getStatusIcon('timedout')).toBe(getStatusIcon('failed'));
+    expect(getStatusTextClass('timedOut')).toBe(getStatusTextClass('failed'));
+  });
+
+  test('gives each outcome its own icon', () => {
+    expect(getStatusIcon('passed')).toBe('i-lucide-check-circle-2');
+    expect(getStatusIcon('failed')).toBe('i-lucide-x-circle');
+    expect(getStatusIcon('didnotrun')).toBe('i-lucide-circle-slash');
+    expect(getStatusIcon('running')).toBe('i-lucide-loader-circle');
+    expect(getStatusIcon('skipped')).toBe('i-lucide-minus-circle');
+  });
+
+  test('gives each outcome its own colour, and one colour to the in-flight three', () => {
+    expect(getStatusTextClass('passed')).toContain('green');
+    expect(getStatusTextClass('failed')).toContain('red');
+    expect(getStatusTextClass('didnotrun')).toContain('amber');
+    expect(getStatusTextClass('running')).toContain('blue');
+    expect(getStatusTextClass('initialising')).toBe(getStatusTextClass('running'));
+    expect(getStatusTextClass('finalizing')).toBe(getStatusTextClass('running'));
+    expect(getStatusTextClass('skipped')).toContain('gray');
+  });
+
+  test('only the in-flight statuses spin', () => {
+    expect(isStatusInFlight('running')).toBe(true);
+    expect(isStatusInFlight('initialising')).toBe(true);
+    expect(isStatusInFlight('finalizing')).toBe(true);
+    expect(isStatusInFlight('passed')).toBe(false);
+    expect(isStatusInFlight('timedOut')).toBe(false);
+  });
+});
+
+describe('toTestPriority', () => {
+  test('keeps a declared priority and drops anything the DB happens to hold', () => {
+    expect(toTestPriority('critical')).toBe('critical');
+    expect(toTestPriority('low')).toBe('low');
+    expect(toTestPriority('urgent')).toBeUndefined();
+    expect(toTestPriority('')).toBeUndefined();
+    expect(toTestPriority(null)).toBeUndefined();
+    expect(toTestPriority(undefined)).toBeUndefined();
   });
 });
 

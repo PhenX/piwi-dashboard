@@ -250,11 +250,11 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                 }}</UBadge>
               </template>
               <template #durationA-cell="{ row }">
-                <span v-if="row.original.durationA !== null">{{ formatDuration(row.original.durationA) }}</span>
+                <DurationValue v-if="row.original.durationA !== null" :ms="row.original.durationA" />
                 <span v-else class="text-gray-400">&mdash;</span>
               </template>
               <template #durationB-cell="{ row }">
-                <span v-if="row.original.durationB !== null">{{ formatDuration(row.original.durationB) }}</span>
+                <DurationValue v-if="row.original.durationB !== null" :ms="row.original.durationB" />
                 <span v-else class="text-gray-400">&mdash;</span>
               </template>
               <template #delta-cell="{ row }">
@@ -269,7 +269,8 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                         : 'text-gray-500'
                   "
                 >
-                  {{ row.original.delta > 0 ? '+' : '' }}{{ formatDuration(row.original.delta) }}
+                  {{ row.original.delta > 0 ? '+' : ''
+                  }}<DurationValue :ms="row.original.delta" unit-class="opacity-60" />
                 </span>
               </template>
               <template #percentChange-cell="{ row }">

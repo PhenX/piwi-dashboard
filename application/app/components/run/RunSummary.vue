@@ -246,9 +246,7 @@ function onLabelKeydown(e: KeyboardEvent) {
             :did-not-run="testRun?.didNotRunTests ?? 0"
             :total="displayProgress?.totalTests ?? testRun?.totalTests ?? 0"
           />
-          <span class="text-xs text-gray-400 tabular-nums whitespace-nowrap">{{
-            formatDuration(testRun?.duration)
-          }}</span>
+          <DurationValue :ms="testRun?.duration" class="text-xs text-gray-400" />
         </div>
       </div>
     </template>
@@ -476,26 +474,30 @@ function onLabelKeydown(e: KeyboardEvent) {
                 <div class="flex items-center gap-3 text-xs shrink-0">
                   <div class="flex items-center gap-1">
                     <UIcon name="i-lucide-clock" class="size-3.5 text-gray-400" />
-                    <span class="font-medium tabular-nums">{{ formatDuration(testRun?.duration) }}</span>
+                    <DurationValue :ms="testRun?.duration" class="font-medium" />
                   </div>
                   <div v-if="testRun?.avgTestDuration" class="flex items-center gap-1">
                     <UIcon name="i-lucide-gauge" class="size-3.5 text-gray-400" />
                     <span class="text-gray-500 hidden sm:inline">Avg</span>
-                    <span class="font-medium tabular-nums">{{ formatDuration(testRun.avgTestDuration) }}</span>
+                    <DurationValue :ms="testRun.avgTestDuration" class="font-medium" />
                   </div>
                   <div v-if="testRun?.p90TestDuration" class="flex items-center gap-1">
                     <UIcon name="i-lucide-arrow-up-right" class="size-3.5 text-orange-500" />
                     <span class="text-gray-500 hidden sm:inline">P90</span>
-                    <span class="font-medium tabular-nums text-orange-600 dark:text-orange-400">{{
-                      formatDuration(testRun.p90TestDuration)
-                    }}</span>
+                    <DurationValue
+                      :ms="testRun.p90TestDuration"
+                      class="font-medium text-orange-600 dark:text-orange-400"
+                      unit-class="opacity-60"
+                    />
                   </div>
                   <div v-if="totalWastedTime && totalWastedTime > 0" class="flex items-center gap-1">
                     <UIcon name="i-lucide-clock" class="size-3.5 text-amber-500" />
                     <span class="text-gray-500 hidden sm:inline">Wasted</span>
-                    <span class="font-medium tabular-nums text-amber-600 dark:text-amber-400">{{
-                      formatDuration(totalWastedTime)
-                    }}</span>
+                    <DurationValue
+                      :ms="totalWastedTime"
+                      class="font-medium text-amber-600 dark:text-amber-400"
+                      unit-class="opacity-60"
+                    />
                   </div>
                 </div>
               </div>
