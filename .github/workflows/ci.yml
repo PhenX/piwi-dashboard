@@ -248,14 +248,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
-      # Only the chromium project is enabled in playwright.config.ts.
+      # Only the chromium project is enabled in playwright.config.ts. The runner
+      # image already carries the shared libraries the headless shell links
+      # against, so a cache hit needs no apt work at all.
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium --with-deps --only-shell
-
-      - name: Install Playwright system dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
 
       - name: Run Playwright Tests
         env:
