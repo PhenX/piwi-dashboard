@@ -51,7 +51,9 @@ WORKDIR /app
 ARG PORT=3000
 ENV NODE_ENV=production
 ENV NITRO_HOST=0.0.0.0
-ENV NITRO_PORT=${PORT}
+# PORT rather than NITRO_PORT: Nitro reads `NITRO_PORT || PORT || 3000`, so baking
+# NITRO_PORT would override the PORT that hosting platforms inject at runtime.
+ENV PORT=${PORT}
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
@@ -92,7 +94,7 @@ EXPOSE ${PORT}
 
 # Readiness for compose/k8s/monitors — /api/health verifies DB connectivity
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget -qO /dev/null "http://127.0.0.1:${NITRO_PORT}/api/health" || exit 1
+  CMD wget -qO /dev/null "http://127.0.0.1:${PORT}/api/health" || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "application/.output/server/index.mjs"]

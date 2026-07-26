@@ -4,6 +4,8 @@ This guide explains how to deploy the Piwi Dashboard using Docker.
 
 > **Note:** For the complete deployment reference including Kubernetes and production build from source, see the [full deployment documentation](https://piwitests.github.io/deployment).
 
+> **No server to run Docker on?** Hosting templates for Railway, Render, Fly.io, Koyeb, Coolify and Dokploy live in [`deploy/`](./deploy) — see [one-click deploy](https://piwitests.github.io/deployment#one-click-deploy).
+
 ## Quick Start with Docker
 
 ### Pull and Run

@@ -35,6 +35,12 @@ docker-compose*.yml
 # CI/CD
 .github
 
+# Hosting-platform manifests (read by the providers, not by the build)
+deploy/
+render.yaml
+fly.toml
+railway.json
+
 # Docs
 docs/
 **/*.md
