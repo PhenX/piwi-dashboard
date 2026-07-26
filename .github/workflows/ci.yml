@@ -270,7 +270,11 @@ jobs:
           PIWI_S3_TEST_ACCESS_KEY_ID: ${{ matrix.storage == 's3' && 'minioadmin' || '' }}
           PIWI_S3_TEST_SECRET_ACCESS_KEY: ${{ matrix.storage == 's3' && 'minioadmin' || '' }}
           PIWI_POSTGRES_TEST_URL: ${{ matrix.database == 'postgres' && 'postgresql://postgres:postgres@localhost:5432/playwright_test' || '' }}
-        run: npm run app:test -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }}
+        # The servers pointed at .test-temp only create their database file, not
+        # the directory holding it, and Playwright starts them before globalSetup.
+        run: |
+          mkdir -p .test-temp
+          npm run app:test -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }}
 
       - name: Upload blob report
         if: failure()
