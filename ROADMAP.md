@@ -39,6 +39,13 @@ Piwi Dashboard is under active development (pre-1.0). This page shows direction,
 
 ## Exploring
 
+- **Offline export** — take a failing execution or a whole failure cluster out of the dashboard as a self-contained
+  HTML file, a ZIP with the raw evidence, or a PDF, readable with no network and no Piwi server. Whole runs and a test's
+  history across runs would follow the same shape.
+- **Public share links** — handing an investigation to someone without a dashboard account means sending them a file; a
+  read-only link would need share tokens, which Piwi has no infrastructure for today.
+- **Self-sufficient trace archives** — an export can carry the trace files, but reading them still needs a Playwright
+  trace viewer. Bundling the viewer's assets would close that gap, at roughly 10 MB per export.
 - More backend-log instrumentation packages beyond ASP.NET Core and Nitro.
 - Merging imported shards of one CI run into a single run (today each shard imports separately).
 - A dual ESM/CJS reporter build (the package is CommonJS-only today; named imports work everywhere, but a native ESM default import needs an interop shim).
