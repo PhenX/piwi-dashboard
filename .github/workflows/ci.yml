@@ -294,7 +294,7 @@ jobs:
   demo:
     name: Test demo generation
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -311,5 +311,14 @@ jobs:
         working-directory: .
         run: npm ci --prefer-offline --no-audit --fund=false
 
+      - name: Install Playwright chromium
+        run: npx playwright install chromium --with-deps --only-shell
+
       - name: Run demo-generate
         run: npm run app:generate:demo
+
+      # Building the demo only proves it compiles. This drives the built SPA
+      # from its real sub-path with the service worker installed, which is the
+      # only way base-path, worker-scope and demo-handler breakage shows up.
+      - name: Check the built demo actually runs
+        run: npm run app:check:demo:runtime

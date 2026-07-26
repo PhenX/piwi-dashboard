@@ -34,6 +34,7 @@
     "db:push:pg": "drizzle-kit push --config=drizzle.config.pg.ts",
     "db:studio:pg": "drizzle-kit studio --config=drizzle.config.pg.ts",
     "app:check:demo": "node scripts/check-demo-routes.mjs",
+    "app:check:demo:runtime": "node scripts/check-demo-runtime.mjs",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {

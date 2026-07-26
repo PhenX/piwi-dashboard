@@ -76,7 +76,8 @@ From `application/`:
 | `npm run db:generate` / `db:migrate` / `db:push` / `db:studio` | Drizzle, SQLite — append `:pg` for PostgreSQL |
 | `npm run app:seed:demo` | Regenerate demo seed data (`public/demo/seed.sql`) |
 | `npm run app:seed:dev` | Load the demo sample data into the local dev SQLite DB |
-| `npm run app:generate:demo` / `app:check:demo` | Build / verify the demo SPA |
+| `npm run app:generate:demo` / `app:check:demo` | Build the demo SPA / verify every server route has a demo handler |
+| `npm run app:check:demo:runtime` | Drive the **built** demo from its real `/demo/` sub-path in a browser (run `app:generate:demo` first) |
 | `node scripts/db-query.mjs "<sql>" [--json]` | Query the local SQLite DB directly |
 
 From `reporter/`: `reporter:build`, `reporter:dev` (watch), `reporter:typecheck`, `reporter:lint[:fix]`,
