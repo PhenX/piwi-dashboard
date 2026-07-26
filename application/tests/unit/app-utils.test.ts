@@ -16,6 +16,7 @@ import {
   clusterErrorTypeColor,
   fixVerificationBadge,
   getFileApiPath,
+  fileApiUrl,
   getTraceViewerUrl,
   errorMessage,
   filterCommits,
@@ -238,6 +239,25 @@ describe('file path helpers', () => {
   test('getFileApiPath strips the storage prefix and passes relative paths through', () => {
     expect(getFileApiPath('.data/storage/reports/index.html')).toBe('reports/index.html');
     expect(getFileApiPath('reports/index.html')).toBe('reports/index.html');
+  });
+
+  test('fileApiUrl prefixes the base path so the URL stays inside a sub-path deployment', () => {
+    expect(fileApiUrl('.data/storage/screenshots/a.png')).toBe('/api/files/screenshots/a.png');
+    expect(fileApiUrl('demo/screenshots/a.png', null, '/demo/')).toBe('/demo/api/files/demo/screenshots/a.png');
+  });
+
+  test('fileApiUrl forwards contentType only for extension-less paths', () => {
+    expect(fileApiUrl('attachments/blob', 'image/png')).toBe('/api/files/attachments/blob?contentType=image%2Fpng');
+    expect(fileApiUrl('attachments/a.png', 'image/png')).toBe('/api/files/attachments/a.png');
+  });
+
+  test('fileApiUrl combines the compress flag with the base path and contentType', () => {
+    expect(fileApiUrl('demo/screenshots/a.png', null, '/demo/', true)).toBe(
+      '/demo/api/files/demo/screenshots/a.png?compress=1',
+    );
+    expect(fileApiUrl('attachments/blob', 'image/png', '/demo/', true)).toBe(
+      '/demo/api/files/attachments/blob?contentType=image%2Fpng&compress=1',
+    );
   });
 
   test('getTraceViewerUrl embeds the encoded file API URL using the current origin', () => {

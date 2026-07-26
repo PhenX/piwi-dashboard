@@ -350,14 +350,22 @@ export function getFileApiPath(filePath: string): string {
  * `baseURL` is the app's base path (`useRuntimeConfig().app.baseURL`) — read
  * it once in setup and pass it in. Pass `contentType` for extension-less
  * attachment paths — it is forwarded as a query param so the server can set
- * the right Content-Type.
+ * the right Content-Type. `compress` asks the server to re-encode an image
+ * down before sending it.
  */
-export function fileApiUrl(filePath: string, contentType?: string | null, baseURL: string = '/'): string {
+export function fileApiUrl(
+  filePath: string,
+  contentType?: string | null,
+  baseURL: string = '/',
+  compress: boolean = false,
+): string {
   const base = (baseURL || '/').replace(/\/$/, '');
-  let url = `${base}/api/files/${getFileApiPath(filePath)}`;
+  const params = new URLSearchParams();
   const hasExt = /\.[a-z0-9]+$/i.test(filePath);
-  if (contentType && !hasExt) url += `?contentType=${encodeURIComponent(contentType)}`;
-  return url;
+  if (contentType && !hasExt) params.set('contentType', contentType);
+  if (compress) params.set('compress', '1');
+  const query = params.toString();
+  return `${base}/api/files/${getFileApiPath(filePath)}${query ? `?${query}` : ''}`;
 }
 
 /**

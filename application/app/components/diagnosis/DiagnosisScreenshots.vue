@@ -28,6 +28,8 @@ const emit = defineEmits<{
   (e: 'update:images', images: DiagnoseImage[]): void;
 }>();
 
+const config = useRuntimeConfig();
+
 const MAX_SCREENSHOTS = 8;
 
 async function blobToBase64(blob: Blob): Promise<{ data: string; mediaType: string }> {
@@ -67,7 +69,7 @@ async function loadScreenshots() {
         if (!isImageFile(att.path, att.contentType)) continue;
         if (results.length >= MAX_SCREENSHOTS) break;
         const imgName = att.name || att.path.split('/').pop() || 'screenshot';
-        const url = `/api/files/${getFileApiPath(att.path)}?compress=1`;
+        const url = fileApiUrl(att.path, att.contentType, config.app?.baseURL, true);
         try {
           const res = await fetch(url);
           if (!res.ok) continue;

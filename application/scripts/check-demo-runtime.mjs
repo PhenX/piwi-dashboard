@@ -128,6 +128,14 @@ async function main() {
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(String(e).slice(0, 200)));
 
+  // A root-relative /api/ URL escapes the service worker's scope and hits the
+  // static host instead, so it can never be answered by the in-browser API.
+  const escapedApiUrls = new Set();
+  page.on('request', (r) => {
+    const url = r.url();
+    if (url.startsWith(`${ORIGIN}/api/`)) escapedApiUrls.add(url.slice(ORIGIN.length));
+  });
+
   try {
     await page.goto(`${ORIGIN}${BASE}`, { waitUntil: 'domcontentloaded' });
     check(await waitForServiceWorker(page), 'the service worker installs and takes control');
@@ -172,6 +180,12 @@ async function main() {
     const bytes = path ? (await readFile(path)).length : 0;
     check(bytes > 1000, 'the ZIP export downloads', `${bytes} bytes as ${download.suggestedFilename()}`);
     check(download.suggestedFilename().endsWith('.zip'), 'the download is named as a ZIP');
+
+    check(
+      escapedApiUrls.size === 0,
+      'every API request stays inside the demo base path',
+      [...escapedApiUrls].slice(0, 3).join(', '),
+    );
 
     check(pageErrors.length === 0, 'no uncaught page errors', pageErrors[0] ?? '');
   } catch (error) {
