@@ -96,6 +96,13 @@ describe('renderExportHtml', () => {
     expect(html).toContain('https://piwi.example.com/test-run-cases/1');
   });
 
+  it('colors a timed-out case as a warning, matching the dashboard', () => {
+    const html = renderExportHtml(bundle({ cases: [exportCase({ status: 'timedout' })] }), noAssets);
+    expect(html).toContain('class="badge s-timedout"');
+    // getStatusColor maps timedout to warning; the export must not call it a failure.
+    expect(html).toMatch(/\.s-timedout[^}]*var\(--warn\)/);
+  });
+
   it('carries a restrictive content security policy', () => {
     expect(renderExportHtml(bundle(), noAssets)).toContain("default-src 'none'");
   });

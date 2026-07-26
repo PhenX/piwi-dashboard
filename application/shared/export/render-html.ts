@@ -42,7 +42,7 @@ const STYLES = `
   color-scheme: light dark;
   --bg:#fff; --fg:#1c1c20; --muted:#6b6b76; --faint:#8b8b96;
   --line:#e2e2e7; --line-strong:#c9c9d2; --card:#fafafa; --sunken:#f5f5f8;
-  --accent:#4338ca; --fail:#c0392b; --pass:#15803d; --warn:#a16207; --info:#1d4ed8; --skip:#6b6b76;
+  --accent:#4338ca; --fail:#be123c; --pass:#047857; --warn:#b45309; --info:#1d4ed8; --skip:#6b6b76;
   --tok-key:#7c3aed; --tok-str:#0f766e; --tok-num:#b45309; --tok-fn:#1d4ed8; --tok-attr:#a21caf; --tok-builtin:#0369a1;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
@@ -50,7 +50,7 @@ const STYLES = `
   :root {
     --bg:#161619; --fg:#ececf1; --muted:#a0a0ad; --faint:#7e7e8c;
     --line:#2f2f36; --line-strong:#43434d; --card:#1d1d21; --sunken:#131316;
-    --accent:#a5b4fc; --fail:#f87171; --pass:#4ade80; --warn:#fbbf24; --info:#93c5fd; --skip:#a0a0ad;
+    --accent:#a5b4fc; --fail:#fb7185; --pass:#34d399; --warn:#fbbf24; --info:#93c5fd; --skip:#a0a0ad;
     --tok-key:#c4b5fd; --tok-str:#5eead4; --tok-num:#fcd34d; --tok-fn:#93c5fd; --tok-attr:#f0abfc; --tok-builtin:#7dd3fc;
   }
 }
@@ -151,10 +151,11 @@ td.num { font-family:var(--mono); white-space:nowrap; }
   display:inline-block; padding:0 .4rem; border-radius:3px; font-size:.7rem;
   font-weight:650; border:1px solid currentColor; vertical-align:.15em;
 }
-.s-failed, .s-timedout, .s-error, .s-open { color:var(--fail); }
+.s-failed, .s-error, .s-open { color:var(--fail); }
 .s-passed, .s-resolved { color:var(--pass); }
 .s-skipped, .s-log, .s-debug, .s-ignored { color:var(--skip); }
-.s-warning, .s-warn { color:var(--warn); }
+/* Matches getStatusColor in app/utils: a timeout is a warning, not a failure. */
+.s-timedout, .s-timedout_, .s-interrupted, .s-warning, .s-warn { color:var(--warn); }
 .s-info { color:var(--info); }
 .tag { font-weight:650; }
 
@@ -169,7 +170,7 @@ td.num { font-family:var(--mono); white-space:nowrap; }
   :root {
     --bg:#fff; --fg:#000; --muted:#3f3f46; --faint:#52525b;
     --line:#b8b8bf; --line-strong:#71717a; --card:transparent; --sunken:transparent;
-    --accent:#3730a3; --fail:#991b1b; --pass:#166534; --warn:#854d0e; --info:#1e40af;
+    --accent:#3730a3; --fail:#9f1239; --pass:#065f46; --warn:#92400e; --info:#1e40af;
     --tok-key:#5b21b6; --tok-str:#115e59; --tok-num:#92400e; --tok-fn:#1e3a8a; --tok-attr:#86198f; --tok-builtin:#075985;
   }
   body { padding:0; font-size:10.5pt; }
