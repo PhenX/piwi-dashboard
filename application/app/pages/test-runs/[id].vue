@@ -461,19 +461,22 @@ const tabItems = computed(() => [
     value: 'insights',
     slot: 'insights',
   },
-  ...(hasFailures.value
-    ? [
-        {
-          label: `Failure groups (${failureGroupCount.value})`,
-          icon: 'i-lucide-layers',
-          value: 'failure-groups',
-          slot: 'failure-groups',
-        },
-      ]
-    : []),
-  ...(hasFailures.value
-    ? [{ label: 'Regression', icon: 'i-lucide-git-pull-request-arrow', value: 'regression', slot: 'regression' }]
-    : []),
+  // Failure-only tabs stay visible but disabled on a green run: tabs that
+  // appear and disappear shift every other tab's position between runs.
+  {
+    label: hasFailures.value ? `Failure groups (${failureGroupCount.value})` : 'Failure groups',
+    icon: 'i-lucide-layers',
+    value: 'failure-groups',
+    slot: 'failure-groups',
+    disabled: !hasFailures.value,
+  },
+  {
+    label: 'Regression',
+    icon: 'i-lucide-git-pull-request-arrow',
+    value: 'regression',
+    slot: 'regression',
+    disabled: !hasFailures.value,
+  },
   {
     label: `Timeline${uniqueWorkerCount.value > 0 ? ` (${uniqueWorkerCount.value})` : ''}`,
     icon: 'i-lucide-timeline',
@@ -495,10 +498,10 @@ const tabPanelClass: Record<string, string> = {
 };
 
 // Deep-link the active tab via ?tab= so run views can be shared and cross-page
-// links (e.g. Run insights → this run's Performance) land on the right tab. The
-// tab set is conditional (failure-groups/regression only exist with failures),
-// so validate against the current tabItems.
-const runTabValues = computed(() => tabItems.value.map((t) => t.value));
+// links (e.g. Run insights → this run's Performance) land on the right tab.
+// Failure-only tabs (failure-groups/regression) are disabled on a green run,
+// so validate against the currently *enabled* tabs.
+const runTabValues = computed(() => tabItems.value.filter((t) => !t.disabled).map((t) => t.value));
 if (typeof route.query.tab === 'string' && runTabValues.value.includes(route.query.tab)) {
   activeTab.value = route.query.tab;
 }

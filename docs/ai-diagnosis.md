@@ -51,13 +51,19 @@ A cluster used to go quiet and stay open forever — nothing ever confirmed it w
 answers that.
 
 When a run executes every test a cluster covers and they all pass, Piwi records the fix: the run, the commit, and how
-long the cluster was open. Two verdicts, because they are not the same claim:
+long the cluster was open. Three verdicts, because they are not the same claim:
 
 | Verdict | Means |
 |---|---|
 | **Stopped failing** | The tests pass again. A flaky test can achieve this by accident. |
 | **Diagnosis verified** | The commits since the last failing run touched a file the [suggested patch](#what-a-diagnosis-contains) named — the change Piwi pointed at is the change that fixed it. |
 | **Regressed** | A fix was recorded, and the cluster is failing again. A fix that didn't hold is worth knowing about. |
+
+The verdict appears on the cluster page, under the signature, with the run the fix landed in, the commit, and how long
+the cluster stayed open. The project's **Failure clusters** tab shows it beside the triage status — deliberately as a
+second badge rather than folded into the first, because the two answer different questions: the status is what a person
+declared, the verdict is what the runs showed. A cluster somebody marked *resolved* that is quietly failing again shows
+both, and that disagreement is the point.
 
 Two rules keep the verdict honest:
 
@@ -259,6 +265,10 @@ The full list of `PIWI_AI_MAX_*` limit variables, their defaults and their clamp
 ## Try it in the demo
 
 The [live demo](https://piwitests.github.io/demo/) runs entirely in your browser with no AI provider — yet the diagnosis experience is fully wired. Several failing clusters ship with a completed diagnosis (category, confidence, evidence with citations, a validated suggested patch, per-stage pipeline stats, and auto-selected suspect commits); others are left undiagnosed so you can trigger a **simulated streaming diagnosis** yourself and watch the reasoning tokens arrive. The diagnoses are generated from each cluster's real seeded evidence (occurrences, failure rate, affected tests, browsers) and a canned SCM history, so the **Context sent to AI** modal, the data-coverage map, the commit browser, baseline pinning, and the diagnosis version history all behave as they do against a real server. Suggested-fix patches are validated against the seeded source files, so the "Applies cleanly" badge means the same thing it does in production.
+
+The demo also carries three clusters with a recorded resolution, one per verdict — including one marked *resolved* by a
+person that the runs show failing again, so the difference between what somebody declared and what actually happened is
+visible without waiting for it to occur.
 
 ## Privacy
 

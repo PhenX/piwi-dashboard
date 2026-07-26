@@ -159,10 +159,9 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
             "
           />
           <StatTile label="Failed" :value="testCase?.failedRuns ?? 0" value-class="text-red-600" />
-          <StatTile
-            label="Avg duration"
-            :value="testCase?.avgDuration != null ? formatDuration(testCase.avgDuration) : '—'"
-          />
+          <StatTile label="Avg duration">
+            <DurationValue :ms="testCase?.avgDuration" />
+          </StatTile>
           <StatTile
             label="Flaky"
             :value="testCase?.flakyRuns ?? 0"
@@ -247,10 +246,12 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
               </span>
             </template>
             <template #status-cell="{ row }">
-              <UBadge :color="getStatusColor(row.original.status)" class="capitalize">{{ row.original.status }}</UBadge>
+              <UBadge :color="getStatusColor(row.original.status)" variant="subtle" class="capitalize">{{
+                row.original.status
+              }}</UBadge>
             </template>
             <template #duration-cell="{ row }">
-              <span v-if="row.original.duration !== null">{{ formatDuration(row.original.duration) }}</span>
+              <DurationValue v-if="row.original.duration !== null" :ms="row.original.duration" />
               <span v-else class="text-gray-400">&mdash;</span>
             </template>
             <template #retries-cell="{ row }">

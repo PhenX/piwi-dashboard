@@ -1,7 +1,38 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices, type ReporterDescription } from '@playwright/test';
 import PiwiDashboardReporter from '@piwitests/reporter';
 const { wrapConfig } = PiwiDashboardReporter;
 import { join } from 'path';
+
+// CI runs every test server from the production output built once by the
+// workflow; locally each server compiles on demand.
+const useBuiltServer = !!process.env.CI;
+const serverCommand = useBuiltServer ? 'node .output/server/index.mjs' : 'npm run app:dev';
+
+// `PIWI_AUTH_*` is resolved into `runtimeConfig` when the Nuxt config is
+// evaluated, which for a production build is build time. Nitro maps the
+// `NUXT_`-prefixed forms onto the same keys at startup, so auth-enabled servers
+// set both and work either way.
+function authServerEnv(secret: string) {
+  return {
+    PIWI_AUTH_ENABLED: 'true',
+    PIWI_AUTH_SECRET: secret,
+    NUXT_AUTH_ENABLED: 'true',
+    NUXT_AUTH_SECRET: secret,
+    NUXT_PUBLIC_AUTH_ENABLED: 'true',
+  };
+}
+
+// CI shards the suite across jobs, where a per-shard HTML report is not useful.
+// Each shard emits a blob instead, which `npx playwright merge-reports` turns
+// into a single report from the artifacts a failed run uploads.
+const reporters: ReporterDescription[] = process.env.CI
+  ? [['list'], ['blob', { outputDir: 'blob-report' }]]
+  : [
+      ['list'],
+      ['html', { outputFolder: 'playwright-report' }],
+      ['monocart-reporter', { name: 'Piwi Dashboard Tests', outputFile: 'monocart-report/index.html' }],
+      ['blob', { outputDir: 'blob-report' }],
+    ];
 
 const baseConfig = defineConfig({
   testDir: './tests',
@@ -16,22 +47,25 @@ const baseConfig = defineConfig({
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
 
-  /* Cap the number of failures to 3 on CI to avoid wasting resources, but allow unlimited failures locally for debugging. */
-  maxFailures: process.env.CI ? 3 : 0,
+  // Bail out of a hopelessly broken shard instead of burning the job timeout,
+  // but keep the budget well clear of the retries: the counter tracks failed
+  // *attempts*, so one test that fails all three of its tries already spends
+  // three, and a flaky test that passes on retry still spends one. Reaching the
+  // cap also tears down the workers mid-flight, which reports whatever tests
+  // were still running as "Target page, context or browser has been closed" —
+  // a tight cap turns two flakes into a red shard full of phantom failures.
+  maxFailures: process.env.CI ? 12 : 0,
 
-  /* Run tests in parallel across projects */
-  workers: 3,
+  // Sharding is where CI gets its parallelism now, so each shard can afford one
+  // browser fewer: three workers plus the three app servers oversubscribe a
+  // four-core runner, and the browsers are the ones that die under it.
+  workers: process.env.CI ? 2 : 3,
 
   globalSetup: './tests/globalSetup',
   globalTeardown: './tests/globalTeardown',
 
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: [
-    ['list'],
-    ['html', { outputFolder: 'playwright-report' }],
-    ['monocart-reporter', { name: 'Piwi Dashboard Tests', outputFile: 'monocart-report/index.html' }],
-    ['blob', { outputDir: 'blob-report' }],
-  ],
+  reporter: reporters,
 
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
@@ -43,6 +77,13 @@ const baseConfig = defineConfig({
 
     /* Capture screenshot on first retry for failure diagnostics */
     screenshot: 'only-on-failure',
+
+    // Chromium puts its shared renderer memory in /dev/shm, which is small on a
+    // CI runner. When it fills the renderer is killed mid-test and Playwright
+    // surfaces it as "Target page, context or browser has been closed" or an
+    // unbound protocol object rather than as a real assertion failure. Backing
+    // it with /tmp instead costs a little speed and removes that failure mode.
+    launchOptions: { args: ['--disable-dev-shm-usage'] },
   },
 
   /* Configure projects for major browsers */
@@ -63,7 +104,7 @@ const baseConfig = defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: [
     {
-      command: 'npm run app:dev',
+      command: serverCommand,
       url: 'http://localhost:3000',
       reuseExistingServer: !process.env.CI,
       timeout: 60 * 1000,
@@ -73,11 +114,10 @@ const baseConfig = defineConfig({
     ...(process.env.CI
       ? [
           {
-            command: 'npm run app:dev',
+            command: serverCommand,
             url: 'http://localhost:3099/api/auth/me',
             env: {
-              PIWI_AUTH_ENABLED: 'true',
-              PIWI_AUTH_SECRET: 'test-auth-secret-key-for-reporter-tests',
+              ...authServerEnv('test-auth-secret-key-for-reporter-tests'),
               PIWI_DATABASE_PATH: join(process.cwd(), '.test-temp', 'auth-test.db'),
               PIWI_STORAGE_PATH: join(process.cwd(), '.test-temp', 'auth-test-storage'),
               NITRO_PORT: '3099',
@@ -93,11 +133,10 @@ const baseConfig = defineConfig({
           // Notifications server used by notifications.spec.ts.
           // Auth-enabled, no SMTP (channel test endpoint verifies SMTP-not-configured path).
           {
-            command: 'npm run app:dev',
+            command: serverCommand,
             url: 'http://localhost:3097/api/auth/me',
             env: {
-              PIWI_AUTH_ENABLED: 'true',
-              PIWI_AUTH_SECRET: 'test-auth-secret-key-for-notifications-tests',
+              ...authServerEnv('test-auth-secret-key-for-notifications-tests'),
               PIWI_DATABASE_PATH: join(process.cwd(), '.test-temp', 'notif-test.db'),
               PIWI_STORAGE_PATH: join(process.cwd(), '.test-temp', 'notif-test-storage'),
               NITRO_PORT: '3097',
@@ -118,11 +157,10 @@ const baseConfig = defineConfig({
     ...(process.env.PIWI_MAILPIT_URL
       ? [
           {
-            command: 'npm run app:dev',
+            command: serverCommand,
             url: 'http://localhost:3098/api/auth/me',
             env: {
-              PIWI_AUTH_ENABLED: 'true',
-              PIWI_AUTH_SECRET: 'test-email-secret-key-for-mailpit-tests',
+              ...authServerEnv('test-email-secret-key-for-mailpit-tests'),
               PIWI_DATABASE_PATH: join(process.cwd(), '.test-temp', 'email-test.db'),
               PIWI_STORAGE_PATH: join(process.cwd(), '.test-temp', 'email-test-storage'),
               NITRO_PORT: '3098',
@@ -148,7 +186,7 @@ const baseConfig = defineConfig({
     ...(process.env.PIWI_POSTGRES_TEST_URL
       ? [
           {
-            command: 'npm run app:dev',
+            command: serverCommand,
             url: 'http://localhost:3101',
             env: {
               PIWI_DATABASE_URL: process.env.PIWI_POSTGRES_TEST_URL,

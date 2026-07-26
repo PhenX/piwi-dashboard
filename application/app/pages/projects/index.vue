@@ -273,9 +273,11 @@ const columns: TableColumn<ProjectWithStats>[] = [
             </div>
           </template>
           <template #duration-cell="{ row }">
-            <span v-if="row.original.latestRun?.duration != null" class="text-sm text-gray-600">{{
-              formatDuration(row.original.latestRun.duration)
-            }}</span>
+            <DurationValue
+              v-if="row.original.latestRun?.duration != null"
+              :ms="row.original.latestRun.duration"
+              class="text-sm text-gray-600"
+            />
             <span v-else class="text-xs text-gray-600 italic">No data</span>
           </template>
           <template #status-cell="{ row }">

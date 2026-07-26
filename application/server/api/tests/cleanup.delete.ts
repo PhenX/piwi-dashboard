@@ -10,7 +10,7 @@ defineRouteMeta({
     tags: ['Admin'],
     summary: 'Clean up test data',
     description:
-      'Deletes all test projects and test tags by known names. Only available in non-production environments with administrator role.',
+      'Deletes all test projects and test tags by known names. Requires the administrator role, and a non-production environment unless PIWI_TEST_CLEANUP_ENABLED is set.',
     'x-required-roles': ['administrator'],
   },
 });
@@ -20,7 +20,13 @@ export default eventHandler(async (event) => {
   // use in production by requiring administrator role AND a non-production env
   await requireAuth(event);
 
-  if (process.env.NODE_ENV === 'production') {
+  // CI drives the E2E suite against a production build, so the environment
+  // check alone would refuse the global setup/teardown cleanup and leave the
+  // known test projects behind. An explicit opt-in re-enables it there; real
+  // deployments never set it and keep the guard.
+  const cleanupOptIn = process.env.PIWI_TEST_CLEANUP_ENABLED === 'true';
+
+  if (process.env.NODE_ENV === 'production' && !cleanupOptIn) {
     throw createError({
       statusCode: 403,
       message: 'Cleanup endpoint is disabled in production',

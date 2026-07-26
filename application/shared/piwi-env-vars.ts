@@ -996,6 +996,14 @@ export const PIWI_ENV_VARS = {
     category: 'test',
     runtimeOnly: true,
   },
+  PIWI_TEST_CLEANUP_ENABLED: {
+    description:
+      'Allow the E2E cleanup endpoint (`DELETE /api/tests/cleanup`) on a production build, which CI needs because it runs the suite against one. Never set it on a real deployment.',
+    category: 'test',
+    runtimeOnly: true,
+    type: 'boolean',
+    since: '0.19.0',
+  },
 } as const satisfies Record<string, PiwiEnvVarMeta>;
 
 /** Typed union of every `PIWI_*` env var name. */

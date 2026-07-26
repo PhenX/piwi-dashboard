@@ -144,7 +144,7 @@ function openDrawer(entry: TraceNetworkEntry) {
                   : 'text-gray-500'
             "
           >
-            {{ formatDuration(entry.duration) }}
+            <DurationValue :ms="entry.duration" unit-class="opacity-60" />
           </span>
         </div>
         <!-- Waterfall track: this request's span, with the failing window shaded behind it -->

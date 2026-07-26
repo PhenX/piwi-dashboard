@@ -142,7 +142,7 @@ const flatRows = computed<FlatRow[]>(() => {
 </script>
 
 <template>
-  <div class="rounded-lg border border-default text-sm">
+  <div class="rounded-lg border border-default bg-default text-sm">
     <!-- Toolbar: collapse/expand all -->
     <div class="flex items-center justify-end px-3 py-1.5 border-b border-default bg-elevated">
       <button
@@ -224,9 +224,11 @@ const flatRows = computed<FlatRow[]>(() => {
           <span class="text-xs text-muted tabular-nums max-sm:hidden" :title="`${row.testCase.totalRuns} runs`">
             {{ row.testCase.totalRuns }}&times;
           </span>
-          <span v-if="row.testCase.avgDuration != null" class="text-xs text-muted tabular-nums max-sm:hidden">
-            {{ formatDuration(row.testCase.avgDuration) }}
-          </span>
+          <DurationValue
+            v-if="row.testCase.avgDuration != null"
+            :ms="row.testCase.avgDuration"
+            class="text-xs text-muted max-sm:hidden"
+          />
           <span class="text-xs text-muted max-sm:hidden" :title="prettyDateFormat(row.testCase.lastRun)">
             {{ formatRelativeTime(row.testCase.lastRun) }}
           </span>

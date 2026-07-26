@@ -3,6 +3,16 @@ import { UIcon } from '#components';
 import type { Column } from '@tanstack/vue-table';
 import type { CommitListItem } from '~~/types/api';
 import { formatDuration as formatDurationLib, formatDistanceToNow } from 'date-fns';
+import { TEST_PRIORITIES, type TestPriority } from '@piwitests/core/test-meta';
+
+/**
+ * Narrow a stored priority to the union `TestMetaBadges` takes. The database
+ * column is a plain string, so anything unrecognized drops out rather than
+ * rendering a badge nobody defined.
+ */
+export function toTestPriority(value: string | null | undefined): TestPriority | undefined {
+  return TEST_PRIORITIES.includes(value as TestPriority) ? (value as TestPriority) : undefined;
+}
 
 /**
  * Creates a sortable column header render function.
@@ -158,6 +168,58 @@ export function getStatusColor(status: string) {
   }
 }
 
+/** Playwright reports `timedOut`; the DB and the UI both store `timedout`. */
+function normalizeStatusKey(status: string): string {
+  return status === 'timedOut' ? 'timedout' : status;
+}
+
+/**
+ * Lucide icon for a test/run status, so a status drawn as an icon (the run
+ * tree, `StatusBlock`) always looks the same.
+ */
+export function getStatusIcon(status: string): string {
+  switch (normalizeStatusKey(status)) {
+    case 'passed':
+      return 'i-lucide-check-circle-2';
+    case 'failed':
+    case 'timedout':
+      return 'i-lucide-x-circle';
+    case 'didnotrun':
+      return 'i-lucide-circle-slash';
+    case 'running':
+    case 'initialising':
+    case 'finalizing':
+      return 'i-lucide-loader-circle';
+    default:
+      return 'i-lucide-minus-circle';
+  }
+}
+
+/** Text colour classes matching `getStatusIcon`, for an icon drawn without a chip. */
+export function getStatusTextClass(status: string): string {
+  switch (normalizeStatusKey(status)) {
+    case 'passed':
+      return 'text-emerald-600 dark:text-emerald-400';
+    case 'failed':
+    case 'timedout':
+      return 'text-rose-600 dark:text-rose-400';
+    case 'didnotrun':
+      return 'text-amber-600 dark:text-amber-400';
+    case 'running':
+    case 'initialising':
+    case 'finalizing':
+      return 'text-blue-600 dark:text-blue-400';
+    default:
+      return 'text-zinc-400 dark:text-zinc-500';
+  }
+}
+
+/** Whether a status icon should spin (the run is still in flight). */
+export function isStatusInFlight(status: string): boolean {
+  const s = normalizeStatusKey(status);
+  return s === 'running' || s === 'initialising' || s === 'finalizing';
+}
+
 /**
  * Human-readable label for a test-case status badge. Normalizes Playwright's
  * `timedOut` to `failed` (as the UI treats timeouts as failures) and renders
@@ -180,6 +242,48 @@ export function clusterStatusColor(status: string | null | undefined): 'success'
   return (status && map[status]) || 'neutral';
 }
 
+/**
+ * How a landed fix should be presented.
+ *
+ * The three verdicts are deliberately not interchangeable: only
+ * `diagnosis-verified` claims the change is the one that fixed it, so it is the
+ * only one shown in a confident colour. `stopped-failing` says nothing more
+ * than that the tests went green, and the wording has to stay that modest or
+ * the badge over-claims.
+ *
+ * Returns null when nothing has landed, which is what keeps the resolution
+ * block absent rather than empty on the clusters nobody has fixed yet.
+ */
+export function fixVerificationBadge(
+  verification: string | null | undefined,
+): { label: string; color: 'success' | 'info' | 'error'; icon: string; hint: string } | null {
+  switch (verification) {
+    case 'diagnosis-verified':
+      return {
+        label: 'Fix verified',
+        color: 'success',
+        icon: 'i-lucide-badge-check',
+        hint: 'The tests went green and the change touched the files the diagnosis named.',
+      };
+    case 'stopped-failing':
+      return {
+        label: 'Stopped failing',
+        color: 'info',
+        icon: 'i-lucide-check',
+        hint: 'The tests went green. Nothing corroborates which change did it.',
+      };
+    case 'regressed':
+      return {
+        label: 'Regressed',
+        color: 'error',
+        icon: 'i-lucide-undo-2',
+        hint: 'A fix was recorded for this cluster and it did not hold — the failure came back.',
+      };
+    default:
+      return null;
+  }
+}
+
 /** Badge color for a normalized failure-cluster error type (timeout/assertion/…). */
 export function clusterErrorTypeColor(
   type: string | null | undefined,
@@ -196,48 +300,29 @@ export function clusterErrorTypeColor(
 }
 
 /**
- * Generate a random vibrant hex color.
- * Uses HSL with fixed saturation/lightness for visually appealing results.
- *
- * Conversion uses the standard HSL → RGB chroma method:
- *   c = chroma, x = intermediate value per 60° sector, m = brightness offset
- *   The (r,g,b) triple is selected from one of six 60°-wide hue sectors,
- *   then shifted by m and scaled to [0,255].
+ * Curated tag palette — the Tailwind 500 shades, which keep even perceived
+ * saturation across hues. `TagBadge` derives its tint/text from whatever it
+ * gets, but picking from a fixed set keeps sibling tags looking like one
+ * family instead of the arbitrary HSL spins this used to generate.
  */
+export const TAG_COLOR_PALETTE = [
+  '#ef4444', // red
+  '#f97316', // orange
+  '#f59e0b', // amber
+  '#84cc16', // lime
+  '#10b981', // emerald
+  '#14b8a6', // teal
+  '#06b6d4', // cyan
+  '#3b82f6', // blue
+  '#6366f1', // indigo
+  '#8b5cf6', // violet
+  '#d946ef', // fuchsia
+  '#ec4899', // pink
+] as const;
+
+/** Pick a random color for a new tag from the curated palette. */
 export function randomHexColor(): string {
-  const hue = Math.floor(Math.random() * 360);
-  const s = 65; // saturation %: vibrant but not neon
-  const l = 50; // lightness %: mid-range for good contrast on both light/dark backgrounds
-  const c = ((1 - Math.abs((2 * l) / 100 - 1)) * s) / 100;
-  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
-  const m = l / 100 - c / 2;
-  let r = 0,
-    g = 0,
-    b = 0;
-  if (hue < 60) {
-    r = c;
-    g = x;
-  } else if (hue < 120) {
-    r = x;
-    g = c;
-  } else if (hue < 180) {
-    g = c;
-    b = x;
-  } else if (hue < 240) {
-    g = x;
-    b = c;
-  } else if (hue < 300) {
-    r = x;
-    b = c;
-  } else {
-    r = c;
-    b = x;
-  }
-  const toHex = (v: number) =>
-    Math.round((v + m) * 255)
-      .toString(16)
-      .padStart(2, '0');
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  return TAG_COLOR_PALETTE[Math.floor(Math.random() * TAG_COLOR_PALETTE.length)]!;
 }
 
 /**

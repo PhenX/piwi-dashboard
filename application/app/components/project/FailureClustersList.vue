@@ -17,6 +17,8 @@ const { data: clusters, pending: loading } = await useFetch<ProjectFailureCluste
   { lazy: true, server: false, watch: [statusFilter] },
 );
 
+const resolutionOf = (cluster: ProjectFailureCluster) => fixVerificationBadge(cluster.fixVerification);
+
 const columns: TableColumn<ProjectFailureCluster>[] = [
   { accessorKey: 'signature', header: createSortHeader<ProjectFailureCluster>('Signature') },
   { accessorKey: 'errorType', header: createSortHeader<ProjectFailureCluster>('Type') },
@@ -85,10 +87,21 @@ const columns: TableColumn<ProjectFailureCluster>[] = [
           <span v-else class="text-gray-400 text-xs">—</span>
         </template>
 
+        <!-- Triage status is what a human declared; the resolution badge below it
+             is what the runs actually showed. They disagree often enough — a
+             cluster fixed but never triaged — that both have to be visible. -->
         <template #status-cell="{ row }">
-          <UBadge :color="clusterStatusColor(row.original.status)" variant="subtle" size="sm">
-            {{ row.original.status }}
-          </UBadge>
+          <div class="space-y-1">
+            <UBadge :color="clusterStatusColor(row.original.status)" variant="subtle" size="sm">
+              {{ row.original.status }}
+            </UBadge>
+            <UTooltip v-if="resolutionOf(row.original)" :text="resolutionOf(row.original)!.hint">
+              <UBadge :color="resolutionOf(row.original)!.color" variant="subtle" size="sm" class="gap-1">
+                <UIcon :name="resolutionOf(row.original)!.icon" class="size-3" />
+                {{ resolutionOf(row.original)!.label }}
+              </UBadge>
+            </UTooltip>
+          </div>
         </template>
 
         <template #affectedTests-cell="{ row }">

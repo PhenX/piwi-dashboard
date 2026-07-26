@@ -344,8 +344,14 @@ test.describe('Dashboard UI Tests', () => {
 });
 
 test.describe('Foldable Summary', () => {
+  // The run this test owns. `fullyParallel` spreads the block over several
+  // workers, each seeding the same project, so "the newest run of
+  // PROJECT.SUMMARY_FOLD" can belong to another worker's test — take the id the
+  // submit returned instead.
+  let testRunId = 0;
+
   test.beforeEach(async ({ page, request }) => {
-    await retryPost(request, '/api/test-runs/submit', {
+    const submitRes = await retryPost(request, '/api/test-runs/submit', {
       data: {
         projectName: PROJECT.SUMMARY_FOLD,
         status: 'passed',
@@ -371,20 +377,11 @@ test.describe('Foldable Summary', () => {
       },
       timeout: 20000,
     });
+    testRunId = (await submitRes.json()).testRunId;
     await page.context().clearCookies();
   });
 
-  async function findTestRunId(request: import('@playwright/test').APIRequestContext) {
-    const projectsRes = await request.get('/api/projects');
-    const projects = await projectsRes.json();
-    const project = projects.find((p: { name: string }) => p.name === PROJECT.SUMMARY_FOLD);
-    const projectDetailRes = await request.get(`/api/projects/${project.id}`);
-    const projectDetail = await projectDetailRes.json();
-    return projectDetail.testRuns[0].id as number;
-  }
-
-  test('should start expanded on test run detail page', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
+  test('should start expanded on test run detail page', async ({ page }) => {
     await page.goto(`/test-runs/${testRunId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
 
@@ -392,8 +389,7 @@ test.describe('Foldable Summary', () => {
     await expect(page.locator('h2').filter({ hasText: /Run #/ })).toBeVisible();
   });
 
-  test('should collapse and expand test run summary', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
+  test('should collapse and expand test run summary', async ({ page }) => {
     await page.goto(`/test-runs/${testRunId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
@@ -408,8 +404,7 @@ test.describe('Foldable Summary', () => {
     await expect(page.getByTitle('Collapse summary')).toBeVisible();
   });
 
-  test('should show key info in folded state', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
+  test('should show key info in folded state', async ({ page }) => {
     await page.goto(`/test-runs/${testRunId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
@@ -423,7 +418,6 @@ test.describe('Foldable Summary', () => {
   });
 
   test('should start expanded on test case detail page', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
     const runRes = await request.get(`/api/test-runs/${testRunId}`);
     const runData = await runRes.json();
     const testCaseId = runData.testCases[0].id;
@@ -436,7 +430,6 @@ test.describe('Foldable Summary', () => {
   });
 
   test('should collapse and expand test case summary', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
     const runRes = await request.get(`/api/test-runs/${testRunId}`);
     const runData = await runRes.json();
     const testCaseId = runData.testCases[0].id;
@@ -455,8 +448,7 @@ test.describe('Foldable Summary', () => {
     await expect(page.getByTitle('Collapse summary')).toBeVisible();
   });
 
-  test('should persist fold state across navigation', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
+  test('should persist fold state across navigation', async ({ page }) => {
     await page.goto(`/test-runs/${testRunId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
@@ -472,8 +464,14 @@ test.describe('Foldable Summary', () => {
 });
 
 test.describe('Run Label', () => {
+  // These tests edit the label of the run they seed. `fullyParallel` spreads
+  // them over several workers, so "the newest run of PROJECT.RUN_LABEL" can be
+  // another worker's run and two tests then fight over one label — take the id
+  // the submit returned instead.
+  let testRunId = 0;
+
   test.beforeEach(async ({ page, request }) => {
-    await retryPost(request, '/api/test-runs/submit', {
+    const submitRes = await retryPost(request, '/api/test-runs/submit', {
       data: {
         projectName: PROJECT.RUN_LABEL,
         status: 'passed',
@@ -495,20 +493,11 @@ test.describe('Run Label', () => {
       },
       timeout: 20000,
     });
+    testRunId = (await submitRes.json()).testRunId;
     await page.context().clearCookies();
   });
 
-  async function findTestRunId(request: import('@playwright/test').APIRequestContext) {
-    const projectsRes = await request.get('/api/projects');
-    const projects = await projectsRes.json();
-    const project = projects.find((p: { name: string }) => p.name === PROJECT.RUN_LABEL);
-    const projectDetailRes = await request.get(`/api/projects/${project.id}`);
-    const projectDetail = await projectDetailRes.json();
-    return projectDetail.testRuns[0].id as number;
-  }
-
-  test('shows + label button when no label exists', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
+  test('shows + label button when no label exists', async ({ page }) => {
     await page.goto(`/test-runs/${testRunId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
@@ -519,8 +508,7 @@ test.describe('Run Label', () => {
     await expect(addLabelBtn).toHaveText('+ label');
   });
 
-  test('clicking + label shows an inline input', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
+  test('clicking + label shows an inline input', async ({ page }) => {
     await page.goto(`/test-runs/${testRunId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
@@ -531,8 +519,7 @@ test.describe('Run Label', () => {
     await expect(input).toBeFocused();
   });
 
-  test('pressing Enter saves the label and displays it', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
+  test('pressing Enter saves the label and displays it', async ({ page }) => {
     await page.goto(`/test-runs/${testRunId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
@@ -546,8 +533,7 @@ test.describe('Run Label', () => {
     await expect(page.locator('h2')).toContainText('— v1.0');
   });
 
-  test('label persists after page reload', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
+  test('label persists after page reload', async ({ page }) => {
     await page.goto(`/test-runs/${testRunId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
@@ -564,7 +550,6 @@ test.describe('Run Label', () => {
 
   test('clicking label text re-enters edit mode', async ({ page, request }) => {
     // Submit a run with a label via API
-    const testRunId = await findTestRunId(request);
     await request.patch(`/api/test-runs/${testRunId}`, {
       data: { label: 'edit-me' },
     });
@@ -582,8 +567,7 @@ test.describe('Run Label', () => {
     await expect(input).toHaveValue('edit-me');
   });
 
-  test('pressing Escape cancels label edit', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
+  test('pressing Escape cancels label edit', async ({ page }) => {
     await page.goto(`/test-runs/${testRunId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
@@ -599,7 +583,6 @@ test.describe('Run Label', () => {
 
   test('saving an empty label clears it', async ({ page, request }) => {
     // Set a label first via API
-    const testRunId = await findTestRunId(request);
     await request.patch(`/api/test-runs/${testRunId}`, {
       data: { label: 'will-be-cleared' },
     });
@@ -623,7 +606,6 @@ test.describe('Run Label', () => {
   });
 
   test('label appears in breadcrumb on test run page', async ({ page, request }) => {
-    const testRunId = await findTestRunId(request);
     await request.patch(`/api/test-runs/${testRunId}`, {
       data: { label: 'breadcrumb-label' },
     });

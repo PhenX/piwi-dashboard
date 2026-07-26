@@ -126,21 +126,6 @@ function sortValue(tc: TestCaseResult, key: string): string | number {
   }
 }
 
-// Compact duration for the dense table cells ("5.3s", "340ms", "1m 5s") so the
-// Duration and Wasted columns stay on a single line.
-function formatDurationShort(ms?: number | null): string {
-  if (ms === null || ms === undefined) return '';
-  const abs = Math.round(Math.abs(ms));
-  if (abs === 0) return '0s';
-  const sign = ms < 0 ? '−' : '';
-  if (abs < 1000) return `${sign}${abs}ms`;
-  const seconds = abs / 1000;
-  if (seconds < 60) return `${sign}${Number.isInteger(seconds) ? seconds : seconds.toFixed(1)}s`;
-  const mins = Math.floor(seconds / 60);
-  const rem = Math.round(seconds % 60);
-  return rem ? `${sign}${mins}m ${rem}s` : `${sign}${mins}m`;
-}
-
 const sortedTestCases = computed<TestCaseResult[]>(() => {
   const cases = filteredTestCases.value;
   const key = sortKey.value;
@@ -182,12 +167,11 @@ const columns = computed<Column[]>(() => {
   if (hasWastedTime.value) {
     cols.push({ key: 'wastedTimeMs', label: 'Wasted', sortable: true, width: '6rem', align: 'left' });
   }
-  cols.push({ key: 'actions', label: 'Actions', sortable: false, width: '7.5rem', align: 'right' });
   return cols;
 });
 
 const gridTemplate = computed(() => columns.value.map((c) => c.width).join(' '));
-const gridMinWidth = computed(() => (hasWastedTime.value ? '55rem' : '49rem'));
+const gridMinWidth = computed(() => (hasWastedTime.value ? '47.5rem' : '41.5rem'));
 
 const hasFilter = computed(
   () =>
@@ -273,10 +257,10 @@ defineExpose({ scrollToCase });
             <UIcon name="i-lucide-folder-tree" class="size-3.5" />
           </button>
         </div>
-        <span v-if="isLive" class="text-sm text-gray-500 tabular-nums inline-flex items-center gap-1">
+        <span v-if="isLive" class="text-sm text-zinc-500 tabular-nums inline-flex items-center gap-1">
           {{ testCases.length }} completed <HelpHint topic="run.live" />
         </span>
-        <span v-else class="text-sm text-gray-500 tabular-nums inline-flex items-center gap-1">
+        <span v-else class="text-sm text-zinc-500 tabular-nums inline-flex items-center gap-1">
           {{ sortedTestCases.length
           }}{{ sortedTestCases.length !== testCases.length ? ` / ${testCases.length}` : '' }} cases
           <HelpHint topic="run.test-cases" />
@@ -298,13 +282,13 @@ defineExpose({ scrollToCase });
           :class="
             activeStatuses.includes(opt.value)
               ? opt.color === 'green'
-                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                 : opt.color === 'red'
-                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
                   : opt.color === 'orange'
                     ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-                    : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-              : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300'
+              : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
           "
           @click="toggleStatus(opt.value)"
         >
@@ -312,12 +296,12 @@ defineExpose({ scrollToCase });
             class="size-2 rounded-full shrink-0"
             :class="
               opt.color === 'green'
-                ? 'bg-green-500'
+                ? 'bg-emerald-500'
                 : opt.color === 'red'
-                  ? 'bg-red-500'
+                  ? 'bg-rose-500'
                   : opt.color === 'orange'
                     ? 'bg-orange-500'
-                    : 'bg-gray-400'
+                    : 'bg-zinc-400'
             "
           />
           {{ opt.label }}
@@ -344,7 +328,7 @@ defineExpose({ scrollToCase });
     <template v-else-if="!treeView">
       <div
         v-if="sortedTestCases.length > 0"
-        class="flex-1 min-h-0 max-lg:h-[70dvh] overflow-x-auto overflow-y-hidden rounded-lg border border-default"
+        class="flex-1 min-h-0 max-lg:h-[70dvh] overflow-x-auto overflow-y-hidden rounded-lg border border-default bg-default"
       >
         <div
           class="flex flex-col h-full"
@@ -405,11 +389,18 @@ defineExpose({ scrollToCase });
                 <DynamicScrollerItem
                   :item="item"
                   :active="active"
-                  :size-dependencies="[item.title, item.location, item.isNewRegression, item.isNewFlaky]"
+                  :size-dependencies="[
+                    item.title,
+                    item.location,
+                    item.isNewRegression,
+                    item.isNewFlaky,
+                    item.testAnnotations,
+                    item.tags,
+                  ]"
                   :data-index="index"
                 >
                   <div
-                    class="grid items-center border-b border-default text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-900/50"
+                    class="grid items-center border-b border-default text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
                     :class="highlightedCaseId === item.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
                     role="row"
                     :style="{ gridTemplateColumns: gridTemplate }"
@@ -422,43 +413,35 @@ defineExpose({ scrollToCase });
                     <!-- title -->
                     <div class="px-3 py-2 min-w-0 space-y-0.5" role="cell">
                       <div class="flex items-center gap-1.5 min-w-0">
-                        <UBadge
-                          v-if="item.isNewRegression"
-                          color="error"
-                          variant="solid"
-                          size="xs"
-                          class="uppercase tracking-wider"
-                        >
-                          NEW
-                        </UBadge>
-                        <UBadge
-                          v-if="item.isNewFlaky"
-                          color="info"
-                          variant="solid"
-                          size="xs"
-                          class="uppercase tracking-wider"
-                        >
-                          FLAKY
-                        </UBadge>
+                        <!-- Same badge cluster, in the same order, as the tree's rows. -->
+                        <TestRowBadges
+                          :is-new-regression="Boolean(item.isNewRegression)"
+                          :is-new-flaky="Boolean(item.isNewFlaky)"
+                          :annotations="item.testAnnotations"
+                          :tags="item.tags"
+                          :meta="item.testMeta"
+                          :max-tags="3"
+                          class="shrink-0"
+                        />
+                        <!-- Neutral title: green titles read as "passed" even on failed rows. -->
                         <a
                           :href="`/test-run-cases/${item.id}`"
-                          class="text-primary hover:underline font-medium truncate"
+                          class="text-highlighted hover:text-primary hover:underline font-medium truncate"
                           :title="item.title"
                           @click.prevent="navigateTo(`/test-run-cases/${item.id}`)"
                           >{{ item.title }}</a
                         >
-                        <SharedTestMetaBadges :tags="item.tags" :meta="item.testMeta" :max-tags="3" />
                       </div>
                       <OpenInIdeLink
                         v-if="item.location"
                         :location="item.location"
                         :project-key="projectKey"
                         :project-name="projectName"
-                        class="text-xs text-gray-400 dark:text-gray-500"
+                        class="text-xs text-zinc-400 dark:text-zinc-500"
                       />
                     </div>
 
-                    <!-- status -->
+                    <!-- status — the flat view's only status encoding, so it keeps a chip (subtle, not solid) -->
                     <div class="px-3 py-2 flex items-center" role="cell">
                       <UBadge
                         :color="
@@ -466,6 +449,7 @@ defineExpose({ scrollToCase });
                             item.status === 'timedOut' || item.status === 'timedout' ? 'failed' : item.status,
                           )
                         "
+                        variant="subtle"
                         class="capitalize"
                       >
                         {{ formatStatusLabel(item.status) }}
@@ -475,7 +459,7 @@ defineExpose({ scrollToCase });
                     <!-- duration -->
                     <div class="px-3 py-2 flex items-center whitespace-nowrap" role="cell">
                       <span v-if="item.status === 'running'" class="text-info text-xs">In progress...</span>
-                      <span v-else>{{ formatDurationShort(item.duration) }}</span>
+                      <DurationValue v-else :ms="item.duration" fallback="" />
                     </div>
 
                     <!-- worker -->
@@ -492,15 +476,13 @@ defineExpose({ scrollToCase });
 
                     <!-- wasted -->
                     <div v-if="hasWastedTime" class="px-3 py-2 flex items-center whitespace-nowrap" role="cell">
-                      <span v-if="item.wastedTimeMs" class="text-amber-600 dark:text-amber-400">
-                        {{ formatDurationShort(item.wastedTimeMs) }}
-                      </span>
-                      <span v-else class="text-gray-400">&mdash;</span>
-                    </div>
-
-                    <!-- actions -->
-                    <div class="px-3 py-2 flex items-center justify-end" role="cell">
-                      <UButton :to="`/test-run-cases/${item.id}`" size="sm" variant="outline"> View details </UButton>
+                      <DurationValue
+                        v-if="item.wastedTimeMs"
+                        :ms="item.wastedTimeMs"
+                        class="text-amber-600 dark:text-amber-400"
+                        unit-class="opacity-60"
+                      />
+                      <span v-else class="text-zinc-400">&mdash;</span>
                     </div>
                   </div>
                 </DynamicScrollerItem>
@@ -508,7 +490,7 @@ defineExpose({ scrollToCase });
             </DynamicScroller>
 
             <template #fallback>
-              <div class="flex-1 min-h-0 flex items-center justify-center py-10 text-sm text-gray-500">
+              <div class="flex-1 min-h-0 flex items-center justify-center py-10 text-sm text-zinc-500">
                 <UIcon name="i-lucide-loader-circle" class="size-4 mr-2 animate-spin" />
                 Loading test cases…
               </div>
@@ -517,13 +499,13 @@ defineExpose({ scrollToCase });
         </div>
       </div>
 
-      <div v-else-if="testCases.length === 0" class="text-center py-10 text-gray-500">
-        <UIcon name="i-lucide-beaker" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+      <div v-else-if="testCases.length === 0" class="text-center py-10 text-zinc-500">
+        <UIcon name="i-lucide-beaker" class="size-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
         <p>No test cases recorded for this run.</p>
       </div>
 
-      <div v-else class="text-center py-10 text-gray-500">
-        <UIcon name="i-lucide-search-x" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+      <div v-else class="text-center py-10 text-zinc-500">
+        <UIcon name="i-lucide-search-x" class="size-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
         <p>No test cases match your filters.</p>
       </div>
     </template>

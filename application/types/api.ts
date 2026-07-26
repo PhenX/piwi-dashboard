@@ -692,9 +692,30 @@ export interface FailureGroup {
 }
 
 /**
+ * What a landed fix was corroborated against.
+ *
+ * `diagnosis-verified` is the strong verdict — the change touched the files the
+ * diagnosis named. `stopped-failing` only says the tests went green, which is
+ * the common and weaker case. `regressed` means the recorded fix did not hold.
+ */
+export type FixVerification = 'stopped-failing' | 'diagnosis-verified' | 'regressed';
+
+/**
+ * The resolution a cluster carries once a fix has landed. Every field is null
+ * until then, so a cluster nobody has fixed simply omits the whole block.
+ */
+export interface ClusterResolutionFields {
+  fixLandedRunId: number | null;
+  fixLandedAt: string | Date | null;
+  fixCommit: string | null;
+  timeToResolutionMs: number | null;
+  fixVerification: FixVerification | null;
+}
+
+/**
  * Full failure cluster — returned by GET /api/failure-clusters/[id]
  */
-export interface FailureClusterDetail {
+export interface FailureClusterDetail extends ClusterResolutionFields {
   id: number;
   projectId: number;
   fingerprint: string;
@@ -726,7 +747,7 @@ export interface FailureClusterDetail {
 /**
  * Failure cluster summary for a project page — returned by GET /api/projects/[id]/failure-clusters
  */
-export interface ProjectFailureCluster {
+export interface ProjectFailureCluster extends ClusterResolutionFields {
   id: number;
   fingerprint: string;
   signature: string;

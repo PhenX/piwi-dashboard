@@ -3,18 +3,6 @@ defineProps<{
   status: string;
   size?: 'sm' | 'md';
 }>();
-
-function iconName(status: string): string {
-  if (status === 'passed') return 'i-lucide-check-circle-2';
-  if (status === 'failed' || status === 'timedout') return 'i-lucide-x-circle';
-  if (status === 'didnotrun') return 'i-lucide-circle-slash';
-  if (status === 'running' || status === 'initialising' || status === 'finalizing') return 'i-lucide-loader-circle';
-  return 'i-lucide-minus-circle';
-}
-
-function isSpinning(status: string): boolean {
-  return status === 'running' || status === 'initialising' || status === 'finalizing';
-}
 </script>
 
 <template>
@@ -24,9 +12,10 @@ function isSpinning(status: string): boolean {
       :class="[
         size === 'sm' ? 'size-7' : 'size-8',
         {
-          'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400': status === 'passed',
-          'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400': status === 'failed' || status === 'timedout',
-          'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400':
+          'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400': status === 'passed',
+          'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400':
+            status === 'failed' || status === 'timedout',
+          'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400':
             status === 'cancelled' || status === 'skipped',
           'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400': status === 'didnotrun',
           'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400':
@@ -35,12 +24,12 @@ function isSpinning(status: string): boolean {
       ]"
     >
       <UIcon
-        :name="iconName(status)"
-        :class="[size === 'sm' ? 'size-3.5' : 'size-4.5', { 'animate-spin': isSpinning(status) }]"
+        :name="getStatusIcon(status)"
+        :class="[size === 'sm' ? 'size-3.5' : 'size-4.5', { 'animate-spin': isStatusInFlight(status) }]"
       />
     </div>
-    <UBadge :color="getStatusColor(status)" class="capitalize gap-1 items-center">
-      <UIcon v-if="isSpinning(status)" name="i-lucide-loader-circle" class="size-3 animate-spin shrink-0" />
+    <UBadge :color="getStatusColor(status)" variant="subtle" class="capitalize gap-1 items-center">
+      <UIcon v-if="isStatusInFlight(status)" name="i-lucide-loader-circle" class="size-3 animate-spin shrink-0" />
       {{ formatStatusLabel(status) }}
     </UBadge>
   </div>

@@ -46,7 +46,12 @@ const demoPwaConfig = isDemo
         enabled: false,
       },
     }
-  : { disabled: true };
+  : // The option is `disable`; `disabled` is silently ignored, which left the
+    // normal build generating a Workbox service worker nobody asked for and
+    // every page registering `/sw.js` — a 404 on the dev server (logged as a
+    // Vue Router "No match found" warning on every page load) and a live
+    // asset-caching worker on a production build.
+    { disable: true };
 
 export default defineNuxtConfig({
   modules: ['@nuxt/ui', '@vueuse/nuxt', '@vite-pwa/nuxt'],

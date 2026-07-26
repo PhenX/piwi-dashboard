@@ -352,6 +352,11 @@ export const HELP_TOPICS = {
   'cluster.triage': {
     text: 'Track a cluster’s state: set its status, add triage notes, or extract a subset of failures into a separate cluster.',
   },
+  'cluster.resolution': {
+    title: 'Resolution',
+    text: 'Recorded when a full run turns this cluster green: when the fix landed, how long the cluster stayed open, and whether the change matched the diagnosed files. If the failure comes back, the cluster is marked as regressed rather than quietly reopened.',
+    doc: 'ai-diagnosis#did-the-fix-work',
+  },
   'cluster.evidence': {
     title: 'Test evidence',
     text: 'The concrete artifacts behind this cluster — screenshots, signals and traces from affected tests — gathered for review and AI diagnosis.',

@@ -115,7 +115,7 @@ const endpointColumns: TableColumn<EndpointSummary>[] = [
                 : ''
           "
         >
-          {{ formatDuration(row.original.avgDuration) }}
+          <DurationValue :ms="row.original.avgDuration" unit-class="opacity-60" />
         </span>
       </template>
       <template #p90Duration-cell="{ row }">
@@ -128,7 +128,7 @@ const endpointColumns: TableColumn<EndpointSummary>[] = [
                 : ''
           "
         >
-          {{ formatDuration(row.original.p90Duration) }}
+          <DurationValue :ms="row.original.p90Duration" unit-class="opacity-60" />
         </span>
       </template>
       <template #errorRate-cell="{ row }">

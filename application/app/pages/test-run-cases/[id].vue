@@ -669,8 +669,8 @@ provide(clusterSectionLocatorKey, {
                     {{ c.category }}
                   </UBadge>
                   <span class="tabular-nums text-gray-500 dark:text-gray-400"
-                    >×{{ c.count }} · {{ formatDuration(c.duration) }}</span
-                  >
+                    >×{{ c.count }} · <DurationValue :ms="c.duration"
+                  /></span>
                 </span>
               </div>
 
@@ -741,9 +741,11 @@ provide(clusterSectionLocatorKey, {
                   <template #duration-cell="{ row }">
                     <div class="min-w-[6rem]">
                       <div class="flex items-center justify-between gap-2">
-                        <span :class="`text-sm tabular-nums ${stepDurationTextClass(row.original.duration)}`">
-                          {{ formatDuration(row.original.duration) }}
-                        </span>
+                        <DurationValue
+                          :ms="row.original.duration"
+                          :class="`text-sm ${stepDurationTextClass(row.original.duration)}`"
+                          unit-class="opacity-60"
+                        />
                         <span
                           v-if="stepPctOfTest(row.original.duration)"
                           class="text-xs tabular-nums text-gray-400 dark:text-gray-500"
@@ -867,7 +869,6 @@ provide(clusterSectionLocatorKey, {
                 <StatTileGrid v-if="webVitals.navigation" min-tile-width="10rem">
                   <StatTile
                     label="TTFB"
-                    :value="formatDuration(webVitals.navigation.ttfb)"
                     hint="Time to first byte"
                     :value-class="
                       webVitals.navigation.ttfb > 600
@@ -876,10 +877,11 @@ provide(clusterSectionLocatorKey, {
                           ? 'text-orange-500'
                           : 'text-green-600'
                     "
-                  />
+                  >
+                    <DurationValue :ms="webVitals.navigation.ttfb" />
+                  </StatTile>
                   <StatTile
                     label="DOM Interactive"
-                    :value="formatDuration(webVitals.navigation.domInteractive)"
                     hint="DOM interactive"
                     :value-class="
                       webVitals.navigation.domInteractive > 3000
@@ -888,10 +890,11 @@ provide(clusterSectionLocatorKey, {
                           ? 'text-orange-500'
                           : 'text-green-600'
                     "
-                  />
+                  >
+                    <DurationValue :ms="webVitals.navigation.domInteractive" />
+                  </StatTile>
                   <StatTile
                     label="DOMContentLoaded"
-                    :value="formatDuration(webVitals.navigation.domContentLoaded)"
                     hint="DOMContentLoaded"
                     :value-class="
                       webVitals.navigation.domContentLoaded > 3000
@@ -900,10 +903,11 @@ provide(clusterSectionLocatorKey, {
                           ? 'text-orange-500'
                           : 'text-green-600'
                     "
-                  />
+                  >
+                    <DurationValue :ms="webVitals.navigation.domContentLoaded" />
+                  </StatTile>
                   <StatTile
                     label="Load Complete"
-                    :value="formatDuration(webVitals.navigation.loadComplete)"
                     hint="Page fully loaded"
                     :value-class="
                       webVitals.navigation.loadComplete > 5000
@@ -912,7 +916,9 @@ provide(clusterSectionLocatorKey, {
                           ? 'text-orange-500'
                           : 'text-green-600'
                     "
-                  />
+                  >
+                    <DurationValue :ms="webVitals.navigation.loadComplete" />
+                  </StatTile>
                 </StatTileGrid>
 
                 <StatTileGrid
@@ -920,15 +926,12 @@ provide(clusterSectionLocatorKey, {
                   min-tile-width="10rem"
                   class="pt-2 border-t"
                 >
-                  <StatTile
-                    v-if="webVitals.paint.firstPaint !== undefined"
-                    label="First Paint (FP)"
-                    :value="formatDuration(webVitals.paint.firstPaint)"
-                  />
+                  <StatTile v-if="webVitals.paint.firstPaint !== undefined" label="First Paint (FP)">
+                    <DurationValue :ms="webVitals.paint.firstPaint" />
+                  </StatTile>
                   <StatTile
                     v-if="webVitals.paint.firstContentfulPaint !== undefined"
                     label="First Contentful Paint (FCP)"
-                    :value="formatDuration(webVitals.paint.firstContentfulPaint)"
                     :value-class="
                       webVitals.paint.firstContentfulPaint > 3000
                         ? 'text-red-600'
@@ -936,7 +939,9 @@ provide(clusterSectionLocatorKey, {
                           ? 'text-orange-500'
                           : 'text-green-600'
                     "
-                  />
+                  >
+                    <DurationValue :ms="webVitals.paint.firstContentfulPaint" />
+                  </StatTile>
                 </StatTileGrid>
 
                 <!-- Core Web Vitals — Google rating bands; missing values render "n/a"
@@ -944,7 +949,6 @@ provide(clusterSectionLocatorKey, {
                 <StatTileGrid v-if="webVitals.vitals" min-tile-width="10rem" class="pt-2 border-t">
                   <StatTile
                     label="Largest Contentful Paint (LCP)"
-                    :value="webVitals.vitals.lcp != null ? formatDuration(webVitals.vitals.lcp) : 'n/a'"
                     :value-class="
                       webVitals.vitals.lcp == null
                         ? 'text-gray-400'
@@ -954,7 +958,9 @@ provide(clusterSectionLocatorKey, {
                             ? 'text-orange-500'
                             : 'text-green-600'
                     "
-                  />
+                  >
+                    <DurationValue :ms="webVitals.vitals.lcp" fallback="n/a" />
+                  </StatTile>
                   <StatTile
                     label="Cumulative Layout Shift (CLS)"
                     :value="webVitals.vitals.cls != null ? String(webVitals.vitals.cls) : 'n/a'"
@@ -970,7 +976,6 @@ provide(clusterSectionLocatorKey, {
                   />
                   <StatTile
                     label="Interaction to Next Paint (INP)"
-                    :value="webVitals.vitals.inp != null ? formatDuration(webVitals.vitals.inp) : 'n/a'"
                     :value-class="
                       webVitals.vitals.inp == null
                         ? 'text-gray-400'
@@ -980,7 +985,9 @@ provide(clusterSectionLocatorKey, {
                             ? 'text-orange-500'
                             : 'text-green-600'
                     "
-                  />
+                  >
+                    <DurationValue :ms="webVitals.vitals.inp" fallback="n/a" />
+                  </StatTile>
                 </StatTileGrid>
 
                 <div v-if="webVitals.navigation?.url" class="text-xs text-gray-400 pt-1">
@@ -1047,12 +1054,12 @@ provide(clusterSectionLocatorKey, {
                     </span>
                   </template>
                   <template #status-cell="{ row }">
-                    <UBadge :color="getStatusColor(row.original.status)" class="capitalize">{{
+                    <UBadge :color="getStatusColor(row.original.status)" variant="subtle" class="capitalize">{{
                       row.original.status
                     }}</UBadge>
                   </template>
                   <template #duration-cell="{ row }">
-                    <span v-if="row.original.duration !== null">{{ formatDuration(row.original.duration) }}</span>
+                    <DurationValue v-if="row.original.duration !== null" :ms="row.original.duration" />
                     <span v-else class="text-gray-400">&mdash;</span>
                   </template>
                   <template #runId-cell="{ row }">

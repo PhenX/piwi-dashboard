@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { isPiwiAnnotation } from '@piwitests/core/test-meta';
 import type { TestCaseResult, SuiteInfo } from '~~/types/api';
 
 const props = defineProps<{
@@ -53,42 +52,16 @@ function normalizeStatus(s: string): string {
   return s === 'timedOut' || s === 'timedout' ? 'failed' : s;
 }
 
-function annotationColor(type: string): 'warning' | 'error' | 'neutral' | 'info' | 'primary' {
-  if (type === 'fixme' || type === 'slow') return 'warning';
-  if (type === 'fail') return 'error';
-  if (type === 'skip') return 'neutral';
-  if (type === 'tag') return 'primary';
-  return 'info';
-}
+/** Order the per-group tallies are shown in — failures first, they matter most. */
+const GROUP_STAT_KEYS = ['failed', 'passed', 'skipped', 'didnotrun', 'running'] as const;
 
-function annotationIcon(type: string): string | null {
-  switch (type) {
-    case 'fixme':
-      return 'i-lucide-wrench';
-    case 'skip':
-      return 'i-lucide-skip-forward';
-    case 'slow':
-      return 'i-lucide-timer';
-    case 'fail':
-      return 'i-lucide-x-circle';
-    case 'tag':
-      return 'i-lucide-tag';
-    default:
-      return null;
-  }
-}
-
-function annotationLabel(ann: { type: string; description?: string }): string {
-  return ann.type === 'tag' ? (ann.description ?? ann.type) : ann.type;
-}
-
-/**
- * Playwright test marks only. `piwi:` annotations carry ownership metadata and
- * are rendered by `TestMetaBadges`, so showing them here too would duplicate
- * every owner and priority on the row.
- */
-function testMarks(annotations: Array<{ type: string; description?: string }> | null | undefined) {
-  return (annotations ?? []).filter((ann) => !isPiwiAnnotation(ann.type));
+/** The non-zero tallies of a group row, ready to render. */
+function visibleStats(stats: Stats) {
+  return GROUP_STAT_KEYS.filter((key) => stats[key] > 0).map((key) => ({
+    key,
+    count: stats[key],
+    label: formatStatusLabel(key),
+  }));
 }
 
 function computeStats(tests: TestCaseResult[]): Stats {
@@ -217,7 +190,7 @@ const flatRows = computed<FlatRow[]>(() => {
 </script>
 
 <template>
-  <div class="rounded-lg border border-default text-sm flex flex-col flex-1 min-h-0">
+  <div class="rounded-lg border border-default bg-default text-sm flex flex-col flex-1 min-h-0">
     <!-- Toolbar: collapse/expand all -->
     <div class="flex items-center justify-end px-3 py-1.5 border-b border-default bg-elevated shrink-0">
       <button
@@ -267,82 +240,86 @@ const flatRows = computed<FlatRow[]>(() => {
           <span v-else class="font-medium truncate min-w-0 text-muted">
             {{ row.label }}
           </span>
-          <div v-if="row.depth > 0" class="flex items-center gap-1 shrink-0">
-            <UBadge v-if="row.mode === 'parallel'" color="success" variant="soft" size="xs">parallel</UBadge>
-            <UBadge v-if="row.mode === 'serial'" color="warning" variant="soft" size="xs">serial</UBadge>
-            <UBadge
-              v-for="ann in row.annotations"
-              :key="`${ann.type}:${ann.description ?? ''}`"
-              :color="annotationColor(ann.type)"
-              variant="soft"
-              size="xs"
-              :title="ann.type !== 'tag' ? (ann.description ?? undefined) : undefined"
-              class="gap-1"
-            >
-              <UIcon v-if="annotationIcon(ann.type)" :name="annotationIcon(ann.type)!" class="size-2.5 shrink-0" />
-              {{ annotationLabel(ann) }}
-            </UBadge>
-          </div>
+          <TestRowBadges v-if="row.depth > 0" :mode="row.mode" :annotations="row.annotations" class="shrink-0" />
           <div class="flex-1" />
-          <div class="flex items-center gap-2 shrink-0 tabular-nums">
-            <span v-if="row.stats.failed > 0" class="text-xs text-red-600 dark:text-red-400 font-medium">
-              {{ row.stats.failed }} failed
+          <!--
+            Counts stay visible at every width. Below `sm` the wording drops to
+            `sr-only` — still announced, still on the hover title — and a status
+            icon takes its place so the tally never reads on colour alone. That
+            is what gives the spec path room to breathe on a phone.
+          -->
+          <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 tabular-nums">
+            <span
+              v-for="stat in visibleStats(row.stats)"
+              :key="stat.key"
+              class="text-xs inline-flex items-center gap-0.5"
+              :class="[getStatusTextClass(stat.key), stat.key === 'failed' ? 'font-medium' : '']"
+              :title="`${stat.count} ${stat.label}`"
+            >
+              <UIcon :name="getStatusIcon(stat.key)" class="size-3 shrink-0 sm:hidden" />
+              {{ stat.count }}<span class="max-sm:sr-only"> {{ stat.label }}</span>
             </span>
-            <span v-if="row.stats.passed > 0" class="text-xs text-green-600 dark:text-green-400">
-              {{ row.stats.passed }} passed
-            </span>
-            <span v-if="row.stats.skipped > 0" class="text-xs text-muted">{{ row.stats.skipped }} skipped</span>
-            <span v-if="row.stats.didnotrun > 0" class="text-xs text-amber-600 dark:text-amber-400">
-              {{ row.stats.didnotrun }} didn't run
-            </span>
-            <span v-if="row.stats.running > 0" class="text-xs text-info">{{ row.stats.running }} running</span>
           </div>
         </div>
 
         <!-- Test row -->
         <div
           v-else
-          class="flex items-center gap-2 pr-3 py-1.5 border-b border-default last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors"
+          class="flex flex-wrap items-center gap-x-2 gap-y-1 pr-3 py-2 sm:py-1.5 border-b border-default last:border-b-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors"
           :class="highlightedCaseId === row.test.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
           :style="{ paddingLeft: `${row.depth * 20 + 12}px` }"
         >
-          <UIcon name="i-lucide-flask-conical" class="size-3.5 text-muted shrink-0" />
-          <UBadge
-            :color="
-              getStatusColor(
-                row.test.status === 'timedOut' || row.test.status === 'timedout' ? 'failed' : row.test.status,
-              )
-            "
-            size="xs"
-            class="capitalize shrink-0"
-          >
-            {{ formatStatusLabel(row.test.status) }}
-          </UBadge>
-          <UBadge
-            v-for="ann in testMarks(row.test.testAnnotations)"
-            :key="`${ann.type}:${ann.description ?? ''}`"
-            :color="annotationColor(ann.type)"
-            variant="soft"
-            size="xs"
-            :title="ann.type !== 'tag' ? (ann.description ?? undefined) : undefined"
-            class="shrink-0 gap-1"
-          >
-            <UIcon v-if="annotationIcon(ann.type)" :name="annotationIcon(ann.type)!" class="size-2.5 shrink-0" />
-            {{ annotationLabel(ann) }}
-          </UBadge>
-          <SharedTestMetaBadges :tags="row.test.tags" :meta="row.test.testMeta" :max-tags="3" class="shrink-0" />
+          <!--
+            Same data as the flat list, same left-to-right order: browser,
+            status, badges, title, then the numbers.
+          -->
+          <BrowserBadge :browser="row.test.browser" size="sm" />
+          <!--
+            The status rides on the row's leading icon (it replaces a purely
+            decorative flask). The icon is the row's ONLY status encoding —
+            a per-row "Passed" badge repeated ten times carries no information,
+            it just buries the one failed row in green ink.
+          -->
+          <UIcon
+            :name="getStatusIcon(row.test.status)"
+            class="size-4 shrink-0"
+            :class="[getStatusTextClass(row.test.status), isStatusInFlight(row.test.status) ? 'animate-spin' : '']"
+            role="img"
+            :aria-label="`Status: ${formatStatusLabel(row.test.status)}`"
+            :title="formatStatusLabel(row.test.status)"
+          />
+          <TestRowBadges
+            :is-new-regression="Boolean(row.test.isNewRegression)"
+            :is-new-flaky="Boolean(row.test.isNewFlaky)"
+            :annotations="row.test.testAnnotations"
+            :tags="row.test.tags"
+            :meta="row.test.testMeta"
+            :max-tags="3"
+            class="shrink-0"
+          />
+          <!--
+            The title is the row's only navigation — a separate "View" button
+            pointed at the same page and just ate width. `self-stretch` keeps the
+            tap target the full height of the row on touch screens, and the
+            `min-w-32` floor stops a tagged test from squeezing its own title to
+            nothing on a phone: the numbers wrap to a second line instead.
+          -->
+          <!--
+            Neutral title: primary-green titles read as "passed" — on the one
+            row that failed, a green title actively lies. Status stays on the
+            icon; the link affordance shows on hover.
+          -->
           <a
             :href="`/test-run-cases/${row.test.id}`"
-            class="text-primary hover:underline truncate flex-1 min-w-0"
+            class="text-highlighted hover:text-primary hover:underline flex-1 min-w-32 self-stretch flex items-center"
+            :title="row.test.title"
             @click.prevent="navigateTo(`/test-run-cases/${row.test.id}`)"
           >
-            {{ row.test.title }}
+            <span class="truncate">{{ row.test.title }}</span>
           </a>
-          <div class="flex items-center gap-2 shrink-0">
+          <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto">
             <span v-if="row.test.status === 'running'" class="text-xs text-info">In progress...</span>
-            <span v-else-if="row.test.duration" class="text-xs text-muted tabular-nums">
-              {{ formatDuration(row.test.duration) }}
-            </span>
+            <DurationValue v-else-if="row.test.duration" :ms="row.test.duration" class="text-xs text-muted" />
             <UBadge
               v-if="row.test.workerIndex != null"
               color="neutral"
@@ -356,13 +333,20 @@ const flatRows = computed<FlatRow[]>(() => {
             <UBadge v-if="(row.test.retries ?? 0) > 0" color="warning" variant="soft" size="xs">
               {{ row.test.retries }}x
             </UBadge>
-            <UButton :to="`/test-run-cases/${row.test.id}`" size="xs" variant="outline"> View </UButton>
+            <span
+              v-if="row.test.wastedTimeMs"
+              class="inline-flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400"
+              title="Wasted in fixed waits"
+            >
+              <UIcon name="i-lucide-hourglass" class="size-3 shrink-0" />
+              <DurationValue :ms="row.test.wastedTimeMs" unit-class="opacity-60" no-title />
+            </span>
           </div>
         </div>
       </template>
 
       <div v-if="flatRows.length === 0" class="text-center py-8 text-muted">
-        <UIcon name="i-lucide-search-x" class="size-6 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+        <UIcon name="i-lucide-search-x" class="size-6 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
         <p class="text-sm">No test cases match your filters.</p>
       </div>
     </div>

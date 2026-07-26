@@ -8,7 +8,7 @@ defineProps<{
 </script>
 
 <template>
-  <UBadge :color="getStatusColor(status)" :size="size" class="capitalize gap-1 items-center">
+  <UBadge :color="getStatusColor(status)" :size="size" variant="subtle" class="capitalize gap-1 items-center">
     <UIcon
       v-if="status === 'running' || status === 'initialising' || status === 'finalizing'"
       name="i-lucide-loader-circle"

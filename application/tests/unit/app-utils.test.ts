@@ -6,10 +6,15 @@ import {
   prettyDateFormat,
   formatRelativeTime,
   getStatusColor,
+  getStatusIcon,
+  getStatusTextClass,
+  isStatusInFlight,
+  toTestPriority,
   formatStatusLabel,
   testCaseCategoryColor,
   clusterStatusColor,
   clusterErrorTypeColor,
+  fixVerificationBadge,
   getFileApiPath,
   getTraceViewerUrl,
   errorMessage,
@@ -132,6 +137,51 @@ describe('formatStatusLabel', () => {
   });
 });
 
+describe('status icon helpers', () => {
+  test('maps both spellings of a timeout to the failed icon and color', () => {
+    expect(getStatusIcon('timedOut')).toBe(getStatusIcon('failed'));
+    expect(getStatusIcon('timedout')).toBe(getStatusIcon('failed'));
+    expect(getStatusTextClass('timedOut')).toBe(getStatusTextClass('failed'));
+  });
+
+  test('gives each outcome its own icon', () => {
+    expect(getStatusIcon('passed')).toBe('i-lucide-check-circle-2');
+    expect(getStatusIcon('failed')).toBe('i-lucide-x-circle');
+    expect(getStatusIcon('didnotrun')).toBe('i-lucide-circle-slash');
+    expect(getStatusIcon('running')).toBe('i-lucide-loader-circle');
+    expect(getStatusIcon('skipped')).toBe('i-lucide-minus-circle');
+  });
+
+  test('gives each outcome its own colour, and one colour to the in-flight three', () => {
+    expect(getStatusTextClass('passed')).toContain('emerald');
+    expect(getStatusTextClass('failed')).toContain('rose');
+    expect(getStatusTextClass('didnotrun')).toContain('amber');
+    expect(getStatusTextClass('running')).toContain('blue');
+    expect(getStatusTextClass('initialising')).toBe(getStatusTextClass('running'));
+    expect(getStatusTextClass('finalizing')).toBe(getStatusTextClass('running'));
+    expect(getStatusTextClass('skipped')).toContain('zinc');
+  });
+
+  test('only the in-flight statuses spin', () => {
+    expect(isStatusInFlight('running')).toBe(true);
+    expect(isStatusInFlight('initialising')).toBe(true);
+    expect(isStatusInFlight('finalizing')).toBe(true);
+    expect(isStatusInFlight('passed')).toBe(false);
+    expect(isStatusInFlight('timedOut')).toBe(false);
+  });
+});
+
+describe('toTestPriority', () => {
+  test('keeps a declared priority and drops anything the DB happens to hold', () => {
+    expect(toTestPriority('critical')).toBe('critical');
+    expect(toTestPriority('low')).toBe('low');
+    expect(toTestPriority('urgent')).toBeUndefined();
+    expect(toTestPriority('')).toBeUndefined();
+    expect(toTestPriority(null)).toBeUndefined();
+    expect(toTestPriority(undefined)).toBeUndefined();
+  });
+});
+
 describe('testCaseCategoryColor', () => {
   test('maps derived catalog categories to badge colors', () => {
     expect(testCaseCategoryColor('flaky')).toBe('warning');
@@ -158,6 +208,29 @@ describe('cluster color helpers', () => {
     expect(clusterErrorTypeColor('navigation')).toBe('secondary');
     expect(clusterErrorTypeColor('crash')).toBe('error');
     expect(clusterErrorTypeColor(null)).toBe('neutral');
+  });
+
+  describe('fixVerificationBadge', () => {
+    // Null is what keeps the resolution block off the clusters nobody fixed.
+    test('is null until a fix has landed', () => {
+      expect(fixVerificationBadge(null)).toBeNull();
+      expect(fixVerificationBadge(undefined)).toBeNull();
+      expect(fixVerificationBadge('something-else')).toBeNull();
+    });
+
+    test('only the corroborated verdict claims the fix was verified', () => {
+      expect(fixVerificationBadge('diagnosis-verified')).toMatchObject({ label: 'Fix verified', color: 'success' });
+      // "Stopped failing" must not read as a verified fix — nothing says which
+      // change did it.
+      expect(fixVerificationBadge('stopped-failing')).toMatchObject({ label: 'Stopped failing', color: 'info' });
+      expect(fixVerificationBadge('regressed')).toMatchObject({ label: 'Regressed', color: 'error' });
+    });
+
+    test('every verdict explains itself', () => {
+      for (const verdict of ['diagnosis-verified', 'stopped-failing', 'regressed']) {
+        expect(fixVerificationBadge(verdict)!.hint.length, verdict).toBeGreaterThan(20);
+      }
+    });
   });
 });
 

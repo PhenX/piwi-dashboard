@@ -174,26 +174,26 @@ function onLabelKeydown(e: KeyboardEvent) {
                 v-model="labelInput"
                 type="text"
                 placeholder="Add a label..."
-                class="inline-block w-40 text-sm font-normal border-b border-dashed border-gray-400 bg-transparent outline-none focus:border-primary px-0.5 py-0"
+                class="inline-block w-40 text-sm font-normal border-b border-dashed border-zinc-400 bg-transparent outline-none focus:border-primary px-0.5 py-0"
                 @keydown="onLabelKeydown"
                 @blur="saveLabel"
               />
               <UIcon
                 v-if="savingLabel"
                 name="i-lucide-loader-circle"
-                class="size-3.5 text-gray-400 animate-spin shrink-0"
+                class="size-3.5 text-zinc-400 animate-spin shrink-0"
               />
             </template>
             <template v-else>
               <span
                 v-if="testRun?.label"
-                class="font-normal text-gray-500 ml-1.5 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 border-b border-dashed border-transparent hover:border-gray-400"
+                class="font-normal text-zinc-500 ml-1.5 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300 border-b border-dashed border-transparent hover:border-zinc-400"
                 @click="startEditLabel"
                 >— {{ testRun.label }}</span
               >
               <button
                 v-else
-                class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 border-b border-dashed border-transparent hover:border-gray-400 ml-1"
+                class="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 border-b border-dashed border-transparent hover:border-zinc-400 ml-1"
                 title="Add a label"
                 @click="startEditLabel"
               >
@@ -214,19 +214,19 @@ function onLabelKeydown(e: KeyboardEvent) {
           </UBadge>
         </div>
         <div class="flex items-center gap-3 shrink-0 max-sm:hidden">
-          <span class="text-xs text-gray-500 tabular-nums whitespace-nowrap">
+          <span class="text-xs text-zinc-500 tabular-nums whitespace-nowrap">
             T:
-            <strong class="text-gray-700 dark:text-gray-300">{{
+            <strong class="text-zinc-700 dark:text-zinc-300">{{
               displayProgress?.totalTests ?? testRun?.totalTests ?? 0
             }}</strong>
           </span>
-          <span class="text-xs text-green-600 dark:text-green-400 tabular-nums whitespace-nowrap">
+          <span class="text-xs text-emerald-600 dark:text-emerald-400 tabular-nums whitespace-nowrap">
             P: <strong>{{ displayProgress?.passedTests ?? testRun?.passedTests ?? 0 }}</strong>
           </span>
-          <span class="text-xs text-red-600 dark:text-red-400 tabular-nums whitespace-nowrap">
+          <span class="text-xs text-rose-600 dark:text-rose-400 tabular-nums whitespace-nowrap">
             F: <strong>{{ displayProgress?.failedTests ?? testRun?.failedTests ?? 0 }}</strong>
           </span>
-          <span class="text-xs text-gray-500 tabular-nums whitespace-nowrap">
+          <span class="text-xs text-zinc-500 tabular-nums whitespace-nowrap">
             S: <strong>{{ displayProgress?.skippedTests ?? testRun?.skippedTests ?? 0 }}</strong>
           </span>
           <span
@@ -246,9 +246,7 @@ function onLabelKeydown(e: KeyboardEvent) {
             :did-not-run="testRun?.didNotRunTests ?? 0"
             :total="displayProgress?.totalTests ?? testRun?.totalTests ?? 0"
           />
-          <span class="text-xs text-gray-400 tabular-nums whitespace-nowrap">{{
-            formatDuration(testRun?.duration)
-          }}</span>
+          <DurationValue :ms="testRun?.duration" class="text-xs text-zinc-400" />
         </div>
       </div>
     </template>
@@ -269,26 +267,26 @@ function onLabelKeydown(e: KeyboardEvent) {
                           v-model="labelInput"
                           type="text"
                           placeholder="Add a label..."
-                          class="inline-block w-48 text-sm font-normal border-b border-dashed border-gray-400 bg-transparent outline-none focus:border-primary px-0.5 py-0"
+                          class="inline-block w-48 text-sm font-normal border-b border-dashed border-zinc-400 bg-transparent outline-none focus:border-primary px-0.5 py-0"
                           @keydown="onLabelKeydown"
                           @blur="saveLabel"
                         />
                         <UIcon
                           v-if="savingLabel"
                           name="i-lucide-loader-circle"
-                          class="size-3.5 text-gray-400 animate-spin shrink-0"
+                          class="size-3.5 text-zinc-400 animate-spin shrink-0"
                         />
                       </template>
                       <template v-else>
                         <span
                           v-if="testRun?.label"
-                          class="font-normal text-gray-500 ml-1.5 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 border-b border-dashed border-transparent hover:border-gray-400"
+                          class="font-normal text-zinc-500 ml-1.5 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300 border-b border-dashed border-transparent hover:border-zinc-400"
                           @click="startEditLabel"
                           >— {{ testRun.label }}</span
                         >
                         <button
                           v-else
-                          class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 border-b border-dashed border-transparent hover:border-gray-400 ml-1.5"
+                          class="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 border-b border-dashed border-transparent hover:border-zinc-400 ml-1.5"
                           title="Add a label"
                           @click="startEditLabel"
                         >
@@ -320,7 +318,7 @@ function onLabelKeydown(e: KeyboardEvent) {
                         <MarkerBadge :marker="testRun.precedingMarker" size="xs" />
                       </NuxtLink>
                     </UTooltip>
-                    <span class="text-xs text-gray-500 ml-auto whitespace-nowrap">
+                    <span class="text-xs text-zinc-500 ml-auto whitespace-nowrap">
                       {{ testRun?.project?.label ?? testRun?.project?.name }} · Started
                       {{ prettyDateFormat(testRun?.startTime) }}
                     </span>
@@ -330,7 +328,7 @@ function onLabelKeydown(e: KeyboardEvent) {
                         variant="ghost"
                         color="neutral"
                         :icon="copied ? 'i-lucide-check' : 'i-lucide-clipboard'"
-                        class="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        class="shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
                         @click="copy(buildRunSummary(), { toast: 'Run summary copied' })"
                       />
                     </UTooltip>
@@ -347,11 +345,11 @@ function onLabelKeydown(e: KeyboardEvent) {
                       </UButton>
                       <template #content>
                         <div class="p-2 space-y-1 min-w-32">
-                          <p class="text-xs font-medium text-gray-500 px-2 py-1">Mode</p>
+                          <p class="text-xs font-medium text-zinc-500 px-2 py-1">Mode</p>
                           <button
                             v-for="m in ['file-line', 'grep', 'file'] as RetryMode[]"
                             :key="m"
-                            class="w-full text-left px-2 py-1 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                            class="w-full text-left px-2 py-1 text-sm rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
                             :class="retryMode === m ? 'bg-primary/10 text-primary' : ''"
                             @click="retryMode = m"
                           >
@@ -370,12 +368,12 @@ function onLabelKeydown(e: KeyboardEvent) {
                 class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
                 :class="
                   activeFilter === 'all'
-                    ? 'bg-gray-200 dark:bg-gray-700 ring-2 ring-gray-400 dark:ring-gray-500'
-                    : 'bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ? 'bg-accented ring-2 ring-zinc-400 dark:ring-zinc-500'
+                    : 'bg-elevated/60 hover:bg-elevated'
                 "
                 @click="emit('filter-status', 'all')"
               >
-                <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Total</p>
+                <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider">Total</p>
                 <p class="text-xl font-bold mt-0.5">
                   {{ displayProgress?.totalTests ?? testRun?.totalTests ?? 0 }}
                 </p>
@@ -389,13 +387,15 @@ function onLabelKeydown(e: KeyboardEvent) {
                   class="rounded-lg p-3 text-left w-full h-full transition-colors cursor-pointer"
                   :class="
                     activeFilter === 'passed'
-                      ? 'bg-green-100 dark:bg-green-900/30 ring-2 ring-green-400 dark:ring-green-600'
-                      : 'bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
+                      ? 'bg-emerald-100 dark:bg-emerald-900/30 ring-2 ring-emerald-400 dark:ring-emerald-600'
+                      : 'bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
                   "
                   @click="emit('filter-status', 'passed')"
                 >
-                  <p class="text-xs font-medium text-green-700 dark:text-green-400 uppercase tracking-wider">Passed</p>
-                  <p class="text-xl font-bold mt-0.5 text-green-600 dark:text-green-400">
+                  <p class="text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                    Passed
+                  </p>
+                  <p class="text-xl font-bold mt-0.5 text-emerald-600 dark:text-emerald-400">
                     {{ displayProgress?.passedTests ?? testRun?.passedTests ?? 0 }}
                   </p>
                 </button>
@@ -418,13 +418,13 @@ function onLabelKeydown(e: KeyboardEvent) {
                 class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
                 :class="
                   activeFilter === 'failed'
-                    ? 'bg-red-100 dark:bg-red-900/30 ring-2 ring-red-400 dark:ring-red-600'
-                    : 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30'
+                    ? 'bg-rose-100 dark:bg-rose-900/30 ring-2 ring-rose-400 dark:ring-rose-600'
+                    : 'bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/30'
                 "
                 @click="emit('filter-status', 'failed')"
               >
-                <p class="text-xs font-medium text-red-700 dark:text-red-400 uppercase tracking-wider">Failed</p>
-                <p class="text-xl font-bold mt-0.5 text-red-600 dark:text-red-400">
+                <p class="text-xs font-medium text-rose-700 dark:text-rose-400 uppercase tracking-wider">Failed</p>
+                <p class="text-xl font-bold mt-0.5 text-rose-600 dark:text-rose-400">
                   {{ displayProgress?.failedTests ?? testRun?.failedTests ?? 0 }}
                 </p>
               </button>
@@ -432,13 +432,13 @@ function onLabelKeydown(e: KeyboardEvent) {
                 class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
                 :class="
                   activeFilter === 'skipped'
-                    ? 'bg-gray-200 dark:bg-gray-700 ring-2 ring-gray-400 dark:ring-gray-500'
-                    : 'bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ? 'bg-accented ring-2 ring-zinc-400 dark:ring-zinc-500'
+                    : 'bg-elevated/60 hover:bg-elevated'
                 "
                 @click="emit('filter-status', 'skipped')"
               >
-                <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">Skipped</p>
-                <p class="text-xl font-bold mt-0.5 text-gray-600 dark:text-gray-400">
+                <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider">Skipped</p>
+                <p class="text-xl font-bold mt-0.5 text-zinc-600 dark:text-zinc-400">
                   {{ displayProgress?.skippedTests ?? testRun?.skippedTests ?? 0 }}
                 </p>
               </button>
@@ -475,27 +475,31 @@ function onLabelKeydown(e: KeyboardEvent) {
                 </div>
                 <div class="flex items-center gap-3 text-xs shrink-0">
                   <div class="flex items-center gap-1">
-                    <UIcon name="i-lucide-clock" class="size-3.5 text-gray-400" />
-                    <span class="font-medium tabular-nums">{{ formatDuration(testRun?.duration) }}</span>
+                    <UIcon name="i-lucide-clock" class="size-3.5 text-zinc-400" />
+                    <DurationValue :ms="testRun?.duration" class="font-medium" />
                   </div>
                   <div v-if="testRun?.avgTestDuration" class="flex items-center gap-1">
-                    <UIcon name="i-lucide-gauge" class="size-3.5 text-gray-400" />
-                    <span class="text-gray-500 hidden sm:inline">Avg</span>
-                    <span class="font-medium tabular-nums">{{ formatDuration(testRun.avgTestDuration) }}</span>
+                    <UIcon name="i-lucide-gauge" class="size-3.5 text-zinc-400" />
+                    <span class="text-zinc-500 hidden sm:inline">Avg</span>
+                    <DurationValue :ms="testRun.avgTestDuration" class="font-medium" />
                   </div>
                   <div v-if="testRun?.p90TestDuration" class="flex items-center gap-1">
                     <UIcon name="i-lucide-arrow-up-right" class="size-3.5 text-orange-500" />
-                    <span class="text-gray-500 hidden sm:inline">P90</span>
-                    <span class="font-medium tabular-nums text-orange-600 dark:text-orange-400">{{
-                      formatDuration(testRun.p90TestDuration)
-                    }}</span>
+                    <span class="text-zinc-500 hidden sm:inline">P90</span>
+                    <DurationValue
+                      :ms="testRun.p90TestDuration"
+                      class="font-medium text-orange-600 dark:text-orange-400"
+                      unit-class="opacity-60"
+                    />
                   </div>
                   <div v-if="totalWastedTime && totalWastedTime > 0" class="flex items-center gap-1">
                     <UIcon name="i-lucide-clock" class="size-3.5 text-amber-500" />
-                    <span class="text-gray-500 hidden sm:inline">Wasted</span>
-                    <span class="font-medium tabular-nums text-amber-600 dark:text-amber-400">{{
-                      formatDuration(totalWastedTime)
-                    }}</span>
+                    <span class="text-zinc-500 hidden sm:inline">Wasted</span>
+                    <DurationValue
+                      :ms="totalWastedTime"
+                      class="font-medium text-amber-600 dark:text-amber-400"
+                      unit-class="opacity-60"
+                    />
                   </div>
                 </div>
               </div>
@@ -535,7 +539,7 @@ function onLabelKeydown(e: KeyboardEvent) {
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between mb-1">
               <span class="text-sm font-medium">Finalizing test run</span>
-              <span class="text-xs text-gray-500">Uploading reports &amp; traces…</span>
+              <span class="text-xs text-zinc-500">Uploading reports &amp; traces…</span>
             </div>
             <UProgress :value="null" size="sm" color="info" class="rounded-full animate-pulse" />
           </div>
@@ -553,13 +557,13 @@ function onLabelKeydown(e: KeyboardEvent) {
             >
               {{ report.label }}
             </UButton>
-            <span class="text-xs tabular-nums text-gray-400 dark:text-gray-500 shrink-0">{{
+            <span class="text-xs tabular-nums text-zinc-400 dark:text-zinc-500 shrink-0">{{
               formatBytes(report.size)
             }}</span>
           </div>
           <div v-if="storageStats.testCaseFilesCount > 0" class="flex items-center justify-between gap-2 min-w-0">
             <span class="truncate">Test files ({{ storageStats.testCaseFilesCount }})</span>
-            <span class="text-xs tabular-nums text-gray-400 dark:text-gray-500 shrink-0">{{
+            <span class="text-xs tabular-nums text-zinc-400 dark:text-zinc-500 shrink-0">{{
               formatBytes(storageStats.testCaseFilesSize)
             }}</span>
           </div>
@@ -577,7 +581,7 @@ function onLabelKeydown(e: KeyboardEvent) {
             </div>
           </div>
           <p v-if="testRun.metadata.relatedIssue" class="flex items-center gap-1">
-            <UIcon name="i-lucide-link" class="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <UIcon name="i-lucide-link" class="w-3.5 h-3.5 text-zinc-400 shrink-0" />
             <span>{{ testRun.metadata.relatedIssue }}</span>
           </p>
           <EntityLinks
@@ -598,7 +602,7 @@ function onLabelKeydown(e: KeyboardEvent) {
           </UButton>
           <div v-if="showCustomData && testRun.metadata.customData">
             <div
-              class="bg-gray-50 dark:bg-gray-900 p-2.5 rounded text-xs font-mono overflow-x-auto max-h-48 overflow-y-auto"
+              class="bg-zinc-50 dark:bg-zinc-900 p-2.5 rounded text-xs font-mono overflow-x-auto max-h-48 overflow-y-auto"
             >
               <pre class="m-0">{{ JSON.stringify(testRun.metadata.customData, null, 2) }}</pre>
             </div>

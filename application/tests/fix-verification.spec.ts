@@ -26,6 +26,20 @@ function nextStartTime(): string {
   return new Date(clock).toISOString();
 }
 
+/**
+ * A token unique to the current attempt, mixed into the failing error so each
+ * attempt clusters on its own fingerprint.
+ *
+ * Retrying a `describe.serial` block re-runs it from the top against a project
+ * that already exists — and this suite's whole subject is state accumulated
+ * across runs, so the second attempt would otherwise inspect the first
+ * attempt's recorded fix and fail on it. Letters, not digits: the fingerprint
+ * normalizer collapses numbers to a placeholder, which would make every
+ * attempt cluster together again.
+ */
+let attemptTag = 'attemptA';
+const failingError = () => `Error: card declined ${attemptTag}`;
+
 async function submitRun(
   request: APIRequestContext,
   cases: Array<{ title: string; status: string; error?: string }>,
@@ -52,11 +66,13 @@ async function submitRun(
   return body.testRunId;
 }
 
+/** This attempt's clusters only — see `attemptTag`. */
 async function clusters(request: APIRequestContext, projectId: number): Promise<Cluster[]> {
   const res = await request.get(`/api/projects/${projectId}/failure-clusters`);
   expect(res.ok()).toBeTruthy();
   const body = (await res.json()) as { clusters?: Cluster[] } | Cluster[];
-  return Array.isArray(body) ? body : (body.clusters ?? []);
+  const all = Array.isArray(body) ? body : (body.clusters ?? []);
+  return all.filter((c) => c.signature.includes(attemptTag));
 }
 
 async function projectIdFor(request: APIRequestContext): Promise<number> {
@@ -70,13 +86,17 @@ async function projectIdFor(request: APIRequestContext): Promise<number> {
 test.describe.serial('Fix verification', () => {
   let projectId: number;
 
+  test.beforeAll(({}, testInfo) => {
+    attemptTag = `attempt${String.fromCharCode(65 + Math.min(testInfo.retry, 25))}`;
+  });
+
   test('a cluster is not marked fixed while it is still failing', async ({ request }) => {
-    await submitRun(request, [{ title: 'checkout pays', status: 'failed', error: 'Error: card declined' }], {
+    await submitRun(request, [{ title: 'checkout pays', status: 'failed', error: failingError() }], {
       commit: 'aaaaaaa1',
     });
     projectId = await projectIdFor(request);
 
-    await submitRun(request, [{ title: 'checkout pays', status: 'failed', error: 'Error: card declined' }], {
+    await submitRun(request, [{ title: 'checkout pays', status: 'failed', error: failingError() }], {
       commit: 'aaaaaaa2',
     });
 
@@ -104,7 +124,7 @@ test.describe.serial('Fix verification', () => {
   });
 
   test('a fix that does not hold is marked regressed', async ({ request }) => {
-    await submitRun(request, [{ title: 'checkout pays', status: 'failed', error: 'Error: card declined' }], {
+    await submitRun(request, [{ title: 'checkout pays', status: 'failed', error: failingError() }], {
       commit: 'ccccccc1',
     });
 
@@ -128,5 +148,30 @@ test.describe.serial('Fix verification', () => {
 
     const after = (await clusters(request, projectId)).find((c) => c.id === before.id)!;
     expect(after.fixVerification).toBe('regressed');
+  });
+
+  // The verdict is only worth recording if someone can see it: for most of its
+  // life this feature wrote columns no page ever read.
+  test('the cluster page shows the verdict and how long the cluster was open', async ({ page, request }) => {
+    const cluster = (await clusters(request, projectId)).find((c) => c.fixVerification === 'regressed')!;
+
+    await page.goto(`/failure-clusters/${cluster.id}`);
+    await expect(page.getByText('Regressed').first()).toBeVisible();
+    await expect(page.getByText(/open for /).first()).toBeVisible();
+    await expect(page.getByText(new RegExp(`run #${cluster.fixLandedRunId}`)).first()).toBeVisible();
+  });
+
+  test('the project cluster list shows the verdict next to the triage status', async ({ page, request }) => {
+    const cluster = (await clusters(request, projectId)).find((c) => c.fixVerification === 'regressed')!;
+
+    await page.goto(`/projects/${projectId}?tab=failure-clusters`);
+    // Anchor on the row's own link rather than its text: the signature cell
+    // renders the cluster title when it has one, so matching on error text
+    // finds nothing the moment a cluster gets named.
+    const row = page.locator('tr').filter({ has: page.locator(`a[href="/failure-clusters/${cluster.id}"]`) });
+    // Asserted separately so a failure says whether the row or the badge is
+    // missing — the table loads client-side, after the page itself is ready.
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await expect(row.getByText('Regressed')).toBeVisible();
   });
 });
