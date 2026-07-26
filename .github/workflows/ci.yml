@@ -37,6 +37,19 @@ jobs:
         working-directory: .
         run: npm ci --prefer-offline --no-audit --fund=false
 
+      # Restored after the install so the postinstall `nuxt prepare` cannot
+      # clobber it. `experimental.buildCache` reuses whatever still matches.
+      - name: Cache Nuxt build
+        uses: actions/cache@v4
+        with:
+          path: |
+            application/node_modules/.cache
+            application/.nuxt/cache
+          key: nuxt-build-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            nuxt-build-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            nuxt-build-${{ runner.os }}-
+
       # The reporter dist is imported by playwright.config.ts.
       - name: Build reporter
         working-directory: ./reporter
