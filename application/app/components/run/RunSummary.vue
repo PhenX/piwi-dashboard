@@ -20,6 +20,7 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const config = useRuntimeConfig();
 const storageStats = computed(() => props.testRun?.storageStats);
 
 // Visibility of each metadata block, defined once and referenced by both the
@@ -547,7 +548,7 @@ function onLabelKeydown(e: KeyboardEvent) {
         <div v-if="storageStats?.totalFiles" class="space-y-1.5 text-sm">
           <div v-for="report in allReports" :key="report.label" class="flex items-center justify-between gap-2 min-w-0">
             <UButton
-              :href="`/api/files/${getFileApiPath(report.path)}`"
+              :href="fileApiUrl(report.path, null, config.app?.baseURL)"
               :icon="reportIcon(report.type)"
               target="_blank"
               size="xs"
