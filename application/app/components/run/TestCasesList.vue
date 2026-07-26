@@ -170,6 +170,26 @@ const columns = computed<Column[]>(() => {
   return cols;
 });
 
+/**
+ * Sort picker for the card layout below `md`, which has no column headers to
+ * click. `NATURAL_ORDER` stands in for "no sort key" — a `USelect` item may not
+ * carry an empty string, which the select reserves for clearing itself.
+ */
+const NATURAL_ORDER = 'natural';
+
+const sortOptions = computed(() => [
+  { label: 'Run order', value: NATURAL_ORDER },
+  ...columns.value.map((c) => ({ label: c.label, value: c.key })),
+]);
+
+const mobileSortKey = computed({
+  get: () => sortKey.value ?? NATURAL_ORDER,
+  set: (value: string) => {
+    sortKey.value = value === NATURAL_ORDER ? null : value;
+    if (value !== NATURAL_ORDER) sortDir.value = 'asc';
+  },
+});
+
 const gridTemplate = computed(() => columns.value.map((c) => c.width).join(' '));
 const gridMinWidth = computed(() => (hasWastedTime.value ? '47.5rem' : '41.5rem'));
 
@@ -310,6 +330,20 @@ defineExpose({ scrollToCase });
       <USelect v-model="testCaseBrowserFilter" :items="testCaseBrowserOptions" size="sm" class="w-36" />
       <UCheckbox v-if="!isLive" v-model="showNewRegressionsOnly" label="New regressions" size="sm" />
       <UCheckbox v-if="!isLive" v-model="showNewFlakyOnly" label="New flaky" size="sm" />
+      <!-- Phones get the card layout, which has no sortable column headers. -->
+      <div v-if="!treeView" class="flex items-center gap-1 md:hidden">
+        <USelect v-model="mobileSortKey" :items="sortOptions" size="sm" class="w-32" aria-label="Sort cases by" />
+        <UButton
+          size="sm"
+          variant="outline"
+          color="neutral"
+          :disabled="sortKey === null"
+          :icon="sortDir === 'asc' ? 'i-lucide-arrow-up-narrow-wide' : 'i-lucide-arrow-down-wide-narrow'"
+          :title="sortDir === 'asc' ? 'Sorted ascending' : 'Sorted descending'"
+          :aria-label="sortDir === 'asc' ? 'Sorted ascending' : 'Sorted descending'"
+          @click="sortDir = sortDir === 'asc' ? 'desc' : 'asc'"
+        />
+      </div>
     </FilterToolbar>
 
     <!-- Tree view -->
@@ -328,18 +362,23 @@ defineExpose({ scrollToCase });
     <template v-else-if="!treeView">
       <div
         v-if="sortedTestCases.length > 0"
-        class="flex-1 min-h-0 max-lg:h-[70dvh] overflow-x-auto overflow-y-hidden rounded-lg border border-default bg-default"
+        class="flex-1 min-h-0 max-lg:h-[70dvh] md:overflow-x-auto overflow-y-hidden rounded-lg border border-default bg-default"
       >
+        <!--
+          The grid only claims its minimum width from `md` up, where the columns
+          exist; below that the cards fit the viewport and the page must not
+          scroll sideways.
+        -->
         <div
-          class="flex flex-col h-full"
+          class="flex flex-col h-full md:min-w-(--grid-min-width)"
           role="table"
           aria-label="Test cases"
           :aria-rowcount="sortedTestCases.length + 1"
-          :style="{ minWidth: gridMinWidth }"
+          :style="{ '--grid-min-width': gridMinWidth }"
         >
-          <!-- Header -->
+          <!-- Header — the sort control below `md` lives in the toolbar instead -->
           <div
-            class="grid shrink-0 bg-elevated/50 border-b border-default"
+            class="hidden md:grid shrink-0 bg-elevated/50 border-b border-default"
             role="row"
             :style="{ gridTemplateColumns: gridTemplate }"
           >
@@ -399,8 +438,82 @@ defineExpose({ scrollToCase });
                   ]"
                   :data-index="index"
                 >
+                  <!--
+                    Below `md` the columns become a card: a phone cannot show
+                    seven of them without a horizontal scroll, and the numbers
+                    need their own labels once the header row is gone. The card
+                    mirrors the tree's row so the two views still read alike.
+                  -->
                   <div
-                    class="grid items-center border-b border-default text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                    class="md:hidden border-b border-default px-3 py-2.5 space-y-1.5 text-sm transition-colors"
+                    :class="highlightedCaseId === item.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
+                    role="row"
+                  >
+                    <div class="flex items-start gap-2">
+                      <UIcon
+                        :name="getStatusIcon(item.status)"
+                        class="size-4 shrink-0 mt-0.5"
+                        :class="[getStatusTextClass(item.status), isStatusInFlight(item.status) ? 'animate-spin' : '']"
+                        role="img"
+                        :aria-label="`Status: ${formatStatusLabel(item.status)}`"
+                        :title="formatStatusLabel(item.status)"
+                      />
+                      <a
+                        :href="`/test-run-cases/${item.id}`"
+                        class="text-highlighted hover:text-primary hover:underline font-medium flex-1 min-w-0"
+                        @click.prevent="navigateTo(`/test-run-cases/${item.id}`)"
+                        >{{ item.title }}</a
+                      >
+                      <BrowserBadge :browser="item.browser" size="sm" class="mt-0.5" />
+                    </div>
+
+                    <OpenInIdeLink
+                      v-if="item.location"
+                      :location="item.location"
+                      :project-key="projectKey"
+                      :project-name="projectName"
+                      class="block pl-6 text-xs text-gray-400 dark:text-gray-500"
+                    />
+
+                    <TestRowBadges
+                      :is-new-regression="Boolean(item.isNewRegression)"
+                      :is-new-flaky="Boolean(item.isNewFlaky)"
+                      :annotations="item.testAnnotations"
+                      :tags="item.tags"
+                      :meta="item.testMeta"
+                      :max-tags="3"
+                      class="pl-6"
+                    />
+
+                    <div class="pl-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                      <span v-if="item.status === 'running'" class="text-info">In progress...</span>
+                      <DurationValue v-else-if="item.duration" :ms="item.duration" />
+                      <UBadge
+                        v-if="item.workerIndex != null"
+                        color="neutral"
+                        variant="soft"
+                        size="xs"
+                        class="font-mono"
+                        :title="`Worker ${item.workerIndex}`"
+                      >
+                        w{{ item.workerIndex }}
+                      </UBadge>
+                      <UBadge v-if="(item.retries ?? 0) > 0" color="warning" variant="soft" size="xs">
+                        {{ item.retries }}x
+                      </UBadge>
+                      <span
+                        v-if="item.wastedTimeMs"
+                        class="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400"
+                        title="Wasted in fixed waits"
+                      >
+                        <UIcon name="i-lucide-hourglass" class="size-3 shrink-0" />
+                        <DurationValue :ms="item.wastedTimeMs" unit-class="opacity-60" no-title />
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    class="hidden md:grid items-center border-b border-default text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
                     :class="highlightedCaseId === item.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
                     role="row"
                     :style="{ gridTemplateColumns: gridTemplate }"
@@ -413,7 +526,15 @@ defineExpose({ scrollToCase });
                     <!-- title -->
                     <div class="px-3 py-2 min-w-0 space-y-0.5" role="cell">
                       <div class="flex items-center gap-1.5 min-w-0">
-                        <!-- Same badge cluster, in the same order, as the tree's rows. -->
+                        <!-- Neutral title: green titles read as "passed" even on failed rows. -->
+                        <a
+                          :href="`/test-run-cases/${item.id}`"
+                          class="text-highlighted hover:text-primary hover:underline font-medium truncate"
+                          :title="item.title"
+                          @click.prevent="navigateTo(`/test-run-cases/${item.id}`)"
+                          >{{ item.title }}</a
+                        >
+                        <!-- Same badge cluster, in the same place, as the tree's rows. -->
                         <TestRowBadges
                           :is-new-regression="Boolean(item.isNewRegression)"
                           :is-new-flaky="Boolean(item.isNewFlaky)"
@@ -423,14 +544,6 @@ defineExpose({ scrollToCase });
                           :max-tags="3"
                           class="shrink-0"
                         />
-                        <!-- Neutral title: green titles read as "passed" even on failed rows. -->
-                        <a
-                          :href="`/test-run-cases/${item.id}`"
-                          class="text-highlighted hover:text-primary hover:underline font-medium truncate"
-                          :title="item.title"
-                          @click.prevent="navigateTo(`/test-run-cases/${item.id}`)"
-                          >{{ item.title }}</a
-                        >
                       </div>
                       <OpenInIdeLink
                         v-if="item.location"

@@ -288,6 +288,28 @@ const flatRows = computed<FlatRow[]>(() => {
             :aria-label="`Status: ${formatStatusLabel(row.test.status)}`"
             :title="formatStatusLabel(row.test.status)"
           />
+          <!--
+            The title is the row's only navigation — a separate "View" button
+            pointed at the same page and just ate width. `self-stretch` keeps the
+            tap target the full height of the row on touch screens, and the
+            `min-w-32` floor stops a tagged test from squeezing its own title to
+            nothing on a phone: the badges wrap to a second line instead.
+
+            Neutral title: primary-green titles read as "passed" — on the one
+            row that failed, a green title actively lies. Status stays on the
+            icon; the link affordance shows on hover.
+
+            The badges follow the title rather than leading it: a row is scanned
+            by name, and a `@tag` in front of every name is noise to read past.
+          -->
+          <a
+            :href="`/test-run-cases/${row.test.id}`"
+            class="text-highlighted hover:text-primary hover:underline min-w-32 self-stretch flex items-center"
+            :title="row.test.title"
+            @click.prevent="navigateTo(`/test-run-cases/${row.test.id}`)"
+          >
+            <span class="truncate">{{ row.test.title }}</span>
+          </a>
           <TestRowBadges
             :is-new-regression="Boolean(row.test.isNewRegression)"
             :is-new-flaky="Boolean(row.test.isNewFlaky)"
@@ -297,26 +319,6 @@ const flatRows = computed<FlatRow[]>(() => {
             :max-tags="3"
             class="shrink-0"
           />
-          <!--
-            The title is the row's only navigation — a separate "View" button
-            pointed at the same page and just ate width. `self-stretch` keeps the
-            tap target the full height of the row on touch screens, and the
-            `min-w-32` floor stops a tagged test from squeezing its own title to
-            nothing on a phone: the numbers wrap to a second line instead.
-          -->
-          <!--
-            Neutral title: primary-green titles read as "passed" — on the one
-            row that failed, a green title actively lies. Status stays on the
-            icon; the link affordance shows on hover.
-          -->
-          <a
-            :href="`/test-run-cases/${row.test.id}`"
-            class="text-highlighted hover:text-primary hover:underline flex-1 min-w-32 self-stretch flex items-center"
-            :title="row.test.title"
-            @click.prevent="navigateTo(`/test-run-cases/${row.test.id}`)"
-          >
-            <span class="truncate">{{ row.test.title }}</span>
-          </a>
           <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto">
             <span v-if="row.test.status === 'running'" class="text-xs text-info">In progress...</span>
             <DurationValue v-else-if="row.test.duration" :ms="row.test.duration" class="text-xs text-muted" />
