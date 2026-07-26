@@ -184,7 +184,7 @@ function diagnosisWhere(cluster: FailureCluster, opts: DiagnosisRunOpts) {
 }
 
 /** Build the combined (global + project) diagnosis system prompt. */
-async function loadDiagnosisSystemPrompt(db: DbClient, cluster: FailureCluster): Promise<string> {
+export async function loadDiagnosisSystemPrompt(db: DbClient, cluster: { projectId: number }): Promise<string> {
   const [globalInstructionsRow, projectRows] = await Promise.all([
     getAppSetting<{ value?: string }>(db, 'ai_instructions'),
     db

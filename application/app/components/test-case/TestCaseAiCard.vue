@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * Execution-scoped AI diagnosis for a single failing test-run case. Two things it
- * always offers: "Copy AI context" (the full evidence bundle, for pasting into your
- * own assistant — works with no provider configured) and, when a provider is set up,
- * "Diagnose with AI" which runs a diagnosis scoped to just this execution and renders
- * it inline. A stored diagnosis is restored on load so it survives a refresh.
+ * Execution-scoped AI diagnosis for a single failing test-run case. When a provider
+ * is set up it offers "Diagnose with AI", which runs a diagnosis scoped to just this
+ * execution and renders it inline; a stored diagnosis is restored on load so it
+ * survives a refresh. The evidence bundle itself is copied from the page's Export
+ * menu, which works with no provider configured.
  */
 import type { FailureDiagnosis } from '~~/server/database/schema';
 import type { DiagnosisContextCoverage } from '~~/types/api';
@@ -18,7 +18,6 @@ const props = defineProps<{
 
 const { aiStatus } = useAiStatus();
 const toast = useToast();
-const { copy: copyContext, copied: contextCopied } = useCopy();
 
 const diagnosis = ref<FailureDiagnosis | null>(null);
 const posting = ref(false);
@@ -103,10 +102,6 @@ function onPrefillContext(text: string) {
   showAdditionalContext.value = true;
 }
 
-function copyAiContext() {
-  if (contextText.value) copyContext(contextText.value, { toast: 'AI context copied' });
-}
-
 async function diagnose(force = false) {
   posting.value = true;
   try {
@@ -153,18 +148,7 @@ const showRunning = computed(
 <template>
   <SectionCard icon="i-lucide-sparkles" icon-class="text-primary" title="AI diagnosis" help="case.ai">
     <template #actions>
-      <UButton
-        size="xs"
-        color="neutral"
-        variant="outline"
-        :icon="contextCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
-        :loading="contextLoading"
-        :disabled="!contextText"
-        title="Copy the full evidence context to paste into your own AI assistant"
-        @click="copyAiContext"
-      >
-        {{ contextCopied ? 'Copied' : 'Copy AI context' }}
-      </UButton>
+      <CopyAiPromptButton :context-endpoint="`/api/test-run-cases/${testRunsCaseId}/diagnosis-context`" />
     </template>
 
     <div class="space-y-3">
@@ -270,8 +254,8 @@ const showRunning = computed(
             AI diagnosis is not configured <HelpHint topic="cluster.ai-setup" />
           </p>
           <p class="text-xs mt-2 max-w-xs mx-auto">
-            Use <strong>Copy AI context</strong> above to grab the full evidence bundle for your own AI tool, or
-            configure a provider.
+            Use <strong>Export → AI context</strong> in the header to grab the full evidence bundle for your own AI
+            tool, or configure a provider.
           </p>
           <UButton to="/settings/ai" size="xs" color="neutral" variant="outline" class="mt-3">
             Configure in Settings

@@ -381,8 +381,16 @@ app with Playwright — `scripts/take-demo-screenshots.mjs` is a working harness
 
 **Caveats that cost real debugging time:**
 
-- **Do NOT use `PIWI_DEMO_MODE=true` for local verification.** The demo's service worker + WASM SQLite does not install
-  in headless Chromium, so pages render blank. Demo mode is only for building the static SPA.
+- **Do NOT use `PIWI_DEMO_MODE=true` for the dev server.** Demo mode builds the static SPA; it is not a `nuxt dev` flag.
+  To verify a change _in the demo_, build it and drive the build:
+  `npm run app:generate:demo && npm run app:check:demo:runtime`. That serves `.output/public` from the `/demo/` sub-path
+  it is really deployed under, with its service worker installed — the only setup in which base-path, worker-scope and
+  demo-handler bugs appear. `app:check:demo` alone only compares route patterns, and stays green while every page is
+  broken.
+- **Anything the UI opens outside `$fetch` MUST carry `useRuntimeConfig().app.baseURL`** — `window.open`, an `href`, a
+  download URL. The demo is served from `/demo/` and its service worker only intercepts that prefix, so a root-relative
+  `/api/...` escapes the scope and 404s against the static host. `fileApiUrl` and `getTraceViewerUrl` exist for exactly
+  this reason.
 - **Test cases live under runs #21+.** Runs #1–20 have 0 cases (their rows target a migration-only table the dev schema
   drops). Query a real id: `node scripts/db-query.mjs "SELECT id FROM test_runs_cases ORDER BY id DESC LIMIT 5"`.
   Clusters with data: #3, #4, #5, #7, #8; project #2 (`api-integration`) owns clusters 3 and 4.

@@ -8,6 +8,9 @@ import { join } from 'path';
 const useBuiltServer = !!process.env.CI;
 const serverCommand = useBuiltServer ? 'node .output/server/index.mjs' : 'npm run app:dev';
 
+/** An already-installed Chromium to use instead of the revision Playwright pins. */
+const chromiumExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?.trim() || '';
+
 // `PIWI_AUTH_*` is resolved into `runtimeConfig` when the Nuxt config is
 // evaluated, which for a production build is build time. Nitro maps the
 // `NUXT_`-prefixed forms onto the same keys at startup, so auth-enabled servers
@@ -90,7 +93,16 @@ const baseConfig = defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // Sandboxes and dev containers often ship a Chromium that does not match
+        // the revision this Playwright pins, which makes every browser spec
+        // unrunnable for a reason unrelated to the change under test. Pointing
+        // PLAYWRIGHT_CHROMIUM_EXECUTABLE at the browser that *is* installed runs
+        // the suite instead of skipping it. Unset everywhere else, so CI and
+        // local machines keep using the pinned download.
+        ...(chromiumExecutable ? { launchOptions: { executablePath: chromiumExecutable } } : {}),
+      },
     },
     /*
     ,

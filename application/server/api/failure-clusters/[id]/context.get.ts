@@ -1,6 +1,9 @@
 import { failureClusters } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
 import { buildDiagnosisContext } from '../../../utils/ai-context';
+import { loadDiagnosisSystemPrompt } from '../../../utils/ai-diagnosis';
+import { buildPromptPreview } from '#shared/ai-prompt-preview';
+import { DIAGNOSIS_JSON_SCHEMA } from '#shared/ai-diagnosis';
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../../utils/project-access';
 
 defineRouteMeta({
@@ -8,10 +11,10 @@ defineRouteMeta({
     tags: ['Failure Clusters'],
     summary: 'Get AI diagnosis context preview',
     description:
-      'Returns a preview of the full AI context that would be sent for diagnosis. Supports ?format=json for a structured response with per-section breakdown, token estimate, and coverage metadata.',
+      'Returns a preview of the full AI context that would be sent for diagnosis. `?format=json` gives a structured response with per-section breakdown, token estimate and coverage metadata; `?format=prompt` gives the exact request payload as plain text — system prompt, user message, image count and response schema — for pasting into another assistant or auditing what is sent.',
     parameters: [
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
-      { name: 'format', in: 'query', required: false, schema: { type: 'string', enum: ['json'] } },
+      { name: 'format', in: 'query', required: false, schema: { type: 'string', enum: ['json', 'prompt'] } },
     ],
     'x-required-roles': ['administrator', 'reporter', 'user'],
   },
@@ -40,6 +43,16 @@ export default eventHandler(async (event) => {
     baseCommit,
     selectedCommitShas,
   });
+
+  if (format === 'prompt') {
+    setResponseHeader(event, 'Content-Type', 'text/plain; charset=utf-8');
+    return buildPromptPreview({
+      system: await loadDiagnosisSystemPrompt(db, cluster),
+      user: ctx.text,
+      imageCount: ctx.images?.length ?? 0,
+      jsonSchema: DIAGNOSIS_JSON_SCHEMA,
+    });
+  }
 
   if (format === 'json') {
     return {

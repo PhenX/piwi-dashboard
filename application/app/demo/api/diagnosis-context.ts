@@ -21,6 +21,10 @@
  */
 
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { getAppSetting } from '~~/server/utils/app-settings';
+import { buildDiagnosisSystemPrompt } from '~~/server/utils/ai-system-prompt';
+import { buildPromptPreview } from '#shared/ai-prompt-preview';
+import { DIAGNOSIS_JSON_SCHEMA } from '#shared/ai-diagnosis';
 import {
   failureClusters,
   failureDiagnoses,
@@ -29,6 +33,7 @@ import {
   testCases,
   networkRequests,
   files,
+  projects,
 } from '../../../server/database/schema';
 import type { DrizzleDB } from '#shared/handlers/db';
 import { DIAGNOSIS_SECTIONS } from '#shared/diagnosis-sections';
@@ -892,4 +897,61 @@ export async function getExecutionContext(db: DrizzleDB, testRunsCaseId: number,
     tokenEstimate: Math.ceil(textChars / 4),
     imageTokenEstimate: 0,
   };
+}
+
+// ── Prompt preview ──────────────────────────────────────────────────────────
+// `?format=prompt` returns the exact request payload as plain text. The demo
+// reads the same stored instructions the server does, so the preview it shows
+// is the one its own canned diagnosis would use.
+
+/** Resolve the project a cluster or execution belongs to. */
+async function resolveProjectId(db: DrizzleDB, opts: { clusterId?: number; testRunsCaseId?: number }) {
+  if (opts.clusterId != null) {
+    const [row] = await db
+      .select({ projectId: failureClusters.projectId })
+      .from(failureClusters)
+      .where(eq(failureClusters.id, opts.clusterId));
+    return row?.projectId ?? null;
+  }
+  const [row] = await db
+    .select({ projectId: testRuns.projectId })
+    .from(testRunsCases)
+    .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
+    .where(eq(testRunsCases.id, opts.testRunsCaseId!));
+  return row?.projectId ?? null;
+}
+
+async function promptResponse(db: DrizzleDB, contextText: string, projectId: number | null): Promise<Response> {
+  const globalRow = await getAppSetting<{ value?: string }>(db, 'ai_instructions');
+  let projectInstructions: string | null = null;
+  if (projectId != null) {
+    const [row] = await db
+      .select({ diagnosisInstructions: projects.diagnosisInstructions })
+      .from(projects)
+      .where(eq(projects.id, projectId));
+    projectInstructions = row?.diagnosisInstructions?.trim() || null;
+  }
+
+  const text = buildPromptPreview({
+    system: buildDiagnosisSystemPrompt({
+      globalInstructions: globalRow?.value?.trim() || null,
+      projectInstructions,
+    }),
+    user: contextText,
+    jsonSchema: DIAGNOSIS_JSON_SCHEMA,
+  });
+
+  return new Response(text, { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+}
+
+/** GET /api/failure-clusters/:id/context?format=prompt */
+export async function getClusterContextPrompt(db: DrizzleDB, clusterId: number, query?: URLSearchParams) {
+  const ctx = (await getClusterContext(db, clusterId, query)) as { text?: string };
+  return promptResponse(db, ctx.text ?? '', await resolveProjectId(db, { clusterId }));
+}
+
+/** GET /api/test-run-cases/:id/diagnosis-context?format=prompt */
+export async function getExecutionContextPrompt(db: DrizzleDB, testRunsCaseId: number, query?: URLSearchParams) {
+  const ctx = (await getExecutionContext(db, testRunsCaseId, query)) as { text?: string };
+  return promptResponse(db, ctx.text ?? '', await resolveProjectId(db, { testRunsCaseId }));
 }
