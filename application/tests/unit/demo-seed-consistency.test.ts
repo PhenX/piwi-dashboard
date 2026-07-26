@@ -145,6 +145,48 @@ describe('cluster ↔ case ↔ file coherence', () => {
       expect(c.last_seen_run_id, `cluster ${c.id} last_seen_run_id`).not.toBeNull();
     }
   });
+
+  // A fix is only ever recorded from a run that came back green, so a landing
+  // run the cluster failed in is a contradiction the UI would faithfully show.
+  test('a recorded fix landed in a run where the cluster did not fail', () => {
+    const fixed = q(`
+      select id, fix_landed_run_id, fix_verification, time_to_resolution_ms
+      from failure_clusters where fix_verification is not null`);
+    expect(fixed.length, 'demo should carry recorded fixes').toBeGreaterThan(0);
+
+    for (const c of fixed) {
+      expect(c.fix_landed_run_id, `cluster ${c.id} fix_landed_run_id`).not.toBeNull();
+      expect(c.time_to_resolution_ms, `cluster ${c.id} time_to_resolution_ms`).toBeGreaterThan(0);
+
+      const failedInLandingRun = q(`
+        select count(*) as n from test_runs_cases
+        where failure_cluster_id = ${c.id as number} and test_run_id = ${c.fix_landed_run_id as number}`)[0]!
+        .n as number;
+      expect(failedInLandingRun, `cluster ${c.id} failed in the run its fix supposedly landed in`).toBe(0);
+    }
+  });
+
+  // Run ids descend as time advances in the seed, so "later" means a lower id.
+  test('only a regressed cluster fails after its fix landed', () => {
+    const fixed = q(`
+      select id, fix_landed_run_id, fix_verification from failure_clusters where fix_verification is not null`);
+    const verdicts = new Set(fixed.map((c) => c.fix_verification));
+    // All three verdicts read very differently; the demo is only useful if it
+    // shows what each one looks like.
+    expect(verdicts).toEqual(new Set(['regressed', 'stopped-failing', 'diagnosis-verified']));
+
+    for (const c of fixed) {
+      const failuresAfter = q(`
+        select count(*) as n from test_runs_cases
+        where failure_cluster_id = ${c.id as number} and test_run_id < ${c.fix_landed_run_id as number}`)[0]!
+        .n as number;
+      if (c.fix_verification === 'regressed') {
+        expect(failuresAfter, `regressed cluster ${c.id} should fail again after the fix`).toBeGreaterThan(0);
+      } else {
+        expect(failuresAfter, `cluster ${c.id} kept failing after a fix that supposedly held`).toBe(0);
+      }
+    }
+  });
 });
 
 describe('captured-source format fidelity', () => {

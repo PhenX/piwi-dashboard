@@ -18,6 +18,10 @@ const emit = defineEmits<{
 // Triage is the only metadata block alongside the cluster info card.
 const { summaryColSpanClass } = useDetailGrid(() => 1);
 
+// Null until a fix lands, which is what hides the whole resolution block on the
+// clusters that are still broken.
+const resolution = computed(() => fixVerificationBadge(props.cluster.fixVerification));
+
 const triageStatusOptions = [
   { label: 'Open', value: 'open', color: 'warning' as const },
   { label: 'Resolved', value: 'resolved', color: 'success' as const },
@@ -38,6 +42,10 @@ const triageStatusOptions = [
           </span>
           <UBadge v-if="cluster.errorType" :color="clusterErrorTypeColor(cluster.errorType)" variant="subtle" size="sm">
             {{ cluster.errorType }}
+          </UBadge>
+          <UBadge v-if="resolution" :color="resolution.color" variant="subtle" size="sm" class="gap-1 shrink-0">
+            <UIcon :name="resolution.icon" class="size-3" />
+            {{ resolution.label }}
           </UBadge>
         </div>
         <div class="flex items-center gap-3 shrink-0 max-sm:hidden">
@@ -111,6 +119,34 @@ const triageStatusOptions = [
                 class="ml-1 align-middle"
               />
             </p>
+
+            <!-- Resolution: only present once a fix has actually landed, so a
+                 cluster nobody has fixed shows nothing rather than an empty row. -->
+            <div v-if="resolution" class="rounded-md border border-default p-3 space-y-1.5">
+              <div class="flex items-center gap-2 flex-wrap">
+                <UBadge :color="resolution.color" variant="subtle" class="gap-1">
+                  <UIcon :name="resolution.icon" class="size-3" />
+                  {{ resolution.label }}
+                </UBadge>
+                <span v-if="cluster.timeToResolutionMs != null" class="text-xs text-gray-500">
+                  open for {{ formatDuration(cluster.timeToResolutionMs) }}
+                </span>
+                <HelpHint topic="cluster.resolution" />
+              </div>
+              <p class="text-xs text-gray-500">{{ resolution.hint }}</p>
+              <p class="text-sm text-gray-500">
+                <template v-if="cluster.fixLandedRunId">
+                  Fix landed in
+                  <NuxtLink :to="`/test-runs/${cluster.fixLandedRunId}`" class="text-primary hover:underline">
+                    run #{{ cluster.fixLandedRunId }}
+                  </NuxtLink>
+                </template>
+                <template v-if="cluster.fixLandedAt"> ({{ formatRelativeTime(cluster.fixLandedAt) }})</template>
+                <template v-if="cluster.fixCommit">
+                  · commit <code class="font-mono text-xs">{{ cluster.fixCommit.slice(0, 8) }}</code>
+                </template>
+              </p>
+            </div>
           </div>
         </SectionCard>
       </div>

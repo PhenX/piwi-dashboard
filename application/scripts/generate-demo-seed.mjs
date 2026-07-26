@@ -372,6 +372,9 @@ for (const story of FAILURE_STORIES) {
     lastRunId: null,
     firstStartMs: null,
     lastStartMs: null,
+    // Distinct runs this cluster failed in, newest first. `occurrences` counts
+    // retries too, so it cannot be used to find the runs where it went quiet.
+    failedRuns: [],
   };
 }
 
@@ -735,6 +738,10 @@ for (const proj of DEMO_PROJECTS) {
         }
         stats.firstRunId = runId;
         stats.firstStartMs = startMs;
+        // Several cases in the same run share a cluster; record the run once.
+        if (stats.failedRuns[stats.failedRuns.length - 1]?.runId !== runId) {
+          stats.failedRuns.push({ runId, startMs });
+        }
       }
 
       const steps = buildSteps(proj, caseDuration);
@@ -1122,13 +1129,70 @@ const CLUSTER_TRIAGE = {
 
 /**
  * Clusters whose fix landed, so the demo shows the loop closing rather than
- * only the failures. One is corroborated against the diagnosed change; the
- * other merely stopped failing, which is the weaker (and more common) verdict.
+ * only the failures. All three verdicts appear, because they mean different
+ * things: one is corroborated against the diagnosed change, one merely stopped
+ * failing (the weaker and more common case), and one did not hold.
+ *
+ * Cluster 1 is the regression on purpose — it is the cluster a human already
+ * marked resolved, so the demo shows triage and evidence disagreeing, which is
+ * the reason they are two separate indicators.
  */
 const CLUSTER_FIXES = {
-  2: { verification: 'diagnosis-verified', openHours: 26 },
-  5: { verification: 'stopped-failing', openHours: 9 },
+  1: { verification: 'regressed', openHours: 14 },
+  6: { verification: 'stopped-failing', openHours: 9 },
+  10: { verification: 'diagnosis-verified', openHours: 26 },
 };
+
+/**
+ * The run a fix landed in — a run where the cluster did **not** fail.
+ *
+ * Runs are generated newest-first, so ids descend as time advances: the run
+ * after run 4 is run 3. That inversion is the whole subtlety here.
+ *
+ * A fix that held landed in the run straight after the cluster's newest
+ * failure. A regression is the opposite shape — the cluster went quiet and the
+ * failure returned — so its landing run comes from a gap between two failures.
+ *
+ * Returns null when the cluster still fails in the project's newest run: there
+ * is no later run in which anything could have been observed to pass, and
+ * claiming a fix anyway is how the demo would end up showing a cluster that is
+ * failing and fixed at the same time.
+ */
+function fixLandedRun(stats, verification, newestRunIdOfProject) {
+  if (verification === 'regressed') {
+    for (let i = 0; i < stats.failedRuns.length - 1; i++) {
+      const newer = stats.failedRuns[i];
+      const older = stats.failedRuns[i + 1];
+      // More than one id apart means a run in between with no failure.
+      if (older.runId - newer.runId > 1) {
+        return { runId: newer.runId + 1, startMs: Math.round((newer.startMs + older.startMs) / 2) };
+      }
+    }
+    return null;
+  }
+
+  if (stats.lastRunId === null || stats.lastRunId <= newestRunIdOfProject) return null;
+  return { runId: stats.lastRunId - 1, startMs: stats.lastStartMs };
+}
+
+/** The resolution columns for a cluster, or nothing when no fix can be placed. */
+function buildClusterFix(story, stats) {
+  const fix = CLUSTER_FIXES[story.clusterId];
+  if (!fix) return {};
+
+  // `firstRunByProject` is the first row encountered, and rows are newest-first
+  // — so it holds the project's *newest* run, despite the name.
+  const landed = fixLandedRun(stats, fix.verification, firstRunByProject[story.projectId]);
+  if (!landed) throw new Error(`Cluster ${story.clusterId} has no run a fix could have landed in`);
+
+  return {
+    fix_landed_run_id: landed.runId,
+    fix_landed_at: Math.floor(landed.startMs / 1000),
+    fix_commit: `demo${String(story.clusterId).padStart(3, '0')}`,
+    time_to_resolution_ms: fix.openHours * 3600 * 1000,
+    fix_verification: fix.verification,
+  };
+}
 
 for (const story of FAILURE_STORIES) {
   const stats = clusterStats[story.clusterId];
@@ -1149,15 +1213,7 @@ for (const story of FAILURE_STORIES) {
     first_seen_run_id: stats.firstRunId ?? firstRunByProject[story.projectId],
     last_seen_run_id: stats.lastRunId ?? lastRunByProject[story.projectId],
     occurrences: stats.occurrences || 1,
-    ...(CLUSTER_FIXES[story.clusterId]
-      ? {
-          fix_landed_run_id: stats.lastRunId ?? lastRunByProject[story.projectId],
-          fix_landed_at: updatedAt,
-          fix_commit: `demo${String(story.clusterId).padStart(3, '0')}`,
-          time_to_resolution_ms: CLUSTER_FIXES[story.clusterId].openHours * 3600 * 1000,
-          fix_verification: CLUSTER_FIXES[story.clusterId].verification,
-        }
-      : {}),
+    ...buildClusterFix(story, stats),
     created_at: createdAt,
     updated_at: updatedAt,
   });
