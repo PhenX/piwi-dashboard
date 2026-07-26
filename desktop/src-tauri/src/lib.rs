@@ -12,6 +12,7 @@
 
 mod mcp_clients;
 mod runner;
+mod updates;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,6 +33,7 @@ use tauri_plugin_shell::ShellExt as _;
 use tauri_plugin_store::StoreExt as _;
 
 use mcp_clients::{desktop_mcp_clients, desktop_mcp_connect, desktop_mcp_disconnect, desktop_mcp_reveal};
+use updates::{desktop_check_update, desktop_install_update, desktop_restart_app};
 use runner::{
     desktop_get_project_link, desktop_pick_folder, desktop_run_local_tests,
     desktop_set_project_link, desktop_stop_local_tests,
@@ -421,6 +423,17 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_playwright::init());
     }
 
+    let context = tauri::generate_context!();
+
+    // Update support exists only in builds made with the signing key: CI then
+    // applies tauri.updater.conf.json, which is what puts an `updater` entry in
+    // the compiled config. Without it the plugin stays out entirely and the
+    // update commands report "unsupported".
+    let updater_supported = context.config().plugins.0.contains_key("updater");
+    if updater_supported {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    }
+
     builder
         .invoke_handler(tauri::generate_handler![
             desktop_get_service_settings,
@@ -438,11 +451,16 @@ pub fn run() {
             desktop_mcp_clients,
             desktop_mcp_connect,
             desktop_mcp_disconnect,
-            desktop_mcp_reveal
+            desktop_mcp_reveal,
+            desktop_check_update,
+            desktop_install_update,
+            desktop_restart_app
         ])
         .manage(ServerProcess::default())
         .manage(runner::LocalRuns::default())
         .manage(PendingOpenFiles::default())
+        .manage(updates::UpdaterSupport(updater_supported))
+        .manage(updates::PendingUpdate::default())
         .setup(move |app| {
             // --- data locations (survive app updates; outside the read-only bundle) ---
             let app_data_dir = app.path().app_data_dir()?;
@@ -735,7 +753,7 @@ pub fn run() {
                 }
             }
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building the Piwi Dashboard app")
         .run(|app_handle, event| match event {
             RunEvent::ExitRequested { .. } => {

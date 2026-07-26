@@ -69,4 +69,14 @@ test('the dashboard can reach the shell IPC commands', async ({ tauriPage }) => 
   expect(mcp.ids).toEqual(
     expect.arrayContaining(['claude-code', 'claude-desktop', 'cursor', 'vscode', 'windsurf', 'gemini-cli']),
   );
+
+  // Dev builds carry no updater config, so the update check must degrade to
+  // "unsupported" — not reject through the ACL and not error.
+  const update = (await tauriPage.evaluate(`
+    window.__TAURI__.core.invoke('desktop_check_update')
+      .then((s) => ({ ok: true, state: s && s.state }))
+      .catch((e) => ({ ok: false, error: String((e && e.message) || e) }))
+  `)) as { ok: boolean; error?: string; state?: string };
+  expect(update.ok, `desktop_check_update rejected: ${update.error ?? 'unknown'}`).toBe(true);
+  expect(update.state).toBe('unsupported');
 });

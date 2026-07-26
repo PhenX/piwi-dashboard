@@ -118,9 +118,19 @@ jobs:
           # valid Apple Developer ID + notarization secrets and re-introduce the
           # APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY /
           # APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID env here.
+          #
+          # In-app updates are opt-in and OFF until the updater keypair exists.
+          # To enable them: run `npx tauri signer generate` locally, put the
+          # public key into src-tauri/tauri.updater.conf.json, and add the
+          # private key (+ its password) as the two secrets below. The config
+          # overlay is applied only when the secret is present, so releases
+          # without it build exactly as before — installers with no update
+          # artifacts, and apps that report updates as unsupported.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
-          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && '--config src-tauri/tauri.updater.conf.json' || '' }}
           # Attach to the release release-please already made for this tag. On a
           # manual dispatch (no tag) tagName is empty, so tauri-action just builds.
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}

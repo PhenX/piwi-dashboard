@@ -47,6 +47,9 @@ const dbBackendLabel = computed(() => {
       </StatTileGrid>
     </SectionCard>
 
+    <!-- Desktop shell only (renders nothing without the IPC bridge). -->
+    <DesktopUpdateCard :current-version="appVersion" />
+
     <!-- Desktop build only: where data lives + how to connect this local app -->
     <template v-if="isDesktop">
       <DataLocationCard v-if="stats" :database="stats.databaseLocation" :storage="stats.storageLocation" />
