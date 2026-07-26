@@ -264,7 +264,9 @@ export const HELP_TOPICS = {
     doc: 'ui-overview#trace-powered-deep-views',
   },
   'export.offline': {
-    title: 'Offline export',
+    // Deliberately avoids the word "Export": the hint sits beside a button with
+    // that label, and a substring role query would match both.
+    title: 'Reading this offline',
     text: 'Takes this investigation out of the dashboard as a file that needs no network and no Piwi server. HTML is one self-contained page with screenshots and video embedded; ZIP adds the raw artifacts — trace archives, full-size video, logs — plus a machine-readable data.json; PDF is the HTML printed from your browser. Evidence past the size budget is listed in the report as omitted rather than dropped quietly.',
     envVars: ['PIWI_EXPORT_MAX_INLINE_BYTES', 'PIWI_EXPORT_MAX_BYTES', 'PIWI_EXPORT_MAX_CASES'],
   },

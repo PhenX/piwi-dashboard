@@ -16,6 +16,7 @@
 import { markdownToHtml } from '#shared/markdown-to-html';
 import { html, joinHtml, raw, toHtmlString, type RawHtml } from './html';
 import { stripAnsi } from '#shared/error-fingerprint';
+import { highlightCode } from '#shared/highlight';
 import {
   caseFacts,
   clusterFacts,
@@ -42,6 +43,7 @@ const STYLES = `
   --bg:#fff; --fg:#1c1c20; --muted:#6b6b76; --faint:#8b8b96;
   --line:#e2e2e7; --line-strong:#c9c9d2; --card:#fafafa; --sunken:#f5f5f8;
   --accent:#4338ca; --fail:#c0392b; --pass:#15803d; --warn:#a16207; --info:#1d4ed8; --skip:#6b6b76;
+  --tok-key:#7c3aed; --tok-str:#0f766e; --tok-num:#b45309; --tok-fn:#1d4ed8; --tok-attr:#a21caf; --tok-builtin:#0369a1;
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark) {
@@ -49,6 +51,7 @@ const STYLES = `
     --bg:#161619; --fg:#ececf1; --muted:#a0a0ad; --faint:#7e7e8c;
     --line:#2f2f36; --line-strong:#43434d; --card:#1d1d21; --sunken:#131316;
     --accent:#a5b4fc; --fail:#f87171; --pass:#4ade80; --warn:#fbbf24; --info:#93c5fd; --skip:#a0a0ad;
+    --tok-key:#c4b5fd; --tok-str:#5eead4; --tok-num:#fcd34d; --tok-fn:#93c5fd; --tok-attr:#f0abfc; --tok-builtin:#7dd3fc;
   }
 }
 * { box-sizing:border-box; }
@@ -109,6 +112,24 @@ pre {
   font:12px/1.5 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere;
 }
 code { font-family:var(--mono); font-size:.92em; }
+pre.hljs { position:relative; }
+pre.hljs[data-lang]:not([data-lang=""])::before {
+  content:attr(data-lang); position:absolute; top:0; right:.4rem;
+  font-size:.6rem; letter-spacing:.06em; text-transform:uppercase; color:var(--faint);
+}
+
+/* Token colors only — no fills, so a background-free print keeps every hue. */
+.hljs-comment, .hljs-quote { color:var(--faint); font-style:italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-type, .hljs-meta { color:var(--tok-key); }
+.hljs-string, .hljs-regexp, .hljs-symbol, .hljs-char { color:var(--tok-str); }
+.hljs-number, .hljs-bullet { color:var(--tok-num); }
+.hljs-title, .hljs-title.function_, .hljs-section, .hljs-name { color:var(--tok-fn); }
+.hljs-attr, .hljs-attribute, .hljs-property, .hljs-variable, .hljs-template-variable { color:var(--tok-attr); }
+.hljs-built_in, .hljs-class .hljs-title { color:var(--tok-builtin); }
+.hljs-addition { color:var(--pass); }
+.hljs-deletion { color:var(--fail); }
+.hljs-emphasis { font-style:italic; }
+.hljs-strong { font-weight:650; }
 p { margin:.4rem 0; }
 ul { margin:.35rem 0; padding-left:1.1rem; }
 li { margin:.1rem 0; }
@@ -149,6 +170,7 @@ td.num { font-family:var(--mono); white-space:nowrap; }
     --bg:#fff; --fg:#000; --muted:#3f3f46; --faint:#52525b;
     --line:#b8b8bf; --line-strong:#71717a; --card:transparent; --sunken:transparent;
     --accent:#3730a3; --fail:#991b1b; --pass:#166534; --warn:#854d0e; --info:#1e40af;
+    --tok-key:#5b21b6; --tok-str:#115e59; --tok-num:#92400e; --tok-fn:#1e3a8a; --tok-attr:#86198f; --tok-builtin:#075985;
   }
   body { padding:0; font-size:10.5pt; }
   .no-print { display:none !important; }
@@ -218,8 +240,18 @@ function details(title: string, inner: RawHtml | string, kind = 'data', open = f
   </details>`;
 }
 
+/** Plain block — stack traces and logs are not source code. */
 function pre(text: string): RawHtml {
   return html`<pre>${stripAnsi(text)}</pre>`;
+}
+
+/**
+ * A source block, syntax-highlighted. highlight.js escapes the code itself, so
+ * its output is markup we can pass through.
+ */
+function code(text: string, lang: string): RawHtml {
+  const { html: highlighted, language } = highlightCode(stripAnsi(text), lang);
+  return html`<pre class="hljs" data-lang="${language || lang}"><code>${raw(highlighted)}</code></pre>`;
 }
 
 /** AI prose is Markdown; links are flattened so the document stays self-contained. */
@@ -248,8 +280,8 @@ function renderDiagnosis(diagnosis: Record<string, any> | null): RawHtml {
   if (fix) {
     parts.push(html`<h3>Suggested fix</h3>`);
     if (fix.description) parts.push(prose(String(fix.description)));
-    if (fix.patch) parts.push(pre(String(fix.patch)));
-    else if (fix.code) parts.push(pre(String(fix.code)));
+    if (fix.patch) parts.push(code(String(fix.patch), 'diff'));
+    else if (fix.code) parts.push(code(String(fix.code), 'typescript'));
   }
 
   return details('AI diagnosis', joinHtml(parts, '\n'), 'diagnosis', true);
@@ -427,7 +459,7 @@ function renderCase(exportCase: ExportCase, opts: RenderOptions, index: number, 
   parts.push(details('Steps', renderSteps(d.steps)));
   parts.push(details('Console', renderConsole(d.consoleLogs)));
   parts.push(details('Network', renderNetwork(d.networkRequests)));
-  if (d.testSource) parts.push(details('Test source', pre(String(d.testSource))));
+  if (d.testSource) parts.push(details('Test source', code(String(d.testSource), 'typescript')));
   if (Array.isArray(d.testSourceFrames) && d.testSourceFrames.length) {
     parts.push(
       details(
@@ -442,9 +474,9 @@ function renderCase(exportCase: ExportCase, opts: RenderOptions, index: number, 
       ),
     );
   }
-  if (d.ariaSnapshot) parts.push(details('ARIA snapshot', pre(String(d.ariaSnapshot))));
-  if (d.pageState) parts.push(details('Page state', pre(JSON.stringify(d.pageState, null, 2))));
-  if (d.webVitals) parts.push(details('Web vitals', pre(JSON.stringify(d.webVitals, null, 2))));
+  if (d.ariaSnapshot) parts.push(details('ARIA snapshot', code(String(d.ariaSnapshot), 'yaml')));
+  if (d.pageState) parts.push(details('Page state', code(JSON.stringify(d.pageState, null, 2), 'json')));
+  if (d.webVitals) parts.push(details('Web vitals', code(JSON.stringify(d.webVitals, null, 2), 'json')));
 
   return html`<section class="case">${joinHtml(parts, '\n')}</section>`;
 }

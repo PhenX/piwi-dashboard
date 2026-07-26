@@ -1,17 +1,5 @@
 <script setup lang="ts">
-import hljs from 'highlight.js/lib/core';
-import typescript from 'highlight.js/lib/languages/typescript';
-import javascript from 'highlight.js/lib/languages/javascript';
-import bash from 'highlight.js/lib/languages/bash';
-import json from 'highlight.js/lib/languages/json';
-import diff from 'highlight.js/lib/languages/diff';
-
-hljs.registerLanguage('typescript', typescript);
-hljs.registerLanguage('javascript', javascript);
-hljs.registerLanguage('bash', bash);
-hljs.registerLanguage('sh', bash);
-hljs.registerLanguage('json', json);
-hljs.registerLanguage('diff', diff);
+import { highlightCode } from '#shared/highlight';
 
 const props = defineProps<{
   code: string;
@@ -23,13 +11,9 @@ const { copy, copied } = useCopy();
 const detectedLang = ref('');
 
 const highlighted = computed(() => {
-  if (props.lang && hljs.getLanguage(props.lang)) {
-    detectedLang.value = props.lang;
-    return hljs.highlight(props.code, { language: props.lang }).value;
-  }
-  const result = hljs.highlightAuto(props.code);
-  detectedLang.value = result.language ?? '';
-  return result.value;
+  const result = highlightCode(props.code, props.lang);
+  detectedLang.value = result.language;
+  return result.html;
 });
 </script>
 
