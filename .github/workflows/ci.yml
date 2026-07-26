@@ -52,6 +52,8 @@ jobs:
           path: |
             application/.output
             reporter/dist
+          # `.output` is dot-prefixed, so without this the upload silently skips it.
+          include-hidden-files: true
           retention-days: 1
           compression-level: 1
 
