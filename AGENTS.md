@@ -78,6 +78,7 @@ From `application/`:
 | `npm run app:seed:dev` | Load the demo sample data into the local dev SQLite DB |
 | `npm run app:generate:demo` / `app:check:demo` | Build the demo SPA / verify every server route has a demo handler |
 | `npm run app:check:demo:runtime` | Drive the **built** demo from its real `/demo/` sub-path in a browser (run `app:generate:demo` first) |
+| `npm run app:generate:deploy` | Regenerate the one-click deploy manifests (`render.yaml`, `fly.toml`, `deploy/`) |
 | `node scripts/db-query.mjs "<sql>" [--json]` | Query the local SQLite DB directly |
 
 From `reporter/`: `reporter:build`, `reporter:dev` (watch), `reporter:typecheck`, `reporter:lint[:fix]`,
@@ -142,6 +143,10 @@ other `curl` examples may stay bash-only. `.env` file contents are not shell com
 - Update the affected doc **in the same commit** as the code change.
 - User-facing docs live in `docs/` (VitePress → GitHub Pages); `README.md` is the landing page.
 - API reference is **generated** — never hand-write endpoint docs. See [`docs/AGENTS.md`](docs/AGENTS.md).
+- The one-click deploy manifests (`render.yaml`, `fly.toml`, `railway.json`, `deploy/**`) are **generated and
+  committed** — Render and Fly read them from the repository. Edit
+  `application/scripts/generate-deploy-manifests.mjs` or the emitters in `application/shared/env-format.ts`, then run
+  `npm run app:generate:deploy`; a unit test fails if the committed files drift.
 
 #### One canonical positioning line (MUST follow)
 

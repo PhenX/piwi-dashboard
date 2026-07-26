@@ -10,7 +10,7 @@ import {
   type PiwiEnvVarMeta,
   type PiwiEnvVarName,
 } from '#shared/piwi-env-vars'
-import { ENV_OUTPUT_FORMATS, type EnvEntry } from '#shared/env-format'
+import { ENV_OUTPUT_FORMATS, ENV_OUTPUT_GROUPS, type EnvEntry } from '#shared/env-format'
 import appPackage from '../../../../application/package.json'
 
 const registry = PIWI_ENV_VARS as Record<PiwiEnvVarName, PiwiEnvVarMeta>
@@ -188,6 +188,14 @@ const entries = computed<EnvEntry[]>(() => {
 
 const activeFormatId = ref(ENV_OUTPUT_FORMATS[0]!.id)
 const activeFormat = computed(() => ENV_OUTPUT_FORMATS.find((format) => format.id === activeFormatId.value) ?? ENV_OUTPUT_FORMATS[0]!)
+
+/** One tab row per group, so thirteen formats stay scannable. */
+const formatGroups = computed(() =>
+  ENV_OUTPUT_GROUPS.map((group) => ({
+    group,
+    formats: ENV_OUTPUT_FORMATS.filter((format) => format.group === group),
+  })).filter((row) => row.formats.length),
+)
 
 const output = computed(() => {
   if (!entries.value.length) return ''
@@ -378,9 +386,16 @@ function placeholderFor(meta: PiwiEnvVarMeta): string {
         appears here.
       </div>
       <template v-else>
-        <div class="format-tabs" role="tablist" aria-label="Output format">
+        <div
+          v-for="row in formatGroups"
+          :key="row.group"
+          class="format-tabs"
+          role="tablist"
+          :aria-label="`Output format — ${row.group}`"
+        >
+          <span class="format-group-label">{{ row.group }}</span>
           <button
-            v-for="format in ENV_OUTPUT_FORMATS"
+            v-for="format in row.formats"
             :key="format.id"
             type="button"
             role="tab"
@@ -622,8 +637,19 @@ function placeholderFor(meta: PiwiEnvVarMeta): string {
 .format-tabs {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+  margin-bottom: 6px;
+}
+.format-tabs:last-of-type {
   margin-bottom: 10px;
+}
+.format-group-label {
+  min-width: 96px;
+  color: var(--vp-c-text-3);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .format-tab {
   padding: 5px 12px;
