@@ -135,6 +135,23 @@ The bundled `/trace-viewer/` is same-origin, so it works whether or not [authent
 
 Each cluster (`/failure-clusters/:id`) opens on a summary — signature, affected tests, and **Triage** (set status open/resolved/ignored and write a note) — above a two-column body. The left column collapses each investigation section to a header with an at-a-glance peek (click to expand, and the state is remembered): the raw **error message**, an **alternative-locators** panel for broken locators, **test evidence** (one tab per affected case, each linking through to its test-run case, with screenshots, traces, failing steps, console/network signals and source), and **what changed** (the SCM diff since the last green run, with a baseline-commit picker and commit browser). The right column holds the **AI diagnosis** — an SCM-grounded LLM analysis whose cited evidence links back to the matching left-column section. Full detail: [AI diagnosis & clustering](./ai-diagnosis).
 
+## Offline export
+
+An **Export** button on a test-case execution (`/test-run-cases/:id`) and on a failure cluster (`/failure-clusters/:id`) writes the investigation to a file that opens with no network and no Piwi server — for a ticket attachment, a mail to someone without an account, or an archive that outlives your retention window.
+
+| Format | What you get |
+|--------|--------------|
+| **HTML** | One file. Screenshots and video are embedded as `data:` URIs; error, steps, console, network, ARIA snapshot, test source and the AI diagnosis are all inline. Double-click it. |
+| **ZIP** | `report.html` plus the raw artifacts on disk — full-size video, reconstructed `trace.zip` archives, console and network logs — and `data.json` with everything the report shows, machine-readable. |
+| **PDF** | The HTML report opened with your browser's print dialog. Video and traces cannot survive printing; everything else does. |
+| **Markdown / JSON** | Text only, for pasting into an issue or feeding an agent. |
+
+A cluster export carries the most recent failing execution of each affected test. Beyond `PIWI_EXPORT_MAX_CASES` the remaining tests are listed by name without their evidence.
+
+Exports are bounded so one download cannot exhaust the server: `PIWI_EXPORT_MAX_INLINE_BYTES` caps what a single HTML file will embed, and `PIWI_EXPORT_MAX_BYTES` caps the whole export (see [Configuration](./configuration#offline-export)). Anything left out is listed in an **Omitted from this export** table in the report and in the ZIP's `README.txt` — an export never drops evidence silently.
+
+The exported HTML carries a restrictive `Content-Security-Policy` and escapes every value that came from a test run, so a report is safe to open even when the failure it describes involved hostile page content.
+
 ## Settings
 
 | Page | Path | What it does |

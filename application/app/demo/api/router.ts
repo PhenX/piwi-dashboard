@@ -20,6 +20,7 @@ import { getLocatorHealing, saveLocatorPick } from '~~/server/utils/locator-heal
 import { buildFixPlan } from '~~/server/utils/fix-plan';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
+import { apiExportTestRunCase, apiExportFailureCluster } from './export';
 import { apiGetDemoTraceStacks, apiGetDemoTraceNetwork, apiGetDemoTraceNetworkBody } from './trace-insights';
 import {
   listProjects,
@@ -400,6 +401,11 @@ const routes: RouteEntry[] = [
     handler: async (m) => getFailureCluster(await getDemoDb(), +m[1]!),
   },
   {
+    method: 'GET',
+    pattern: /^\/api\/failure-clusters\/(\d+)\/export$/,
+    handler: (m, _, q) => apiExportFailureCluster(+m[1]!, q as URLSearchParams | undefined),
+  },
+  {
     method: 'PATCH',
     pattern: /^\/api\/failure-clusters\/(\d+)\/status$/,
     handler: async (m, body) => {
@@ -529,6 +535,11 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/test-run-cases\/(\d+)\/traces$/,
     handler: async (m) => getTestRunCaseTraces(await getDemoDb(), +m[1]!),
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/export$/,
+    handler: (m, _, q) => apiExportTestRunCase(+m[1]!, q as URLSearchParams | undefined),
   },
   {
     method: 'GET',

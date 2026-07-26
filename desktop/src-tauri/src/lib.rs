@@ -260,14 +260,58 @@ fn desktop_notify(app: tauri::AppHandle, title: String, body: String) -> Result<
         .map_err(|e| e.to_string())
 }
 
+/// Decode standard base64 (with or without `=` padding) into raw bytes.
+///
+/// Binary downloads cross the IPC boundary as base64 because a `Vec<u8>` is
+/// serialized as a JSON array of numbers, which costs several times the payload
+/// size for an archive of any real weight.
+fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
+    fn sextet(c: u8) -> Result<u32, String> {
+        match c {
+            b'A'..=b'Z' => Ok((c - b'A') as u32),
+            b'a'..=b'z' => Ok((c - b'a') as u32 + 26),
+            b'0'..=b'9' => Ok((c - b'0') as u32 + 52),
+            b'+' => Ok(62),
+            b'/' => Ok(63),
+            _ => Err("invalid base64 character".to_string()),
+        }
+    }
+
+    let cleaned: Vec<u8> = input
+        .bytes()
+        .filter(|b| !b.is_ascii_whitespace() && *b != b'=')
+        .collect();
+
+    let mut out = Vec::with_capacity(cleaned.len() / 4 * 3);
+    for chunk in cleaned.chunks(4) {
+        if chunk.len() == 1 {
+            return Err("truncated base64 input".to_string());
+        }
+        let mut acc: u32 = 0;
+        for (i, byte) in chunk.iter().enumerate() {
+            acc |= sextet(*byte)? << (18 - 6 * i);
+        }
+        let produced = chunk.len() - 1;
+        for i in 0..produced {
+            out.push(((acc >> (16 - 8 * i)) & 0xff) as u8);
+        }
+    }
+    Ok(out)
+}
+
 /// Write a file the webview fetched to the user's Downloads folder and reveal it.
 /// Returns the saved path. The name is reduced to its base component so a caller
 /// can't traverse out of the Downloads directory.
+///
+/// `encoding` selects how `contents` is interpreted: omitted or `"utf8"` writes
+/// the string as-is, `"base64"` decodes it first so archives, PDFs and images
+/// land on disk intact.
 #[tauri::command]
 fn desktop_save_download(
     app: tauri::AppHandle,
     filename: String,
     contents: String,
+    encoding: Option<String>,
 ) -> Result<String, String> {
     let dir = app.path().download_dir().map_err(|e| e.to_string())?;
     let name = std::path::Path::new(&filename)
@@ -276,7 +320,13 @@ fn desktop_save_download(
         .filter(|n| !n.is_empty())
         .unwrap_or_else(|| "download".to_string());
     let target = dir.join(&name);
-    std::fs::write(&target, contents).map_err(|e| e.to_string())?;
+
+    let bytes = match encoding.as_deref() {
+        Some("base64") => decode_base64(&contents)?,
+        _ => contents.into_bytes(),
+    };
+    std::fs::write(&target, bytes).map_err(|e| e.to_string())?;
+
     let _ = app.opener().reveal_item_in_dir(&target);
     Ok(node_path(&target))
 }

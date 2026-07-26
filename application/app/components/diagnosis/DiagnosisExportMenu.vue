@@ -2,6 +2,7 @@
 import type { FailureDiagnosis } from '~~/server/database/schema';
 import type { DiagnoseImage } from '~/composables/useClusterDiagnosis';
 import { stripAnsi } from '#shared/error-fingerprint';
+import { escapeHtml, markdownToHtml } from '#shared/markdown-to-html';
 
 const props = defineProps<{
   contextText: string | null;
@@ -46,7 +47,7 @@ function copyInvestigationSummary() {
     .filter((l) => l !== null)
     .join('\n');
 
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const esc = escapeHtml;
   const html = [
     `<p><strong>\uD83D\uDD0D Investigation: <code>${esc(sig)}</code></strong></p>`,
     meta ? `<p><em>${esc(meta)}</em></p>` : '',
@@ -78,83 +79,9 @@ function copyContextJson() {
   exportOpen.value = false;
 }
 
-function markdownToHtml(md: string): string {
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const out: string[] = [];
-  let inCode = false;
-  let codeLang = '';
-  const codeLines: string[] = [];
-  let inList = false;
-
-  function flushCode() {
-    if (codeLines.length) {
-      const langTag = codeLang ? ` class="language-${esc(codeLang)}"` : '';
-      out.push(`<pre><code${langTag}>${esc(codeLines.join('\n'))}</code></pre>`);
-      codeLines.length = 0;
-    }
-    codeLang = '';
-  }
-
-  function closeList() {
-    if (inList) {
-      out.push('</ul>');
-      inList = false;
-    }
-  }
-
-  for (const line of md.split('\n')) {
-    if (line.startsWith('```')) {
-      closeList();
-      if (inCode) {
-        flushCode();
-        inCode = false;
-      } else {
-        flushCode();
-        inCode = true;
-        codeLang = line.slice(3).trim();
-      }
-      continue;
-    }
-    if (inCode) {
-      codeLines.push(line);
-      continue;
-    }
-
-    if (line.startsWith('- ')) {
-      if (!inList) {
-        out.push('<ul>');
-        inList = true;
-      }
-      out.push(`<li>${esc(line.slice(2))}</li>`);
-      continue;
-    }
-    closeList();
-    if (line.startsWith('## ')) {
-      out.push(`<h2>${esc(line.slice(3))}</h2>`);
-      continue;
-    }
-    if (line.startsWith('### ')) {
-      out.push(`<h3>${esc(line.slice(4))}</h3>`);
-      continue;
-    }
-    if (line.startsWith('> ')) {
-      out.push(`<blockquote>${esc(line.slice(2))}</blockquote>`);
-      continue;
-    }
-    if (line.trim() === '') {
-      out.push('<br>');
-      continue;
-    }
-    out.push(`<p>${esc(line)}</p>`);
-  }
-  closeList();
-  if (inCode) flushCode();
-  return out.join('\n');
-}
-
 function buildScreenshotsHtml(): string {
   if (!props.screenshots?.length) return '';
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const esc = escapeHtml;
   const figures = props.screenshots
     .map(
       (img) =>
@@ -213,7 +140,7 @@ function copyDiagnosisOnly() {
   }
 
   const md = lines.join('\n');
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const esc = escapeHtml;
   const html = [
     `<dl>${d.category ? `<dt>Category</dt><dd>${esc(d.category)}</dd>` : ''}${d.confidence ? `<dt>Confidence</dt><dd>${esc(d.confidence)}</dd>` : ''}</dl>`,
     d.summary ? `<p><strong>${esc(d.summary)}</strong></p>` : '',

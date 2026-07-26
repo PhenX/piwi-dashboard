@@ -53,6 +53,7 @@ export const PROJECT = {
   ENV_STREAM_START: 'env-stream-start-test',
   ENV_UI: 'env-ui-test',
   ENV_UPLOAD: 'env-upload-test',
+  EXPORT_OFFLINE: 'export-offline-test',
   AI_DIAGNOSIS: 'ai-diagnosis-test',
   EXTRACT_CASES: 'extract-cases-test',
   FAILURE_CLUSTERS: 'failure-clusters-test',

@@ -107,12 +107,19 @@ Key server utilities (`server/utils/`):
 | `scm/`                                                        | Repo history, diffs and patch validation for AI diagnosis                                                                                          |
 | `notifications/`                                              | `match.ts` (subscription matching → outbox rows), `dispatch.ts` (`sweepOutbox`, HMAC-SHA256 `X-Piwi-Signature`), `emit.ts`, `run-notifications.ts` |
 | `email.ts`, `account-tokens.ts`, `rate-limit.ts`, `crypto.ts` | SMTP transport + templates, single-use tokens (reset 1 h / verify 24 h / invite 72 h), in-memory sliding window, AES-256-GCM                       |
+| `export-request.ts`, `export-assets.ts`                       | Offline-export endpoints' shared plumbing: format parsing, download headers, size budget, storage-backed asset reader                              |
+| `trace-reconstruct.ts`                                        | Rebuilds a full trace ZIP from a slim blob + the shared resource pool; used by the file endpoint and by exports                                    |
 | `retention.ts`                                                | Nightly pruning of runs, notification history, diagnosis versions and orphan payloads                                                              |
 | `compute-regression-signals.ts`, `flaky-classify.ts`          | `isNewRegression` / `isNewFlaky` signals; flaky root-cause classification                                                                          |
 | `server/tasks/notifications/sweep.ts`                         | Nitro scheduled task — sweeps the outbox every minute                                                                                              |
 
 Import orchestration is shared, not mirrored: `shared/handlers/import-runs.ts` owns everything after parsing, with
 the server and demo supplying an `ImportPort` for the parts that genuinely differ.
+
+Offline export follows the same split: `shared/export/` collects the bundle, renders the self-contained HTML and
+Markdown, and writes the ZIP (fflate, so it runs in the demo's service worker too); server and demo differ only in the
+`ExportAssetReader` that fetches evidence bytes. `server/utils/trace-zip.ts` is unrelated — it stores rather than
+deflates and exists for trace-blob reconstruction.
 
 ## Front end
 
@@ -190,4 +197,5 @@ crash recovery) · HTML reports, traces, videos and screenshots stored under `.d
 flaky detection with root-cause classification and impact scoring · failure clustering with semantic merge suggestions ·
 AI diagnosis grounded in real SCM diffs, optionally two-stage · locator healing · timeline markers · notifications
 (email, Slack, webhook, browser) · an MCP server for AI agents · optional auth with project-level permissions ·
-retention and storage housekeeping.
+retention and storage housekeeping · offline export of an execution or a cluster as self-contained HTML, a ZIP of the
+raw evidence, or a printed PDF.
