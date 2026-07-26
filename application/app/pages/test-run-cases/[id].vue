@@ -283,16 +283,15 @@ function stepBarColorClass(duration: number): string {
 const environment = computed(() => testCase.value?.testRun?.environment);
 
 // ── Retry command ─────────────────────────────────────────────────────────
-const retryCommand = computed(() =>
-  buildRetryCommand([
-    {
-      filePath: testCase.value?.filePath ?? '',
-      title: testCase.value?.title ?? '',
-      line: testCase.value?.line ?? null,
-      projectName: (testCase.value?.browser as { projectName?: string } | null)?.projectName ?? null,
-    },
-  ]),
-);
+const retryCases = computed(() => [
+  {
+    filePath: testCase.value?.filePath ?? '',
+    title: testCase.value?.title ?? '',
+    line: testCase.value?.line ?? null,
+    projectName: (testCase.value?.browser as { projectName?: string } | null)?.projectName ?? null,
+  },
+]);
+const retryCommand = computed(() => buildRetryCommand(retryCases.value));
 const { copy: copyRetry, copied: retryCopied } = useCopy();
 
 const navbarActions = computed(() => [
@@ -493,6 +492,12 @@ provide(clusterSectionLocatorKey, {
             v-if="testCase"
             :endpoint="`/api/test-run-cases/${testCase.id}/export`"
             :base-name="`piwi-execution-${testCase.id}`"
+            class="mr-2"
+          />
+          <DesktopRunLocallyButton
+            :project-id="testCase?.testRun?.project?.id"
+            :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
+            :cases="retryCases"
             class="mr-2"
           />
           <NavbarActions :actions="navbarActions" />

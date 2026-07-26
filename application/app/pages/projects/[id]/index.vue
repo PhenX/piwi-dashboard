@@ -688,6 +688,9 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
           </div>
         </div>
 
+        <!-- Desktop shell only (renders nothing without the IPC bridge). -->
+        <DesktopProjectLinkCard :project-id="projectId" />
+
         <!-- Mobile: a select replaces the cramped tab strip; the strip scrolls from sm up. -->
         <USelect
           v-model="activeTab"

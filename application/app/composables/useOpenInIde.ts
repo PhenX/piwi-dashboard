@@ -187,7 +187,13 @@ export function useOpenInIde() {
     const rel = target.filePath;
     const line = target.line ?? null;
     const column = target.column ?? null;
-    const root = resolveRoot(target.projectKey);
+    // Desktop shell: a project's linked folder stands in for an unconfigured
+    // workspace root, so IDE links work with zero setup.
+    let root = resolveRoot(target.projectKey);
+    if (!root) {
+      const linked = await getDesktopProjectLink(target.projectKey);
+      if (linked?.exists) root = linked.path;
+    }
     const jbName = resolveJbProjectName(target.projectKey, target.projectName);
     const ctx: IdeSettingsContext = {
       projectKey: projectKeyOf(target.projectKey),
