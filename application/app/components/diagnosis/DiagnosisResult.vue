@@ -2,6 +2,7 @@
 import type { FailureDiagnosis } from '~~/server/database/schema';
 import { formatRelativeTime } from '~/utils';
 import { DIAGNOSIS_SECTION_SHORT, isKnownSectionId } from '#shared/diagnosis-sections';
+import { escapeHtml } from '#shared/markdown-to-html';
 import type { PatchValidation } from '#shared/patch';
 
 const props = defineProps<{
@@ -190,10 +191,6 @@ function diagnosisHtml(): string {
     parts.push('</ul>');
   }
   return parts.join('\n');
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 async function copyDiagnosis() {

@@ -7,9 +7,11 @@
  * printing this document is what produces the PDF.
  *
  * Every value interpolated here comes from a test run — error text, console
- * output, page source — so it is escaped without exception.
+ * output, page source. The `html` tagged template escapes interpolations by
+ * default, so markup has to be opted into explicitly with `raw()`.
  */
-import { escapeHtml, markdownToHtml } from '#shared/markdown-to-html';
+import { markdownToHtml } from '#shared/markdown-to-html';
+import { html, joinHtml, raw, toHtmlString, type RawHtml } from './html';
 import { stripAnsi } from '#shared/error-fingerprint';
 import type { ExportAsset, ExportBundle, ExportCase } from './types';
 
@@ -106,27 +108,39 @@ function fmtBytes(bytes: unknown): string {
   return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
-function facts(rows: [string, string | null | undefined][]): string {
+function facts(rows: [string, string | null | undefined][]): RawHtml {
   const present = rows.filter(([, v]) => v != null && v !== '');
-  if (!present.length) return '';
-  return `<dl class="facts">${present
-    .map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(String(v))}</dd>`)
-    .join('')}</dl>`;
+  if (!present.length) return raw('');
+  return html`<dl class="facts">
+    ${present.map(
+      ([k, v]) => html`<dt>${k}</dt>
+        <dd>${String(v)}</dd>`,
+    )}
+  </dl>`;
 }
 
-function details(title: string, inner: string, open = false): string {
-  if (!inner.trim()) return '';
-  return `<details class="card"${open ? ' open' : ''}><summary>${escapeHtml(title)}</summary><div class="body">${inner}</div></details>`;
+function details(title: string, inner: RawHtml | string, open = false): RawHtml {
+  const body = toHtmlString(inner);
+  if (!body.trim()) return raw('');
+  return html`<details class="card" ${open ? raw('open') : ''}>
+    <summary>${title}</summary>
+    <div class="body">${raw(body)}</div>
+  </details>`;
 }
 
-function pre(text: string): string {
-  return `<pre>${escapeHtml(stripAnsi(text))}</pre>`;
+function pre(text: string): RawHtml {
+  return html`<pre>${stripAnsi(text)}</pre>`;
 }
 
-function renderDiagnosis(diagnosis: Record<string, any> | null): string {
-  if (!diagnosis || diagnosis.status !== 'completed') return '';
+/** AI prose is Markdown; links are flattened so the document stays self-contained. */
+function prose(markdown: string): RawHtml {
+  return raw(markdownToHtml(markdown, { linkMode: 'text' }));
+}
+
+function renderDiagnosis(diagnosis: Record<string, any> | null): RawHtml {
+  if (!diagnosis || diagnosis.status !== 'completed') return raw('');
   const det = (diagnosis.details ?? {}) as Record<string, any>;
-  const parts: string[] = [];
+  const parts: (RawHtml | string)[] = [];
 
   parts.push(
     facts([
@@ -136,82 +150,130 @@ function renderDiagnosis(diagnosis: Record<string, any> | null): string {
       ['Affected area', det.affectedArea],
     ]),
   );
-  if (diagnosis.summary) parts.push(`<p><strong>${escapeHtml(String(diagnosis.summary))}</strong></p>`);
-  if (diagnosis.rootCause) parts.push(`<p><strong>Root cause:</strong> ${escapeHtml(String(diagnosis.rootCause))}</p>`);
+  if (diagnosis.summary) parts.push(html`<p><strong>${String(diagnosis.summary)}</strong></p>`);
+  if (diagnosis.rootCause) parts.push(html`<p><strong>Root cause:</strong> ${String(diagnosis.rootCause)}</p>`);
 
   const evidence = (det.evidence ?? []) as unknown[];
   if (evidence.length) {
-    parts.push(`<h3>Evidence</h3><ul>${evidence.map((e) => `<li>${escapeHtml(String(e))}</li>`).join('')}</ul>`);
+    parts.push(html`<h3>Evidence</h3>
+      <ul>
+        ${evidence.map((e) => html`<li>${String(e)}</li>`)}
+      </ul>`);
   }
 
   const fix = (det.suggestedFix ?? null) as Record<string, any> | null;
   if (fix) {
-    parts.push('<h3>Suggested fix</h3>');
-    if (fix.description) parts.push(markdownToHtml(String(fix.description)));
+    parts.push(html`<h3>Suggested fix</h3>`);
+    if (fix.description) parts.push(prose(String(fix.description)));
     if (fix.patch) parts.push(pre(String(fix.patch)));
     else if (fix.code) parts.push(pre(String(fix.code)));
   }
 
-  return details('AI diagnosis', parts.join('\n'), true);
+  return details('AI diagnosis', joinHtml(parts, '\n'), true);
 }
 
-function renderAssets(exportCase: ExportCase, assetUrl: RenderOptions['assetUrl']): string {
+function renderAssets(exportCase: ExportCase, assetUrl: RenderOptions['assetUrl']): RawHtml {
   const shots = exportCase.assets.filter((a) => a.kind === 'screenshot');
   const videos = exportCase.assets.filter((a) => a.kind === 'video');
   const traces = exportCase.assets.filter((a) => a.kind === 'trace');
   const others = exportCase.assets.filter((a) => a.kind === 'attachment');
-  const out: string[] = [];
+  const out: (RawHtml | string)[] = [];
 
   const shotFigures = shots
     .map((a) => {
       const url = assetUrl(a);
-      if (!url) return '';
-      return `<figure><img class="shot" src="${escapeHtml(url)}" alt="${escapeHtml(a.name)}"><figcaption>${escapeHtml(a.name)}</figcaption></figure>`;
+      if (!url) return null;
+      return html`<figure>
+        <img class="shot" src="${url}" alt="${a.name}" />
+        <figcaption>${a.name}</figcaption>
+      </figure>`;
     })
-    .filter(Boolean);
-  if (shotFigures.length) out.push(`<h3>Screenshots</h3>${shotFigures.join('')}`);
+    .filter((f): f is RawHtml => f !== null);
+  if (shotFigures.length)
+    out.push(
+      html`<h3>Screenshots</h3>
+        ${shotFigures}`,
+    );
 
   const videoFigures = videos
     .map((a) => {
       const url = assetUrl(a);
-      if (!url) return '';
-      return `<figure><video controls preload="metadata" src="${escapeHtml(url)}"></video><figcaption>${escapeHtml(a.name)} — video does not play in a printed PDF</figcaption></figure>`;
+      if (!url) return null;
+      return html`<figure>
+        <video controls preload="metadata" src="${url}"></video>
+        <figcaption>${a.name} — video does not play in a printed PDF</figcaption>
+      </figure>`;
     })
-    .filter(Boolean);
-  if (videoFigures.length) out.push(`<h3>Video</h3>${videoFigures.join('')}`);
-
-  const fileRows = [...traces, ...others]
-    .map((a) => {
-      const url = assetUrl(a);
-      const label = url
-        ? `<a href="${escapeHtml(url)}">${escapeHtml(a.name)}</a>`
-        : `${escapeHtml(a.name)} <span class="meta">(not included)</span>`;
-      return `<tr><td>${label}</td><td>${escapeHtml(a.kind)}</td><td>${escapeHtml(fmtBytes(a.size))}</td></tr>`;
-    })
-    .join('');
-  if (fileRows) {
+    .filter((f): f is RawHtml => f !== null);
+  if (videoFigures.length)
     out.push(
-      `<h3>Files</h3><div class="scroll"><table><thead><tr><th>Name</th><th>Kind</th><th>Size</th></tr></thead><tbody>${fileRows}</tbody></table></div>`,
-      `<p class="meta">Trace archives open at <code>trace.playwright.dev</code> or in any Playwright trace viewer.</p>`,
+      html`<h3>Video</h3>
+        ${videoFigures}`,
+    );
+
+  const fileRows = [...traces, ...others].map((a) => {
+    const url = assetUrl(a);
+    const label = url ? html`<a href="${url}">${a.name}</a>` : html`${a.name} <span class="meta">(not included)</span>`;
+    return html`<tr>
+      <td>${label}</td>
+      <td>${a.kind}</td>
+      <td>${fmtBytes(a.size)}</td>
+    </tr>`;
+  });
+  if (fileRows.length) {
+    out.push(
+      html`<h3>Files</h3>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Kind</th>
+                <th>Size</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${fileRows}
+            </tbody>
+          </table>
+        </div>
+        <p class="meta">
+          Trace archives open at <code>trace.playwright.dev</code> or in any Playwright trace viewer.
+        </p>`,
     );
   }
 
-  return out.join('\n');
+  return joinHtml(out, '\n');
 }
 
-function renderSteps(steps: unknown): string {
-  if (!Array.isArray(steps) || !steps.length) return '';
-  const rows = steps
-    .map((s) => {
-      const step = s as Record<string, any>;
-      return `<tr><td>${escapeHtml(String(step.title ?? ''))}</td><td>${escapeHtml(String(step.category ?? ''))}</td><td>${escapeHtml(fmtDuration(step.duration))}</td></tr>`;
-    })
-    .join('');
-  return `<div class="scroll"><table><thead><tr><th>Step</th><th>Category</th><th>Duration</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+function renderSteps(steps: unknown): RawHtml {
+  if (!Array.isArray(steps) || !steps.length) return raw('');
+  const rows = steps.map((s) => {
+    const step = s as Record<string, any>;
+    return html`<tr>
+      <td>${String(step.title ?? '')}</td>
+      <td>${String(step.category ?? '')}</td>
+      <td>${fmtDuration(step.duration)}</td>
+    </tr>`;
+  });
+  return html`<div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Step</th>
+          <th>Category</th>
+          <th>Duration</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  </div>`;
 }
 
-function renderConsole(logs: unknown): string {
-  if (!Array.isArray(logs) || !logs.length) return '';
+function renderConsole(logs: unknown): RawHtml {
+  if (!Array.isArray(logs) || !logs.length) return raw('');
   return pre(
     logs
       .map((l) => {
@@ -222,27 +284,44 @@ function renderConsole(logs: unknown): string {
   );
 }
 
-function renderNetwork(requests: unknown): string {
-  if (!Array.isArray(requests) || !requests.length) return '';
-  const rows = requests
-    .map((r) => {
-      const req = r as Record<string, any>;
-      return `<tr><td>${escapeHtml(String(req.method ?? ''))}</td><td>${escapeHtml(String(req.status ?? ''))}</td><td>${escapeHtml(fmtDuration(req.duration))}</td><td>${escapeHtml(String(req.url ?? ''))}</td></tr>`;
-    })
-    .join('');
-  return `<div class="scroll"><table><thead><tr><th>Method</th><th>Status</th><th>Time</th><th>URL</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+function renderNetwork(requests: unknown): RawHtml {
+  if (!Array.isArray(requests) || !requests.length) return raw('');
+  const rows = requests.map((r) => {
+    const req = r as Record<string, any>;
+    return html`<tr>
+      <td>${String(req.method ?? '')}</td>
+      <td>${String(req.status ?? '')}</td>
+      <td>${fmtDuration(req.duration)}</td>
+      <td>${String(req.url ?? '')}</td>
+    </tr>`;
+  });
+  return html`<div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Status</th>
+          <th>Time</th>
+          <th>URL</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  </div>`;
 }
 
-function renderCase(exportCase: ExportCase, opts: RenderOptions, index: number, total: number): string {
+function renderCase(exportCase: ExportCase, opts: RenderOptions, index: number, total: number): RawHtml {
   const d = exportCase.detail as Record<string, any>;
   const run = (d.testRun ?? {}) as Record<string, any>;
   const browser = (d.browser ?? {}) as Record<string, any>;
-  const parts: string[] = [];
+  const parts: (RawHtml | string)[] = [];
 
-  parts.push(
-    `<header><h2>${escapeHtml(exportCase.title)} <span class="badge ${escapeHtml(exportCase.status)}">${escapeHtml(exportCase.status)}</span></h2>`,
-    `<p class="meta"><code>${escapeHtml(exportCase.location ?? exportCase.filePath ?? '')}</code></p></header>`,
-  );
+  parts.push(html`<header>
+    <h2>${exportCase.title} <span class="badge ${exportCase.status}">${exportCase.status}</span></h2>
+    <p class="meta"><code>${exportCase.location ?? exportCase.filePath ?? ''}</code></p>
+  </header>`);
 
   parts.push(
     facts([
@@ -262,7 +341,7 @@ function renderCase(exportCase: ExportCase, opts: RenderOptions, index: number, 
   parts.push(renderDiagnosis(exportCase.diagnosis));
 
   const assetsHtml = renderAssets(exportCase, opts.assetUrl);
-  if (assetsHtml) parts.push(details('Evidence', assetsHtml, true));
+  if (toHtmlString(assetsHtml).trim()) parts.push(details('Evidence', assetsHtml, true));
 
   parts.push(details('Steps', renderSteps(d.steps)));
   parts.push(details('Console', renderConsole(d.consoleLogs)));
@@ -272,9 +351,13 @@ function renderCase(exportCase: ExportCase, opts: RenderOptions, index: number, 
     parts.push(
       details(
         'Call stack',
-        (d.testSourceFrames as Record<string, any>[])
-          .map((f) => `<h3>${escapeHtml(`${f.file ?? ''}:${f.line ?? ''}`)}</h3>${pre(String(f.snippet ?? ''))}`)
-          .join(''),
+        joinHtml(
+          (d.testSourceFrames as Record<string, any>[]).map(
+            (f) =>
+              html`<h3>${`${f.file ?? ''}:${f.line ?? ''}`}</h3>
+                ${pre(String(f.snippet ?? ''))}`,
+          ),
+        ),
       ),
     );
   }
@@ -282,13 +365,16 @@ function renderCase(exportCase: ExportCase, opts: RenderOptions, index: number, 
   if (d.pageState) parts.push(details('Page state', pre(JSON.stringify(d.pageState, null, 2))));
   if (d.webVitals) parts.push(details('Web vitals', pre(JSON.stringify(d.webVitals, null, 2))));
 
-  return `<section class="case"><p class="meta no-print">Case ${index + 1} of ${total}</p>${parts.filter(Boolean).join('\n')}</section>`;
+  return html`<section class="case">
+    <p class="meta no-print">Case ${index + 1} of ${total}</p>
+    ${joinHtml(parts, '\n')}
+  </section>`;
 }
 
-function renderClusterHeader(bundle: ExportBundle): string {
+function renderClusterHeader(bundle: ExportBundle): RawHtml {
   const c = bundle.cluster as Record<string, any> | null;
-  if (!c) return '';
-  const parts: string[] = [
+  if (!c) return raw('');
+  const parts: (RawHtml | string)[] = [
     facts([
       ['Signature', c.signature],
       ['Error type', c.errorType],
@@ -308,68 +394,93 @@ function renderClusterHeader(bundle: ExportBundle): string {
     parts.push(
       details(
         `Other affected tests (${bundle.truncatedCases.length}, evidence not included)`,
-        `<ul>${bundle.truncatedCases
-          .map((t) => `<li>${escapeHtml(t.title)} <span class="meta">${escapeHtml(t.filePath ?? '')}</span></li>`)
-          .join('')}</ul>`,
+        html`<ul>
+          ${bundle.truncatedCases.map((t) => html`<li>${t.title} <span class="meta">${t.filePath ?? ''}</span></li>`)}
+        </ul>`,
       ),
     );
   }
-  return parts.filter(Boolean).join('\n');
+  return joinHtml(parts, '\n');
 }
 
-function renderOmissions(bundle: ExportBundle): string {
-  if (!bundle.omitted.length) return '';
-  const reasons: Record<string, string> = {
-    'too-large': 'larger than the per-file inline limit',
-    'budget-exhausted': 'the export size budget was reached',
-    unreadable: 'the file could not be read from storage',
-    'html-format': 'not embeddable in a single HTML file — use the ZIP export',
-  };
-  const rows = bundle.omitted
-    .map(
-      (o) =>
-        `<tr><td>${escapeHtml(o.name)}</td><td>${escapeHtml(o.kind)}</td><td>${escapeHtml(fmtBytes(o.bytes))}</td><td>${escapeHtml(reasons[o.reason] ?? o.reason)}</td></tr>`,
-    )
-    .join('');
-  return `<section class="card"><div class="body"><h2>Omitted from this export</h2><div class="scroll"><table><thead><tr><th>File</th><th>Kind</th><th>Size</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
+const OMISSION_REASONS: Record<string, string> = {
+  'too-large': 'larger than the per-file inline limit',
+  'budget-exhausted': 'the export size budget was reached',
+  unreadable: 'the file could not be read from storage',
+  'html-format': 'not embeddable in a single HTML file — use the ZIP export',
+};
+
+function renderOmissions(bundle: ExportBundle): RawHtml {
+  if (!bundle.omitted.length) return raw('');
+  const rows = bundle.omitted.map(
+    (o) => html`<tr>
+      <td>${o.name}</td>
+      <td>${o.kind}</td>
+      <td>${fmtBytes(o.bytes)}</td>
+      <td>${OMISSION_REASONS[o.reason] ?? o.reason}</td>
+    </tr>`,
+  );
+  return html`<section class="card">
+    <div class="body">
+      <h2>Omitted from this export</h2>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Kind</th>
+              <th>Size</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>`;
 }
 
 export function renderExportHtml(bundle: ExportBundle, opts: RenderOptions): string {
   const kindLabel = bundle.kind === 'cluster' ? 'Failure cluster' : 'Test execution';
   const projectLabel = bundle.project ? bundle.project.label || bundle.project.name : null;
 
-  const head = [
-    '<meta charset="utf-8">',
-    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+  const head = joinHtml([
+    raw('<meta charset="utf-8">'),
+    raw('<meta name="viewport" content="width=device-width, initial-scale=1">'),
     // Standalone files are opened from disk and carry untrusted test output —
     // deny everything except the data/blob URIs this document embeds itself.
-    `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob: 'self'; media-src data: blob: 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:">`,
-    `<title>${escapeHtml(`Piwi — ${bundle.title}`)}</title>`,
-    `<style>${STYLES}</style>`,
-  ].join('');
+    raw(
+      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob: 'self'; media-src data: blob: 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:">`,
+    ),
+    html`<title>${`Piwi — ${bundle.title}`}</title>`,
+    raw(`<style>${STYLES}</style>`),
+  ]);
 
-  const body = [
-    '<div class="wrap">',
-    '<header class="doc">',
-    `<p class="meta">${escapeHtml(kindLabel)}${projectLabel ? ` · ${escapeHtml(projectLabel)}` : ''}</p>`,
-    `<h1>${escapeHtml(bundle.title)}</h1>`,
-    `<p class="meta">Exported ${escapeHtml(bundle.generatedAt)}${bundle.piwiVersion ? ` · Piwi ${escapeHtml(bundle.piwiVersion)}` : ''}</p>`,
-    bundle.sourceUrl ? `<p class="meta">Source: <code>${escapeHtml(bundle.sourceUrl)}</code></p>` : '',
-    '<div class="toolbar no-print">',
-    '<button type="button" data-action="print">Print / Save as PDF</button>',
-    '<button type="button" data-action="expand">Expand all</button>',
-    '</div>',
-    '</header>',
-    renderClusterHeader(bundle),
-    ...bundle.cases.map((c, i) => renderCase(c, opts, i, bundle.cases.length)),
-    bundle.cases.length === 0 ? '<p class="note">No executions were included in this export.</p>' : '',
-    renderOmissions(bundle),
-    '<p class="meta">Generated by Piwi. This file is self-contained and needs no network connection.</p>',
-    '</div>',
-    `<script>${SCRIPT}${opts.print ? AUTO_PRINT : ''}</script>`,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const body = joinHtml(
+    [
+      raw('<div class="wrap">'),
+      html`<header class="doc">
+        <p class="meta">${kindLabel}${projectLabel ? ` · ${projectLabel}` : ''}</p>
+        <h1>${bundle.title}</h1>
+        <p class="meta">Exported ${bundle.generatedAt}${bundle.piwiVersion ? ` · Piwi ${bundle.piwiVersion}` : ''}</p>
+        ${bundle.sourceUrl ? html`<p class="meta">Source: <code>${bundle.sourceUrl}</code></p>` : ''}
+        <div class="toolbar no-print">
+          <button type="button" data-action="print">Print / Save as PDF</button>
+          <button type="button" data-action="expand">Expand all</button>
+        </div>
+      </header>`,
+      renderClusterHeader(bundle),
+      ...bundle.cases.map((c, i) => renderCase(c, opts, i, bundle.cases.length)),
+      bundle.cases.length === 0 ? html`<p class="note">No executions were included in this export.</p>` : '',
+      renderOmissions(bundle),
+      html`<p class="meta">Generated by Piwi. This file is self-contained and needs no network connection.</p>`,
+      raw('</div>'),
+      raw(`<script>${SCRIPT}${opts.print ? AUTO_PRINT : ''}</script>`),
+    ],
+    '\n',
+  );
 
-  return `<!DOCTYPE html><html lang="en"><head>${head}</head><body>${body}</body></html>`;
+  return `<!DOCTYPE html><html lang="en"><head>${toHtmlString(head)}</head><body>${toHtmlString(body)}</body></html>`;
 }
