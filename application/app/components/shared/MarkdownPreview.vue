@@ -1,22 +1,5 @@
 <script setup lang="ts">
-import hljs from 'highlight.js/lib/core';
-import javascript from 'highlight.js/lib/languages/javascript';
-import typescript from 'highlight.js/lib/languages/typescript';
-import python from 'highlight.js/lib/languages/python';
-import bash from 'highlight.js/lib/languages/bash';
-import json from 'highlight.js/lib/languages/json';
-import css from 'highlight.js/lib/languages/css';
-import xml from 'highlight.js/lib/languages/xml';
-import diff from 'highlight.js/lib/languages/diff';
-
-hljs.registerLanguage('javascript', javascript);
-hljs.registerLanguage('typescript', typescript);
-hljs.registerLanguage('python', python);
-hljs.registerLanguage('bash', bash);
-hljs.registerLanguage('json', json);
-hljs.registerLanguage('css', css);
-hljs.registerLanguage('xml', xml);
-hljs.registerLanguage('diff', diff);
+import { highlightCode } from '#shared/highlight';
 
 const props = defineProps<{
   text: string | null;
@@ -64,12 +47,9 @@ function parse(text: string): PreviewLine[] {
       if (line === '```') {
         const code = codeLines.join('\n');
         if (codeLines.length) {
-          const { value } =
-            codeLang && hljs.getLanguage(codeLang)
-              ? hljs.highlight(code, { language: codeLang })
-              : hljs.highlightAuto(code);
+          const { html } = highlightCode(code, codeLang);
           result.push({ kind: 'code-start', lang: codeLang || 'code' });
-          result.push({ kind: 'code-block', html: value });
+          result.push({ kind: 'code-block', html });
           result.push({ kind: 'code-end' });
         }
         inCode = false;
@@ -80,11 +60,9 @@ function parse(text: string): PreviewLine[] {
   }
 
   if (inCode && codeLines.length) {
-    const code = codeLines.join('\n');
-    const { value } =
-      codeLang && hljs.getLanguage(codeLang) ? hljs.highlight(code, { language: codeLang }) : hljs.highlightAuto(code);
+    const { html } = highlightCode(codeLines.join('\n'), codeLang);
     result.push({ kind: 'code-start', lang: codeLang || 'code' });
-    result.push({ kind: 'code-block', html: value });
+    result.push({ kind: 'code-block', html });
     result.push({ kind: 'code-end' });
   }
 

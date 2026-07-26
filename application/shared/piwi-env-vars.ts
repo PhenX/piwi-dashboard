@@ -41,6 +41,7 @@ export type PiwiEnvVarCategory =
   | 'ai'
   | 'ai-limits'
   | 'ingest'
+  | 'export'
   | 'markers'
   | 'clustering'
   | 'smtp'
@@ -174,36 +175,42 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     intro:
       'Caps applied to per-execution payloads (console output, steps, ARIA snapshots, error text, source snippets) before they are stored. They bound database growth against verbose or hostile submitters; values above each limit are truncated with a visible marker. Distinct from the `PIWI_AI_MAX_*` limits, which bound what enters an AI diagnosis prompt — the storage defaults sit at or above the AI maxima so the AI limits stay the binding constraint for prompts. Environment-only (no settings UI).',
   },
-  markers: { title: 'Timeline markers', order: 10 },
+  export: {
+    title: 'Offline export',
+    order: 10,
+    intro:
+      'Bounds on the offline export of a test execution or a failure cluster (HTML, ZIP, PDF). Evidence that does not fit is listed in the report as omitted rather than dropped silently. The total cap is also the memory an export costs to build, since the archive is assembled before it is sent.',
+  },
+  markers: { title: 'Timeline markers', order: 11 },
   smtp: {
     title: 'Email (SMTP)',
-    order: 11,
+    order: 12,
     intro:
       'Required for email notifications and account flows (verification, password reset, invites). Set via environment only.',
     note: 'Email sending activates once `PIWI_SMTP_HOST`, `PIWI_SMTP_USER`, `PIWI_SMTP_PASS` and `PIWI_SMTP_FROM` are all set. See [Notifications](./notifications) for channels and subscriptions.',
   },
   clustering: {
     title: 'Failure clustering',
-    order: 12,
+    order: 13,
     intro:
       'Tunes the similarity thresholds used when grouping failures into clusters by their error fingerprint (and optional embeddings). Only used when an embedding model is configured.',
     note: 'See [AI diagnosis → Failure clustering](./ai-diagnosis#failure-clustering).',
   },
   testing: {
     title: 'Backend logs',
-    order: 13,
+    order: 14,
     intro:
       'Controls the `X-Piwi-Logs` response-header capture that attaches backend logs to test failures. See [Backend logs](./backend-logs).',
   },
   build: {
     title: 'Build-time',
-    order: 14,
+    order: 15,
     intro:
       'These affect how the app is built rather than how a running instance behaves, and are mostly for contributors.',
   },
-  demo: { title: 'Demo', order: 15, mergeInto: 'build' },
-  test: { title: 'Test harness', order: 16, internal: true },
-  desktop: { title: 'Desktop app', order: 17, internal: true },
+  demo: { title: 'Demo', order: 16, mergeInto: 'build' },
+  test: { title: 'Test harness', order: 17, internal: true },
+  desktop: { title: 'Desktop app', order: 18, internal: true },
 };
 
 export const PIWI_ENV_VARS = {
@@ -720,6 +727,37 @@ export const PIWI_ENV_VARS = {
     default: String(500 * 1024 * 1024),
     min: 1024 * 1024,
     max: 5 * 1024 * 1024 * 1024,
+    since: '0.19.0',
+  },
+  // ── Offline export limits ───────────────────────────────────────────────
+  PIWI_EXPORT_MAX_INLINE_BYTES: {
+    description:
+      'Max size of a single evidence file embedded as a data: URI in an HTML export, in bytes. Larger files are left out of the single-file HTML (and listed as omitted); the ZIP export still carries them at full size.',
+    category: 'export',
+    type: 'number',
+    default: String(8 * 1024 * 1024),
+    min: 64 * 1024,
+    max: 512 * 1024 * 1024,
+    since: '0.19.0',
+  },
+  PIWI_EXPORT_MAX_BYTES: {
+    description:
+      'Max total size of one export, in bytes. Evidence is added largest-last until the budget is reached; the rest is listed as omitted. The archive is built in memory, so this also bounds what a single export costs the server.',
+    category: 'export',
+    type: 'number',
+    default: String(500 * 1024 * 1024),
+    min: 1024 * 1024,
+    max: 4 * 1024 * 1024 * 1024,
+    since: '0.19.0',
+  },
+  PIWI_EXPORT_MAX_CASES: {
+    description:
+      'Max member executions carrying full evidence in a failure-cluster export. Remaining affected tests are listed by name without their evidence.',
+    category: 'export',
+    type: 'number',
+    default: '25',
+    min: 1,
+    max: 200,
     since: '0.19.0',
   },
   PIWI_INGEST_MAX_CONSOLE_ENTRY_CHARS: {

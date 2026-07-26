@@ -489,6 +489,12 @@ provide(clusterSectionLocatorKey, {
             <UIcon name="i-lucide-trending-up" class="size-3.5" />
             <span class="hidden sm:inline">Evolution</span>
           </NuxtLink>
+          <ExportMenu
+            v-if="testCase"
+            :endpoint="`/api/test-run-cases/${testCase.id}/export`"
+            :base-name="`piwi-execution-${testCase.id}`"
+            class="mr-2"
+          />
           <NavbarActions :actions="navbarActions" />
         </template>
       </UDashboardNavbar>

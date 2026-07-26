@@ -263,6 +263,13 @@ export const HELP_TOPICS = {
     text: 'The source around the failing line and the callers above it — captured from the failure’s call stack — so you can read where it broke, and the code that led there, without opening your editor. When the execution has a trace, this deepens into the complete call stack with the real source of every frame, read from the trace’s embedded files.',
     doc: 'ui-overview#trace-powered-deep-views',
   },
+  'export.offline': {
+    // Deliberately avoids the word "Export": the hint sits beside a button with
+    // that label, and a substring role query would match both.
+    title: 'Reading this offline',
+    text: 'Takes this investigation out of the dashboard as a file that needs no network and no Piwi server. HTML is one self-contained page with screenshots and video embedded; ZIP adds the raw artifacts — trace archives, full-size video, logs — plus a machine-readable data.json; PDF is the HTML printed from your browser. Evidence past the size budget is listed in the report as omitted rather than dropped quietly.',
+    envVars: ['PIWI_EXPORT_MAX_INLINE_BYTES', 'PIWI_EXPORT_MAX_BYTES', 'PIWI_EXPORT_MAX_CASES'],
+  },
   'case.artifacts': {
     title: 'Artifacts',
     text: 'Traces, attachments, console output and network requests captured for this execution — the raw material behind the result.',

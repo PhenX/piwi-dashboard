@@ -195,6 +195,11 @@ const breadcrumbItems = computed(() => [
           <BreadcrumbNav :items="breadcrumbItems" />
         </template>
         <template #right>
+          <ExportMenu
+            v-if="cluster"
+            :endpoint="`/api/failure-clusters/${cluster.id}/export`"
+            :base-name="`piwi-cluster-${cluster.id}`"
+          />
           <UTooltip v-if="cluster" :text="clusterCopied ? 'Copied!' : 'Copy failure cluster'">
             <UButton
               size="sm"
