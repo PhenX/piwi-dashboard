@@ -129,7 +129,7 @@ async function release(testCaseId: number) {
                   <NuxtLink :to="`/test-cases/${entry.testCaseId}`" class="text-primary hover:underline font-medium">
                     {{ entry.title }}
                   </NuxtLink>
-                  <SharedTestMetaBadges
+                  <TestMetaBadges
                     :tags="entry.tags"
                     :meta="{ owner: entry.owner ?? undefined }"
                     :max-tags="3"

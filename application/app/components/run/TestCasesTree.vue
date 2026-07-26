@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { isPiwiAnnotation } from '@piwitests/core/test-meta';
 import type { TestCaseResult, SuiteInfo } from '~~/types/api';
 
 const props = defineProps<{
@@ -51,44 +50,6 @@ type FlatRow = GroupRow | TestRow;
 
 function normalizeStatus(s: string): string {
   return s === 'timedOut' || s === 'timedout' ? 'failed' : s;
-}
-
-function annotationColor(type: string): 'warning' | 'error' | 'neutral' | 'info' | 'primary' {
-  if (type === 'fixme' || type === 'slow') return 'warning';
-  if (type === 'fail') return 'error';
-  if (type === 'skip') return 'neutral';
-  if (type === 'tag') return 'primary';
-  return 'info';
-}
-
-function annotationIcon(type: string): string | null {
-  switch (type) {
-    case 'fixme':
-      return 'i-lucide-wrench';
-    case 'skip':
-      return 'i-lucide-skip-forward';
-    case 'slow':
-      return 'i-lucide-timer';
-    case 'fail':
-      return 'i-lucide-x-circle';
-    case 'tag':
-      return 'i-lucide-tag';
-    default:
-      return null;
-  }
-}
-
-function annotationLabel(ann: { type: string; description?: string }): string {
-  return ann.type === 'tag' ? (ann.description ?? ann.type) : ann.type;
-}
-
-/**
- * Playwright test marks only. `piwi:` annotations carry ownership metadata and
- * are rendered by `TestMetaBadges`, so showing them here too would duplicate
- * every owner and priority on the row.
- */
-function testMarks(annotations: Array<{ type: string; description?: string }> | null | undefined) {
-  return (annotations ?? []).filter((ann) => !isPiwiAnnotation(ann.type));
 }
 
 /** Order the per-group tallies are shown in — failures first, they matter most. */
@@ -279,22 +240,7 @@ const flatRows = computed<FlatRow[]>(() => {
           <span v-else class="font-medium truncate min-w-0 text-muted">
             {{ row.label }}
           </span>
-          <div v-if="row.depth > 0" class="flex items-center gap-1 shrink-0">
-            <UBadge v-if="row.mode === 'parallel'" color="success" variant="soft" size="xs">parallel</UBadge>
-            <UBadge v-if="row.mode === 'serial'" color="warning" variant="soft" size="xs">serial</UBadge>
-            <UBadge
-              v-for="ann in row.annotations"
-              :key="`${ann.type}:${ann.description ?? ''}`"
-              :color="annotationColor(ann.type)"
-              variant="soft"
-              size="xs"
-              :title="ann.type !== 'tag' ? (ann.description ?? undefined) : undefined"
-              class="gap-1"
-            >
-              <UIcon v-if="annotationIcon(ann.type)" :name="annotationIcon(ann.type)!" class="size-2.5 shrink-0" />
-              {{ annotationLabel(ann) }}
-            </UBadge>
-          </div>
+          <TestRowBadges v-if="row.depth > 0" :mode="row.mode" :annotations="row.annotations" class="shrink-0" />
           <div class="flex-1" />
           <!--
             Counts stay visible at every width. Below `sm` the wording drops to
@@ -319,10 +265,15 @@ const flatRows = computed<FlatRow[]>(() => {
         <!-- Test row -->
         <div
           v-else
-          class="flex items-center gap-2 pr-3 py-2 sm:py-1.5 border-b border-default last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors"
+          class="flex flex-wrap items-center gap-x-2 gap-y-1 pr-3 py-2 sm:py-1.5 border-b border-default last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors"
           :class="highlightedCaseId === row.test.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
           :style="{ paddingLeft: `${row.depth * 20 + 12}px` }"
         >
+          <!--
+            Same data as the flat list, same left-to-right order: browser,
+            status, badges, title, then the numbers.
+          -->
+          <BrowserBadge :browser="row.test.browser" size="sm" />
           <!--
             The status rides on the row's leading icon (it replaces a purely
             decorative flask), so the row still reads at a glance on mobile
@@ -347,33 +298,31 @@ const flatRows = computed<FlatRow[]>(() => {
           >
             {{ formatStatusLabel(row.test.status) }}
           </UBadge>
-          <UBadge
-            v-for="ann in testMarks(row.test.testAnnotations)"
-            :key="`${ann.type}:${ann.description ?? ''}`"
-            :color="annotationColor(ann.type)"
-            variant="soft"
-            size="xs"
-            :title="ann.type !== 'tag' ? (ann.description ?? undefined) : undefined"
-            class="shrink-0 gap-1"
-          >
-            <UIcon v-if="annotationIcon(ann.type)" :name="annotationIcon(ann.type)!" class="size-2.5 shrink-0" />
-            {{ annotationLabel(ann) }}
-          </UBadge>
-          <SharedTestMetaBadges :tags="row.test.tags" :meta="row.test.testMeta" :max-tags="3" class="shrink-0" />
+          <TestRowBadges
+            :is-new-regression="Boolean(row.test.isNewRegression)"
+            :is-new-flaky="Boolean(row.test.isNewFlaky)"
+            :annotations="row.test.testAnnotations"
+            :tags="row.test.tags"
+            :meta="row.test.testMeta"
+            :max-tags="3"
+            class="shrink-0"
+          />
           <!--
             The title is the row's only navigation — a separate "View" button
             pointed at the same page and just ate width. `self-stretch` keeps the
-            tap target the full height of the row on touch screens.
+            tap target the full height of the row on touch screens, and the
+            `min-w-32` floor stops a tagged test from squeezing its own title to
+            nothing on a phone: the numbers wrap to a second line instead.
           -->
           <a
             :href="`/test-run-cases/${row.test.id}`"
-            class="text-primary hover:underline flex-1 min-w-0 self-stretch flex items-center"
+            class="text-primary hover:underline flex-1 min-w-32 self-stretch flex items-center"
             :title="row.test.title"
             @click.prevent="navigateTo(`/test-run-cases/${row.test.id}`)"
           >
             <span class="truncate">{{ row.test.title }}</span>
           </a>
-          <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto">
             <span v-if="row.test.status === 'running'" class="text-xs text-info">In progress...</span>
             <DurationValue v-else-if="row.test.duration" :ms="row.test.duration" class="text-xs text-muted" />
             <UBadge
@@ -389,6 +338,14 @@ const flatRows = computed<FlatRow[]>(() => {
             <UBadge v-if="(row.test.retries ?? 0) > 0" color="warning" variant="soft" size="xs">
               {{ row.test.retries }}x
             </UBadge>
+            <span
+              v-if="row.test.wastedTimeMs"
+              class="inline-flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400"
+              title="Wasted in fixed waits"
+            >
+              <UIcon name="i-lucide-hourglass" class="size-3 shrink-0" />
+              <DurationValue :ms="row.test.wastedTimeMs" unit-class="opacity-60" no-title />
+            </span>
           </div>
         </div>
       </template>

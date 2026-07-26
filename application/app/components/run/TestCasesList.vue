@@ -389,7 +389,14 @@ defineExpose({ scrollToCase });
                 <DynamicScrollerItem
                   :item="item"
                   :active="active"
-                  :size-dependencies="[item.title, item.location, item.isNewRegression, item.isNewFlaky]"
+                  :size-dependencies="[
+                    item.title,
+                    item.location,
+                    item.isNewRegression,
+                    item.isNewFlaky,
+                    item.testAnnotations,
+                    item.tags,
+                  ]"
                   :data-index="index"
                 >
                   <div
@@ -406,24 +413,16 @@ defineExpose({ scrollToCase });
                     <!-- title -->
                     <div class="px-3 py-2 min-w-0 space-y-0.5" role="cell">
                       <div class="flex items-center gap-1.5 min-w-0">
-                        <UBadge
-                          v-if="item.isNewRegression"
-                          color="error"
-                          variant="solid"
-                          size="xs"
-                          class="uppercase tracking-wider"
-                        >
-                          NEW
-                        </UBadge>
-                        <UBadge
-                          v-if="item.isNewFlaky"
-                          color="info"
-                          variant="solid"
-                          size="xs"
-                          class="uppercase tracking-wider"
-                        >
-                          FLAKY
-                        </UBadge>
+                        <!-- Same badge cluster, in the same order, as the tree's rows. -->
+                        <TestRowBadges
+                          :is-new-regression="Boolean(item.isNewRegression)"
+                          :is-new-flaky="Boolean(item.isNewFlaky)"
+                          :annotations="item.testAnnotations"
+                          :tags="item.tags"
+                          :meta="item.testMeta"
+                          :max-tags="3"
+                          class="shrink-0"
+                        />
                         <a
                           :href="`/test-run-cases/${item.id}`"
                           class="text-primary hover:underline font-medium truncate"
@@ -431,7 +430,6 @@ defineExpose({ scrollToCase });
                           @click.prevent="navigateTo(`/test-run-cases/${item.id}`)"
                           >{{ item.title }}</a
                         >
-                        <SharedTestMetaBadges :tags="item.tags" :meta="item.testMeta" :max-tags="3" />
                       </div>
                       <OpenInIdeLink
                         v-if="item.location"

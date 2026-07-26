@@ -3,6 +3,16 @@ import { UIcon } from '#components';
 import type { Column } from '@tanstack/vue-table';
 import type { CommitListItem } from '~~/types/api';
 import { formatDuration as formatDurationLib, formatDistanceToNow } from 'date-fns';
+import { TEST_PRIORITIES, type TestPriority } from '@piwitests/core/test-meta';
+
+/**
+ * Narrow a stored priority to the union `TestMetaBadges` takes. The database
+ * column is a plain string, so anything unrecognized drops out rather than
+ * rendering a badge nobody defined.
+ */
+export function toTestPriority(value: string | null | undefined): TestPriority | undefined {
+  return TEST_PRIORITIES.includes(value as TestPriority) ? (value as TestPriority) : undefined;
+}
 
 /**
  * Creates a sortable column header render function.

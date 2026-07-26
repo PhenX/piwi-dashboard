@@ -343,11 +343,11 @@ defineExpose({ refresh });
                   >
                     {{ row.original.title }}
                   </NuxtLink>
-                  <SharedTestMetaBadges
+                  <TestMetaBadges
                     :tags="row.original.tags"
                     :meta="{
                       owner: row.original.owner ?? undefined,
-                      priority: row.original.priority ?? undefined,
+                      priority: toTestPriority(row.original.priority),
                       feature: row.original.feature ?? undefined,
                       link: row.original.link ?? undefined,
                     }"

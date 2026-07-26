@@ -131,9 +131,9 @@ const columns: TableColumn<FlakyTest>[] = [
             >
               {{ row.original.title }}
             </NuxtLink>
-            <SharedTestMetaBadges
+            <TestMetaBadges
               :tags="row.original.tags"
-              :meta="{ owner: row.original.owner ?? undefined, priority: row.original.priority ?? undefined }"
+              :meta="{ owner: row.original.owner ?? undefined, priority: toTestPriority(row.original.priority) }"
               :max-tags="3"
             />
             <OpenInIdeLink

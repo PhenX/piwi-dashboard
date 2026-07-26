@@ -116,7 +116,7 @@ const { summaryColSpanClass, blockColSpanClass } = useDetailGrid(() => {
                   >
                     @{{ ann.type }}
                   </UBadge>
-                  <SharedTestMetaBadges :tags="testCase?.tags" :meta="testCase?.testMeta" />
+                  <TestMetaBadges :tags="testCase?.tags" :meta="testCase?.testMeta" />
                 </div>
                 <p class="text-xs text-gray-500 mt-0.5">
                   <span v-if="testCase?.location">{{ testCase.location }}</span>
