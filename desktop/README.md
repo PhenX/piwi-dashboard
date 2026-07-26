@@ -30,6 +30,9 @@ Targets for v1: **Windows (`.msi`)** and **macOS (`.dmg`)**. Linux is deferred.
    clients' config files (`src-tauri/src/mcp_clients.rs`): strict-JSON merge
    of one key with a backup next to the file, and a startup pass that rewrites
    entries whose URL/token drifted after a port change.
+7. Native notifications shown while the window is hidden bump an unread badge
+   on the dock icon and the tray tooltip (`desktop_set_activity`), cleared
+   when the window regains focus.
 
 Local access is gated by a per-launch token (see
 `application/server/middleware/desktop-guard.ts`), so only the app — not other

@@ -26,6 +26,7 @@
     "allow-desktop-mcp-reveal",
     "allow-desktop-check-update",
     "allow-desktop-install-update",
-    "allow-desktop-restart-app"
+    "allow-desktop-restart-app",
+    "allow-desktop-set-activity"
   ]
 }

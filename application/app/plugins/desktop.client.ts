@@ -10,17 +10,15 @@
  *   - the Web Notification API is unavailable / permission-denied in the
  *     webview, so we shim it onto native OS notifications.
  *
- * All of this only activates in the desktop build (`NUXT_PUBLIC_DESKTOP`) and
- * only when the native bridge is actually present, so the shared web build is
- * unaffected. File downloads (the OpenAPI spec) are handled separately by
- * `useDesktopDownload`, wired at the button that triggers them.
+ * All of this activates only when the native bridge is actually present —
+ * plain browsers (including one opened at the same loopback URL) have no
+ * bridge, so the shared web build is unaffected. File downloads (the OpenAPI
+ * spec) are handled separately by `useDesktopDownload`, wired at the button
+ * that triggers them.
  */
 export default defineNuxtPlugin(() => {
-  const config = useRuntimeConfig();
-  if (String(config.public.desktop) !== 'true') return;
-
   const core = tauriCore();
-  if (!core) return; // opened in a plain browser at the loopback URL — no bridge
+  if (!core) return; // no bridge — not running inside the desktop shell
 
   installExternalLinkHandler(core);
   installNativeNotifications(core);
@@ -71,8 +69,20 @@ function installExternalLinkHandler(core: Bridge) {
  * routing those through the shell makes browser-channel notifications work in
  * the desktop app without touching a dozen call sites. (Native click-to-open is
  * platform-dependent and not wired — the notification still displays.)
+ *
+ * Every notification shown while the window is hidden or unfocused also bumps
+ * the ambient unread state — a dock/taskbar badge where the platform has one,
+ * and the tray tooltip everywhere. Focusing the window clears it.
  */
 function installNativeNotifications(core: Bridge) {
+  let unread = 0;
+
+  window.addEventListener('focus', () => {
+    if (unread === 0) return;
+    unread = 0;
+    core.invoke('desktop_set_activity', { count: 0, status: null }).catch(() => {});
+  });
+
   class NativeNotification extends EventTarget {
     static readonly permission: NotificationPermission = 'granted';
     static requestPermission(): Promise<NotificationPermission> {
@@ -91,6 +101,11 @@ function installNativeNotifications(core: Bridge) {
       this.title = title;
       this.body = options?.body ?? '';
       core.invoke('desktop_notify', { title, body: this.body }).catch(() => {});
+      if (document.hidden || !document.hasFocus()) {
+        unread += 1;
+        const status = this.body.split('\n')[0] || this.title;
+        core.invoke('desktop_set_activity', { count: unread, status }).catch(() => {});
+      }
     }
 
     close() {}

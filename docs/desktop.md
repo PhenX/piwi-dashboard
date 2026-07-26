@@ -56,6 +56,11 @@ By default, closing the window quits the app. From the tray icon you can enable:
   tray, so submitting more results is instant and reopening is immediate.
 - **Start on login** — launch the app (hidden, into the tray) when you log in.
 
+While the window is hidden or unfocused, subscribed
+[notifications](/notifications) (the bell on a project page) show as **native
+OS notifications**, and each one bumps an unread count on the dock icon
+(macOS/Linux) and in the tray tooltip. Focusing the window clears it.
+
 ## Sending results to it
 
 While the app is running, the reporter finds it by itself — no URL and no token

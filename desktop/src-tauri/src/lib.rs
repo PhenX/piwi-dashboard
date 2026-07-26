@@ -100,6 +100,31 @@ fn desktop_take_pending_open_files(app: tauri::AppHandle) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Ambient status while the window is hidden or unfocused: an unread count on
+/// the dock/taskbar icon (where the platform supports a badge) and the tray
+/// tooltip. Driven by the dashboard, which knows what fired; the shell only
+/// renders. Count 0 clears everything.
+#[tauri::command]
+fn desktop_set_activity(app: tauri::AppHandle, count: u32, status: Option<String>) {
+    let handle = app.clone();
+    // Badge and tray mutations belong on the main thread on every platform.
+    let _ = app.run_on_main_thread(move || {
+        if let Some(w) = handle.get_webview_window("main") {
+            // Unsupported platforms (Windows) reject the call — that's fine,
+            // the tray tooltip below still carries the count.
+            let _ = w.set_badge_count(if count > 0 { Some(count as i64) } else { None });
+        }
+        if let Some(tray) = handle.tray_by_id("main") {
+            let tooltip = match (count, status.as_deref()) {
+                (0, _) => "Piwi Dashboard (click to open)".to_string(),
+                (n, None) => format!("Piwi Dashboard — {n} unread"),
+                (n, Some(s)) => format!("Piwi Dashboard — {n} unread — {s}"),
+            };
+            let _ = tray.set_tooltip(Some(tooltip));
+        }
+    });
+}
+
 fn random_hex_32() -> String {
     use rand::RngCore;
     let mut bytes = [0u8; 32];
@@ -454,7 +479,8 @@ pub fn run() {
             desktop_mcp_reveal,
             desktop_check_update,
             desktop_install_update,
-            desktop_restart_app
+            desktop_restart_app,
+            desktop_set_activity
         ])
         .manage(ServerProcess::default())
         .manage(runner::LocalRuns::default())
