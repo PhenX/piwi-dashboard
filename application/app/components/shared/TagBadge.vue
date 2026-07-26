@@ -28,9 +28,9 @@ defineProps<{
 
 <style scoped>
 .tag-badge {
-  background-color: color-mix(in srgb, var(--tag-color) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--tag-color) 30%, transparent);
-  color: color-mix(in oklab, var(--tag-color) 60%, black);
+  background-color: color-mix(in srgb, var(--tag-color) 20%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tag-color) 60%, transparent);
+  color: color-mix(in oklab, var(--tag-color) 80%, black);
 }
 
 :global(.dark) .tag-badge {
