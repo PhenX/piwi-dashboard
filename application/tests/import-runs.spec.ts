@@ -8,6 +8,26 @@ import { PROJECT } from '#shared/test-project-names';
 import { buildBlobReport, buildTraceArchive, errorContextMarkdown } from './utils/blob-report-fixture';
 
 /**
+ * Deletes the projects a suite imports into. Imports are deduplicated by
+ * content, so a suite that runs a second time against surviving data sees
+ * `duplicate` where it asserts `imported`. Both suites below run serially,
+ * where one failure replays every test in the block.
+ */
+async function resetImportProjects(playwright: typeof import('@playwright/test').playwright, names: string[]) {
+  const api = await playwright.request.newContext({ baseURL: test.info().project.use.baseURL });
+  try {
+    const response = await api.get('/api/projects/menu');
+    if (!response.ok()) return;
+    const projects = (await response.json()) as { id: number; name: string }[];
+    for (const project of projects) {
+      if (names.includes(project.name)) await api.delete(`/api/projects/${project.id}`);
+    }
+  } finally {
+    await api.dispose();
+  }
+}
+
+/**
  * End-to-end cover for importing historical blob reports: the pre-flight that
  * spares the user a doomed upload, the import itself, and the page that drives
  * both.
@@ -22,7 +42,9 @@ test.describe('Blob report import', () => {
   /** Bytes of the primary archive, reused for the duplicate assertions. */
   let archive: Buffer;
 
-  test.beforeAll(() => {
+  test.beforeAll(async ({ playwright }) => {
+    await resetImportProjects(playwright, [PROJECT.IMPORT_BLOB, PROJECT.IMPORT_BLOB_UI]);
+
     if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
 
     archive = buildBlobReport({
@@ -241,6 +263,14 @@ test.describe('Blob report import', () => {
 
 test.describe('Trace file import', () => {
   test.describe.configure({ mode: 'serial' });
+
+  test.beforeAll(async ({ playwright }) => {
+    await resetImportProjects(playwright, [
+      PROJECT.IMPORT_TRACE,
+      PROJECT.IMPORT_TRACE_GROUP,
+      PROJECT.IMPORT_TRACE_RETRY,
+    ]);
+  });
 
   /** One trace per attempt, as Playwright writes them under test-results/. */
   const passing = buildTraceArchive({
