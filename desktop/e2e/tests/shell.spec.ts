@@ -38,4 +38,24 @@ test('the dashboard can reach the shell IPC commands', async ({ tauriPage }) => 
 
   expect(result.ok, `invoke was rejected: ${result.error ?? 'unknown'}`).toBe(true);
   expect(result.keys).toEqual(expect.arrayContaining(['run_in_background', 'start_on_login']));
+
+  // The local-runner commands are granted too: an unknown project resolves to
+  // null (not an ACL rejection)…
+  const link = (await tauriPage.evaluate(`
+    window.__TAURI__.core.invoke('desktop_get_project_link', { projectId: 'e2e-no-such-project' })
+      .then((l) => ({ ok: true, link: l ?? null }))
+      .catch((e) => ({ ok: false, error: String((e && e.message) || e) }))
+  `)) as { ok: boolean; error?: string; link?: unknown };
+  expect(link.ok, `desktop_get_project_link rejected: ${link.error ?? 'unknown'}`).toBe(true);
+  expect(link.link).toBeNull();
+
+  // …and a relative path is refused by the command's own validation, proving
+  // the call went through the ACL and into the handler.
+  const rejected = (await tauriPage.evaluate(`
+    window.__TAURI__.core.invoke('desktop_set_project_link', { projectId: 'e2e-no-such-project', path: 'not/absolute' })
+      .then(() => ({ rejected: false, error: '' }))
+      .catch((e) => ({ rejected: true, error: String((e && e.message) || e) }))
+  `)) as { rejected: boolean; error: string };
+  expect(rejected.rejected).toBe(true);
+  expect(rejected.error).toContain('absolute');
 });

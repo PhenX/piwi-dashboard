@@ -17,6 +17,10 @@ Targets for v1: **Windows (`.msi`)** and **macOS (`.dmg`)**. Linux is deferred.
    window at the server via a one-time token bootstrap (`/__piwi/session`).
 3. The tray offers **Run in background** (keep serving after the window closes),
    **Start on login**, and **Open data folder**.
+4. The dashboard can link a Piwi project to a folder on this machine and run
+   `playwright test` there (`src-tauri/src/runner.rs`): the shell resolves the
+   folder's own Playwright package, executes it with the bundled Node sidecar,
+   and streams output back to the webview as `piwi:local-run` events.
 
 Local access is gated by a per-launch token (see
 `application/server/middleware/desktop-guard.ts`), so only the app — not other
