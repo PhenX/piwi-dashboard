@@ -199,10 +199,10 @@ export function getStatusIcon(status: string): string {
 export function getStatusTextClass(status: string): string {
   switch (normalizeStatusKey(status)) {
     case 'passed':
-      return 'text-green-600 dark:text-green-400';
+      return 'text-emerald-600 dark:text-emerald-400';
     case 'failed':
     case 'timedout':
-      return 'text-red-600 dark:text-red-400';
+      return 'text-rose-600 dark:text-rose-400';
     case 'didnotrun':
       return 'text-amber-600 dark:text-amber-400';
     case 'running':
@@ -210,7 +210,7 @@ export function getStatusTextClass(status: string): string {
     case 'finalizing':
       return 'text-blue-600 dark:text-blue-400';
     default:
-      return 'text-gray-400 dark:text-gray-500';
+      return 'text-zinc-400 dark:text-zinc-500';
   }
 }
 
@@ -300,48 +300,29 @@ export function clusterErrorTypeColor(
 }
 
 /**
- * Generate a random vibrant hex color.
- * Uses HSL with fixed saturation/lightness for visually appealing results.
- *
- * Conversion uses the standard HSL → RGB chroma method:
- *   c = chroma, x = intermediate value per 60° sector, m = brightness offset
- *   The (r,g,b) triple is selected from one of six 60°-wide hue sectors,
- *   then shifted by m and scaled to [0,255].
+ * Curated tag palette — the Tailwind 500 shades, which keep even perceived
+ * saturation across hues. `TagBadge` derives its tint/text from whatever it
+ * gets, but picking from a fixed set keeps sibling tags looking like one
+ * family instead of the arbitrary HSL spins this used to generate.
  */
+export const TAG_COLOR_PALETTE = [
+  '#ef4444', // red
+  '#f97316', // orange
+  '#f59e0b', // amber
+  '#84cc16', // lime
+  '#10b981', // emerald
+  '#14b8a6', // teal
+  '#06b6d4', // cyan
+  '#3b82f6', // blue
+  '#6366f1', // indigo
+  '#8b5cf6', // violet
+  '#d946ef', // fuchsia
+  '#ec4899', // pink
+] as const;
+
+/** Pick a random color for a new tag from the curated palette. */
 export function randomHexColor(): string {
-  const hue = Math.floor(Math.random() * 360);
-  const s = 65; // saturation %: vibrant but not neon
-  const l = 50; // lightness %: mid-range for good contrast on both light/dark backgrounds
-  const c = ((1 - Math.abs((2 * l) / 100 - 1)) * s) / 100;
-  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
-  const m = l / 100 - c / 2;
-  let r = 0,
-    g = 0,
-    b = 0;
-  if (hue < 60) {
-    r = c;
-    g = x;
-  } else if (hue < 120) {
-    r = x;
-    g = c;
-  } else if (hue < 180) {
-    g = c;
-    b = x;
-  } else if (hue < 240) {
-    g = x;
-    b = c;
-  } else if (hue < 300) {
-    r = x;
-    b = c;
-  } else {
-    r = c;
-    b = x;
-  }
-  const toHex = (v: number) =>
-    Math.round((v + m) * 255)
-      .toString(16)
-      .padStart(2, '0');
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  return TAG_COLOR_PALETTE[Math.floor(Math.random() * TAG_COLOR_PALETTE.length)]!;
 }
 
 /**

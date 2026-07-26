@@ -246,7 +246,9 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
               </span>
             </template>
             <template #status-cell="{ row }">
-              <UBadge :color="getStatusColor(row.original.status)" class="capitalize">{{ row.original.status }}</UBadge>
+              <UBadge :color="getStatusColor(row.original.status)" variant="subtle" class="capitalize">{{
+                row.original.status
+              }}</UBadge>
             </template>
             <template #duration-cell="{ row }">
               <DurationValue v-if="row.original.duration !== null" :ms="row.original.duration" />

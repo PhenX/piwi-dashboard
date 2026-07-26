@@ -16,10 +16,10 @@ const segments = computed(() => {
   const passedCount = props.passed - props.flaky;
 
   return [
-    { key: 'passed', label: 'Passed', count: passedCount, color: 'bg-green-500' },
-    { key: 'failed', label: 'Failed', count: props.failed, color: 'bg-red-500' },
+    { key: 'passed', label: 'Passed', count: passedCount, color: 'bg-emerald-500' },
+    { key: 'failed', label: 'Failed', count: props.failed, color: 'bg-rose-500' },
     { key: 'flaky', label: 'Flaky', count: props.flaky, color: 'bg-purple-500' },
-    { key: 'skipped', label: 'Skipped', count: props.skipped, color: 'bg-gray-400' },
+    { key: 'skipped', label: 'Skipped', count: props.skipped, color: 'bg-zinc-400' },
     { key: 'didNotRun', label: "Didn't run", count: props.didNotRun ?? 0, color: 'bg-amber-300 dark:bg-amber-700' },
   ]
     .filter((s) => s.count > 0)
@@ -33,7 +33,7 @@ const segments = computed(() => {
 
 <template>
   <UTooltip :ui="{ content: 'overflow-visible !p-0' }">
-    <div v-if="total > 0" class="flex h-2.5 w-full min-w-30 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+    <div v-if="total > 0" class="flex h-2.5 w-full min-w-30 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
       <div
         v-for="seg in segments"
         :key="seg.key"
@@ -41,16 +41,16 @@ const segments = computed(() => {
         :style="{ width: seg.widthPct + '%' }"
       />
     </div>
-    <div v-else class="text-xs text-gray-400 dark:text-gray-500 italic">No tests</div>
+    <div v-else class="text-xs text-zinc-400 dark:text-zinc-500 italic">No tests</div>
 
     <template #content>
-      <div class="min-w-52 space-y-1.5 rounded-md bg-gray-900 px-3 py-2 text-sm shadow-lg">
+      <div class="min-w-52 space-y-1.5 rounded-md bg-zinc-900 px-3 py-2 text-sm shadow-lg">
         <div class="font-semibold text-white">{{ total }} tests total</div>
         <div v-for="seg in segments" :key="seg.key" class="flex items-center gap-2 whitespace-nowrap">
           <span :class="[seg.color, 'inline-block h-2.5 w-2.5 shrink-0 rounded-sm']" />
           <span class="text-white">{{ seg.label }}</span>
           <span class="ml-4 tabular-nums font-medium text-white">{{ seg.count }}</span>
-          <span class="ml-auto tabular-nums text-gray-300 text-xs">{{ seg.displayPct }}%</span>
+          <span class="ml-auto tabular-nums text-zinc-300 text-xs">{{ seg.displayPct }}%</span>
         </div>
       </div>
     </template>

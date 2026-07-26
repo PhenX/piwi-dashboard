@@ -735,8 +735,8 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                     :class="[
                       'text-xs font-medium px-2 py-1 rounded border cursor-pointer focus:outline-none transition-colors',
                       isEnvironmentFilterActive(env)
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-300 dark:border-blue-700 hover:bg-blue-200 dark:hover:bg-blue-800',
+                        ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700'
+                        : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 dark:hover:bg-zinc-700',
                     ]"
                     @click="toggleEnvironmentFilter(env)"
                   >
@@ -844,12 +844,9 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                   <span class="text-xs text-gray-600">{{ prettyDateFormat(row.original.startTime) }}</span>
                 </template>
                 <template #environment-cell="{ row }">
-                  <span
-                    v-if="row.original.environment"
-                    class="text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-1.5 py-0.5 rounded"
-                  >
+                  <UBadge v-if="row.original.environment" color="info" variant="subtle" size="sm">
                     {{ row.original.environment }}
-                  </span>
+                  </UBadge>
                 </template>
                 <template #metadata-cell="{ row }">
                   <div v-if="row.original.metadata?.scm" class="flex items-center gap-1 flex-wrap">
@@ -1080,15 +1077,23 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                   >
                     <template #statusA-cell="{ row }">
                       <span v-if="!row.original.statusA" class="text-gray-400">&mdash;</span>
-                      <UBadge v-else :color="getStatusColor(row.original.statusA)" class="capitalize">{{
-                        row.original.statusA
-                      }}</UBadge>
+                      <UBadge
+                        v-else
+                        :color="getStatusColor(row.original.statusA)"
+                        variant="subtle"
+                        class="capitalize"
+                        >{{ row.original.statusA }}</UBadge
+                      >
                     </template>
                     <template #statusB-cell="{ row }">
                       <span v-if="!row.original.statusB" class="text-gray-400">&mdash;</span>
-                      <UBadge v-else :color="getStatusColor(row.original.statusB)" class="capitalize">{{
-                        row.original.statusB
-                      }}</UBadge>
+                      <UBadge
+                        v-else
+                        :color="getStatusColor(row.original.statusB)"
+                        variant="subtle"
+                        class="capitalize"
+                        >{{ row.original.statusB }}</UBadge
+                      >
                     </template>
                     <template #durationA-cell="{ row }">
                       <DurationValue v-if="row.original.durationA !== null" :ms="row.original.durationA" />
@@ -1250,15 +1255,23 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                   >
                     <template #statusA-cell="{ row }">
                       <span v-if="!row.original.statusA" class="text-gray-400">&mdash;</span>
-                      <UBadge v-else :color="getStatusColor(row.original.statusA)" class="capitalize">{{
-                        row.original.statusA
-                      }}</UBadge>
+                      <UBadge
+                        v-else
+                        :color="getStatusColor(row.original.statusA)"
+                        variant="subtle"
+                        class="capitalize"
+                        >{{ row.original.statusA }}</UBadge
+                      >
                     </template>
                     <template #statusB-cell="{ row }">
                       <span v-if="!row.original.statusB" class="text-gray-400">&mdash;</span>
-                      <UBadge v-else :color="getStatusColor(row.original.statusB)" class="capitalize">{{
-                        row.original.statusB
-                      }}</UBadge>
+                      <UBadge
+                        v-else
+                        :color="getStatusColor(row.original.statusB)"
+                        variant="subtle"
+                        class="capitalize"
+                        >{{ row.original.statusB }}</UBadge
+                      >
                     </template>
                     <template #durationA-cell="{ row }">
                       <DurationValue v-if="row.original.durationA !== null" :ms="row.original.durationA" />

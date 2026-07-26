@@ -1048,7 +1048,7 @@ provide(clusterSectionLocatorKey, {
                     </span>
                   </template>
                   <template #status-cell="{ row }">
-                    <UBadge :color="getStatusColor(row.original.status)" class="capitalize">{{
+                    <UBadge :color="getStatusColor(row.original.status)" variant="subtle" class="capitalize">{{
                       row.original.status
                     }}</UBadge>
                   </template>

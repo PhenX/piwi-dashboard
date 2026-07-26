@@ -19,7 +19,7 @@ defineProps<{
       <!-- Environment + CI provider -->
       <div v-if="environment || ci?.provider" class="flex items-center gap-x-2 gap-y-1 flex-wrap">
         <UIcon name="i-lucide-cloud" class="w-3.5 h-3.5 text-gray-400 shrink-0" />
-        <span v-if="environment" class="rounded-full border px-2 py-0.5 text-xs bg-gray-50 dark:bg-gray-800">{{
+        <span v-if="environment" class="rounded-full border border-default px-2 py-0.5 text-xs bg-elevated/60">{{
           environment
         }}</span>
         <span v-if="ci?.provider">{{ ci.provider }}</span>

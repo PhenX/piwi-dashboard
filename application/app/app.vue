@@ -2,7 +2,9 @@
 const config = useRuntimeConfig();
 const colorMode = useColorMode();
 
-const color = computed(() => (colorMode.value === 'dark' ? '#1b1718' : 'white'));
+// Matches --ui-bg-canvas (zinc-950 / zinc-100) so mobile browser chrome
+// blends with the page background.
+const color = computed(() => (colorMode.value === 'dark' ? '#09090b' : '#f4f4f5'));
 // Prepend the app base URL so the favicon resolves correctly in demo mode
 // (where baseURL is /demo/) and in normal mode (where it is /).
 const iconHref = (config.app?.baseURL ?? '/').replace(/\/$/, '') + '/logo.svg';
