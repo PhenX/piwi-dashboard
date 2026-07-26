@@ -328,7 +328,7 @@ defineExpose({ scrollToCase });
     <template v-else-if="!treeView">
       <div
         v-if="sortedTestCases.length > 0"
-        class="flex-1 min-h-0 max-lg:h-[70dvh] overflow-x-auto overflow-y-hidden rounded-lg border border-default"
+        class="flex-1 min-h-0 max-lg:h-[70dvh] overflow-x-auto overflow-y-hidden rounded-lg border border-default bg-default"
       >
         <div
           class="flex flex-col h-full"

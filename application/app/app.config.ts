@@ -6,7 +6,9 @@ export default defineAppConfig({
     },
     card: {
       slots: {
-        header: 'px-3 py-3 sm:px-6 bg-muted/60',
+        // Solid muted header so block headers clearly separate from the card
+        // body in both modes (zinc-100 on white / zinc-800 on zinc-900).
+        header: 'px-3 py-3 sm:px-6 bg-muted',
       },
     },
     table: {

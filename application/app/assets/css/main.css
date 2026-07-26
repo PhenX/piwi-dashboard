@@ -17,6 +17,36 @@
   --color-green-950: #052e16;
 }
 
+/*
+ * Surface contrast
+ * ----------------
+ * Nuxt UI paints the page <body> with `bg-default` — the same token cards and
+ * most raised surfaces use — so the canvas, blocks and block headers all sit
+ * within a few lightness points of each other (white-on-white in light mode,
+ * zinc-900-on-zinc-900 in dark mode). Give the page canvas its own token one
+ * clear step away from surfaces, so cards/blocks read as raised:
+ *   light: zinc-100 canvas under white cards
+ *   dark:  zinc-950 canvas under zinc-900 cards
+ * Popovers, modals, inputs and everything else on `bg-default` are untouched.
+ */
+:root {
+  --ui-bg-canvas: var(--ui-color-neutral-100);
+  /* Default muted (zinc-50) is invisible against white cards — muted
+     surfaces (card headers, code chips) need a real step. */
+  --ui-bg-muted: var(--ui-color-neutral-100);
+}
+.dark {
+  --ui-bg-canvas: var(--ui-color-neutral-950);
+  /* Restate Nuxt UI's dark value: the unlayered `:root` override above would
+     otherwise beat their layered `.dark` rule and leak the light value. */
+  --ui-bg-muted: var(--ui-color-neutral-800);
+}
+
+/* Deliberately unlayered so it beats Nuxt UI's `@layer base` body rule. */
+body {
+  background-color: var(--ui-bg-canvas);
+}
+
 /* highlight.js theme (GitHub-style) */
 .hljs {
   background: transparent;

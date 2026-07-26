@@ -47,7 +47,7 @@ function panelClasses(value: string) {
 
     <!-- Tab switcher: a full-width select on phones, a (scrollable) tab strip from sm up. Sticky on mobile. -->
     <div
-      class="lg:shrink-0 max-lg:sticky max-lg:top-0 max-lg:z-10 max-lg:-mx-1 max-lg:bg-default max-lg:px-1 max-lg:py-1.5"
+      class="lg:shrink-0 max-lg:sticky max-lg:top-0 max-lg:z-10 max-lg:-mx-1 max-lg:bg-(--ui-bg-canvas) max-lg:px-1 max-lg:py-1.5"
     >
       <USelect v-model="activeTab" :items="tabItems" :icon="activeTabIcon" size="md" class="w-full sm:hidden" />
       <UTabs

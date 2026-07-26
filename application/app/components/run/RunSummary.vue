@@ -368,8 +368,8 @@ function onLabelKeydown(e: KeyboardEvent) {
                 class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
                 :class="
                   activeFilter === 'all'
-                    ? 'bg-gray-200 dark:bg-gray-700 ring-2 ring-gray-400 dark:ring-gray-500'
-                    : 'bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ? 'bg-accented ring-2 ring-zinc-400 dark:ring-zinc-500'
+                    : 'bg-elevated/60 hover:bg-elevated'
                 "
                 @click="emit('filter-status', 'all')"
               >
@@ -430,8 +430,8 @@ function onLabelKeydown(e: KeyboardEvent) {
                 class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
                 :class="
                   activeFilter === 'skipped'
-                    ? 'bg-gray-200 dark:bg-gray-700 ring-2 ring-gray-400 dark:ring-gray-500'
-                    : 'bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ? 'bg-accented ring-2 ring-zinc-400 dark:ring-zinc-500'
+                    : 'bg-elevated/60 hover:bg-elevated'
                 "
                 @click="emit('filter-status', 'skipped')"
               >
