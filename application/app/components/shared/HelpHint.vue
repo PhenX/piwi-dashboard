@@ -39,7 +39,8 @@ const open = ref(false);
 // Names both the trigger and the popover it opens, so assistive tech announces
 // which hint is on screen.
 const ariaLabel = computed(() => (title.value ? `Help: ${title.value}` : 'Help'));
-const contentAttrs = computed(() => ({ 'aria-label': ariaLabel.value }));
+// Rides along with the positioning props Reka spreads onto the popover element.
+const contentAttrs = computed(() => ({ side: 'bottom' as const, 'aria-label': ariaLabel.value }));
 </script>
 
 <template>
