@@ -9,10 +9,24 @@
  * Every value interpolated here comes from a test run — error text, console
  * output, page source. The `html` tagged template escapes interpolations by
  * default, so markup has to be opted into explicitly with `raw()`.
+ *
+ * Color is carried by text and borders, never by a fill behind text, so a
+ * printer with background graphics turned off loses decoration but no meaning.
  */
 import { markdownToHtml } from '#shared/markdown-to-html';
 import { html, joinHtml, raw, toHtmlString, type RawHtml } from './html';
 import { stripAnsi } from '#shared/error-fingerprint';
+import {
+  caseFacts,
+  clusterFacts,
+  diagnosisFacts,
+  fmtBytes,
+  fmtDuration,
+  hasDiagnosis,
+  OMISSION_REASONS,
+  projectLabel,
+  type Fact,
+} from './fields';
 import type { ExportAsset, ExportBundle, ExportCase } from './types';
 
 export interface RenderOptions {
@@ -23,54 +37,132 @@ export interface RenderOptions {
 }
 
 const STYLES = `
-:root { color-scheme: light dark; --bg:#fff; --fg:#18181b; --muted:#71717a; --line:#e4e4e7; --card:#fafafa; --accent:#2563eb; --fail:#dc2626; --pass:#16a34a; }
-@media (prefers-color-scheme: dark) { :root { --bg:#18181b; --fg:#f4f4f5; --muted:#a1a1aa; --line:#3f3f46; --card:#27272a; --accent:#60a5fa; --fail:#f87171; --pass:#4ade80; } }
-* { box-sizing: border-box; }
-body { margin:0; padding:0 1rem 4rem; background:var(--bg); color:var(--fg); font-family:system-ui,-apple-system,Segoe UI,sans-serif; line-height:1.6; }
-.wrap { max-width: 60rem; margin: 0 auto; }
-header.doc { padding:2rem 0 1rem; border-bottom:1px solid var(--line); }
-h1 { font-size:1.6rem; margin:0 0 .25rem; overflow-wrap:anywhere; }
-h2 { font-size:1.15rem; margin:0; }
-h3 { font-size:1rem; margin:1.25rem 0 .35rem; }
-.meta { color:var(--muted); font-size:.85rem; }
-.meta code { overflow-wrap:anywhere; }
-dl.facts { display:grid; grid-template-columns:max-content 1fr; gap:.15rem .75rem; margin:.75rem 0; font-size:.9rem; }
-dl.facts dt { color:var(--muted); }
-dl.facts dd { margin:0; overflow-wrap:anywhere; }
-section.card { border:1px solid var(--line); border-radius:8px; margin:1rem 0; background:var(--card); overflow:hidden; }
-section.card > summary, details > summary { cursor:pointer; padding:.6rem .9rem; font-weight:600; list-style:none; display:flex; justify-content:space-between; gap:1rem; align-items:center; }
+:root {
+  color-scheme: light dark;
+  --bg:#fff; --fg:#1c1c20; --muted:#6b6b76; --faint:#8b8b96;
+  --line:#e2e2e7; --line-strong:#c9c9d2; --card:#fafafa; --sunken:#f5f5f8;
+  --accent:#4338ca; --fail:#c0392b; --pass:#15803d; --warn:#a16207; --info:#1d4ed8; --skip:#6b6b76;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#161619; --fg:#ececf1; --muted:#a0a0ad; --faint:#7e7e8c;
+    --line:#2f2f36; --line-strong:#43434d; --card:#1d1d21; --sunken:#131316;
+    --accent:#a5b4fc; --fail:#f87171; --pass:#4ade80; --warn:#fbbf24; --info:#93c5fd; --skip:#a0a0ad;
+  }
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; padding:0 1rem 3rem; background:var(--bg); color:var(--fg);
+  font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+.wrap { max-width:62rem; margin:0 auto; }
+
+header.doc { padding:1.5rem 0 .75rem; border-bottom:2px solid var(--line-strong); }
+.eyebrow { font-size:.7rem; letter-spacing:.09em; text-transform:uppercase; color:var(--accent); font-weight:650; margin:0; }
+h1 { font-size:1.45rem; line-height:1.25; margin:.2rem 0 .3rem; overflow-wrap:anywhere; }
+h2 { font-size:1.05rem; line-height:1.3; margin:0 0 .15rem; overflow-wrap:anywhere; }
+.meta { color:var(--muted); font-size:.78rem; margin:.15rem 0; }
+.meta code { font-family:var(--mono); overflow-wrap:anywhere; }
+.toolbar { display:flex; gap:.4rem; margin-top:.7rem; }
+button {
+  font:inherit; font-size:.78rem; padding:.3rem .7rem; border:1px solid var(--line-strong);
+  border-radius:5px; background:var(--card); color:var(--fg); cursor:pointer;
+}
+button:hover { border-color:var(--accent); color:var(--accent); }
+
+section.case { padding-top:1rem; }
+section.case + section.case { border-top:1px solid var(--line); margin-top:1.2rem; }
+
+dl.facts {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(10.5rem,1fr));
+  gap:.4rem .9rem; margin:.7rem 0;
+}
+dl.facts > div { min-width:0; border-left:2px solid var(--line); padding-left:.5rem; }
+dl.facts dt { font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); }
+dl.facts dd { margin:0; font-size:.82rem; overflow-wrap:anywhere; }
+
+details.card {
+  border:1px solid var(--line); border-left:3px solid var(--line-strong);
+  border-radius:5px; margin:.5rem 0; background:var(--card); overflow:hidden;
+}
+details.card.k-error { border-left-color:var(--fail); }
+details.card.k-diagnosis { border-left-color:var(--accent); }
+details.card.k-evidence { border-left-color:var(--info); }
+details > summary {
+  cursor:pointer; padding:.4rem .65rem; font-weight:600; font-size:.85rem;
+  list-style:none; display:flex; justify-content:space-between; gap:1rem; align-items:center;
+}
+details > summary:hover { color:var(--accent); }
 details > summary::-webkit-details-marker { display:none; }
-details > summary::after { content:'▾'; color:var(--muted); font-weight:400; }
-details[open] > summary::after { content:'▴'; }
-.body { padding:0 .9rem .9rem; }
-pre { background:var(--bg); border:1px solid var(--line); padding:.75rem; border-radius:6px; overflow-x:auto; font-size:.82rem; white-space:pre-wrap; overflow-wrap:anywhere; }
-code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
-img.shot, video { max-width:100%; height:auto; border:1px solid var(--line); border-radius:6px; }
-figure { margin:.5rem 0; }
-figcaption { font-size:.75rem; color:var(--muted); margin-top:.2rem; overflow-wrap:anywhere; }
-table { border-collapse:collapse; width:100%; font-size:.82rem; }
-th, td { text-align:left; padding:.3rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
-th { color:var(--muted); font-weight:600; }
+details > summary::after { content:'+'; color:var(--faint); font-weight:400; font-size:.95rem; }
+details[open] > summary::after { content:'\\2013'; }
+details[open] > summary { border-bottom:1px solid var(--line); }
+.body { padding:.55rem .65rem .65rem; }
+.body > :first-child { margin-top:0; }
+.body > :last-child { margin-bottom:0; }
+h3 { font-size:.7rem; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin:.8rem 0 .25rem; }
+
+pre {
+  background:var(--sunken); border:1px solid var(--line); border-radius:4px;
+  padding:.5rem .6rem; margin:.35rem 0; overflow-x:auto;
+  font:12px/1.5 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere;
+}
+code { font-family:var(--mono); font-size:.92em; }
+p { margin:.4rem 0; }
+ul { margin:.35rem 0; padding-left:1.1rem; }
+li { margin:.1rem 0; }
+blockquote { margin:.4rem 0; padding-left:.6rem; border-left:2px solid var(--line-strong); color:var(--muted); }
+
+.shots { display:flex; flex-wrap:wrap; gap:.5rem; }
+figure { margin:.35rem 0; flex:1 1 18rem; min-width:0; }
+img.shot, video { max-width:100%; height:auto; border:1px solid var(--line); border-radius:4px; display:block; }
+figcaption { font-size:.7rem; color:var(--faint); margin-top:.2rem; overflow-wrap:anywhere; }
+
 .scroll { overflow-x:auto; }
-.badge { display:inline-block; padding:.05rem .45rem; border-radius:99px; font-size:.75rem; border:1px solid var(--line); }
-.badge.failed, .badge.timedout { color:var(--fail); border-color:var(--fail); }
-.badge.passed { color:var(--pass); border-color:var(--pass); }
-.note { border-left:3px solid var(--accent); padding:.4rem .75rem; margin:1rem 0; font-size:.85rem; background:var(--card); }
-.toolbar { display:flex; gap:.5rem; padding:1rem 0 0; }
-button { font:inherit; padding:.35rem .8rem; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--fg); cursor:pointer; }
-@media (max-width: 30rem) { body { padding:0 .6rem 3rem; } dl.facts { grid-template-columns:1fr; } dl.facts dt { margin-top:.4rem; } }
+table { border-collapse:collapse; width:100%; font-size:.78rem; }
+th, td { text-align:left; padding:.25rem .45rem; border-bottom:1px solid var(--line); vertical-align:top; overflow-wrap:anywhere; }
+th { font-size:.66rem; letter-spacing:.05em; text-transform:uppercase; color:var(--faint); font-weight:650; white-space:nowrap; }
+tbody tr:last-child td { border-bottom:0; }
+td.num { font-family:var(--mono); white-space:nowrap; }
+
+.badge {
+  display:inline-block; padding:0 .4rem; border-radius:3px; font-size:.7rem;
+  font-weight:650; border:1px solid currentColor; vertical-align:.15em;
+}
+.s-failed, .s-timedout, .s-error, .s-open { color:var(--fail); }
+.s-passed, .s-resolved { color:var(--pass); }
+.s-skipped, .s-log, .s-debug, .s-ignored { color:var(--skip); }
+.s-warning, .s-warn { color:var(--warn); }
+.s-info { color:var(--info); }
+.tag { font-weight:650; }
+
+.note { border-left:3px solid var(--accent); padding:.35rem .6rem; margin:.7rem 0; font-size:.82rem; background:var(--card); }
+
+@media (max-width:30rem) {
+  body { padding:0 .6rem 2.5rem; }
+  dl.facts { grid-template-columns:repeat(auto-fill,minmax(8rem,1fr)); }
+}
+
 @media print {
-  :root { --bg:#fff; --fg:#000; --muted:#555; --line:#bbb; --card:#fff; }
-  body { padding:0; font-size:11pt; }
+  :root {
+    --bg:#fff; --fg:#000; --muted:#3f3f46; --faint:#52525b;
+    --line:#b8b8bf; --line-strong:#71717a; --card:transparent; --sunken:transparent;
+    --accent:#3730a3; --fail:#991b1b; --pass:#166534; --warn:#854d0e; --info:#1e40af;
+  }
+  body { padding:0; font-size:10.5pt; }
   .no-print { display:none !important; }
+  details.card, pre, .note, button { background:transparent !important; }
+  /* Fold markers mean nothing on paper; the [open] selector outranks a bare one. */
+  details > summary::after, details[open] > summary::after { content:''; }
   details { break-inside:avoid; }
-  section.case { break-before:page; }
+  section.case { break-before:page; border-top:0; }
   section.case:first-of-type { break-before:auto; }
   pre { white-space:pre-wrap; word-break:break-word; }
+  a { color:inherit; text-decoration:underline; }
 }
 `;
 
-/** Expand every <details> before printing so nothing is lost in the PDF. */
 const SCRIPT = `
 document.addEventListener('click', function (e) {
   var t = e.target;
@@ -86,43 +178,41 @@ window.addEventListener('beforeprint', function () {
 
 const AUTO_PRINT = `window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 300); });`;
 
-function fmtDuration(ms: unknown): string {
-  const n = typeof ms === 'number' ? ms : Number(ms);
-  if (!Number.isFinite(n)) return '—';
-  if (n < 1000) return `${Math.round(n)}ms`;
-  if (n < 60_000) return `${(n / 1000).toFixed(1)}s`;
-  const m = Math.floor(n / 60_000);
-  return `${m}m ${Math.round((n % 60_000) / 1000)}s`;
+/** Status-ish value → the color class that carries its meaning once fills are gone. */
+function statusClass(value: unknown): string {
+  return `s-${String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '')}`;
 }
 
-function fmtBytes(bytes: unknown): string {
-  const n = typeof bytes === 'number' ? bytes : Number(bytes);
-  if (!Number.isFinite(n)) return '—';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let v = n;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+function httpClass(status: unknown): string {
+  const n = Number(status);
+  if (!Number.isFinite(n)) return '';
+  if (n >= 500) return 's-failed';
+  if (n >= 400) return 's-warning';
+  if (n >= 300) return 's-info';
+  if (n >= 200) return 's-passed';
+  return '';
 }
 
-function facts(rows: [string, string | null | undefined][]): RawHtml {
+function facts(rows: Fact[]): RawHtml {
   const present = rows.filter(([, v]) => v != null && v !== '');
   if (!present.length) return raw('');
   return html`<dl class="facts">
     ${present.map(
-      ([k, v]) => html`<dt>${k}</dt>
-        <dd>${String(v)}</dd>`,
+      ([k, v]) =>
+        html`<div>
+          <dt>${k}</dt>
+          <dd>${String(v)}</dd>
+        </div>`,
     )}
   </dl>`;
 }
 
-function details(title: string, inner: RawHtml | string, open = false): RawHtml {
+function details(title: string, inner: RawHtml | string, kind = 'data', open = false): RawHtml {
   const body = toHtmlString(inner);
   if (!body.trim()) return raw('');
-  return html`<details class="card" ${open ? raw('open') : ''}>
+  return html`<details class="card k-${kind}" ${open ? raw('open') : ''}>
     <summary>${title}</summary>
     <div class="body">${raw(body)}</div>
   </details>`;
@@ -138,20 +228,13 @@ function prose(markdown: string): RawHtml {
 }
 
 function renderDiagnosis(diagnosis: Record<string, any> | null): RawHtml {
-  if (!diagnosis || diagnosis.status !== 'completed') return raw('');
-  const det = (diagnosis.details ?? {}) as Record<string, any>;
-  const parts: (RawHtml | string)[] = [];
+  if (!hasDiagnosis(diagnosis)) return raw('');
+  const d = diagnosis as Record<string, any>;
+  const det = (d.details ?? {}) as Record<string, any>;
+  const parts: (RawHtml | string)[] = [facts(diagnosisFacts(d))];
 
-  parts.push(
-    facts([
-      ['Category', diagnosis.category],
-      ['Confidence', diagnosis.confidence],
-      ['Severity', det.severity],
-      ['Affected area', det.affectedArea],
-    ]),
-  );
-  if (diagnosis.summary) parts.push(html`<p><strong>${String(diagnosis.summary)}</strong></p>`);
-  if (diagnosis.rootCause) parts.push(html`<p><strong>Root cause:</strong> ${String(diagnosis.rootCause)}</p>`);
+  if (d.summary) parts.push(html`<p><strong>${String(d.summary)}</strong></p>`);
+  if (d.rootCause) parts.push(html`<p><span class="tag">Root cause:</span> ${String(d.rootCause)}</p>`);
 
   const evidence = (det.evidence ?? []) as unknown[];
   if (evidence.length) {
@@ -169,55 +252,54 @@ function renderDiagnosis(diagnosis: Record<string, any> | null): RawHtml {
     else if (fix.code) parts.push(pre(String(fix.code)));
   }
 
-  return details('AI diagnosis', joinHtml(parts, '\n'), true);
+  return details('AI diagnosis', joinHtml(parts, '\n'), 'diagnosis', true);
 }
 
 function renderAssets(exportCase: ExportCase, assetUrl: RenderOptions['assetUrl']): RawHtml {
-  const shots = exportCase.assets.filter((a) => a.kind === 'screenshot');
-  const videos = exportCase.assets.filter((a) => a.kind === 'video');
-  const traces = exportCase.assets.filter((a) => a.kind === 'trace');
-  const others = exportCase.assets.filter((a) => a.kind === 'attachment');
+  const pick = (kind: string) => exportCase.assets.filter((a) => a.kind === kind);
   const out: (RawHtml | string)[] = [];
 
-  const shotFigures = shots
-    .map((a) => {
-      const url = assetUrl(a);
-      if (!url) return null;
-      return html`<figure>
-        <img class="shot" src="${url}" alt="${a.name}" />
-        <figcaption>${a.name}</figcaption>
-      </figure>`;
-    })
-    .filter((f): f is RawHtml => f !== null);
-  if (shotFigures.length)
+  const figures = (kind: string, node: (a: ExportAsset, url: string) => RawHtml) =>
+    pick(kind)
+      .map((a) => {
+        const url = assetUrl(a);
+        return url ? node(a, url) : null;
+      })
+      .filter((f): f is RawHtml => f !== null);
+
+  const shots = figures(
+    'screenshot',
+    (a, url) => html`<figure>
+      <img class="shot" src="${url}" alt="${a.name}" />
+      <figcaption>${a.name}</figcaption>
+    </figure>`,
+  );
+  if (shots.length)
     out.push(
       html`<h3>Screenshots</h3>
-        ${shotFigures}`,
+        <div class="shots">${shots}</div>`,
     );
 
-  const videoFigures = videos
-    .map((a) => {
-      const url = assetUrl(a);
-      if (!url) return null;
-      return html`<figure>
-        <video controls preload="metadata" src="${url}"></video>
-        <figcaption>${a.name} — video does not play in a printed PDF</figcaption>
-      </figure>`;
-    })
-    .filter((f): f is RawHtml => f !== null);
-  if (videoFigures.length)
+  const videos = figures(
+    'video',
+    (a, url) => html`<figure>
+      <video controls preload="metadata" src="${url}"></video>
+      <figcaption>${a.name} — does not play in a printed PDF</figcaption>
+    </figure>`,
+  );
+  if (videos.length)
     out.push(
       html`<h3>Video</h3>
-        ${videoFigures}`,
+        <div class="shots">${videos}</div>`,
     );
 
-  const fileRows = [...traces, ...others].map((a) => {
+  const fileRows = [...pick('trace'), ...pick('attachment')].map((a) => {
     const url = assetUrl(a);
     const label = url ? html`<a href="${url}">${a.name}</a>` : html`${a.name} <span class="meta">(not included)</span>`;
     return html`<tr>
       <td>${label}</td>
       <td>${a.kind}</td>
-      <td>${fmtBytes(a.size)}</td>
+      <td class="num">${fmtBytes(a.size)}</td>
     </tr>`;
   });
   if (fileRows.length) {
@@ -248,14 +330,13 @@ function renderAssets(exportCase: ExportCase, assetUrl: RenderOptions['assetUrl'
 
 function renderSteps(steps: unknown): RawHtml {
   if (!Array.isArray(steps) || !steps.length) return raw('');
-  const rows = steps.map((s) => {
-    const step = s as Record<string, any>;
-    return html`<tr>
+  const rows = (steps as Record<string, any>[]).map(
+    (step) => html`<tr>
       <td>${String(step.title ?? '')}</td>
       <td>${String(step.category ?? '')}</td>
-      <td>${fmtDuration(step.duration)}</td>
-    </tr>`;
-  });
+      <td class="num">${fmtDuration(step.duration)}</td>
+    </tr>`,
+  );
   return html`<div class="scroll">
     <table>
       <thead>
@@ -274,27 +355,37 @@ function renderSteps(steps: unknown): RawHtml {
 
 function renderConsole(logs: unknown): RawHtml {
   if (!Array.isArray(logs) || !logs.length) return raw('');
-  return pre(
-    logs
-      .map((l) => {
-        const entry = l as Record<string, any>;
-        return `[${entry.type ?? 'log'}] ${entry.text ?? ''}`;
-      })
-      .join('\n'),
+  const rows = (logs as Record<string, any>[]).map(
+    (l) => html`<tr>
+      <td class="num ${statusClass(l.type ?? 'log')}"><span class="tag">${String(l.type ?? 'log')}</span></td>
+      <td>${String(l.text ?? '')}</td>
+    </tr>`,
   );
+  return html`<div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Level</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  </div>`;
 }
 
 function renderNetwork(requests: unknown): RawHtml {
   if (!Array.isArray(requests) || !requests.length) return raw('');
-  const rows = requests.map((r) => {
-    const req = r as Record<string, any>;
-    return html`<tr>
-      <td>${String(req.method ?? '')}</td>
-      <td>${String(req.status ?? '')}</td>
-      <td>${fmtDuration(req.duration)}</td>
-      <td>${String(req.url ?? '')}</td>
-    </tr>`;
-  });
+  const rows = (requests as Record<string, any>[]).map(
+    (r) => html`<tr>
+      <td class="num">${String(r.method ?? '')}</td>
+      <td class="num ${httpClass(r.status)}"><span class="tag">${String(r.status ?? '')}</span></td>
+      <td class="num">${fmtDuration(r.duration)}</td>
+      <td>${String(r.url ?? '')}</td>
+    </tr>`,
+  );
   return html`<div class="scroll">
     <table>
       <thead>
@@ -314,34 +405,24 @@ function renderNetwork(requests: unknown): RawHtml {
 
 function renderCase(exportCase: ExportCase, opts: RenderOptions, index: number, total: number): RawHtml {
   const d = exportCase.detail as Record<string, any>;
-  const run = (d.testRun ?? {}) as Record<string, any>;
-  const browser = (d.browser ?? {}) as Record<string, any>;
   const parts: (RawHtml | string)[] = [];
 
   parts.push(html`<header>
-    <h2>${exportCase.title} <span class="badge ${exportCase.status}">${exportCase.status}</span></h2>
+    ${total > 1 ? html`<p class="eyebrow">Case ${index + 1} of ${total}</p>` : ''}
+    <h2>
+      ${exportCase.title}
+      <span class="badge ${statusClass(exportCase.status)}">${exportCase.status}</span>
+    </h2>
     <p class="meta"><code>${exportCase.location ?? exportCase.filePath ?? ''}</code></p>
   </header>`);
 
-  parts.push(
-    facts([
-      ['Duration', fmtDuration(d.duration)],
-      ['Retries', d.retries != null ? String(d.retries) : null],
-      ['Run', run.id != null ? `#${run.id}` : null],
-      ['Browser', browser.projectName ?? browser.browserName ?? null],
-      ['Worker', d.workerIndex != null ? String(d.workerIndex) : null],
-      ['Shard', d.shardIndex != null ? String(d.shardIndex) : null],
-      ['New regression', d.isNewRegression ? 'yes' : null],
-      ['Newly flaky', d.isNewFlaky ? 'yes' : null],
-      ['Slowest step', d.slowestStep ? `${d.slowestStep} (${fmtDuration(d.slowestStepDuration)})` : null],
-    ]),
-  );
+  parts.push(facts(caseFacts(exportCase)));
 
-  if (d.error) parts.push(details('Error', pre(String(d.error)), true));
+  if (d.error) parts.push(details('Error', pre(String(d.error)), 'error', true));
   parts.push(renderDiagnosis(exportCase.diagnosis));
 
   const assetsHtml = renderAssets(exportCase, opts.assetUrl);
-  if (toHtmlString(assetsHtml).trim()) parts.push(details('Evidence', assetsHtml, true));
+  if (toHtmlString(assetsHtml).trim()) parts.push(details('Evidence', assetsHtml, 'evidence', true));
 
   parts.push(details('Steps', renderSteps(d.steps)));
   parts.push(details('Console', renderConsole(d.consoleLogs)));
@@ -365,29 +446,15 @@ function renderCase(exportCase: ExportCase, opts: RenderOptions, index: number, 
   if (d.pageState) parts.push(details('Page state', pre(JSON.stringify(d.pageState, null, 2))));
   if (d.webVitals) parts.push(details('Web vitals', pre(JSON.stringify(d.webVitals, null, 2))));
 
-  return html`<section class="case">
-    <p class="meta no-print">Case ${index + 1} of ${total}</p>
-    ${joinHtml(parts, '\n')}
-  </section>`;
+  return html`<section class="case">${joinHtml(parts, '\n')}</section>`;
 }
 
 function renderClusterHeader(bundle: ExportBundle): RawHtml {
   const c = bundle.cluster as Record<string, any> | null;
   if (!c) return raw('');
-  const parts: (RawHtml | string)[] = [
-    facts([
-      ['Signature', c.signature],
-      ['Error type', c.errorType],
-      ['Selector', c.selector],
-      ['Status', c.status],
-      ['Occurrences', c.occurrences != null ? String(c.occurrences) : null],
-      ['Affected tests', c.affectedTests != null ? String(c.affectedTests) : null],
-      ['First seen', c.firstSeenAt ? new Date(c.firstSeenAt).toISOString() : null],
-      ['Last seen', c.lastSeenAt ? new Date(c.lastSeenAt).toISOString() : null],
-      ['Triage note', c.triageNote],
-    ]),
-  ];
-  if (c.sampleError) parts.push(details('Representative error', pre(String(c.sampleError)), true));
+  const parts: (RawHtml | string)[] = [facts(clusterFacts(c))];
+
+  if (c.sampleError) parts.push(details('Representative error', pre(String(c.sampleError)), 'error', true));
   parts.push(renderDiagnosis((c.diagnosis ?? null) as Record<string, any> | null));
 
   if (bundle.truncatedCases.length) {
@@ -403,48 +470,42 @@ function renderClusterHeader(bundle: ExportBundle): RawHtml {
   return joinHtml(parts, '\n');
 }
 
-const OMISSION_REASONS: Record<string, string> = {
-  'too-large': 'larger than the per-file inline limit',
-  'budget-exhausted': 'the export size budget was reached',
-  unreadable: 'the file could not be read from storage',
-  'html-format': 'not embeddable in a single HTML file — use the ZIP export',
-};
-
 function renderOmissions(bundle: ExportBundle): RawHtml {
   if (!bundle.omitted.length) return raw('');
   const rows = bundle.omitted.map(
     (o) => html`<tr>
       <td>${o.name}</td>
       <td>${o.kind}</td>
-      <td>${fmtBytes(o.bytes)}</td>
+      <td class="num">${fmtBytes(o.bytes)}</td>
       <td>${OMISSION_REASONS[o.reason] ?? o.reason}</td>
     </tr>`,
   );
-  return html`<section class="card">
-    <div class="body">
-      <h2>Omitted from this export</h2>
-      <div class="scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>File</th>
-              <th>Kind</th>
-              <th>Size</th>
-              <th>Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>`;
+  return details(
+    `Omitted from this export (${bundle.omitted.length})`,
+    html`<div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Kind</th>
+            <th>Size</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    </div>`,
+    'data',
+    true,
+  );
 }
 
 export function renderExportHtml(bundle: ExportBundle, opts: RenderOptions): string {
   const kindLabel = bundle.kind === 'cluster' ? 'Failure cluster' : 'Test execution';
-  const projectLabel = bundle.project ? bundle.project.label || bundle.project.name : null;
+  const label = projectLabel(bundle);
+  const clusterStatus = (bundle.cluster as Record<string, any> | null)?.status;
 
   const head = joinHtml([
     raw('<meta charset="utf-8">'),
@@ -462,10 +523,13 @@ export function renderExportHtml(bundle: ExportBundle, opts: RenderOptions): str
     [
       raw('<div class="wrap">'),
       html`<header class="doc">
-        <p class="meta">${kindLabel}${projectLabel ? ` · ${projectLabel}` : ''}</p>
-        <h1>${bundle.title}</h1>
+        <p class="eyebrow">${kindLabel}${label ? ` · ${label}` : ''}</p>
+        <h1>
+          ${bundle.title}
+          ${clusterStatus ? html`<span class="badge ${statusClass(clusterStatus)}">${clusterStatus}</span>` : ''}
+        </h1>
         <p class="meta">Exported ${bundle.generatedAt}${bundle.piwiVersion ? ` · Piwi ${bundle.piwiVersion}` : ''}</p>
-        ${bundle.sourceUrl ? html`<p class="meta">Source: <code>${bundle.sourceUrl}</code></p>` : ''}
+        ${bundle.sourceUrl ? html`<p class="meta"><code>${bundle.sourceUrl}</code></p>` : ''}
         <div class="toolbar no-print">
           <button type="button" data-action="print">Print / Save as PDF</button>
           <button type="button" data-action="expand">Expand all</button>
@@ -475,7 +539,7 @@ export function renderExportHtml(bundle: ExportBundle, opts: RenderOptions): str
       ...bundle.cases.map((c, i) => renderCase(c, opts, i, bundle.cases.length)),
       bundle.cases.length === 0 ? html`<p class="note">No executions were included in this export.</p>` : '',
       renderOmissions(bundle),
-      html`<p class="meta">Generated by Piwi. This file is self-contained and needs no network connection.</p>`,
+      html`<p class="meta">Generated by Piwi · self-contained, no network connection required.</p>`,
       raw('</div>'),
       raw(`<script>${SCRIPT}${opts.print ? AUTO_PRINT : ''}</script>`),
     ],

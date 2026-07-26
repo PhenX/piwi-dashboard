@@ -5,6 +5,7 @@
  * `ExportAssetReader`. Size budgeting and the ZIP layout live here so the two
  * cannot drift.
  */
+import { consoleLine } from './fields';
 import { renderExportHtml } from './render-html';
 import { renderExportMarkdown } from './render-markdown';
 import { buildExportZip, type ExportZipEntry } from './zip';
@@ -181,7 +182,7 @@ export async function buildExport(
     if (Array.isArray(d.consoleLogs) && d.consoleLogs.length) {
       entries.push({
         path: `evidence/${exportCase.slug}/console.log`,
-        data: (d.consoleLogs as Record<string, any>[]).map((l) => `[${l.type ?? 'log'}] ${l.text ?? ''}`).join('\n'),
+        data: (d.consoleLogs as Record<string, any>[]).map(consoleLine).join('\n'),
       });
     }
     if (Array.isArray(d.networkRequests) && d.networkRequests.length) {
