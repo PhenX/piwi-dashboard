@@ -257,6 +257,9 @@ jobs:
 
       - name: Run Playwright Tests
         env:
+          # The suite runs against the production build, where the cleanup
+          # endpoint its global setup/teardown calls is disabled by default.
+          PIWI_TEST_CLEANUP_ENABLED: 'true'
           # --- Main app server backend (driven by the matrix) ---
           PIWI_STORAGE_TYPE: ${{ matrix.storage }}
           PIWI_S3_ENDPOINT: ${{ matrix.storage == 's3' && 'http://localhost:9000' || '' }}

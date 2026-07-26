@@ -45,10 +45,16 @@ const baseConfig = defineConfig({
   forbidOnly: !!process.env.CI,
 
   /* Retry on CI only */
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI ? 2 : 0,
 
-  /* Cap the number of failures to 3 on CI to avoid wasting resources, but allow unlimited failures locally for debugging. */
-  maxFailures: process.env.CI ? 3 : 0,
+  // Bail out of a hopelessly broken shard instead of burning the job timeout,
+  // but keep the budget well clear of the retries: the counter tracks failed
+  // *attempts*, so one test that fails all three of its tries already spends
+  // three, and a flaky test that passes on retry still spends one. Reaching the
+  // cap also tears down the workers mid-flight, which reports whatever tests
+  // were still running as "Target page, context or browser has been closed" —
+  // a tight cap turns two flakes into a red shard full of phantom failures.
+  maxFailures: process.env.CI ? 12 : 0,
 
   /* Run tests in parallel across projects */
   workers: 3,
