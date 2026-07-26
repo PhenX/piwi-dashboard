@@ -14,14 +14,12 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import {
-  emitCoolifyCompose,
-  emitFlyToml,
-  emitKoyebDeployUrl,
-  emitRailwayTemplate,
-  emitRenderBlueprint,
-} from '../shared/env-format.ts';
-import { PIWI_ENV_VARS } from '../shared/piwi-env-vars.ts';
+import { emitCoolifyCompose } from '#shared/deploy/coolify';
+import { emitFlyToml } from '#shared/deploy/fly';
+import { emitKoyebDeployUrl } from '#shared/deploy/koyeb';
+import { emitRailwayTemplate } from '#shared/deploy/railway';
+import { emitRenderBlueprint } from '#shared/deploy/render';
+import { PIWI_ENV_VARS } from '#shared/piwi-env-vars';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 

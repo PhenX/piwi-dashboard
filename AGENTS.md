@@ -145,8 +145,8 @@ other `curl` examples may stay bash-only. `.env` file contents are not shell com
 - API reference is **generated** — never hand-write endpoint docs. See [`docs/AGENTS.md`](docs/AGENTS.md).
 - The one-click deploy manifests (`render.yaml`, `fly.toml`, `railway.json`, `deploy/**`) are **generated and
   committed** — Render and Fly read them from the repository. Edit
-  `application/scripts/generate-deploy-manifests.mjs` or the emitters in `application/shared/env-format.ts`, then run
-  `npm run app:generate:deploy`; a unit test fails if the committed files drift.
+  `application/scripts/generate-deploy-manifests.mjs` or the per-provider emitters in
+  `application/shared/deploy/`, then run `npm run app:generate:deploy`; a unit test fails if the committed files drift.
 
 #### One canonical positioning line (MUST follow)
 

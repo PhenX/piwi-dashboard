@@ -175,6 +175,26 @@ Do not enumerate env vars in prose anywhere — link to the registry or the gene
 env vars set**, and `PIWI_SECRET_KEY` is the master key for AES-256-GCM encryption of DB-stored secrets (AI keys, SCM
 tokens) — recommended in production even without auth, falling back to an insecure development default.
 
+### Emitting configuration
+
+Resolved values are rendered into deployment snippets by a family of pure `(entries, opts) => string` emitters:
+
+- `shared/env-format-base.ts` — the shapes (`EnvEntry`, `EmitOptions`), the per-syntax quoting rules and the constants a
+  deployment must agree on (`DATA_MOUNT`, `HEALTH_PATH`, default image). No emitter of its own.
+- `shared/env-format.ts` — the generic formats (dotenv, shells, compose, `docker run`, Kubernetes, systemd) plus the
+  `ENV_OUTPUT_FORMATS` registry, and the **only** module anything outside `shared/` should import.
+- `shared/deploy/<provider>.ts` — one module per hosting platform (railway, render, fly, koyeb, coolify), each owning
+  that provider's quirks and nothing else.
+
+Adding a provider is: a new `shared/deploy/*.ts`, an entry in `ENV_OUTPUT_FORMATS`, a re-export from `env-format.ts`,
+and — if it should ship a committed manifest — a line in `scripts/generate-deploy-manifests.mjs`. These are stateless
+functions selected through a data registry, deliberately not classes: there is no per-provider state to hold, and the
+registry already provides the polymorphism a factory would.
+
+Modules under `shared/` import each other with `#shared/...` specifiers, never relative paths — that is what lets the
+same files load unchanged in Vite, Vitest and plain Node (the generator script relies on the `imports` map in
+`package.json`).
+
 ## Adding the usual things
 
 - **API endpoint** — a file under `server/api/` using `eventHandler()` + `getDatabase()`, with a `defineRouteMeta`
