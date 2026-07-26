@@ -111,6 +111,11 @@ The server implements the **MCP Streamable HTTP transport**. On `initialize` it 
 
 Replace `<your-piwi-url>` with your dashboard base URL (e.g. `http://localhost:3000`) and `pd_YOUR_API_KEY` with a real API key.
 
+> **Desktop app:** none of this is needed there. The [/mcp page](/desktop#connecting-ai-assistants)
+> detects installed clients (Claude Code, Claude Desktop, Cursor, VS Code,
+> Windsurf, Gemini CLI) and writes the entry into their config files in one
+> click — URL and token included, kept current across launches.
+
 ### Claude Code (CLI)
 
 ```bash

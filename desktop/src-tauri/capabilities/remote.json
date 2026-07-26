@@ -19,6 +19,10 @@
     "allow-desktop-set-project-link",
     "allow-desktop-run-local-tests",
     "allow-desktop-stop-local-tests",
-    "allow-desktop-take-pending-open-files"
+    "allow-desktop-take-pending-open-files",
+    "allow-desktop-mcp-clients",
+    "allow-desktop-mcp-connect",
+    "allow-desktop-mcp-disconnect",
+    "allow-desktop-mcp-reveal"
   ]
 }

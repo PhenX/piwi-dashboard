@@ -25,6 +25,10 @@ fn main() {
             "desktop_run_local_tests",
             "desktop_stop_local_tests",
             "desktop_take_pending_open_files",
+            "desktop_mcp_clients",
+            "desktop_mcp_connect",
+            "desktop_mcp_disconnect",
+            "desktop_mcp_reveal",
         ])),
     )
     .expect("failed to run tauri-build");

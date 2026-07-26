@@ -128,6 +128,10 @@ const windsurfSnippet = computed(() =>
           description="The MCP endpoint is not active in this demo — it requires a real Piwi backend. The tools and client setup shown below reflect what your own deployment exposes."
         />
 
+        <!-- Desktop shell only: one-click writes into detected clients' config
+             files (renders nothing without the IPC bridge). -->
+        <DesktopMcpClientsCard />
+
         <!-- Client setup — the single place to connect any MCP client. On the
              desktop build this also carries the real URL + local access token,
              already baked into every snippet (no placeholder to swap). -->

@@ -147,6 +147,25 @@ Semantics match the [import page](/importing-runs): idempotent by content
 hash, and imports never trigger notifications, AI diagnosis or regression
 signals.
 
+## Connecting AI assistants
+
+The app exposes the same [MCP server](/mcp) as every Piwi deployment — and on
+this machine it can also do the wiring. The **MCP server** page detects
+installed clients — Claude Code, Claude Desktop, Cursor, VS Code, Windsurf and
+Gemini CLI — and connects each with one click:
+
+- The `piwi` entry is written into the client's **own config file**, with the
+  app's URL and access token filled in; a backup copy is kept next to the file,
+  and only that one entry is ever added, updated or removed.
+- A config that is not plain JSON (comments, trailing commas) is never
+  rewritten — the page says so and shows the copy-paste snippet instead.
+- Written entries embed this app's address, which can change when port 3000 is
+  taken — on every launch the app checks the clients it configured and
+  rewrites any entry that drifted.
+
+Restart the client after connecting; most MCP clients read their config at
+startup.
+
 ## Building from source
 
 See [`desktop/README.md`](https://github.com/PiwiTests/platform/blob/main/desktop/README.md)
