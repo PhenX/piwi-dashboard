@@ -130,6 +130,23 @@ The linked folder also completes [Open in IDE](/ide-integration): when no
 workspace root is configured there, source links resolve against the linked
 folder automatically.
 
+## Importing local files
+
+Drop a Playwright **blob report** or **trace** (`.zip`) anywhere on the app
+window and an import dialog opens: pick the project, and each archive is
+imported straight from its path on disk — nothing is uploaded anywhere.
+Several traces dropped together can be gathered into a single run.
+
+The same dialog opens when the OS hands files to the app: **Open with →
+Piwi Dashboard** in your file manager, dropping archives on the dock icon
+(macOS), or launching the app with file arguments. The app registers as an
+*optional* opener for `.zip` files — it never takes over your system's default
+archive handler.
+
+Semantics match the [import page](/importing-runs): idempotent by content
+hash, and imports never trigger notifications, AI diagnosis or regression
+signals.
+
 ## Building from source
 
 See [`desktop/README.md`](https://github.com/PiwiTests/platform/blob/main/desktop/README.md)

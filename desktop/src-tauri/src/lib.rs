@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{Emitter as _, Manager, RunEvent, WindowEvent};
 
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_autostart::ManagerExt as _;
@@ -58,6 +58,43 @@ struct DataDir(PathBuf);
 
 /// The reporter discovery file, removed on quit so it never outlives the server.
 struct DiscoveryFile(PathBuf);
+
+/// Archives handed to the app by the OS (drag onto the dock icon, "Open with",
+/// a second launch with file arguments) that the dashboard has not collected
+/// yet. The shell only ever queues and pokes; the dashboard drains the queue
+/// over IPC, so a poke fired before the webview listens is never lost.
+#[derive(Default)]
+struct PendingOpenFiles(Mutex<Vec<String>>);
+
+/// Keep only arguments that are real `.zip` files on disk; relative paths are
+/// resolved against the directory the launching process ran from.
+fn collect_zip_args<'a>(args: impl Iterator<Item = &'a str>, cwd: Option<&Path>) -> Vec<String> {
+    args.filter(|a| a.to_lowercase().ends_with(".zip"))
+        .filter_map(|a| {
+            let p = PathBuf::from(a);
+            let abs = if p.is_absolute() { p } else { cwd?.join(p) };
+            abs.is_file().then(|| abs.to_string_lossy().to_string())
+        })
+        .collect()
+}
+
+fn queue_open_files(app: &tauri::AppHandle, paths: Vec<String>) {
+    if paths.is_empty() {
+        return;
+    }
+    if let Some(state) = app.try_state::<PendingOpenFiles>() {
+        state.0.lock().unwrap().extend(paths);
+        let _ = app.emit("piwi:open-files", ());
+    }
+}
+
+/// Drain the queue of archives the OS asked this app to open.
+#[tauri::command]
+fn desktop_take_pending_open_files(app: tauri::AppHandle) -> Vec<String> {
+    app.try_state::<PendingOpenFiles>()
+        .map(|s| std::mem::take(&mut *s.0.lock().unwrap()))
+        .unwrap_or_default()
+}
 
 fn random_hex_32() -> String {
     use rand::RngCore;
@@ -355,8 +392,10 @@ pub fn run() {
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // A second launch just focuses the running window (never a 2nd server).
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            // A second launch just focuses the running window (never a 2nd
+            // server) — and forwards any archives it was asked to open.
+            queue_open_files(app, collect_zip_args(args.iter().skip(1).map(String::as_str), Some(Path::new(&cwd))));
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.show();
                 let _ = w.set_focus();
@@ -392,10 +431,12 @@ pub fn run() {
             desktop_get_project_link,
             desktop_set_project_link,
             desktop_run_local_tests,
-            desktop_stop_local_tests
+            desktop_stop_local_tests,
+            desktop_take_pending_open_files
         ])
         .manage(ServerProcess::default())
         .manage(runner::LocalRuns::default())
+        .manage(PendingOpenFiles::default())
         .setup(move |app| {
             // --- data locations (survive app updates; outside the read-only bundle) ---
             let app_data_dir = app.path().app_data_dir()?;
@@ -649,6 +690,15 @@ pub fn run() {
                 }
             }
 
+            // Archives passed on the very first launch ("Open with" while the
+            // app was closed) — queued now, drained once the dashboard boots.
+            let argv: Vec<String> = std::env::args().skip(1).collect();
+            let launch_cwd = std::env::current_dir().ok();
+            queue_open_files(
+                app.handle(),
+                collect_zip_args(argv.iter().map(String::as_str), launch_cwd.as_deref()),
+            );
+
             // e2e builds: grant the Playwright plugin's result-callback command to
             // the loopback (remote) origin the dashboard runs at, so the driven
             // page can post results back. Added at runtime so the permission only
@@ -675,8 +725,8 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building the Piwi Dashboard app")
-        .run(|app_handle, event| {
-            if let RunEvent::ExitRequested { .. } = event {
+        .run(|app_handle, event| match event {
+            RunEvent::ExitRequested { .. } => {
                 // Best-effort: stop the bundled server so no orphan process lingers.
                 if let Some(child) = app_handle.state::<ServerProcess>().0.lock().unwrap().take() {
                     let _ = child.kill();
@@ -691,5 +741,21 @@ pub fn run() {
                     let _ = std::fs::remove_file(&discovery.0);
                 }
             }
+            // macOS delivers file-association opens as an event, not argv.
+            #[cfg(target_os = "macos")]
+            RunEvent::Opened { urls } => {
+                let paths: Vec<String> = urls
+                    .iter()
+                    .filter_map(|u| u.to_file_path().ok())
+                    .map(|p| p.to_string_lossy().to_string())
+                    .filter(|p| p.to_lowercase().ends_with(".zip"))
+                    .collect();
+                queue_open_files(app_handle, paths);
+                if let Some(w) = app_handle.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            }
+            _ => {}
         });
 }

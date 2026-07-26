@@ -40,6 +40,15 @@
     "externalBin": [
       "binaries/node"
     ],
+    "fileAssociations": [
+      {
+        "ext": ["zip"],
+        "name": "Playwright archive",
+        "description": "Playwright trace or blob report",
+        "role": "Viewer",
+        "mimeType": "application/zip"
+      }
+    ],
     "resources": [
       "resources/app-server"
     ],

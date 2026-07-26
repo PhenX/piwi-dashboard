@@ -18,6 +18,7 @@
     "allow-desktop-get-project-link",
     "allow-desktop-set-project-link",
     "allow-desktop-run-local-tests",
-    "allow-desktop-stop-local-tests"
+    "allow-desktop-stop-local-tests",
+    "allow-desktop-take-pending-open-files"
   ]
 }
