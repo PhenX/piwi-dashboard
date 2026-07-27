@@ -11,8 +11,8 @@
 // Links live in the shell's own store (`settings.json`), not the server
 // database — a folder path is a fact about this machine, not about the project.
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::collections::{HashMap, HashSet};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 
@@ -138,6 +138,62 @@ pub fn desktop_set_project_link(
     let store = app.store(STORE_FILE).map_err(|e| e.to_string())?;
     store.set(PROJECT_LINKS_KEY, json!(links));
     store.save().map_err(|e| e.to_string())
+}
+
+#[derive(serde::Serialize)]
+pub struct SpecCheck {
+    folder: String,
+    missing: Vec<String>,
+}
+
+/// The given spec paths that are absent from `folder`, in the order given and
+/// without repeats.
+///
+/// A path that is absolute, or that climbs out of the folder, is skipped
+/// rather than reported: it says nothing about whether the right folder is
+/// linked, and the answer here only ever drives a warning.
+fn missing_specs(folder: &Path, files: &[String]) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut missing = Vec::new();
+    for file in files {
+        let relative = Path::new(file);
+        if relative.is_absolute()
+            || relative
+                .components()
+                .any(|part| matches!(part, Component::ParentDir))
+        {
+            continue;
+        }
+        if !seen.insert(file.as_str()) {
+            continue;
+        }
+        if !folder.join(relative).is_file() {
+            missing.push(file.clone());
+        }
+    }
+    missing
+}
+
+/// Which of a run's spec files the linked folder does not contain — the cheap
+/// way to catch a project linked to the wrong checkout before spawning a run
+/// whose failure would surface as a module-resolution stack trace.
+#[tauri::command]
+pub fn desktop_check_local_specs(
+    app: AppHandle,
+    project_id: String,
+    files: Vec<String>,
+) -> Result<SpecCheck, String> {
+    let folder = read_links(&app)
+        .get(&project_id)
+        .map(PathBuf::from)
+        .ok_or("no folder is linked to this project")?;
+    if !folder.is_dir() {
+        return Err("the linked folder no longer exists — pick it again".into());
+    }
+    Ok(SpecCheck {
+        missing: missing_specs(&folder, &files),
+        folder: folder.to_string_lossy().to_string(),
+    })
 }
 
 /// Find the linked folder's own Playwright CLI entry, walking up so a package
@@ -276,5 +332,84 @@ pub fn desktop_stop_local_tests(app: AppHandle, run_id: u32) -> Result<(), Strin
     match child {
         Some(c) => c.kill().map_err(|e| e.to_string()),
         None => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A folder holding `tests/a.spec.ts`, removed when the test ends.
+    struct Checkout(PathBuf);
+
+    impl Checkout {
+        fn new(label: &str) -> Self {
+            use std::sync::atomic::AtomicU32;
+            static COUNTER: AtomicU32 = AtomicU32::new(0);
+            let unique = COUNTER.fetch_add(1, Ordering::SeqCst);
+            let path = std::env::temp_dir()
+                .join(format!("piwi-run-{label}-{}-{unique}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&path);
+            std::fs::create_dir_all(path.join("tests")).expect("create checkout");
+            std::fs::write(path.join("tests").join("a.spec.ts"), "").expect("write spec");
+            Self(path)
+        }
+    }
+
+    impl Drop for Checkout {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn reports_only_the_specs_the_folder_does_not_hold() {
+        let checkout = Checkout::new("partial");
+
+        let missing = missing_specs(
+            &checkout.0,
+            &["tests/a.spec.ts".into(), "tests/example.spec.ts".into()],
+        );
+
+        assert_eq!(missing, vec!["tests/example.spec.ts".to_string()]);
+    }
+
+    #[test]
+    fn reports_nothing_when_every_spec_is_present() {
+        let checkout = Checkout::new("complete");
+        assert!(missing_specs(&checkout.0, &["tests/a.spec.ts".into()]).is_empty());
+    }
+
+    #[test]
+    fn reports_each_missing_spec_once() {
+        let checkout = Checkout::new("dupes");
+
+        let missing = missing_specs(
+            &checkout.0,
+            &["tests/gone.spec.ts".into(), "tests/gone.spec.ts".into()],
+        );
+
+        assert_eq!(missing, vec!["tests/gone.spec.ts".to_string()]);
+    }
+
+    #[test]
+    fn skips_paths_that_cannot_be_judged_against_the_folder() {
+        let checkout = Checkout::new("outside");
+
+        let missing = missing_specs(
+            &checkout.0,
+            &["../elsewhere/b.spec.ts".into(), "/abs/c.spec.ts".into()],
+        );
+
+        assert!(missing.is_empty());
+    }
+
+    #[test]
+    fn directories_do_not_count_as_specs() {
+        let checkout = Checkout::new("dir");
+        assert_eq!(
+            missing_specs(&checkout.0, &["tests".into()]),
+            vec!["tests".to_string()]
+        );
     }
 }

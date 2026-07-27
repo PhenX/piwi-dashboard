@@ -59,6 +59,16 @@ test('the dashboard can reach the shell IPC commands', async ({ tauriPage }) => 
   expect(rejected.rejected).toBe(true);
   expect(rejected.error).toContain('absolute');
 
+  // The spec pre-flight is granted too, and refuses an unlinked project from
+  // inside the handler rather than at the ACL.
+  const specs = (await tauriPage.evaluate(`
+    window.__TAURI__.core.invoke('desktop_check_local_specs', { projectId: 'e2e-no-such-project', files: ['tests/a.spec.ts'] })
+      .then(() => ({ rejected: false, error: '' }))
+      .catch((e) => ({ rejected: true, error: String((e && e.message) || e) }))
+  `)) as { rejected: boolean; error: string };
+  expect(specs.rejected).toBe(true);
+  expect(specs.error).toContain('linked');
+
   // The MCP configurator command is granted and reports every known client.
   const mcp = (await tauriPage.evaluate(`
     window.__TAURI__.core.invoke('desktop_mcp_clients')
