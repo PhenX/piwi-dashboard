@@ -127,8 +127,9 @@ const alternatives = ref<RankedLocator[]>([]);
 
 // ── Build iframe content ────────────────────────────────────
 
-// The snapshot HTML plus the serialized picker script (appended at the end so a
-// truncated document still runs it) load into a HARDENED blob iframe:
+// The snapshot HTML plus the serialized picker script (placed at the FRONT and
+// DOMContentLoaded-deferred so a truncated/unbalanced snapshot can't swallow it
+// and leave the page live) load into a HARDENED blob iframe:
 // sandbox="allow-scripts" with NO allow-same-origin, so the picker runs on an
 // opaque origin and can reach the host only via postMessage. A sanitizer bypass
 // in the snapshot therefore cannot touch the dashboard's cookies/storage/API.

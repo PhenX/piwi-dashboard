@@ -47,6 +47,8 @@ function buildTraceZip(): Buffer {
   const network = [
     resourceSnap('http://app.local/app.css', 'css1', 'text/css'),
     resourceSnap('http://app.local/img/logo.png', 'img1', 'image/png'),
+    resourceSnap('http://app.local/theme.css', 'theme1', 'text/css'),
+    resourceSnap('http://app.local/img/sprite.svg', 'svg1', 'image/svg+xml'),
   ]
     .map((e) => JSON.stringify(e))
     .join('\n');
@@ -58,16 +60,25 @@ function buildTraceZip(): Buffer {
 
 const BLOB = 'project-7/blobs/abc.zip';
 const HEX_SECRET = 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2'; // 40 hex chars → masked
-// The stylesheet references a background image by a document-relative url() and
-// also carries a token-shaped secret, so one fixture exercises both concerns.
-const CSS = `.logo{background:url(/img/logo.png)}.k{--t:"${HEX_SECRET}"}`;
+// The stylesheet pulls in a background image, an @import'ed sheet, and a
+// fragment-addressed SVG sprite, and carries a token-shaped secret — one fixture
+// exercises every inlining path plus masking.
+const CSS =
+  `@import url(/theme.css);` +
+  `.logo{background:url(/img/logo.png)}` +
+  `.k{--t:"${HEX_SECRET}"}` +
+  `.i{background:url(/img/sprite.svg#star)}`;
+const THEME_CSS = `.t{background:url(/img/logo.png)}`; // the imported sheet has its own asset
 const PNG = Buffer.from('PNGBYTES');
+const SVG = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><symbol id="star"></symbol></svg>');
 
 beforeEach(() => {
   storageFiles.clear();
   storageFiles.set(BLOB, buildTraceZip());
   storageFiles.set('project-7/trace-resources/css1', Buffer.from(CSS, 'utf8'));
   storageFiles.set('project-7/trace-resources/img1', PNG);
+  storageFiles.set('project-7/trace-resources/theme1', Buffer.from(THEME_CSS, 'utf8'));
+  storageFiles.set('project-7/trace-resources/svg1', SVG);
 });
 
 describe('getTraceDomSnapshot — stylesheet + asset inlining', () => {
@@ -83,6 +94,21 @@ describe('getTraceDomSnapshot — stylesheet + asset inlining', () => {
     // …while the token-shaped secret in the same sheet is still scrubbed.
     expect(res.html).toContain('[masked-hex]');
     expect(res.html).not.toContain(HEX_SECRET);
+  });
+
+  test('recursively embeds an @import chain, inlining the imported sheet AND its own assets', async () => {
+    const res = await getTraceDomSnapshot(BLOB, 1_000_000, { inlineStyles: true });
+    // The @import becomes an embedded stylesheet…
+    const m = /url\("(data:text\/css;base64,[^"#)]+)"\)/.exec(res.html!);
+    expect(m).not.toBeNull();
+    // …and decoding it shows the imported sheet's OWN url() image was embedded too.
+    const importedCss = Buffer.from(m![1].split('base64,')[1]!, 'base64').toString('utf8');
+    expect(importedCss).toContain(`url("data:image/png;base64,${PNG.toString('base64')}")`);
+  });
+
+  test('embeds a fragment-addressed SVG sprite and preserves the #fragment on the data URI', async () => {
+    const res = await getTraceDomSnapshot(BLOB, 1_000_000, { inlineStyles: true });
+    expect(res.html).toContain(`url("data:image/svg+xml;base64,${SVG.toString('base64')}#star")`);
   });
 
   test('leaves the external <link> untouched when inlineStyles is off (the read-only card path)', async () => {

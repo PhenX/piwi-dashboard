@@ -57,13 +57,20 @@ export function deriveHighlightHints(input: {
 }
 
 /**
- * The `<script>` tag to append to the snapshot HTML — it runs the serialized
- * picker with `config`. `</script>` in the source is escaped so a stray one in
- * the (constant) body can't close the tag early.
+ * The `<script>` tag that runs the serialized picker with `config`. `</script>`
+ * in the source is escaped so a stray one in the (constant) body can't close the
+ * tag early. Installation is deferred to `DOMContentLoaded`: the tag sits at the
+ * FRONT of the document (see `buildPickerDocument`), so it runs before the
+ * snapshot body is parsed, and by DOMContentLoaded the parser has built
+ * `document.body` — even for a truncated snapshot that never closes its tags.
  */
 export function snapshotPickerScriptTag(config: SnapshotPickerConfig): string {
   const src = String(installSnapshotPicker).replace(/<\/(script)/gi, '<\\/$1');
-  return `<script>(${src})(${JSON.stringify(config)})</script>`;
+  const invoke = `(${src})(${JSON.stringify(config)})`;
+  return (
+    `<script>(function(){var run=function(){${invoke}};` +
+    `if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',run)}else{run()}})()</script>`
+  );
 }
 
 /** Strip `<base>` so the snapshot's relative subresources can't be redirected to the tested app. */
@@ -71,7 +78,22 @@ export function stripBaseTag(html: string): string {
   return html.replace(/<base\b[^>]*>/gi, '');
 }
 
-/** Build the full blob HTML: the snapshot with `<base>` stripped, plus the appended picker script. */
+const DOCTYPE_RE = /^\s*<!doctype[^>]*>/i;
+
+/**
+ * Build the full blob HTML: the snapshot with `<base>` stripped, with the picker
+ * script placed at the FRONT (right after any doctype) rather than appended.
+ *
+ * A large snapshot is truncated at a hard character cap and can end mid-tag or
+ * inside a `<style>`; a trailing `<script>` would then be swallowed as attribute
+ * text or stylesheet text and never execute, leaving the page fully interactive.
+ * Parsed first, the (DOMContentLoaded-deferred) picker always installs, so the
+ * snapshot is reliably inert regardless of how mangled its markup is.
+ */
 export function buildPickerDocument(html: string, config: SnapshotPickerConfig): string {
-  return stripBaseTag(html) + snapshotPickerScriptTag(config);
+  const stripped = stripBaseTag(html);
+  const doctype = DOCTYPE_RE.exec(stripped);
+  const head = doctype ? doctype[0] : '';
+  const body = doctype ? stripped.slice(doctype[0].length) : stripped;
+  return head + snapshotPickerScriptTag(config) + body;
 }

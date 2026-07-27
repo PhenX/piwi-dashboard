@@ -7,6 +7,7 @@ import {
   inlineStylesheets,
   collectCssUrls,
   inlineCssUrls,
+  splitCssUrlFragment,
   maskCssText,
 } from '~~/server/utils/dom-snapshot-render';
 import { resolveCaseDomSnapshot } from '~~/server/utils/dom-snapshot';
@@ -253,15 +254,20 @@ describe('parseResourceSnapshots', () => {
 });
 
 describe('collectCssUrls / inlineCssUrls', () => {
-  test('collects distinct url() targets, skipping data:, #fragment and fragment-addressed refs', () => {
+  test('collects distinct url() targets (incl. fragment-addressed), skipping data: and in-document refs', () => {
     const css =
       '@font-face{src:url("/f/inter.woff2") format("woff2")}' +
       '.a{background:url(/img/bg.png)}' +
       ".b{background:url('/img/bg.png')}" + // dupe of the same target
       '.c{background:url(data:image/gif;base64,AAAA)}' + // already inline
-      '.d{filter:url(#blur)}' + // in-document ref
-      '.e{background:url(/img/sprite.svg#star)}'; // fragment-addressed — can't inline faithfully
-    expect(collectCssUrls(css)).toEqual(['/f/inter.woff2', '/img/bg.png']);
+      '.d{filter:url(#blur)}' + // in-document ref → skipped
+      '.e{background:url(/img/sprite.svg#star)}'; // fragment-addressed → kept (embedded + fragment)
+    expect(collectCssUrls(css)).toEqual(['/f/inter.woff2', '/img/bg.png', '/img/sprite.svg#star']);
+  });
+
+  test('splitCssUrlFragment separates the resource path from any #fragment', () => {
+    expect(splitCssUrlFragment('/img/sprite.svg#star')).toEqual({ path: '/img/sprite.svg', fragment: '#star' });
+    expect(splitCssUrlFragment('/f/inter.woff2?v=2')).toEqual({ path: '/f/inter.woff2?v=2', fragment: '' });
   });
 
   test('rewrites only the targets present in the replacement map, double-quoting them', () => {

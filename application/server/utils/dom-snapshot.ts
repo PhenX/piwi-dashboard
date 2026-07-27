@@ -17,6 +17,7 @@ import {
   inlineStylesheets,
   collectCssUrls,
   inlineCssUrls,
+  splitCssUrlFragment,
   maskCssText,
   type DomSnapshotResult,
   type DomSnapshotSource,
@@ -48,7 +49,11 @@ const EXT_MIME: Record<string, string> = {
   avif: 'image/avif',
   ico: 'image/x-icon',
   bmp: 'image/bmp',
+  css: 'text/css', // an @import'd stylesheet with no recorded Content-Type
 };
+
+/** How deep to follow `@import`ed stylesheets when embedding their assets. */
+const MAX_IMPORT_DEPTH = 3;
 
 /** Resolve a `<link href>` / CSS `url(...)` (possibly relative) against a base URL. */
 function resolveResourceUrl(href: string, base: string | undefined): string | null {
@@ -75,11 +80,55 @@ function assetMimeType(res: TraceResource, ref: string): string | null {
 }
 
 /**
- * Embed a stylesheet's own `url(...)` assets (fonts, background images) as
- * base64 `data:` URIs so they render in the offline, opaque-origin iframe. Each
- * ref resolves against the stylesheet's URL (not the document's), then the same
- * resource lookup the stylesheets use. Shares one binary budget across the whole
- * snapshot. Returns the CSS with resolvable refs rewritten; the rest untouched.
+ * Read one captured asset referenced from CSS and return it as a `data:` URI, or
+ * null when it can't be embedded (unknown type, missing, too big, or over
+ * budget). An imported stylesheet (`text/css`) is recursed into first — up to
+ * {@link MAX_IMPORT_DEPTH} — so its own `url()` assets embed and its secrets are
+ * masked before it is itself embedded as a `data:text/css` URI.
+ */
+async function embedCssAsset(
+  path: string,
+  baseUrl: string,
+  urlToRes: Map<string, TraceResource>,
+  resourcesDir: string,
+  budget: { value: number },
+  depth: number,
+): Promise<string | null> {
+  const abs = resolveResourceUrl(path, baseUrl);
+  const res = (abs ? urlToRes.get(abs) : undefined) ?? urlToRes.get(path);
+  if (!res) return null;
+  const mime = assetMimeType(res, path);
+  if (!mime) return null;
+  let bytes: Buffer;
+  try {
+    bytes = await getStorage().readFile(`${resourcesDir}/${res.sha1}`);
+  } catch {
+    return null; // missing/unreadable — leave the url() as-is
+  }
+  if (bytes.length === 0 || bytes.length > MAX_ASSET_BYTES || bytes.length > budget.value) return null;
+  budget.value -= bytes.length;
+  if (/^text\/css\b/i.test(mime) && depth < MAX_IMPORT_DEPTH) {
+    const nested = await inlineCssAssets(
+      bytes.toString('utf8'),
+      abs ?? path,
+      urlToRes,
+      resourcesDir,
+      budget,
+      depth + 1,
+    );
+    return `data:text/css;base64,${Buffer.from(maskCssText(nested), 'utf8').toString('base64')}`;
+  }
+  return `data:${mime};base64,${bytes.toString('base64')}`;
+}
+
+/**
+ * Embed a stylesheet's own `url(...)` assets (fonts, background images,
+ * `@import`ed sheets) as base64 `data:` URIs so they render in the offline,
+ * opaque-origin iframe. Each ref resolves against the stylesheet's URL (not the
+ * document's). Reads are deduped by resource path, so `sprite.svg#a` and
+ * `sprite.svg#b` fetch the file once and each keeps its own fragment on the
+ * data: URI. Shares one binary budget across the whole snapshot. Returns the CSS
+ * with resolvable refs rewritten; the rest untouched.
  */
 async function inlineCssAssets(
   css: string,
@@ -87,27 +136,21 @@ async function inlineCssAssets(
   urlToRes: Map<string, TraceResource>,
   resourcesDir: string,
   budget: { value: number },
+  depth = 0,
 ): Promise<string> {
   if (budget.value <= 0) return css;
   const refs = collectCssUrls(css);
   if (refs.length === 0) return css;
-  const storage = getStorage();
+  const byPath = new Map<string, string | null>();
   const replacements: Record<string, string> = {};
   for (const ref of refs) {
     if (budget.value <= 0) break;
-    const abs = resolveResourceUrl(ref, styleBaseUrl);
-    const res = (abs ? urlToRes.get(abs) : undefined) ?? urlToRes.get(ref);
-    if (!res) continue;
-    const mime = assetMimeType(res, ref);
-    if (!mime) continue;
-    try {
-      const bytes = await storage.readFile(`${resourcesDir}/${res.sha1}`);
-      if (bytes.length === 0 || bytes.length > MAX_ASSET_BYTES || bytes.length > budget.value) continue;
-      replacements[ref] = `data:${mime};base64,${bytes.toString('base64')}`;
-      budget.value -= bytes.length;
-    } catch {
-      // Missing/unreadable asset — leave the url() as-is.
+    const { path, fragment } = splitCssUrlFragment(ref);
+    if (!byPath.has(path)) {
+      byPath.set(path, await embedCssAsset(path, styleBaseUrl, urlToRes, resourcesDir, budget, depth));
     }
+    const dataUri = byPath.get(path);
+    if (dataUri) replacements[ref] = dataUri + fragment;
   }
   return Object.keys(replacements).length ? inlineCssUrls(css, replacements) : css;
 }

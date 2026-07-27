@@ -226,6 +226,12 @@ function parseStylesheetLink(tag: string): { href: string; media: string | null 
   return { href, media };
 }
 
+/** Split a `url()` target into its resource path and any `#fragment` (SVG sprites). Pure. */
+export function splitCssUrlFragment(ref: string): { path: string; fragment: string } {
+  const hash = ref.indexOf('#');
+  return hash >= 0 ? { path: ref.slice(0, hash), fragment: ref.slice(hash) } : { path: ref, fragment: '' };
+}
+
 /** Unique original hrefs of every `<link rel="stylesheet">` in the HTML. Pure. */
 export function collectStylesheetLinks(html: string): string[] {
   const out: string[] = [];
@@ -288,10 +294,10 @@ export function collectCssUrls(css: string): string[] {
   let m: RegExpExecArray | null;
   while ((m = re.exec(css)) !== null) {
     const raw = (m[2] ?? m[3] ?? '').trim();
-    // Skip already-inline data: URIs and any fragment ref (`#blur` filters,
-    // `sprite.svg#icon`) — a data: URI can't carry the fragment that addresses
-    // the resource, so inlining would break them; leaving them alone is safer.
-    if (!raw || raw.startsWith('data:') || raw.includes('#')) continue;
+    // Skip already-inline data: URIs and in-document refs (`url(#blur)` filters,
+    // `url(#gradient)`). A `sprite.svg#icon` ref keeps its fragment — the caller
+    // embeds the file and re-appends `#icon` to the data: URI.
+    if (!raw || raw.startsWith('data:') || raw.startsWith('#')) continue;
     if (!seen.has(raw)) {
       seen.add(raw);
       out.push(raw);

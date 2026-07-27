@@ -79,9 +79,25 @@ describe('snapshotPickerScriptTag / buildPickerDocument', () => {
     expect(tag).toContain('freezeAfterPick');
   });
 
-  test('buildPickerDocument strips <base> and appends the script after the HTML', () => {
+  test('buildPickerDocument strips <base> and places the script BEFORE the snapshot body', () => {
+    // Front-loaded so a truncated snapshot can't swallow the trailing script.
     const doc = buildPickerDocument('<body><base href="http://x/"><button>Go</button></body>', { probedAttrs: [] });
     expect(doc).not.toContain('<base');
-    expect(doc.indexOf('<button>Go</button>')).toBeLessThan(doc.indexOf('<script>'));
+    expect(doc.indexOf('<script>')).toBeLessThan(doc.indexOf('<button>Go</button>'));
+  });
+
+  test('buildPickerDocument keeps the doctype first, then the script, then the body', () => {
+    const doc = buildPickerDocument('<!DOCTYPE html><html><body><button>Go</button></body></html>', {
+      probedAttrs: [],
+    });
+    expect(doc.indexOf('<!DOCTYPE html>')).toBe(0);
+    expect(doc.indexOf('<!DOCTYPE html>')).toBeLessThan(doc.indexOf('<script>'));
+    expect(doc.indexOf('<script>')).toBeLessThan(doc.indexOf('<button>Go</button>'));
+  });
+
+  test('the picker install is deferred to DOMContentLoaded so it runs after the body is parsed', () => {
+    const tag = snapshotPickerScriptTag({ probedAttrs: [] });
+    expect(tag).toContain("document.readyState==='loading'");
+    expect(tag).toContain('DOMContentLoaded');
   });
 });
