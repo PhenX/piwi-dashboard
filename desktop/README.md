@@ -91,5 +91,54 @@ changes — see `.github/workflows/desktop-e2e.yml`.
 ## Signing
 
 Installers are **unsigned** unless code-signing secrets are configured, in which
-case CI signs (and notarizes on macOS) automatically. Unsigned apps still run —
-right-click → Open on macOS, or "More info → Run anyway" on Windows SmartScreen.
+case CI signs automatically. Unsigned apps still run — right-click → Open on
+macOS, or "More info → Run anyway" on Windows SmartScreen.
+
+macOS signing and notarization are not wired up (see the comment in
+`desktop-release.yml`). Windows is, in two flavours — pick the one your
+certificate allows:
+
+### Cloud or token-held key (the usual case)
+
+Certificates issued since June 2023 keep their private key in hardware, so
+there is no file to install and Tauri shells out to the vendor's CLI instead.
+[Azure Trusted Signing][azure] is the cheapest route and needs no certificate
+purchase. Set these as repository **variables** (they are not secret):
+
+```
+WINDOWS_SIGN_SETUP     cargo install artifact-signing-cli
+WINDOWS_SIGN_COMMAND   artifact-signing-cli -e https://weu.codesigning.azure.net \
+                         -a <account> -c <profile> -d "Piwi Dashboard" %1
+```
+
+…and the credentials the CLI reads as repository **secrets** — for Azure that
+is `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` and `AZURE_TENANT_ID`. `%1` is
+substituted with each file being signed. Other vendors (DigiCert KeyLocker,
+SSL.com eSigner) work the same way with their own CLI and variables; add those
+to the job `env` in `desktop-release.yml`.
+
+### Exportable `.pfx` (OV certificates issued before June 2023)
+
+Two repository **secrets**: `WINDOWS_CERTIFICATE`, holding the output of
+`certutil -encode certificate.pfx base64cert.txt`, and
+`WINDOWS_CERTIFICATE_PASSWORD`, the PFX export password.
+
+CI imports the certificate into the runner's store and reads the thumbprint
+off the import, so there is no third secret to keep in sync. Override the
+timestamp server with the `WINDOWS_TIMESTAMP_URL` variable if your issuer runs
+its own; it defaults to DigiCert's.
+
+### Either way
+
+The workflow writes `src-tauri/tauri.windows.conf.json` from those values, which
+Tauri merges into `tauri.conf.json` on Windows only — the thumbprint stays out
+of the repository and `npm run build` on a developer machine keeps producing an
+unsigned installer with no extra setup. The Node sidecar is signed in a separate
+step, because Tauri signs the app binary and the `.msi` but never `externalBin`
+entries, and an unsigned UPX-packed `node.exe` inside a signed installer is a
+reliable way to attract antivirus false positives.
+
+Verify a build with `signtool verify /pa /v <installer>.msi`, or look for
+`info: signing app` in the workflow log.
+
+[azure]: https://learn.microsoft.com/en-us/azure/trusted-signing/quickstart

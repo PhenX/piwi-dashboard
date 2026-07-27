@@ -45,6 +45,22 @@ jobs:
     needs: [build-server]
     permissions:
       contents: write # upload installers to the release
+    # Job-level so the signing steps can branch on them: a step's own `env:`
+    # block is not visible to that step's `if:`. All optional — every one of
+    # these is empty on a repo with no signing secrets, and the steps that read
+    # them skip, which is what keeps unsigned builds working unchanged.
+    env:
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+      WINDOWS_SIGN_SETUP: ${{ vars.WINDOWS_SIGN_SETUP }}
+      WINDOWS_SIGN_COMMAND: ${{ vars.WINDOWS_SIGN_COMMAND }}
+      # Credentials for the sign command. These are Azure's names because
+      # Trusted Signing / Key Vault is the documented route; a different vendor
+      # CLI reads different variables — add them here alongside.
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
     strategy:
       fail-fast: false
       matrix:
@@ -99,6 +115,87 @@ jobs:
         run: |
           choco install upx -y --no-progress
           upx --best --lzma "src-tauri/binaries/node-${{ matrix.target }}.exe"
+
+      # --- Windows code signing (opt-in; unsigned when no secrets are set) ---
+      #
+      # Two routes, because which one you can use depends on the certificate:
+      #
+      #  * WINDOWS_CERTIFICATE — a base64 .pfx whose private key can be
+      #    exported. Only OV certificates issued before June 2023 qualify;
+      #    since then the CA/B rules require the key to live in hardware.
+      #    The cert is imported into the runner's store and Tauri drives
+      #    signtool through `certificateThumbprint`.
+      #
+      #  * WINDOWS_SIGN_COMMAND — anything else: Azure Trusted Signing, Azure
+      #    Key Vault, DigiCert KeyLocker, SSL.com eSigner, a physical token.
+      #    There is no key to install, so Tauri shells out to the vendor CLI
+      #    instead (`%1` is the file being signed). WINDOWS_SIGN_SETUP installs
+      #    that CLI first, and the credentials it reads are plain job env below.
+      #
+      # Both land in src-tauri/tauri.windows.conf.json, which Tauri merges into
+      # tauri.conf.json on Windows only — keeping the thumbprint out of the repo
+      # and leaving `npm run build` on a developer machine unsigned and working.
+      - name: Configure Windows code signing
+        id: winsign
+        if: runner.os == 'Windows' && (env.WINDOWS_CERTIFICATE != '' || env.WINDOWS_SIGN_COMMAND != '')
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $windows = @{}
+
+          if ($env:WINDOWS_SIGN_COMMAND) {
+            if ($env:WINDOWS_SIGN_SETUP) { Invoke-Expression $env:WINDOWS_SIGN_SETUP }
+            $windows.signCommand = $env:WINDOWS_SIGN_COMMAND
+          } else {
+            if (-not $env:WINDOWS_CERTIFICATE_PASSWORD) {
+              throw 'WINDOWS_CERTIFICATE is set but WINDOWS_CERTIFICATE_PASSWORD is not.'
+            }
+            Set-Content -Path cert.b64 -Value $env:WINDOWS_CERTIFICATE
+            certutil -decode cert.b64 cert.pfx
+            Remove-Item cert.b64
+            $imported = Import-PfxCertificate -FilePath cert.pfx `
+              -CertStoreLocation Cert:\CurrentUser\My `
+              -Password (ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText)
+            Remove-Item cert.pfx
+            $timestampUrl = if ($env:WINDOWS_TIMESTAMP_URL) { $env:WINDOWS_TIMESTAMP_URL } else { 'http://timestamp.digicert.com' }
+            # Read the thumbprint off the import rather than carrying it as a
+            # third secret that can silently drift from the certificate.
+            $windows.certificateThumbprint = $imported.Thumbprint
+            $windows.digestAlgorithm = 'sha256'
+            $windows.timestampUrl = $timestampUrl
+            "thumbprint=$($imported.Thumbprint)" >> $env:GITHUB_OUTPUT
+            "timestampUrl=$timestampUrl" >> $env:GITHUB_OUTPUT
+          }
+
+          @{ bundle = @{ windows = $windows } } | ConvertTo-Json -Depth 5 |
+            Set-Content -Path src-tauri/tauri.windows.conf.json
+          "signing=true" >> $env:GITHUB_OUTPUT
+          Write-Host "Windows signing enabled via $(if ($env:WINDOWS_SIGN_COMMAND) { 'sign command' } else { 'certificate store' })."
+
+      # Tauri signs the app executable and the .msi, but not `externalBin`
+      # entries — the Node sidecar would ship unsigned inside a signed
+      # installer, which is what trips antivirus heuristics on the UPX-packed
+      # runtime. Sign it here: after UPX (packing would strip the signature)
+      # and before staging, so the signed binary is what gets bundled.
+      - name: Sign Node sidecar (Windows)
+        if: steps.winsign.outputs.signing == 'true'
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sidecar = "src-tauri/binaries/node-${{ matrix.target }}.exe"
+          if ($env:WINDOWS_SIGN_COMMAND) {
+            $command = $env:WINDOWS_SIGN_COMMAND -replace '%1', $sidecar
+            Invoke-Expression $command
+          } else {
+            $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' -ErrorAction SilentlyContinue |
+              Sort-Object FullName | Select-Object -Last 1
+            if (-not $signtool) { throw 'signtool.exe not found in the Windows 10 SDK.' }
+            & $signtool.FullName sign /sha1 '${{ steps.winsign.outputs.thumbprint }}' `
+              /fd sha256 /tr '${{ steps.winsign.outputs.timestampUrl }}' /td sha256 $sidecar
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
+          }
 
       - name: Stage server (native modules for this OS)
         working-directory: desktop
