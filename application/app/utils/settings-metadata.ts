@@ -41,11 +41,27 @@ export interface SettingFieldMeta {
   envOnly?: boolean;
 }
 
+/**
+ * Settings splits into two jobs that were previously one flat list of ten:
+ * running the instance, and tuning what Piwi infers from your results. A
+ * newcomer met "Timeout hygiene" before they had seen a timeout, because
+ * nothing said which pages were infrastructure and which were analysis.
+ */
+export type SettingsGroupId = 'instance' | 'analysis' | 'meta';
+
+export const SETTINGS_GROUPS: { id: SettingsGroupId; label: string }[] = [
+  { id: 'instance', label: 'Instance' },
+  { id: 'analysis', label: 'Analysis' },
+  { id: 'meta', label: '' },
+];
+
 export interface SettingsPageMeta {
   id: SettingsPageId;
   label: string;
   icon: string;
   to: string;
+  /** Which section of the Settings nav this page belongs to. */
+  group: SettingsGroupId;
   /** Roles that may access the page; omitted = any authenticated user. */
   roles?: Role[];
   /**
@@ -66,6 +82,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     label: 'Account',
     icon: 'i-lucide-user-round',
     to: '/settings/account',
+    group: 'instance',
     authOnly: true,
     fields: [
       { id: 'account.display-name', label: 'Display name', help: 'account.display-name' },
@@ -80,6 +97,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     label: 'Users',
     icon: 'i-lucide-users',
     to: '/settings/users',
+    group: 'instance',
     roles: [Role.ADMINISTRATOR],
     authOnly: true,
     introHelp: 'settings.users',
@@ -93,6 +111,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     label: 'Notifications',
     icon: 'i-lucide-bell',
     to: '/settings/notifications',
+    group: 'instance',
     fields: [
       { id: 'notifications.smtp', label: 'SMTP email delivery', help: 'settings.smtp', envOnly: true },
       { id: 'notifications.test-email', label: 'Send test email', help: 'notifications.test-email' },
@@ -105,6 +124,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     label: 'Tags',
     icon: 'i-lucide-tags',
     to: '/settings/tags',
+    group: 'analysis',
     roles: [Role.ADMINISTRATOR],
     introHelp: 'settings.tags',
     fields: [{ id: 'tags.list', label: 'Tags', help: 'settings.tags' }],
@@ -114,6 +134,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     label: 'Storage',
     icon: 'i-lucide-hard-drive',
     to: '/settings/storage',
+    group: 'instance',
     roles: [Role.ADMINISTRATOR],
     fields: [
       { id: 'storage.backend', label: 'Storage backend', help: 'settings.storage-backend', envOnly: true },
@@ -126,6 +147,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     label: 'Wasted time',
     icon: 'i-lucide-hourglass',
     to: '/settings/wasted-time',
+    group: 'analysis',
     roles: [Role.ADMINISTRATOR],
     introHelp: 'settings.wasted-time',
     fields: [{ id: 'wasted-time.patterns', label: 'Wasted-time patterns', help: 'settings.wasted-time' }],
@@ -135,6 +157,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     label: 'Timeout hygiene',
     icon: 'i-lucide-scissors',
     to: '/settings/timeout-hygiene',
+    group: 'analysis',
     roles: [Role.ADMINISTRATOR],
     introHelp: 'settings.timeout-hygiene',
     fields: [{ id: 'timeout-hygiene.thresholds', label: 'Detection thresholds', help: 'settings.timeout-hygiene' }],
@@ -144,6 +167,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     label: 'Pull requests',
     icon: 'i-lucide-git-pull-request',
     to: '/settings/pr-feedback',
+    group: 'analysis',
     roles: [Role.ADMINISTRATOR],
     introHelp: 'settings.pr-feedback',
     fields: [{ id: 'pr-feedback.settings', label: 'Pull-request feedback', help: 'settings.pr-feedback' }],
@@ -153,6 +177,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     label: 'AI diagnosis',
     icon: 'i-lucide-sparkles',
     to: '/settings/ai',
+    group: 'analysis',
     roles: [Role.ADMINISTRATOR],
     fields: [
       { id: 'ai.diagnosis', label: 'Diagnosis model', help: 'settings.ai-provider' },
@@ -170,6 +195,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     label: 'About',
     icon: 'i-lucide-info',
     to: '/settings/about',
+    group: 'meta',
     fields: [],
   },
 ];

@@ -195,42 +195,79 @@ watch(activeTab, (tab) => {
 
 const hasFailures = computed(() => project.value?.testRuns?.some((r) => r.failedTests > 0) ?? false);
 
-const tabItems = computed(() => [
+/**
+ * Tabs, grouped by the question they answer rather than listed flat.
+ *
+ * Ten peer tabs made the page read as a pile — "Performance" sat between
+ * "Flaky tests" and "Test cases" for no reason a reader could reconstruct.
+ * The groups run: what happened (Results) → what's broken (Failures) → is the
+ * suite healthy (Health) → administration. The desktop strip renders the
+ * flattened order (adjacency alone carries most of the meaning); the mobile
+ * select and the command palette render the labelled groups.
+ */
+const tabGroups = computed(() => [
   {
-    label: `Test runs (${filteredRuns.value.length})`,
-    icon: 'i-lucide-play-circle',
-    value: 'test-runs',
-    slot: 'test-runs',
+    label: 'Results',
+    items: [
+      {
+        label: `Test runs (${filteredRuns.value.length})`,
+        icon: 'i-lucide-play-circle',
+        value: 'test-runs',
+        slot: 'test-runs',
+      },
+      {
+        label: `Test cases${testCasesTotal.value != null ? ` (${testCasesTotal.value})` : ''}`,
+        icon: 'i-lucide-list-checks',
+        value: 'test-cases',
+        slot: 'test-cases',
+      },
+      { label: 'Compare', icon: 'i-lucide-git-compare-arrows', value: 'compare', slot: 'compare' },
+    ],
   },
-  ...(hasFailures.value
+  {
+    label: 'Failures',
+    items: [
+      ...(hasFailures.value
+        ? [
+            {
+              label: 'Failure clusters',
+              icon: 'i-lucide-layers',
+              value: 'failure-clusters',
+              slot: 'failure-clusters',
+            },
+          ]
+        : []),
+      { label: 'Flaky tests', icon: 'i-lucide-shuffle', value: 'flaky-tests', slot: 'flaky-tests' },
+      { label: 'Quarantine', icon: 'i-lucide-shield-alert', value: 'quarantine', slot: 'quarantine' },
+    ],
+  },
+  {
+    label: 'Health',
+    items: [
+      { label: 'Spec health', icon: 'i-lucide-table-2', value: 'spec-health', slot: 'spec-health' },
+      { label: 'Performance', icon: 'i-lucide-trending-up', value: 'performance', slot: 'performance' },
+      {
+        label: `Timeline${markers.value.length ? ` (${markers.value.length})` : ''}`,
+        icon: 'i-lucide-milestone',
+        value: 'timeline',
+        slot: 'timeline',
+      },
+    ],
+  },
+  ...(isAdmin.value
     ? [
         {
-          label: 'Failure clusters',
-          icon: 'i-lucide-layers',
-          value: 'failure-clusters',
-          slot: 'failure-clusters',
+          label: 'Admin',
+          items: [{ label: 'Members', icon: 'i-lucide-users', value: 'members', slot: 'members' }],
         },
       ]
     : []),
-  { label: 'Flaky tests', icon: 'i-lucide-shuffle', value: 'flaky-tests', slot: 'flaky-tests' },
-  { label: 'Performance', icon: 'i-lucide-trending-up', value: 'performance', slot: 'performance' },
-  {
-    label: `Test cases${testCasesTotal.value != null ? ` (${testCasesTotal.value})` : ''}`,
-    icon: 'i-lucide-list-checks',
-    value: 'test-cases',
-    slot: 'test-cases',
-  },
-  { label: 'Compare', icon: 'i-lucide-git-compare-arrows', value: 'compare', slot: 'compare' },
-  { label: 'Spec health', icon: 'i-lucide-table-2', value: 'spec-health', slot: 'spec-health' },
-  { label: 'Quarantine', icon: 'i-lucide-shield-alert', value: 'quarantine', slot: 'quarantine' },
-  {
-    label: `Timeline${markers.value.length ? ` (${markers.value.length})` : ''}`,
-    icon: 'i-lucide-milestone',
-    value: 'timeline',
-    slot: 'timeline',
-  },
-  ...(isAdmin.value ? [{ label: 'Members', icon: 'i-lucide-users', value: 'members', slot: 'members' }] : []),
 ]);
+
+const tabItems = computed(() => tabGroups.value.flatMap((g) => g.items));
+
+/** Grouped shape for `USelect` (mobile) — array-of-arrays renders as sections. */
+const tabSelectGroups = computed(() => tabGroups.value.map((g) => g.items).filter((items) => items.length > 0));
 
 const activeTabIcon = computed(() => tabItems.value.find((t) => t.value === activeTab.value)?.icon);
 
@@ -694,7 +731,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
         <!-- Mobile: a select replaces the cramped tab strip; the strip scrolls from sm up. -->
         <USelect
           v-model="activeTab"
-          :items="tabItems"
+          :items="tabSelectGroups"
           :icon="activeTabIcon"
           size="md"
           class="w-full mx-1 mb-1 sm:hidden"
