@@ -40,6 +40,35 @@ const runModeItems = [
 ];
 
 const linked = computed(() => !!link.value?.exists);
+
+// A project linked to the wrong checkout is the likeliest reason a local run
+// dies immediately, and Playwright reports it as a module-resolution stack
+// trace from whatever config that folder happens to hold. Ask the shell which
+// spec files are actually there before anything is spawned.
+const specFiles = computed(() => [...new Set(props.cases.map((c) => c.filePath).filter(Boolean))]);
+const missingSpecs = ref<string[]>([]);
+
+async function checkSpecs() {
+  const core = tauriCore();
+  missingSpecs.value = [];
+  if (!core || !linked.value || specFiles.value.length === 0) return;
+  try {
+    const result = await core.invoke<{ folder: string; missing: string[] }>('desktop_check_local_specs', {
+      projectId: String(props.projectId),
+      files: specFiles.value,
+    });
+    missingSpecs.value = result?.missing ?? [];
+  } catch {
+    // An older shell without the command — the run itself still reports.
+  }
+}
+
+watch([open, () => link.value?.path, linked], () => {
+  if (open.value) void checkSpecs();
+});
+
+/** Every spec absent points at the folder rather than at any one test. */
+const wrongFolder = computed(() => specFiles.value.length > 0 && missingSpecs.value.length === specFiles.value.length);
 const plan = computed(() =>
   buildLocalRunPlan(props.cases, {
     mode: mode.value,
@@ -156,6 +185,43 @@ watch(
               <USwitch v-model="trace" :disabled="running" />
             </UFormField>
           </div>
+
+          <UAlert
+            v-if="missingSpecs.length > 0"
+            color="warning"
+            variant="soft"
+            icon="i-lucide-file-question"
+            :title="
+              wrongFolder ? 'None of these tests are in the linked folder' : 'Some tests are not in the linked folder'
+            "
+          >
+            <template #description>
+              <p>
+                Not found under <code class="text-xs">{{ link?.path }}</code
+                >: <code class="text-xs">{{ missingSpecs[0] }}</code
+                ><span v-if="missingSpecs.length > 1"> and {{ missingSpecs.length - 1 }} more</span>.
+              </p>
+              <p class="mt-1">
+                <template v-if="wrongFolder">
+                  This project is probably linked to a different checkout than the one these tests come from.
+                </template>
+                <template v-else> Running anyway is fine when your Playwright config puts them elsewhere. </template>
+              </p>
+              <UButton
+                v-if="wrongFolder"
+                size="xs"
+                color="warning"
+                variant="soft"
+                icon="i-lucide-folder-search"
+                class="mt-2"
+                :loading="busy"
+                :disabled="running"
+                @click="pickAndLink"
+              >
+                Choose the right folder…
+              </UButton>
+            </template>
+          </UAlert>
 
           <div class="space-y-1">
             <div class="text-xs text-muted">Runs in the linked folder</div>

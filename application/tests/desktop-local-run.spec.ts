@@ -23,8 +23,8 @@ declare global {
 }
 
 /** Install a fake `window.__TAURI__` before any app script runs. */
-async function installFakeBridge(page: Page, options: { linked: boolean }) {
-  await page.addInitScript((opts: { linked: boolean }) => {
+async function installFakeBridge(page: Page, options: { linked: boolean; missingSpecs?: string[] }) {
+  await page.addInitScript((opts: { linked: boolean; missingSpecs?: string[] }) => {
     const listeners: ((event: { payload: unknown }) => void)[] = [];
     const state = {
       link: opts.linked ? { path: '/home/dev/acme', exists: true } : null,
@@ -44,6 +44,8 @@ async function installFakeBridge(page: Page, options: { linked: boolean }) {
               case 'desktop_set_project_link':
                 state.link = { path: '/home/dev/acme', exists: true };
                 return null;
+              case 'desktop_check_local_specs':
+                return { folder: '/home/dev/acme', missing: opts.missingSpecs ?? [] };
               case 'desktop_run_local_tests':
                 setTimeout(() => {
                   for (const emit of listeners) {
@@ -149,6 +151,23 @@ test.describe('Desktop local run', () => {
     expect(runInvocation).toBeTruthy();
     expect(runInvocation!.args!.args).toEqual(['tests/checkout.spec.ts:42', '--project=chromium']);
     expect(String(runInvocation!.args!.projectId)).toMatch(/^\d+$/);
+  });
+
+  test('warns before running when the linked folder holds none of the tests', async ({ page }) => {
+    await installFakeBridge(page, { linked: true, missingSpecs: ['tests/checkout.spec.ts'] });
+    await page.goto(`/test-runs/${runId}`);
+    await waitForHydration(page);
+
+    await page.getByRole('button', { name: 'Run locally' }).click();
+    const dialog = page.getByRole('dialog');
+
+    await expect(dialog.getByText('None of these tests are in the linked folder')).toBeVisible();
+    await expect(dialog.getByText('tests/checkout.spec.ts', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('linked to a different checkout')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Choose the right folder…' })).toBeVisible();
+
+    // A warning, never a block: the config may put specs elsewhere.
+    await expect(dialog.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();
   });
 
   test('prompts to link a folder when none is linked yet', async ({ page }) => {
