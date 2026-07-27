@@ -380,6 +380,14 @@ async function confirm() {
       },
     );
     if (result.status === 'ok') {
+      // Confirm the save explicitly — the pick otherwise closes with no signal,
+      // which reads as "nothing happened" when the panel doesn't visibly change.
+      toast.add({
+        title: 'Locator pick saved',
+        description: 'Your chosen locator was saved for this failure.',
+        color: 'success',
+        icon: 'i-lucide-check',
+      });
       emit('confirmed', selectedAlt.value);
     } else {
       // Persisted nowhere — the stored error has no call site or locator
