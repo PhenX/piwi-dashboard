@@ -68,6 +68,17 @@ describe('snapshotPickerScriptTag / buildPickerDocument', () => {
     expect(tag.match(/<\/script>/g)).toHaveLength(1);
   });
 
+  test('the serialized picker swallows page interaction and re-arms the block after a pick', () => {
+    const tag = snapshotPickerScriptTag({ probedAttrs: [] });
+    // A representative slice of the events a dead snapshot must ignore so a
+    // click never navigates a link, submits a form, or activates a control.
+    for (const evt of ['submit', 'contextmenu', 'auxclick', 'dragstart', 'keypress', 'touchstart']) {
+      expect(tag).toContain(evt);
+    }
+    // The iframe stays inert through the review step (a pick doesn't re-enable it).
+    expect(tag).toContain('freezeAfterPick');
+  });
+
   test('buildPickerDocument strips <base> and appends the script after the HTML', () => {
     const doc = buildPickerDocument('<body><base href="http://x/"><button>Go</button></body>', { probedAttrs: [] });
     expect(doc).not.toContain('<base');

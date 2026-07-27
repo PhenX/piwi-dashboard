@@ -187,6 +187,17 @@ export function maskSensitiveText(text: string): string {
 }
 
 /**
+ * Mask secrets in a CSS body destined for an inlined `<style>`, but leave
+ * `data:` URIs alone — unlike {@link maskSensitiveText}. The picker deliberately
+ * embeds fonts/images as base64 data URIs, so blanket data-URI masking would
+ * wipe them out; token-shaped secrets (JWTs, long hex) are still scrubbed. Run
+ * this AFTER assets are inlined so the fresh data URIs survive. Pure.
+ */
+export function maskCssText(css: string): string {
+  return css.replace(JWT_RE, '[masked-token]').replace(LONG_HEX_RE, '[masked-hex]');
+}
+
+/**
  * Mask token-shaped strings and cap the rendered HTML. Pure and unit-testable.
  * The renderer already drops `__playwright_*` values, inline handlers, and
  * script bodies — this pass handles secrets baked into ordinary markup.
@@ -199,6 +210,109 @@ export function sanitizeDomSnapshot(html: string, capChars: number): { html: str
     truncated = true;
   }
   return { html: out, truncated };
+}
+
+/**
+ * A `<link rel="stylesheet">` parsed out of rendered snapshot HTML: its original
+ * `href` (the key a resource map is looked up by) and any `media` attribute.
+ */
+function parseStylesheetLink(tag: string): { href: string; media: string | null } | null {
+  // rel may be quoted or bare and carry several tokens (`rel="preload stylesheet"`).
+  if (!/\brel\s*=\s*("|')?[^"'>]*\bstylesheet\b/i.test(tag)) return null;
+  const quoted = /\bhref\s*=\s*("|')(.*?)\1/i.exec(tag);
+  const href = quoted ? quoted[2]! : (/\bhref\s*=\s*([^\s"'>]+)/i.exec(tag)?.[1] ?? null);
+  if (!href) return null;
+  const media = /\bmedia\s*=\s*("|')(.*?)\1/i.exec(tag)?.[2] ?? null;
+  return { href, media };
+}
+
+/** Unique original hrefs of every `<link rel="stylesheet">` in the HTML. Pure. */
+export function collectStylesheetLinks(html: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const re = /<link\b[^>]*>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const link = parseStylesheetLink(m[0]);
+    if (link && !seen.has(link.href)) {
+      seen.add(link.href);
+      out.push(link.href);
+    }
+  }
+  return out;
+}
+
+/**
+ * Replace external `<link rel="stylesheet">` elements whose CSS we have with an
+ * inline `<style>`, so the snapshot renders styled inside the opaque-origin
+ * picker iframe — where the original href (pointing at the long-gone test
+ * server) can never load. `cssByHref` is keyed by each link's ORIGINAL href
+ * attribute; links with no entry are left untouched (their href might still
+ * resolve, and a broken link is no worse than before). `<style>` bodies are raw
+ * text to the HTML parser, so a stray `</style` in the CSS is defanged here.
+ *
+ * The caller is responsible for scrubbing secrets from the CSS first (see
+ * `maskCssText`): masking must run BEFORE any `url(...)` assets are embedded, or
+ * it would shred the base64 data URIs it can't tell from real tokens.
+ *
+ * Inlining stops once `maxTotalChars` of CSS has been emitted; the remaining
+ * links stay as-is rather than emit a half sheet. Pure and unit-testable.
+ */
+export function inlineStylesheets(html: string, cssByHref: Record<string, string>, maxTotalChars = 8_000_000): string {
+  if (!html || Object.keys(cssByHref).length === 0) return html;
+  let budget = maxTotalChars;
+  return html.replace(/<link\b[^>]*>/gi, (tag) => {
+    const link = parseStylesheetLink(tag);
+    if (!link) return tag;
+    const css = cssByHref[link.href];
+    if (typeof css !== 'string' || css.length === 0 || css.length > budget) return tag;
+    budget -= css.length;
+    const media = link.media ? ` media="${escapeAttr(link.media)}"` : '';
+    const safeCss = css.replace(/<\/(style)/gi, '<\\/$1');
+    return `<style${media}>${safeCss}</style>`;
+  });
+}
+
+// A `url(...)` target: single/double quoted (group 2) or bare (group 3).
+const CSS_URL_RE = /url\(\s*(?:(['"])(.*?)\1|([^)\s'"]+))\s*\)/gi;
+
+/**
+ * Every distinct `url(...)` target in a CSS body worth resolving — quotes
+ * stripped, and already-inline (`data:`) / in-document (`#id`) refs skipped.
+ * Pure; the caller resolves each against the stylesheet's own URL.
+ */
+export function collectCssUrls(css: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const re = new RegExp(CSS_URL_RE.source, 'gi');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(css)) !== null) {
+    const raw = (m[2] ?? m[3] ?? '').trim();
+    // Skip already-inline data: URIs and any fragment ref (`#blur` filters,
+    // `sprite.svg#icon`) — a data: URI can't carry the fragment that addresses
+    // the resource, so inlining would break them; leaving them alone is safer.
+    if (!raw || raw.startsWith('data:') || raw.includes('#')) continue;
+    if (!seen.has(raw)) {
+      seen.add(raw);
+      out.push(raw);
+    }
+  }
+  return out;
+}
+
+/**
+ * Rewrite every `url(...)` whose target appears in `replacements` (keyed by the
+ * raw target) to the replacement, double-quoted. Used to swap external asset
+ * refs for `data:` URIs so fonts / background images render offline. Targets
+ * with no replacement are left untouched. Pure.
+ */
+export function inlineCssUrls(css: string, replacements: Record<string, string>): string {
+  if (!css || Object.keys(replacements).length === 0) return css;
+  return css.replace(new RegExp(CSS_URL_RE.source, 'gi'), (full, _q, quoted, bare) => {
+    const raw = (quoted ?? bare ?? '').trim();
+    const repl = replacements[raw];
+    return repl ? `url("${repl}")` : full;
+  });
 }
 
 /** The two representations a case can be viewed as: trace-derived DOM or the ARIA tree. */
@@ -214,6 +328,8 @@ export interface DomSnapshotResult {
   action?: string;
   /** The recorded page viewport, for proportion-preserving scaled rendering. */
   viewport?: { width: number; height: number };
+  /** The rendered frame's document URL — the base for resolving `<link href>` when inlining stylesheets. */
+  frameUrl?: string;
   /** Which representation `html` is — the trace DOM (`dom`) or the ARIA tree (`aria`). */
   source?: DomSnapshotSource;
   /**
@@ -261,6 +377,7 @@ export function extractDomSnapshot(data: ParsedTraceData, capChars: number): Dom
       snapshotName: name,
       action: fa?.apiName,
       viewport: rendered?.viewport,
+      frameUrl: rendered?.frameUrl,
     };
   }
   return { status: 'no-snapshot' };

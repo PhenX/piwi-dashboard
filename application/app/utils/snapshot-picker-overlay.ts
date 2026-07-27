@@ -255,10 +255,11 @@ export function installSnapshotPicker(config) {
     }
   }
   function onKey(e) {
-    if (e.key === 'Escape' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      stop(e);
-      handleKey(e.key);
-    }
+    // Swallow EVERY key while picking so a focused control in the snapshot can't
+    // be activated (Enter/Space), the DOM can't be typed into, and Tab can't
+    // move focus into the page. Esc / ↑ / ↓ still drive the picker itself.
+    stop(e);
+    handleKey(e.key);
   }
 
   // ── Guidance: pre-highlight likely elements + text search ──────────────────
@@ -413,21 +414,68 @@ export function installSnapshotPicker(config) {
     highlight.style.display = 'none';
     clearHints();
     banner.innerHTML = '<div style="text-align:center;color:#9ca3af;">Analyzing element…</div>';
-    removeListeners();
+    freezeAfterPick();
     g.parent.postMessage({ type: 'elementPicked', attrs: attrs }, '*');
   }
 
-  var suppressed = ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'auxclick', 'dblclick'];
-  function removeListeners() {
+  // Every interaction the snapshot must swallow so it behaves as an inert
+  // picture: a click must never navigate a link, submit a form, activate a
+  // control, type into a field, or start a drag/selection. `mousemove`, `click`
+  // and `keydown` are owned by the picker (hover / pick / tree-walk) and handled
+  // separately below. This list stays installed for the whole picker lifetime.
+  //
+  // NOTE: intentionally STRICTER than the reporter's live picker
+  // (`installPickerOverlay`), which runs on a real page the user may still want
+  // to interact with. Here the page is a dead snapshot, so nothing should react.
+  var INERT_EVENTS = [
+    'mousedown',
+    'mouseup',
+    'pointerdown',
+    'pointerup',
+    'auxclick',
+    'dblclick',
+    'contextmenu',
+    'submit',
+    'beforeinput',
+    'input',
+    'change',
+    'paste',
+    'cut',
+    'drop',
+    'dragstart',
+    'keypress',
+    'keyup',
+    'touchstart',
+    'touchend',
+  ];
+  function addInert() {
+    for (var i = 0; i < INERT_EVENTS.length; i++) doc.addEventListener(INERT_EVENTS[i], stop, true);
+  }
+
+  // Detach the picker's own hover/pick/key handlers. Does NOT re-enable the page.
+  function disarmPicking() {
     doc.removeEventListener('mousemove', onMove, true);
     doc.removeEventListener('click', onClick, true);
     doc.removeEventListener('keydown', onKey, true);
     g.removeEventListener('message', onParentMsg, false);
-    for (var i = 0; i < suppressed.length; i++) doc.removeEventListener(suppressed[i], stop, true);
+  }
+
+  // A pick committed but the snapshot iframe stays on screen through the review
+  // step — keep it fully inert (a stray click/keydown there must do nothing) by
+  // swapping the picker's click/keydown handlers for plain blockers.
+  function freezeAfterPick() {
+    disarmPicking();
+    doc.addEventListener('click', stop, true);
+    doc.addEventListener('keydown', stop, true);
   }
 
   function doClose() {
-    removeListeners();
+    disarmPicking();
+    for (var i = 0; i < INERT_EVENTS.length; i++) doc.removeEventListener(INERT_EVENTS[i], stop, true);
+    // These are only attached after a pick (freezeAfterPick); removeEventListener
+    // is a no-op when they were never added, so this is safe in every state.
+    doc.removeEventListener('click', stop, true);
+    doc.removeEventListener('keydown', stop, true);
     clearHints();
     highlight.remove();
     banner.remove();
@@ -438,7 +486,7 @@ export function installSnapshotPicker(config) {
   doc.addEventListener('click', onClick, true);
   doc.addEventListener('keydown', onKey, true);
   g.addEventListener('message', onParentMsg, false);
-  for (var i = 0; i < suppressed.length; i++) doc.addEventListener(suppressed[i], stop, true);
+  addInert();
 
   // ── Report full content height so the host can size the (opaque-origin)
   // iframe without reading its document. Replaces parent-side measurement. ────
