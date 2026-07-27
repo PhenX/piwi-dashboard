@@ -79,4 +79,13 @@ test('the dashboard can reach the shell IPC commands', async ({ tauriPage }) => 
   `)) as { ok: boolean; error?: string; state?: string };
   expect(update.ok, `desktop_check_update rejected: ${update.error ?? 'unknown'}`).toBe(true);
   expect(update.state).toBe('unsupported');
+
+  // The ambient badge/tooltip command is granted and accepts a set + clear.
+  const activity = (await tauriPage.evaluate(`
+    window.__TAURI__.core.invoke('desktop_set_activity', { count: 2, status: 'e2e' })
+      .then(() => window.__TAURI__.core.invoke('desktop_set_activity', { count: 0, status: null }))
+      .then(() => ({ ok: true }))
+      .catch((e) => ({ ok: false, error: String((e && e.message) || e) }))
+  `)) as { ok: boolean; error?: string };
+  expect(activity.ok, `desktop_set_activity rejected: ${activity.error ?? 'unknown'}`).toBe(true);
 });

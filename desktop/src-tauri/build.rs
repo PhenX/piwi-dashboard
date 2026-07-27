@@ -32,6 +32,7 @@ fn main() {
             "desktop_check_update",
             "desktop_install_update",
             "desktop_restart_app",
+            "desktop_set_activity",
         ])),
     )
     .expect("failed to run tauri-build");
