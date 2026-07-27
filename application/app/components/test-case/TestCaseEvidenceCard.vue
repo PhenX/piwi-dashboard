@@ -94,7 +94,13 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
         </div>
       </TestEvidenceSection>
 
-      <EmptyState v-if="totalCount === 0" icon="i-lucide-camera-off" text="No screenshots, video or traces captured" />
+      <FeatureUnavailable
+        v-if="totalCount === 0"
+        icon="i-lucide-camera-off"
+        title="No screenshots, video or traces captured"
+        text="Evidence comes from Playwright's own capture settings — set trace, screenshot and video in your config (trace: 'retain-on-failure' is the usual starting point)."
+        doc="reporter"
+      />
     </div>
   </CollapsibleSectionCard>
 </template>

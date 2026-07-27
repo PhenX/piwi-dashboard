@@ -44,10 +44,12 @@ function methodColor(method: string): 'success' | 'info' | 'warning' | 'error' |
         </UButton>
       </template>
     </ErrorState>
-    <EmptyState
+    <FeatureUnavailable
       v-else-if="!slow || slow.endpoints.length === 0"
       icon="i-lucide-network"
-      text="No network requests captured in this period."
+      title="No network requests captured in this period"
+      text="Slow endpoints need the Piwi capture fixtures — extend your Playwright test with piwiFixtures and request timing rides along with every run."
+      doc="capture-fixtures"
     />
     <template v-else>
       <!-- Mobile: card list -->
