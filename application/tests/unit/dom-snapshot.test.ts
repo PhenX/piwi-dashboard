@@ -1,8 +1,14 @@
 import { describe, test, expect } from 'vitest';
-import { renderSnapshotHtml, sanitizeDomSnapshot, extractDomSnapshot } from '~~/server/utils/dom-snapshot-render';
+import {
+  renderSnapshotHtml,
+  sanitizeDomSnapshot,
+  extractDomSnapshot,
+  collectStylesheetLinks,
+  inlineStylesheets,
+} from '~~/server/utils/dom-snapshot-render';
 import { resolveCaseDomSnapshot } from '~~/server/utils/dom-snapshot';
 import { renderAriaSnapshotHtml } from '~~/server/utils/dom-snapshot-aria';
-import type { TraceFrameSnapshot, ParsedTraceData } from '~~/server/utils/trace-events';
+import { parseResourceSnapshots, type TraceFrameSnapshot, type ParsedTraceData } from '~~/server/utils/trace-events';
 
 function snap(overrides: Partial<TraceFrameSnapshot>): TraceFrameSnapshot {
   return { frameId: 'frame@1', isMainFrame: true, html: ['HTML', {}], ...overrides };
@@ -141,6 +147,90 @@ describe('renderSnapshotHtml', () => {
     });
     const main = snap({ snapshotName: 's1', html: ['HTML', {}, ['BODY', {}, 'main content']] });
     expect(renderSnapshotHtml([iframe, main], 's1')).toContain('main content');
+  });
+});
+
+describe('collectStylesheetLinks', () => {
+  test('returns unique stylesheet hrefs and ignores non-stylesheet links', () => {
+    const html =
+      '<head>' +
+      '<link rel="stylesheet" href="/a.css">' +
+      "<link rel='stylesheet' href='/b.css'>" +
+      '<link rel="preload" as="style" href="/c.css">' + // not rel=stylesheet
+      '<link rel="icon" href="/favicon.ico">' +
+      '<link rel="stylesheet" href="/a.css">' + // dupe
+      '<link rel="stylesheet">' + // no href
+      '</head>';
+    expect(collectStylesheetLinks(html)).toEqual(['/a.css', '/b.css']);
+  });
+
+  test('matches a stylesheet token among several rel values and a bare href', () => {
+    expect(collectStylesheetLinks('<link rel="preload stylesheet" href=bare.css>')).toEqual(['bare.css']);
+  });
+});
+
+describe('inlineStylesheets', () => {
+  test('replaces matching stylesheet links in place, leaving unmatched ones alone', () => {
+    const html = '<head><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/missing.css"></head>';
+    const out = inlineStylesheets(html, { '/app.css': 'body{color:red}' });
+    expect(out).toContain('<style>body{color:red}</style>');
+    expect(out).not.toContain('href="/app.css"');
+    // Unknown sheet stays as a link (its href may still resolve; no worse off).
+    expect(out).toContain('<link rel="stylesheet" href="/missing.css">');
+  });
+
+  test('preserves the media attribute on the inlined style', () => {
+    const html = '<link rel="stylesheet" href="/print.css" media="print">';
+    expect(inlineStylesheets(html, { '/print.css': 'a{}' })).toBe('<style media="print">a{}</style>');
+  });
+
+  test('defangs a stray </style> in the CSS and masks token-shaped strings', () => {
+    const css =
+      '.x{content:"</style><script>alert(1)</script>"}.y{background:url(data:image/png;base64,iVBORw0KGgoAAAA==)}';
+    const out = inlineStylesheets('<link rel="stylesheet" href="x">', { x: css });
+    expect(out).not.toContain('</style><script>'); // the closing tag can't break out
+    expect(out).toContain('<\\/style>');
+    expect(out).toContain('data:[masked]'); // secret masking still applies
+    expect(out).not.toContain('iVBORw0KGgo');
+  });
+
+  test('stops inlining once the CSS budget is spent, keeping later links intact', () => {
+    const html = '<link rel="stylesheet" href="/a.css"><link rel="stylesheet" href="/b.css">';
+    const out = inlineStylesheets(html, { '/a.css': 'aaaa', '/b.css': 'bbbb' }, 4);
+    expect(out).toContain('<style>aaaa</style>'); // first fits the budget of 4
+    expect(out).toContain('<link rel="stylesheet" href="/b.css">'); // second exceeds it → left as a link
+  });
+
+  test('is a no-op when there is nothing to inline', () => {
+    expect(inlineStylesheets('<link rel="stylesheet" href="/a.css">', {})).toBe(
+      '<link rel="stylesheet" href="/a.css">',
+    );
+  });
+});
+
+describe('parseResourceSnapshots', () => {
+  const line = (url: string, sha1: string | null) =>
+    JSON.stringify({
+      type: 'resource-snapshot',
+      snapshot: { request: { url }, response: { content: sha1 ? { _sha1: sha1 } : {} } },
+    });
+
+  test('maps resource URLs to their content hash, ignoring other events and lines without a hash', () => {
+    const text = [
+      line('http://app/main.css', 'aaa.css'),
+      JSON.stringify({ type: 'context-options' }), // unrelated event
+      'not json at all',
+      line('http://app/no-hash.css', null), // response carries no _sha1
+    ].join('\n');
+    const map = parseResourceSnapshots([text]);
+    expect(map.get('http://app/main.css')).toBe('aaa.css');
+    expect(map.has('http://app/no-hash.css')).toBe(false);
+    expect(map.size).toBe(1);
+  });
+
+  test('later snapshots win for a repeated URL', () => {
+    const text = [line('http://app/x.css', 'old.css'), line('http://app/x.css', 'new.css')].join('\n');
+    expect(parseResourceSnapshots([text]).get('http://app/x.css')).toBe('new.css');
   });
 });
 
@@ -303,6 +393,17 @@ describe('extractDomSnapshot — styled/lean two-pass', () => {
     expect(res.html).toContain('.x{color:red}'); // styles preserved
     expect(res.html).toContain('<button>Click me</button>');
     expect(res.viewport).toEqual({ width: 1280, height: 720 });
+  });
+
+  test('surfaces the frame URL of the rendered snapshot (the base for stylesheet inlining)', () => {
+    const frames: TraceFrameSnapshot[] = [
+      snap({
+        snapshotName: 'after@call@1',
+        frameUrl: 'http://127.0.0.1:42589/checkout',
+        html: ['HTML', {}, ['BODY', {}, ['BUTTON', {}, 'Pay']]],
+      }),
+    ];
+    expect(extractDomSnapshot(traceData(frames), 1_000_000).frameUrl).toBe('http://127.0.0.1:42589/checkout');
   });
 
   test('falls back to a lean render (styles dropped) so the body survives a tiny cap', () => {

@@ -201,6 +201,63 @@ export function sanitizeDomSnapshot(html: string, capChars: number): { html: str
   return { html: out, truncated };
 }
 
+/**
+ * A `<link rel="stylesheet">` parsed out of rendered snapshot HTML: its original
+ * `href` (the key a resource map is looked up by) and any `media` attribute.
+ */
+function parseStylesheetLink(tag: string): { href: string; media: string | null } | null {
+  // rel may be quoted or bare and carry several tokens (`rel="preload stylesheet"`).
+  if (!/\brel\s*=\s*("|')?[^"'>]*\bstylesheet\b/i.test(tag)) return null;
+  const quoted = /\bhref\s*=\s*("|')(.*?)\1/i.exec(tag);
+  const href = quoted ? quoted[2]! : (/\bhref\s*=\s*([^\s"'>]+)/i.exec(tag)?.[1] ?? null);
+  if (!href) return null;
+  const media = /\bmedia\s*=\s*("|')(.*?)\1/i.exec(tag)?.[2] ?? null;
+  return { href, media };
+}
+
+/** Unique original hrefs of every `<link rel="stylesheet">` in the HTML. Pure. */
+export function collectStylesheetLinks(html: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const re = /<link\b[^>]*>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const link = parseStylesheetLink(m[0]);
+    if (link && !seen.has(link.href)) {
+      seen.add(link.href);
+      out.push(link.href);
+    }
+  }
+  return out;
+}
+
+/**
+ * Replace external `<link rel="stylesheet">` elements whose CSS we have with an
+ * inline `<style>`, so the snapshot renders styled inside the opaque-origin
+ * picker iframe — where the original href (pointing at the long-gone test
+ * server) can never load. `cssByHref` is keyed by each link's ORIGINAL href
+ * attribute; links with no entry are left untouched (their href might still
+ * resolve, and a broken link is no worse than before). `<style>` bodies are raw
+ * text to the HTML parser, so a stray `</style` in the CSS is defanged and
+ * token-shaped strings are masked (same posture as the rest of the snapshot).
+ * Inlining stops once `maxTotalChars` of CSS has been emitted; the remaining
+ * links stay as-is rather than emit a half sheet. Pure and unit-testable.
+ */
+export function inlineStylesheets(html: string, cssByHref: Record<string, string>, maxTotalChars = 2_000_000): string {
+  if (!html || Object.keys(cssByHref).length === 0) return html;
+  let budget = maxTotalChars;
+  return html.replace(/<link\b[^>]*>/gi, (tag) => {
+    const link = parseStylesheetLink(tag);
+    if (!link) return tag;
+    const css = cssByHref[link.href];
+    if (typeof css !== 'string' || css.length === 0 || css.length > budget) return tag;
+    budget -= css.length;
+    const media = link.media ? ` media="${escapeAttr(link.media)}"` : '';
+    const safeCss = maskSensitiveText(css).replace(/<\/(style)/gi, '<\\/$1');
+    return `<style${media}>${safeCss}</style>`;
+  });
+}
+
 /** The two representations a case can be viewed as: trace-derived DOM or the ARIA tree. */
 export type DomSnapshotSource = 'dom' | 'aria';
 
@@ -214,6 +271,8 @@ export interface DomSnapshotResult {
   action?: string;
   /** The recorded page viewport, for proportion-preserving scaled rendering. */
   viewport?: { width: number; height: number };
+  /** The rendered frame's document URL — the base for resolving `<link href>` when inlining stylesheets. */
+  frameUrl?: string;
   /** Which representation `html` is — the trace DOM (`dom`) or the ARIA tree (`aria`). */
   source?: DomSnapshotSource;
   /**
@@ -261,6 +320,7 @@ export function extractDomSnapshot(data: ParsedTraceData, capChars: number): Dom
       snapshotName: name,
       action: fa?.apiName,
       viewport: rendered?.viewport,
+      frameUrl: rendered?.frameUrl,
     };
   }
   return { status: 'no-snapshot' };

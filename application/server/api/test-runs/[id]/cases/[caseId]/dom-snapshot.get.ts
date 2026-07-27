@@ -24,6 +24,14 @@ defineRouteMeta({
         schema: { type: 'string', enum: ['dom', 'aria'] },
         description: 'Which representation to render — trace-derived DOM (default) or the ARIA tree',
       },
+      {
+        name: 'inlineStyles',
+        in: 'query',
+        required: false,
+        schema: { type: 'string', enum: ['1', 'true'] },
+        description:
+          "Inline external stylesheets from the trace's resources so the DOM renders styled (used by the locator picker)",
+      },
     ],
     'x-required-roles': ['administrator', 'reporter', 'user'],
   },
@@ -38,8 +46,12 @@ export default eventHandler(async (event) => {
   // another project (the cluster page may pass a caseId from another run).
   const { db } = await requireResolvedProjectAccess(event, caseId, resolveTestRunCaseProjectId, 'Test run case');
 
-  const sourceParam = getQuery(event).source;
+  const query = getQuery(event);
+  const sourceParam = query.source;
   const source = sourceParam === 'aria' || sourceParam === 'dom' ? sourceParam : undefined;
+  // The interactive picker asks to inline external CSS so its iframe renders
+  // styled; the read-only card omits it and gets the HTML-as-text view.
+  const inlineStyles = query.inlineStyles === '1' || query.inlineStyles === 'true';
 
   const [traceRows, caseRows] = await Promise.all([
     db
@@ -61,5 +73,5 @@ export default eventHandler(async (event) => {
     caseRows[0]?.aria ??
     null;
 
-  return resolveCaseDomSnapshot(traceRows[0]?.path ?? null, aria, undefined, { source });
+  return resolveCaseDomSnapshot(traceRows[0]?.path ?? null, aria, undefined, { source, inlineStyles });
 });

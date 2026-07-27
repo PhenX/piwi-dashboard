@@ -147,6 +147,37 @@ export function parseTraceTexts(texts: string[]): ParsedTraceData {
   return extractFromEvents(events);
 }
 
+/**
+ * Map every resource URL captured in a trace's `.network` stream to the content
+ * hash (`_sha1`) naming its stored body. Used to inline external stylesheets
+ * into a DOM snapshot: a `<link href>` resolves to a URL here, whose `_sha1`
+ * names the file in the project's shared `trace-resources` pool. Later snapshots
+ * win on duplicate URLs. Node-free (shared with the browser demo, which reads
+ * `resources/<sha1>` straight from the ZIP). Unparseable lines are skipped.
+ */
+export function parseResourceSnapshots(texts: string[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const text of texts) {
+    for (const line of text.split('\n')) {
+      if (!line) continue;
+      let evt: Record<string, unknown>;
+      try {
+        evt = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (!evt || evt.type !== 'resource-snapshot') continue;
+      const snapshot = evt.snapshot as Record<string, unknown> | undefined;
+      const request = snapshot?.request as { url?: unknown } | undefined;
+      const content = (snapshot?.response as { content?: { _sha1?: unknown } } | undefined)?.content;
+      const url = request?.url;
+      const sha1 = content?._sha1;
+      if (typeof url === 'string' && url && typeof sha1 === 'string' && sha1) map.set(url, sha1);
+    }
+  }
+  return map;
+}
+
 function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
   const actions: TraceAction[] = [];
   const consoleEntries: TraceConsoleEntry[] = [];
