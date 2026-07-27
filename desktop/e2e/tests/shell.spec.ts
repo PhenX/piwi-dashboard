@@ -58,4 +58,15 @@ test('the dashboard can reach the shell IPC commands', async ({ tauriPage }) => 
   `)) as { rejected: boolean; error: string };
   expect(rejected.rejected).toBe(true);
   expect(rejected.error).toContain('absolute');
+
+  // The MCP configurator command is granted and reports every known client.
+  const mcp = (await tauriPage.evaluate(`
+    window.__TAURI__.core.invoke('desktop_mcp_clients')
+      .then((list) => ({ ok: true, ids: (list || []).map((c) => c.id) }))
+      .catch((e) => ({ ok: false, error: String((e && e.message) || e) }))
+  `)) as { ok: boolean; error?: string; ids?: string[] };
+  expect(mcp.ok, `desktop_mcp_clients rejected: ${mcp.error ?? 'unknown'}`).toBe(true);
+  expect(mcp.ids).toEqual(
+    expect.arrayContaining(['claude-code', 'claude-desktop', 'cursor', 'vscode', 'windsurf', 'gemini-cli']),
+  );
 });

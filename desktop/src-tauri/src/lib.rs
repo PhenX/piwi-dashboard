@@ -10,6 +10,7 @@
 // and "start on login". Everything binds 127.0.0.1 — nothing is exposed to the
 // network.
 
+mod mcp_clients;
 mod runner;
 
 use std::path::{Path, PathBuf};
@@ -30,6 +31,7 @@ use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt as _;
 use tauri_plugin_store::StoreExt as _;
 
+use mcp_clients::{desktop_mcp_clients, desktop_mcp_connect, desktop_mcp_disconnect, desktop_mcp_reveal};
 use runner::{
     desktop_get_project_link, desktop_pick_folder, desktop_run_local_tests,
     desktop_set_project_link, desktop_stop_local_tests,
@@ -432,7 +434,11 @@ pub fn run() {
             desktop_set_project_link,
             desktop_run_local_tests,
             desktop_stop_local_tests,
-            desktop_take_pending_open_files
+            desktop_take_pending_open_files,
+            desktop_mcp_clients,
+            desktop_mcp_connect,
+            desktop_mcp_disconnect,
+            desktop_mcp_reveal
         ])
         .manage(ServerProcess::default())
         .manage(runner::LocalRuns::default())
@@ -460,6 +466,12 @@ pub fn run() {
             let port = pick_port();
 
             app.manage(DataDir(data_dir.clone()));
+            app.manage(mcp_clients::ServerInfo { port, token: token.clone() });
+
+            // MCP client configs written on earlier launches embed the URL and
+            // token — bring any that drifted (a different port this launch)
+            // back in line before a client tries the dead address.
+            mcp_clients::heal_configured_clients(app.handle());
 
             // --- publish connection details for the Playwright reporter ---
             match app.path().home_dir().map_err(|e| e.to_string()).and_then(|home| {
