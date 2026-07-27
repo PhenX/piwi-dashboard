@@ -26,7 +26,8 @@ The sidebar gives access to the top-level sections:
 | Home | `/` | Aggregate stats and activity across all projects |
 | Analytics | `/analytics` | Cross-project trends, portfolio health, and insights over a chosen time window (see [Analytics](./analytics)) |
 | Projects | `/projects` | Full project listing with search and tag filters |
-| Settings | `/settings` | Configuration — general, account, users, storage, tags, wasted time, AI, notifications |
+| Settings | `/settings` | Configuration, in two groups — **Instance** (account, users, notifications, storage) and **Analysis** (AI diagnosis, wasted time, timeout hygiene, tags, pull requests) |
+| Setup | `/setup` | Connect the reporter, and a checklist of which optional capabilities are actually active on this instance |
 | API docs | `/docs` | Self-contained OpenAPI 3.1 reference (no external CDN) — browse endpoints and schemas, try requests live, copy cURL / fetch snippets |
 | MCP server | `/mcp` | Setup guide for connecting AI clients (see [MCP server](./mcp)) |
 
@@ -41,6 +42,12 @@ Everything else is reached by drilling into a project, run, or test case:
 | Test run | `/test-runs/:id` |
 | Test case | `/test-cases/:id` |
 
+## Setup
+
+Reachable from the sidebar at any time — not just before your first run. It carries the reporter setup steps (install, configure, run, plus `wrapConfig` and the capture fixtures under **Go further**) and a **capability checklist**: for each optional feature, whether this instance shows evidence of actually using it.
+
+The checklist is deliberately evidence-based rather than config-based, so it answers the question an empty panel raises — *is this blank because it's broken, or because I never switched it on?* In the desktop build the page also carries the local instance's reporter URL and token, its MCP client configuration, the data location, and background-service control.
+
 ## Home
 
 A quick health check across all projects: **stats cards** (projects, runs, active/passing projects, flaky count, slowest project), a **test-results trend chart** (pass/fail/skip/flaky over time), **recent projects**, and a getting-started snippet for teams that haven't wired up the reporter yet.
@@ -49,7 +56,14 @@ A quick health check across all projects: **stats cards** (projects, runs, activ
 
 A cross-project decision view — where Home answers *"what's happening now"*, Analytics answers *"across projects, over time"*. A **scope bar** at the top sets the period (last 7 / 30 / 90 days, last year, or all time), an optional environment, and a full-runs-only toggle; every widget re-aggregates against that scope.
 
-Widgets: an **insights** feed, **portfolio health**, a **pass-rate heatmap**, **CI time** and **wasted CI time**, the global **flakiest tests** leaderboard, open **failure clusters**, **regression velocity**, a **browser matrix**, and cross-project **slow endpoints**. [Timeline markers](./timeline-markers) overlay your deploys and infrastructure changes on the trend charts.
+Widgets are grouped into four bands, in reading order:
+
+- **Where things stand** — portfolio health, the insights feed, the pass-rate heatmap.
+- **Where the pain is** — open failure clusters, the flakiest-tests leaderboard, wasted CI time.
+- **Which way it is going** — regression velocity, CI time.
+- **Detail** — the browser matrix, cross-project slow endpoints.
+
+[Timeline markers](./timeline-markers) overlay your deploys and infrastructure changes on the trend charts.
 
 See [Analytics](./analytics) for what each widget answers and how the periods are compared.
 

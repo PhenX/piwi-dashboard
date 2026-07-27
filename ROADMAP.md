@@ -2,6 +2,16 @@
 
 Piwi Dashboard is under active development (pre-1.0). This page shows direction, not promises — priorities shift with feedback, and the best way to influence them is a [GitHub Discussion](https://github.com/PiwiTests/platform/discussions).
 
+## What Piwi is for
+
+Everything below is in service of three things, in this order. When a proposed feature doesn't strengthen one of them, that's the argument against building it.
+
+1. **Keep the history.** CI deletes every report it makes. Piwi keeps every run, trace and report, so "has this always been flaky?" and "did my fix hold?" are answerable at all.
+2. **Explain the failures.** Group them by root cause so forty red tests become three problems, score the flaky ones by what they actually cost, and — optionally — have an LLM explain a cluster against your real diff.
+3. **Hand back a fix.** A ranked replacement locator, a validated patch, an owner, a command that verifies the work. The point is to leave with something to do, not just something to read.
+
+Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the desktop app — is a delivery route for those three. That's the ranking the UI follows too: the dashboard leads with results and failures, and the supporting lenses sit behind them.
+
 ## Recently shipped
 
 - **One-click deploy** — hosting templates for Railway, Render, Fly.io, Koyeb, Coolify and Dokploy, each
