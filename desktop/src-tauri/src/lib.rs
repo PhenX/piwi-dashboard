@@ -10,6 +10,8 @@
 // and "start on login". Everything binds 127.0.0.1 — nothing is exposed to the
 // network.
 
+mod runner;
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -28,7 +30,12 @@ use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt as _;
 use tauri_plugin_store::StoreExt as _;
 
-const STORE_FILE: &str = "settings.json";
+use runner::{
+    desktop_get_project_link, desktop_pick_folder, desktop_run_local_tests,
+    desktop_set_project_link, desktop_stop_local_tests,
+};
+
+pub(crate) const STORE_FILE: &str = "settings.json";
 const RUN_BG_KEY: &str = "runInBackground";
 const READY_TIMEOUT_SECS: u64 = 60;
 /// Preferred loopback port — stable so the reporter can target it; falls back to
@@ -166,7 +173,7 @@ fn write_discovery_file(home: &Path, port: u16, token: &str) -> std::io::Result<
 /// Windows, Tauri's resource + app-data paths come back with the `\\?\` verbatim
 /// prefix, which Node's module resolver mishandles (it splits `\\?\C:\...` wrong
 /// and dies with `EISDIR: lstat 'C:'`) — strip it. No-op on other platforms.
-fn node_path(p: &std::path::Path) -> String {
+pub(crate) fn node_path(p: &std::path::Path) -> String {
     let s = p.to_string_lossy();
     s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
 }
@@ -356,6 +363,7 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::init(
@@ -379,9 +387,15 @@ pub fn run() {
             desktop_set_start_on_login,
             desktop_open_external,
             desktop_notify,
-            desktop_save_download
+            desktop_save_download,
+            desktop_pick_folder,
+            desktop_get_project_link,
+            desktop_set_project_link,
+            desktop_run_local_tests,
+            desktop_stop_local_tests
         ])
         .manage(ServerProcess::default())
+        .manage(runner::LocalRuns::default())
         .setup(move |app| {
             // --- data locations (survive app updates; outside the read-only bundle) ---
             let app_data_dir = app.path().app_data_dir()?;
@@ -666,6 +680,10 @@ pub fn run() {
                 // Best-effort: stop the bundled server so no orphan process lingers.
                 if let Some(child) = app_handle.state::<ServerProcess>().0.lock().unwrap().take() {
                     let _ = child.kill();
+                }
+                // Local test runs die with the shell — never orphan a browser fleet.
+                if let Some(runs) = app_handle.try_state::<runner::LocalRuns>() {
+                    runs.kill_all();
                 }
                 // Withdraw the reporter discovery file with the server it points
                 // at, so a later test run does not try a dead port.

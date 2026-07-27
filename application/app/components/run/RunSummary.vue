@@ -359,6 +359,12 @@ function onLabelKeydown(e: KeyboardEvent) {
                         </div>
                       </template>
                     </UPopover>
+                    <DesktopRunLocallyButton
+                      v-if="failedCases.length > 0"
+                      :project-id="testRun?.project?.id"
+                      :project-label="testRun?.project?.label ?? testRun?.project?.name"
+                      :cases="failedCases"
+                    />
                   </div>
                 </div>
               </div>

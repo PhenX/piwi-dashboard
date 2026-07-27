@@ -99,6 +99,37 @@ actual one).
 > *other machines* over the network is intentionally not supported in the desktop
 > build — run the [Docker image](/deployment) for a shared, always-on server.
 
+## Running tests from the app
+
+A failing run is one click from a local retry. On a run page (or a single
+execution page), **Run locally** re-runs the failed tests on this machine:
+
+1. **Link the Piwi project to its checkout** — the folder that contains the
+   tests. The app asks on first use, or link it any time on the project page
+   under **Local folder**. The link stays on this machine; it is never sent
+   anywhere.
+2. **Pick what to re-run and how** — by `file:line`, title or file; headless,
+   headed, the Playwright inspector or UI mode; optional trace recording; and
+   `--repeat-each` up to 1000× for flake reproduction.
+3. **Run.** The app executes the folder's *own* Playwright with the app's
+   bundled Node — nothing extra to install — and streams the output into the
+   dialog. The exact command is shown before anything runs, and **Stop** (or
+   closing the dialog) kills the process.
+
+Results flow back automatically: the run executes your project's regular
+Playwright config, so the Piwi reporter in it reports to this app through the
+[discovery file](#sending-results-to-it), exactly like a run started from your
+terminal.
+
+Two prerequisites, both usually already true for a project that reports to
+Piwi: the linked folder has `@playwright/test` installed (`node_modules`
+present — monorepos with a hoisted root install work too), and its Playwright
+config includes the Piwi reporter.
+
+The linked folder also completes [Open in IDE](/ide-integration): when no
+workspace root is configured there, source links resolve against the linked
+folder automatically.
+
 ## Building from source
 
 See [`desktop/README.md`](https://github.com/PiwiTests/platform/blob/main/desktop/README.md)

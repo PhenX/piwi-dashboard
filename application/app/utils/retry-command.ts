@@ -1,6 +1,6 @@
 export type RetryMode = 'file-line' | 'grep' | 'file';
 
-interface RetryCase {
+export interface RetryCase {
   filePath: string;
   title: string;
   line?: number | null;
@@ -9,7 +9,7 @@ interface RetryCase {
 
 const MAX_CMD_LENGTH = 4096;
 
-function escapeGrep(text: string): string {
+export function escapeGrep(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 

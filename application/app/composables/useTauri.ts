@@ -11,8 +11,18 @@ interface TauriCore {
   invoke: <T = unknown>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 }
 
+interface TauriEvent {
+  listen: <T = unknown>(event: string, handler: (event: { payload: T }) => void) => Promise<() => void>;
+}
+
 /** The native invoke bridge, or `null` when not running inside the desktop shell. */
 export function tauriCore(): TauriCore | null {
   const g = globalThis as unknown as { __TAURI__?: { core?: TauriCore } };
   return g.__TAURI__?.core ?? null;
+}
+
+/** The native event bridge (shell → webview), or `null` outside the desktop shell. */
+export function tauriEvent(): TauriEvent | null {
+  const g = globalThis as unknown as { __TAURI__?: { event?: TauriEvent } };
+  return g.__TAURI__?.event ?? null;
 }

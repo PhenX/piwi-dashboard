@@ -19,6 +19,11 @@ fn main() {
             "desktop_open_external",
             "desktop_notify",
             "desktop_save_download",
+            "desktop_pick_folder",
+            "desktop_get_project_link",
+            "desktop_set_project_link",
+            "desktop_run_local_tests",
+            "desktop_stop_local_tests",
         ])),
     )
     .expect("failed to run tauri-build");
