@@ -1,80 +1,58 @@
 /**
  * Pure emitters that turn a list of resolved environment variable values into
  * deployment-ready configuration snippets (.env file, docker run, Docker
- * Compose, Kubernetes, systemd, shell exports).
+ * Compose, Kubernetes, systemd, shell exports, hosting-platform manifests).
+ *
+ * This module is the public entry point — import everything from
+ * `#shared/env-format`. It owns the generic formats and the `ENV_OUTPUT_FORMATS`
+ * registry, and re-exports the shared vocabulary from `#shared/env-format-base`
+ * plus one module per hosting platform from `#shared/deploy/*`.
  *
  * Consumed by the docs-site configuration generator wizard (which imports this
- * module directly through the `#shared` alias wired into the VitePress build),
- * so it MUST stay dependency-free and browser-safe: no imports, no Node APIs.
- * All quoting/escaping rules live here so every surface renders identical,
- * correct output — covered by `tests/unit/env-format.test.ts`.
+ * module directly through the `#shared` alias wired into the VitePress build)
+ * and by `scripts/generate-deploy-manifests.mjs`, so it MUST stay
+ * dependency-free and browser-safe: no third-party imports, no Node APIs. All
+ * quoting/escaping rules live in the base module so every surface renders
+ * identical, correct output — covered by `tests/unit/env-format.test.ts`.
  */
+import {
+  commentBlock,
+  DEFAULT_IMAGE,
+  DEFAULT_NAME,
+  quoteDotenvValue,
+  quotePowershellValue,
+  quoteShellValue,
+  quoteYamlValue,
+  type EmitOptions,
+  type EnvEntry,
+} from '#shared/env-format-base';
+import { emitCoolifyCompose } from '#shared/deploy/coolify';
+import { emitFlyToml } from '#shared/deploy/fly';
+import { emitKoyebDeployUrl } from '#shared/deploy/koyeb';
+import { emitRailwayTemplate } from '#shared/deploy/railway';
+import { emitRenderBlueprint } from '#shared/deploy/render';
 
-export interface EnvEntry {
-  /** Environment variable name (`A–Z`, `0–9`, `_`). */
-  name: string;
-  /** The exact string value the process should receive. */
-  value: string;
-  /** Secret values land in the Kubernetes `Secret` instead of the `ConfigMap`. */
-  secret?: boolean;
-  /** Optional one-line comment rendered above the entry where the format allows it. */
-  comment?: string;
-}
-
-export interface EmitOptions {
-  /** Docker image reference used by the container formats. */
-  image?: string;
-  /** Container / Kubernetes resource base name. */
-  name?: string;
-  /** Comment lines prefixed to the output (each format uses its own comment syntax). */
-  header?: readonly string[];
-}
-
-const DEFAULT_IMAGE = 'phenx/piwitests-server:latest';
-const DEFAULT_NAME = 'piwi';
-
-/** Characters safe to leave unquoted in a dotenv value. */
-const DOTENV_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
-
-/**
- * Quote a value for a `.env` file (also used for the systemd EnvironmentFile).
- * Values containing `$` prefer single quotes so dotenv/compose interpolation
- * can never rewrite them; everything else uses double quotes with `\`, `"` and
- * newline escapes. Simple values stay unquoted.
- */
-export function quoteDotenvValue(value: string): string {
-  if (value === '') return '';
-  if (DOTENV_SAFE.test(value)) return value;
-  if (value.includes('$') && !value.includes("'") && !value.includes('\n')) return `'${value}'`;
-  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
-}
-
-/** Quote a value for POSIX shells: single quotes, embedded `'` as `'\''`. */
-export function quoteShellValue(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-/** Quote a value for PowerShell: single quotes, embedded `'` doubled. */
-export function quotePowershellValue(value: string): string {
-  return `'${value.replace(/'/g, `''`)}'`;
-}
-
-/**
- * Quote a value for YAML. Always quoted so `true`, `587` or `0.92` stay
- * strings; double-quoted style when escapes are needed, single-quoted
- * otherwise.
- */
-export function quoteYamlValue(value: string): string {
-  if (/[\n\t]/.test(value)) {
-    return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\t/g, '\\t').replace(/\n/g, '\\n')}"`;
-  }
-  return `'${value.replace(/'/g, `''`)}'`;
-}
-
-function commentBlock(header: readonly string[] | undefined): string {
-  if (!header?.length) return '';
-  return header.map((line) => `# ${line}`).join('\n') + '\n\n';
-}
+export {
+  DATA_MOUNT,
+  DEFAULT_DISK_GB,
+  DEFAULT_IMAGE,
+  DEFAULT_NAME,
+  DEFAULT_PORT,
+  HEALTH_PATH,
+  qualifyImage,
+  quoteDotenvValue,
+  quotePowershellValue,
+  quoteShellValue,
+  quoteTomlValue,
+  quoteYamlValue,
+  type EmitOptions,
+  type EnvEntry,
+} from '#shared/env-format-base';
+export { emitCoolifyCompose } from '#shared/deploy/coolify';
+export { emitFlyToml } from '#shared/deploy/fly';
+export { emitKoyebDeployUrl } from '#shared/deploy/koyeb';
+export { emitRailwayTemplate } from '#shared/deploy/railway';
+export { emitRenderBlueprint } from '#shared/deploy/render';
 
 /** `.env` file (application/.env, `docker compose --env-file`, …). */
 export function emitDotenv(entries: readonly EnvEntry[], opts: EmitOptions = {}): string {
@@ -206,6 +184,11 @@ ${lines.join('\n')}
   );
 }
 
+/** Tab groups the configuration generator renders, in display order. */
+export const ENV_OUTPUT_GROUPS = ['Files & shells', 'Containers', 'Hosting platforms'] as const;
+
+export type EnvOutputGroup = (typeof ENV_OUTPUT_GROUPS)[number];
+
 export interface EnvOutputFormat {
   /** Stable identifier (also used as the wizard tab key). */
   id: string;
@@ -215,18 +198,52 @@ export interface EnvOutputFormat {
   language: string;
   /** Suggested filename for downloads. */
   filename: string;
+  /** Row the wizard renders this format's tab in. */
+  group: EnvOutputGroup;
   emit(entries: readonly EnvEntry[], opts?: EmitOptions): string;
 }
 
 /** Every output format the configuration generator offers, in display order. */
 export const ENV_OUTPUT_FORMATS: readonly EnvOutputFormat[] = [
-  { id: 'dotenv', label: '.env file', language: 'dotenv', filename: '.env', emit: emitDotenv },
-  { id: 'compose', label: 'Docker Compose', language: 'yaml', filename: 'docker-compose.yml', emit: emitDockerCompose },
+  { id: 'dotenv', label: '.env file', language: 'dotenv', filename: '.env', group: 'Files & shells', emit: emitDotenv },
+  {
+    id: 'systemd',
+    label: 'systemd',
+    language: 'ini',
+    filename: 'piwi.env',
+    group: 'Files & shells',
+    emit: emitSystemd,
+  },
+  {
+    id: 'shell',
+    label: 'Shell exports (bash)',
+    language: 'bash',
+    filename: 'piwi-env.sh',
+    group: 'Files & shells',
+    emit: emitShellExports,
+  },
+  {
+    id: 'powershell',
+    label: 'Shell exports (PowerShell)',
+    language: 'powershell',
+    filename: 'piwi-env.ps1',
+    group: 'Files & shells',
+    emit: emitPowershellEnv,
+  },
+  {
+    id: 'compose',
+    label: 'Docker Compose',
+    language: 'yaml',
+    filename: 'docker-compose.yml',
+    group: 'Containers',
+    emit: emitDockerCompose,
+  },
   {
     id: 'docker-run',
     label: 'docker run (Linux / macOS)',
     language: 'bash',
     filename: 'run-piwi.sh',
+    group: 'Containers',
     emit: emitDockerRunBash,
   },
   {
@@ -234,16 +251,48 @@ export const ENV_OUTPUT_FORMATS: readonly EnvOutputFormat[] = [
     label: 'docker run (PowerShell)',
     language: 'powershell',
     filename: 'run-piwi.ps1',
+    group: 'Containers',
     emit: emitDockerRunPowershell,
   },
-  { id: 'kubernetes', label: 'Kubernetes', language: 'yaml', filename: 'piwi-env.yaml', emit: emitKubernetes },
-  { id: 'systemd', label: 'systemd', language: 'ini', filename: 'piwi.env', emit: emitSystemd },
-  { id: 'shell', label: 'Shell exports (bash)', language: 'bash', filename: 'piwi-env.sh', emit: emitShellExports },
   {
-    id: 'powershell',
-    label: 'Shell exports (PowerShell)',
-    language: 'powershell',
-    filename: 'piwi-env.ps1',
-    emit: emitPowershellEnv,
+    id: 'kubernetes',
+    label: 'Kubernetes',
+    language: 'yaml',
+    filename: 'piwi-env.yaml',
+    group: 'Containers',
+    emit: emitKubernetes,
+  },
+  {
+    id: 'railway',
+    label: 'Railway',
+    language: 'markdown',
+    filename: 'railway-template.md',
+    group: 'Hosting platforms',
+    emit: emitRailwayTemplate,
+  },
+  {
+    id: 'render',
+    label: 'Render',
+    language: 'yaml',
+    filename: 'render.yaml',
+    group: 'Hosting platforms',
+    emit: emitRenderBlueprint,
+  },
+  { id: 'fly', label: 'Fly.io', language: 'toml', filename: 'fly.toml', group: 'Hosting platforms', emit: emitFlyToml },
+  {
+    id: 'koyeb',
+    label: 'Koyeb',
+    language: 'bash',
+    filename: 'koyeb-deploy-url.txt',
+    group: 'Hosting platforms',
+    emit: emitKoyebDeployUrl,
+  },
+  {
+    id: 'coolify',
+    label: 'Coolify / Dokploy',
+    language: 'yaml',
+    filename: 'coolify-compose.yml',
+    group: 'Hosting platforms',
+    emit: emitCoolifyCompose,
   },
 ];
