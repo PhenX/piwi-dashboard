@@ -29,6 +29,9 @@ fn main() {
             "desktop_mcp_connect",
             "desktop_mcp_disconnect",
             "desktop_mcp_reveal",
+            "desktop_check_update",
+            "desktop_install_update",
+            "desktop_restart_app",
         ])),
     )
     .expect("failed to run tauri-build");

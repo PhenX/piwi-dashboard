@@ -23,6 +23,9 @@
     "allow-desktop-mcp-clients",
     "allow-desktop-mcp-connect",
     "allow-desktop-mcp-disconnect",
-    "allow-desktop-mcp-reveal"
+    "allow-desktop-mcp-reveal",
+    "allow-desktop-check-update",
+    "allow-desktop-install-update",
+    "allow-desktop-restart-app"
   ]
 }

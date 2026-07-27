@@ -166,6 +166,18 @@ Gemini CLI — and connects each with one click:
 Restart the client after connecting; most MCP clients read their config at
 startup.
 
+## Updates
+
+**Settings → About → Updates** checks GitHub releases for a newer version,
+downloads it in the background, and applies it when you restart the app.
+
+Update support exists only in releases built with the project's update
+signing key — the app verifies every download against the matching public key
+before installing anything. A build without that key (a dev build, or a
+release made before the key existed) says so on the card; update it by
+downloading the [latest release](https://github.com/PiwiTests/platform/releases/latest)
+installer, which keeps your data (the data folder lives outside the app).
+
 ## Building from source
 
 See [`desktop/README.md`](https://github.com/PiwiTests/platform/blob/main/desktop/README.md)

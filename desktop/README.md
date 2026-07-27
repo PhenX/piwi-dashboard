@@ -93,3 +93,20 @@ changes — see `.github/workflows/desktop-e2e.yml`.
 Installers are **unsigned** unless code-signing secrets are configured, in which
 case CI signs (and notarizes on macOS) automatically. Unsigned apps still run —
 right-click → Open on macOS, or "More info → Run anyway" on Windows SmartScreen.
+
+## In-app updates
+
+Off until the updater keypair exists; releases build exactly as before without
+it. To enable:
+
+1. `npx tauri signer generate` (keep the private key + password secret).
+2. Put the **public** key into `src-tauri/tauri.updater.conf.json`.
+3. Add `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` as
+   repository secrets.
+
+With the secret present, `desktop-release.yml` applies the
+`tauri.updater.conf.json` overlay: bundles gain signed update artifacts,
+tauri-action uploads `latest.json` to the release, and the app (whose compiled
+config now contains the updater entry) exposes Check for updates in
+Settings → About. Builds without the overlay report updates as unsupported —
+the plugin is not even registered there (see `src-tauri/src/updates.rs`).
