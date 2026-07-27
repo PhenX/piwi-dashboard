@@ -147,16 +147,25 @@ export function parseTraceTexts(texts: string[]): ParsedTraceData {
   return extractFromEvents(events);
 }
 
+/** A captured response body: the content hash naming its stored file, plus its recorded MIME type. */
+export interface TraceResource {
+  /** The `_sha1` filename in the project's shared `trace-resources` pool. */
+  sha1: string;
+  /** The recorded `Content-Type` (`response.content.mimeType`), when known — names the data: URI. */
+  mimeType?: string;
+}
+
 /**
- * Map every resource URL captured in a trace's `.network` stream to the content
- * hash (`_sha1`) naming its stored body. Used to inline external stylesheets
- * into a DOM snapshot: a `<link href>` resolves to a URL here, whose `_sha1`
- * names the file in the project's shared `trace-resources` pool. Later snapshots
- * win on duplicate URLs. Node-free (shared with the browser demo, which reads
- * `resources/<sha1>` straight from the ZIP). Unparseable lines are skipped.
+ * Map every resource URL captured in a trace's `.network` stream to the stored
+ * body naming it (`_sha1`) and its MIME type. Used to inline a DOM snapshot's
+ * external assets: a `<link href>` (or a CSS `url(...)`) resolves to a URL here,
+ * whose `_sha1` names the file in the project's shared `trace-resources` pool.
+ * Later snapshots win on duplicate URLs. Node-free (shared with the browser
+ * demo, which reads `resources/<sha1>` straight from the ZIP). Unparseable lines
+ * are skipped.
  */
-export function parseResourceSnapshots(texts: string[]): Map<string, string> {
-  const map = new Map<string, string>();
+export function parseResourceSnapshots(texts: string[]): Map<string, TraceResource> {
+  const map = new Map<string, TraceResource>();
   for (const text of texts) {
     for (const line of text.split('\n')) {
       if (!line) continue;
@@ -169,10 +178,13 @@ export function parseResourceSnapshots(texts: string[]): Map<string, string> {
       if (!evt || evt.type !== 'resource-snapshot') continue;
       const snapshot = evt.snapshot as Record<string, unknown> | undefined;
       const request = snapshot?.request as { url?: unknown } | undefined;
-      const content = (snapshot?.response as { content?: { _sha1?: unknown } } | undefined)?.content;
+      const content = (snapshot?.response as { content?: { _sha1?: unknown; mimeType?: unknown } } | undefined)
+        ?.content;
       const url = request?.url;
       const sha1 = content?._sha1;
-      if (typeof url === 'string' && url && typeof sha1 === 'string' && sha1) map.set(url, sha1);
+      if (typeof url === 'string' && url && typeof sha1 === 'string' && sha1) {
+        map.set(url, { sha1, mimeType: typeof content?.mimeType === 'string' ? content.mimeType : undefined });
+      }
     }
   }
   return map;

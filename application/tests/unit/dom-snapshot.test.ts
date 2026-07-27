@@ -5,6 +5,9 @@ import {
   extractDomSnapshot,
   collectStylesheetLinks,
   inlineStylesheets,
+  collectCssUrls,
+  inlineCssUrls,
+  maskCssText,
 } from '~~/server/utils/dom-snapshot-render';
 import { resolveCaseDomSnapshot } from '~~/server/utils/dom-snapshot';
 import { renderAriaSnapshotHtml } from '~~/server/utils/dom-snapshot-aria';
@@ -184,14 +187,19 @@ describe('inlineStylesheets', () => {
     expect(inlineStylesheets(html, { '/print.css': 'a{}' })).toBe('<style media="print">a{}</style>');
   });
 
-  test('defangs a stray </style> in the CSS and masks token-shaped strings', () => {
-    const css =
-      '.x{content:"</style><script>alert(1)</script>"}.y{background:url(data:image/png;base64,iVBORw0KGgoAAAA==)}';
+  test('defangs a stray </style> in the CSS so it cannot break out of the tag', () => {
+    const css = '.x{content:"</style><script>alert(1)</script>"}';
     const out = inlineStylesheets('<link rel="stylesheet" href="x">', { x: css });
     expect(out).not.toContain('</style><script>'); // the closing tag can't break out
     expect(out).toContain('<\\/style>');
-    expect(out).toContain('data:[masked]'); // secret masking still applies
-    expect(out).not.toContain('iVBORw0KGgo');
+  });
+
+  test('does NOT mask embedded data URIs — masking is the caller-side job before assets are inlined', () => {
+    // inlineStylesheets is purely structural now; a base64 background image the
+    // asset-inliner embedded must survive untouched (maskCssText scrubs secrets
+    // beforehand, leaving data: URIs alone).
+    const css = '.y{background:url("data:image/png;base64,iVBORw0KGgoAAAA==")}';
+    expect(inlineStylesheets('<link rel="stylesheet" href="x">', { x: css })).toContain('iVBORw0KGgoAAAA==');
   });
 
   test('stops inlining once the CSS budget is spent, keeping later links intact', () => {
@@ -209,28 +217,71 @@ describe('inlineStylesheets', () => {
 });
 
 describe('parseResourceSnapshots', () => {
-  const line = (url: string, sha1: string | null) =>
+  const line = (url: string, sha1: string | null, mimeType?: string) =>
     JSON.stringify({
       type: 'resource-snapshot',
-      snapshot: { request: { url }, response: { content: sha1 ? { _sha1: sha1 } : {} } },
+      snapshot: {
+        request: { url },
+        response: { content: sha1 ? { _sha1: sha1, ...(mimeType ? { mimeType } : {}) } : {} },
+      },
     });
 
-  test('maps resource URLs to their content hash, ignoring other events and lines without a hash', () => {
+  test('maps resource URLs to their content hash + MIME, ignoring other events and lines without a hash', () => {
     const text = [
-      line('http://app/main.css', 'aaa.css'),
+      line('http://app/main.css', 'aaa.css', 'text/css'),
       JSON.stringify({ type: 'context-options' }), // unrelated event
       'not json at all',
       line('http://app/no-hash.css', null), // response carries no _sha1
     ].join('\n');
     const map = parseResourceSnapshots([text]);
-    expect(map.get('http://app/main.css')).toBe('aaa.css');
+    expect(map.get('http://app/main.css')).toEqual({ sha1: 'aaa.css', mimeType: 'text/css' });
     expect(map.has('http://app/no-hash.css')).toBe(false);
     expect(map.size).toBe(1);
   });
 
+  test('records an undefined MIME when the response did not carry one', () => {
+    expect(parseResourceSnapshots([line('http://app/x.woff2', 'f.woff2')]).get('http://app/x.woff2')).toEqual({
+      sha1: 'f.woff2',
+      mimeType: undefined,
+    });
+  });
+
   test('later snapshots win for a repeated URL', () => {
     const text = [line('http://app/x.css', 'old.css'), line('http://app/x.css', 'new.css')].join('\n');
-    expect(parseResourceSnapshots([text]).get('http://app/x.css')).toBe('new.css');
+    expect(parseResourceSnapshots([text]).get('http://app/x.css')?.sha1).toBe('new.css');
+  });
+});
+
+describe('collectCssUrls / inlineCssUrls', () => {
+  test('collects distinct url() targets, skipping data:, #fragment and fragment-addressed refs', () => {
+    const css =
+      '@font-face{src:url("/f/inter.woff2") format("woff2")}' +
+      '.a{background:url(/img/bg.png)}' +
+      ".b{background:url('/img/bg.png')}" + // dupe of the same target
+      '.c{background:url(data:image/gif;base64,AAAA)}' + // already inline
+      '.d{filter:url(#blur)}' + // in-document ref
+      '.e{background:url(/img/sprite.svg#star)}'; // fragment-addressed — can't inline faithfully
+    expect(collectCssUrls(css)).toEqual(['/f/inter.woff2', '/img/bg.png']);
+  });
+
+  test('rewrites only the targets present in the replacement map, double-quoting them', () => {
+    const css = ".a{background:url(/img/bg.png)}.b{src:url('/f/x.woff2')}";
+    const out = inlineCssUrls(css, { '/img/bg.png': 'data:image/png;base64,PNG' });
+    expect(out).toContain('url("data:image/png;base64,PNG")');
+    expect(out).toContain("url('/f/x.woff2')"); // untouched — no replacement supplied
+  });
+});
+
+describe('maskCssText', () => {
+  test('scrubs JWT/long-hex secrets but leaves data: URIs alone', () => {
+    const css =
+      '.a{--t:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0In0.SflKxwRJSMeKKF2QT4fwpM"}' +
+      '.b{content:"4a7d1ed414474e4033ac29ccb8653d9b4a7d1ed414474e40"}' +
+      '.c{background:url("data:image/png;base64,iVBORw0KGgoAAAA==")}';
+    const out = maskCssText(css);
+    expect(out).toContain('[masked-token]');
+    expect(out).toContain('[masked-hex]');
+    expect(out).toContain('data:image/png;base64,iVBORw0KGgoAAAA=='); // asset preserved
   });
 });
 

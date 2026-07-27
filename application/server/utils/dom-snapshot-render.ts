@@ -187,6 +187,17 @@ export function maskSensitiveText(text: string): string {
 }
 
 /**
+ * Mask secrets in a CSS body destined for an inlined `<style>`, but leave
+ * `data:` URIs alone — unlike {@link maskSensitiveText}. The picker deliberately
+ * embeds fonts/images as base64 data URIs, so blanket data-URI masking would
+ * wipe them out; token-shaped secrets (JWTs, long hex) are still scrubbed. Run
+ * this AFTER assets are inlined so the fresh data URIs survive. Pure.
+ */
+export function maskCssText(css: string): string {
+  return css.replace(JWT_RE, '[masked-token]').replace(LONG_HEX_RE, '[masked-hex]');
+}
+
+/**
  * Mask token-shaped strings and cap the rendered HTML. Pure and unit-testable.
  * The renderer already drops `__playwright_*` values, inline handlers, and
  * script bodies — this pass handles secrets baked into ordinary markup.
@@ -238,12 +249,16 @@ export function collectStylesheetLinks(html: string): string[] {
  * server) can never load. `cssByHref` is keyed by each link's ORIGINAL href
  * attribute; links with no entry are left untouched (their href might still
  * resolve, and a broken link is no worse than before). `<style>` bodies are raw
- * text to the HTML parser, so a stray `</style` in the CSS is defanged and
- * token-shaped strings are masked (same posture as the rest of the snapshot).
+ * text to the HTML parser, so a stray `</style` in the CSS is defanged here.
+ *
+ * The caller is responsible for scrubbing secrets from the CSS first (see
+ * `maskCssText`): masking must run BEFORE any `url(...)` assets are embedded, or
+ * it would shred the base64 data URIs it can't tell from real tokens.
+ *
  * Inlining stops once `maxTotalChars` of CSS has been emitted; the remaining
  * links stay as-is rather than emit a half sheet. Pure and unit-testable.
  */
-export function inlineStylesheets(html: string, cssByHref: Record<string, string>, maxTotalChars = 2_000_000): string {
+export function inlineStylesheets(html: string, cssByHref: Record<string, string>, maxTotalChars = 8_000_000): string {
   if (!html || Object.keys(cssByHref).length === 0) return html;
   let budget = maxTotalChars;
   return html.replace(/<link\b[^>]*>/gi, (tag) => {
@@ -253,8 +268,50 @@ export function inlineStylesheets(html: string, cssByHref: Record<string, string
     if (typeof css !== 'string' || css.length === 0 || css.length > budget) return tag;
     budget -= css.length;
     const media = link.media ? ` media="${escapeAttr(link.media)}"` : '';
-    const safeCss = maskSensitiveText(css).replace(/<\/(style)/gi, '<\\/$1');
+    const safeCss = css.replace(/<\/(style)/gi, '<\\/$1');
     return `<style${media}>${safeCss}</style>`;
+  });
+}
+
+// A `url(...)` target: single/double quoted (group 2) or bare (group 3).
+const CSS_URL_RE = /url\(\s*(?:(['"])(.*?)\1|([^)\s'"]+))\s*\)/gi;
+
+/**
+ * Every distinct `url(...)` target in a CSS body worth resolving — quotes
+ * stripped, and already-inline (`data:`) / in-document (`#id`) refs skipped.
+ * Pure; the caller resolves each against the stylesheet's own URL.
+ */
+export function collectCssUrls(css: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const re = new RegExp(CSS_URL_RE.source, 'gi');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(css)) !== null) {
+    const raw = (m[2] ?? m[3] ?? '').trim();
+    // Skip already-inline data: URIs and any fragment ref (`#blur` filters,
+    // `sprite.svg#icon`) — a data: URI can't carry the fragment that addresses
+    // the resource, so inlining would break them; leaving them alone is safer.
+    if (!raw || raw.startsWith('data:') || raw.includes('#')) continue;
+    if (!seen.has(raw)) {
+      seen.add(raw);
+      out.push(raw);
+    }
+  }
+  return out;
+}
+
+/**
+ * Rewrite every `url(...)` whose target appears in `replacements` (keyed by the
+ * raw target) to the replacement, double-quoted. Used to swap external asset
+ * refs for `data:` URIs so fonts / background images render offline. Targets
+ * with no replacement are left untouched. Pure.
+ */
+export function inlineCssUrls(css: string, replacements: Record<string, string>): string {
+  if (!css || Object.keys(replacements).length === 0) return css;
+  return css.replace(new RegExp(CSS_URL_RE.source, 'gi'), (full, _q, quoted, bare) => {
+    const raw = (quoted ?? bare ?? '').trim();
+    const repl = replacements[raw];
+    return repl ? `url("${repl}")` : full;
   });
 }
 
