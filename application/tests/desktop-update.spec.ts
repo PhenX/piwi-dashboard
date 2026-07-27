@@ -16,47 +16,57 @@ declare global {
   }
 }
 
-async function installFakeBridge(page: Page, outcome: 'unsupported' | 'uptodate' | 'available') {
-  await page.addInitScript((state: string) => {
-    const listeners: ((event: { payload: unknown }) => void)[] = [];
-    const invocations: string[] = [];
-    Object.assign(window, {
-      __piwiUpdateInvocations: invocations,
-      __piwiEmitProgress: (downloaded: number, total: number | null) => {
-        for (const cb of listeners) cb({ payload: { downloaded, total } });
-      },
-    });
-    Object.assign(window, {
-      __TAURI__: {
-        core: {
-          invoke: async (cmd: string) => {
-            invocations.push(cmd);
-            switch (cmd) {
-              case 'desktop_check_update':
-                return state === 'available'
-                  ? { state, version: '99.0.0', notes: 'feat: everything', date: null }
-                  : { state, version: null, notes: null, date: null };
-              case 'desktop_install_update':
-                // Resolves after a beat so the progress event lands mid-install.
-                return new Promise((resolve) => setTimeout(resolve, 150));
-              case 'desktop_restart_app':
-                return null;
-              case 'desktop_take_pending_open_files':
-                return [];
-              default:
-                throw new Error(`unexpected command: ${cmd}`);
-            }
+async function installFakeBridge(
+  page: Page,
+  outcome: 'unsupported' | 'uptodate' | 'available',
+  exitsOnInstall = false,
+) {
+  await page.addInitScript(
+    ([state, exits]: [string, boolean]) => {
+      const listeners: ((event: { payload: unknown }) => void)[] = [];
+      const invocations: string[] = [];
+      Object.assign(window, {
+        __piwiUpdateInvocations: invocations,
+        __piwiEmitProgress: (downloaded: number, total: number | null) => {
+          for (const cb of listeners) cb({ payload: { downloaded, total } });
+        },
+      });
+      Object.assign(window, {
+        __TAURI__: {
+          core: {
+            invoke: async (cmd: string) => {
+              invocations.push(cmd);
+              switch (cmd) {
+                case 'desktop_check_update':
+                  return state === 'available'
+                    ? { state, version: '99.0.0', notes: 'feat: everything', date: null, exits_on_install: exits }
+                    : { state, version: null, notes: null, date: null, exits_on_install: exits };
+                case 'desktop_install_update':
+                  // Windows never returns here — the installer kills the app
+                  // mid-call, so the promise simply never settles.
+                  if (exits) return new Promise(() => {});
+                  // Resolves after a beat so the progress event lands mid-install.
+                  return new Promise((resolve) => setTimeout(resolve, 150));
+                case 'desktop_restart_app':
+                  return null;
+                case 'desktop_take_pending_open_files':
+                  return [];
+                default:
+                  throw new Error(`unexpected command: ${cmd}`);
+              }
+            },
+          },
+          event: {
+            listen: async (name: string, cb: (event: { payload: unknown }) => void) => {
+              if (name === 'piwi:update-progress') listeners.push(cb);
+              return () => {};
+            },
           },
         },
-        event: {
-          listen: async (name: string, cb: (event: { payload: unknown }) => void) => {
-            if (name === 'piwi:update-progress') listeners.push(cb);
-            return () => {};
-          },
-        },
-      },
-    });
-  }, outcome);
+      });
+    },
+    [outcome, exitsOnInstall] as [string, boolean],
+  );
 }
 
 test.describe('Desktop update card', () => {
@@ -104,5 +114,24 @@ test.describe('Desktop update card', () => {
     const invocations = await page.evaluate(() => window.__piwiUpdateInvocations);
     expect(invocations).toContain('desktop_install_update');
     expect(invocations).toContain('desktop_restart_app');
+  });
+
+  test('promises a quit, not a restart, when the installer closes the app', async ({ page }) => {
+    await installFakeBridge(page, 'available', true);
+    await page.goto('/settings/about');
+    await waitForHydration(page);
+
+    await page.getByRole('button', { name: 'Check for updates' }).click();
+    await expect(page.getByText('Piwi closes while the installer runs')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Install and quit' }).click();
+
+    // The shell dies mid-install here, so the call never settles and the
+    // restart step must never be offered — it could not be clicked anyway.
+    await expect(page.getByText('applies the next time the app starts')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Restart now' })).toHaveCount(0);
+    const invocations = await page.evaluate(() => window.__piwiUpdateInvocations);
+    expect(invocations).toContain('desktop_install_update');
+    expect(invocations).not.toContain('desktop_restart_app');
   });
 });

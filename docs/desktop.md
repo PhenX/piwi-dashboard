@@ -168,8 +168,13 @@ startup.
 
 ## Updates
 
-**Settings → About → Updates** checks GitHub releases for a newer version,
-downloads it in the background, and applies it when you restart the app.
+**Settings → About → Updates** checks GitHub releases for a newer version and
+downloads it in the background.
+
+How it lands differs by platform, and the card says which one you get before
+you start: on macOS the update is staged while the app keeps running and
+applies when you choose **Restart now**, while on Windows the installer needs
+the app closed — Piwi quits as the install begins.
 
 Update support exists only in releases built with the project's update
 signing key — the app verifies every download against the matching public key

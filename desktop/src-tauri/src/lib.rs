@@ -82,6 +82,30 @@ fn collect_zip_args<'a>(args: impl Iterator<Item = &'a str>, cwd: Option<&Path>)
         .collect()
 }
 
+/// Stop everything this shell owns outside its own process: the Node sidecar,
+/// any local test runs, and the reporter discovery file.
+///
+/// Quitting reaches this through `RunEvent::ExitRequested`, but that event is
+/// not the only way the process ends — installing an update exits the app
+/// itself on Windows, and `AppHandle::restart` replaces it on every platform.
+/// Both call this directly; it is idempotent, so a later `ExitRequested` that
+/// runs anyway is a no-op.
+pub(crate) fn stop_background_work(app: &tauri::AppHandle) {
+    // Best-effort: stop the bundled server so no orphan process lingers.
+    if let Some(child) = app.state::<ServerProcess>().0.lock().unwrap().take() {
+        let _ = child.kill();
+    }
+    // Local test runs die with the shell — never orphan a browser fleet.
+    if let Some(runs) = app.try_state::<runner::LocalRuns>() {
+        runs.kill_all();
+    }
+    // Withdraw the reporter discovery file with the server it points at, so a
+    // later test run does not try a dead port.
+    if let Some(discovery) = app.try_state::<DiscoveryFile>() {
+        let _ = std::fs::remove_file(&discovery.0);
+    }
+}
+
 fn queue_open_files(app: &tauri::AppHandle, paths: Vec<String>) {
     if paths.is_empty() {
         return;
@@ -756,21 +780,7 @@ pub fn run() {
         .build(context)
         .expect("error while building the Piwi Dashboard app")
         .run(|app_handle, event| match event {
-            RunEvent::ExitRequested { .. } => {
-                // Best-effort: stop the bundled server so no orphan process lingers.
-                if let Some(child) = app_handle.state::<ServerProcess>().0.lock().unwrap().take() {
-                    let _ = child.kill();
-                }
-                // Local test runs die with the shell — never orphan a browser fleet.
-                if let Some(runs) = app_handle.try_state::<runner::LocalRuns>() {
-                    runs.kill_all();
-                }
-                // Withdraw the reporter discovery file with the server it points
-                // at, so a later test run does not try a dead port.
-                if let Some(discovery) = app_handle.try_state::<DiscoveryFile>() {
-                    let _ = std::fs::remove_file(&discovery.0);
-                }
-            }
+            RunEvent::ExitRequested { .. } => stop_background_work(app_handle),
             // macOS delivers file-association opens as an event, not argv.
             #[cfg(target_os = "macos")]
             RunEvent::Opened { urls } => {

@@ -52,9 +52,16 @@ jobs:
           - runner: windows-latest
             target: x86_64-pc-windows-msvc
             bundles: msi
+            # The .msi is its own updater artifact — the bundler signs it in
+            # place rather than producing a separate archive.
+            updaterBundles: msi
           - runner: macos-14
             target: aarch64-apple-darwin
             bundles: dmg
+            # The macOS updater artifact (.app.tar.gz) is only emitted when
+            # `app` is an explicit bundle target: with `dmg` alone the bundler
+            # builds the .app, skips the updater step, and then deletes it.
+            updaterBundles: app,dmg
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
@@ -130,7 +137,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
-          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && '--config src-tauri/tauri.updater.conf.json' || '' }}
+          args: >-
+            --target ${{ matrix.target }}
+            --bundles ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && matrix.updaterBundles || matrix.bundles }}
+            ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && '--config src-tauri/tauri.updater.conf.json' || '' }}
           # Attach to the release release-please already made for this tag. On a
           # manual dispatch (no tag) tagName is empty, so tauri-action just builds.
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
@@ -138,6 +148,10 @@ jobs:
 
       # Dry-run only: make the built installers downloadable as a workflow artifact
       # (they are not attached to any release unless this was a tag build).
+      # The updater artifacts come along so a manual dispatch can prove the
+      # signing pipeline works before a tag depends on it: expect a .sig next to
+      # every installer, plus the .app.tar.gz on macOS. (`latest.json` is not
+      # here — tauri-action writes it at release time, not at bundle time.)
       - name: Upload installers (dry-run)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@v7
@@ -146,5 +160,7 @@ jobs:
           path: |
             desktop/src-tauri/target/**/release/bundle/**/*.msi
             desktop/src-tauri/target/**/release/bundle/**/*.dmg
+            desktop/src-tauri/target/**/release/bundle/**/*.sig
+            desktop/src-tauri/target/**/release/bundle/**/*.app.tar.gz
           if-no-files-found: warn
           retention-days: 7

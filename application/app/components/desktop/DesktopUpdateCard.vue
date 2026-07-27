@@ -4,7 +4,13 @@
  * without the IPC bridge; on builds without update support (dev builds,
  * releases made without the signing key) it explains why instead of showing a
  * dead button. Progress arrives as `piwi:update-progress` events while the
- * shell downloads and installs; the restart happens only when the user asks.
+ * shell downloads and installs.
+ *
+ * Two install shapes, told apart by `exits_on_install` from the shell (never
+ * by sniffing the platform here): on macOS the app stays up and the user
+ * chooses when to restart, while on Windows the installer needs the app gone
+ * and closes it mid-install — so there the card promises a quit, not a
+ * restart button that would never render.
  */
 const props = defineProps<{ currentVersion?: string | null }>();
 
@@ -13,6 +19,7 @@ interface UpdateStatus {
   version: string | null;
   notes: string | null;
   date: string | null;
+  exits_on_install: boolean;
 }
 
 const toast = useToast();
@@ -87,14 +94,15 @@ const progressPercent = computed(() => {
   if (!p?.total) return null;
   return Math.min(100, Math.round((p.downloaded / p.total) * 100));
 });
+
+/** Windows closes the app to install; macOS installs alongside it. */
+const exitsOnInstall = computed(() => status.value?.exits_on_install === true);
 </script>
 
 <template>
   <SectionCard v-if="available" icon="i-lucide-arrow-up-circle" title="Updates">
     <template #subtitle>
-      Updates install from GitHub releases and apply on restart{{
-        currentVersion ? ` — you are on v${currentVersion}` : ''
-      }}.
+      Updates come from GitHub releases{{ currentVersion ? ` — you are on v${currentVersion}` : '' }}.
     </template>
 
     <div class="space-y-3">
@@ -149,14 +157,24 @@ const progressPercent = computed(() => {
             class="shrink-0"
             @click="install"
           >
-            {{ installing ? 'Installing…' : 'Install update' }}
+            {{ installing ? 'Installing…' : exitsOnInstall ? 'Install and quit' : 'Install update' }}
           </UButton>
-          <UButton v-else size="xs" color="success" icon="i-lucide-rotate-cw" class="shrink-0" @click="restart">
+          <UButton
+            v-else-if="!exitsOnInstall"
+            size="xs"
+            color="success"
+            icon="i-lucide-rotate-cw"
+            class="shrink-0"
+            @click="restart"
+          >
             Restart now
           </UButton>
         </div>
         <UProgress v-if="installing && progressPercent !== null" :model-value="progressPercent" size="sm" />
-        <p v-if="installed" class="text-xs text-muted">
+        <p v-if="exitsOnInstall && !installed" class="text-xs text-muted">
+          Piwi closes while the installer runs — Windows cannot replace an app that is open.
+        </p>
+        <p v-else-if="installed" class="text-xs text-muted">
           The update is installed — it applies the next time the app starts.
         </p>
       </template>
