@@ -17,7 +17,7 @@
 // across launches — so `heal_configured_clients` runs at startup and rewrites
 // any entry that no longer matches the live URL/token.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Manager as _};
@@ -80,6 +80,64 @@ fn entry_for(id: &str, info: &ServerInfo) -> Value {
     }
 }
 
+const CLAUDE_DESKTOP_CONFIG: &str = "claude_desktop_config.json";
+
+/// Claude Desktop config directories, in the order they are preferred.
+///
+/// A Windows Store (MSIX) install runs in a package container, and Windows
+/// redirects the writes it aims at `%APPDATA%` into
+/// `%LOCALAPPDATA%\Packages\<package family name>\LocalCache\Roaming\` — so
+/// that container, not `%APPDATA%\Claude`, holds the file that build reads.
+/// Both are offered, container first; on macOS and Linux only the plain
+/// config-dir candidate ever exists.
+fn claude_desktop_dirs(app: &AppHandle) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Ok(local) = app.path().local_data_dir() {
+        dirs.extend(packaged_claude_dirs(&local.join("Packages")));
+    }
+    if let Ok(config) = app.path().config_dir() {
+        dirs.push(config.join("Claude"));
+    }
+    dirs
+}
+
+/// The `LocalCache\Roaming\Claude` directory of every `Claude_*` package under
+/// the MSIX package root, sorted so the choice never depends on the order the
+/// filesystem happens to list entries in.
+///
+/// The package family name is matched by prefix: its suffix is a hash of the
+/// publisher identity, so it is the same on every machine but changes with a
+/// re-signed or side-by-side package.
+fn packaged_claude_dirs(packages_root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(packages_root) else {
+        return Vec::new();
+    };
+    let mut dirs: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("Claude_"))
+        })
+        .map(|path| path.join("LocalCache").join("Roaming").join("Claude"))
+        .collect();
+    dirs.sort();
+    dirs
+}
+
+/// The first candidate that exists, else the last — where a fresh install of
+/// the client would create it. Existence beats content: a container that is
+/// present but still empty belongs to the build that is actually installed,
+/// while a config left behind elsewhere belongs to one that is not.
+fn pick_config_dir(candidates: &[PathBuf]) -> Option<PathBuf> {
+    candidates
+        .iter()
+        .find(|dir| dir.is_dir())
+        .or_else(|| candidates.last())
+        .cloned()
+}
+
 /// Where the client keeps the config to edit, and the directory whose presence
 /// means "this client is installed on this machine".
 fn paths_of(app: &AppHandle, id: &str) -> Option<(PathBuf, PathBuf)> {
@@ -88,10 +146,10 @@ fn paths_of(app: &AppHandle, id: &str) -> Option<(PathBuf, PathBuf)> {
     let config = app.path().config_dir().ok()?;
     match id {
         "claude-code" => Some((home.join(".claude.json"), home.join(".claude"))),
-        "claude-desktop" => Some((
-            config.join("Claude").join("claude_desktop_config.json"),
-            config.join("Claude"),
-        )),
+        "claude-desktop" => {
+            let dir = pick_config_dir(&claude_desktop_dirs(app))?;
+            Some((dir.join(CLAUDE_DESKTOP_CONFIG), dir))
+        }
         "cursor" => Some((home.join(".cursor").join("mcp.json"), home.join(".cursor"))),
         "vscode" => Some((
             config.join("Code").join("User").join("mcp.json"),
@@ -300,6 +358,38 @@ pub fn desktop_mcp_reveal(app: AppHandle, client_id: String) -> Result<(), Strin
 mod tests {
     use super::*;
 
+    /// A directory under the OS temp dir, removed when the test ends.
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new(label: &str) -> Self {
+            use std::sync::atomic::{AtomicU32, Ordering};
+            static COUNTER: AtomicU32 = AtomicU32::new(0);
+            let unique = COUNTER.fetch_add(1, Ordering::SeqCst);
+            let path = std::env::temp_dir()
+                .join(format!("piwi-mcp-{label}-{}-{unique}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&path);
+            std::fs::create_dir_all(&path).expect("create temp dir");
+            Self(path)
+        }
+
+        fn join(&self, rel: &str) -> PathBuf {
+            self.0.join(rel)
+        }
+
+        fn mkdir(&self, rel: &str) -> PathBuf {
+            let path = self.join(rel);
+            std::fs::create_dir_all(&path).expect("create dir");
+            path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     fn info() -> ServerInfo {
         ServerInfo {
             port: 3000,
@@ -372,5 +462,79 @@ mod tests {
     fn merge_creates_the_container_on_a_fresh_file() {
         let merged = merge_piwi_entry(json!({}), "servers", Some(json!({ "type": "http" })));
         assert_eq!(merged["servers"]["piwi"]["type"], "http");
+    }
+
+    #[test]
+    fn packaged_dirs_map_claude_packages_to_their_redirected_roaming_dir() {
+        let temp = TempDir::new("packages");
+        temp.mkdir("Claude_pzs8sxrjxfjjc");
+        temp.mkdir("SomeOtherApp_abc123");
+
+        let dirs = packaged_claude_dirs(&temp.0);
+
+        assert_eq!(
+            dirs,
+            vec![temp
+                .join("Claude_pzs8sxrjxfjjc")
+                .join("LocalCache")
+                .join("Roaming")
+                .join("Claude")]
+        );
+    }
+
+    #[test]
+    fn packaged_dirs_are_sorted_so_the_choice_is_stable() {
+        let temp = TempDir::new("multi");
+        temp.mkdir("Claude_zzzzzzzzzzzzz");
+        temp.mkdir("Claude_aaaaaaaaaaaaa");
+
+        let dirs = packaged_claude_dirs(&temp.0);
+
+        assert_eq!(dirs.len(), 2);
+        assert!(dirs[0].starts_with(temp.join("Claude_aaaaaaaaaaaaa")));
+    }
+
+    #[test]
+    fn packaged_dirs_are_empty_without_a_package_root() {
+        assert!(packaged_claude_dirs(Path::new("/no/such/packages/root")).is_empty());
+    }
+
+    #[test]
+    fn pick_prefers_the_container_over_a_config_left_behind_elsewhere() {
+        let temp = TempDir::new("pick");
+        let container = temp.mkdir("Packages/Claude_x/LocalCache/Roaming/Claude");
+        let appdata = temp.mkdir("Roaming/Claude");
+        std::fs::write(appdata.join(CLAUDE_DESKTOP_CONFIG), "{}").expect("write config");
+
+        let picked = pick_config_dir(&[container.clone(), appdata]);
+
+        assert_eq!(picked, Some(container));
+    }
+
+    #[test]
+    fn pick_falls_back_to_the_plain_config_dir_when_no_container_exists() {
+        let temp = TempDir::new("fallback");
+        let container = temp.join("Packages/Claude_x/LocalCache/Roaming/Claude");
+        let appdata = temp.mkdir("Roaming/Claude");
+
+        let picked = pick_config_dir(&[container, appdata.clone()]);
+
+        assert_eq!(picked, Some(appdata));
+    }
+
+    #[test]
+    fn pick_returns_the_creation_target_when_the_client_is_absent() {
+        let temp = TempDir::new("absent");
+        let container = temp.join("Packages/Claude_x/LocalCache/Roaming/Claude");
+        let appdata = temp.join("Roaming/Claude");
+
+        let picked = pick_config_dir(&[container, appdata.clone()]);
+
+        assert_eq!(picked, Some(appdata));
+    }
+
+    #[test]
+    fn pick_returns_nothing_without_candidates() {
+        assert_eq!(pick_config_dir(&[]), None);
     }
 }
