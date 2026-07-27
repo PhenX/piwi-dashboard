@@ -21,6 +21,11 @@ Targets for v1: **Windows (`.msi`)** and **macOS (`.dmg`)**. Linux is deferred.
    `playwright test` there (`src-tauri/src/runner.rs`): the shell resolves the
    folder's own Playwright package, executes it with the bundled Node sidecar,
    and streams output back to the webview as `piwi:local-run` events.
+5. Archives the OS hands to the app (drag & drop, "Open with", second-launch
+   file arguments, macOS open events) are queued shell-side and drained by the
+   dashboard over IPC (`desktop_take_pending_open_files` + a `piwi:open-files`
+   poke), which imports them by path through the desktop-only
+   `/api/desktop/import-local` route.
 
 Local access is gated by a per-launch token (see
 `application/server/middleware/desktop-guard.ts`), so only the app — not other

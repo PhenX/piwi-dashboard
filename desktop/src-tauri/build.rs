@@ -24,6 +24,7 @@ fn main() {
             "desktop_set_project_link",
             "desktop_run_local_tests",
             "desktop_stop_local_tests",
+            "desktop_take_pending_open_files",
         ])),
     )
     .expect("failed to run tauri-build");
