@@ -1,0 +1,90 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { Page } from '@playwright/test';
+import { test, expect } from './fixtures.js';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const DIST = path.join(here, '..', '..', 'dist');
+
+interface ExposedFinding {
+  tag: string;
+  role: string;
+  accessibleName: string | null;
+  suggestedTestId: string;
+  bestScore: number;
+}
+
+/**
+ * `scanForLintIssues` calls @piwitests/core's `generateAlternatives`, which
+ * has its own web of private module-level helpers (`attr`, `esc`, etc.) —
+ * unlike `evaluateLocatorChain`/`derivePattern`, stringifying it alone via
+ * `Function.prototype.toString()` can't carry those along, and they aren't
+ * exported to install individually either. Driving the real built
+ * `lint-overlay.js` and reading the findings it bridges out to
+ * `globalThis.__piwiLintFindings` (see that file) exercises the real,
+ * fully-bundled function instead.
+ */
+async function scan(page: Page): Promise<ExposedFinding[]> {
+  await page.addScriptTag({ path: path.join(DIST, 'lint-overlay.js') });
+  const findings = await page.evaluate(() => (globalThis as any).__piwiLintFindings as ExposedFinding[]);
+  // Tear the overlay back down so each test starts clean and to mirror how
+  // a real user would dismiss it — a second trigger of the same script toggles it off.
+  await page.addScriptTag({ path: path.join(DIST, 'lint-overlay.js') });
+  return findings;
+}
+
+test.describe('scanForLintIssues (via the real built lint-overlay.js)', () => {
+  test('does not flag a button with a test id', async ({ context }) => {
+    const page = await context.newPage();
+    await page.setContent(`<!doctype html><html><body>
+      <button data-testid="submit-btn">Submit</button>
+    </body></html>`);
+    expect(await scan(page)).toEqual([]);
+  });
+
+  test('does not flag a button with an accessible name (text content)', async ({ context }) => {
+    const page = await context.newPage();
+    await page.setContent(`<!doctype html><html><body>
+      <button>Submit</button>
+    </body></html>`);
+    expect(await scan(page)).toEqual([]);
+  });
+
+  test('flags duplicate anonymous buttons with no test id, name, or unique structural anchor', async ({ context }) => {
+    const page = await context.newPage();
+    await page.setContent(`<!doctype html><html><body>
+      <button></button>
+      <button></button>
+    </body></html>`);
+    const findings = await scan(page);
+    expect(findings).toHaveLength(2);
+    for (const f of findings) {
+      expect(f.tag).toBe('button');
+      expect(f.role).toBe('button');
+      expect(f.accessibleName).toBeNull();
+      expect(f.bestScore).toBeLessThan(50);
+    }
+    expect(findings.map((f) => f.suggestedTestId)).toEqual(['button-1', 'button-2']);
+  });
+
+  test('numbers suggested test ids per role, not with one counter shared across roles', async ({ context }) => {
+    const page = await context.newPage();
+    await page.setContent(`<!doctype html><html><body>
+      <button></button>
+      <input type="checkbox" />
+      <button></button>
+      <input type="checkbox" />
+    </body></html>`);
+    const findings = await scan(page);
+    expect(findings.map((f) => f.suggestedTestId)).toEqual(['button-1', 'checkbox-1', 'button-2', 'checkbox-2']);
+  });
+
+  test('ignores non-interactive roles (headings, regions) even when anonymous', async ({ context }) => {
+    const page = await context.newPage();
+    await page.setContent(`<!doctype html><html><body>
+      <h2></h2>
+      <nav></nav>
+    </body></html>`);
+    expect(await scan(page)).toEqual([]);
+  });
+});
