@@ -1,0 +1,28 @@
+{
+  "name": "@piwitests/extension",
+  "version": "0.20.0",
+  "description": "Piwi Picker — a browser extension for ranked, stable Playwright locators, picked from the live page",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "extension:build": "node scripts/build.mjs",
+    "extension:typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tests/tsconfig.json",
+    "extension:lint": "oxlint --config oxlint.config.mts .",
+    "extension:lint:fix": "oxlint --config oxlint.config.mts . --fix",
+    "extension:format": "oxfmt --config oxfmt.config.mts --write \"src/\" \"tests/\" \"scripts/\"",
+    "extension:format:check": "oxfmt --config oxfmt.config.mts --check \"src/\" \"tests/\" \"scripts/\"",
+    "extension:test": "vitest run",
+    "extension:test:watch": "vitest",
+    "extension:test:e2e": "npm run extension:build && playwright test --config=tests/e2e/playwright.config.ts",
+    "test": "npm run extension:test"
+  },
+  "dependencies": {
+    "@piwitests/core": "*",
+    "@piwitests/picker-dom": "*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/chrome": "^0.1.43",
+    "vite": "^8.0.16"
+  }
+}

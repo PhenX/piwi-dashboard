@@ -1,5 +1,37 @@
 import { test, expect } from '@playwright/test';
 import { probeElementAttrs } from '../../src/probe.js';
+import { domRoleOf, domHeadingLevel } from '../../src/dom-role.js';
+
+test.describe('domRoleOf / domHeadingLevel', () => {
+  test('resolves explicit and implicit roles, and heading level', async ({ page }) => {
+    await page.setContent(`<!doctype html><html><body>
+      <button id="btn">X</button>
+      <a id="link" href="/x">X</a>
+      <a id="bare-a">X</a>
+      <input id="text-input" />
+      <input id="checkbox-input" type="checkbox" />
+      <div id="explicit" role="tab">X</div>
+      <h2 id="heading">X</h2>
+      <div id="aria-heading" role="heading" aria-level="4">X</div>
+    </body></html>`);
+    const maps = {
+      tagRoles: { a: 'link', button: 'button', h2: 'heading' },
+      inputRoles: { text: 'textbox', checkbox: 'checkbox' },
+    };
+    const roleOf = (id: string) => page.locator(`#${id}`).evaluate(domRoleOf, maps);
+
+    expect(await roleOf('btn')).toBe('button');
+    expect(await roleOf('link')).toBe('link');
+    expect(await roleOf('bare-a')).toBe(null);
+    expect(await roleOf('text-input')).toBe('textbox');
+    expect(await roleOf('checkbox-input')).toBe('checkbox');
+    expect(await roleOf('explicit')).toBe('tab');
+
+    expect(await page.locator('#heading').evaluate(domHeadingLevel)).toBe(2);
+    expect(await page.locator('#aria-heading').evaluate(domHeadingLevel)).toBe(4);
+    expect(await page.locator('#btn').evaluate(domHeadingLevel)).toBe(null);
+  });
+});
 
 test.describe('probeElementAttrs', () => {
   test('reads the attribute whitelist and selector-uniqueness counts', async ({ page }) => {

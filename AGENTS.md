@@ -14,6 +14,7 @@ how to run and verify things, and the conventions that apply everywhere.
 | `application/` — the Nuxt dashboard (app, server, demo, MCP) | [`application/AGENTS.md`](application/AGENTS.md) |
 | `reporter/` — the Playwright reporter package | [`reporter/AGENTS.md`](reporter/AGENTS.md) |
 | `desktop/` — the Tauri desktop shell | [`desktop/AGENTS.md`](desktop/AGENTS.md) |
+| `extension/` — the browser extension (Manifest V3) | [`extension/AGENTS.md`](extension/AGENTS.md) |
 | `docs/` — the VitePress documentation site | [`docs/AGENTS.md`](docs/AGENTS.md) |
 
 Reference material worth opening when you need the map rather than the rules:
@@ -34,8 +35,10 @@ application/          Nuxt 4 dashboard — app (UI), server (API), demo SPA, MCP
 application/shared/   Types, constants & pure utilities shared app-wide (import via `#shared/...`)
 packages/core/        @piwitests/core — private, zero-dependency logic shared by app AND reporter
 packages/server/      @piwitests/server — published npm run-option (`npx @piwitests/server`)
+packages/picker-dom/  @piwitests/picker-dom — shared DOM picker overlay used by the reporter, dashboard, and extension
 reporter/             @piwitests/reporter — the Playwright reporter (TypeScript → bundled via tsup)
 desktop/              Tauri desktop shell that bundles and runs the same server locally
+extension/            Piwi Picker — browser extension (Manifest V3), standalone, no server dependency
 docs/                 VitePress documentation site, published to GitHub Pages
 integrations/nitro/   Backend-log instrumentation for Nitro apps
 integrations/aspnetcore/  Backend-log instrumentation for ASP.NET Core (NuGet)
@@ -115,9 +118,9 @@ and the type → release-bump table. release-please reads PR titles (squash-merg
 Format `type(scope): subject`:
 
 - **type** — `feat` `fix` `perf` `docs` `chore` `ci` `refactor` `test` `build` `style` `revert`
-- **scope** — closed list, anything else fails: `app` `reporter` `db` `ui` `demo` `ci` `docs` `deps` `auth` `ai`
-  `notifications` `release` (`main` is reserved for release-please). Optional but include the best fit; never invent one
-  (a timeline component change is `fix(ui)`, not `fix(timeline)`).
+- **scope** — closed list, anything else fails: `app` `reporter` `db` `ui` `demo` `desktop` `extension` `ci` `docs`
+  `deps` `auth` `ai` `notifications` `release` (`main` is reserved for release-please). Optional but include the best
+  fit; never invent one (a timeline component change is `fix(ui)`, not `fix(timeline)`).
 - **subject** — lower-case start, imperative, no trailing period, full header ≤ 100 chars.
 
 The `commitlint` CI check lints **every commit in the PR range**, so one bad message turns the PR red. Self-check with

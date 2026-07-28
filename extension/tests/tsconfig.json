@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // Tests mix Node-side fixture/build code (node:path, node:fs) with
+    // browser-context assertions inside page.evaluate callbacks, unlike
+    // src/ (extension runtime code only, browser + chrome.* types).
+    "lib": ["ES2021", "dom"],
+    "types": ["chrome", "node"]
+  },
+  "include": ["**/*.ts"]
+}

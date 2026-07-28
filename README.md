@@ -228,6 +228,7 @@ Full docs at **[piwitests.github.io](https://piwitests.github.io)**. The usual e
 - [Deployment](https://piwitests.github.io/deployment) and [Configuration](https://piwitests.github.io/configuration) — running your instance
 - [Upgrading](https://piwitests.github.io/upgrading) — what a version bump does, and why downgrading isn't a thing
 - [Privacy & data flow](https://piwitests.github.io/privacy) — exactly what leaves your server (nothing you didn't configure)
+- [Browser extension](https://piwitests.github.io/extension) — pick ranked locators from the live page (standalone, not yet store-published)
 
 A running dashboard also serves interactive API docs at `/docs`, rendered in-app from its own OpenAPI
 spec — no external CDN, so they work offline.

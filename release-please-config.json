@@ -18,6 +18,8 @@
         { "type": "json", "path": "desktop/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "desktop/src-tauri/tauri.conf.json", "jsonpath": "$.version" },
         { "type": "generic", "path": "desktop/src-tauri/Cargo.toml" },
+        { "type": "json", "path": "extension/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "extension/manifest.json", "jsonpath": "$.version" },
         {
           "type": "json",
           "path": "examples/playwright-fixtures/package.json",

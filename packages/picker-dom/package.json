@@ -11,9 +11,12 @@
     "./overlay-element": "./src/overlay-element.ts",
     "./overlay-anchors": "./src/overlay-anchors.ts",
     "./overlay-confirm": "./src/overlay-confirm.ts",
-    "./anchor-alternatives": "./src/anchor-alternatives.ts"
+    "./anchor-alternatives": "./src/anchor-alternatives.ts",
+    "./syntax-highlight": "./src/syntax-highlight.ts",
+    "./dom-role": "./src/dom-role.ts"
   },
   "scripts": {
+    "picker-dom:typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tests/tsconfig.json",
     "picker-dom:test": "vitest run",
     "picker-dom:test:watch": "vitest",
     "picker-dom:test:integration": "playwright test --config=tests/integration/playwright.config.ts",
