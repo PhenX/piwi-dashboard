@@ -230,3 +230,58 @@ export function getSettingsPage(id: SettingsPageId): SettingsPageMeta {
   if (!page) throw new Error(`Unknown settings page: ${id}`);
   return page;
 }
+
+// ── Nav construction ───────────────────────────────────────────────────────
+
+/**
+ * One nav entry. Structurally a `NavigationMenuItem` (and a `DropdownMenuItem`),
+ * declared here rather than importing the Nuxt UI type so this module stays pure
+ * and unit-testable.
+ */
+export interface SettingsNavItem {
+  label: string;
+  icon: string;
+  to: string;
+  badge?: { icon: string; color: 'neutral' };
+}
+
+/** What the viewer is allowed to see, and which pages the environment has pinned. */
+export interface SettingsNavContext {
+  /**
+   * Whether admin-only pages are visible. Callers pass `true` when auth is
+   * disabled entirely — every visitor is a virtual administrator then.
+   */
+  canSeeAdmin: boolean;
+  /** Desktop build: single-user with auth off, so `authOnly` pages are hidden. */
+  isDesktop: boolean;
+  /** Pages currently pinned by env, which get a trailing lock badge. */
+  envManaged?: Partial<Record<SettingsPageId, boolean>>;
+}
+
+/**
+ * Build the grouped Settings navigation.
+ *
+ * Sections come out in `SETTINGS_GROUPS` order, and a section whose pages are
+ * all hidden for this viewer is dropped rather than rendered as an empty
+ * separator — a non-admin, for instance, can see none of the Analysis pages.
+ *
+ * Kept pure (no Vue, no Nuxt composables) so the role/build/env branching is
+ * directly testable; `useSettingsNav` is the reactive wrapper around it.
+ */
+export function buildSettingsNavSections(ctx: SettingsNavContext): SettingsNavItem[][] {
+  const visible = SETTINGS_PAGES.filter(
+    (page) => (!page.roles || ctx.canSeeAdmin) && !(ctx.isDesktop && page.authOnly),
+  );
+
+  const toItem = (page: SettingsPageMeta): SettingsNavItem => ({
+    label: page.label,
+    icon: page.icon,
+    to: page.to,
+    // Trailing lock badge marks env-pinned pages.
+    ...(ctx.envManaged?.[page.id] ? { badge: { icon: 'i-lucide-lock', color: 'neutral' as const } } : {}),
+  });
+
+  return SETTINGS_GROUPS.map((group) => visible.filter((page) => page.group === group.id).map(toItem)).filter(
+    (section) => section.length > 0,
+  );
+}
