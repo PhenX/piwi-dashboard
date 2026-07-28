@@ -11,13 +11,17 @@ import { test, expect } from './fixtures.js';
  * inject, tested directly).
  */
 test.describe('popup.html', () => {
-  test('renders the pick, hover-inspect, locator console, and multi-pick actions', async ({ context, extensionId }) => {
+  test('renders the pick, hover-inspect, locator console, multi-pick, and lint overlay actions', async ({
+    context,
+    extensionId,
+  }) => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/popup.html`);
     await expect(page.getByRole('button', { name: /Pick an element/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Toggle hover-inspect/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Locator console/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Multi-pick pattern/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Lint overlay/ })).toBeVisible();
     await expect(page.getByText('Ctrl+Shift+E')).toBeVisible();
   });
 });

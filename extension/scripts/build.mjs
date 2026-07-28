@@ -33,6 +33,7 @@ await buildStandalone('pick', 'src/content/pick.ts');
 await buildStandalone('hover-inspect', 'src/content/hover-inspect.ts');
 await buildStandalone('locator-console', 'src/content/locator-console.ts');
 await buildStandalone('multi-pick', 'src/content/multi-pick.ts');
+await buildStandalone('lint-overlay', 'src/content/lint-overlay.ts');
 await buildStandalone('background', 'src/background/index.ts');
 
 await build({
