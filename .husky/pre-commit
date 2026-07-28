@@ -1,2 +1,5 @@
 (cd application && npm run app:format) && git add -u application/
 (cd reporter && npm run reporter:format) && git add -u reporter/src/
+(cd packages/core && npm run core:format) && git add -u packages/core/
+(cd packages/picker-dom && npm run picker-dom:format) && git add -u packages/picker-dom/
+(cd extension && npm run extension:format) && git add -u extension/
