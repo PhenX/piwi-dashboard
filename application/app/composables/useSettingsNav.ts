@@ -1,41 +1,29 @@
 import type { NavigationMenuItem } from '@nuxt/ui';
 import { toValue, type MaybeRefOrGetter } from 'vue';
-import { SETTINGS_PAGES, type SettingsPageId } from '~/utils/settings-metadata';
+import { buildSettingsNavSections, type SettingsPageId } from '~/utils/settings-metadata';
 
 /**
- * Build the Settings sub-navigation from the shared `SETTINGS_PAGES` registry.
- * Admin-only pages are hidden for non-admins (no more 403 on click). Pages that
- * are currently env-managed get a trailing lock badge, so an admin can see at a
- * glance which settings are pinned by the environment.
+ * Reactive wrapper around `buildSettingsNavSections`.
+ *
+ * Resolves who the viewer is (admin or not, desktop build or not) from the Nuxt
+ * composables and hands that to the pure builder, which owns the actual
+ * filtering and grouping. Returns the `[][]` shape `UNavigationMenu` renders
+ * with a separator between sections; callers wanting one flat list (the user
+ * menu) call `.flat()`.
  *
  * `envManaged` is the per-page state from `useSettingsEnvState` (a ref or
  * getter); pass it to make the lock badges reactive. When omitted, no lock
  * badges are shown.
  */
 export function useSettingsNav(envManaged?: MaybeRefOrGetter<Record<SettingsPageId, boolean>>) {
-  const { isAdmin } = useAuth();
-  const config = useRuntimeConfig();
-  // When auth is disabled, every visitor is a virtual administrator — show all
-  // pages (mirrors the per-page `isAdmin` fallback in users.vue/tags.vue).
-  const canSeeAdmin = computed(() => !config.public.authEnabled || isAdmin.value);
-  // The desktop build is single-user with auth off, so account/user management
-  // (pages flagged `authOnly`) is meaningless there — hide it.
+  const { canSeeAdmin } = useAuth();
   const isDesktop = useIsDesktop();
 
-  const items = computed<NavigationMenuItem[]>(() => {
-    const admin = canSeeAdmin.value;
-    const managedMap = envManaged ? toValue(envManaged) : undefined;
-    return SETTINGS_PAGES.filter((page) => (!page.roles || admin) && !(isDesktop && page.authOnly)).map((page) => {
-      const managed = managedMap?.[page.id] ?? false;
-      return {
-        label: page.label,
-        icon: page.icon,
-        to: page.to,
-        // Trailing lock badge marks env-pinned pages.
-        ...(managed ? { badge: { icon: 'i-lucide-lock', color: 'neutral' as const } } : {}),
-      } satisfies NavigationMenuItem;
-    });
-  });
-
-  return items;
+  return computed<NavigationMenuItem[][]>(() =>
+    buildSettingsNavSections({
+      canSeeAdmin: canSeeAdmin.value,
+      isDesktop,
+      envManaged: envManaged ? toValue(envManaged) : undefined,
+    }),
+  );
 }

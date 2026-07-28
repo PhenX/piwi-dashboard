@@ -51,7 +51,7 @@ app.Run();
 ### Nitro / Nuxt (npm)
 
 ```bash
-npm install @piwitests/instrumentation
+npm install @piwitests/instrumentation-nitro
 ```
 
 Create a file in your project's server plugins directory:
@@ -59,7 +59,7 @@ Create a file in your project's server plugins directory:
 ```typescript
 // Nuxt: server/plugins/piwi-test-logs.ts
 // Standalone Nitro: plugins/piwi-test-logs.ts
-export { default } from '@piwitests/instrumentation'
+export { default } from '@piwitests/instrumentation-nitro'
 ```
 
 The plugin is auto-loaded by Nitro. It captures `consola` Warning/Error entries (bare `console.*` calls are not captured) and unhandled H3 errors, then writes the header just before each response goes out — including error responses. Capture is on outside production; override either way with `PIWI_TEST_LOGS_DISABLED` (`true` = always off, `false` = on even in production).

@@ -1,5 +1,5 @@
 {
-  "name": "@piwitests/instrumentation",
+  "name": "@piwitests/instrumentation-nitro",
   "version": "0.20.0",
   "description": "Nitro/Nuxt server plugin for sending backend logs to Piwi Dashboard via the X-Piwi-Logs response header",
   "homepage": "https://piwitests.github.io",

@@ -378,7 +378,9 @@ const featureHighlights = [
           <p>No runs match the current filters.</p>
         </div>
 
-        <!-- Empty state: setup wizard first (the actionable step), feature highlights after -->
+        <!-- Empty state: setup wizard first (the actionable step), feature highlights after.
+             Once projects exist the wizard moves to /setup, which stays reachable from the
+             sidebar — the steps past "install the reporter" must not vanish on first run. -->
         <template v-if="!hasProjects">
           <GetStartedWizard />
 
