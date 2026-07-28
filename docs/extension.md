@@ -7,8 +7,10 @@ lang: en-US
 
 Piwi Picker is a Chrome/Edge extension (Manifest V3) that picks ranked, stable Playwright
 locators directly from the page you're looking at — scored by the same engine the dashboard
-uses. It's standalone: this phase talks to no server, sends nothing anywhere, and requests
-`activeTab`, `scripting`, and `storage` only.
+uses, and can record a multi-page flow into a runnable TypeScript spec. Picking and recording
+are fully standalone — nothing is sent anywhere by default. Connecting to a Piwi instance is
+optional and adds exactly one thing: matching a recording against your project's own
+page-object methods and helpers, ranked live as you record.
 
 > Not yet published to the Chrome Web Store or Edge Add-ons. Install it unpacked from a local
 > build until it is.
@@ -67,22 +69,64 @@ Then, in Chrome or Edge:
 - **Copy context for agent** — pick an element and copy one paste-able block for an AI coding
   agent: the page URL, a compact element summary (tag, role, accessible name, key attributes,
   text), and every ranked locator alternative.
+- **Record actions across pages** — click **Record actions** and Piwi Picker grants itself
+  access to the one site you're on, then captures clicks, fills, checks/unchecks, select
+  changes, and Enter-to-submit as you browse — across as many pages on that site as you like.
+  A small HUD tracks the step count and shows the top-ranked locator for whatever you just
+  interacted with. Click **Stop** to open the review panel: reorder or drop steps, then **Copy
+  as TypeScript** for a runnable Playwright spec (`page.goto`, then one line per step). Password
+  fields are never captured — their value is replaced with a `process.env.*` placeholder in the
+  generated code.
+- **Matching functions, ranked live** *(needs a Piwi connection)* — connect to a Piwi instance
+  from the toolbar popup's **connect to Piwi** link (instance URL, API key, project) and the
+  recorder fetches that project's function catalog — page-object methods and helpers it already
+  knows about. While recording, the HUD ranks which catalog function the steps so far look like,
+  live, with a progress indicator (`2/3`) until a full match is found. On export, any complete
+  match collapses into a call to your own function instead of raw locator lines; anything
+  unmatched still comes out as plain locators. The matcher only ever *selects among* the catalog
+  you've registered — it never invents a function. Manage the catalog from a project's **Test
+  functions** page in the dashboard.
 
 ## Permissions, explained
 
 | Permission | Why |
 |---|---|
 | `activeTab` | Lets the extension act on the tab you're looking at only when you click the toolbar icon or press the keyboard shortcut — not on every page you visit. |
-| `scripting` | Injects the picker into the active tab on demand (see above) — there is no background content script running on pages you haven't asked it to. |
-| `storage` | Remembers your last-used copy format, and the named pick session if you use one, locally on your machine. The session specifically uses `chrome.storage.session`, which the browser clears when you close it — it's a working session, not a saved file. |
+| `scripting` | Injects the picker (and the recorder) into the active tab on demand — there is no background content script running on pages you haven't asked it to. |
+| `storage` | Remembers your last-used copy format, a named pick session, the running recording, and (only if you connect) the instance URL/API key/project and the cached function catalog — all locally on your machine. Pick sessions and the recording specifically use `chrome.storage.session`, which the browser clears when you close it — a working session, not a saved file. |
+| `optional_host_permissions` (`http://*/*`, `https://*/*`, granted nothing by default) | Recording across pages needs to keep working after you navigate, which `activeTab` alone can't do (it's revoked on navigation). Clicking **Record actions** requests access to *the one site you're on* — never `<all_urls>`, never granted in advance — so the recorder can re-attach itself as you move between that site's pages. Nothing else in the extension asks for this. |
 
-Nothing here reaches a network. There is no host permission, no `<all_urls>`, and no remote
-code — the entire extension is the code in this repository, bundled as-is.
+No picking, hover-inspect, locator console, multi-pick, lint overlay, assertion suggester,
+session export, agent-context copy, or standalone recording ever reaches a network. Connecting
+to a Piwi instance is the one opt-in exception — see below.
+
+## Connecting to a Piwi instance
+
+Entirely optional, and off by default. From the toolbar popup, **connect to Piwi** opens a
+settings page for your instance's URL and an API key (`pd_…`, from your account's API key
+settings), then lets you pick a project. Saving fetches that project's function catalog once
+and caches it on your machine — nothing about your browsing is sent in that request beyond the
+project id.
+
+**A recording itself is never sent to your instance.** Connecting only changes what the
+**Copy as TypeScript** export looks like (it can now use your own functions) and what the HUD
+shows while recording (ranked matches). Sending a recording to a server for anything beyond
+that — saving it, running codegen server-side — isn't implemented; if it is later, it will be
+opt-in per recording with a payload preview before the first send, matching the standard this
+extension already holds itself to for the API key.
+
+The function catalog itself is managed from a project's **Test functions** page in the
+dashboard — add entries by hand, or, once you've recorded a flow, extract one from the steps
+you just captured.
 
 ## Current limits
 
 - **One frame at a time.** Picking inside an iframe, or across shadow DOM boundaries, isn't
-  supported yet — the picker sees the top-level document.
+  supported yet — the picker sees the top-level document. The same limit applies to recording.
+- **Recording covers one origin.** The host permission recording requests is scoped to the
+  site you started on; navigating to a different origin mid-recording stops capturing new steps
+  there (nothing is lost — stop and review what was captured, or start a fresh recording on the
+  new site). Expanding a running recording to a second origin isn't implemented yet.
 - **No aria-snapshot copier yet.** Reproducing Playwright's `toMatchAriaSnapshot()` YAML format
   exactly needs the browser's real computed accessibility tree, which isn't reachable from a
   content script without a much heavier permission (`debugger`) than this extension asks for. An
@@ -95,8 +139,9 @@ code — the entire extension is the code in this repository, bundled as-is.
   `getByRole` are re-verified against the page as it is now; text/label/placeholder-based
   matches and anchor-scoped chains keep the count captured at pick time (Playwright's own
   text-matching rules aren't reproduced here).
-- **No dashboard connection in this phase.** Nothing is sent to your Piwi instance yet — that's
-  planned as an opt-in later phase, kept clearly separate from this standalone path.
+- **Function matching is deterministic, not AI-assisted, in this phase.** The catalog matcher
+  scores DOM patterns against recorded steps; there's no optional AI pass yet to name things or
+  break ties beyond the scoring itself.
 
 ## Source
 

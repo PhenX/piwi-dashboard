@@ -9,6 +9,7 @@ import {
   failureClusters,
   failureDiagnoses,
   markers,
+  testFunctions,
 } from '../database/schema';
 import { eq } from 'drizzle-orm';
 import { requireAuth, isAuthEnabled } from './auth';
@@ -124,6 +125,14 @@ export async function resolveTestRunCaseProjectId(db: DrizzleDB, runCaseId: numb
 
 export async function resolveMarkerProjectId(db: DrizzleDB, markerId: number): Promise<number | null> {
   const rows = await db.select({ projectId: markers.projectId }).from(markers).where(eq(markers.id, markerId));
+  return rows[0]?.projectId ?? null;
+}
+
+export async function resolveTestFunctionProjectId(db: DrizzleDB, testFunctionId: number): Promise<number | null> {
+  const rows = await db
+    .select({ projectId: testFunctions.projectId })
+    .from(testFunctions)
+    .where(eq(testFunctions.id, testFunctionId));
   return rows[0]?.projectId ?? null;
 }
 

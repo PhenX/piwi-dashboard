@@ -30,7 +30,11 @@
         width: 360px;
         background: var(--bg);
         color: var(--fg);
-        font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font:
+          13px/1.5 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          sans-serif;
       }
       .popup {
         padding: 14px;
@@ -107,7 +111,9 @@
         color: inherit;
       }
       kbd {
-        font: 10.5px ui-monospace, monospace;
+        font:
+          10.5px ui-monospace,
+          monospace;
         border: 1px solid var(--border);
         border-radius: 4px;
         padding: 1px 4px;
@@ -125,6 +131,13 @@
       <header><img src="icons/icon-32.png" width="18" height="18" alt="" /><span>Piwi Picker</span></header>
       <div id="status"></div>
       <div class="actions">
+        <button id="record" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="8" />
+          </svg>
+          <span class="label" id="record-label">Record actions</span>
+          <span class="hint" id="record-hint">Multi-page → TypeScript</span>
+        </button>
         <button id="pick" class="primary" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <circle cx="12" cy="12" r="6.5" />
@@ -192,7 +205,8 @@
       </div>
       <footer>
         <kbd>Ctrl+Shift+E</kbd> picks without opening this popup ·
-        <a href="https://piwitests.github.io/extension" target="_blank" rel="noopener">docs</a>
+        <a href="https://piwitests.github.io/extension" target="_blank" rel="noopener">docs</a> ·
+        <a href="#" id="options-link">connect to Piwi</a>
       </footer>
     </div>
     <script type="module" src="src/popup/main.ts"></script>

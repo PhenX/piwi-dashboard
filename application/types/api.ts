@@ -110,6 +110,78 @@ export interface MarkersResponse {
 }
 
 // ============================================================================
+// Test function catalog types (recorder codegen matching — see
+// packages/core/src/function-match.ts for the deserialized `entry` shape)
+// ============================================================================
+
+export interface TestFunctionParam {
+  name: string;
+  type: 'string' | 'number' | 'boolean';
+}
+
+export interface TestFunctionPatternTarget {
+  role?: string | null;
+  name?: string | null;
+  testId?: string | null;
+}
+
+export type TestFunctionStepAction =
+  | 'goto'
+  | 'click'
+  | 'fill'
+  | 'check'
+  | 'uncheck'
+  | 'selectOption'
+  | 'press'
+  | 'assertVisible';
+
+export interface TestFunctionPatternStep {
+  action: TestFunctionStepAction;
+  target: TestFunctionPatternTarget;
+}
+
+export interface TestFunctionParamSource {
+  param: string;
+  stepIndex: number;
+  from: 'text' | 'value' | 'testId';
+}
+
+/** The deserialized catalog entry shape — matches `TestFunctionEntry` in `@piwitests/core/function-match`. */
+export interface TestFunctionEntryInfo {
+  id: number;
+  name: string;
+  kind: 'page-object-method' | 'helper' | 'fixture';
+  module: string;
+  receiver: string | null;
+  importName: string | null;
+  params: TestFunctionParam[];
+  urlPattern: string | null;
+  steps: TestFunctionPatternStep[];
+  paramSources: TestFunctionParamSource[];
+}
+
+/** One catalog row as returned by the API — the raw row plus its deserialized `entry`. */
+export interface TestFunctionInfo {
+  id: number;
+  projectId: number;
+  name: string;
+  kind: string;
+  module: string;
+  receiver: string | null;
+  importName: string | null;
+  urlPattern: string | null;
+  source: string; // 'manual' | 'scanned' | 'recorded'
+  confidence: number;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  entry: TestFunctionEntryInfo;
+}
+
+export interface TestFunctionsResponse {
+  testFunctions: TestFunctionInfo[];
+}
+
+// ============================================================================
 // Period and Range types (used for filtering and date range selection)
 // ============================================================================
 

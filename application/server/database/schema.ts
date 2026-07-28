@@ -40,6 +40,7 @@ export const {
   projectAssignments,
   locatorSnapshots,
   casePayloads,
+  testFunctions,
 } = schema;
 
 // TypeScript type exports – always based on SQLite schema (the canonical reference)
@@ -98,4 +99,6 @@ export type {
   NewLocatorSnapshotRow,
   CasePayload,
   NewCasePayload,
+  TestFunction,
+  NewTestFunction,
 } from './schema.sqlite';

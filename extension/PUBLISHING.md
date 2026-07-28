@@ -2,7 +2,7 @@
 
 Not yet published anywhere — see `docs/extension.md`'s own note ("install unpacked until it is"). This is what closes that gap.
 
-Current state this guide assumes: manifest name `"Piwi Picker"`, version tracked by release-please repo-wide (`extension/manifest.json`'s version is already an `extra-files` target in `release-please-config.json` — no manual version bumps needed), MIT-licensed, icons present at 16/32/48/128px, permissions limited to `activeTab` + `scripting` + `storage`.
+Current state this guide assumes: manifest name `"Piwi Picker"`, version tracked by release-please repo-wide (`extension/manifest.json`'s version is already an `extra-files` target in `release-please-config.json` — no manual version bumps needed), MIT-licensed, icons present at 16/32/48/128px, standing permissions limited to `activeTab` + `scripting` + `storage`, plus `optional_host_permissions` (`http://*/*`, `https://*/*`) — declared but granted nothing until the user clicks "Record actions" and approves a single origin. See `docs/extension.md`'s permissions table for the exact wording, and the note in §2 step 3 below on justifying this one to reviewers.
 
 ## 0. One-time setup (per store, before your first submission)
 
@@ -25,8 +25,8 @@ Builds, then zips `dist/`'s contents (manifest at the zip root, not nested — w
 ## 2. Chrome Web Store
 
 1. Dashboard → **New item** → upload the zip.
-2. Store listing requires: description, at least one 1280×800 or 640×400 screenshot, a 128×128 icon (already have it), category (Developer Tools), and a **privacy practices** disclosure. Since this extension is zero-telemetry/zero-network in the standalone phase, that section is short and honest: no data collected, no data transmitted.
-3. Permission justification: Chrome's review form asks you to justify each requested permission in plain English. For `activeTab`/`scripting`/`storage`, reuse the exact wording already in `docs/extension.md`'s permissions table — it's already accurate and honest.
+2. Store listing requires: description, at least one 1280×800 or 640×400 screenshot, a 128×128 icon (already have it), category (Developer Tools), and a **privacy practices** disclosure. Picking and recording are zero-telemetry/zero-network by default; the one exception is the optional Piwi-instance connection (`options.html`), which — only if the user configures it — sends the API key and project id to fetch a function catalog, and nothing else (no recorded data, no browsing history). State both halves plainly rather than only the standalone claim.
+3. Permission justification: Chrome's review form asks you to justify each requested permission in plain English. For `activeTab`/`scripting`/`storage`, reuse the exact wording already in `docs/extension.md`'s permissions table — it's already accurate and honest. `optional_host_permissions` needs its own explanation since the two patterns (`http://*/*`, `https://*/*`) look broad on their own: say plainly that this is declared so the extension *can* request a single origin, on demand, only when the user clicks "Record actions" inside that click's own gesture — nothing is granted at install, and the grant is scoped to whichever one site the user is recording, never `<all_urls>` in practice. Reviewers specifically look for this "declared broad, granted narrow, user-gestured" pattern with optional host permissions — state it explicitly rather than assuming the manifest speaks for itself.
 4. Submit for review. First review is typically the slowest (hours to a few days); version updates thereafter are usually faster.
 5. Once approved, note the **extension ID** Chrome assigns — useful for support links and the docs page.
 
@@ -46,14 +46,14 @@ Structurally the easiest: Edge is Chromium and accepts the **same zip** unmodifi
 "browser_specific_settings": {
   "gecko": {
     "id": "piwi-picker@piwitests.dev",
-    "strict_min_version": "109.0"
+    "strict_min_version": "116.0"
   }
 }
 ```
 
 Chromium ignores this key entirely, so the single built zip stays valid for all three stores. Two caveats worth knowing:
 - **The ID is permanent once published.** AMO binds the listing to it; changing it later creates a *new* add-on rather than updating the existing one, orphaning existing installs. Change it before the first submission or not at all.
-- **`109.0` is an assumption, not a verified floor.** It's roughly where Firefox's MV3 support stabilized. Test against a real Firefox install and adjust before submitting, rather than trusting the number.
+- **`116.0` is a floor set by a feature, not a fully verified minimum.** `optional_host_permissions` (used by the recorder — see the top of this doc) needs Firefox 116+; without recording, `109.0` would likely still work. Test against a real Firefox install of the target version and adjust before submitting, rather than trusting the number as-is — this repo's CI doesn't exercise Firefox at all (see the note near the bottom of this section).
 
 **b) Submit source, not just the built zip.** Because `extension/dist` is Vite-bundled/minified output, not hand-written source, Mozilla's reviewers require the **original source** plus build instructions whenever the reviewable code doesn't match human-readable source 1:1. Concretely:
 - Upload the same built zip as the actual extension.

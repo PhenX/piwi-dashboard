@@ -25,6 +25,12 @@ const STANDALONE_ENTRIES = [
   ['assertion-panel', 'src/content/assertion-panel.ts'],
   ['session-panel', 'src/content/session-panel.ts'],
   ['agent-context-panel', 'src/content/agent-context-panel.ts'],
+  // Not injected via `chrome.scripting.executeScript({ files: [...] })` like the others —
+  // registered dynamically for the recording's lifetime
+  // (`chrome.scripting.registerContentScripts`, see `background/index.ts`) so it re-attaches
+  // itself on every navigation across the recording's granted origin. Still built the same
+  // standalone-IIFE way: MV3 has no other way to inject a classic script by file path.
+  ['record-panel', 'src/content/record-panel.ts'],
   ['background', 'src/background/index.ts'],
 ];
 
@@ -55,7 +61,7 @@ export async function buildExtension() {
     build: {
       outDir,
       emptyOutDir: false,
-      rollupOptions: { input: path.join(root, 'popup.html') },
+      rollupOptions: { input: { popup: path.join(root, 'popup.html'), options: path.join(root, 'options.html') } },
     },
   });
 

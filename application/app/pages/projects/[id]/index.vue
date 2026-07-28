@@ -697,6 +697,12 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                   ]
                 : []),
               {
+                label: 'Test functions',
+                icon: 'i-lucide-function-square',
+                variant: 'outline' as const,
+                to: `/projects/${projectId}/test-functions`,
+              },
+              {
                 label: 'Edit',
                 icon: 'i-lucide-pencil',
                 variant: 'outline' as const,
