@@ -24,8 +24,18 @@ export const test = base.extend<{ context: BrowserContext; extensionId: string }
   },
 
   extensionId: async ({ context }, use) => {
-    let [sw] = context.serviceWorkers();
-    if (!sw) sw = await context.waitForEvent('serviceworker');
+    // Not a check-then-await-the-event pattern: the service worker can
+    // register in the gap between checking serviceWorkers() and attaching
+    // a waitForEvent listener, missing the event entirely and hanging until
+    // timeout. Polling re-checks the live state instead, so there's no gap
+    // to lose the registration in.
+    const deadline = Date.now() + 30_000;
+    let sw = context.serviceWorkers()[0];
+    while (!sw && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      sw = context.serviceWorkers()[0];
+    }
+    if (!sw) throw new Error("the extension's service worker never registered within 30s");
     await use(sw.url().split('/')[2]!);
   },
 });
