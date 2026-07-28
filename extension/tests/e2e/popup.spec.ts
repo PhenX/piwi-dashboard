@@ -18,6 +18,7 @@ const ACTION_BUTTON_NAMES = [
   /Lint overlay/,
   /Assertion suggester/,
   /Session/,
+  /Copy context for agent/,
 ];
 
 test.describe('popup.html', () => {

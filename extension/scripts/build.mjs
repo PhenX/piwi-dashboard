@@ -36,6 +36,7 @@ await buildStandalone('multi-pick', 'src/content/multi-pick.ts');
 await buildStandalone('lint-overlay', 'src/content/lint-overlay.ts');
 await buildStandalone('assertion-panel', 'src/content/assertion-panel.ts');
 await buildStandalone('session-panel', 'src/content/session-panel.ts');
+await buildStandalone('agent-context-panel', 'src/content/agent-context-panel.ts');
 await buildStandalone('background', 'src/background/index.ts');
 
 await build({

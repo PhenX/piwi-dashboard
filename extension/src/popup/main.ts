@@ -26,3 +26,4 @@ document.getElementById('multi-pick')!.addEventListener('click', () => void inje
 document.getElementById('lint-overlay')!.addEventListener('click', () => void inject('lint-overlay.js'));
 document.getElementById('assertion-panel')!.addEventListener('click', () => void inject('assertion-panel.js'));
 document.getElementById('session-panel')!.addEventListener('click', () => void inject('session-panel.js'));
+document.getElementById('agent-context-panel')!.addEventListener('click', () => void inject('agent-context-panel.js'));
