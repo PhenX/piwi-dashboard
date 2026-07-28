@@ -55,7 +55,8 @@
     "prepublishOnly": "npm run reporter:build"
   },
   "files": [
-    "dist/"
+    "dist/",
+    "templates/"
   ],
   "peerDependencies": {
     "@playwright/test": "^1.61.1"

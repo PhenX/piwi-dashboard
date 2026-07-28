@@ -181,6 +181,7 @@ describe('PIWI_ENV_VARS registry', () => {
       'PIWI_ENV_CATEGORIES',
       'PIWI_ENV_KEYS',
       'PIWI_API_KEY',
+      'PIWI_OUTPUT_FILE',
     ]);
     const realMissing = missing.filter((v) => !knownFalsePositives.has(v));
     expect(realMissing.sort()).toEqual([]);

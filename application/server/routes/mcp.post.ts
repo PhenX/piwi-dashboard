@@ -1,10 +1,14 @@
-import { requireAuth } from '../utils/auth';
+import { getRequestURL, type H3Event } from 'h3';
+import { requireAuth, isAuthEnabled } from '../utils/auth';
 import { getDatabase } from '../database';
 import { MCP_TOOLS, toContent } from '../utils/mcp/tools';
 import type { McpContext } from '../utils/mcp/tools';
+import { getPrompt, isKnownPrompt } from '../utils/mcp/prompts';
 import { getProjectScope } from '../utils/project-access';
+import { resolvePublicBaseUrl } from '../utils/oauth-helpers';
 import { ok, rpcErr, RPC, MCP_SERVER_INFO, negotiateProtocolVersion } from '../utils/mcp/protocol';
 import type { JsonRpcRequest } from '../utils/mcp/protocol';
+import { MCP_PROMPT_DEFS } from '#shared/mcp-prompts';
 
 const TOOL_MAP = new Map(MCP_TOOLS.map((t) => [t.name, t]));
 const MAX_BODY_BYTES = 1_048_576; // 1 MB — reject oversized batches early
@@ -51,7 +55,7 @@ export default eventHandler(async (event) => {
   const body = await readBody<JsonRpcRequest | JsonRpcRequest[]>(event);
   const requests = Array.isArray(body) ? body : [body];
 
-  const responses = await Promise.all(requests.map((req) => handleRequest(ctx, req)));
+  const responses = await Promise.all(requests.map((req) => handleRequest(ctx, req, event)));
 
   // Notifications (no id) have no response — filter them out.
   const toSend = responses.filter((r) => r !== null);
@@ -60,7 +64,7 @@ export default eventHandler(async (event) => {
   return Array.isArray(body) ? toSend : (toSend[0] ?? null);
 });
 
-async function handleRequest(ctx: McpContext, req: JsonRpcRequest) {
+async function handleRequest(ctx: McpContext, req: JsonRpcRequest, event: H3Event) {
   if (!req || req.jsonrpc !== '2.0' || !req.method) {
     return rpcErr(req?.id, RPC.INVALID_REQUEST, 'Invalid JSON-RPC request');
   }
@@ -72,7 +76,7 @@ async function handleRequest(ctx: McpContext, req: JsonRpcRequest) {
   }
 
   try {
-    return await dispatch(ctx, req);
+    return await dispatch(ctx, req, event);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[MCP] error handling', req.method, message);
@@ -82,7 +86,7 @@ async function handleRequest(ctx: McpContext, req: JsonRpcRequest) {
 
 // ── JSON-RPC dispatcher ───────────────────────────────────────────────────────
 
-async function dispatch(ctx: McpContext, req: JsonRpcRequest) {
+async function dispatch(ctx: McpContext, req: JsonRpcRequest, event: H3Event) {
   const { id, method, params } = req;
 
   switch (method) {
@@ -91,7 +95,7 @@ async function dispatch(ctx: McpContext, req: JsonRpcRequest) {
       const requested = (params as { protocolVersion?: unknown } | undefined)?.protocolVersion;
       return ok(id, {
         protocolVersion: negotiateProtocolVersion(requested),
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, prompts: {} },
         serverInfo: MCP_SERVER_INFO,
         instructions:
           'Piwi Dashboard MCP server — query Playwright test results, failure clusters, AI diagnoses, and SCM diffs. ' +
@@ -99,7 +103,8 @@ async function dispatch(ctx: McpContext, req: JsonRpcRequest) {
           'List tools return {items, nextCursor}; pass nextCursor back (when non-null) to page. ' +
           'IDs: testCaseId = stable test identity; executionId/testRunsCaseId = one per-run execution. ' +
           'Errors are truncated; use get_test_run_case for full error text and explain_failure for a one-call evidence bundle. ' +
-          'Write/triage tools (set_cluster_status, run_cluster_diagnosis, set_cluster_base_commit, submit_diagnosis_feedback) require reporter or admin access.',
+          'Write/triage tools (set_cluster_status, run_cluster_diagnosis, set_cluster_base_commit, submit_diagnosis_feedback) require reporter or admin access. ' +
+          'The setup_piwi prompt (prompts/get) generates a ready-to-run setup for a Playwright project not yet reporting here.',
       });
     }
 
@@ -132,12 +137,41 @@ async function dispatch(ctx: McpContext, req: JsonRpcRequest) {
       return ok(id, toContent(data));
     }
 
-    // ── Resources / prompts (not implemented in v1) ──────────────────────────
+    // ── Prompts ──────────────────────────────────────────────────────────────
+    case 'prompts/list': {
+      return ok(id, {
+        prompts: MCP_PROMPT_DEFS.map((p) => ({
+          name: p.name,
+          description: p.description,
+          arguments: p.arguments ?? [],
+        })),
+      });
+    }
+
+    case 'prompts/get': {
+      const p = params as { name?: string; arguments?: Record<string, string> };
+      if (!p?.name || !isKnownPrompt(p.name)) {
+        return rpcErr(id, RPC.INVALID_PARAMS, `Unknown prompt: ${p?.name}`);
+      }
+      const db = await getDatabase();
+      // The URL the client used to reach this dashboard is the URL its reporter
+      // should point at; PIWI_SITE_URL overrides it when set (reverse proxy).
+      const requestUrl = getRequestURL(event);
+      const siteUrl = (useRuntimeConfig(event).public as { siteUrl?: string })?.siteUrl;
+      const baseUrl = resolvePublicBaseUrl(siteUrl, `${requestUrl.protocol}//${requestUrl.host}`);
+      const result = await getPrompt(p.name, {
+        db,
+        ctx,
+        baseUrl,
+        authEnabled: isAuthEnabled(event),
+        args: p.arguments ?? {},
+      });
+      return ok(id, result);
+    }
+
+    // ── Resources (not implemented) ──────────────────────────────────────────
     case 'resources/list':
       return ok(id, { resources: [] });
-
-    case 'prompts/list':
-      return ok(id, { prompts: [] });
 
     default:
       return rpcErr(id, RPC.METHOD_NOT_FOUND, `Method not found: ${method}`);
