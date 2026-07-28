@@ -30,7 +30,7 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 - **Pull-request feedback** — when a run finishes on a branch with an open pull request, Piwi posts a summary comment
   (new failures separated from pre-existing ones, each with its owner and the suggested replacement locator) and a
   commit status. GitHub and GitLab; off by default.
-- **CI gate** — `npx piwi gate` fails a build on the dashboard's analysis rather than on the raw exit code: required
+- **CI gate** — `npx @piwitests/reporter gate` fails a build on the dashboard's analysis rather than on the raw exit code: required
   tags, new regressions, newly flaky tests, or a failure cluster never seen before.
 - **Test tags & ownership** — Playwright's own test tags plus `piwi:owner` / `priority` / `feature` / `link`
   annotations, filterable across the test-case catalog and the flaky leaderboard.

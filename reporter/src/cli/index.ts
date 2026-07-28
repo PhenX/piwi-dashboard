@@ -15,14 +15,16 @@ const USAGE = `
 piwi — companion commands for the Piwi Dashboard reporter
 
 Usage:
-  npx piwi <command> [options]
+  npx @piwitests/reporter <command> [options]
 
 Commands:
   init      Wire a Playwright project up to a Piwi Dashboard
   skills    Install the Piwi agent skills into this project
   gate      Fail a CI job on the dashboard's analysis of a run
 
-Run \`npx piwi <command> --help\` for a command's options.
+Run \`npx @piwitests/reporter <command> --help\` for a command's options.
+(The published package is @piwitests/reporter; its command is piwi. Invoke it
+through the package name so npx resolves this package, not an unrelated "piwi".)
 `.trim();
 
 async function main(): Promise<number> {

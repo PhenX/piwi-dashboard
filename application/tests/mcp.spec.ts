@@ -120,7 +120,7 @@ test.describe.serial('MCP server', () => {
     const text = messages[0].content.text;
     // Server-aware: the message names this project and includes a runnable init command.
     expect(text).toContain(`--project ${PROJECT.MCP_TEST}`);
-    expect(text).toContain('npx piwi init --server-url');
+    expect(text).toContain('npx @piwitests/reporter init --server-url');
     // Auth is disabled in the test server, so it should say no key is needed.
     expect(text).toContain('Authentication: not required');
   });

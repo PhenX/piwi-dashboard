@@ -229,23 +229,23 @@ Alongside its tools, the server exposes an MCP **prompt** — a ready-made instr
 |--------|--------------|
 | `setup_piwi` | Generates a complete, ready-to-run setup for a Playwright project that is not yet reporting here. |
 
-`setup_piwi` is **server-aware**: because the dashboard builds it, it fills in *this* instance's real URL, whether authentication is required, and the projects that already exist — facts a static copy-paste prompt can't know. Pick it in your MCP client (optionally passing a `projectName`), and the agent gets a personalized plan: run `npx piwi init` against this dashboard, handle the API key if auth is on, rewire the specs, and verify a run lands. It pairs with the `setup-piwi` skill below — the prompt needs no install but requires the MCP connection; the skill works offline once installed.
+`setup_piwi` is **server-aware**: because the dashboard builds it, it fills in *this* instance's real URL, whether authentication is required, and the projects that already exist — facts a static copy-paste prompt can't know. Pick it in your MCP client (optionally passing a `projectName`), and the agent gets a personalized plan: run `npx @piwitests/reporter init` against this dashboard, handle the API key if auth is on, rewire the specs, and verify a run lands. It pairs with the `setup-piwi` skill below — the prompt needs no install but requires the MCP connection; the skill works offline once installed.
 
 ## Agent skills
 
 The MCP server gives an agent read access to your results; **skills** tell it what to *do* with them. A skill is a single `SKILL.md` file — the portable open format (a small front-matter block plus Markdown instructions) that Claude Code and other agents pick up from a project's skills directory. Piwi ships four, installed with the reporter's CLI:
 
 ```bash
-npx piwi skills add            # install all of them into .claude/skills/
-npx piwi skills list           # see what each one does
-npx piwi skills add investigate-failure --dir .cursor/skills   # a specific one, elsewhere
+npx @piwitests/reporter skills add          # install all of them into .claude/skills/
+npx @piwitests/reporter skills list         # see what each one does
+npx @piwitests/reporter skills add investigate-failure --dir .cursor/skills   # a specific one, elsewhere
 ```
 
-`npx piwi init` installs the three workflow skills automatically as part of setup.
+`npx @piwitests/reporter init` installs the three workflow skills automatically as part of setup. (Invoke the CLI through the package name so npx resolves *this* package, not an unrelated `piwi` on npm; a plain `npx piwi …` works once the reporter is a project dependency.)
 
 | Skill | What it does |
 |------|--------------|
-| `setup-piwi` | Wire a Playwright project up to a dashboard — the same work `npx piwi init` does, driven by an agent. |
+| `setup-piwi` | Wire a Playwright project up to a dashboard — the same work `npx @piwitests/reporter init` does, driven by an agent. |
 | `investigate-failure` | Investigate a failed run and propose a fix grounded in Piwi's evidence — error, steps, console, network, and the diff since the last green run. |
 | `apply-locator-healing` | Replace a brittle locator with Piwi's ranked healed selector at its call site, then re-run to confirm. |
 | `stabilize-flaky-tests` | Fix the root cause of the highest-impact flaky tests (never by adding retries), then verify with repeated runs. |

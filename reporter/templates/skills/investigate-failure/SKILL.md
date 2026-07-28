@@ -9,7 +9,7 @@ Turn a failed run in [Piwi Dashboard](https://piwitests.github.io) into a ground
 
 ## How you reach Piwi
 
-Prefer the **Piwi MCP server** if it is connected to this agent (tools named `list_recent_activity`, `get_run`, `explain_failure`, `get_cluster_context`, …). If it is not connected, tell the user they can connect it (`npx piwi` does not proxy MCP — see the dashboard's **MCP server** page) or paste the run URL / failure details, and work from those plus the repo.
+Prefer the **Piwi MCP server** if it is connected to this agent (tools named `list_recent_activity`, `get_run`, `explain_failure`, `get_cluster_context`, …). If it is not connected, tell the user they can connect it (the reporter CLI does not proxy MCP — see the dashboard's **MCP server** page) or paste the run URL / failure details, and work from those plus the repo.
 
 ## Steps
 

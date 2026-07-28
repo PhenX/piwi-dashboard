@@ -23,7 +23,9 @@ describe('buildSetupPiwiMessages', () => {
 
   it('bakes the dashboard URL into the init command', () => {
     const text = buildSetupPiwiMessages(base).messages[0].content.text;
-    expect(text).toContain('npx piwi init --server-url https://piwi.example.com --project <project-name>');
+    expect(text).toContain(
+      'npx @piwitests/reporter init --server-url https://piwi.example.com --project <project-name>',
+    );
     expect(text).toContain('Authentication: not required');
   });
 
