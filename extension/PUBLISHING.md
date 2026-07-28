@@ -16,14 +16,11 @@ Current state this guide assumes: manifest name `"Piwi Picker"`, version tracked
 
 ## 1. Build a clean distributable
 
-There's no packaging script in `extension/package.json` yet — today `npm run extension:build` only produces `extension/dist/`. Before your first submission, zip it:
-
 ```bash
-npm run extension:build --workspace=extension
-cd extension/dist && zip -r ../piwi-picker-v$(node -p "require('../package.json').version").zip . -x '*.map'
+npm run extension:zip --workspace=extension
 ```
 
-(`-x '*.map'` drops sourcemaps from the shipped zip — keep them out of the store upload, not out of the repo.) All three stores want this **same built zip**; the manifest is already store-agnostic MV3, so no store-specific rebuild is needed (Firefox's one extra requirement is a manifest key addition, not a different build — see §4).
+Builds, then zips `dist/`'s contents (manifest at the zip root, not nested — what stores expect) into `extension/piwi-picker-v<version>.zip`, dropping `.map` sourcemaps along the way (`extension/scripts/zip.mjs`, via `archiver` — pure JS, no dependency on a system `zip`/`7z` binary, so this works the same on Windows as it does in CI). The zip is gitignored; regenerate it whenever you need a fresh one rather than keeping an old one around. All three stores want this **same built zip**; the manifest is already store-agnostic MV3, so no store-specific rebuild is needed (Firefox's one extra requirement is a manifest key addition, not a different build — see §4).
 
 ## 2. Chrome Web Store
 
