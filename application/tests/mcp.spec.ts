@@ -62,6 +62,7 @@ test.describe.serial('MCP server', () => {
     expect(body.result.protocolVersion).toBe('2024-11-05');
     expect(body.result.serverInfo.name).toBe('piwi-dashboard');
     expect(body.result.capabilities.tools).toBeDefined();
+    expect(body.result.capabilities.prompts).toBeDefined();
   });
 
   test('ping — returns empty result', async ({ request }) => {
@@ -97,6 +98,37 @@ test.describe.serial('MCP server', () => {
       expect(t).toHaveProperty('description');
       expect(t).toHaveProperty('inputSchema');
     }
+  });
+
+  test('prompts/list — advertises the setup_piwi prompt', async ({ request }) => {
+    const body = await mcp(request, 'prompts/list');
+    const prompts: { name: string; description: string; arguments: unknown[] }[] = body.result.prompts;
+    const setup = prompts.find((p) => p.name === 'setup_piwi');
+    expect(setup).toBeDefined();
+    expect(setup!.description.length).toBeGreaterThan(20);
+    expect(Array.isArray(setup!.arguments)).toBe(true);
+  });
+
+  test('prompts/get setup_piwi — returns server-aware setup messages', async ({ request }) => {
+    const body = await mcp(request, 'prompts/get', {
+      name: 'setup_piwi',
+      arguments: { projectName: PROJECT.MCP_TEST },
+    });
+    const messages: { role: string; content: { type: string; text: string } }[] = body.result.messages;
+    expect(messages.length).toBeGreaterThan(0);
+    expect(messages[0].role).toBe('user');
+    const text = messages[0].content.text;
+    // Server-aware: the message names this project and includes a runnable init command.
+    expect(text).toContain(`--project ${PROJECT.MCP_TEST}`);
+    expect(text).toContain('npx piwi init --server-url');
+    // Auth is disabled in the test server, so it should say no key is needed.
+    expect(text).toContain('Authentication: not required');
+  });
+
+  test('prompts/get — unknown prompt returns invalid-params error', async ({ request }) => {
+    const body = await mcp(request, 'prompts/get', { name: 'nope' });
+    expect(body.error).toBeDefined();
+    expect(body.error.code).toBe(-32602);
   });
 
   test('tools/call list_projects — returns project list with stats', async ({ request }) => {

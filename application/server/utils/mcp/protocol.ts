@@ -3,7 +3,7 @@
 // this. Kept broad so older clients (2024-11-05) keep working.
 export const MCP_PROTOCOL_VERSION = '2025-06-18';
 export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'] as const;
-export const MCP_SERVER_INFO = { name: 'piwi-dashboard', version: '1.1.0' };
+export const MCP_SERVER_INFO = { name: 'piwi-dashboard', version: '1.2.0' };
 
 /** Pick the protocol version to advertise: the client's if supported, else ours. */
 export function negotiateProtocolVersion(requested: unknown): string {

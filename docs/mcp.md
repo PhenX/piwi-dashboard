@@ -221,6 +221,16 @@ Agent: [calls list_projects → finds checkout → calls list_runs → calls get
 
 ---
 
+## Prompts
+
+Alongside its tools, the server exposes an MCP **prompt** — a ready-made instruction a client offers as a slash command (Claude Code's `/`, Cursor's prompt picker, …), with no files to install.
+
+| Prompt | What it does |
+|--------|--------------|
+| `setup_piwi` | Generates a complete, ready-to-run setup for a Playwright project that is not yet reporting here. |
+
+`setup_piwi` is **server-aware**: because the dashboard builds it, it fills in *this* instance's real URL, whether authentication is required, and the projects that already exist — facts a static copy-paste prompt can't know. Pick it in your MCP client (optionally passing a `projectName`), and the agent gets a personalized plan: run `npx piwi init` against this dashboard, handle the API key if auth is on, rewire the specs, and verify a run lands. It pairs with the `setup-piwi` skill below — the prompt needs no install but requires the MCP connection; the skill works offline once installed.
+
 ## Agent skills
 
 The MCP server gives an agent read access to your results; **skills** tell it what to *do* with them. A skill is a single `SKILL.md` file — the portable open format (a small front-matter block plus Markdown instructions) that Claude Code and other agents pick up from a project's skills directory. Piwi ships four, installed with the reporter's CLI:
