@@ -181,7 +181,7 @@ const evidenceChips = computed(() => {
       </button>
     </div>
 
-    <!-- Selected case header: title, file location, link to the test run case -->
+    <!-- Selected case header: title, file location, link to the execution -->
     <div v-if="selectedCase" class="flex items-start justify-between gap-2 flex-wrap">
       <div class="min-w-0">
         <p class="text-sm font-medium break-words">{{ selectedCase.title }}</p>
@@ -199,7 +199,7 @@ const evidenceChips = computed(() => {
         color="neutral"
         trailing-icon="i-lucide-arrow-right"
       >
-        Open test run case
+        Open execution
       </UButton>
     </div>
 

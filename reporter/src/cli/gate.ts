@@ -33,7 +33,7 @@ const USAGE = `
 piwi gate — fail a CI job on the dashboard's analysis of a run
 
 Usage:
-  npx piwi gate [options]
+  npx @piwitests/reporter gate [options]
 
 Where the run comes from (first match wins):
   --run-id <id>            Run id to evaluate

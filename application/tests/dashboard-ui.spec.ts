@@ -228,8 +228,8 @@ test.describe('Dashboard UI Tests', () => {
     await expect(page.getByText('Delete test run', { exact: true })).not.toBeVisible();
   });
 
-  test('metadata blocks remain on the same row when all are displayed', async ({ page, request }) => {
-    // Submit a run with CI, SCM, tags and environment so all 4 metadata blocks render
+  test('run metadata renders every fact group in the summary meta strip', async ({ page, request }) => {
+    // Submit a run with CI, SCM, tags and environment so every fact group renders
     const submitRes = await retryPost(request, '/api/test-runs/submit', {
       data: {
         projectName: PROJECT.BLOCK_LAYOUT,
@@ -264,41 +264,26 @@ test.describe('Dashboard UI Tests', () => {
     await page.goto(`/test-runs/${testRunId}`);
     await waitForHydration(page);
 
-    // Wait for the RunSummary grid to render
-    const runSummary = page.locator('[class*="grid"][class*="lg:grid-cols-12"]').first();
-    await expect(runSummary).toBeVisible();
+    // Each MetaStripGroup carries its label as a title attribute
+    const ciGroup = page.locator('[title="CI & environment"]');
+    await expect(ciGroup).toBeVisible();
+    await expect(ciGroup).toContainText('staging');
+    await expect(ciGroup).toContainText('GitHub Actions');
+    await expect(ciGroup).toContainText('Build #42');
 
-    // Get the metadata block cards (direct children of the grid with col-span classes)
-    const blocks = runSummary.locator('> [class*="lg:col-span"]');
-    const blockCount = await blocks.count();
+    const sourceGroup = page.locator('[title="Source"]');
+    await expect(sourceGroup).toContainText('main');
+    await expect(sourceGroup).toContainText('abc123de');
 
-    // Should have at least 3 blocks (CI, SCM, Tags/Other) — storage may not show
-    expect(blockCount).toBeGreaterThanOrEqual(3);
-
-    // All visible blocks should share the same Y position (same row at lg breakpoint)
-    const positions = await blocks.evaluateAll((els) => {
-      return els.map((el) => {
-        const rect = el.getBoundingClientRect();
-        return { y: rect.top, height: rect.height };
-      });
-    });
-
-    // Group by row (any blocks whose top edge is within 5px of each other)
-    const rows = new Map<number, number>();
-    for (const p of positions) {
-      const key = Math.round(p.y / 5) * 5;
-      rows.set(key, (rows.get(key) || 0) + 1);
-    }
-
-    // All metadata blocks should be in a single row (not wrapped)
-    expect(rows.size).toBe(1);
+    const tagsGroup = page.locator('[title="Tags"]');
+    await expect(tagsGroup).toContainText('smoke');
+    await expect(tagsGroup).toContainText('regression');
   });
 
-  test('metadata blocks stay on one row when CI/Env shows only tooling versions', async ({ page, request }) => {
+  test('tooling versions render in the meta strip without CI metadata', async ({ page, request }) => {
     // A run with no ci/environment but with Playwright/reporter versions still
-    // renders the CI/Env block. The block count must include it — a regression
-    // guard: the count once ignored the versions, so it widened the spans past
-    // 12 columns and wrapped a block onto a second row.
+    // gets a versions fact group — a regression guard: the old layout once
+    // dropped the versions from the block count and broke the row.
     const submitRes = await retryPost(request, '/api/test-runs/submit', {
       data: {
         projectName: PROJECT.BLOCK_LAYOUT_VERSIONS,
@@ -323,23 +308,13 @@ test.describe('Dashboard UI Tests', () => {
     await page.goto(`/test-runs/${testRunId}`);
     await waitForHydration(page);
 
-    const runSummary = page.locator('[class*="grid"][class*="lg:grid-cols-12"]').first();
-    await expect(runSummary).toBeVisible();
+    const versionsGroup = page.locator('[title="Tooling versions"]');
+    await expect(versionsGroup).toBeVisible();
+    await expect(versionsGroup).toContainText('Playwright v1.51.0');
+    await expect(versionsGroup).toContainText('Piwi v0.7.0');
 
-    // The CI/Env block rendered from the tooling versions alone
-    await expect(page.getByText('Playwright v1.51.0')).toBeVisible();
-
-    // CI/Env (versions), Source (scm) and Other (tags) — three blocks
-    const blocks = runSummary.locator('> [class*="lg:col-span"]');
-    expect(await blocks.count()).toBeGreaterThanOrEqual(3);
-
-    const positions = await blocks.evaluateAll((els) => els.map((el) => ({ y: el.getBoundingClientRect().top })));
-    const rows = new Map<number, number>();
-    for (const p of positions) {
-      const key = Math.round(p.y / 5) * 5;
-      rows.set(key, (rows.get(key) || 0) + 1);
-    }
-    expect(rows.size).toBe(1);
+    await expect(page.locator('[title="Source"]')).toContainText('main');
+    await expect(page.locator('[title="Tags"]')).toContainText('smoke');
   });
 });
 

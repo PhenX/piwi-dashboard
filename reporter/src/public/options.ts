@@ -20,6 +20,7 @@ export interface ShardInfo {
  * in the reporter entry's options (`['@piwitests/reporter', { … }]`).
  */
 export interface PiwiDashboardOptions {
+  // ── Connection ─────────────────────────────────────────────────────────────
   /** Explicitly enable or disable the reporter. Defaults to `true` when `serverUrl` is set. Set to `false` to disable even if `serverUrl` is provided. */
   enabled?: boolean;
   /** URL of the Piwi Dashboard server */
@@ -28,12 +29,23 @@ export interface PiwiDashboardOptions {
   projectName?: string;
   /** Optional description of the project */
   projectDescription?: string;
+
+  // ── What gets uploaded ─────────────────────────────────────────────────────
   /** Upload trace files to the dashboard. Defaults to `true`. */
   uploadTraces?: boolean;
   /** Upload the Playwright HTML report. Defaults to `true`. */
   uploadReport?: boolean;
   /** Upload each test's trace and attachments as soon as the test finishes (streaming mode only). Defaults to `true`. */
   liveFileUploads?: boolean;
+
+  // ── What gets captured ─────────────────────────────────────────────────────
+  //
+  // Note the dependency: `collectPerformanceMetrics` is a master switch for the
+  // three `capture*` toggles below it. Setting it to `false` forces
+  // `captureLocators`, `capturePageState` and `captureServerTraces` off too,
+  // because the reporter discards their data in that case — it is the one
+  // option here that silently disables others. `collectScmInfo` and
+  // `collectCiInfo` are independent of it.
   /** Auto-collect git commit, branch, author. Defaults to `true`. */
   collectScmInfo?: boolean;
   /** Auto-collect CI environment info. Defaults to `true`. */
@@ -59,13 +71,15 @@ export interface PiwiDashboardOptions {
   /**
    * Capture server-side spans for each API/document request the test makes,
    * read from the `X-Piwi-Trace` response header emitted by a Piwi
-   * instrumentation plugin (e.g. `@piwitests/instrumentation`). The spans show
+   * instrumentation plugin (e.g. `@piwitests/instrumentation-nitro`). The spans show
    * up next to the network request in the dashboard and feed AI diagnosis. Free
    * when no instrumentation is present (the header is simply absent). Defaults
    * to `true`; automatically disabled when `collectPerformanceMetrics` is
    * `false`. Can also be forced off with `PIWI_CAPTURE_SERVER_TRACES=false`.
    */
   captureServerTraces?: boolean;
+
+  // ── Local debugging aids (headed runs only, never under CI) ────────────────
   /**
    * Open Piwi's own failure-time overlay on the failing page — for inspecting
    * the page and picking a locator for any element (click an element → confirm
@@ -90,18 +104,24 @@ export interface PiwiDashboardOptions {
    * with `PIWI_PICK_LOCATOR_ON_FAIL=true`.
    */
   pickLocatorOnFailure?: boolean;
+
+  // ── Streaming ──────────────────────────────────────────────────────────────
   /** Enable live streaming of results (falls back to batch if unsupported). Defaults to `true`. */
   streaming?: boolean;
   /** Number of test results to batch before sending during streaming. Defaults to `5`. */
   streamingBatchSize?: number;
   /** Max delay (ms) before flushing pending events during streaming. Defaults to `2000`. */
   streamingBatchDelay?: number;
+
+  // ── Authentication ─────────────────────────────────────────────────────────
   /** Username for dashboard login (use `apiKey` instead when possible) */
   username?: string | null;
   /** Password for dashboard login (used with `username`) */
   password?: string | null;
   /** API key for authentication (preferred over `username`/`password` for CI) */
   apiKey?: string | null;
+
+  // ── Run metadata ───────────────────────────────────────────────────────────
   /** Additional report types to upload. Each entry can specify `type`, optional `dir`, and optional `label`. */
   reports?: Array<{ type: string; dir?: string; label?: string }>;
   /** Stable label that ties shards together (e.g. CI run ID). Auto-detected from CI env; override if needed. */
@@ -118,6 +138,8 @@ export interface PiwiDashboardOptions {
   tags?: string[];
   /** Additional custom metadata as key-value pairs */
   customData?: Record<string, unknown>;
+
+  // ── Output & diagnostics ───────────────────────────────────────────────────
   /**
    * Write a JSON file with the submitted run's dashboard URL, id, project id and
    * status after the run lands, so a CI pipeline can consume it (e.g. feed the

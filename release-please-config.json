@@ -28,7 +28,7 @@
         {
           "type": "json",
           "path": "examples/playwright-fixtures/package.json",
-          "jsonpath": "$.devDependencies['@piwitests/instrumentation']"
+          "jsonpath": "$.devDependencies['@piwitests/instrumentation-nitro']"
         },
         {
           "type": "generic",

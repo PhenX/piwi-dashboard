@@ -98,6 +98,22 @@ The SQLite database is automatically created on the first API call.
 
 The recommended way to integrate is via the custom reporter package — it handles uploading results, HTML reports, and trace files automatically.
 
+### Fast path: one command
+
+From your Playwright project, one command installs the reporter, wraps your `playwright.config`, creates the capture-fixtures file, and records the connection in `.env.example`:
+
+```bash
+npx @piwitests/reporter init --server-url http://localhost:3000 --project my-project
+```
+
+Every step is idempotent, so it is safe to re-run. If it finds a config shape it will not rewrite (or a fixtures file that already exists), it reports that step as `manual` with the exact change to make instead of touching the file. Pass `--dry-run` to preview, or `--json` to get a machine-readable plan — the latter is what lets a coding agent run the setup for you and finish anything left manual. `init` also drops the [Piwi agent skills](./mcp#agent-skills) into the project so your agent can investigate failures, heal locators, and stabilize flaky tests. See `npx @piwitests/reporter init --help` for all options.
+
+> The reporter is published as `@piwitests/reporter`; its command is `piwi`. Invoke it through the package name — `npx @piwitests/reporter <command>` — so npx always resolves *this* package. (`npx piwi` would fetch an unrelated `piwi` package from npm.) Once the reporter is a dependency of your project, a plain `npx piwi <command>` also works, since it resolves the local binary first.
+
+Prefer to wire it up by hand? The manual steps are below.
+
+### Manual setup
+
 Install it:
 
 ```bash

@@ -1,43 +1,31 @@
 <script setup lang="ts">
-const runtimeConfig = useRuntimeConfig();
-const isDemoMode = runtimeConfig.public.demoMode;
-const { isResetting, resetDemo } = useDemoReset();
+/**
+ * `/settings` has no content of its own — it redirects to the first settings
+ * page the current user can actually see.
+ *
+ * It used to render a "General settings" card whose entire body told you to
+ * click something in the sidebar, which made the first click into Settings a
+ * dead end. The target is computed from the same nav registry rather than
+ * hardcoded, because "the first page" differs by role and build: a web instance
+ * lands on Account (admin or not), while the desktop build — single-user, auth
+ * off, account pages hidden — lands on Notifications.
+ *
+ * The redirect is issued synchronously in setup so it also happens during SSR
+ * (a real redirect response rather than a flash of this page). `useSettingsNav`
+ * is a pure computed over the static registry plus auth state, so reading it
+ * here needs no await. The template is only what a client sees in the gap
+ * before navigation commits.
+ */
+const navItems = useSettingsNav();
+
+// `replace` so Back returns to wherever the user came from rather than bouncing
+// them through this redirect again.
+const firstPage = navItems.value.flat().find((item) => typeof item.to === 'string')?.to as string | undefined;
+if (firstPage) {
+  await navigateTo(firstPage, { replace: true });
+}
 </script>
 
 <template>
-  <SectionCard icon="i-lucide-settings" title="General settings" help="settings.general">
-    <template #actions>
-      <UButton
-        v-if="isDemoMode"
-        color="error"
-        variant="soft"
-        icon="i-lucide-refresh-cw"
-        :loading="isResetting"
-        @click="resetDemo"
-      >
-        Reset demo
-      </UButton>
-    </template>
-
-    <div v-if="isDemoMode" class="flex max-sm:flex-col justify-between items-start gap-4">
-      <div>
-        <p class="font-medium text-sm">Reset demo data</p>
-        <p class="text-sm text-muted">
-          Wipe the in-browser database and reload with fresh sample data dated to the current moment. All changes made
-          during this demo session will be lost.
-        </p>
-      </div>
-    </div>
-
-    <div v-else class="text-sm text-muted">
-      <p>
-        Appearance and theme are in the top bar. Use the sidebar to manage your account, users, AI diagnosis,
-        notifications, storage, and tags.
-      </p>
-      <p class="mt-2">
-        Settings that can be overridden by <code class="font-mono text-xs">PIWI_*</code> environment variables show a
-        lock badge with the variable name — hover the help icon on any card to see which env var backs a setting.
-      </p>
-    </div>
-  </SectionCard>
+  <LoadingState text="Opening settings…" />
 </template>

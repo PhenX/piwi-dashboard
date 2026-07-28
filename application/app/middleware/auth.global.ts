@@ -28,8 +28,20 @@ export default defineNuxtRouteMiddleware(async (to) => {
     }
   }
 
+  const isAdmin = authState.value.user?.role === Role.ADMINISTRATOR;
+
   // Check if user is trying to access edit pages
-  if (to.path.includes('/edit') && authState.value.user?.role !== Role.ADMINISTRATOR) {
+  if (to.path.includes('/edit') && !isAdmin) {
+    return navigateTo('/');
+  }
+
+  // Setup configures how results reach this instance and, in the desktop build,
+  // exposes the local access token — admin-only. The sidebar hides the link, and
+  // this stops a non-admin reaching it by typing the URL. The endpoint behind it
+  // (`/api/setup-status`) enforces the same role server-side; this is only the
+  // affordance. Note the early returns above: with auth disabled every visitor is
+  // a virtual admin, which is what keeps Setup reachable on a default install.
+  if (to.path === '/setup' && !isAdmin) {
     return navigateTo('/');
   }
 });

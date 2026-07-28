@@ -99,6 +99,7 @@ import {
   updateUserRecord,
 } from '#shared/handlers/users';
 import { searchProjectsTestRunsCases } from '#shared/handlers/search';
+import { getSetupStatus } from '#shared/handlers/setup-status';
 import {
   apiSetupTestRun,
   apiBeginTestRun,
@@ -841,6 +842,14 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/search$/,
     handler: async (_, __, q, ctx) => searchProjectsTestRunsCases(await getDemoDb(), q?.get('q') || '', ctx?.scope),
+  },
+
+  // Setup status — the same evidence probes as the server, run against the
+  // in-browser demo DB, so the Setup page's checklist reflects the seeded data.
+  {
+    method: 'GET',
+    pattern: /^\/api\/setup-status$/,
+    handler: async () => getSetupStatus(await getDemoDb()),
   },
 
   // Version — demo runs entirely client-side (sql.js in the browser, no Node

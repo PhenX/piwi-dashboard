@@ -55,7 +55,8 @@ const items = computed<DropdownMenuItem[][]>(() => {
   if (!config.public.authEnabled || (authState.value.authenticated && authState.value.user?.role === 'administrator')) {
     // Nav items are reused as dropdown items (both are link items); the cast
     // bridges the slightly different `type` union between the two Nuxt UI types.
-    configurationMenuItems.push(...(settingsNav.value as unknown as DropdownMenuItem[]));
+    // `settingsNav` is grouped into sections — this menu wants one flat list.
+    configurationMenuItems.push(...(settingsNav.value.flat() as unknown as DropdownMenuItem[]));
   }
 
   const baseItems: DropdownMenuItem[][] = [

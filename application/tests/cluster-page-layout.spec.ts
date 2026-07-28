@@ -82,7 +82,7 @@ test.describe('Failure cluster page layout', () => {
     await expect(page.getByRole('heading', { name: 'What changed' })).toBeVisible();
 
     // …but their bodies are folded: the case link (inside the evidence body) is hidden.
-    await expect(page.getByRole('link', { name: 'Open test run case' })).toBeHidden();
+    await expect(page.getByRole('link', { name: 'Open execution' })).toBeHidden();
 
     // The evidence peek carries the key info while folded (the toggle's accessible
     // name includes the peek; occurrence count varies so match loosely).
@@ -94,12 +94,12 @@ test.describe('Failure cluster page layout', () => {
     await waitForHydration(page);
 
     await page.getByRole('heading', { name: 'Test evidence' }).click();
-    await expect(page.getByRole('link', { name: 'Open test run case' }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open execution' }).first()).toBeVisible();
 
     await page.reload();
     await waitForHydration(page);
     // Cookie kept it expanded.
-    await expect(page.getByRole('link', { name: 'Open test run case' }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open execution' }).first()).toBeVisible();
   });
 
   test('summary shows Triage and no longer has a Runs card', async ({ page }) => {
@@ -126,7 +126,7 @@ test.describe('Failure cluster page layout', () => {
     await tab2.click();
     await expect(page.getByText('tests/checkout.spec.ts').first()).toBeVisible();
 
-    const link = page.getByRole('link', { name: 'Open test run case' }).first();
+    const link = page.getByRole('link', { name: 'Open execution' }).first();
     await expect(link).toHaveAttribute('href', /\/test-run-cases\/\d+/);
   });
 

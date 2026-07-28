@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue';
-import { ANALYTICS_WIDGETS, type AnalyticsWidgetId } from '#shared/analytics/registry';
+import { ANALYTICS_WIDGETS, ANALYTICS_BANDS, type AnalyticsWidgetId } from '#shared/analytics/registry';
 import { MAX_ANALYTICS_DAYS } from '#shared/analytics/scope';
 import type { ProjectMenuItem, TestRunForChart } from '~~/types/api';
 import {
@@ -78,6 +78,14 @@ const WIDGET_COMPONENTS: Record<AnalyticsWidgetId, Component> = {
   'browser-matrix': BrowserMatrix,
   'slow-endpoints': SlowEndpointsTable,
 };
+
+/** Widgets grouped into their bands, in registry order, empty bands dropped. */
+const bands = computed(() =>
+  ANALYTICS_BANDS.map((band) => ({
+    ...band,
+    widgets: ANALYTICS_WIDGETS.filter((w) => w.band === band.id),
+  })).filter((band) => band.widgets.length > 0),
+);
 </script>
 
 <template>
@@ -113,15 +121,18 @@ const WIDGET_COMPONENTS: Record<AnalyticsWidgetId, Component> = {
           ]"
         />
 
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-          <div
-            v-for="widget in ANALYTICS_WIDGETS"
-            :key="widget.id"
-            :class="widget.size === 'full' ? 'xl:col-span-2' : ''"
-          >
-            <component :is="WIDGET_COMPONENTS[widget.id]" :query="scopeQuery" />
+        <section v-for="band in bands" :key="band.id" class="space-y-3">
+          <div>
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-dimmed">{{ band.label }}</h2>
+            <p class="text-sm text-muted">{{ band.description }}</p>
           </div>
-        </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+            <div v-for="widget in band.widgets" :key="widget.id" :class="widget.size === 'full' ? 'xl:col-span-2' : ''">
+              <component :is="WIDGET_COMPONENTS[widget.id]" :query="scopeQuery" />
+            </div>
+          </div>
+        </section>
       </div>
     </template>
   </UDashboardPanel>

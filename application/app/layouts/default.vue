@@ -70,6 +70,8 @@ useNotificationStream();
 // caller of useDashboard(); without it the shortcuts never register.
 useDashboard();
 
+const { canSeeAdmin } = useAuth();
+
 // Extract current project ID from route (if viewing a project page)
 const currentProjectId = computed(() => {
   // Check if route path starts with /projects/:id
@@ -161,6 +163,19 @@ const links = computed(() => {
       open.value = false;
     },
   });
+  // Setup is admin-only: it configures how results reach this instance and, in
+  // the desktop build, exposes the local access token. Hiding the link also
+  // removes it from the command palette, which is built from these same items.
+  if (canSeeAdmin.value) {
+    bottomLinks.unshift({
+      label: 'Setup',
+      icon: 'i-lucide-rocket',
+      to: '/setup',
+      onSelect: () => {
+        open.value = false;
+      },
+    });
+  }
   bottomLinks.unshift({
     label: 'API Docs',
     icon: 'i-lucide-book-open',
@@ -261,14 +276,17 @@ const groups = computed<CommandPaletteGroup[]>(() => {
   // omitted; the project page also tolerates an unknown ?tab= by falling back.
   if (currentProjectId.value) {
     const pid = currentProjectId.value;
+    // Same order as the project page's grouped tab strip (Results → Failures →
+    // Health), so the palette and the page agree on where a tab sits.
     const projectTabs: [value: string, label: string, icon: string][] = [
       ['test-runs', 'Test runs', 'i-lucide-play'],
-      ['failure-clusters', 'Failure clusters', 'i-lucide-layers'],
-      ['flaky-tests', 'Flaky tests', 'i-lucide-shuffle'],
-      ['performance', 'Performance', 'i-lucide-trending-up'],
       ['test-cases', 'Test cases', 'i-lucide-flask-conical'],
       ['compare', 'Compare', 'i-lucide-git-compare-arrows'],
+      ['failure-clusters', 'Failure clusters', 'i-lucide-layers'],
+      ['flaky-tests', 'Flaky tests', 'i-lucide-shuffle'],
+      ['quarantine', 'Quarantine', 'i-lucide-shield-alert'],
       ['spec-health', 'Spec health', 'i-lucide-table-2'],
+      ['performance', 'Performance', 'i-lucide-trending-up'],
       ['timeline', 'Timeline', 'i-lucide-git-commit-horizontal'],
     ];
     staticGroups.unshift({

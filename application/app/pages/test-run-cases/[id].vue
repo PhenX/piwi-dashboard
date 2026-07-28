@@ -37,9 +37,15 @@ const { data: traceData, refresh: refreshTraces } = await useFetch<TraceInfo[]>(
 /** Whether a trace file exists for this execution — unlocks the "go deeper" evidence views. */
 const hasTrace = computed(() => (traceData.value?.length ?? 0) > 0);
 
+// "Execution" is the word `docs/concepts.md` defines for one attempt of one test
+// on one browser — the distinction the whole object model rests on. The UI used
+// to say "Test run case", which is the join-table's name, not a concept anyone
+// was taught. Say the documented word.
 useHead(
   computed(() => ({
-    title: `${testCase.value?.title || `Test run case #${testCaseId}`} — Piwi Dashboard`,
+    title: testCase.value?.title
+      ? `${testCase.value.title} — execution — Piwi Dashboard`
+      : `Execution #${testCaseId} — Piwi Dashboard`,
   })),
 );
 
@@ -474,7 +480,7 @@ provide(clusterSectionLocatorKey, {
                     },
                   ]
                 : [{ label: 'Test run' }]),
-              { label: testCase?.title || `Test run case #${testCaseId}` },
+              { label: testCase?.title || `Execution #${testCaseId}` },
             ]"
           />
         </template>
@@ -517,6 +523,8 @@ provide(clusterSectionLocatorKey, {
             :steps-count="steps.length"
             :historical-timing="historicalTiming"
             :stable-links="(testCase as any)?.stableLinks ?? null"
+            :project-key="testCase?.testRun?.project?.id"
+            :project-name="testCase?.testRun?.project?.name"
             @refresh="refresh()"
           />
         </template>
@@ -1001,15 +1009,13 @@ provide(clusterSectionLocatorKey, {
               </div>
             </SectionCard>
 
-            <EmptyState
+            <FeatureUnavailable
               v-if="performanceHints.length === 0 && !webVitals"
               icon="i-lucide-gauge"
-              text="No performance hints or Web Vitals were captured for this execution."
-            >
-              <p class="text-xs text-gray-400">
-                Web Vitals and timing come from the <DocLink to="capture-fixtures">capture fixtures</DocLink>.
-              </p>
-            </EmptyState>
+              title="No performance hints or Web Vitals for this execution"
+              text="Web Vitals and step timing come from the Piwi capture fixtures — extend your Playwright test with piwiFixtures to collect them."
+              doc="capture-fixtures"
+            />
           </div>
         </template>
 

@@ -223,7 +223,7 @@ failure cause appear* — and those need the run history, so the dashboard evalu
     PIWI_DASHBOARD_URL: https://piwi.example.com
     PIWI_OUTPUT_FILE: piwi-run.json      # records which run to gate on
 
-- run: npx piwi gate --require-tag @critical --max-new-regressions 0
+- run: npx @piwitests/reporter gate --require-tag @critical --max-new-regressions 0
   if: always()
   env:
     PIWI_DASHBOARD_URL: https://piwi.example.com
@@ -256,7 +256,7 @@ Three behaviors worth knowing:
 - **A required tag that matches no test in the run is a violation.** A misspelled `--require-tag @critcal` would
   otherwise pass silently, which is the worst outcome for a rule meant to block merges.
 
-`npx piwi gate --help` lists every option. Add `--json` to get the raw result for a pipeline to parse.
+`npx @piwitests/reporter gate --help` lists every option. Add `--json` to get the raw result for a pipeline to parse. (Invoking through the package name keeps npx on this package; a plain `npx piwi gate` also works wherever the reporter is already a dependency, as it is in any job that ran the tests.)
 
 ## Notifying people instead
 
