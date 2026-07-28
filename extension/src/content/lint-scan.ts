@@ -26,11 +26,11 @@ export interface LintFinding {
  * source of truth for what counts as a good locator, just read as a
  * pass/fail signal instead of a ranked list.
  *
- * Nested like `evaluateLocatorChain`/`derivePattern`: re-serialized via
- * `Function.prototype.toString()` in tests (installing `probeElementAttrs`,
- * `generateAlternatives`, `approximateAccessibleName`, `resolveAriaRole`,
- * `CAPTURED_ATTRIBUTES`, `TAG_TO_ROLE`, `INPUT_TYPE_TO_ROLE` as globals
- * first), which only ever carries a function's own source text.
+ * Unlike `evaluateLocatorChain`/`derivePattern`, this isn't re-serialized via
+ * `Function.prototype.toString()` in tests: `generateAlternatives` has its
+ * own web of private module-level helpers that reconstruction can't carry
+ * along, and they aren't exported to install individually either. Tested via
+ * the real built `lint-overlay.js` bundle instead (see that file).
  */
 export function scanForLintIssues(): LintFinding[] {
   // ARIA "widget" roles — the interactive surface A9 is scoped to, not every

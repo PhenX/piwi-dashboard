@@ -11,7 +11,7 @@ import { test, expect } from './fixtures.js';
  * inject, tested directly).
  */
 test.describe('popup.html', () => {
-  test('renders the pick, hover-inspect, locator console, multi-pick, and lint overlay actions', async ({
+  test('renders the pick, hover-inspect, locator console, multi-pick, lint overlay, and assertion suggester actions', async ({
     context,
     extensionId,
   }) => {
@@ -22,6 +22,7 @@ test.describe('popup.html', () => {
     await expect(page.getByRole('button', { name: /Locator console/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Multi-pick pattern/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /Lint overlay/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Assertion suggester/ })).toBeVisible();
     await expect(page.getByText('Ctrl+Shift+E')).toBeVisible();
   });
 });
