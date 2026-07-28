@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "extension:build": "node scripts/build.mjs",
+    "extension:dev": "node scripts/dev.mjs",
     "extension:typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tests/tsconfig.json",
     "extension:lint": "oxlint --config oxlint.config.mts .",
     "extension:lint:fix": "oxlint --config oxlint.config.mts . --fix",

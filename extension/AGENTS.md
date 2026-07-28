@@ -73,6 +73,8 @@ real-bundle-testable, see below) instead of needing a live browser for everythin
 | Command | Purpose |
 |---|---|
 | `npm run extension:build` | Build `dist/` (content scripts, background, popup, manifest, icons) |
+| `npm run extension:dev` | Same build, re-run on every change to `src/`, `public/`, `popup.html`, or `manifest.json` |
+| `npm run extension:zip` | Build, then package `dist/` as a store-ready zip (see `PUBLISHING.md`) |
 | `npm run extension:typecheck` | TypeScript check |
 | `npm run extension:lint` / `extension:lint:fix` | oxlint |
 | `npm run extension:format` / `extension:format:check` | oxfmt |
@@ -83,3 +85,8 @@ real-bundle-testable, see below) instead of needing a live browser for everythin
 
 `npm run extension:build`, then in Chrome/Edge: `chrome://extensions` → enable Developer
 mode → Load unpacked → select `extension/dist`.
+
+While iterating, use `npm run extension:dev` instead — it rebuilds on save. The browser
+still needs a manual reload on the `chrome://extensions` card to pick up a new build (MV3
+gives no way to trigger that from outside the browser), so the loop is: save → wait for the
+rebuild line → click reload.
