@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const EXTENSION_PATH = path.join(here, '..', '..', 'dist');
+const BASE_ARGS = [`--disable-extensions-except=${EXTENSION_PATH}`, `--load-extension=${EXTENSION_PATH}`];
 
 /** An already-installed Chromium to use instead of the revision Playwright pins — see application/playwright.config.ts's own copy of this. Extensions need the full browser, not the headless-shell variant `--only-shell` installs, so CI installs plain `chromium` here and leaves this unset. */
 const chromiumExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?.trim() || '';
@@ -14,41 +15,38 @@ export const test = base.extend<{ context: BrowserContext; extensionId: string }
   // eslint-disable-next-line no-empty-pattern
   context: async ({}, use) => {
     const userDataDir = mkdtempSync(path.join(tmpdir(), 'piwi-picker-e2e-'));
-    const context = await chromium.launchPersistentContext(userDataDir, {
-      headless: true,
-      ...(chromiumExecutable ? { executablePath: chromiumExecutable } : {}),
-      args: [`--disable-extensions-except=${EXTENSION_PATH}`, `--load-extension=${EXTENSION_PATH}`, '--headless=new'],
-    });
+    // Playwright's own docs example for extensions uses `channel: 'chromium'`
+    // with no `headless` option and no manual `--headless=new` — that's not
+    // cosmetic: CI was hanging indefinitely waiting for the extension's
+    // service worker to register (see extensionId below) with the previous
+    // `headless: true` + manual `--headless=new` combo, matching a known
+    // class of upstream reports where that combination is unreliable for
+    // extensions specifically in CI/Docker (works locally, hangs in CI).
+    // `executablePath` and `channel` are mutually exclusive, so the local
+    // sandbox override keeps its own previously-working combo instead.
+    const context = await chromium.launchPersistentContext(
+      userDataDir,
+      chromiumExecutable
+        ? { executablePath: chromiumExecutable, args: [...BASE_ARGS, '--headless=new'] }
+        : { channel: 'chromium', args: BASE_ARGS },
+    );
     await use(context);
     await context.close();
   },
 
   extensionId: async ({ context }, use) => {
-    // This fixture is the only place in the suite that ever waits on the
-    // extension's service worker (every other spec only destructures
-    // `context`, so Playwright's lazy fixture instantiation never runs this
-    // for them) — a pageless persistent context, at least in CI, seems not
-    // to reliably finish registering it; a real page/tab open in the
-    // context appears to be what nudges Chromium to complete that.
-    const warmup = await context.newPage();
-
     // Not a check-then-await-the-event pattern: the service worker can
     // register in the gap between checking serviceWorkers() and attaching
     // a waitForEvent listener, missing the event entirely and hanging until
     // timeout. Polling re-checks the live state instead, so there's no gap
     // to lose the registration in.
-    //
-    // Deadline is kept comfortably below playwright.config.ts's own 90s
-    // per-test timeout so this throw can actually surface instead of losing
-    // a race against Playwright's own generic "Test timeout exceeded".
-    const deadline = Date.now() + 75_000;
+    const deadline = Date.now() + 45_000;
     let sw = context.serviceWorkers()[0];
     while (!sw && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       sw = context.serviceWorkers()[0];
     }
-    await warmup.close();
-    if (!sw) throw new Error("the extension's service worker never registered within 75s");
+    if (!sw) throw new Error("the extension's service worker never registered within 45s");
     await use(sw.url().split('/')[2]!);
   },
 });
