@@ -124,8 +124,8 @@ const USAGE = `
 piwi skills — install the Piwi agent skills into this project
 
 Usage:
-  npx piwi skills list
-  npx piwi skills add [names...] [options]
+  npx @piwitests/reporter skills list
+  npx @piwitests/reporter skills add [names...] [options]
 
 Commands:
   list              Show the available skills and what each one is for

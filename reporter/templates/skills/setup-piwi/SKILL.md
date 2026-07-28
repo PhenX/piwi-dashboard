@@ -21,7 +21,7 @@ Confirm this is a Playwright project: there should be a `playwright.config.ts|js
 Run the initializer from the project root. It installs `@piwitests/reporter`, wraps `defineConfig(...)` with `wrapConfig(...)`, creates `tests/fixtures.ts`, and records `PIWI_*` settings in `.env.example`:
 
 ```bash
-npx piwi init --server-url <dashboard-url> --project <name> --json
+npx @piwitests/reporter init --server-url <dashboard-url> --project <name> --json
 ```
 
 - Preview first with `--dry-run` if you want to see the plan before anything is written.

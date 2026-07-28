@@ -91,7 +91,7 @@ export function buildSetupPiwiMessages(input: SetupPiwiInput): PromptResult {
     '',
     '1. From the project root, run the setup command:',
     '',
-    `   npx piwi init --server-url ${baseUrl} --project ${projectArg}`,
+    `   npx @piwitests/reporter init --server-url ${baseUrl} --project ${projectArg}`,
     '',
     '   It installs `@piwitests/reporter`, wraps `defineConfig(...)` with `wrapConfig(...)`, creates',
     '   `tests/fixtures.ts`, and records PIWI_* settings in `.env.example`. Every step is idempotent, so it is',

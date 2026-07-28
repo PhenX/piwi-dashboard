@@ -43,7 +43,7 @@ const USAGE = `
 piwi init — wire a Playwright project up to a Piwi Dashboard
 
 Usage:
-  npx piwi init [options]
+  npx @piwitests/reporter init [options]
 
 What it does (each step is idempotent and safe to re-run):
   - installs @piwitests/reporter as a dev dependency
@@ -164,7 +164,7 @@ function stepConfig(project: ProjectShape, opts: InitOptions): StepResult {
     return {
       step,
       status: 'manual',
-      detail: 'No playwright.config found — create one, then re-run `npx piwi init`',
+      detail: 'No playwright.config found — create one, then re-run `npx @piwitests/reporter init`',
     };
 
   const rel = path.relative(project.root, project.configPath) || path.basename(project.configPath);
