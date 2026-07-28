@@ -175,7 +175,7 @@ function normalizeStatusKey(status: string): string {
 
 /**
  * Lucide icon for a test/run status, so a status drawn as an icon (the run
- * tree, `StatusBlock`) always looks the same.
+ * tree, `StatusChip`) always looks the same.
  */
 export function getStatusIcon(status: string): string {
   switch (normalizeStatusKey(status)) {
