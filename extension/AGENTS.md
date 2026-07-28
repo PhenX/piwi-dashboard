@@ -21,6 +21,14 @@ stable Playwright locators from the live page. Standalone — talks to no server
   way unless the popup's own complexity genuinely outgrows it.
 - `src/shared/` — code shared between content scripts, background, and popup.
 
+Each standalone content-script feature (locator console, multi-pick, lint overlay, assertion
+suggester, pick session, agent context, …) is split into a pure logic file (e.g.
+`lint-scan.ts`, `assertion-suggest.ts`, `session-export.ts`) and a separate entry-point/UI
+file (e.g. `lint-overlay.ts`, `assertion-panel.ts`, `session-panel.ts`) that wires picking,
+DOM, and `chrome.*` calls around it. Keep new features on this split rather than mixing pure
+logic into the entry point — it's what makes the logic half plain-unit-testable (or
+real-bundle-testable, see below) instead of needing a live browser for everything.
+
 ## Rules
 
 - **Zero network calls, zero telemetry.** This workspace talks to no server in this phase.
@@ -35,10 +43,27 @@ stable Playwright locators from the live page. Standalone — talks to no server
   in this phase. A feature that seems to need more (host permissions, `debugger`,
   `contextMenus`, `sidePanel`) needs a deliberate call, not a silent addition — see the
   aria-snapshot feature (deferred; would need `debugger` to get the browser's real
-  accessibility tree, which contradicts the minimal-permissions goal).
+  accessibility tree, which contradicts the minimal-permissions goal) and the agent-context
+  feature's element summary, which deliberately approximates instead of attempting the same
+  real accessibility tree for the same reason.
 - Reuse `@piwitests/picker-dom`'s exports (`installPickerOverlay`, `showAnchorPicker`,
   probe, role-resolution, syntax highlighting) rather than re-deriving picker logic here —
   that package exists so this workspace doesn't become a third hand-synced copy.
+- **`chrome.storage.session` needs `setAccessLevel` to be reachable from a content script.**
+  It defaults to extension-page/service-worker-only access; `src/background/index.ts` widens
+  it once at startup (`TRUSTED_AND_UNTRUSTED_CONTEXTS`) specifically so `session-panel.ts` can
+  read/write it directly. `chrome.storage.local` has no such restriction.
+- **Two different test strategies for content-script logic, pick deliberately.** A function
+  built entirely from nested helpers with no imports from `@piwitests/core`'s scoring engine
+  (`evaluateLocatorChain`, `derivePattern`) can be re-serialized via
+  `Function.prototype.toString()` in tests, installing any genuine cross-module dependency as
+  a global first. A function that calls `generateAlternatives` (`scanForLintIssues`,
+  `suggestAssertions`, `buildAgentContext`) can't — that function's own private module-level
+  helpers don't survive reconstruction and aren't exported individually. Those are tested by
+  driving the real built bundle (`page.addScriptTag`) and reading a well-known
+  `globalThis.__piwiXxx` the entry-point file bridges the result out to (see
+  `lint-overlay.ts`, `assertion-panel.ts`, `agent-context-panel.ts`) — don't reach for
+  reconstruction if the feature touches `generateAlternatives`.
 
 ## Commands
 
