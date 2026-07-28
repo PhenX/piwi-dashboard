@@ -29,13 +29,17 @@ export const test = base.extend<{ context: BrowserContext; extensionId: string }
     // a waitForEvent listener, missing the event entirely and hanging until
     // timeout. Polling re-checks the live state instead, so there's no gap
     // to lose the registration in.
-    const deadline = Date.now() + 30_000;
+    //
+    // Deadline is kept comfortably below playwright.config.ts's own 60s
+    // per-test timeout so this throw can actually surface instead of losing
+    // a race against Playwright's own generic "Test timeout exceeded".
+    const deadline = Date.now() + 45_000;
     let sw = context.serviceWorkers()[0];
     while (!sw && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       sw = context.serviceWorkers()[0];
     }
-    if (!sw) throw new Error("the extension's service worker never registered within 30s");
+    if (!sw) throw new Error("the extension's service worker never registered within 45s");
     await use(sw.url().split('/')[2]!);
   },
 });
