@@ -25,3 +25,4 @@ document.getElementById('locator-console')!.addEventListener('click', () => void
 document.getElementById('multi-pick')!.addEventListener('click', () => void inject('multi-pick.js'));
 document.getElementById('lint-overlay')!.addEventListener('click', () => void inject('lint-overlay.js'));
 document.getElementById('assertion-panel')!.addEventListener('click', () => void inject('assertion-panel.js'));
+document.getElementById('session-panel')!.addEventListener('click', () => void inject('session-panel.js'));

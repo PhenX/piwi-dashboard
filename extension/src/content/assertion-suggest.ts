@@ -1,11 +1,4 @@
-import { probeElementAttrs, type ProbeArg } from '@piwitests/picker-dom';
-import {
-  generateAlternatives,
-  approximateAccessibleName,
-  CAPTURED_ATTRIBUTES,
-  TAG_TO_ROLE,
-  INPUT_TYPE_TO_ROLE,
-} from '@piwitests/core/locator-generation';
+import { deriveTopLocator } from './top-locator.js';
 
 export interface AssertionCandidate {
   /** Which Playwright assertion this suggests. */
@@ -32,8 +25,8 @@ export interface AssertionSuggestion {
  * universal fallback. Ordered most-specific-to-the-element first.
  * `toMatchAriaSnapshot` is deliberately out of scope, same as A5.
  *
- * Depends on `generateAlternatives`, which — like `scanForLintIssues` —
- * has its own web of private module-level helpers that
+ * Depends (via `deriveTopLocator`) on `generateAlternatives`, which — like
+ * `scanForLintIssues` — has its own web of private module-level helpers that
  * `Function.prototype.toString()` reconstruction can't carry along; tested
  * via the real built bundle instead (see `assertion-panel.ts`).
  */
@@ -55,22 +48,9 @@ export function suggestAssertions(el: Element): AssertionSuggestion {
     return null;
   }
 
-  const roleSources = [...new Set(['[role]', 'input', 'select', ...Object.keys(TAG_TO_ROLE)])].join(',');
-  const probeArg: ProbeArg = {
-    keep: [...CAPTURED_ATTRIBUTES],
-    tagRoles: TAG_TO_ROLE,
-    inputRoles: INPUT_TYPE_TO_ROLE,
-    roleSources,
-    includeStructural: true,
-    includeLabelText: false,
-  };
+  const { locator, accessibleName } = deriveTopLocator(el);
+  if (locator == null) return { locator: null, candidates: [] };
 
-  const attrs = probeElementAttrs(el, probeArg);
-  const accessibleName = approximateAccessibleName({ ...attrs, accessibleName: null });
-  const ranked = generateAlternatives({ ...attrs, accessibleName });
-  if (ranked.length === 0) return { locator: null, candidates: [] };
-
-  const locator = ranked[0]!.locator;
   const candidates: AssertionCandidate[] = [];
 
   const value = formValue(el);
