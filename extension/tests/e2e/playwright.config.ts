@@ -11,10 +11,10 @@ import { defineConfig } from '@playwright/test';
  */
 export default defineConfig({
   testDir: '.',
-  // Comfortably above fixtures.ts's own 45s service-worker-registration
+  // Comfortably above fixtures.ts's own 75s service-worker-registration
   // deadline, so that fixture's specific error can actually surface instead
   // of racing against (and losing to) this generic per-test timeout.
-  timeout: 60_000,
+  timeout: 90_000,
   fullyParallel: false,
   workers: 1,
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : [['line']],
