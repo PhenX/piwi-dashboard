@@ -40,9 +40,7 @@ Structurally the easiest: Edge is Chromium and accepts the **same zip** unmodifi
 
 ## 4. Firefox AMO — the one with real differences
 
-Two things need to happen before Firefox will accept a submission, neither of which is done yet in this repo.
-
-**a) Add a Firefox-specific manifest key.** Firefox requires an explicit, stable extension ID (Chrome/Edge derive one from the store upload automatically; Firefox doesn't). `extension/manifest.json` doesn't have this yet — add it:
+**a) The Firefox-specific manifest key is already in place.** Firefox requires an explicit, stable extension ID (Chrome/Edge derive one from the store upload automatically; Firefox doesn't). `extension/manifest.json` carries it:
 
 ```json
 "browser_specific_settings": {
@@ -53,7 +51,9 @@ Two things need to happen before Firefox will accept a submission, neither of wh
 }
 ```
 
-(`109.0` is roughly where Firefox's MV3 support stabilized — verify against a real Firefox install before trusting that floor, rather than assuming it.)
+Chromium ignores this key entirely, so the single built zip stays valid for all three stores. Two caveats worth knowing:
+- **The ID is permanent once published.** AMO binds the listing to it; changing it later creates a *new* add-on rather than updating the existing one, orphaning existing installs. Change it before the first submission or not at all.
+- **`109.0` is an assumption, not a verified floor.** It's roughly where Firefox's MV3 support stabilized. Test against a real Firefox install and adjust before submitting, rather than trusting the number.
 
 **b) Submit source, not just the built zip.** Because `extension/dist` is Vite-bundled/minified output, not hand-written source, Mozilla's reviewers require the **original source** plus build instructions whenever the reviewable code doesn't match human-readable source 1:1. Concretely:
 - Upload the same built zip as the actual extension.

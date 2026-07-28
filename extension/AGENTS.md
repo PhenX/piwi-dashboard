@@ -8,7 +8,10 @@ stable Playwright locators from the live page. Standalone — talks to no server
 
 - `manifest.json` — MV3 manifest. Permissions stay at `activeTab` + `scripting` + `storage`
   only — no host permissions, no `<all_urls>`, no remote code. Adding a permission here is
-  a deliberate, reviewed decision, not a default.
+  a deliberate, reviewed decision, not a default. `browser_specific_settings.gecko.id` is
+  Firefox's required stable add-on ID (Chromium ignores the key); don't change it once the
+  add-on is published to AMO — a new ID creates a separate add-on rather than an update,
+  orphaning existing installs. See `PUBLISHING.md`.
 - `src/content/` — content scripts, each a standalone entry injected on demand via
   `chrome.scripting.executeScript({ files: [...] })` (never `<all_urls>` static injection,
   never the `func:` stringify-and-inject form — a normal file injection can import

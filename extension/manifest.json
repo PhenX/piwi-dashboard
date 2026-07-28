@@ -4,6 +4,12 @@
   "short_name": "Piwi Picker",
   "version": "0.20.0",
   "description": "Ranked, stable Playwright locators for any element on the page — scored the same way Piwi's dashboard scores them.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "piwi-picker@piwitests.dev",
+      "strict_min_version": "109.0"
+    }
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
