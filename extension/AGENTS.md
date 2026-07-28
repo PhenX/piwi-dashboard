@@ -8,7 +8,10 @@ stable Playwright locators from the live page. Standalone — talks to no server
 
 - `manifest.json` — MV3 manifest. Permissions stay at `activeTab` + `scripting` + `storage`
   only — no host permissions, no `<all_urls>`, no remote code. Adding a permission here is
-  a deliberate, reviewed decision, not a default.
+  a deliberate, reviewed decision, not a default. `browser_specific_settings.gecko.id` is
+  Firefox's required stable add-on ID (Chromium ignores the key); don't change it once the
+  add-on is published to AMO — a new ID creates a separate add-on rather than an update,
+  orphaning existing installs. See `PUBLISHING.md`.
 - `src/content/` — content scripts, each a standalone entry injected on demand via
   `chrome.scripting.executeScript({ files: [...] })` (never `<all_urls>` static injection,
   never the `func:` stringify-and-inject form — a normal file injection can import
@@ -20,6 +23,14 @@ stable Playwright locators from the live page. Standalone — talks to no server
 - `src/popup/` — the toolbar popup. Plain TypeScript + DOM, no UI framework — keep it that
   way unless the popup's own complexity genuinely outgrows it.
 - `src/shared/` — code shared between content scripts, background, and popup.
+
+Each standalone content-script feature (locator console, multi-pick, lint overlay, assertion
+suggester, pick session, agent context, …) is split into a pure logic file (e.g.
+`lint-scan.ts`, `assertion-suggest.ts`, `session-export.ts`) and a separate entry-point/UI
+file (e.g. `lint-overlay.ts`, `assertion-panel.ts`, `session-panel.ts`) that wires picking,
+DOM, and `chrome.*` calls around it. Keep new features on this split rather than mixing pure
+logic into the entry point — it's what makes the logic half plain-unit-testable (or
+real-bundle-testable, see below) instead of needing a live browser for everything.
 
 ## Rules
 
@@ -35,16 +46,35 @@ stable Playwright locators from the live page. Standalone — talks to no server
   in this phase. A feature that seems to need more (host permissions, `debugger`,
   `contextMenus`, `sidePanel`) needs a deliberate call, not a silent addition — see the
   aria-snapshot feature (deferred; would need `debugger` to get the browser's real
-  accessibility tree, which contradicts the minimal-permissions goal).
+  accessibility tree, which contradicts the minimal-permissions goal) and the agent-context
+  feature's element summary, which deliberately approximates instead of attempting the same
+  real accessibility tree for the same reason.
 - Reuse `@piwitests/picker-dom`'s exports (`installPickerOverlay`, `showAnchorPicker`,
   probe, role-resolution, syntax highlighting) rather than re-deriving picker logic here —
   that package exists so this workspace doesn't become a third hand-synced copy.
+- **`chrome.storage.session` needs `setAccessLevel` to be reachable from a content script.**
+  It defaults to extension-page/service-worker-only access; `src/background/index.ts` widens
+  it once at startup (`TRUSTED_AND_UNTRUSTED_CONTEXTS`) specifically so `session-panel.ts` can
+  read/write it directly. `chrome.storage.local` has no such restriction.
+- **Two different test strategies for content-script logic, pick deliberately.** A function
+  built entirely from nested helpers with no imports from `@piwitests/core`'s scoring engine
+  (`evaluateLocatorChain`, `derivePattern`) can be re-serialized via
+  `Function.prototype.toString()` in tests, installing any genuine cross-module dependency as
+  a global first. A function that calls `generateAlternatives` (`scanForLintIssues`,
+  `suggestAssertions`, `buildAgentContext`) can't — that function's own private module-level
+  helpers don't survive reconstruction and aren't exported individually. Those are tested by
+  driving the real built bundle (`page.addScriptTag`) and reading a well-known
+  `globalThis.__piwiXxx` the entry-point file bridges the result out to (see
+  `lint-overlay.ts`, `assertion-panel.ts`, `agent-context-panel.ts`) — don't reach for
+  reconstruction if the feature touches `generateAlternatives`.
 
 ## Commands
 
 | Command | Purpose |
 |---|---|
 | `npm run extension:build` | Build `dist/` (content scripts, background, popup, manifest, icons) |
+| `npm run extension:dev` | Same build, re-run on every change to `src/`, `public/`, `popup.html`, or `manifest.json` |
+| `npm run extension:zip` | Build, then package `dist/` as a store-ready zip (see `PUBLISHING.md`) |
 | `npm run extension:typecheck` | TypeScript check |
 | `npm run extension:lint` / `extension:lint:fix` | oxlint |
 | `npm run extension:format` / `extension:format:check` | oxfmt |
@@ -55,3 +85,8 @@ stable Playwright locators from the live page. Standalone — talks to no server
 
 `npm run extension:build`, then in Chrome/Edge: `chrome://extensions` → enable Developer
 mode → Load unpacked → select `extension/dist`.
+
+While iterating, use `npm run extension:dev` instead — it rebuilds on save. The browser
+still needs a manual reload on the `chrome://extensions` card to pick up a new build (MV3
+gives no way to trigger that from outside the browser), so the loop is: save → wait for the
+rebuild line → click reload.

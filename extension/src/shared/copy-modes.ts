@@ -1,5 +1,3 @@
-import type { RankedLocator } from '@piwitests/picker-dom';
-
 export const COPY_MODES = ['bare', 'action', 'expect'] as const;
 export type CopyMode = (typeof COPY_MODES)[number];
 
@@ -9,8 +7,8 @@ export const COPY_MODE_LABELS: Record<CopyMode, string> = {
   expect: 'Assertion',
 };
 
-/** Render a ranked locator as source in the requested copy mode. */
-export function renderCopyMode(locator: RankedLocator, mode: CopyMode): string {
+/** Render a locator string as source in the requested copy mode. Takes just `{ locator }` (not the full `RankedLocator`) since that's the only field this ever reads — any locator-bearing candidate can reuse this, ranked or not. */
+export function renderCopyMode(locator: { locator: string }, mode: CopyMode): string {
   switch (mode) {
     case 'bare':
       return `page.${locator.locator}`;

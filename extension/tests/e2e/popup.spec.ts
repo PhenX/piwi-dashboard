@@ -10,12 +10,24 @@ import { test, expect } from './fixtures.js';
  * `pick.spec.ts` / `hover-inspect.spec.ts` for the content scripts they
  * inject, tested directly).
  */
+const ACTION_BUTTON_NAMES = [
+  /Pick an element/,
+  /Hover-inspect/,
+  /Locator console/,
+  /Multi-pick/,
+  /Lint overlay/,
+  /Assertions/,
+  /Session/,
+  /Agent context/,
+];
+
 test.describe('popup.html', () => {
-  test('renders the pick and hover-inspect actions', async ({ context, extensionId }) => {
+  test('renders every action button and the keyboard-shortcut hint', async ({ context, extensionId }) => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/popup.html`);
-    await expect(page.getByRole('button', { name: /Pick an element/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Toggle hover-inspect/ })).toBeVisible();
+    for (const name of ACTION_BUTTON_NAMES) {
+      await expect(page.getByRole('button', { name })).toBeVisible();
+    }
     await expect(page.getByText('Ctrl+Shift+E')).toBeVisible();
   });
 });

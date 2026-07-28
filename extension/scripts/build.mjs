@@ -4,16 +4,29 @@
 // injects them as plain classic scripts with no module resolution — unlike
 // popup.html, which is loaded as a normal extension page and gets Vite's
 // standard (chunk-splitting-friendly) HTML-entry build.
+//
+// Exports buildExtension() so dev.mjs can re-run the whole thing on change;
+// running this file directly builds once.
 import { cpSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { build } from 'vite';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const outDir = path.join(root, 'dist');
 
-rmSync(outDir, { recursive: true, force: true });
-mkdirSync(outDir, { recursive: true });
+/** Every standalone content script / service worker entry, as [output name, source entry]. */
+const STANDALONE_ENTRIES = [
+  ['pick', 'src/content/pick.ts'],
+  ['hover-inspect', 'src/content/hover-inspect.ts'],
+  ['locator-console', 'src/content/locator-console.ts'],
+  ['multi-pick', 'src/content/multi-pick.ts'],
+  ['lint-overlay', 'src/content/lint-overlay.ts'],
+  ['assertion-panel', 'src/content/assertion-panel.ts'],
+  ['session-panel', 'src/content/session-panel.ts'],
+  ['agent-context-panel', 'src/content/agent-context-panel.ts'],
+  ['background', 'src/background/index.ts'],
+];
 
 async function buildStandalone(name, entry) {
   await build({
@@ -29,23 +42,29 @@ async function buildStandalone(name, entry) {
   });
 }
 
-await buildStandalone('pick', 'src/content/pick.ts');
-await buildStandalone('hover-inspect', 'src/content/hover-inspect.ts');
-await buildStandalone('background', 'src/background/index.ts');
+export async function buildExtension() {
+  rmSync(outDir, { recursive: true, force: true });
+  mkdirSync(outDir, { recursive: true });
 
-await build({
-  root,
-  configFile: false,
-  logLevel: 'warn',
-  build: {
-    outDir,
-    emptyOutDir: false,
-    rollupOptions: { input: path.join(root, 'popup.html') },
-  },
-});
+  for (const [name, entry] of STANDALONE_ENTRIES) await buildStandalone(name, entry);
 
-const manifest = JSON.parse(readFileSync(path.join(root, 'manifest.json'), 'utf8'));
-writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
-cpSync(path.join(root, 'public', 'icons'), path.join(outDir, 'icons'), { recursive: true });
+  await build({
+    root,
+    configFile: false,
+    logLevel: 'warn',
+    build: {
+      outDir,
+      emptyOutDir: false,
+      rollupOptions: { input: path.join(root, 'popup.html') },
+    },
+  });
 
-console.log(`Built extension into ${path.relative(process.cwd(), outDir)}`);
+  const manifest = JSON.parse(readFileSync(path.join(root, 'manifest.json'), 'utf8'));
+  writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  cpSync(path.join(root, 'public', 'icons'), path.join(outDir, 'icons'), { recursive: true });
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await buildExtension();
+  console.log(`Built extension into ${path.relative(process.cwd(), outDir)}`);
+}
