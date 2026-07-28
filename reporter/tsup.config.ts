@@ -36,9 +36,9 @@ export default defineConfig({
   splitting: false,
   sourcemap: false,
   clean: true,
-  // Inline the shared core package so nothing monorepo-relative leaks into the
-  // published artifact.
-  noExternal: [/^@piwitests\/core/],
+  // Inline the shared core/picker-dom packages so nothing monorepo-relative
+  // leaks into the published artifact.
+  noExternal: [/^@piwitests\/core/, /^@piwitests\/picker-dom/],
   // Real runtime dep + Playwright peer stay external.
   external: ['form-data', '@playwright/test'],
 });

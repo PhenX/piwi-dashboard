@@ -65,6 +65,7 @@
   },
   "devDependencies": {
     "@piwitests/core": "*",
+    "@piwitests/picker-dom": "*",
     "tsup": "^8.5.0"
   }
 }

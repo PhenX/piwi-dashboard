@@ -58,7 +58,10 @@ describe('snapshotPickerScriptTag / buildPickerDocument', () => {
     const tag = snapshotPickerScriptTag({ probedAttrs: ['id', 'data-testid'] });
     expect(tag.startsWith('<script>')).toBe(true);
     expect(tag.endsWith('</script>')).toBe(true);
-    expect(tag).toContain('installSnapshotPicker');
+    // The probe is installed on a well-known global for the shared core
+    // overlay (postMessage transport) to find, ahead of the overlay itself.
+    expect(tag).toContain('globalThis.__piwiProbe');
+    expect(tag).toContain('"transport":"postMessage"');
     expect(tag).toContain('["id","data-testid"]');
   });
 
@@ -76,7 +79,7 @@ describe('snapshotPickerScriptTag / buildPickerDocument', () => {
       expect(tag).toContain(evt);
     }
     // The iframe stays inert through the review step (a pick doesn't re-enable it).
-    expect(tag).toContain('freezeAfterPick');
+    expect(tag).toContain('Analyzing element');
   });
 
   test('buildPickerDocument strips <base> and appends the script after the HTML', () => {

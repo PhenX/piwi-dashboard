@@ -61,11 +61,12 @@ export default defineNuxtConfig({
     dirs: [{ path: '~/components', pathPrefix: false }],
   },
 
-  // @piwitests/core ships TypeScript source (shared with the reporter); Vite
-  // must transpile it since node_modules is not transpiled by default and
-  // nitro.experimental.noExternals inlines it into the server build.
+  // @piwitests/core and @piwitests/picker-dom ship TypeScript source (shared
+  // with the reporter); Vite must transpile them since node_modules is not
+  // transpiled by default and nitro.experimental.noExternals inlines them
+  // into the server build.
   build: {
-    transpile: ['@piwitests/core'],
+    transpile: ['@piwitests/core', '@piwitests/picker-dom'],
   },
 
   devtools: {

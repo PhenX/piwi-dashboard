@@ -1,0 +1,32 @@
+{
+  "name": "@piwitests/picker-dom",
+  "version": "0.20.0",
+  "description": "Shared DOM element-picker overlay — probing, hover/highlight, anchor scoping and locator syntax highlighting shared by the reporter's live picker and the dashboard's snapshot picker",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./probe": "./src/probe.ts",
+    "./overlay-element": "./src/overlay-element.ts",
+    "./overlay-anchors": "./src/overlay-anchors.ts",
+    "./overlay-confirm": "./src/overlay-confirm.ts",
+    "./anchor-alternatives": "./src/anchor-alternatives.ts"
+  },
+  "scripts": {
+    "picker-dom:test": "vitest run",
+    "picker-dom:test:watch": "vitest",
+    "picker-dom:test:integration": "playwright test --config=tests/integration/playwright.config.ts",
+    "picker-dom:lint": "oxlint --config oxlint.config.mts .",
+    "picker-dom:lint:fix": "oxlint --config oxlint.config.mts . --fix",
+    "picker-dom:format": "oxfmt --config oxfmt.config.mts --write \"src/\" \"tests/\"",
+    "picker-dom:format:check": "oxfmt --config oxfmt.config.mts --check \"src/\" \"tests/\"",
+    "test": "npm run picker-dom:test"
+  },
+  "dependencies": {
+    "@piwitests/core": "*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
+}

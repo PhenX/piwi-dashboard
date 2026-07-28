@@ -10,6 +10,7 @@
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         { "type": "json", "path": "packages/core/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "packages/picker-dom/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "packages/server/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "application/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "reporter/package.json", "jsonpath": "$.version" },

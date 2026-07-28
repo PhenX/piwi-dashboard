@@ -118,6 +118,27 @@ jobs:
           npm run core:lint
           npm run core:test
 
+      - name: Lint and test picker-dom
+        working-directory: ./packages/picker-dom
+        run: |
+          npm run picker-dom:lint
+          npm run picker-dom:test
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps --only-shell
+
+      - name: Test picker-dom integration (drives a real browser)
+        working-directory: ./packages/picker-dom
+        run: npm run picker-dom:test:integration
+
       - name: Test reporter
         working-directory: ./reporter
         run: npm run reporter:test:coverage
