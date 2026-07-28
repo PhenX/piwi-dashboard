@@ -45,10 +45,12 @@ export function liveCount(locator: RankedLocator, maps: DomRoleMaps): LiveCount 
   ) {
     const role = args.role;
     const level = typeof args.level === 'number' ? args.level : null;
+    // Every tag with an entry in tagRoles, not just the handful with an
+    // obvious role (a role like 'row' or 'listitem' lives on <tr>/<li>, which
+    // this must still be able to find) — mirrors pick.ts's ROLE_SOURCES.
+    const roleCandidates = [...new Set(['[role]', 'input', 'select', ...Object.keys(maps.tagRoles)])].join(',');
     let count = 0;
-    for (const el of document.querySelectorAll<HTMLElement>(
-      '[role],a,button,input,select,textarea,h1,h2,h3,h4,h5,h6',
-    )) {
+    for (const el of document.querySelectorAll<HTMLElement>(roleCandidates)) {
       if (domRoleOf(el, maps) !== role) continue;
       if (level != null && domHeadingLevel(el) !== level) continue;
       count++;

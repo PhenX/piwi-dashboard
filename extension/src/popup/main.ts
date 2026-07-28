@@ -21,3 +21,5 @@ async function inject(file: string): Promise<void> {
 
 document.getElementById('pick')!.addEventListener('click', () => void inject('pick.js'));
 document.getElementById('hover-inspect')!.addEventListener('click', () => void inject('hover-inspect.js'));
+document.getElementById('locator-console')!.addEventListener('click', () => void inject('locator-console.js'));
+document.getElementById('multi-pick')!.addEventListener('click', () => void inject('multi-pick.js'));

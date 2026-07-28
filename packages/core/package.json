@@ -19,6 +19,7 @@
     "./wire": "./src/wire.ts"
   },
   "scripts": {
+    "core:typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tests/tsconfig.json",
     "core:test": "vitest run",
     "core:test:watch": "vitest",
     "core:lint": "oxlint --config oxlint.config.mts .",

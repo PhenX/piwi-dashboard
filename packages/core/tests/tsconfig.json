@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // boundary.test.ts dynamic-imports '../src/index.ts' by its literal
+    // extension to verify the barrel itself — fine under Vitest's own
+    // resolution, but tsc needs this opt-in to typecheck it.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["**/*.ts"]
+}

@@ -112,10 +112,11 @@ jobs:
         working-directory: ./reporter
         run: npm run reporter:typecheck
 
-      - name: Lint and test core
+      - name: Lint, typecheck and test core
         working-directory: ./packages/core
         run: |
           npm run core:lint
+          npm run core:typecheck
           npm run core:test
 
       - name: Lint, typecheck and test picker-dom
