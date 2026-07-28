@@ -221,6 +221,37 @@ Agent: [calls list_projects → finds checkout → calls list_runs → calls get
 
 ---
 
+## Prompts
+
+Alongside its tools, the server exposes an MCP **prompt** — a ready-made instruction a client offers as a slash command (Claude Code's `/`, Cursor's prompt picker, …), with no files to install.
+
+| Prompt | What it does |
+|--------|--------------|
+| `setup_piwi` | Generates a complete, ready-to-run setup for a Playwright project that is not yet reporting here. |
+
+`setup_piwi` is **server-aware**: because the dashboard builds it, it fills in *this* instance's real URL, whether authentication is required, and the projects that already exist — facts a static copy-paste prompt can't know. Pick it in your MCP client (optionally passing a `projectName`), and the agent gets a personalized plan: run `npx @piwitests/reporter init` against this dashboard, handle the API key if auth is on, rewire the specs, and verify a run lands. It pairs with the `setup-piwi` skill below — the prompt needs no install but requires the MCP connection; the skill works offline once installed.
+
+## Agent skills
+
+The MCP server gives an agent read access to your results; **skills** tell it what to *do* with them. A skill is a single `SKILL.md` file — the portable open format (a small front-matter block plus Markdown instructions) that Claude Code and other agents pick up from a project's skills directory. Piwi ships four, installed with the reporter's CLI:
+
+```bash
+npx @piwitests/reporter skills add          # install all of them into .claude/skills/
+npx @piwitests/reporter skills list         # see what each one does
+npx @piwitests/reporter skills add investigate-failure --dir .cursor/skills   # a specific one, elsewhere
+```
+
+`npx @piwitests/reporter init` installs the three workflow skills automatically as part of setup. (Invoke the CLI through the package name so npx resolves *this* package, not an unrelated `piwi` on npm; a plain `npx piwi …` works once the reporter is a project dependency.)
+
+| Skill | What it does |
+|------|--------------|
+| `setup-piwi` | Wire a Playwright project up to a dashboard — the same work `npx @piwitests/reporter init` does, driven by an agent. |
+| `investigate-failure` | Investigate a failed run and propose a fix grounded in Piwi's evidence — error, steps, console, network, and the diff since the last green run. |
+| `apply-locator-healing` | Replace a brittle locator with Piwi's ranked healed selector at its call site, then re-run to confirm. |
+| `stabilize-flaky-tests` | Fix the root cause of the highest-impact flaky tests (never by adding retries), then verify with repeated runs. |
+
+The skills are agent-agnostic Markdown — only the destination directory is tool-specific, so `--dir` points the install wherever your agent reads skills from. They pair with this MCP server: each one prefers a connected Piwi MCP tool (`explain_failure`, `get_locator_healing`, `list_flaky_tests`, …) and falls back to the dashboard UI when MCP is not connected.
+
 ## Architecture
 
 The MCP server is implemented as a single Nitro route (`server/routes/mcp.post.ts`) that dispatches JSON-RPC methods to tool handlers in `server/utils/mcp/tools.ts`. Handlers call the same shared DB helpers used by the REST API — no self-HTTP-calls, no extra processes.

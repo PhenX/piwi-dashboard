@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { MCP_TOOL_DEFS } from '#shared/mcp-tools';
+import { MCP_PROMPT_DEFS } from '#shared/mcp-prompts';
 
 const config = useRuntimeConfig();
 const isDemo = config.public.demoMode;
@@ -29,6 +30,10 @@ useHead({ title: 'MCP server — Piwi Dashboard' });
 // Single source of truth: the exact catalog the MCP server exposes over
 // `tools/list` (see shared/mcp-tools.ts). New tools appear here automatically.
 const tools = MCP_TOOL_DEFS;
+
+// Same for the prompts the server exposes over `prompts/list`
+// (see shared/mcp-prompts.ts).
+const prompts = MCP_PROMPT_DEFS;
 
 const clientItems = [
   { label: 'Claude Code', slot: 'claude-code' },
@@ -285,6 +290,39 @@ const windsurfSnippet = computed(() =>
               <div class="min-w-0">
                 <p class="text-sm font-mono font-semibold text-foreground">{{ t.name }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ t.description }}</p>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+
+        <!-- Prompts -->
+        <SectionCard icon="i-lucide-sparkles" title="Prompts">
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Prompts are ready-made instructions your MCP client offers as a slash command — nothing to install.
+            <code class="font-mono">setup_piwi</code> is <strong>server-aware</strong>: it fills in this instance's URL,
+            whether authentication is required, and the projects that already exist, then hands your agent a
+            ready-to-run setup for a Playwright project that is not yet reporting here.
+          </p>
+          <div class="flex flex-col gap-1.5">
+            <div
+              v-for="p in prompts"
+              :key="p.name"
+              class="flex items-start gap-3 px-3 py-2.5 rounded-md bg-elevated/50 border border-default hover:bg-elevated transition-colors"
+            >
+              <UIcon name="i-lucide-square-slash" class="size-4 mt-0.5 shrink-0 text-primary" />
+              <div class="min-w-0">
+                <p class="text-sm font-mono font-semibold text-foreground">{{ p.name }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{{ p.description }}</p>
+                <div v-if="p.arguments?.length" class="flex flex-wrap gap-1.5 mt-1.5">
+                  <code
+                    v-for="arg in p.arguments"
+                    :key="arg.name"
+                    class="px-1.5 py-0.5 rounded bg-muted text-[11px] font-mono"
+                    :title="arg.description"
+                  >
+                    {{ arg.name }}{{ arg.required ? '' : '?' }}
+                  </code>
+                </div>
               </div>
             </div>
           </div>

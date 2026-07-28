@@ -10,6 +10,18 @@ A custom Playwright reporter that sends test results to a [Piwi Dashboard](https
 npm install --save-dev @piwitests/reporter
 ```
 
+## Set up in one command
+
+From your Playwright project, `npx @piwitests/reporter init` installs the reporter, wraps your `playwright.config`, creates the capture-fixtures file, and records the connection in `.env.example`:
+
+```bash
+npx @piwitests/reporter init --server-url http://localhost:3000 --project my-project
+```
+
+Every step is idempotent (safe to re-run); a config shape it will not rewrite is reported as `manual` with the exact change to make, never mangled. Add `--dry-run` to preview or `--json` for a machine-readable plan an agent can act on. It also installs the [Piwi agent skills](https://piwitests.github.io/mcp#agent-skills) so your coding agent can investigate failures, heal locators, and stabilize flaky tests. Run `npx @piwitests/reporter init --help` for all options, or wire it up by hand with the steps below.
+
+> The package is `@piwitests/reporter`; its command is `piwi`. Invoke it through the package name (`npx @piwitests/reporter <command>`) so npx resolves this package — `npx piwi` would fetch an unrelated `piwi` from npm. Once the reporter is a project dependency, `npx piwi <command>` resolves the local binary and works too.
+
 ## Quick start
 
 `wrapConfig` is the recommended setup. It injects the reporter **and** a global
