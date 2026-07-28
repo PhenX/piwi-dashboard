@@ -20,3 +20,6 @@ format_staged() {
 
 format_staged application app:format application/
 format_staged reporter reporter:format reporter/src/
+format_staged packages/core core:format packages/core/
+format_staged packages/picker-dom picker-dom:format packages/picker-dom/
+format_staged extension extension:format extension/

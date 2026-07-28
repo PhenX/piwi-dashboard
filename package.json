@@ -8,6 +8,7 @@
     "packages/server",
     "application",
     "reporter",
+    "extension",
     "integrations/nitro"
   ],
   "engines": {

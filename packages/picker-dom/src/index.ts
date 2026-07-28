@@ -18,3 +18,5 @@ export * from './overlay-element.js';
 export * from './overlay-anchors.js';
 export * from './overlay-confirm.js';
 export * from './anchor-alternatives.js';
+export * from './syntax-highlight.js';
+export * from './dom-role.js';

@@ -120,6 +120,7 @@ export default defineConfig({
           { text: 'Storage configuration', link: '/storage' },
           { text: 'Privacy & data flow', link: '/privacy' },
           { text: 'Desktop app', link: '/desktop' },
+          { text: 'Browser extension', link: '/extension' },
         ],
       },
       {

@@ -118,11 +118,19 @@ jobs:
           npm run core:lint
           npm run core:test
 
-      - name: Lint and test picker-dom
+      - name: Lint, typecheck and test picker-dom
         working-directory: ./packages/picker-dom
         run: |
           npm run picker-dom:lint
+          npm run picker-dom:typecheck
           npm run picker-dom:test
+
+      - name: Lint, typecheck and unit-test extension
+        working-directory: ./extension
+        run: |
+          npm run extension:lint
+          npm run extension:typecheck
+          npm run extension:test
 
       - name: Cache Playwright browsers
         id: playwright-cache

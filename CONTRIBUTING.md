@@ -78,7 +78,8 @@ type(scope): subject
 
 ### Scopes
 
-`app`, `reporter`, `db`, `ui`, `demo`, `ci`, `docs`, `deps`, `auth`, `ai`, `notifications`, `release`
+`app`, `reporter`, `db`, `ui`, `demo`, `desktop`, `extension`, `ci`, `docs`, `deps`, `auth`, `ai`, `notifications`,
+`release`
 
 (`main` is also allowed, but only appears in release-please's own auto-generated `chore(main): release X.Y.Z` PRs — don't use it for your own commits.)
 
