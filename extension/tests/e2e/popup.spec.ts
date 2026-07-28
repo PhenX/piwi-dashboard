@@ -12,13 +12,13 @@ import { test, expect } from './fixtures.js';
  */
 const ACTION_BUTTON_NAMES = [
   /Pick an element/,
-  /Toggle hover-inspect/,
+  /Hover-inspect/,
   /Locator console/,
-  /Multi-pick pattern/,
+  /Multi-pick/,
   /Lint overlay/,
-  /Assertion suggester/,
+  /Assertions/,
   /Session/,
-  /Copy context for agent/,
+  /Agent context/,
 ];
 
 test.describe('popup.html', () => {
