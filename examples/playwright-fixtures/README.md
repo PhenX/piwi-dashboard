@@ -2,7 +2,7 @@
 
 A small, runnable Playwright project wired to [Piwi Dashboard](https://piwitests.github.io) with the **[capture fixtures](https://piwitests.github.io/capture-fixtures)** — the one-file addition that unlocks slow-endpoint analysis, Web Vitals, console capture, failure-time ARIA snapshots, and locator healing.
 
-It tests a tiny [Nitro](https://nitro.build) web app (`app/`, started automatically by Playwright) and exercises **every capture path** the fixtures support — including **[backend logs](https://piwitests.github.io/backend-logs)**: the app is instrumented with [`@piwitests/instrumentation`](../../integrations/nitro), so server-side warnings and errors ride back to the dashboard on the `X-Piwi-Logs` response header.
+It tests a tiny [Nitro](https://nitro.build) web app (`app/`, started automatically by Playwright) and exercises **every capture path** the fixtures support — including **[backend logs](https://piwitests.github.io/backend-logs)**: the app is instrumented with [`@piwitests/instrumentation-nitro`](../../integrations/nitro), so server-side warnings and errors ride back to the dashboard on the `X-Piwi-Logs` response header.
 
 ## Run it
 
@@ -56,7 +56,7 @@ Every spec imports `test` from one of these files — never from `@playwright/te
 The entire backend-log setup is `app/plugins/piwi-test-logs.ts`:
 
 ```ts
-export { default } from '@piwitests/instrumentation';
+export { default } from '@piwitests/instrumentation-nitro';
 ```
 
 Nitro auto-loads it from `plugins/` (in a Nuxt app, put the same file in `server/plugins/`). Two things worth knowing:

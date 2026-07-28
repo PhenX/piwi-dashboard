@@ -27,7 +27,7 @@ The sidebar gives access to the top-level sections:
 | Analytics | `/analytics` | Cross-project trends, portfolio health, and insights over a chosen time window (see [Analytics](./analytics)) |
 | Projects | `/projects` | Full project listing with search and tag filters |
 | Settings | `/settings` | Configuration, in two groups — **Instance** (account, users, notifications, storage) and **Analysis** (AI diagnosis, wasted time, timeout hygiene, tags, pull requests) |
-| Setup | `/setup` | Connect the reporter, and a checklist of which optional capabilities are actually active on this instance |
+| Setup *(admins)* | `/setup` | Connect the reporter, and a checklist of which optional capabilities are actually active on this instance |
 | API docs | `/docs` | Self-contained OpenAPI 3.1 reference (no external CDN) — browse endpoints and schemas, try requests live, copy cURL / fetch snippets |
 | MCP server | `/mcp` | Setup guide for connecting AI clients (see [MCP server](./mcp)) |
 
@@ -44,7 +44,7 @@ Everything else is reached by drilling into a project, run, or test case:
 
 ## Setup
 
-Reachable from the sidebar at any time — not just before your first run. It carries the reporter setup steps (install, configure, run, plus `wrapConfig` and the capture fixtures under **Go further**) and a **capability checklist**: for each optional feature, whether this instance shows evidence of actually using it.
+Reachable from the sidebar at any time — not just before your first run. **Administrators only**, since it governs how results reach the instance and, in the desktop build, shows the local access token; when authentication is disabled every visitor is a virtual administrator, so it stays available on a default install. It carries the reporter setup steps (install, configure, run, plus `wrapConfig` and the capture fixtures under **Go further**) and a **capability checklist**: for each optional feature, whether this instance shows evidence of actually using it.
 
 The checklist is deliberately evidence-based rather than config-based, so it answers the question an empty panel raises — *is this blank because it's broken, or because I never switched it on?* In the desktop build the page also carries the local instance's reporter URL and token, its MCP client configuration, the data location, and background-service control.
 

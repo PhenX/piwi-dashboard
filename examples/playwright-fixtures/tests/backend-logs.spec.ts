@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures';
 
-// The app is instrumented with @piwitests/instrumentation (see
+// The app is instrumented with @piwitests/instrumentation-nitro (see
 // app/plugins/piwi-test-logs.ts): each response carries its server-side
 // Warning/Error logs in the X-Piwi-Logs header, and the fixtures attach them
 // to the matching network request. On the dashboard, open this test's
