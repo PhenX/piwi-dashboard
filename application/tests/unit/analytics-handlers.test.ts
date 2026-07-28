@@ -20,7 +20,7 @@ const { getAnalyticsBrowserMatrix } = await import('../../shared/handlers/analyt
 const { getAnalyticsSlowEndpoints } = await import('../../shared/handlers/analytics/slow-endpoints');
 const { evaluateInsightRules } = await import('../../shared/analytics/insight-rules');
 const { parseAnalyticsScope, MAX_ANALYTICS_DAYS } = await import('../../shared/analytics/scope');
-const { ANALYTICS_WIDGETS } = await import('../../shared/analytics/registry');
+const { ANALYTICS_WIDGETS, ANALYTICS_BANDS } = await import('../../shared/analytics/registry');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const daysAgo = (days: number) => new Date(Date.now() - days * DAY_MS);
@@ -198,6 +198,17 @@ describe('analytics registry', () => {
     for (const widget of ANALYTICS_WIDGETS) {
       const result = await runAnalyticsWidget(db, widget.id, DEFAULT_SCOPE, 'all');
       expect(result).toBeDefined();
+    }
+  });
+
+  test('every widget sits in a declared band, and every band has widgets', () => {
+    const bandIds = new Set(ANALYTICS_BANDS.map((b) => b.id));
+    for (const widget of ANALYTICS_WIDGETS) {
+      expect(bandIds.has(widget.band)).toBe(true);
+    }
+    // An empty band would render a heading over nothing.
+    for (const band of ANALYTICS_BANDS) {
+      expect(ANALYTICS_WIDGETS.some((w) => w.band === band.id)).toBe(true);
     }
   });
 });

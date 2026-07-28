@@ -6,13 +6,15 @@ useHead({ title: 'Settings — Piwi Dashboard' });
 const { envManaged } = useSettingsEnvState();
 const navItems = useSettingsNav(envManaged);
 
+// `navItems` already arrives grouped (Instance / Analysis / meta); the docs link
+// is appended as its own trailing section.
 const links = computed<NavigationMenuItem[][]>(() => [
-  navItems.value,
+  ...navItems.value,
   [
     {
       label: 'Documentation',
       icon: 'i-lucide-book-open',
-      to: 'https://github.com/piwitests/platform',
+      to: 'https://piwitests.github.io',
       target: '_blank',
     },
   ],
