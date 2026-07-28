@@ -37,8 +37,8 @@ packages/server/      @piwitests/server — published npm run-option (`npx @piwi
 reporter/             @piwitests/reporter — the Playwright reporter (TypeScript → bundled via tsup)
 desktop/              Tauri desktop shell that bundles and runs the same server locally
 docs/                 VitePress documentation site, published to GitHub Pages
-integrations/nitro/   Backend-log instrumentation for Nitro apps
-integrations/aspnetcore/  Backend-log instrumentation for ASP.NET Core (NuGet)
+integrations/nitro/   @piwitests/instrumentation-nitro — backend-log instrumentation for Nitro apps
+integrations/aspnetcore/  PiwiTests.Instrumentation.AspNetCore — the same for ASP.NET Core (NuGet)
 examples/             Standalone usage examples (Playwright fixtures)
 plans/                Local working docs — gitignored, never committed
 ```

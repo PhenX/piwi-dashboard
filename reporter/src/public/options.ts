@@ -71,7 +71,7 @@ export interface PiwiDashboardOptions {
   /**
    * Capture server-side spans for each API/document request the test makes,
    * read from the `X-Piwi-Trace` response header emitted by a Piwi
-   * instrumentation plugin (e.g. `@piwitests/instrumentation`). The spans show
+   * instrumentation plugin (e.g. `@piwitests/instrumentation-nitro`). The spans show
    * up next to the network request in the dashboard and feed AI diagnosis. Free
    * when no instrumentation is present (the header is simply absent). Defaults
    * to `true`; automatically disabled when `collectPerformanceMetrics` is
