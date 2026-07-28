@@ -13,6 +13,8 @@ The `@piwitests/reporter` package is a custom Playwright reporter that automatic
 npm install --save-dev @piwitests/reporter
 ```
 
+Or let `npx piwi init` do the install and wiring for you — see the [one-command setup](./getting-started#fast-path-npx-piwi-init) in Getting started. The rest of this page is the full manual reference.
+
 ## Basic configuration
 
 Add the reporter to your `playwright.config.ts`:
