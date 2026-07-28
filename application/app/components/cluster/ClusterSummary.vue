@@ -15,9 +15,6 @@ const emit = defineEmits<{
   'save-triage': [];
 }>();
 
-// Triage is the only metadata block alongside the cluster info card.
-const { summaryColSpanClass } = useDetailGrid(() => 1);
-
 // Null until a fix lands, which is what hides the whole resolution block on the
 // clusters that are still broken.
 const resolution = computed(() => fixVerificationBadge(props.cluster.fixVerification));
@@ -74,7 +71,7 @@ const triageStatusOptions = [
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
       <!-- Left: cluster metadata -->
-      <div :class="summaryColSpanClass">
+      <div class="lg:col-span-9">
         <SectionCard :title="cluster.signature">
           <div class="space-y-3">
             <p v-if="cluster.title" class="text-sm font-medium break-words text-gray-500 dark:text-gray-400">
