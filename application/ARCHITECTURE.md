@@ -154,7 +154,8 @@ Shared building blocks worth knowing before writing new markup (`AGENTS.md` make
 - **Structure** — `SectionCard` (standard icon/title/count/subtitle header, `actions` + `footer` slots),
   `CollapsibleSectionCard` (same contract + required `storageKey`, cookie-persisted fold state via `useFoldedState`,
   `#folded` peek slot), `FoldableSummary`, `DetailPageLayout` (summary + tabs + panels with correct flex height at `lg`+,
-  single-document scroll below), `BlockCard`, `StatusBlock`.
+  single-document scroll below), `SummaryMetaStrip` + `MetaStripGroup` (the wrapping fact-group footer of detail
+  summary cards).
 - **States** — `EmptyState`, `LoadingState`, `ErrorState` (with an `action` slot).
 - **Data display** — `StatTile` + `StatTileGrid` (auto-fitting, no per-page breakpoints), `TableScroller`,
   `FilterToolbar`, `ChartCard`, `ChartLegend`, `ChartMarkerTooltip`, `MiniRunBars`, `DurationValue` (tight `210ms` via
@@ -164,9 +165,10 @@ Shared building blocks worth knowing before writing new markup (`AGENTS.md` make
   `OpenInIdeSettingsModal`, `DocLink`, `LinkChip` / `EntityLinks`.
 - **Help & settings** — `HelpHint` (topic keys from `app/utils/help-content.ts`), `SettingsField`, `EnvManagedBadge`,
   `EnvManagedAlert`.
-- **Domain widgets** — `RunStatusBadge`, `TestStatusBar`, `TagBadge` / `TagsSelect`, `BrowserBadge`, `CiEnvCard`,
-  `SourceInfoCard`, `MarkerBadge` / `MarkerFormModal`, `ScreenshotLightbox`, `VideoPlayer`, `TraceListItem`,
-  `LocatorHealingPanel` / `LocatorAlternativeRow`, `SnapshotLocatorPicker`, `EnvironmentDiffCard`, `DataLocationCard`.
+- **Domain widgets** — `RunStatusBadge`, `StatusChip` (status icon + label in one badge, for detail summaries),
+  `TestStatusBar`, `TagBadge` / `TagsSelect`, `BrowserBadge`, `MarkerBadge` / `MarkerFormModal`,
+  `ScreenshotLightbox`, `VideoPlayer`, `TraceListItem`, `LocatorHealingPanel` / `LocatorAlternativeRow`,
+  `SnapshotLocatorPicker`, `EnvironmentDiffCard`, `DataLocationCard`.
 
 ### Composables & utils
 

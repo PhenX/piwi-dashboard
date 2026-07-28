@@ -523,6 +523,8 @@ provide(clusterSectionLocatorKey, {
             :steps-count="steps.length"
             :historical-timing="historicalTiming"
             :stable-links="(testCase as any)?.stableLinks ?? null"
+            :project-key="testCase?.testRun?.project?.id"
+            :project-name="testCase?.testRun?.project?.name"
             @refresh="refresh()"
           />
         </template>

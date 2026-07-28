@@ -33,7 +33,13 @@ const segments = computed(() => {
 
 <template>
   <UTooltip :ui="{ content: 'overflow-visible !p-0' }">
-    <div v-if="total > 0" class="flex h-2.5 w-full min-w-30 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+    <!-- 2px gaps let the track show between segments, so adjacent fills stay
+         separable for colorblind readers (green|red is near-identical under
+         deuteranopia). -->
+    <div
+      v-if="total > 0"
+      class="flex gap-0.5 h-2.5 w-full min-w-30 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700"
+    >
       <div
         v-for="seg in segments"
         :key="seg.key"
