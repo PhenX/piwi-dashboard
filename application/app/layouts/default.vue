@@ -70,6 +70,8 @@ useNotificationStream();
 // caller of useDashboard(); without it the shortcuts never register.
 useDashboard();
 
+const { canSeeAdmin } = useAuth();
+
 // Extract current project ID from route (if viewing a project page)
 const currentProjectId = computed(() => {
   // Check if route path starts with /projects/:id
@@ -161,14 +163,19 @@ const links = computed(() => {
       open.value = false;
     },
   });
-  bottomLinks.unshift({
-    label: 'Setup',
-    icon: 'i-lucide-rocket',
-    to: '/setup',
-    onSelect: () => {
-      open.value = false;
-    },
-  });
+  // Setup is admin-only: it configures how results reach this instance and, in
+  // the desktop build, exposes the local access token. Hiding the link also
+  // removes it from the command palette, which is built from these same items.
+  if (canSeeAdmin.value) {
+    bottomLinks.unshift({
+      label: 'Setup',
+      icon: 'i-lucide-rocket',
+      to: '/setup',
+      onSelect: () => {
+        open.value = false;
+      },
+    });
+  }
   bottomLinks.unshift({
     label: 'API Docs',
     icon: 'i-lucide-book-open',

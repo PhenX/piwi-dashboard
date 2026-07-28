@@ -13,10 +13,18 @@ import type { SettingsPageId } from '../../app/utils/settings-metadata';
  * imported. `computed` is the real Vue one, so the returned ref behaves.
  */
 function stubNuxt(opts: { authEnabled?: boolean; isAdmin?: boolean; desktop?: boolean } = {}) {
+  const authEnabled = opts.authEnabled ?? false;
+  const isAdmin = ref(opts.isAdmin ?? false);
+
   vi.stubGlobal('computed', computed);
-  vi.stubGlobal('useAuth', () => ({ isAdmin: ref(opts.isAdmin ?? false) }));
-  vi.stubGlobal('useRuntimeConfig', () => ({ public: { authEnabled: opts.authEnabled ?? false } }));
+  vi.stubGlobal('useRuntimeConfig', () => ({ public: { authEnabled } }));
   vi.stubGlobal('useIsDesktop', () => opts.desktop ?? false);
+  // Mirrors the real `useAuth`: with auth disabled there are no users, so nobody
+  // holds the administrator role and `canSeeAdmin` has to fall back to true.
+  vi.stubGlobal('useAuth', () => ({
+    isAdmin,
+    canSeeAdmin: computed(() => !authEnabled || isAdmin.value),
+  }));
 }
 
 const pathsOf = (nav: { value: { to?: string | object }[][] }) => nav.value.flat().map((i) => i.to);

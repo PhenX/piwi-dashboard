@@ -16,11 +16,7 @@ import { buildSettingsNavSections, type SettingsPageId } from '~/utils/settings-
  * badges are shown.
  */
 export function useSettingsNav(envManaged?: MaybeRefOrGetter<Record<SettingsPageId, boolean>>) {
-  const { isAdmin } = useAuth();
-  const config = useRuntimeConfig();
-  // When auth is disabled, every visitor is a virtual administrator — show all
-  // pages (mirrors the per-page `isAdmin` fallback in users.vue/tags.vue).
-  const canSeeAdmin = computed(() => !config.public.authEnabled || isAdmin.value);
+  const { canSeeAdmin } = useAuth();
   const isDesktop = useIsDesktop();
 
   return computed<NavigationMenuItem[][]>(() =>

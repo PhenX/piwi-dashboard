@@ -118,6 +118,21 @@ export const useAuth = () => {
   const isReporter = computed(() => hasRole([Role.REPORTER]));
   const canEdit = computed(() => hasRole([Role.ADMINISTRATOR]));
 
+  /**
+   * Whether admin-only surfaces should be shown.
+   *
+   * Differs from `isAdmin` in one case that matters: when authentication is
+   * disabled there are no users at all, so nobody holds the administrator role
+   * and gating on `isAdmin` alone would hide admin surfaces from *everyone* on
+   * a default self-hosted install (and in the desktop build, which runs
+   * single-user with auth off). The server draws the same distinction —
+   * `requireAuth` returns a virtual administrator when auth is disabled.
+   *
+   * This is a UI affordance, never an authorization decision: the server still
+   * enforces roles from each route's `x-required-roles`.
+   */
+  const canSeeAdmin = computed(() => !useRuntimeConfig().public.authEnabled || isAdmin.value);
+
   return {
     authState,
     fetchUser,
@@ -127,6 +142,7 @@ export const useAuth = () => {
     isAdmin,
     isReporter,
     canEdit,
+    canSeeAdmin,
     // Demo "act as" switcher
     demoUsers,
     currentDemoUserId,
