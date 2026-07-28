@@ -1,5 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
+/** An already-installed Chromium to use instead of the revision Playwright pins — see application/playwright.config.ts's own copy of this. */
+const chromiumExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?.trim() || '';
+
 /**
  * Standalone Playwright project for the picker overlay's interactive DOM
  * behavior — hover/highlight/snap/tree-walk/pick/escape and the anchors and
@@ -12,13 +15,6 @@ export default defineConfig({
   reporter: [['line']],
   use: {
     headless: true,
-    launchOptions: {
-      // This package's @playwright/test peer resolves to a browser revision
-      // this sandbox doesn't have pre-installed (only the regular chromium
-      // binary is, not the separate chrome-headless-shell variant that
-      // `headless: true` otherwise resolves to). Point at the pre-installed
-      // binary directly instead of downloading a new one.
-      executablePath: '/opt/pw-browsers/chromium',
-    },
+    ...(chromiumExecutable ? { launchOptions: { executablePath: chromiumExecutable } } : {}),
   },
 });
