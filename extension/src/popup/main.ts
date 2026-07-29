@@ -203,6 +203,20 @@ async function refreshActiveProjectSelect(): Promise<void> {
 
 type RecordUiState = 'idle' | 'recording' | 'stopped';
 
+/**
+ * The record button's state and the tab it applies to, resolved once on open.
+ *
+ * Held here rather than read inside the click handler because starting a
+ * recording has to call `chrome.permissions.request` while the click's user
+ * gesture is still live — Firefox rejects the call outright from anywhere
+ * else, and `options/main.ts` documents the same constraint for the instance
+ * origin. Reading storage or querying tabs first would spend the gesture on an
+ * await. The button stays disabled until this is populated, so a click can
+ * never act on a state that hasn't loaded.
+ */
+let uiState: RecordUiState = 'idle';
+let recordTab: chrome.tabs.Tab | null = null;
+
 async function recordUiState(): Promise<{ state: RecordUiState; steps: number }> {
   const rec = await getRecordingState();
   if (rec.active) return { state: 'recording', steps: rec.events.length };
@@ -211,7 +225,9 @@ async function recordUiState(): Promise<{ state: RecordUiState; steps: number }>
 }
 
 async function refreshRecordButton(): Promise<void> {
-  const { state, steps } = await recordUiState();
+  const [{ state, steps }, tab] = await Promise.all([recordUiState(), activeTab()]);
+  uiState = state;
+  recordTab = tab;
   if (state === 'recording') {
     recordLabel.textContent = `Stop recording (${steps})`;
     recordHint.textContent = 'Steps captured so far';
@@ -222,25 +238,22 @@ async function refreshRecordButton(): Promise<void> {
     recordLabel.textContent = 'Record actions';
     recordHint.textContent = 'Multi-page → TypeScript';
   }
+  recordBtn.disabled = false;
 }
 
-async function startRecordingFlow(): Promise<void> {
-  const tab = await activeTab();
-  if (tab?.id == null || !tab.url) {
-    statusEl.textContent = 'No active tab to record.';
-    return;
-  }
-  let origin: string;
+/** The host permission a recording on `url` needs, or null when the page can't be recorded at all. */
+function recordOriginPattern(url: string | undefined): string | null {
+  if (!url) return null;
   try {
-    origin = new URL(tab.url).origin;
+    const { origin } = new URL(url);
+    return origin === 'null' ? null : `${origin}/*`;
   } catch {
-    statusEl.textContent = "Can't record on this page.";
-    return;
+    return null;
   }
-  const originPattern = `${origin}/*`;
+}
 
-  const granted = await chrome.permissions.request({ origins: [originPattern] });
-  if (!granted) {
+async function startRecordingFlow(originPattern: string, tabId: number, granted: Promise<boolean>): Promise<void> {
+  if (!(await granted)) {
     statusEl.textContent = 'Permission for this site is needed to record across pages.';
     return;
   }
@@ -248,7 +261,7 @@ async function startRecordingFlow(): Promise<void> {
   const response = (await chrome.runtime.sendMessage({
     type: 'piwi-start-recording',
     originPattern,
-    tabId: tab.id,
+    tabId,
   })) as {
     ok: boolean;
     error?: string;
@@ -263,10 +276,15 @@ async function startRecordingFlow(): Promise<void> {
 async function stopRecordingFlow(): Promise<void> {
   await stopRecording();
   try {
+    // The worker owns the fan-out that tears the HUD and border down in every
+    // tab this recording touched — see `notifyRecorderTabs` in background.
     await chrome.runtime.sendMessage({ type: 'piwi-recording-stopped' });
   } catch {
     // Background may already be asleep between messages — the storage write above already stuck.
   }
+  // Injecting rather than relying on that fan-out for the review panel itself:
+  // this tab may never have had the recorder attached, and the panel is what
+  // the user clicked Stop to get.
   await inject('record-panel.js');
 }
 
@@ -275,15 +293,37 @@ async function reviewRecordingFlow(): Promise<void> {
 }
 
 recordBtn.addEventListener('click', () => {
-  void (async () => {
-    const { state } = await recordUiState();
-    if (state === 'recording') await stopRecordingFlow();
-    else if (state === 'stopped') await reviewRecordingFlow();
-    else await startRecordingFlow();
-  })();
+  if (uiState === 'recording') {
+    void stopRecordingFlow();
+    return;
+  }
+  if (uiState === 'stopped') {
+    void reviewRecordingFlow();
+    return;
+  }
+
+  const originPattern = recordOriginPattern(recordTab?.url);
+  if (originPattern == null || recordTab?.id == null) {
+    statusEl.textContent = "Can't record on this page.";
+    return;
+  }
+  // Synchronous, before any await: this is the user gesture the request needs.
+  let granted: Promise<boolean>;
+  try {
+    granted = chrome.permissions.request({ origins: [originPattern] });
+  } catch {
+    statusEl.textContent = 'Permission for this site is needed to record across pages.';
+    return;
+  }
+  void startRecordingFlow(originPattern, recordTab.id, granted);
 });
 
-void refreshRecordButton();
+recordBtn.disabled = true;
+void refreshRecordButton().catch(() => {
+  // Left disabled on purpose: acting on a state we failed to read could start a
+  // second recording over a live one.
+  statusEl.textContent = "Couldn't read the recorder state — reopen the popup.";
+});
 void refreshActiveProjectSelect();
 void renderPickShortcutHint();
 void highlightActiveTool();

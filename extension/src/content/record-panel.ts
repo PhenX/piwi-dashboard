@@ -430,6 +430,7 @@ async function renderReviewPanel(events: RawCaptureEvent[]): Promise<void> {
 
 async function handleStop(): Promise<void> {
   const state = await stopRecording();
+  stopCapture();
   try {
     chrome.runtime.sendMessage({ type: 'piwi-recording-stopped' });
   } catch {
@@ -475,7 +476,46 @@ async function refreshCatalogForThisPage(): Promise<void> {
   await requestCatalogRefresh(activeProject?.projectId ?? null);
 }
 
+interface RecorderGlobals {
+  /** Aborting this detaches every capture listener at once — see `stopCapture`. */
+  __piwiRecordCapture?: AbortController;
+  /** Serializes concurrent injections of this script into one document. */
+  __piwiRecordPanelRun?: Promise<void>;
+  /** Whether this document's `chrome.runtime` stop listener is already registered. */
+  __piwiRecordStopListener?: boolean;
+}
+
+function recorderGlobals(): RecorderGlobals {
+  return globalThis as RecorderGlobals;
+}
+
+/**
+ * Ends capture on this page: detaches the listeners, drops the HUD, and drops
+ * the border that says the tab is being recorded.
+ *
+ * Idempotent, and safe when nothing was ever attached — it runs both from the
+ * HUD's own Stop button and from a stop initiated elsewhere (the popup, or
+ * another tab), which reaches this document as a `piwi-recording-stopped`
+ * message from the service worker.
+ */
+function stopCapture(): void {
+  const g = recorderGlobals();
+  g.__piwiRecordCapture?.abort();
+  g.__piwiRecordCapture = undefined;
+  document.getElementById(HUD_HOST_ID)?.remove();
+  removeRecordingFrame();
+}
+
 function attachListeners(): void {
+  const g = recorderGlobals();
+  g.__piwiRecordCapture?.abort();
+  const controller = new AbortController();
+  g.__piwiRecordCapture = controller;
+  // Capture phase throughout, so a page that stops propagation on its own
+  // handlers can't hide an interaction from the recorder; `signal` is what
+  // makes the whole set removable in one go from `stopCapture`.
+  const opts = { capture: true, signal: controller.signal };
+
   document.addEventListener(
     'click',
     (e) => {
@@ -487,7 +527,7 @@ function attachListeners(): void {
       if (kind === 'checkbox' || kind === 'radio') return; // the resulting `change` event records this one
       void appendRecordingEvent(buildEvent('click', el)).then(() => void refreshHud());
     },
-    true,
+    opts,
   );
 
   document.addEventListener(
@@ -508,7 +548,7 @@ function attachListeners(): void {
         }),
       ).then(() => void refreshHud());
     },
-    true,
+    opts,
   );
 
   document.addEventListener(
@@ -529,7 +569,7 @@ function attachListeners(): void {
         ).then(() => void refreshHud());
       }
     },
-    true,
+    opts,
   );
 
   document.addEventListener(
@@ -540,8 +580,28 @@ function attachListeners(): void {
       const el = e.target instanceof Element ? e.target : null;
       void appendRecordingEvent(buildEvent('keydown', el, { value: 'Enter' })).then(() => void refreshHud());
     },
-    true,
+    opts,
   );
+}
+
+/**
+ * Listens for a stop that came from somewhere other than this page's own HUD —
+ * the popup's Stop button, or the HUD in a different tab of the same recording.
+ * The service worker fans the stop out with `chrome.tabs.sendMessage`, which is
+ * the only thing that reaches a content script: `chrome.runtime.sendMessage`
+ * goes to extension pages and the worker, never here, so a stop from the popup
+ * used to leave this page's HUD and border standing indefinitely.
+ *
+ * Registered once per document — repeated starts on the same page must not
+ * stack handlers.
+ */
+function installStopListener(): void {
+  const g = recorderGlobals();
+  if (g.__piwiRecordStopListener) return;
+  g.__piwiRecordStopListener = true;
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === 'piwi-recording-stopped') stopCapture();
+  });
 }
 
 /**
@@ -555,44 +615,56 @@ function attachListeners(): void {
  * nothing.
  */
 async function runRecordPanel(): Promise<void> {
-  const g = globalThis as any;
-  if (g.__piwiRecordPanelActive) return;
-  g.__piwiRecordPanelActive = true;
-
-  try {
-    await initRecordPanel();
-  } catch (err) {
-    // Clear the guard so a later injection can retry: the usual cause is the
-    // background worker not having widened session-storage access yet, which
-    // is transient. Latching the guard here is what used to turn one unlucky
-    // read into "no HUD on this page at all".
-    g.__piwiRecordPanelActive = false;
-    console.warn('[Piwi Picker] recorder failed to start on this page:', err);
-  }
+  const g = recorderGlobals();
+  // Chained rather than latched: this script is injected both by the dynamic
+  // registration (on every navigation) and one-off from the popup, and the two
+  // can land together. A plain boolean guard would let both pass the
+  // "already capturing?" check below before either had attached — and, worse,
+  // a guard that stayed latched after a stop made the review panel
+  // unreachable, since a re-injection returned before rendering anything.
+  // Errors are swallowed into the chain so one bad run never blocks the next:
+  // the usual cause is the worker not having widened session-storage access
+  // yet, which is transient.
+  g.__piwiRecordPanelRun = (g.__piwiRecordPanelRun ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(() => initRecordPanel())
+    .catch((err: unknown) => {
+      console.warn('[Piwi Picker] recorder failed to start on this page:', err);
+    });
+  await g.__piwiRecordPanelRun;
 }
 
 async function initRecordPanel(): Promise<void> {
   // Before any session-storage read — see `session-access.ts`.
   await ensureSessionAccess();
   const state = await getRecordingState();
-  if (state.active) {
-    // Seed this page's own URL so a mid-recording navigation's `RecordedStep`s
-    // carry the right `pageUrl`; only the very first one across the whole
-    // recording survives into a `page.goto()` — see `normalizeSteps`.
-    await appendRecordingEvent(buildEvent('navigate', null, { value: location.href }));
-    attachListeners();
-    // Once per page, not per step — `refreshHud` runs on every captured
-    // interaction and must stay local-only. TTL-guarded, so a recording that
-    // crosses many pages still only re-fetches occasionally.
-    void refreshCatalogForThisPage().then(() => void refreshHud());
-    await refreshHud();
-    chrome.runtime.onMessage.addListener((message) => {
-      if (message?.type === 'piwi-recording-stopped')
-        void getRecordingState().then((s) => void renderReviewPanel(s.events));
-    });
-  } else if (state.events.length > 0) {
-    await renderReviewPanel(state.events);
+
+  if (!state.active) {
+    // The recording is over, however it ended. Tear the capture surfaces down
+    // first — a border that outlives the capture it signals is worse than no
+    // border at all — then show whatever is left to review.
+    stopCapture();
+    if (state.events.length > 0) await renderReviewPanel(state.events);
+    return;
   }
+
+  if (recorderGlobals().__piwiRecordCapture) {
+    // Already capturing in this document; a second injection only refreshes.
+    await refreshHud();
+    return;
+  }
+
+  // Seed this page's own URL so a mid-recording navigation's `RecordedStep`s
+  // carry the right `pageUrl`; only the very first one across the whole
+  // recording survives into a `page.goto()` — see `normalizeSteps`.
+  await appendRecordingEvent(buildEvent('navigate', null, { value: location.href }));
+  attachListeners();
+  installStopListener();
+  // Once per page, not per step — `refreshHud` runs on every captured
+  // interaction and must stay local-only. TTL-guarded, so a recording that
+  // crosses many pages still only re-fetches occasionally.
+  void refreshCatalogForThisPage().then(() => void refreshHud());
+  await refreshHud();
 }
 
 void runRecordPanel();
