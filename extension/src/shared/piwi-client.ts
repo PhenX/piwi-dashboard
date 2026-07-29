@@ -3,10 +3,16 @@ import type { ConnectionSettings } from './connection-settings';
 
 /**
  * Talks to a Piwi instance — the only place in this extension that makes a
- * network call. Called from the background service worker and the options
- * page only, never from a content script, so the API key is never reachable
- * from a web page's JS context (matches `extension/AGENTS.md`'s standalone
- * stance: connected mode is opt-in and clearly separated).
+ * network call. Called from the options page (on save) and the background
+ * service worker (`piwi-refresh-catalog`) only, never from a content script,
+ * so the API key is never reachable from a web page's JS context (matches
+ * `extension/AGENTS.md`'s standalone stance: connected mode is opt-in and
+ * clearly separated).
+ *
+ * These requests need a host permission for the instance's origin: the
+ * dashboard API sends no CORS headers, and `X-API-Key` makes them non-simple
+ * so the browser preflights them. The options page requests that permission
+ * inside its own click handler — the worker has no user gesture to do so.
  */
 
 export interface ProjectOption {

@@ -35,6 +35,37 @@ function currentInstanceSettings(): ConnectionSettings {
   return { instanceUrl: instanceUrlEl.value.trim(), apiKey: apiKeyEl.value.trim(), projectMappings: [] };
 }
 
+/**
+ * Grants this extension host access to the Piwi instance's own origin.
+ *
+ * Needed because the dashboard API doesn't send CORS headers, so a
+ * cross-origin fetch from an extension context only succeeds with a host
+ * permission. It matters most for the *background* refresh
+ * (`piwi-refresh-catalog`): a service worker has no user gesture and so can
+ * never request one itself, which would leave the catalog frozen at whatever
+ * this page last fetched.
+ *
+ * `chrome.permissions.request` only counts while the user gesture is still
+ * live, so callers must invoke this before awaiting anything else in the
+ * click handler. Granted narrowly — the one instance origin, never the broad
+ * http/https patterns the manifest declares as merely requestable.
+ */
+async function ensureInstanceHostPermission(instanceUrl: string): Promise<boolean> {
+  let origin: string;
+  try {
+    origin = new URL(instanceUrl).origin;
+  } catch {
+    return false;
+  }
+  const originPattern = `${origin}/*`;
+  if (await chrome.permissions.contains({ origins: [originPattern] })) return true;
+  try {
+    return await chrome.permissions.request({ origins: [originPattern] });
+  } catch {
+    return false;
+  }
+}
+
 function renderMappings(): void {
   mappingsEl.innerHTML = '';
 
@@ -131,9 +162,15 @@ async function loadInitial(): Promise<void> {
 }
 
 testBtn.addEventListener('click', () => {
+  const settings = currentInstanceSettings();
+  // Before any await, so the click still counts as the user gesture.
+  const permission = ensureInstanceHostPermission(settings.instanceUrl);
   void (async () => {
-    const settings = currentInstanceSettings();
     setStatus('Testing…');
+    if (!(await permission)) {
+      setStatus('Access to that instance was denied — grant it to let Piwi Picker read your catalog.', 'error');
+      return;
+    }
     const result = await testConnection(settings);
     if (!result.ok) {
       setStatus(result.error, 'error');
@@ -150,12 +187,15 @@ testBtn.addEventListener('click', () => {
 });
 
 saveBtn.addEventListener('click', () => {
+  const base = currentInstanceSettings();
+  // Before any await, so the click still counts as the user gesture.
+  const permission = ensureInstanceHostPermission(base.instanceUrl);
   void (async () => {
-    const base = currentInstanceSettings();
     if (!base.instanceUrl) {
       setStatus('Enter an instance URL first.', 'error');
       return;
     }
+    const granted = await permission;
 
     const valid = mappings.filter((m) => m.urlPattern.trim() && m.projectId != null);
     const incompleteCount = mappings.length - valid.length;
@@ -186,6 +226,10 @@ saveBtn.addEventListener('click', () => {
 
     const parts = [`Saved ${valid.length} mapping${valid.length === 1 ? '' : 's'}`];
     if (incompleteCount > 0) parts.push(`${incompleteCount} incomplete row${incompleteCount === 1 ? '' : 's'} skipped`);
+    // Without the host permission the catalog can still be fetched from this
+    // page if the instance happens to allow the origin, but the background
+    // refresh never can — so the catalog would silently stop updating.
+    if (!granted) parts.push('access to the instance was denied, so the catalog will not refresh on its own');
     if (distinctProjectIds.length > 0) {
       parts.push(
         `cached ${cachedFunctionCount} function${cachedFunctionCount === 1 ? '' : 's'} across ${distinctProjectIds.length} project${distinctProjectIds.length === 1 ? '' : 's'}`,

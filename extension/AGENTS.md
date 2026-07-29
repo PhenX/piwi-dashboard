@@ -65,9 +65,24 @@ applies here" (record-panel's HUD and review panel, test-function-panel, the pop
 calls this one function rather than re-deriving it.
 
 **No recording is ever sent to the instance** — only each mapped project's catalog is
-fetched, and only `piwi-client.ts`, called from `src/options/` (never a content script),
-makes that request, so the API key never reaches a page's JS context. `record-panel.ts`
-only ever reads the already-fetched catalog back out of `catalog-cache.ts`; it never fetches.
+fetched, and only `piwi-client.ts` makes that request, from exactly two contexts:
+`src/options/` (on save) and the background worker's `piwi-refresh-catalog` handler.
+**Never from a content script**, so the API key never reaches a page's JS context —
+`record-panel.ts`/`test-function-panel.ts` read the cache and, when they need fresher data,
+ask the worker via `catalog-refresh.ts` rather than fetching themselves. Keep it that way.
+
+Staleness matters here: the catalog used to be written only by the options page's save
+handler, so a function added in the dashboard afterwards never reached the extension at all.
+The panels now render from cache first (instant, and fine with the instance unreachable) and
+revalidate in the background, TTL-guarded by `CATALOG_TTL_MS`; the "Test functions" panel also
+has an explicit Refresh that forces past the TTL. `refreshHud` runs on **every captured step**
+during a recording — never add a fetch to it; the record panel refreshes once per page load
+instead.
+
+The dashboard API sends no CORS headers, and the `X-API-Key` header makes these requests
+non-simple, so the browser preflights them. A granted host permission for the instance origin
+is what actually makes the fetch work; the options page requests it inside the save/test click
+(a service worker has no user gesture and can never request one itself).
 
 `test-function-panel.ts` (+ its pure half, `test-function-scan.ts`) is the other consumer of
 the cached catalog: a standalone popup action ("Test functions") that scores every catalog

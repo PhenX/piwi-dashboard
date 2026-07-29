@@ -1,6 +1,7 @@
 import { TAG_TO_ROLE, INPUT_TYPE_TO_ROLE } from '@piwitests/core/locator-generation';
 import { testCatalogAgainstPage, type FunctionTestResult } from './test-function-scan.js';
 import { getCachedCatalog } from '../shared/catalog-cache.js';
+import { requestCatalogRefresh } from '../shared/catalog-refresh.js';
 import { getConnectionSettings } from '../shared/connection-settings.js';
 import { projectCatalogUrl } from '../shared/piwi-client.js';
 import { getActiveProjectOverride, resolveActiveProject } from '../shared/active-project.js';
@@ -72,6 +73,12 @@ async function renderPanel(): Promise<void> {
     .manage-link:hover, .manage-link:focus-visible { text-decoration: underline; }
     .close { background: none; border: none; color: inherit; opacity: .7; cursor: pointer; font-size: 18px; line-height: 1; padding: 4px 8px; border-radius: 6px; }
     .close:hover, .close:focus-visible { opacity: 1; background: rgba(128,128,128,.15); }
+    .header-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .refresh { background: none; border: 1px solid rgba(128,128,128,.35); color: inherit; font: inherit; font-size: 11.5px;
+      opacity: .85; cursor: pointer; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+    .refresh:hover:not(:disabled), .refresh:focus-visible:not(:disabled) { opacity: 1; border-color: #7c3aed; }
+    .refresh:disabled { opacity: .45; cursor: default; }
+    .refresh-error { color: #eab308; font-size: 11.5px; padding: 4px 0 8px; }
     .empty { color: #9ca3af; font-size: 12.5px; padding: 8px 0; }
     .row { border: 1px solid rgba(128,128,128,.3); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
     .row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -97,7 +104,7 @@ async function renderPanel(): Promise<void> {
 
   const [connection, override] = await Promise.all([getConnectionSettings(), getActiveProjectOverride()]);
   const activeProject = resolveActiveProject(connection, override, location.href);
-  const catalog = await getCachedCatalog(activeProject?.projectId ?? null);
+  const projectId = activeProject?.projectId ?? null;
 
   const header = document.createElement('div');
   header.className = 'header';
@@ -119,27 +126,68 @@ async function renderPanel(): Promise<void> {
     sub.appendChild(manageLink);
   }
   titleWrap.append(title, sub);
+
+  const actions = document.createElement('div');
+  actions.className = 'header-actions';
+  const refreshBtn = document.createElement('button');
+  refreshBtn.className = 'refresh';
+  refreshBtn.textContent = 'Refresh';
+  refreshBtn.title = 'Re-fetch this project’s catalog from Piwi';
+  if (projectId == null) refreshBtn.disabled = true;
   const closeBtn = document.createElement('button');
   closeBtn.className = 'close';
   closeBtn.setAttribute('aria-label', 'Close');
   closeBtn.textContent = '×';
-  header.append(titleWrap, closeBtn);
+  actions.append(refreshBtn, closeBtn);
+  header.append(titleWrap, actions);
   panel.appendChild(header);
 
-  if (catalog.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'empty';
-    empty.textContent =
-      activeProject == null
-        ? 'No project mapped to this page — add a URL pattern for it in the extension’s config, or pick a project from the popup.'
-        : `No functions in ${activeProject.projectLabel}’s catalog yet — add one in the dashboard, or extract one from a recording.`;
-    panel.appendChild(empty);
-  } else {
+  const resultsEl = document.createElement('div');
+  panel.appendChild(resultsEl);
+
+  function renderResults(catalog: Awaited<ReturnType<typeof getCachedCatalog>>): void {
+    resultsEl.replaceChildren();
+    if (catalog.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent =
+        activeProject == null
+          ? 'No project mapped to this page — add a URL pattern for it in the extension’s config, or pick a project from the popup.'
+          : `No functions in ${activeProject.projectLabel}’s catalog yet — add one in the dashboard, or extract one from a recording.`;
+      resultsEl.appendChild(empty);
+      return;
+    }
     const results = testCatalogAgainstPage(catalog, MAPS);
     const order = { ready: 0, partial: 1, 'not-found': 2 };
     results.sort((a, b) => order[a.verdict] - order[b.verdict]);
-    for (const result of results) panel.appendChild(renderResult(result));
+    for (const result of results) resultsEl.appendChild(renderResult(result));
   }
+
+  // Cache first so the panel is instant and still works with the instance
+  // unreachable; the re-fetch below then swaps in anything newer.
+  renderResults(await getCachedCatalog(projectId));
+
+  async function revalidate(force: boolean): Promise<void> {
+    if (projectId == null) return;
+    refreshBtn.disabled = true;
+    const previousLabel = refreshBtn.textContent;
+    if (force) refreshBtn.textContent = 'Refreshing…';
+    const result = await requestCatalogRefresh(projectId, { force });
+    if (result.ok && result.refreshed) renderResults(await getCachedCatalog(projectId));
+    refreshBtn.textContent = previousLabel;
+    refreshBtn.disabled = false;
+    if (!result.ok && force) {
+      const failed = document.createElement('div');
+      failed.className = 'refresh-error';
+      failed.textContent = `Couldn't refresh: ${result.error} Showing the last cached catalog.`;
+      resultsEl.prepend(failed);
+    }
+  }
+
+  refreshBtn.addEventListener('click', () => void revalidate(true));
+  // Opening the panel is itself a "show me the current catalog" request —
+  // TTL-guarded so repeated opens don't hit the instance every time.
+  void revalidate(false);
 
   const finish = () => host.remove();
   closeBtn.addEventListener('click', finish);

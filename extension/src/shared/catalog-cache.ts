@@ -3,8 +3,10 @@ import type { TestFunctionEntry } from '@piwitests/core/function-match';
 /**
  * The last-fetched function catalog for every mapped project, cached so
  * `record-panel.ts`/`test-function-panel.ts` (content scripts, with no host
- * permission for the Piwi instance's origin) can read it locally instead of
- * fetching — only the options page ever calls `piwi-client.ts`.
+ * permission for the Piwi instance's origin, and deliberately no access to
+ * the API key) can read it locally instead of fetching. Writes come from the
+ * options page on save and from the background worker's refresh handler —
+ * those are the only two places `piwi-client.ts` is called from.
  * `chrome.storage.local`: useful across a browser restart even with no
  * recording running, and small (a handful of projects' catalogs, not
  * per-session data). Keyed by project id (as a string — object keys are
@@ -13,6 +15,9 @@ import type { TestFunctionEntry } from '@piwitests/core/function-match';
  * (`ConnectionSettings.projectMappings`), not just one.
  */
 const CACHE_KEY = 'piwiCatalogCache';
+
+/** How long a cached catalog is served without a background re-fetch. Short, because a stale entry is still shown instantly while the refresh runs — the cost of a miss is one request, not a wait. */
+export const CATALOG_TTL_MS = 60_000;
 
 interface CatalogCacheEntry {
   entries: TestFunctionEntry[];
@@ -31,6 +36,19 @@ export async function getCachedCatalog(projectId: number | null): Promise<TestFu
   if (projectId == null) return [];
   const store = await readStore();
   return store[String(projectId)]?.entries ?? [];
+}
+
+/**
+ * Whether this project's catalog is old enough to re-fetch. A project that
+ * was never cached at all counts as stale, so a mapping added without a
+ * successful save still fills itself in on first use rather than staying
+ * permanently empty.
+ */
+export async function isCatalogStale(projectId: number, ttlMs = CATALOG_TTL_MS): Promise<boolean> {
+  const store = await readStore();
+  const entry = store[String(projectId)];
+  if (!entry || typeof entry.fetchedAt !== 'number') return true;
+  return Date.now() - entry.fetchedAt >= ttlMs;
 }
 
 export async function setCachedCatalog(projectId: number, entries: TestFunctionEntry[]): Promise<void> {

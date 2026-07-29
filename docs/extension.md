@@ -104,7 +104,7 @@ Then, in Chrome or Edge:
 | `activeTab` | Lets the extension act on the tab you're looking at only when you click the toolbar icon or press the keyboard shortcut — not on every page you visit. |
 | `scripting` | Injects the picker (and the recorder) into the active tab on demand — there is no background content script running on pages you haven't asked it to. |
 | `storage` | Remembers your last-used copy format, a named pick session, the running recording, and (only if you connect) the instance URL/API key, the URL-pattern → project mappings, and each mapped project's cached function catalog — all locally on your machine. Pick sessions, the recording, and a manual **Active project** override specifically use `chrome.storage.session`, which the browser clears when you close it — a working session, not a saved file. |
-| `optional_host_permissions` (`http://*/*`, `https://*/*`, granted nothing by default) | Recording across pages needs to keep working after you navigate, which `activeTab` alone can't do (it's revoked on navigation). Clicking **Record actions** requests access to *the one site you're on* — never `<all_urls>`, never granted in advance — so the recorder can re-attach itself as you move between that site's pages. Nothing else in the extension asks for this. |
+| `optional_host_permissions` (`http://*/*`, `https://*/*`, granted nothing by default) | Recording across pages needs to keep working after you navigate, which `activeTab` alone can't do (it's revoked on navigation). Clicking **Record actions** requests access to *the one site you're on* — never `<all_urls>`, never granted in advance — so the recorder can re-attach itself as you move between that site's pages. The other use is your own Piwi instance's origin, requested when you save the connection settings — the extension needs it to read your function catalog, and to keep that catalog up to date afterwards. Both are single origins you pick, never `<all_urls>`. |
 
 No picking, hover-inspect, locator console, multi-pick, lint overlay, assertion suggester,
 session export, agent-context copy, or standalone recording ever reaches a network. Connecting
@@ -116,9 +116,16 @@ Entirely optional, and off by default. From the toolbar popup, the config (gear)
 settings page for your instance's URL and an API key (`pd_…`, from your account's API key
 settings). Below that is a **Project mappings** table: rows of a URL pattern (wildcards allowed —
 `*` matches within one path segment, `**` crosses segments, e.g. `https://shop.example.com/**`)
-and the project it maps to. Saving fetches every mapped project's function catalog once and
-caches it on your machine — nothing about your browsing is sent in that request beyond each
-project's id.
+and the project it maps to. Saving fetches every mapped project's function catalog and caches it
+on your machine — nothing about your browsing is sent in that request beyond each project's id.
+Saving also asks for access to your instance's origin: the extension needs it to reach the API,
+and without it the catalog can't refresh on its own afterwards.
+
+The cache keeps itself current, so functions you add in the dashboard show up without
+reconnecting: opening **Test functions** shows the cached catalog immediately and re-fetches in
+the background, and its **Refresh** button forces an immediate re-fetch. A recording refreshes
+once per page rather than per step, and again when you stop, so **Copy as TypeScript** matches
+against the catalog as it is now rather than as it was when you connected.
 
 Which mapping applies on a given page is resolved automatically (patterns are checked in order,
 first match wins). The popup's **Active project** select shows the auto-resolved project for the

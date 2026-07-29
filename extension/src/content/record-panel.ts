@@ -25,6 +25,7 @@ import {
   type RecordingState,
 } from '../shared/recording-storage.js';
 import { getCachedCatalog } from '../shared/catalog-cache.js';
+import { requestCatalogRefresh } from '../shared/catalog-refresh.js';
 import { getConnectionSettings } from '../shared/connection-settings.js';
 import { getActiveProjectOverride, resolveActiveProject } from '../shared/active-project.js';
 
@@ -226,6 +227,11 @@ async function renderReviewPanel(events: RawCaptureEvent[]): Promise<void> {
   const session = buildSession(steps, events[0]?.timestamp ?? Date.now());
   const [connection, override] = await Promise.all([getConnectionSettings(), getActiveProjectOverride()]);
   const activeProject = resolveActiveProject(connection, override, location.href);
+  // Worth waiting for here, unlike in the live HUD: this is the one-shot that
+  // feeds "Copy as TypeScript", and generating a spec against a catalog that
+  // predates a function added mid-session would silently emit raw locators
+  // where a call belonged.
+  await requestCatalogRefresh(activeProject?.projectId ?? null);
   const catalog = await getCachedCatalog(activeProject?.projectId ?? null);
   const withCatalog = renderSpec(session, { catalog });
   const raw = renderSpec(session);
@@ -416,6 +422,13 @@ async function refreshHud(): Promise<void> {
   renderHud(state, catalog);
 }
 
+/** One TTL-guarded catalog re-fetch for whichever project this page maps to — called once per page load, never from `refreshHud`. */
+async function refreshCatalogForThisPage(): Promise<void> {
+  const [connection, override] = await Promise.all([getConnectionSettings(), getActiveProjectOverride()]);
+  const activeProject = resolveActiveProject(connection, override, location.href);
+  await requestCatalogRefresh(activeProject?.projectId ?? null);
+}
+
 function attachListeners(): void {
   document.addEventListener(
     'click',
@@ -507,6 +520,10 @@ async function runRecordPanel(): Promise<void> {
     // recording survives into a `page.goto()` — see `normalizeSteps`.
     await appendRecordingEvent(buildEvent('navigate', null, { value: location.href }));
     attachListeners();
+    // Once per page, not per step — `refreshHud` runs on every captured
+    // interaction and must stay local-only. TTL-guarded, so a recording that
+    // crosses many pages still only re-fetches occasionally.
+    void refreshCatalogForThisPage().then(() => void refreshHud());
     await refreshHud();
     chrome.runtime.onMessage.addListener((message) => {
       if (message?.type === 'piwi-recording-stopped')
