@@ -73,14 +73,32 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
           return undefined;
         }
       };
+      // Both of the walks below revisit the same nodes several times over — the
+      // document role scan runs once per anchor ancestor, and a node's text is
+      // read again as its parent's child. Memoized per probe call (the maps are
+      // local and die with it), which turns those repeats into map lookups
+      // instead of fresh attribute reads and fresh `textContent` concatenations.
+      // `textContent` in particular is O(subtree), so re-reading it was what
+      // made a probe of a large page superlinear.
+      const roleMemo = new Map<any, string | null>();
+      const textMemo = new Map<any, string>();
+
       const roleOf = (n: any): string | null => {
+        const cached = roleMemo.get(n);
+        if (cached !== undefined) return cached;
+        let role: string | null;
         const explicit = n.getAttribute('role');
-        if (explicit) return explicit;
-        const tag = (n.tagName || '').toLowerCase();
-        if (tag === 'input') return inputRoles[(n.getAttribute('type') || 'text').toLowerCase()] ?? 'textbox';
-        if (tag === 'select') return n.getAttribute('multiple') != null ? 'listbox' : 'combobox';
-        if (tag === 'a') return n.getAttribute('href') != null ? 'link' : null;
-        return tagRoles[tag] ?? null;
+        if (explicit) {
+          role = explicit;
+        } else {
+          const tag = (n.tagName || '').toLowerCase();
+          if (tag === 'input') role = inputRoles[(n.getAttribute('type') || 'text').toLowerCase()] ?? 'textbox';
+          else if (tag === 'select') role = n.getAttribute('multiple') != null ? 'listbox' : 'combobox';
+          else if (tag === 'a') role = n.getAttribute('href') != null ? 'link' : null;
+          else role = tagRoles[tag] ?? null;
+        }
+        roleMemo.set(n, role);
+        return role;
       };
       const levelOf = (n: any): number | null => {
         const m = /^h([1-6])$/.exec((n.tagName || '').toLowerCase());
@@ -105,7 +123,17 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
       const targetText = (el.textContent || '').replace(/\s+/g, ' ').trim();
       const textNeedle = targetText ? targetText.toLowerCase() : null;
 
-      const normText = (n: any): string => (n.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const normText = (n: any): string => {
+        const cached = textMemo.get(n);
+        if (cached !== undefined) return cached;
+        const text = (n.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        textMemo.set(n, text);
+        return text;
+      };
+      // "One, or more than one" is the whole question a text count answers, for
+      // ranking and for anchor scoping alike. Declared here rather than at module
+      // scope because this function is serialized into the page.
+      const TEXT_COUNT_CAP = 2;
       /**
        * How many elements `getByText(targetText)` would match inside `root`.
        * Playwright's default text match is a case-insensitive substring over
@@ -113,6 +141,10 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
        * the text, so an ancestor that only matches through a descendant is not
        * a separate match. Returns -1 when the subtree is too large to scan,
        * leaving the count unknown rather than reporting a wrong one.
+       *
+       * Counts no further than `TEXT_COUNT_CAP`: every consumer only asks
+       * whether the answer is exactly one, so there is nothing to gain from
+       * walking a page-long list of matches to its end.
        */
       const countTextOwners = (root: any, cap: number): number => {
         if (!textNeedle) return -1;
@@ -131,6 +163,7 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
             }
           }
           if (!deeper) total++;
+          if (total >= TEXT_COUNT_CAP) return total;
         }
         return total;
       };
@@ -184,21 +217,38 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
         // Vue's scoped-style markers (`data-v-4f2a1b`), React's legacy
         // `data-reactid`, Svelte/Angular/Ember instance ids.
         const NOISY_DATA_ATTR = /^data-(v-[0-9a-f]+|reactid|react-checksum|svelte-\w+|ng-\w+|ember\w*)$/i;
-        /** The first `data-*` on a node that looks author-chosen and carries a usable value. `data-testid` is excluded — it has its own, higher-scoring path. */
+        // A row's ordinal is not an identity: it changes the moment the list is
+        // sorted, filtered or added to — the exact failure an anchored locator
+        // exists to avoid.
+        const POSITIONAL_DATA_ATTR =
+          /^data-(index|idx|i|key|row|rownum|col|column|position|pos|order|sort|offset|page)$/i;
+        // Names that exist to be targeted by tests. Kept in step with
+        // `TEST_DATA_ATTRS` in core's `locator-generation.ts`, which scores an
+        // anchor built on one of these above an ordinary `data-*`; picking the
+        // first attribute in document order instead would have handed that
+        // scoring an arbitrary winner.
+        const TEST_DATA_ATTRS = ['data-test', 'data-test-id', 'data-qa', 'data-qa-id', 'data-cy', 'data-e2e'];
+        /** Whether a `data-*` name and value are usable as an anchor at all. `data-testid` is excluded — it has its own, higher-scoring path. */
+        const usableDataAttr = (name: string, value: string): boolean => {
+          if (!name || name.slice(0, 5) !== 'data-' || name === 'data-testid') return false;
+          if (NOISY_DATA_ATTR.test(name) || POSITIONAL_DATA_ATTR.test(name)) return false;
+          // A valueless marker (`data-open`) identifies nothing; an over-long
+          // one is almost always serialized state.
+          return !!value && value.length <= 120;
+        };
+        /** The best `data-*` on a node: a test-oriented name if it has one, else the first other usable one. */
         const stableDataAttr = (n: any): { name: string; value: string } | null => {
           const attrs = n.attributes;
           if (!attrs) return null;
+          let fallback: { name: string; value: string } | null = null;
           for (let i = 0; i < attrs.length; i++) {
             const name = attrs[i].name;
-            if (!name || name.slice(0, 5) !== 'data-' || name === 'data-testid') continue;
-            if (NOISY_DATA_ATTR.test(name)) continue;
             const value = attrs[i].value;
-            // A valueless marker (`data-open`) identifies nothing; an
-            // over-long one is almost always serialized state.
-            if (!value || value.length > 120) continue;
-            return { name, value };
+            if (!usableDataAttr(name, value)) continue;
+            if (TEST_DATA_ATTRS.indexOf(name.toLowerCase()) !== -1) return { name, value };
+            if (!fallback) fallback = { name, value };
           }
-          return null;
+          return fallback;
         };
         const docRoleCount = (role: string): number => {
           let c = 0;
