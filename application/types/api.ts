@@ -116,7 +116,9 @@ export interface MarkersResponse {
 
 export interface TestFunctionParam {
   name: string;
-  type: 'string' | 'number' | 'boolean';
+  type: 'string' | 'number' | 'boolean' | 'object';
+  /** For `type: 'object'` — the option bag's own property names, so codegen can emit `{ label: '…' }`. */
+  fields?: string[];
 }
 
 export interface TestFunctionPatternTarget {
@@ -142,6 +144,8 @@ export interface TestFunctionPatternStep {
 
 export interface TestFunctionParamSource {
   param: string;
+  /** Which field of an `object` param this fills; absent for a scalar param, which takes the value whole. */
+  path?: string | null;
   stepIndex: number;
   from: 'text' | 'value' | 'testId';
 }

@@ -7,7 +7,7 @@
  * `extension/AGENTS.md` for how the extension consumes this list.
  */
 import type { ProjectDetails, TestFunctionsResponse, TestFunctionInfo, TestFunctionStepAction } from '~~/types/api';
-import { buildExtractionPrompt } from '#shared/test-function-extract-prompt';
+import { buildExtractionPrompt, LOW_CONFIDENCE_THRESHOLD } from '#shared/test-function-extract-prompt';
 
 const route = useRoute();
 const projectId = route.params.id as string;
@@ -38,6 +38,7 @@ const PARAM_TYPE_ITEMS = [
   { label: 'string', value: 'string' },
   { label: 'number', value: 'number' },
   { label: 'boolean', value: 'boolean' },
+  { label: 'object', value: 'object' },
 ];
 const ACTION_ITEMS: Array<{ label: string; value: TestFunctionStepAction }> = [
   { label: 'goto', value: 'goto' },
@@ -57,6 +58,24 @@ const PARAM_SOURCE_ITEMS = [
 
 const showModal = ref(false);
 const saving = ref(false);
+/** Null in add mode; the id being edited otherwise — decides POST-create vs PUT-update in `save()`. */
+const editingId = ref<number | null>(null);
+
+type ParamType = 'string' | 'number' | 'boolean' | 'object';
+type ParamFrom = 'text' | 'value' | 'testId';
+
+/** `fields` is edited as one comma-separated string and split on save — an options bag has a handful of keys, so a full sub-editor would cost more than it's worth. */
+interface FormParam {
+  name: string;
+  type: ParamType;
+  fields: string;
+}
+interface FormParamSource {
+  param: string;
+  path: string;
+  stepIndex: number;
+  from: ParamFrom;
+}
 
 function emptyForm() {
   return {
@@ -66,9 +85,9 @@ function emptyForm() {
     receiver: '',
     importName: '',
     urlPattern: '',
-    params: [] as Array<{ name: string; type: 'string' | 'number' | 'boolean' }>,
+    params: [] as FormParam[],
     steps: [{ action: 'click' as TestFunctionStepAction, role: '', name: '', testId: '' }],
-    paramSources: [] as Array<{ param: string; stepIndex: number; from: 'text' | 'value' | 'testId' }>,
+    paramSources: [] as FormParamSource[],
   };
 }
 
@@ -79,30 +98,78 @@ const pastedCode = ref('');
 const extracting = ref(false);
 const aiExtracted = ref(false);
 const extractedConfidence = ref<number | null>(null);
+const extractedNotes = ref<string | null>(null);
 const aiResponseText = ref('');
 const applyingResponse = ref(false);
+
+/** True when the current proposal is one the user should look at hard before saving — mirrors `LOW_CONFIDENCE_THRESHOLD`. */
+const lowConfidence = computed(
+  () => aiExtracted.value && extractedConfidence.value != null && extractedConfidence.value < LOW_CONFIDENCE_THRESHOLD,
+);
+
+/** Object params are the ones a param source can target a field of. */
+const objectParamNames = computed(
+  () => new Set(form.value.params.filter((p) => p.type === 'object' && p.name.trim()).map((p) => p.name.trim())),
+);
 
 interface ExtractionProposal {
   name: string;
   kind: 'page-object-method' | 'helper' | 'fixture';
   receiver: string | null;
   importName: string | null;
-  params: Array<{ name: string; type: 'string' | 'number' | 'boolean' }>;
+  params: Array<{ name: string; type: ParamType; fields?: string[] }>;
   steps: Array<{
     action: TestFunctionStepAction;
     target: { role?: string | null; name?: string | null; testId?: string | null };
   }>;
-  paramSources: Array<{ param: string; stepIndex: number; from: 'text' | 'value' | 'testId' }>;
+  paramSources: Array<{ param: string; path?: string | null; stepIndex: number; from: ParamFrom }>;
   confidence: number;
+  notes: string | null;
 }
 
-function openAdd() {
-  form.value = emptyForm();
+function resetExtractionState() {
   showPasteCode.value = false;
   pastedCode.value = '';
   aiResponseText.value = '';
   aiExtracted.value = false;
   extractedConfidence.value = null;
+  extractedNotes.value = null;
+}
+
+function openAdd() {
+  form.value = emptyForm();
+  editingId.value = null;
+  resetExtractionState();
+  showModal.value = true;
+}
+
+/** Loads an existing entry back into the same modal — the PUT endpoint has existed since the catalog shipped, but nothing reached it, so a typo meant delete-and-re-add. */
+function openEdit(entry: TestFunctionInfo) {
+  const e = entry.entry;
+  form.value = {
+    name: e.name,
+    kind: e.kind,
+    module: e.module,
+    receiver: e.receiver ?? '',
+    importName: e.importName ?? '',
+    urlPattern: e.urlPattern ?? '',
+    params: e.params.map((p) => ({ name: p.name, type: p.type, fields: (p.fields ?? []).join(', ') })),
+    steps: e.steps.map((s) => ({
+      action: s.action,
+      role: s.target.role ?? '',
+      name: s.target.name ?? '',
+      testId: s.target.testId ?? '',
+    })),
+    paramSources: e.paramSources.map((s) => ({
+      param: s.param,
+      path: s.path ?? '',
+      stepIndex: s.stepIndex,
+      from: s.from,
+    })),
+  };
+  if (form.value.steps.length === 0) form.value.steps = emptyForm().steps;
+  editingId.value = entry.id;
+  resetExtractionState();
   showModal.value = true;
 }
 
@@ -112,20 +179,27 @@ function applyProposal(proposal: ExtractionProposal) {
   form.value.kind = proposal.kind;
   form.value.receiver = proposal.receiver ?? '';
   form.value.importName = proposal.importName ?? '';
-  form.value.params = proposal.params.map((p) => ({ name: p.name, type: p.type }));
+  form.value.params = proposal.params.map((p) => ({
+    name: p.name,
+    type: p.type,
+    fields: (p.fields ?? []).join(', '),
+  }));
   form.value.steps = proposal.steps.map((s) => ({
     action: s.action,
     role: s.target.role ?? '',
     name: s.target.name ?? '',
     testId: s.target.testId ?? '',
   }));
+  if (form.value.steps.length === 0) form.value.steps = emptyForm().steps;
   form.value.paramSources = proposal.paramSources.map((s) => ({
     param: s.param,
+    path: s.path ?? '',
     stepIndex: s.stepIndex,
     from: s.from,
   }));
   aiExtracted.value = true;
   extractedConfidence.value = proposal.confidence;
+  extractedNotes.value = proposal.notes;
 }
 
 async function extractFromCode() {
@@ -188,7 +262,7 @@ async function applyPastedResponse() {
 }
 
 function addParam() {
-  form.value.params.push({ name: '', type: 'string' });
+  form.value.params.push({ name: '', type: 'string', fields: '' });
 }
 function removeParam(index: number) {
   form.value.params.splice(index, 1);
@@ -203,7 +277,7 @@ function removeStep(index: number) {
 }
 
 function addParamSource() {
-  form.value.paramSources.push({ param: '', stepIndex: 0, from: 'value' });
+  form.value.paramSources.push({ param: '', path: '', stepIndex: 0, from: 'value' });
 }
 function removeParamSource(index: number) {
   form.value.paramSources.splice(index, 1);
@@ -227,7 +301,20 @@ async function save() {
     receiver: form.value.kind === 'page-object-method' ? form.value.receiver.trim() || null : null,
     importName: form.value.kind === 'page-object-method' ? form.value.importName.trim() || null : null,
     urlPattern: form.value.urlPattern.trim() || null,
-    params: form.value.params.filter((p) => p.name.trim()).map((p) => ({ name: p.name.trim(), type: p.type })),
+    params: form.value.params
+      .filter((p) => p.name.trim())
+      .map((p) => ({
+        name: p.name.trim(),
+        type: p.type,
+        ...(p.type === 'object'
+          ? {
+              fields: p.fields
+                .split(',')
+                .map((f) => f.trim())
+                .filter(Boolean),
+            }
+          : {}),
+      })),
     steps: form.value.steps.map((s) => ({
       action: s.action,
       target: {
@@ -236,18 +323,34 @@ async function save() {
         testId: s.testId.trim() || null,
       },
     })),
-    paramSources: form.value.paramSources.filter((s) => s.param.trim()),
+    paramSources: form.value.paramSources
+      .filter((s) => s.param.trim())
+      .map((s) => ({
+        param: s.param.trim(),
+        path: s.path.trim() || null,
+        stepIndex: s.stepIndex,
+        from: s.from,
+      })),
     source: aiExtracted.value ? ('ai-extracted' as const) : undefined,
     confidence: aiExtracted.value ? (extractedConfidence.value ?? undefined) : undefined,
   };
 
+  const isEdit = editingId.value != null;
   try {
-    await $fetch(`/api/projects/${projectId}/test-functions`, { method: 'POST', body });
-    toast.add({ title: 'Function added', color: 'success' });
+    if (isEdit) {
+      await $fetch(`/api/test-functions/${editingId.value}`, { method: 'PUT', body });
+    } else {
+      await $fetch(`/api/projects/${projectId}/test-functions`, { method: 'POST', body });
+    }
+    toast.add({ title: isEdit ? 'Function updated' : 'Function added', color: 'success' });
     showModal.value = false;
     await refresh();
   } catch (error: unknown) {
-    toast.add({ title: 'Failed to add function', description: errorMessage(error), color: 'error' });
+    toast.add({
+      title: isEdit ? 'Failed to update function' : 'Failed to add function',
+      description: errorMessage(error),
+      color: 'error',
+    });
   } finally {
     saving.value = false;
   }
@@ -324,14 +427,24 @@ function describeSteps(entry: TestFunctionInfo): string {
                   on <code>{{ entry.urlPattern }}</code>
                 </div>
               </div>
-              <UButton
-                icon="i-lucide-trash-2"
-                color="error"
-                variant="ghost"
-                size="sm"
-                :aria-label="`Remove ${entry.name}`"
-                @click="remove(entry)"
-              />
+              <div class="flex items-center gap-1 shrink-0">
+                <UButton
+                  icon="i-lucide-pencil"
+                  color="neutral"
+                  variant="ghost"
+                  size="sm"
+                  :aria-label="`Edit ${entry.name}`"
+                  @click="openEdit(entry)"
+                />
+                <UButton
+                  icon="i-lucide-trash-2"
+                  color="error"
+                  variant="ghost"
+                  size="sm"
+                  :aria-label="`Remove ${entry.name}`"
+                  @click="remove(entry)"
+                />
+              </div>
             </div>
           </div>
         </SectionCard>
@@ -340,7 +453,11 @@ function describeSteps(entry: TestFunctionInfo): string {
   </UDashboardPanel>
 
   <ClientOnly>
-    <UModal v-model:open="showModal" title="Add test function" :ui="{ content: 'max-w-2xl' }">
+    <UModal
+      v-model:open="showModal"
+      :title="editingId == null ? 'Add test function' : 'Edit test function'"
+      :ui="{ content: 'max-w-2xl' }"
+    >
       <template #body>
         <div class="space-y-4">
           <div class="border border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-3 space-y-2">
@@ -388,10 +505,25 @@ function describeSteps(entry: TestFunctionInfo): string {
                   variant="outline"
                   @click="copyPromptForOwnAi"
                 />
-                <span v-if="aiExtracted && extractedConfidence != null" class="text-xs text-gray-500">
+                <span v-if="aiExtracted && !lowConfidence && extractedConfidence != null" class="text-xs text-gray-500">
                   Extracted at {{ Math.round(extractedConfidence * 100) }}% confidence — review below before saving.
                 </span>
               </div>
+
+              <UAlert
+                v-if="lowConfidence"
+                color="warning"
+                variant="subtle"
+                icon="i-lucide-triangle-alert"
+                :title="`Low confidence (${Math.round((extractedConfidence ?? 0) * 100)}%) — check the pattern below carefully`"
+                :description="
+                  extractedNotes ??
+                  'The extractor wasn\'t able to represent this function cleanly. Functions that branch on their arguments, loop, or call other helpers often can\'t be captured as a single fixed pattern — the fields below may be incomplete.'
+                "
+              />
+              <p v-else-if="extractedNotes" class="text-xs text-gray-500 dark:text-gray-400">
+                Note: {{ extractedNotes }}
+              </p>
 
               <p class="text-xs text-gray-500 dark:text-gray-400 pt-1">
                 No AI configured on this instance, or prefer to use your own? Copy the prompt above into any AI chat
@@ -446,11 +578,20 @@ function describeSteps(entry: TestFunctionInfo): string {
             <UInput v-model="form.urlPattern" placeholder="**/cart" class="w-full" />
           </UFormField>
 
-          <UFormField label="Parameters">
+          <UFormField
+            label="Parameters"
+            help="Use “object” for an options bag (e.g. { label }) and list its keys — generated calls then pass an object literal instead of a bare string."
+          >
             <div class="space-y-2">
-              <div v-for="(param, i) in form.params" :key="i" class="flex items-center gap-2">
-                <UInput v-model="param.name" placeholder="param name" class="flex-1" />
+              <div v-for="(param, i) in form.params" :key="i" class="flex items-center gap-2 flex-wrap">
+                <UInput v-model="param.name" placeholder="param name" class="flex-1 min-w-24" />
                 <USelect v-model="param.type" :items="PARAM_TYPE_ITEMS" class="w-32" />
+                <UInput
+                  v-if="param.type === 'object'"
+                  v-model="param.fields"
+                  placeholder="fields, comma-separated (e.g. label, testId)"
+                  class="flex-1 min-w-40"
+                />
                 <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" @click="removeParam(i)" />
               </div>
               <UButton
@@ -502,12 +643,18 @@ function describeSteps(entry: TestFunctionInfo): string {
             help="Where each argument's value comes from, at match time."
           >
             <div class="space-y-2">
-              <div v-for="(src, i) in form.paramSources" :key="i" class="flex items-center gap-2">
+              <div v-for="(src, i) in form.paramSources" :key="i" class="flex items-center gap-2 flex-wrap">
                 <USelect
                   v-model="src.param"
                   :items="form.params.filter((p) => p.name.trim()).map((p) => ({ label: p.name, value: p.name }))"
                   placeholder="parameter"
-                  class="flex-1"
+                  class="flex-1 min-w-24"
+                />
+                <UInput
+                  v-if="objectParamNames.has(src.param)"
+                  v-model="src.path"
+                  placeholder="field (e.g. label)"
+                  class="w-40"
                 />
                 <USelect
                   v-model="src.stepIndex"
@@ -532,7 +679,12 @@ function describeSteps(entry: TestFunctionInfo): string {
 
       <template #footer>
         <UButton color="neutral" variant="ghost" label="Cancel" @click="showModal = false" />
-        <UButton label="Add function" icon="i-lucide-check" :loading="saving" @click="save" />
+        <UButton
+          :label="editingId == null ? 'Add function' : 'Save changes'"
+          icon="i-lucide-check"
+          :loading="saving"
+          @click="save"
+        />
       </template>
     </UModal>
   </ClientOnly>

@@ -76,4 +76,60 @@ describe('validateExtractedFunction', () => {
     const bad = { ...validResponse, steps: [{ action: 'hover', target: { role: 'button' } }] };
     expect(() => validateExtractedFunction(JSON.stringify(bad))).toThrow("couldn't produce a valid pattern");
   });
+
+  test('notes default to null when the model omits them', () => {
+    expect(validateExtractedFunction(JSON.stringify(validResponse)).notes).toBeNull();
+  });
+
+  test('notes are preserved when the model explains what it could not represent', () => {
+    const withNotes = { ...validResponse, notes: 'focusVSelect() is a helper I cannot see inside.' };
+    expect(validateExtractedFunction(JSON.stringify(withNotes)).notes).toContain('focusVSelect');
+  });
+});
+
+/**
+ * The options-bag shape most real Playwright helpers take. Before object
+ * params existed these validated only by being mistyped as `string`, which
+ * produced a non-compiling generated call.
+ */
+describe('validateExtractedFunction — object params', () => {
+  const objectResponse = {
+    name: 'selectOption',
+    kind: 'helper',
+    params: [
+      { name: 'source', type: 'object', fields: ['label', 'testId'] },
+      { name: 'option', type: 'object', fields: ['value'] },
+    ],
+    steps: [
+      { action: 'click', target: { role: 'combobox' } },
+      { action: 'click', target: { role: 'option' } },
+    ],
+    paramSources: [
+      { param: 'source', path: 'label', stepIndex: 0, from: 'text' },
+      { param: 'option', path: 'value', stepIndex: 1, from: 'text' },
+    ],
+    confidence: 0.5,
+  };
+
+  test('accepts object params with fields and field-targeted param sources', () => {
+    const proposal = validateExtractedFunction(JSON.stringify(objectResponse));
+    expect(proposal.params[0]).toMatchObject({ name: 'source', type: 'object', fields: ['label', 'testId'] });
+    expect(proposal.paramSources[0]).toMatchObject({ param: 'source', path: 'label' });
+  });
+
+  test('a scalar param still validates with no path', () => {
+    const scalar = {
+      ...objectResponse,
+      params: [{ name: 'sku', type: 'string' }],
+      paramSources: [{ param: 'sku', stepIndex: 0, from: 'testId' }],
+    };
+    const proposal = validateExtractedFunction(JSON.stringify(scalar));
+    expect(proposal.params[0]).toMatchObject({ name: 'sku', type: 'string' });
+    expect(proposal.paramSources[0]!.path).toBeUndefined();
+  });
+
+  test('rejects a param type outside the allowed set', () => {
+    const bad = { ...objectResponse, params: [{ name: 'source', type: 'array' }] };
+    expect(() => validateExtractedFunction(JSON.stringify(bad))).toThrow("couldn't produce a valid pattern");
+  });
 });

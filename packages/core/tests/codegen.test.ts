@@ -179,3 +179,70 @@ describe('renderSpec — with a catalog', () => {
     expect(code).toContain(`await addItem(page, 'sku-42');`);
   });
 });
+
+/**
+ * The shape most real Playwright helpers actually take — an options bag
+ * (`selectOption(page, { label }, { value })`) rather than positional
+ * scalars. Before `object` params existed these could only be declared
+ * `string`, and codegen emitted a bare `''` into a slot needing a literal.
+ */
+describe('renderSpec — object params', () => {
+  const selectEntry: TestFunctionEntry = {
+    id: 10,
+    name: 'selectOption',
+    kind: 'helper',
+    module: './helpers/select',
+    receiver: null,
+    importName: null,
+    urlPattern: null,
+    params: [
+      { name: 'source', type: 'object', fields: ['label'] },
+      { name: 'option', type: 'object', fields: ['value'] },
+    ],
+    steps: [
+      { action: 'click', target: { role: 'combobox' } },
+      { action: 'click', target: { role: 'option' } },
+    ],
+    paramSources: [
+      { param: 'source', path: 'label', stepIndex: 0, from: 'text' },
+      { param: 'option', path: 'value', stepIndex: 1, from: 'text' },
+    ],
+  };
+
+  function selectSteps(optionText: string | null): RecordedStep[] {
+    return [
+      step({ target: target({ role: 'combobox', accessibleName: 'Country', text: 'Country' }) }),
+      step({ target: target({ role: 'option', accessibleName: 'France', text: optionText }) }),
+    ];
+  }
+
+  test('each object param renders as a literal built from its resolved fields', () => {
+    const session = buildSession(selectSteps('France'), 0);
+    const { code } = renderSpec(session, { catalog: [selectEntry] });
+    expect(code).toContain(`await selectOption(page, { label: 'Country' }, { value: 'France' });`);
+  });
+
+  test('a field that resolved to nothing is omitted, not emitted empty', () => {
+    const session = buildSession(selectSteps(null), 0);
+    const { code } = renderSpec(session, { catalog: [selectEntry] });
+    // `option.value` had no text to read, so the bag renders empty rather than `{ value: '' }`.
+    expect(code).toContain(`await selectOption(page, { label: 'Country' }, {});`);
+  });
+
+  test('a field name that is not a bare identifier is quoted as a key', () => {
+    const quirky: TestFunctionEntry = {
+      ...selectEntry,
+      params: [
+        { name: 'source', type: 'object', fields: ['data-label'] },
+        { name: 'option', type: 'object', fields: ['value'] },
+      ],
+      paramSources: [
+        { param: 'source', path: 'data-label', stepIndex: 0, from: 'text' },
+        { param: 'option', path: 'value', stepIndex: 1, from: 'text' },
+      ],
+    };
+    const session = buildSession(selectSteps('France'), 0);
+    const { code } = renderSpec(session, { catalog: [quirky] });
+    expect(code).toContain(`{ 'data-label': 'Country' }`);
+  });
+});

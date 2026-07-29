@@ -143,6 +143,17 @@ extraction prompt (rules, JSON schema, and your pasted code) for pasting into an
 validated against the exact same schema, no Piwi AI credits spent either way. An MCP-connected
 coding agent (Claude Code, Cursor, …) can skip the copy-paste entirely and call the
 `create_test_function` [MCP tool](./mcp) directly, using its own model to read the source.
+Registered entries can be edited in place from the same page — the pencil button reopens the
+form with everything filled in.
+
+A parameter can be typed **object** for the options-bag argument most helpers take
+(`selectOption(page, { label }, { value })`), listing the bag's keys; a parameter source then
+targets one key by name, so generated calls pass `{ label: 'Country' }` rather than a bare
+string. Extraction is deliberately conservative: a function that branches on its arguments,
+loops, or calls other helpers whose source isn't visible can't be captured as one fixed
+pattern, so it comes back with low confidence and a note saying what was left out, rather than
+a confident-looking guess.
+
 Once a function is registered, use **Test functions** in the extension popup to check whether
 its pattern actually matches whatever page you're looking at.
 

@@ -15,7 +15,15 @@ import type { RecordedStep, StepAction } from './recording';
 
 export interface FunctionParam {
   name: string;
-  type: 'string' | 'number' | 'boolean';
+  /**
+   * `object` covers the options-bag argument that most real Playwright
+   * helpers take (`{ label: 'Name' }`) — without it those params can only be
+   * typed as `string`, and codegen emits a bare `''` where a literal is
+   * required, producing a call that doesn't compile.
+   */
+  type: 'string' | 'number' | 'boolean' | 'object';
+  /** For `type: 'object'` only — the field names this bag carries, so codegen knows which keys it may emit. A `FunctionParamSource` fills one of these via its `path`. Ignored for scalar types. */
+  fields?: string[];
 }
 
 /** The DOM shape one pattern step expects — matched loosely against a recorded step's own target. */
@@ -34,6 +42,8 @@ export interface FunctionPatternStep {
 /** Where one function parameter's value is read from a matched pattern step, at extraction time. */
 export interface FunctionParamSource {
   param: string;
+  /** For an `object` param, which of its `fields` this value fills (e.g. `label`). Null/absent for a scalar param, which takes the value whole. */
+  path?: string | null;
   /** Index into this entry's own `steps` array. */
   stepIndex: number;
   from: 'text' | 'value' | 'testId';
@@ -64,8 +74,18 @@ export interface RankedFunctionMatch {
   matchedIndices: number[];
   /** True when every pattern step found a match — only `complete` matches are safe to substitute into codegen. */
   complete: boolean;
-  /** Parameter values resolved from the matched steps; a param missing here couldn't be resolved. */
+  /**
+   * Parameter values resolved from the matched steps; a param missing here
+   * couldn't be resolved. Keyed by param name for a scalar param, and by
+   * `param.field` for one field of an `object` param — so a partly-resolved
+   * options bag still contributes the fields it did resolve.
+   */
   args: Record<string, string>;
+}
+
+/** The `args` key one param source resolves into — see `RankedFunctionMatch.args`. */
+export function paramArgKey(source: Pick<FunctionParamSource, 'param' | 'path'>): string {
+  return source.path ? `${source.param}.${source.path}` : source.param;
 }
 
 /** Splits on the literal `**` separator first so escaping/single-`*` handling never needs an intermediate placeholder character to tell a glob `**` apart from a literal `*`. */
@@ -212,7 +232,7 @@ function extractArgs(
         : source.from === 'testId'
           ? (step.target?.testId ?? null)
           : (step.target?.text ?? null);
-    if (value != null) args[source.param] = value;
+    if (value != null) args[paramArgKey(source)] = value;
   }
   return args;
 }

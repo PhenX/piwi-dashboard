@@ -584,10 +584,19 @@ export const MCP_TOOL_DEFS = [
         },
         params: {
           type: 'array',
-          description: "The function's own parameters, excluding page/this",
+          description:
+            "The function's own parameters, excluding the leading Playwright handle (page/locator/this). An options-bag parameter must be type 'object' with its property names in 'fields' — never flattened to a string.",
           items: {
             type: 'object',
-            properties: { name: { type: 'string' }, type: { type: 'string', enum: ['string', 'number', 'boolean'] } },
+            properties: {
+              name: { type: 'string' },
+              type: { type: 'string', enum: ['string', 'number', 'boolean', 'object'] },
+              fields: {
+                type: 'array',
+                items: { type: 'string' },
+                description: "For type 'object': the bag's property names, e.g. ['label', 'testId']",
+              },
+            },
             required: ['name', 'type'],
           },
         },
@@ -629,6 +638,11 @@ export const MCP_TOOL_DEFS = [
             type: 'object',
             properties: {
               param: { type: 'string' },
+              path: {
+                type: ['string', 'null'],
+                description:
+                  "For an 'object' param: which of its fields this fills (e.g. 'label'). Omit for a scalar param.",
+              },
               stepIndex: { type: 'integer' },
               from: { type: 'string', enum: ['text', 'value', 'testId'] },
             },

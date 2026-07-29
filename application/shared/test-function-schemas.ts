@@ -34,9 +34,16 @@ export const patternTargetSchema = z.object({
   testId: z.string().nullish(),
 });
 
+/**
+ * `object` exists because most real Playwright helpers take an options bag
+ * (`selectOption(page, { label }, { value })`), not positional scalars — its
+ * `fields` list is what lets codegen emit a literal with the right keys. A
+ * `paramSource` targets one of those fields via its own `path`.
+ */
 export const paramSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(['string', 'number', 'boolean']),
+  type: z.enum(['string', 'number', 'boolean', 'object']),
+  fields: z.array(z.string().min(1).max(80)).max(20).optional(),
 });
 
 export const patternStepSchema = z.object({
@@ -46,6 +53,8 @@ export const patternStepSchema = z.object({
 
 export const paramSourceSchema = z.object({
   param: z.string().min(1),
+  /** Which field of an `object` param this fills; omitted for a scalar param, which takes the value whole. */
+  path: z.string().min(1).max(80).nullish(),
   stepIndex: z.number().int().min(0),
   from: z.enum(['text', 'value', 'testId']),
 });
@@ -69,6 +78,8 @@ export const aiExtractedFunctionSchema = z.object({
   paramSources: z.array(paramSourceSchema).max(10).optional(),
   /** The model's own confidence, 0-1 — surfaced in the review form so a low-confidence extraction reads as one. */
   confidence: z.number().min(0).max(1).optional(),
+  /** What the model couldn't represent (unseen helper calls, collapsed branches, skipped locators) — shown beside the confidence so a thin pattern explains itself instead of looking complete. */
+  notes: z.string().max(500).nullish(),
 });
 
 /**

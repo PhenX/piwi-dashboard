@@ -63,9 +63,29 @@ function renderRawStep(step: RecordedStep, index: number): string {
   }
 }
 
+/** A bare identifier can be an object key as-is; anything else has to be quoted. */
+const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/**
+ * An `object` param renders as a literal built from whichever of its `fields`
+ * resolved — unresolved fields are *omitted* rather than emitted empty, since
+ * an options bag's fields are typically optional and a missing key type-checks
+ * where `label: ''` would silently target nothing.
+ */
+function objectArgExpr(param: TestFunctionEntry['params'][number], match: RankedFunctionMatch): string {
+  const entries = (param.fields ?? [])
+    .map((field) => {
+      const raw = match.args[`${param.name}.${field}`];
+      return raw == null ? null : `${IDENTIFIER_RE.test(field) ? field : quote(field)}: ${quote(raw)}`;
+    })
+    .filter((pair): pair is string => pair != null);
+  return entries.length === 0 ? '{}' : `{ ${entries.join(', ')} }`;
+}
+
 function argExpr(entry: TestFunctionEntry, match: RankedFunctionMatch): string {
   return entry.params
     .map((p) => {
+      if (p.type === 'object') return objectArgExpr(p, match);
       const raw = match.args[p.name];
       if (raw == null) return p.type === 'number' ? '0' : p.type === 'boolean' ? 'false' : "''";
       if (p.type === 'number') return String(Number(raw) || 0);
