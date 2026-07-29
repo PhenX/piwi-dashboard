@@ -34,6 +34,10 @@ export interface ProbedAttrs {
     id?: number;
     name?: number;
     classes?: Record<string, number>;
+    /** How many elements share this element's role *and* accessible name — i.e. what `getByRole(role, { name })` would really match. */
+    roleName?: number;
+    /** How many role-bearing elements share this element's exact text. Undefined for a role-less element, which never reaches the structural probe. */
+    text?: number;
   };
   rolePosition?: {
     role: string;

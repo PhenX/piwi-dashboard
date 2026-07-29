@@ -49,6 +49,10 @@ export interface SelectorCounts {
   id?: number;
   name?: number;
   classes?: Record<string, number>;
+  /** How many elements share this element's role *and* accessible name — what `getByRole(role, { name })` would really match. Absent when unknown (an older capture, or a probe run without the structural pass). */
+  roleName?: number;
+  /** How many role-bearing elements share this element's exact text. Absent when unknown. */
+  text?: number;
 }
 
 /**

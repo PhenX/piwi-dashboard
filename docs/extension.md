@@ -58,7 +58,10 @@ nothing. The popup footer reports the key actually bound, and offers a link to
   captured locators, then re-counted against the page as it is right now (a page can re-render
   between the pick and reviewing the results). A candidate that's become ambiguous is shown with
   its current match count and a suggestion to add `.first()` or `.filter({ hasText: … })` —
-  never silently dropped.
+  never silently dropped. A locator that matches more than one element is ranked *below* every
+  candidate known to resolve to exactly one, so a parent-scoped chain like
+  `getByTestId('product-43').getByRole('button')` comes out on top of a bare
+  `getByRole('button', { name: 'Add to cart' })` that hits every card on the page.
 - **Copy in three forms** — the bare locator, a full action line
   (`await page.getByRole(…).click();`), or a visibility assertion
   (`await expect(page.getByRole(…)).toBeVisible();`). Your last-used form is remembered for next

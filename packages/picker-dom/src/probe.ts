@@ -91,6 +91,19 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
       const targetRole = roleOf(el);
       const targetLevel = targetRole === 'heading' ? levelOf(el) : null;
 
+      // Mirrors core's `approximateAccessibleName` — inlined because this
+      // function is serialized into the page by the reporter and cannot
+      // reference imports. Keep the two in step.
+      const nameOf = (n: any): string | null => {
+        const al = n.getAttribute('aria-label');
+        if (al) return al;
+        const txt = (n.textContent || '').replace(/\s+/g, ' ').trim();
+        if (txt) return txt;
+        return n.getAttribute('title') || n.getAttribute('placeholder') || null;
+      };
+      const targetName = nameOf(el);
+      const targetText = (el.textContent || '').replace(/\s+/g, ' ').trim();
+
       if (targetRole) {
         const nodes = doc.querySelectorAll(roleSources);
         // A truncated scan would produce wrong counts/indexes — skip instead.
@@ -98,13 +111,22 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
           let roleCountAll = 0;
           let index = -1;
           let levelCount = 0;
+          // How many elements a `getByRole(role, { name })` / `getByText(text)`
+          // would actually match. Without these, an ambiguous locator scores
+          // exactly as well as a unique one and wins on base score alone.
+          let roleNameCount = 0;
+          let textCount = 0;
           for (let i = 0; i < nodes.length; i++) {
             const n = nodes[i];
+            if (targetText && (n.textContent || '').replace(/\s+/g, ' ').trim() === targetText) textCount++;
             if (roleOf(n) !== targetRole) continue;
             if (n === el) index = roleCountAll;
             roleCountAll++;
             if (targetLevel != null && levelOf(n) === targetLevel) levelCount++;
+            if (targetName != null && nameOf(n) === targetName) roleNameCount++;
           }
+          if (targetName != null) selectorCounts.roleName = roleNameCount;
+          if (targetText) selectorCounts.text = textCount;
           if (index !== -1) {
             rolePosition = {
               role: targetRole,
