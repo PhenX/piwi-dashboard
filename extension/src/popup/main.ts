@@ -1,9 +1,14 @@
 import { getRecordingState, stopRecording } from '../shared/recording-storage.js';
+import { getConnectionSettings, isConnected, type ProjectMapping } from '../shared/connection-settings.js';
+import { getActiveProjectOverride, setActiveProjectOverride, resolveActiveProject } from '../shared/active-project.js';
 
 const statusEl = document.getElementById('status')!;
 const recordBtn = document.getElementById('record') as HTMLButtonElement;
 const recordLabel = document.getElementById('record-label')!;
 const recordHint = document.getElementById('record-hint')!;
+const configButton = document.getElementById('config-button') as HTMLButtonElement;
+const activeProjectRow = document.getElementById('active-project-row')!;
+const activeProjectSelect = document.getElementById('active-project') as HTMLSelectElement;
 
 async function activeTab(): Promise<chrome.tabs.Tab | null> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -34,10 +39,66 @@ document.getElementById('session-panel')!.addEventListener('click', () => void i
 document.getElementById('agent-context-panel')!.addEventListener('click', () => void inject('agent-context-panel.js'));
 document.getElementById('test-function-panel')!.addEventListener('click', () => void inject('test-function-panel.js'));
 
-document.getElementById('options-link')!.addEventListener('click', (e) => {
-  e.preventDefault();
+configButton.addEventListener('click', () => {
   chrome.runtime.openOptionsPage();
 });
+
+const AUTO_OPTION_VALUE = '';
+
+function dedupeMappings(mappings: ProjectMapping[]): Array<{ projectId: number; projectLabel: string }> {
+  const seen = new Map<number, string>();
+  for (const m of mappings) if (!seen.has(m.projectId)) seen.set(m.projectId, m.projectLabel);
+  return [...seen].map(([projectId, projectLabel]) => ({ projectId, projectLabel }));
+}
+
+/** Populates and pre-selects the active-project picker: hidden until connected, otherwise offering every mapped project plus "Auto" (clears the manual override, falling back to URL-pattern matching). */
+async function refreshActiveProjectSelect(): Promise<void> {
+  const [connection, override, tab] = await Promise.all([
+    getConnectionSettings(),
+    getActiveProjectOverride(),
+    activeTab(),
+  ]);
+
+  if (!isConnected(connection)) {
+    activeProjectRow.style.display = 'none';
+    return;
+  }
+  activeProjectRow.style.display = '';
+
+  const options = dedupeMappings(connection.projectMappings);
+  const resolved = tab?.url ? resolveActiveProject(connection, override, tab.url) : override;
+  if (resolved && !options.some((o) => o.projectId === resolved.projectId)) {
+    options.push({ projectId: resolved.projectId, projectLabel: resolved.projectLabel });
+  }
+
+  activeProjectSelect.innerHTML = '';
+  const autoOpt = document.createElement('option');
+  autoOpt.value = AUTO_OPTION_VALUE;
+  autoOpt.textContent =
+    tab?.url && resolveActiveProject(connection, null, tab.url)
+      ? 'Auto (matched by URL)'
+      : 'Auto (no match on this page)';
+  activeProjectSelect.appendChild(autoOpt);
+  for (const o of options) {
+    const opt = document.createElement('option');
+    opt.value = String(o.projectId);
+    opt.textContent = o.projectLabel;
+    activeProjectSelect.appendChild(opt);
+  }
+  activeProjectSelect.value = override ? String(override.projectId) : AUTO_OPTION_VALUE;
+
+  activeProjectSelect.addEventListener('change', () => {
+    void (async () => {
+      if (activeProjectSelect.value === AUTO_OPTION_VALUE) {
+        await setActiveProjectOverride(null);
+        return;
+      }
+      const projectId = Number(activeProjectSelect.value);
+      const projectLabel = activeProjectSelect.selectedOptions[0]?.textContent ?? `#${projectId}`;
+      await setActiveProjectOverride({ projectId, projectLabel });
+    })();
+  });
+}
 
 type RecordUiState = 'idle' | 'recording' | 'stopped';
 
@@ -122,3 +183,4 @@ recordBtn.addEventListener('click', () => {
 });
 
 void refreshRecordButton();
+void refreshActiveProjectSelect();

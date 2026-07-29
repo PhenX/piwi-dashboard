@@ -53,15 +53,18 @@ interface TestFunctionsApiResponse {
   testFunctions: Array<{ entry: TestFunctionEntry }>;
 }
 
-/** The project's function catalog, ready to hand to `rankFunctionMatches`/`matchFunctionAt`/`renderSpec`. */
-export async function fetchCatalog(settings: ConnectionSettings): Promise<TestFunctionEntry[]> {
-  if (!settings.instanceUrl.trim() || settings.projectId == null) return [];
-  const res = await fetch(
-    `${normalizeBaseUrl(settings.instanceUrl)}/api/projects/${settings.projectId}/test-functions`,
-    {
-      headers: authHeaders(settings),
-    },
-  );
+/**
+ * One project's function catalog, ready to hand to
+ * `rankFunctionMatches`/`matchFunctionAt`/`renderSpec`. Takes `projectId`
+ * explicitly rather than reading it off `settings` — a connection now maps
+ * many projects (`ConnectionSettings.projectMappings`), so the caller (the
+ * options page, once per distinct mapped project) decides which one.
+ */
+export async function fetchCatalog(settings: ConnectionSettings, projectId: number): Promise<TestFunctionEntry[]> {
+  if (!settings.instanceUrl.trim()) return [];
+  const res = await fetch(`${normalizeBaseUrl(settings.instanceUrl)}/api/projects/${projectId}/test-functions`, {
+    headers: authHeaders(settings),
+  });
   if (!res.ok) throw new Error(`Failed to fetch the function catalog (${res.status})`);
   const body = (await res.json()) as TestFunctionsApiResponse;
   return body.testFunctions.map((row) => row.entry);

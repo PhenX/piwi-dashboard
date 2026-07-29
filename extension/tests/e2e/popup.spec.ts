@@ -32,4 +32,70 @@ test.describe('popup.html', () => {
     }
     await expect(page.getByText('Ctrl+Shift+E')).toBeVisible();
   });
+
+  test('shows a config button that opens the options page', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await expect(page.getByRole('button', { name: 'Configure Piwi connection' })).toBeVisible();
+  });
+
+  test('hides the active-project row when not connected to a Piwi instance', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await expect(page.locator('#active-project-row')).toBeHidden();
+  });
+
+  test('shows the active-project row with the mapped project once connected', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          chrome.storage.local.set(
+            {
+              piwiConnection: {
+                instanceUrl: 'https://piwi.test',
+                apiKey: '',
+                projectMappings: [{ urlPattern: '**', projectId: 1, projectLabel: 'Demo project' }],
+              },
+            },
+            resolve,
+          );
+        }),
+    );
+    await page.reload();
+
+    await expect(page.locator('#active-project-row')).toBeVisible();
+    await expect(page.locator('#active-project')).toHaveValue('');
+    const optionTexts = await page.locator('#active-project option').allTextContents();
+    expect(optionTexts).toContain('Demo project');
+  });
+
+  test('dedupes multiple URL patterns mapped to the same project into one option', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          chrome.storage.local.set(
+            {
+              piwiConnection: {
+                instanceUrl: 'https://piwi.test',
+                apiKey: '',
+                projectMappings: [
+                  { urlPattern: 'https://shop.example.com/**', projectId: 1, projectLabel: 'Demo project' },
+                  { urlPattern: 'https://admin.example.com/**', projectId: 1, projectLabel: 'Demo project' },
+                ],
+              },
+            },
+            resolve,
+          );
+        }),
+    );
+    await page.reload();
+
+    await expect(page.locator('#active-project-row')).toBeVisible();
+    const optionTexts = await page.locator('#active-project option').allTextContents();
+    expect(optionTexts.filter((t) => t === 'Demo project')).toHaveLength(1);
+  });
 });

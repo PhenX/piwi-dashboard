@@ -38,7 +38,7 @@
           sans-serif;
       }
       .page {
-        max-width: 480px;
+        max-width: 560px;
         margin: 0 auto;
         padding: 32px 20px;
       }
@@ -59,6 +59,17 @@
         margin-top: 0;
         margin-bottom: 20px;
       }
+      section {
+        margin-top: 24px;
+      }
+      section > h2 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+      section > p.hint {
+        margin: 0 0 10px;
+      }
       label {
         display: block;
         font-size: 12.5px;
@@ -76,13 +87,16 @@
       }
       input,
       select {
-        width: 100%;
         font: inherit;
         padding: 8px 10px;
         border-radius: 8px;
         border: 1px solid var(--border);
         background: var(--surface);
         color: inherit;
+      }
+      input,
+      select:not(.mapping-project) {
+        width: 100%;
       }
       input:focus-visible,
       select:focus-visible {
@@ -115,6 +129,46 @@
       button.danger {
         color: var(--error);
       }
+      button.small {
+        padding: 6px 10px;
+        font-size: 12.5px;
+      }
+      #mappings {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .mapping-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .mapping-row input.mapping-pattern {
+        flex: 1 1 220px;
+        min-width: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12.5px;
+      }
+      .mapping-row select.mapping-project {
+        flex: 1 1 160px;
+        min-width: 0;
+      }
+      .mapping-row button.remove-mapping {
+        flex-shrink: 0;
+        padding: 6px 10px;
+        opacity: 0.7;
+      }
+      .mapping-row button.remove-mapping:hover {
+        opacity: 1;
+        color: var(--error);
+        border-color: var(--error);
+      }
+      .empty-mappings {
+        color: var(--muted);
+        font-size: 12.5px;
+        padding: 10px 0;
+      }
       #status {
         margin-top: 14px;
         font-size: 12.5px;
@@ -141,7 +195,7 @@
         <img src="icons/icon-32.png" width="20" height="20" alt="" /><span>Piwi Picker — Connect to Piwi</span>
       </header>
       <p class="lead">
-        Optional. Connecting lets the recorder match your recording against your project's own page-object methods and
+        Optional. Connecting lets the recorder match your recording against your projects' own page-object methods and
         helpers, and rank them live as you record. Nothing here is required for picking locators or recording a plain
         TypeScript spec — that always works standalone.
       </p>
@@ -153,13 +207,24 @@
       <input id="api-key" type="password" placeholder="pd_…" autocomplete="off" />
       <div class="hint">Generated from your account's API key settings in the Piwi dashboard.</div>
 
-      <label for="project">Project</label>
-      <select id="project" disabled>
-        <option value="">Test the connection first</option>
-      </select>
-
       <div class="row">
         <button id="test-connection" type="button">Test connection</button>
+      </div>
+
+      <section>
+        <h2>Project mappings</h2>
+        <p class="hint">
+          Which project applies on which site — one instance can serve more than one. Checked in order; the first
+          matching pattern wins. Same wildcard syntax as a test function's own URL pattern: <code>*</code> matches
+          within a path segment, <code>**</code> matches across segments.
+        </p>
+        <div id="mappings"></div>
+        <div class="row" style="margin-top: 10px">
+          <button id="add-mapping" type="button" class="small">+ Add mapping</button>
+        </div>
+      </section>
+
+      <div class="row">
         <button id="save" class="primary" type="button">Save</button>
         <button id="disconnect" class="danger" type="button">Disconnect</button>
       </div>
@@ -167,9 +232,9 @@
       <div id="status"></div>
 
       <div class="privacy">
-        Only used from this options page and the extension's background script — an API key entered here never reaches a
-        web page's JavaScript. Recording steps are sent nowhere unless you explicitly copy or send them; connecting only
-        fetches your project's function catalog.
+        Only used from this options page — an API key entered here never reaches a web page's JavaScript. Recording
+        steps are sent nowhere unless you explicitly copy or send them; connecting only fetches each mapped project's
+        function catalog.
       </div>
     </div>
     <script type="module" src="src/options/main.ts"></script>

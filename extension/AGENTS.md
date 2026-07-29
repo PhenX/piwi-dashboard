@@ -6,7 +6,7 @@ stable Playwright locators from the live page. The picking/recording features ar
 standalone (no server, no permissions beyond `activeTab`/`scripting`/`storage`, plus the
 one-origin-at-a-time `optional_host_permissions` grant recording needs — see below);
 **connecting to a Piwi instance is opt-in** and adds exactly one thing: matching a
-recording against the project's own function catalog. See "Connected mode" below.
+recording against a project's own function catalog. See "Connected mode" below.
 
 ## What it is
 
@@ -33,9 +33,12 @@ recording against the project's own function catalog. See "Connected mode" below
   only two places `chrome.scripting.registerContentScripts`/`unregisterContentScripts` and
   `chrome.action.*` are called from, since content scripts can't reach either API.
 - `src/popup/` — the toolbar popup. Plain TypeScript + DOM, no UI framework — keep it that
-  way unless the popup's own complexity genuinely outgrows it.
-- `src/options/` + `options.html` — the connected-mode settings page (instance URL, API key,
-  project). Same plain TypeScript + DOM approach as the popup. Opened via
+  way unless the popup's own complexity genuinely outgrows it. Has a config (gear) button
+  (`chrome.runtime.openOptionsPage()`) and, once connected, an **Active project** select that
+  shows/overrides which mapped project applies to the current tab.
+- `src/options/` + `options.html` — the connected-mode settings page: instance URL, API key,
+  and a **Project mappings** table (URL pattern with wildcards → project, ordered, first match
+  wins). Same plain TypeScript + DOM approach as the popup. Opened via
   `chrome.runtime.openOptionsPage()`, never linked to from a content script.
 - `src/shared/` — code shared between content scripts, background, popup, and options.
 
@@ -44,13 +47,24 @@ recording against the project's own function catalog. See "Connected mode" below
 The recorder (`record-panel.ts`, `record-capture.ts`, `packages/core/src/recording.ts`,
 `function-match.ts`, `codegen.ts`) works fully standalone: record clicks/fills/etc. across
 pages, get a raw Playwright spec back. Connecting to a Piwi instance (`options.html` →
-instance URL + API key + project) adds one thing on top: the project's `test_functions`
-catalog (`application/shared/handlers/test-functions.ts`) is fetched once and cached
-(`src/shared/catalog-cache.ts`, `chrome.storage.local`), and `rankFunctionMatches` /
-`matchFunctionAt` (pure, deterministic, unit-tested in `packages/core`) match the live
-recording against it — ranked live in the HUD, substituted into the generated spec on
-export. The matcher never invents a function; it only scores and selects among what the
-catalog already has. **No recording is ever sent to the instance** — only the catalog is
+instance URL + API key + one or more URL-pattern → project mappings) adds one thing on top:
+each mapped project's `test_functions` catalog (`application/shared/handlers/test-functions.ts`)
+is fetched once and cached per-project (`src/shared/catalog-cache.ts`, `chrome.storage.local`,
+keyed by project id), and `rankFunctionMatches` / `matchFunctionAt` (pure, deterministic,
+unit-tested in `packages/core`) match the live recording against whichever project's catalog
+applies — ranked live in the HUD, substituted into the generated spec on export. The matcher
+never invents a function; it only scores and selects among what the catalog already has.
+
+Which project applies on a given page is resolved by `src/shared/active-project.ts`'s
+`resolveActiveProject(settings, override, url)`: a manual per-tab override
+(`chrome.storage.session`, set from the popup's **Active project** select) wins if present,
+otherwise the first `ConnectionSettings.projectMappings` entry whose `urlPattern` matches the
+URL (via `urlMatches`/`globToRegExp` in `packages/core/src/function-match.ts` — the same glob
+matcher a catalog entry's own `urlPattern` gate uses). Every consumer that needs "which project
+applies here" (record-panel's HUD and review panel, test-function-panel, the popup's select)
+calls this one function rather than re-deriving it.
+
+**No recording is ever sent to the instance** — only each mapped project's catalog is
 fetched, and only `piwi-client.ts`, called from `src/options/` (never a content script),
 makes that request, so the API key never reaches a page's JS context. `record-panel.ts`
 only ever reads the already-fetched catalog back out of `catalog-cache.ts`; it never fetches.

@@ -49,6 +49,57 @@
       header img {
         border-radius: 5px;
       }
+      header span {
+        flex: 1;
+      }
+      .icon-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        border-radius: 7px;
+        border: 1px solid transparent;
+        background: none;
+        color: var(--muted);
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .icon-button:hover,
+      .icon-button:focus-visible {
+        color: inherit;
+        background: var(--surface);
+        border-color: var(--border);
+      }
+      .icon-button svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        stroke-width: 1.75;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        fill: none;
+      }
+      .active-project-row {
+        margin-bottom: 10px;
+      }
+      .active-project-row label {
+        display: block;
+        font-size: 10.5px;
+        color: var(--muted);
+        margin-bottom: 3px;
+      }
+      .active-project-row select {
+        width: 100%;
+        font: inherit;
+        font-size: 12.5px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: inherit;
+      }
       .actions {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -128,8 +179,23 @@
   </head>
   <body>
     <div class="popup">
-      <header><img src="icons/icon-32.png" width="18" height="18" alt="" /><span>Piwi Picker</span></header>
+      <header>
+        <img src="icons/icon-32.png" width="18" height="18" alt="" />
+        <span>Piwi Picker</span>
+        <button id="config-button" type="button" class="icon-button" aria-label="Configure Piwi connection" title="Configure Piwi connection">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 005 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"
+            />
+          </svg>
+        </button>
+      </header>
       <div id="status"></div>
+      <div id="active-project-row" class="active-project-row" style="display: none">
+        <label for="active-project">Active project</label>
+        <select id="active-project"></select>
+      </div>
       <div class="actions">
         <button id="record" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -213,8 +279,7 @@
       </div>
       <footer>
         <kbd>Ctrl+Shift+E</kbd> picks without opening this popup ·
-        <a href="https://piwitests.github.io/extension" target="_blank" rel="noopener">docs</a> ·
-        <a href="#" id="options-link">connect to Piwi</a>
+        <a href="https://piwitests.github.io/extension" target="_blank" rel="noopener">docs</a>
       </footer>
     </div>
     <script type="module" src="src/popup/main.ts"></script>

@@ -78,20 +78,23 @@ Then, in Chrome or Edge:
   fields are never captured — their value is replaced with a `process.env.*` placeholder in the
   generated code.
 - **Matching functions, ranked live** *(needs a Piwi connection)* — connect to a Piwi instance
-  from the toolbar popup's **connect to Piwi** link (instance URL, API key, project) and the
-  recorder fetches that project's function catalog — page-object methods and helpers it already
-  knows about. While recording, the HUD ranks which catalog function the steps so far look like,
-  live, with a progress indicator (`2/3`) until a full match is found. On export, any complete
-  match collapses into a call to your own function instead of raw locator lines; anything
-  unmatched still comes out as plain locators. The matcher only ever *selects among* the catalog
-  you've registered — it never invents a function. Manage the catalog from a project's **Test
-  functions** page in the dashboard.
+  from the toolbar popup's config (gear) button, map one or more URL patterns to a project
+  (wildcards allowed, e.g. `https://shop.example.com/**`), and the recorder fetches each mapped
+  project's function catalog — page-object methods and helpers it already knows about. Which
+  project applies on a given page is resolved automatically from that mapping (first match wins),
+  or you can override it for the current tab from the popup's **Active project** select. While
+  recording, the HUD ranks which catalog function the steps so far look like, live, with a
+  progress indicator (`2/3`) until a full match is found. On export, any complete match collapses
+  into a call to your own function instead of raw locator lines; anything unmatched still comes
+  out as plain locators. The matcher only ever *selects among* the catalog you've registered — it
+  never invents a function. Manage the catalog from a project's **Test functions** page in the
+  dashboard.
 - **Test functions against this page** *(needs a Piwi connection)* — click **Test functions** in
-  the popup for a checklist of every catalog function, scored against the page you're on right
-  now: which pattern steps resolve to exactly one element (**ready to use here**), which are
-  ambiguous or missing (**partial match**), and which don't apply here at all (**not found on
-  this page**) — no recording or replay needed, just a live read of the current DOM against each
-  function's stored pattern.
+  the popup for a checklist of every function in the active project's catalog, scored against the
+  page you're on right now: which pattern steps resolve to exactly one element (**ready to use
+  here**), which are ambiguous or missing (**partial match**), and which don't apply here at all
+  (**not found on this page**) — no recording or replay needed, just a live read of the current
+  DOM against each function's stored pattern.
 
 ## Permissions, explained
 
@@ -99,7 +102,7 @@ Then, in Chrome or Edge:
 |---|---|
 | `activeTab` | Lets the extension act on the tab you're looking at only when you click the toolbar icon or press the keyboard shortcut — not on every page you visit. |
 | `scripting` | Injects the picker (and the recorder) into the active tab on demand — there is no background content script running on pages you haven't asked it to. |
-| `storage` | Remembers your last-used copy format, a named pick session, the running recording, and (only if you connect) the instance URL/API key/project and the cached function catalog — all locally on your machine. Pick sessions and the recording specifically use `chrome.storage.session`, which the browser clears when you close it — a working session, not a saved file. |
+| `storage` | Remembers your last-used copy format, a named pick session, the running recording, and (only if you connect) the instance URL/API key, the URL-pattern → project mappings, and each mapped project's cached function catalog — all locally on your machine. Pick sessions, the recording, and a manual **Active project** override specifically use `chrome.storage.session`, which the browser clears when you close it — a working session, not a saved file. |
 | `optional_host_permissions` (`http://*/*`, `https://*/*`, granted nothing by default) | Recording across pages needs to keep working after you navigate, which `activeTab` alone can't do (it's revoked on navigation). Clicking **Record actions** requests access to *the one site you're on* — never `<all_urls>`, never granted in advance — so the recorder can re-attach itself as you move between that site's pages. Nothing else in the extension asks for this. |
 
 No picking, hover-inspect, locator console, multi-pick, lint overlay, assertion suggester,
@@ -108,11 +111,19 @@ to a Piwi instance is the one opt-in exception — see below.
 
 ## Connecting to a Piwi instance
 
-Entirely optional, and off by default. From the toolbar popup, **connect to Piwi** opens a
+Entirely optional, and off by default. From the toolbar popup, the config (gear) button opens a
 settings page for your instance's URL and an API key (`pd_…`, from your account's API key
-settings), then lets you pick a project. Saving fetches that project's function catalog once
-and caches it on your machine — nothing about your browsing is sent in that request beyond the
-project id.
+settings). Below that is a **Project mappings** table: rows of a URL pattern (wildcards allowed —
+`*` matches within one path segment, `**` crosses segments, e.g. `https://shop.example.com/**`)
+and the project it maps to. Saving fetches every mapped project's function catalog once and
+caches it on your machine — nothing about your browsing is sent in that request beyond each
+project's id.
+
+Which mapping applies on a given page is resolved automatically (patterns are checked in order,
+first match wins). The popup's **Active project** select shows the auto-resolved project for the
+current tab and lets you override it for that tab only — useful when two mappings could apply, or
+none do. The override is session-only (`chrome.storage.session`) and resets to automatic
+resolution when you pick **Auto** again or close the browser.
 
 **A recording itself is never sent to your instance.** Connecting only changes what the
 **Copy as TypeScript** export looks like (it can now use your own functions) and what the HUD

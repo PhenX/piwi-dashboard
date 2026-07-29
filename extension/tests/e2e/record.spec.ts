@@ -198,8 +198,12 @@ test.describe('record-panel.js', () => {
     await stubChromeStorage(context, {
       session: { piwiRecording: { active: false, events: seededEvents, startedAt: 1, grantedOriginPattern: null } },
       local: {
-        piwiCatalogCache: { projectId: 1, entries: catalog, fetchedAt: 1 },
-        piwiConnection: { instanceUrl: 'https://piwi.test', apiKey: '', projectId: 1 },
+        piwiCatalogCache: { '1': { entries: catalog, fetchedAt: 1 } },
+        piwiConnection: {
+          instanceUrl: 'https://piwi.test',
+          apiKey: '',
+          projectMappings: [{ urlPattern: '**', projectId: 1, projectLabel: 'Test project' }],
+        },
       },
     });
 

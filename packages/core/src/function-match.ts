@@ -77,7 +77,14 @@ function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${escaped}$`);
 }
 
-function urlMatches(pattern: string | null, url: string): boolean {
+/**
+ * Whether a `**`/`*` glob pattern matches a URL — `null` matches everything.
+ * Exported (not just used internally for a catalog entry's own `urlPattern`
+ * gate) so any other "which of these applies to this URL" decision uses the
+ * exact same wildcard syntax instead of a second hand-rolled matcher — the
+ * extension's URL-pattern → project mapping reuses this directly.
+ */
+export function urlMatches(pattern: string | null, url: string): boolean {
   if (!pattern) return true;
   try {
     return globToRegExp(pattern).test(url);

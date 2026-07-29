@@ -2,6 +2,7 @@ import { TAG_TO_ROLE, INPUT_TYPE_TO_ROLE } from '@piwitests/core/locator-generat
 import { testCatalogAgainstPage, type FunctionTestResult } from './test-function-scan.js';
 import { getCachedCatalog } from '../shared/catalog-cache.js';
 import { getConnectionSettings } from '../shared/connection-settings.js';
+import { getActiveProjectOverride, resolveActiveProject } from '../shared/active-project.js';
 
 const HOST_ID = 'piwi-test-function-host';
 const MAPS = { tagRoles: TAG_TO_ROLE, inputRoles: INPUT_TYPE_TO_ROLE };
@@ -108,16 +109,17 @@ async function renderPanel(): Promise<void> {
   header.append(titleWrap, closeBtn);
   panel.appendChild(header);
 
-  const connection = await getConnectionSettings();
-  const catalog = await getCachedCatalog(connection.projectId);
+  const [connection, override] = await Promise.all([getConnectionSettings(), getActiveProjectOverride()]);
+  const activeProject = resolveActiveProject(connection, override, location.href);
+  const catalog = await getCachedCatalog(activeProject?.projectId ?? null);
 
   if (catalog.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
     empty.textContent =
-      connection.projectId == null
-        ? 'Not connected to a Piwi instance — connect from the popup, then save a project to cache its function catalog.'
-        : 'No functions in this project’s catalog yet — add one in the dashboard, or extract one from a recording.';
+      activeProject == null
+        ? 'No project mapped to this page — add a URL pattern for it in the extension’s config, or pick a project from the popup.'
+        : `No functions in ${activeProject.projectLabel}’s catalog yet — add one in the dashboard, or extract one from a recording.`;
     panel.appendChild(empty);
   } else {
     const results = testCatalogAgainstPage(catalog, MAPS);

@@ -60,8 +60,12 @@ test.describe('test-function-panel.js', () => {
 
   test('opens and scans the page when a catalog is cached', async ({ context }) => {
     await stubStorage(context, {
-      piwiConnection: { instanceUrl: 'https://piwi.test', apiKey: '', projectId: 1 },
-      piwiCatalogCache: { projectId: 1, entries: [CATALOG_ENTRY], fetchedAt: Date.now() },
+      piwiConnection: {
+        instanceUrl: 'https://piwi.test',
+        apiKey: '',
+        projectMappings: [{ urlPattern: '**', projectId: 1, projectLabel: 'Test project' }],
+      },
+      piwiCatalogCache: { '1': { entries: [CATALOG_ENTRY], fetchedAt: Date.now() } },
     });
     const page = await context.newPage();
     await page.setContent(`<!doctype html><html><body><button>Add to cart</button></body></html>`);
@@ -71,8 +75,12 @@ test.describe('test-function-panel.js', () => {
 
   test('re-injecting re-runs the scan instead of stacking a second host', async ({ context }) => {
     await stubStorage(context, {
-      piwiConnection: { instanceUrl: 'https://piwi.test', apiKey: '', projectId: 1 },
-      piwiCatalogCache: { projectId: 1, entries: [CATALOG_ENTRY], fetchedAt: Date.now() },
+      piwiConnection: {
+        instanceUrl: 'https://piwi.test',
+        apiKey: '',
+        projectMappings: [{ urlPattern: '**', projectId: 1, projectLabel: 'Test project' }],
+      },
+      piwiCatalogCache: { '1': { entries: [CATALOG_ENTRY], fetchedAt: Date.now() } },
     });
     const page = await context.newPage();
     await page.setContent(`<!doctype html><html><body><button>Add to cart</button></body></html>`);

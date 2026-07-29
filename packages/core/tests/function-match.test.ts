@@ -1,5 +1,11 @@
 import { describe, test, expect } from 'vitest';
-import { rankFunctionMatches, matchFunctionAt, scoreTargetMatch, type TestFunctionEntry } from '../src/function-match';
+import {
+  rankFunctionMatches,
+  matchFunctionAt,
+  scoreTargetMatch,
+  urlMatches,
+  type TestFunctionEntry,
+} from '../src/function-match';
 import type { RecordedStep, RecordedTarget } from '../src/recording';
 
 function target(overrides: Partial<RecordedTarget> = {}): RecordedTarget {
@@ -174,5 +180,24 @@ describe('scoreTargetMatch', () => {
     const score = scoreTargetMatch({ role: 'button', name: 'Log in' }, candidate);
     expect(score).toBeGreaterThan(0);
     expect(score).toBeLessThan(0.5);
+  });
+});
+
+describe('urlMatches', () => {
+  test('a null pattern matches any URL', () => {
+    expect(urlMatches(null, 'https://x.test/anything')).toBe(true);
+  });
+
+  test('** matches across path segments', () => {
+    expect(urlMatches('https://shop.test/**', 'https://shop.test/cart/checkout')).toBe(true);
+  });
+
+  test('a single * does not cross a path segment', () => {
+    expect(urlMatches('https://shop.test/*', 'https://shop.test/cart/checkout')).toBe(false);
+    expect(urlMatches('https://shop.test/*', 'https://shop.test/cart')).toBe(true);
+  });
+
+  test('a pattern for a different origin does not match', () => {
+    expect(urlMatches('https://shop.test/**', 'https://other.test/cart')).toBe(false);
   });
 });

@@ -26,6 +26,7 @@ import {
 } from '../shared/recording-storage.js';
 import { getCachedCatalog } from '../shared/catalog-cache.js';
 import { getConnectionSettings } from '../shared/connection-settings.js';
+import { getActiveProjectOverride, resolveActiveProject } from '../shared/active-project.js';
 
 const HUD_HOST_ID = 'piwi-record-hud-host';
 const PANEL_HOST_ID = 'piwi-record-review-host';
@@ -223,8 +224,9 @@ async function renderReviewPanel(events: RawCaptureEvent[]): Promise<void> {
 
   const steps = normalizeSteps(events);
   const session = buildSession(steps, events[0]?.timestamp ?? Date.now());
-  const connection = await getConnectionSettings();
-  const catalog = await getCachedCatalog(connection.projectId);
+  const [connection, override] = await Promise.all([getConnectionSettings(), getActiveProjectOverride()]);
+  const activeProject = resolveActiveProject(connection, override, location.href);
+  const catalog = await getCachedCatalog(activeProject?.projectId ?? null);
   const withCatalog = renderSpec(session, { catalog });
   const raw = renderSpec(session);
 
@@ -403,9 +405,14 @@ function buildEvent(
 }
 
 async function refreshHud(): Promise<void> {
-  const [state, connection] = await Promise.all([getRecordingState(), getConnectionSettings()]);
+  const [state, connection, override] = await Promise.all([
+    getRecordingState(),
+    getConnectionSettings(),
+    getActiveProjectOverride(),
+  ]);
   if (!state.active) return;
-  const catalog = await getCachedCatalog(connection.projectId);
+  const activeProject = resolveActiveProject(connection, override, location.href);
+  const catalog = await getCachedCatalog(activeProject?.projectId ?? null);
   renderHud(state, catalog);
 }
 
