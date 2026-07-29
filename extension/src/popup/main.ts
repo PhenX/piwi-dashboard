@@ -32,6 +32,7 @@ document.getElementById('lint-overlay')!.addEventListener('click', () => void in
 document.getElementById('assertion-panel')!.addEventListener('click', () => void inject('assertion-panel.js'));
 document.getElementById('session-panel')!.addEventListener('click', () => void inject('session-panel.js'));
 document.getElementById('agent-context-panel')!.addEventListener('click', () => void inject('agent-context-panel.js'));
+document.getElementById('test-function-panel')!.addEventListener('click', () => void inject('test-function-panel.js'));
 
 document.getElementById('options-link')!.addEventListener('click', (e) => {
   e.preventDefault();

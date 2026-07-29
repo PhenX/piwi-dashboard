@@ -11,6 +11,7 @@ import { test, expect } from './fixtures.js';
  * inject, tested directly).
  */
 const ACTION_BUTTON_NAMES = [
+  /Record actions/,
   /Pick an element/,
   /Hover-inspect/,
   /Locator console/,
@@ -19,6 +20,7 @@ const ACTION_BUTTON_NAMES = [
   /Assertions/,
   /Session/,
   /Agent context/,
+  /Test functions/,
 ];
 
 test.describe('popup.html', () => {

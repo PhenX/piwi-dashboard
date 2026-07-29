@@ -2,6 +2,13 @@ import { z } from 'zod';
 import { requireResolvedProjectAccess, resolveTestFunctionProjectId, requireRouteId } from '../../utils/project-access';
 import { updateTestFunction } from '#shared/handlers/test-functions';
 import { Role } from '#shared/types';
+import {
+  testFunctionNameSchema,
+  testFunctionKindSchema,
+  paramSchema,
+  patternStepSchema,
+  paramSourceSchema,
+} from '../../utils/test-function-schemas';
 
 defineRouteMeta({
   openAPI: {
@@ -13,47 +20,9 @@ defineRouteMeta({
   },
 });
 
-const stepActionSchema = z.enum([
-  'goto',
-  'click',
-  'fill',
-  'check',
-  'uncheck',
-  'selectOption',
-  'press',
-  'assertVisible',
-]);
-
-const patternTargetSchema = z.object({
-  role: z.string().nullish(),
-  name: z.string().nullish(),
-  testId: z.string().nullish(),
-});
-
-const patternStepSchema = z.object({
-  action: stepActionSchema,
-  target: patternTargetSchema,
-});
-
-const paramSchema = z.object({
-  name: z.string().min(1),
-  type: z.enum(['string', 'number', 'boolean']),
-});
-
-const paramSourceSchema = z.object({
-  param: z.string().min(1),
-  stepIndex: z.number().int().min(0),
-  from: z.enum(['text', 'value', 'testId']),
-});
-
 const updateTestFunctionSchema = z.object({
-  name: z
-    .string()
-    .min(1)
-    .max(120)
-    .regex(/^[A-Za-z_$][A-Za-z0-9_$]*$/, 'Must be a valid JS identifier')
-    .optional(),
-  kind: z.enum(['page-object-method', 'helper', 'fixture']).optional(),
+  name: testFunctionNameSchema.optional(),
+  kind: testFunctionKindSchema.optional(),
   module: z.string().min(1).max(240).optional(),
   receiver: z.string().max(120).nullish(),
   importName: z.string().max(120).nullish(),
@@ -62,7 +31,7 @@ const updateTestFunctionSchema = z.object({
   urlPattern: z.string().max(240).nullish(),
   steps: z.array(patternStepSchema).min(1).max(30).optional(),
   paramSources: z.array(paramSourceSchema).max(10).optional(),
-  source: z.enum(['manual', 'scanned', 'recorded']).optional(),
+  source: z.enum(['manual', 'scanned', 'recorded', 'ai-extracted']).optional(),
   confidence: z.number().min(0).max(1).optional(),
 });
 

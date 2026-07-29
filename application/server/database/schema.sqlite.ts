@@ -882,7 +882,7 @@ export const testFunctions = sqliteTable(
     urlPattern: text('url_pattern'), // glob matched against a recorded step's page URL; null matches any page
     steps: text('steps').notNull(), // JSON: FunctionPatternStep[] — the DOM pattern this function drives
     paramSources: text('param_sources').notNull(), // JSON: FunctionParamSource[]
-    source: text('source').notNull().default('manual'), // 'manual' | 'scanned' | 'recorded'
+    source: text('source').notNull().default('manual'), // 'manual' | 'scanned' | 'recorded' | 'ai-extracted'
     confidence: real('confidence').notNull().default(1), // 0-1; 1 for manual/reviewed entries
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()

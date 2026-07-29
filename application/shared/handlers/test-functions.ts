@@ -19,7 +19,7 @@ export interface TestFunctionInput {
   urlPattern?: string | null;
   steps: FunctionPatternStep[];
   paramSources?: FunctionParamSource[];
-  source?: 'manual' | 'scanned' | 'recorded';
+  source?: 'manual' | 'scanned' | 'recorded' | 'ai-extracted';
   confidence?: number;
 }
 

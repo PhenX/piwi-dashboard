@@ -86,22 +86,35 @@ function urlMatches(pattern: string | null, url: string): boolean {
   }
 }
 
-/** How well one pattern step's target describes one recorded step's target, in [0, 1]; 0 means "not a match". */
-function targetScore(pattern: FunctionPatternTarget, recorded: RecordedStep): number {
-  const target = recorded.target;
-  if (!target) return pattern.role || pattern.testId || pattern.name ? 0 : 0.3;
+/** The bits of an element (recorded or live) a pattern target is scored against — deliberately narrower than `RecordedTarget` so a live-DOM scan (no locator alternatives, no tag name) can build one just as easily as a recording can. */
+export interface MatchCandidate {
+  role: string | null;
+  testId: string | null;
+  accessibleName: string | null;
+  text: string | null;
+}
+
+/**
+ * How well one pattern step's target describes one candidate element, in
+ * [0, 1]; 0 means "not a match". Shared by `stepPairScore` (recorded steps,
+ * via `RecordedStep.target`) and any live-DOM "does this function's pattern
+ * exist on this page" scan (e.g. the extension's try-it check) — one rule,
+ * not two copies that could drift.
+ */
+export function scoreTargetMatch(pattern: FunctionPatternTarget, candidate: MatchCandidate | null): number {
+  if (!candidate) return pattern.role || pattern.testId || pattern.name ? 0 : 0.3;
 
   if (pattern.testId) {
-    return target.testId && target.testId.toLowerCase() === pattern.testId.toLowerCase() ? 1 : 0;
+    return candidate.testId && candidate.testId.toLowerCase() === pattern.testId.toLowerCase() ? 1 : 0;
   }
 
   const roleMatches =
-    !pattern.role || (target.role != null && target.role.toLowerCase() === pattern.role.toLowerCase());
+    !pattern.role || (candidate.role != null && candidate.role.toLowerCase() === pattern.role.toLowerCase());
   if (!roleMatches) return 0;
 
   if (pattern.name) {
     const needle = pattern.name.toLowerCase();
-    const haystack = `${target.accessibleName ?? ''} ${target.text ?? ''}`.toLowerCase().trim();
+    const haystack = `${candidate.accessibleName ?? ''} ${candidate.text ?? ''}`.toLowerCase().trim();
     const nameMatches = haystack.length > 0 && (haystack.includes(needle) || needle.includes(haystack));
     if (!nameMatches) return pattern.role ? 0.35 : 0;
     return pattern.role ? 0.95 : 0.6;
@@ -122,7 +135,7 @@ function actionCompatible(patternAction: StepAction, recordedAction: StepAction)
 
 function stepPairScore(pattern: FunctionPatternStep, recorded: RecordedStep): number {
   if (!actionCompatible(pattern.action, recorded.action)) return 0;
-  const base = targetScore(pattern.target, recorded);
+  const base = scoreTargetMatch(pattern.target, recorded.target);
   return pattern.action === recorded.action ? base : base * 0.6;
 }
 

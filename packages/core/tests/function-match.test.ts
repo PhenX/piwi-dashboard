@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { rankFunctionMatches, matchFunctionAt, type TestFunctionEntry } from '../src/function-match';
+import { rankFunctionMatches, matchFunctionAt, scoreTargetMatch, type TestFunctionEntry } from '../src/function-match';
 import type { RecordedStep, RecordedTarget } from '../src/recording';
 
 function target(overrides: Partial<RecordedTarget> = {}): RecordedTarget {
@@ -141,5 +141,38 @@ describe('matchFunctionAt', () => {
     const steps = [usernameStep];
     const match = matchFunctionAt(steps, 0, [loginEntry]);
     expect(match).toBeNull();
+  });
+});
+
+describe('scoreTargetMatch', () => {
+  test('a null candidate scores 0.3 for an empty pattern, 0 for anything specific', () => {
+    expect(scoreTargetMatch({}, null)).toBe(0.3);
+    expect(scoreTargetMatch({ role: 'button' }, null)).toBe(0);
+    expect(scoreTargetMatch({ testId: 'x' }, null)).toBe(0);
+  });
+
+  test('testId matches exactly and case-insensitively, ignoring role/name on the pattern', () => {
+    const candidate = { role: 'button', testId: 'Submit-Btn', accessibleName: 'Log in', text: 'Log in' };
+    expect(scoreTargetMatch({ testId: 'submit-btn' }, candidate)).toBe(1);
+    expect(scoreTargetMatch({ testId: 'other' }, candidate)).toBe(0);
+  });
+
+  test('role + matching name scores higher than role alone', () => {
+    const candidate = { role: 'button', testId: null, accessibleName: 'Log in', text: null };
+    const withName = scoreTargetMatch({ role: 'button', name: 'Log in' }, candidate);
+    const roleOnly = scoreTargetMatch({ role: 'button' }, candidate);
+    expect(withName).toBeGreaterThan(roleOnly);
+  });
+
+  test('a role that does not match the candidate scores 0 regardless of name', () => {
+    const candidate = { role: 'textbox', testId: null, accessibleName: 'Log in', text: null };
+    expect(scoreTargetMatch({ role: 'button', name: 'Log in' }, candidate)).toBe(0);
+  });
+
+  test('role matches but name does not scores low but nonzero (partial credit)', () => {
+    const candidate = { role: 'button', testId: null, accessibleName: 'Cancel', text: null };
+    const score = scoreTargetMatch({ role: 'button', name: 'Log in' }, candidate);
+    expect(score).toBeGreaterThan(0);
+    expect(score).toBeLessThan(0.5);
   });
 });

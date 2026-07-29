@@ -55,10 +55,18 @@ fetched, and only `piwi-client.ts`, called from `src/options/` (never a content 
 makes that request, so the API key never reaches a page's JS context. `record-panel.ts`
 only ever reads the already-fetched catalog back out of `catalog-cache.ts`; it never fetches.
 
+`test-function-panel.ts` (+ its pure half, `test-function-scan.ts`) is the other consumer of
+the cached catalog: a standalone popup action ("Test functions") that scores every catalog
+entry's pattern against the *current* page's live DOM — no recording needed — and reports a
+per-step unique/ambiguous/missing verdict rolling up into ready/partial/not-found per function.
+It shares `scoreTargetMatch` (`packages/core/src/function-match.ts`) with the recorder's own
+live ranking, so a function this reports "ready" is scored exactly the way it would be mid-recording.
+
 Each standalone content-script feature (locator console, multi-pick, lint overlay, assertion
-suggester, pick session, agent context, recording, …) is split into a pure logic file (e.g.
-`lint-scan.ts`, `assertion-suggest.ts`, `session-export.ts`, `record-capture.ts`) and a
-separate entry-point/UI file (e.g. `lint-overlay.ts`, `assertion-panel.ts`,
+suggester, pick session, agent context, recording, try-it scanning, …) is split into a pure
+logic file (e.g. `lint-scan.ts`, `assertion-suggest.ts`, `session-export.ts`,
+`record-capture.ts`, `test-function-scan.ts`) and a separate entry-point/UI file (e.g.
+`lint-overlay.ts`, `assertion-panel.ts`,
 `session-panel.ts`, `record-panel.ts`) that wires picking, DOM, and `chrome.*` calls around
 it. Keep new features on this split rather than mixing pure logic into the entry point —
 it's what makes the logic half plain-unit-testable (or real-bundle-testable, see below)
@@ -102,7 +110,7 @@ instead of needing a live browser for everything.
   (connection settings, the catalog cache) has no such restriction.
 - **Two different test strategies for content-script logic, pick deliberately.** A function
   built entirely from nested helpers with no imports from `@piwitests/core`'s scoring engine
-  (`evaluateLocatorChain`, `derivePattern`) can be re-serialized via
+  (`evaluateLocatorChain`, `derivePattern`, `testCatalogAgainstPage`) can be re-serialized via
   `Function.prototype.toString()` in tests, installing any genuine cross-module dependency as
   a global first. A function that calls `generateAlternatives` (`scanForLintIssues`,
   `suggestAssertions`, `buildAgentContext`, `record-panel.ts`'s `deriveRecordedTarget`) can't

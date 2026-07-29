@@ -86,6 +86,12 @@ Then, in Chrome or Edge:
   unmatched still comes out as plain locators. The matcher only ever *selects among* the catalog
   you've registered — it never invents a function. Manage the catalog from a project's **Test
   functions** page in the dashboard.
+- **Test functions against this page** *(needs a Piwi connection)* — click **Test functions** in
+  the popup for a checklist of every catalog function, scored against the page you're on right
+  now: which pattern steps resolve to exactly one element (**ready to use here**), which are
+  ambiguous or missing (**partial match**), and which don't apply here at all (**not found on
+  this page**) — no recording or replay needed, just a live read of the current DOM against each
+  function's stored pattern.
 
 ## Permissions, explained
 
@@ -116,8 +122,11 @@ opt-in per recording with a payload preview before the first send, matching the 
 extension already holds itself to for the API key.
 
 The function catalog itself is managed from a project's **Test functions** page in the
-dashboard — add entries by hand, or, once you've recorded a flow, extract one from the steps
-you just captured.
+dashboard — add entries by hand, or paste a page-object method/helper's source code and let AI
+propose the name, parameters, and DOM pattern (a review form you edit before saving; requires
+[AI](./ai-diagnosis) to be configured on that instance — the section only appears when it is).
+Once a function is registered, use **Test functions** in the extension popup to check whether
+its pattern actually matches whatever page you're looking at.
 
 ## Current limits
 

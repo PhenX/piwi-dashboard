@@ -11,6 +11,7 @@ import type { ProjectDetails, TestFunctionsResponse, TestFunctionInfo, TestFunct
 const route = useRoute();
 const projectId = route.params.id as string;
 const toast = useToast();
+const { aiStatus } = useAiStatus();
 
 const { data: project } = await useFetch<ProjectDetails>(`/api/projects/${projectId}`);
 const {
@@ -72,9 +73,69 @@ function emptyForm() {
 
 const form = ref(emptyForm());
 
+const showPasteCode = ref(false);
+const pastedCode = ref('');
+const extracting = ref(false);
+const aiExtracted = ref(false);
+const extractedConfidence = ref<number | null>(null);
+
 function openAdd() {
   form.value = emptyForm();
+  showPasteCode.value = false;
+  pastedCode.value = '';
+  aiExtracted.value = false;
+  extractedConfidence.value = null;
   showModal.value = true;
+}
+
+/** Populates the form from a `/test-functions/extract` proposal — never saves anything itself; the user still reviews and hits Save. */
+async function extractFromCode() {
+  if (!pastedCode.value.trim()) {
+    toast.add({ title: 'Paste some function code first', color: 'error' });
+    return;
+  }
+  extracting.value = true;
+  try {
+    const { proposal } = await $fetch<{
+      proposal: {
+        name: string;
+        kind: 'page-object-method' | 'helper' | 'fixture';
+        receiver: string | null;
+        importName: string | null;
+        params: Array<{ name: string; type: 'string' | 'number' | 'boolean' }>;
+        steps: Array<{
+          action: TestFunctionStepAction;
+          target: { role?: string | null; name?: string | null; testId?: string | null };
+        }>;
+        paramSources: Array<{ param: string; stepIndex: number; from: 'text' | 'value' | 'testId' }>;
+        confidence: number;
+      };
+    }>(`/api/projects/${projectId}/test-functions/extract`, { method: 'POST', body: { code: pastedCode.value } });
+
+    form.value.name = proposal.name;
+    form.value.kind = proposal.kind;
+    form.value.receiver = proposal.receiver ?? '';
+    form.value.importName = proposal.importName ?? '';
+    form.value.params = proposal.params.map((p) => ({ name: p.name, type: p.type }));
+    form.value.steps = proposal.steps.map((s) => ({
+      action: s.action,
+      role: s.target.role ?? '',
+      name: s.target.name ?? '',
+      testId: s.target.testId ?? '',
+    }));
+    form.value.paramSources = proposal.paramSources.map((s) => ({
+      param: s.param,
+      stepIndex: s.stepIndex,
+      from: s.from,
+    }));
+    aiExtracted.value = true;
+    extractedConfidence.value = proposal.confidence;
+    toast.add({ title: 'Extracted — review the fields below before saving', color: 'success' });
+  } catch (error: unknown) {
+    toast.add({ title: 'Extraction failed', description: errorMessage(error), color: 'error' });
+  } finally {
+    extracting.value = false;
+  }
 }
 
 function addParam() {
@@ -127,6 +188,8 @@ async function save() {
       },
     })),
     paramSources: form.value.paramSources.filter((s) => s.param.trim()),
+    source: aiExtracted.value ? ('ai-extracted' as const) : undefined,
+    confidence: aiExtracted.value ? (extractedConfidence.value ?? undefined) : undefined,
   };
 
   try {
@@ -231,6 +294,52 @@ function describeSteps(entry: TestFunctionInfo): string {
     <UModal v-model:open="showModal" title="Add test function" :ui="{ content: 'max-w-2xl' }">
       <template #body>
         <div class="space-y-4">
+          <div
+            v-if="aiStatus?.configured"
+            class="border border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-3 space-y-2"
+          >
+            <button
+              type="button"
+              class="flex items-center gap-2 text-sm font-medium w-full text-left"
+              @click="showPasteCode = !showPasteCode"
+            >
+              <UIcon name="i-lucide-sparkles" class="text-primary" />
+              <span>Paste from code (AI)</span>
+              <UIcon
+                :name="showPasteCode ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                class="ml-auto text-gray-400"
+              />
+            </button>
+            <div v-if="showPasteCode" class="space-y-2">
+              <p class="text-xs text-gray-500 dark:text-gray-400">
+                Paste a page-object method or helper function's source — the fields below are filled in from it, for you
+                to review and edit before saving. Module and URL pattern aren't inferred; fill those in yourself.
+              </p>
+              <UTextarea
+                v-model="pastedCode"
+                :rows="8"
+                placeholder="async login(username: string, password: string) {
+  await this.page.getByRole('textbox', { name: 'Username' }).fill(username);
+  await this.page.getByRole('textbox', { name: 'Password' }).fill(password);
+  await this.page.getByRole('button', { name: 'Log in' }).click();
+}"
+                class="w-full font-mono text-xs"
+              />
+              <div class="flex items-center gap-2">
+                <UButton
+                  label="Extract"
+                  icon="i-lucide-wand-2"
+                  size="sm"
+                  :loading="extracting"
+                  @click="extractFromCode"
+                />
+                <span v-if="aiExtracted && extractedConfidence != null" class="text-xs text-gray-500">
+                  Extracted at {{ Math.round(extractedConfidence * 100) }}% confidence — review below before saving.
+                </span>
+              </div>
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <UFormField label="Name" name="name" required help="Becomes the called method/function name.">
               <UInput v-model="form.name" placeholder="e.g. addToCart" class="w-full" />

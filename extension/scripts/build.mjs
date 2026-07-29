@@ -25,6 +25,7 @@ const STANDALONE_ENTRIES = [
   ['assertion-panel', 'src/content/assertion-panel.ts'],
   ['session-panel', 'src/content/session-panel.ts'],
   ['agent-context-panel', 'src/content/agent-context-panel.ts'],
+  ['test-function-panel', 'src/content/test-function-panel.ts'],
   // Not injected via `chrome.scripting.executeScript({ files: [...] })` like the others —
   // registered dynamically for the recording's lifetime
   // (`chrome.scripting.registerContentScripts`, see `background/index.ts`) so it re-attaches
