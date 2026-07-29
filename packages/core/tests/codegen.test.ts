@@ -204,6 +204,32 @@ describe('renderSpec — with a catalog', () => {
     expect(matchedSpans).toEqual([]);
   });
 
+  test('an entry whose identifiers are not identifiers is never emitted as a call', () => {
+    // These fields land in the generated source unquoted. The API rejects them
+    // on the way in; codegen refuses them on the way out as well, since an MCP
+    // agent can also fill a catalog from repository source.
+    const injected: TestFunctionEntry = {
+      ...loginEntry,
+      receiver: `loginPage); await page.goto('https://evil.test'); (0`,
+      importName: `LoginPage } from 'node:child_process'; import { execSync`,
+    };
+    const session = buildSession(loginSteps(), 0);
+    const { code, matchedSpans } = renderSpec(session, { catalog: [injected] });
+    expect(code).not.toContain('evil.test');
+    expect(code).not.toContain('child_process');
+    expect(matchedSpans).toEqual([]);
+    // The steps still come out — refusing the call must not lose the recording.
+    expect(code).toContain(`.fill('alice');`);
+  });
+
+  test('a name that is not an identifier is refused for a helper too', () => {
+    const injected: TestFunctionEntry = { ...loginEntry, kind: 'helper', receiver: null, name: 'do(); evil' };
+    const session = buildSession(loginSteps(), 0);
+    const { code } = renderSpec(session, { catalog: [injected] });
+    expect(code).not.toContain('evil');
+    expect(code).toContain(`.fill('alice');`);
+  });
+
   test('a helper (no receiver) is imported and called directly with page as the first arg', () => {
     const helper: TestFunctionEntry = {
       ...loginEntry,

@@ -39,6 +39,75 @@ describe('normalizeSteps', () => {
     expect(steps[0]).toMatchObject({ action: 'fill', value: 'alice' });
   });
 
+  test('two unlabelled fields stay two fills — neither value is lost to the other', () => {
+    // Same tag, same role, no name, no test id, and no locator alternative
+    // either: a bare role anchor needs the role to be document-unique, which it
+    // is not with two of them. The recorder's own per-element key is the only
+    // thing telling these apart.
+    const bare = { tagName: 'input', role: 'textbox', accessibleName: null, testId: null, text: null };
+    const first = target({ ...bare, alternatives: [], elementKey: 'e1' });
+    const second = target({ ...bare, alternatives: [], elementKey: 'e2' });
+    const steps = normalizeSteps([
+      ev({ kind: 'input', target: first, value: 'alice', timestamp: 1 }),
+      ev({ kind: 'input', target: second, value: 'smith', timestamp: 2 }),
+    ]);
+    expect(steps.map((s) => s.value)).toEqual(['alice', 'smith']);
+  });
+
+  test('a burst on one field still coalesces when the element key repeats', () => {
+    const field = target({ alternatives: [], elementKey: 'e1' });
+    const steps = normalizeSteps([
+      ev({ kind: 'input', target: field, value: 'a', timestamp: 1 }),
+      ev({ kind: 'input', target: field, value: 'alice', timestamp: 2 }),
+    ]);
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({ value: 'alice' });
+  });
+
+  test('two distinct fields are told apart by their best locator when no element key exists', () => {
+    const first = target({
+      accessibleName: null,
+      alternatives: [{ locator: `locator('#a')`, method: 'locator', score: 40 }],
+    });
+    const second = target({
+      accessibleName: null,
+      alternatives: [{ locator: `locator('#b')`, method: 'locator', score: 40 }],
+    });
+    const steps = normalizeSteps([
+      ev({ kind: 'input', target: first, value: 'alice', timestamp: 1 }),
+      ev({ kind: 'input', target: second, value: 'smith', timestamp: 2 }),
+    ]);
+    expect(steps.map((s) => s.value)).toEqual(['alice', 'smith']);
+  });
+
+  test('Enter on a button drops the browser’s synthetic click that follows it', () => {
+    const button = target({ tagName: 'button', role: 'button', accessibleName: 'Log in', elementKey: 'e9' });
+    const steps = normalizeSteps([
+      ev({ kind: 'keydown', target: button, value: 'Enter', timestamp: 10 }),
+      ev({ kind: 'click', target: button, timestamp: 12 }),
+    ]);
+    expect(steps.map((s) => s.action)).toEqual(['press']);
+  });
+
+  test('a click on a different element after Enter is still recorded', () => {
+    const field = target({ elementKey: 'e1' });
+    const button = target({ tagName: 'button', role: 'button', accessibleName: 'Log in', elementKey: 'e2' });
+    const steps = normalizeSteps([
+      ev({ kind: 'keydown', target: field, value: 'Enter', timestamp: 10 }),
+      ev({ kind: 'click', target: button, timestamp: 12 }),
+    ]);
+    expect(steps.map((s) => s.action)).toEqual(['press', 'click']);
+  });
+
+  test('a deliberate click on the same element well after Enter is still recorded', () => {
+    const button = target({ tagName: 'button', role: 'button', accessibleName: 'Log in', elementKey: 'e9' });
+    const steps = normalizeSteps([
+      ev({ kind: 'keydown', target: button, value: 'Enter', timestamp: 10 }),
+      ev({ kind: 'click', target: button, timestamp: 3000 }),
+    ]);
+    expect(steps.map((s) => s.action)).toEqual(['press', 'click']);
+  });
+
   test('a click on a different target flushes the pending fill first', () => {
     const usernameField = target();
     const button = target({ tagName: 'button', role: 'button', accessibleName: 'Submit' });

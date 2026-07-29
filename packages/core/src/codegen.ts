@@ -85,6 +85,26 @@ function renderRawStep(step: RecordedStep, index: number): string {
 const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 /**
+ * Whether a catalog entry's own names are safe to emit unquoted.
+ *
+ * `name`, `receiver` and `importName` are interpolated straight into the
+ * generated source — `import { X } from …`, `new X(page)`, `await r.name()` —
+ * so anything that is not a plain identifier is arbitrary code, not a call. The
+ * API validates these on the way in; this is the second line of defence, on the
+ * way out, because a catalog can also be filled by the MCP tool from an agent
+ * reading repository source, and the generated spec's whole promise is that it
+ * is deterministic rather than invented. An entry that fails this is skipped for
+ * matching entirely, so its steps come out as ordinary locator lines.
+ */
+export function callIdentifiersAreSafe(entry: TestFunctionEntry): boolean {
+  if (!IDENTIFIER_RE.test(entry.name)) return false;
+  if (entry.kind !== 'page-object-method') return true;
+  if (entry.receiver != null && !IDENTIFIER_RE.test(entry.receiver)) return false;
+  if (entry.importName != null && !IDENTIFIER_RE.test(entry.importName)) return false;
+  return true;
+}
+
+/**
  * An `object` param renders as a literal built from whichever of its `fields`
  * resolved — unresolved fields are *omitted* rather than emitted empty, since
  * an options bag's fields are typically optional and a missing key type-checks
@@ -160,7 +180,7 @@ function renderInstantiations(usedEntries: TestFunctionEntry[]): string[] {
 export function renderSpec(session: RecordedSession, options: CodegenOptions = {}): CodegenResult {
   const { steps } = session;
   const title = options.title ?? 'recorded flow';
-  const catalog = options.catalog ?? [];
+  const catalog = (options.catalog ?? []).filter(callIdentifiersAreSafe);
 
   const bodyLines: string[] = [];
   const matchedSpans: CodegenResult['matchedSpans'] = [];
