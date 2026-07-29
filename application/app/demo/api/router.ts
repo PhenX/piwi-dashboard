@@ -47,6 +47,7 @@ import {
   updateTestFunction,
   deleteTestFunction,
 } from '#shared/handlers/test-functions';
+import { validateExtractedFunction } from '#shared/test-function-extract-prompt';
 import {
   addQuarantine,
   listQuarantine,
@@ -708,6 +709,16 @@ const routes: RouteEntry[] = [
     method: 'DELETE',
     pattern: /^\/api\/test-functions\/(\d+)$/,
     handler: async (m) => deleteTestFunction(await getDemoDb(), +m[1]!),
+  },
+  // No AI call involved (pure parse + schema validation), unlike
+  // `test-functions/extract` — that one's excluded from demo mode in
+  // check-demo-routes.mjs, this one isn't.
+  {
+    method: 'POST',
+    pattern: /^\/api\/projects\/(\d+)\/test-functions\/validate-proposal$/,
+    handler: async (_m, body) => ({
+      proposal: validateExtractedFunction((body as { responseText?: string })?.responseText ?? ''),
+    }),
   },
 
   // Fix plan. Ownership stays annotation-only here — CODEOWNERS resolution

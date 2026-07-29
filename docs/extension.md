@@ -134,8 +134,14 @@ extension already holds itself to for the API key.
 
 The function catalog itself is managed from a project's **Test functions** page in the
 dashboard — add entries by hand, or paste a page-object method/helper's source code and let AI
-propose the name, parameters, and DOM pattern (a review form you edit before saving; requires
-[AI](./ai-diagnosis) to be configured on that instance — the section only appears when it is).
+propose the name, parameters, and DOM pattern (a review form you edit before saving). With
+[AI](./ai-diagnosis) configured on the instance, an **Extract** button calls it directly. Without
+one — or if you'd rather use your own — **Copy prompt for your own AI** copies the full
+extraction prompt (rules, JSON schema, and your pasted code) for pasting into any AI chat
+(ChatGPT, Claude.ai, an IDE assistant, …); paste its reply back into the form below it and it's
+validated against the exact same schema, no Piwi AI credits spent either way. An MCP-connected
+coding agent (Claude Code, Cursor, …) can skip the copy-paste entirely and call the
+`create_test_function` [MCP tool](./mcp) directly, using its own model to read the source.
 Once a function is registered, use **Test functions** in the extension popup to check whether
 its pattern actually matches whatever page you're looking at.
 

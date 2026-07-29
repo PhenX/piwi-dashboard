@@ -7,6 +7,7 @@
  * `extension/AGENTS.md` for how the extension consumes this list.
  */
 import type { ProjectDetails, TestFunctionsResponse, TestFunctionInfo, TestFunctionStepAction } from '~~/types/api';
+import { buildExtractionPrompt } from '#shared/test-function-extract-prompt';
 
 const route = useRoute();
 const projectId = route.params.id as string;
@@ -78,17 +79,55 @@ const pastedCode = ref('');
 const extracting = ref(false);
 const aiExtracted = ref(false);
 const extractedConfidence = ref<number | null>(null);
+const aiResponseText = ref('');
+const applyingResponse = ref(false);
+
+interface ExtractionProposal {
+  name: string;
+  kind: 'page-object-method' | 'helper' | 'fixture';
+  receiver: string | null;
+  importName: string | null;
+  params: Array<{ name: string; type: 'string' | 'number' | 'boolean' }>;
+  steps: Array<{
+    action: TestFunctionStepAction;
+    target: { role?: string | null; name?: string | null; testId?: string | null };
+  }>;
+  paramSources: Array<{ param: string; stepIndex: number; from: 'text' | 'value' | 'testId' }>;
+  confidence: number;
+}
 
 function openAdd() {
   form.value = emptyForm();
   showPasteCode.value = false;
   pastedCode.value = '';
+  aiResponseText.value = '';
   aiExtracted.value = false;
   extractedConfidence.value = null;
   showModal.value = true;
 }
 
-/** Populates the form from a `/test-functions/extract` proposal — never saves anything itself; the user still reviews and hits Save. */
+/** Fills the form from a proposal — shared by the AI-calling extract flow and the paste-response-back flow. Never saves anything itself; the user still reviews and hits Save. */
+function applyProposal(proposal: ExtractionProposal) {
+  form.value.name = proposal.name;
+  form.value.kind = proposal.kind;
+  form.value.receiver = proposal.receiver ?? '';
+  form.value.importName = proposal.importName ?? '';
+  form.value.params = proposal.params.map((p) => ({ name: p.name, type: p.type }));
+  form.value.steps = proposal.steps.map((s) => ({
+    action: s.action,
+    role: s.target.role ?? '',
+    name: s.target.name ?? '',
+    testId: s.target.testId ?? '',
+  }));
+  form.value.paramSources = proposal.paramSources.map((s) => ({
+    param: s.param,
+    stepIndex: s.stepIndex,
+    from: s.from,
+  }));
+  aiExtracted.value = true;
+  extractedConfidence.value = proposal.confidence;
+}
+
 async function extractFromCode() {
   if (!pastedCode.value.trim()) {
     toast.add({ title: 'Paste some function code first', color: 'error' });
@@ -96,45 +135,55 @@ async function extractFromCode() {
   }
   extracting.value = true;
   try {
-    const { proposal } = await $fetch<{
-      proposal: {
-        name: string;
-        kind: 'page-object-method' | 'helper' | 'fixture';
-        receiver: string | null;
-        importName: string | null;
-        params: Array<{ name: string; type: 'string' | 'number' | 'boolean' }>;
-        steps: Array<{
-          action: TestFunctionStepAction;
-          target: { role?: string | null; name?: string | null; testId?: string | null };
-        }>;
-        paramSources: Array<{ param: string; stepIndex: number; from: 'text' | 'value' | 'testId' }>;
-        confidence: number;
-      };
-    }>(`/api/projects/${projectId}/test-functions/extract`, { method: 'POST', body: { code: pastedCode.value } });
-
-    form.value.name = proposal.name;
-    form.value.kind = proposal.kind;
-    form.value.receiver = proposal.receiver ?? '';
-    form.value.importName = proposal.importName ?? '';
-    form.value.params = proposal.params.map((p) => ({ name: p.name, type: p.type }));
-    form.value.steps = proposal.steps.map((s) => ({
-      action: s.action,
-      role: s.target.role ?? '',
-      name: s.target.name ?? '',
-      testId: s.target.testId ?? '',
-    }));
-    form.value.paramSources = proposal.paramSources.map((s) => ({
-      param: s.param,
-      stepIndex: s.stepIndex,
-      from: s.from,
-    }));
-    aiExtracted.value = true;
-    extractedConfidence.value = proposal.confidence;
+    const { proposal } = await $fetch<{ proposal: ExtractionProposal }>(
+      `/api/projects/${projectId}/test-functions/extract`,
+      { method: 'POST', body: { code: pastedCode.value } },
+    );
+    applyProposal(proposal);
     toast.add({ title: 'Extracted — review the fields below before saving', color: 'success' });
   } catch (error: unknown) {
     toast.add({ title: 'Extraction failed', description: errorMessage(error), color: 'error' });
   } finally {
     extracting.value = false;
+  }
+}
+
+/** Copies the full extraction prompt (rules + JSON schema + pasted code) for pasting into any external AI chat — no Piwi AI credits spent. */
+async function copyPromptForOwnAi() {
+  if (!pastedCode.value.trim()) {
+    toast.add({ title: 'Paste some function code first', color: 'error' });
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(buildExtractionPrompt(pastedCode.value));
+    toast.add({
+      title: 'Prompt copied',
+      description: 'Paste it into your AI chat, then paste the reply below.',
+      color: 'success',
+    });
+  } catch (error: unknown) {
+    toast.add({ title: 'Failed to copy the prompt', description: errorMessage(error), color: 'error' });
+  }
+}
+
+/** Validates a manually pasted AI reply against the same schema the AI-calling endpoint uses — no AI call here, just parsing. */
+async function applyPastedResponse() {
+  if (!aiResponseText.value.trim()) {
+    toast.add({ title: 'Paste the AI response first', color: 'error' });
+    return;
+  }
+  applyingResponse.value = true;
+  try {
+    const { proposal } = await $fetch<{ proposal: ExtractionProposal }>(
+      `/api/projects/${projectId}/test-functions/validate-proposal`,
+      { method: 'POST', body: { responseText: aiResponseText.value } },
+    );
+    applyProposal(proposal);
+    toast.add({ title: 'Applied — review the fields below before saving', color: 'success' });
+  } catch (error: unknown) {
+    toast.add({ title: "Couldn't apply that response", description: errorMessage(error), color: 'error' });
+  } finally {
+    applyingResponse.value = false;
   }
 }
 
@@ -294,10 +343,7 @@ function describeSteps(entry: TestFunctionInfo): string {
     <UModal v-model:open="showModal" title="Add test function" :ui="{ content: 'max-w-2xl' }">
       <template #body>
         <div class="space-y-4">
-          <div
-            v-if="aiStatus?.configured"
-            class="border border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-3 space-y-2"
-          >
+          <div class="border border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-3 space-y-2">
             <button
               type="button"
               class="flex items-center gap-2 text-sm font-medium w-full text-left"
@@ -325,18 +371,48 @@ function describeSteps(entry: TestFunctionInfo): string {
 }"
                 class="w-full font-mono text-xs"
               />
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
                 <UButton
+                  v-if="aiStatus?.configured"
                   label="Extract"
                   icon="i-lucide-wand-2"
                   size="sm"
                   :loading="extracting"
                   @click="extractFromCode"
                 />
+                <UButton
+                  label="Copy prompt for your own AI"
+                  icon="i-lucide-clipboard-copy"
+                  size="sm"
+                  color="neutral"
+                  variant="outline"
+                  @click="copyPromptForOwnAi"
+                />
                 <span v-if="aiExtracted && extractedConfidence != null" class="text-xs text-gray-500">
                   Extracted at {{ Math.round(extractedConfidence * 100) }}% confidence — review below before saving.
                 </span>
               </div>
+
+              <p class="text-xs text-gray-500 dark:text-gray-400 pt-1">
+                No AI configured on this instance, or prefer to use your own? Copy the prompt above into any AI chat
+                (ChatGPT, Claude.ai, an IDE assistant, …), then paste its reply here — this doesn't spend Piwi AI
+                credits, it just parses and validates what you paste.
+              </p>
+              <UTextarea
+                v-model="aiResponseText"
+                :rows="6"
+                placeholder="Paste the AI's JSON reply here…"
+                class="w-full font-mono text-xs"
+              />
+              <UButton
+                label="Apply pasted response"
+                icon="i-lucide-check-check"
+                size="sm"
+                color="neutral"
+                variant="outline"
+                :loading="applyingResponse"
+                @click="applyPastedResponse"
+              />
             </div>
           </div>
 

@@ -11,6 +11,7 @@
  * can be bundled into the browser. Behavior (the handlers) lives next to the
  * server; only the pure data lives here.
  */
+import { EXTRACT_SYSTEM_PROMPT } from './test-function-extract-prompt';
 
 export interface PaginatedResponse<T> {
   items: T[];
@@ -550,6 +551,92 @@ export const MCP_TOOL_DEFS = [
         baseCommit: { type: 'string', description: 'Optional baseline commit SHA for SCM-diff context' },
       },
       required: ['id'],
+    },
+  },
+  {
+    name: 'create_test_function',
+    description: `Register a page-object method or helper in a project's test-function catalog, so the Piwi Picker browser extension (and its recorder) can match a live page or a recorded session against it and substitute a call to your own code instead of raw locator lines. This tool does not call an AI itself — you (the calling agent) read the function's real source in your own context and fill in these fields directly; the tool only validates the shape and persists it. Follow these extraction rules when deciding the field values:\n\n${EXTRACT_SYSTEM_PROMPT}\n\nThe fields below map onto that guidance one-for-one, plus "module" and "urlPattern", which no amount of code-reading can infer — supply them from where the function actually lives and, optionally, which page it applies to. Requires reporter or administrator access.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'number', description: 'Project ID from list_projects' },
+        name: {
+          type: 'string',
+          description: 'Becomes the called method/function name — must be a valid JS identifier',
+        },
+        kind: {
+          type: 'string',
+          enum: ['page-object-method', 'helper', 'fixture'],
+          description:
+            '"page-object-method" for a class method acting on this.page; "helper" for a standalone function taking page as its first parameter; "fixture" only for Playwright fixture setup',
+        },
+        module: {
+          type: 'string',
+          description: "Import specifier for where this function lives, e.g. './pages/CartPage'",
+        },
+        receiver: {
+          type: ['string', 'null'],
+          description: 'page-object-method only: instance variable name, e.g. cartPage (null for a helper/fixture)',
+        },
+        importName: {
+          type: ['string', 'null'],
+          description: 'page-object-method only: the class name to import, e.g. CartPage (null for a helper/fixture)',
+        },
+        params: {
+          type: 'array',
+          description: "The function's own parameters, excluding page/this",
+          items: {
+            type: 'object',
+            properties: { name: { type: 'string' }, type: { type: 'string', enum: ['string', 'number', 'boolean'] } },
+            required: ['name', 'type'],
+          },
+        },
+        returnsPage: {
+          type: 'boolean',
+          description: 'True if the function returns/navigates to a new Page (default false)',
+        },
+        urlPattern: {
+          type: ['string', 'null'],
+          description:
+            'Optional glob (** crosses path segments, * does not, e.g. "**/cart") gating which page this applies to',
+        },
+        steps: {
+          type: 'array',
+          description: 'The ordered sequence of page interactions the function performs — at least one required',
+          items: {
+            type: 'object',
+            properties: {
+              action: {
+                type: 'string',
+                enum: ['goto', 'click', 'fill', 'check', 'uncheck', 'selectOption', 'press', 'assertVisible'],
+              },
+              target: {
+                type: 'object',
+                properties: {
+                  role: { type: ['string', 'null'] },
+                  name: { type: ['string', 'null'] },
+                  testId: { type: ['string', 'null'] },
+                },
+              },
+            },
+            required: ['action', 'target'],
+          },
+        },
+        paramSources: {
+          type: 'array',
+          description: "Maps a step's argument back to a function parameter, when that argument IS the parameter",
+          items: {
+            type: 'object',
+            properties: {
+              param: { type: 'string' },
+              stepIndex: { type: 'integer' },
+              from: { type: 'string', enum: ['text', 'value', 'testId'] },
+            },
+            required: ['param', 'stepIndex', 'from'],
+          },
+        },
+      },
+      required: ['projectId', 'name', 'kind', 'module', 'params', 'steps'],
     },
   },
 ] as const satisfies readonly McpToolDef[];

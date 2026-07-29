@@ -15,7 +15,7 @@ The MCP server is served from the same Nitro process as the dashboard. There is 
 
 ## What it provides
 
-The server exposes 39 tools — mostly read-only, plus a few write/triage tools — that cover the full diagnostic workflow, from browsing projects to inspecting the exact evidence behind a failure and closing the loop after a fix.
+The server exposes 40 tools — mostly read-only, plus a few write/triage tools — that cover the full diagnostic workflow, from browsing projects to inspecting the exact evidence behind a failure and closing the loop after a fix.
 
 **Projects & activity**
 
@@ -71,6 +71,7 @@ The server exposes 39 tools — mostly read-only, plus a few write/triage tools 
 | `run_cluster_diagnosis` | Trigger an AI diagnosis and return the result |
 | `set_cluster_base_commit` | Pin the baseline commit for a cluster's SCM-diff context |
 | `submit_diagnosis_feedback` | Thumbs up/down on a diagnosis |
+| `create_test_function` | Register a page-object method or helper in a project's [test-function catalog](./extension#connecting-to-a-piwi-instance) from source you (the calling agent) read yourself — no AI call happens on the server side, this only validates and persists |
 
 **Source control** *(requires an SCM token — per-project or global)*
 

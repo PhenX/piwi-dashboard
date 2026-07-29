@@ -8,7 +8,7 @@ import {
   paramSchema,
   patternStepSchema,
   paramSourceSchema,
-} from '../../utils/test-function-schemas';
+} from '#shared/test-function-schemas';
 
 defineRouteMeta({
   openAPI: {
