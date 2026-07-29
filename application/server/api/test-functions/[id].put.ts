@@ -8,6 +8,8 @@ import {
   paramSchema,
   patternStepSchema,
   paramSourceSchema,
+  optionalIdentifierSchema,
+  moduleSchema,
 } from '#shared/test-function-schemas';
 
 defineRouteMeta({
@@ -23,9 +25,9 @@ defineRouteMeta({
 const updateTestFunctionSchema = z.object({
   name: testFunctionNameSchema.optional(),
   kind: testFunctionKindSchema.optional(),
-  module: z.string().min(1).max(240).optional(),
-  receiver: z.string().max(120).nullish(),
-  importName: z.string().max(120).nullish(),
+  module: moduleSchema.optional(),
+  receiver: optionalIdentifierSchema,
+  importName: optionalIdentifierSchema,
   params: z.array(paramSchema).max(10).optional(),
   returnsPage: z.boolean().optional(),
   urlPattern: z.string().max(240).nullish(),

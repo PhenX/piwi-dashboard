@@ -17,6 +17,33 @@ export const testFunctionNameSchema = z
   .max(120)
   .regex(/^[A-Za-z_$][A-Za-z0-9_$]*$/, 'Must be a valid JS identifier');
 
+/**
+ * `receiver` and `importName` reach generated code *unquoted* — `new X(page)`,
+ * `await r.method()`, `import { X } from …` — so anything that is not a plain
+ * identifier is arbitrary code in the spec the recorder hands the user, not a
+ * call. They were only length-capped, which mattered because the AI-extraction
+ * and MCP paths let a model reading repository source fill them in.
+ * `@piwitests/core`'s `callIdentifiersAreSafe` refuses the same shapes again at
+ * emit time, for entries stored before this check existed.
+ */
+export const optionalIdentifierSchema = z
+  .string()
+  .max(120)
+  .regex(/^[A-Za-z_$][A-Za-z0-9_$]*$/, 'Must be a valid JS identifier')
+  .nullish();
+
+/**
+ * An import specifier, not a path on disk — `./pages/CartPage`,
+ * `@fixtures/cart`. Quoted when emitted, so a quote or a line break in it can
+ * no longer break out of the literal, but neither belongs in a module path and
+ * refusing them keeps the generated import readable.
+ */
+export const moduleSchema = z
+  .string()
+  .min(1, 'Module is required')
+  .max(240)
+  .regex(/^[^'"`\r\n]+$/, 'Must not contain quotes or line breaks');
+
 export const stepActionSchema = z.enum([
   'goto',
   'click',
@@ -70,8 +97,8 @@ export const testFunctionKindSchema = z.enum(['page-object-method', 'helper', 'f
 export const aiExtractedFunctionSchema = z.object({
   name: testFunctionNameSchema,
   kind: testFunctionKindSchema,
-  receiver: z.string().max(120).nullish(),
-  importName: z.string().max(120).nullish(),
+  receiver: optionalIdentifierSchema,
+  importName: optionalIdentifierSchema,
   params: z.array(paramSchema).max(10),
   returnsPage: z.boolean().optional(),
   steps: z.array(patternStepSchema).min(1, 'At least one pattern step is required').max(30),
@@ -88,13 +115,16 @@ export const aiExtractedFunctionSchema = z.object({
  * fields no extraction step can infer). Shared by the create endpoint
  * (`server/api/projects/[id]/test-functions.post.ts`) and the MCP
  * `create_test_function` tool so both hold a caller to the same shape.
+ *
+ * `updateTestFunctionSchema` in `server/api/test-functions/[id].put.ts` is this
+ * shape with every field optional — keep the two in step.
  */
 export const createTestFunctionSchema = z.object({
   name: testFunctionNameSchema,
   kind: testFunctionKindSchema,
-  module: z.string().min(1, 'Module is required').max(240),
-  receiver: z.string().max(120).nullish(),
-  importName: z.string().max(120).nullish(),
+  module: moduleSchema,
+  receiver: optionalIdentifierSchema,
+  importName: optionalIdentifierSchema,
   params: z.array(paramSchema).max(10),
   returnsPage: z.boolean().optional(),
   urlPattern: z.string().max(240).nullish(),
