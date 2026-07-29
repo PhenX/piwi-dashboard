@@ -1,5 +1,7 @@
+import { startTool, endTool, installEscapeToCancel, teardownToolSurfaces } from '../shared/tool-session.js';
 import {
   installPickerOverlay,
+  removePickerOverlay,
   showAnchorPicker,
   probeElementAttrs,
   generateAnchoredAlternatives,
@@ -67,11 +69,17 @@ async function runPick(): Promise<void> {
   const g = globalThis as any;
   if (g.__piwiPicking) return;
   g.__piwiPicking = true;
+  const toolEpoch = startTool('pick', teardownToolSurfaces);
+  installEscapeToCancel();
   try {
     clearPickGlobals();
     installPickerOverlay({ transport: 'global', failing: null });
     const state = await waitForGlobal<string>('__piwiPickState');
     if (state !== 'picked') return;
+    // The element is ours now, so the picking overlay has done its job. Left
+    // up it just sits there reading "Analyzing element…" — behind the anchors
+    // step, and for the whole life of the results panel.
+    removePickerOverlay();
 
     const el = g.__piwiPickedElement;
     const attrs: ProbedAttrs = probeElementAttrs(el, PROBE_ARG);
@@ -104,9 +112,18 @@ async function runPick(): Promise<void> {
     if (ranked.length === 0) return;
 
     await renderResultsPanel(ranked);
+  } catch (err) {
+    // Without this a throw anywhere after the pick left the overlay frozen on
+    // "Analyzing element…" and the rejection unhandled, so the flow looked
+    // hung with nothing to explain it.
+    console.warn('[Piwi Picker] the pick flow failed:', err);
   } finally {
+    // Belt and braces: covers the early returns above (no locators generated,
+    // pick skipped) as well as anything thrown.
+    removePickerOverlay();
     clearPickGlobals();
     g.__piwiPicking = false;
+    endTool(toolEpoch);
   }
 }
 

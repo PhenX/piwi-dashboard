@@ -42,6 +42,13 @@ import {
 import { listTags, createTag, updateTag, deleteTag } from '#shared/handlers/tags';
 import { listProjectMarkers, createMarker, updateMarker, deleteMarker } from '#shared/handlers/markers';
 import {
+  listProjectTestFunctions,
+  createTestFunction,
+  updateTestFunction,
+  deleteTestFunction,
+} from '#shared/handlers/test-functions';
+import { validateExtractedFunction } from '#shared/test-function-extract-prompt';
+import {
   addQuarantine,
   listQuarantine,
   releaseQuarantine,
@@ -678,6 +685,40 @@ const routes: RouteEntry[] = [
     method: 'DELETE',
     pattern: /^\/api\/markers\/(\d+)$/,
     handler: async (m) => deleteMarker(await getDemoDb(), +m[1]!),
+  },
+
+  // Test function catalog (recorder codegen matching)
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/test-functions$/,
+    handler: async (m) => listProjectTestFunctions(await getDemoDb(), +m[1]!),
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/projects\/(\d+)\/test-functions$/,
+    handler: async (m, body) =>
+      createTestFunction(await getDemoDb(), +m[1]!, body as Parameters<typeof createTestFunction>[2]),
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/test-functions\/(\d+)$/,
+    handler: async (m, body) =>
+      updateTestFunction(await getDemoDb(), +m[1]!, body as Parameters<typeof updateTestFunction>[2]),
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/test-functions\/(\d+)$/,
+    handler: async (m) => deleteTestFunction(await getDemoDb(), +m[1]!),
+  },
+  // No AI call involved (pure parse + schema validation), unlike
+  // `test-functions/extract` — that one's excluded from demo mode in
+  // check-demo-routes.mjs, this one isn't.
+  {
+    method: 'POST',
+    pattern: /^\/api\/projects\/(\d+)\/test-functions\/validate-proposal$/,
+    handler: async (_m, body) => ({
+      proposal: validateExtractedFunction((body as { responseText?: string })?.responseText ?? ''),
+    }),
   },
 
   // Fix plan. Ownership stays annotation-only here — CODEOWNERS resolution

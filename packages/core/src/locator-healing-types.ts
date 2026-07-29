@@ -49,6 +49,10 @@ export interface SelectorCounts {
   id?: number;
   name?: number;
   classes?: Record<string, number>;
+  /** How many elements share this element's role *and* accessible name — what `getByRole(role, { name })` would really match. Absent when unknown (an older capture, or a probe run without the structural pass). */
+  roleName?: number;
+  /** How many role-bearing elements share this element's exact text. Absent when unknown. */
+  text?: number;
 }
 
 /**
@@ -82,12 +86,36 @@ export interface AncestorAnchor {
   ariaLabel: string | null;
   /** Same-role matches for the captured element within this ancestor. */
   scopedRoleCount?: number;
+  /**
+   * Matches for the captured element's text within this ancestor. A role-less
+   * leaf (a price `<span>`, a status badge) has no role to scope, so this is
+   * what tells a chain that resolves to one element from one that does not.
+   */
+  scopedTextCount?: number;
   /** Document-wide match count for this ancestor's own data-testid. */
   testIdCount?: number;
   /** Document-wide match count for this ancestor's own id. */
   idCount?: number;
   /** Document-wide count of elements resolving to this ancestor's landmark/explicit role. */
   roleCount?: number;
+  /**
+   * A stable non-testid `data-*` hook on this ancestor (`data-product="43"`,
+   * `data-row-id="7"`). Many apps identify a repeated card or row this way and
+   * nothing else, so without it the only locator left is one that matches every
+   * card on the page.
+   */
+  dataAttr?: { name: string; value: string };
+  /** Document-wide match count for `dataAttr` as an attribute selector. */
+  dataAttrCount?: number;
+  /**
+   * Text inside this ancestor that tells it apart from its same-role siblings —
+   * the product name in a card, the customer name in a table row. A repeated
+   * container carries no unique hook of its own, so this is what makes
+   * `getByRole('listitem').filter({ hasText: 'Keyboard' })` land on one of them.
+   */
+  filterText?: string;
+  /** How many elements of this ancestor's role contain `filterText`. */
+  filterRoleCount?: number;
 }
 
 /** Raw element attributes captured after a successful action. */

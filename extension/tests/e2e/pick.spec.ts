@@ -34,6 +34,10 @@ test.describe('pick.js', () => {
     // results-panel.ts) so its contents aren't reachable through Playwright's
     // locator engine; the host existing confirms the flow reached the end.
     await expect.poll(() => page.evaluate(() => !!document.getElementById('piwi-picker-results-host'))).toBe(true);
+    // …and the picking overlay must be gone by then. It used to survive to the
+    // end of the flow still reading "Analyzing element…", which looked exactly
+    // like a pick that had hung.
+    await expect(page.locator('#__piwi_picker_banner')).toHaveCount(0);
   });
 
   test('Escape at the element step ends the flow with no results panel', async ({ context }) => {

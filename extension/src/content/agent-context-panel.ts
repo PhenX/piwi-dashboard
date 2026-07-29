@@ -1,4 +1,5 @@
-import { installPickerOverlay, type PickerOverlayArg } from '@piwitests/picker-dom';
+import { startTool, endTool, installEscapeToCancel, teardownToolSurfaces } from '../shared/tool-session.js';
+import { installPickerOverlay, removePickerOverlay, type PickerOverlayArg } from '@piwitests/picker-dom';
 import { buildAgentContext } from './agent-context.js';
 
 const HOST_ID = 'piwi-agent-context-host';
@@ -165,12 +166,17 @@ async function runAgentContextPanel(): Promise<void> {
   const g = globalThis as any;
   if (g.__piwiPicking) return;
   g.__piwiPicking = true;
+  const toolEpoch = startTool('agent-context-panel', teardownToolSurfaces);
+  installEscapeToCancel();
   try {
     clearPickGlobals();
     const overlayArg: PickerOverlayArg = { transport: 'global', failing: null };
     installPickerOverlay(overlayArg);
     const state = await waitForGlobal<string>('__piwiPickState');
     if (state !== 'picked') return;
+    // Done with the picking overlay — otherwise it stays up behind this
+    // tool's own panel, still reading "Analyzing element…".
+    removePickerOverlay();
 
     const el = g.__piwiPickedElement as Element;
     const context = buildAgentContext(el, location.href);
@@ -178,6 +184,7 @@ async function runAgentContextPanel(): Promise<void> {
   } finally {
     clearPickGlobals();
     g.__piwiPicking = false;
+    endTool(toolEpoch);
   }
 }
 

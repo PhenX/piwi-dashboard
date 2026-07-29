@@ -7,6 +7,7 @@ import {
   timestamp,
   jsonb,
   doublePrecision,
+  boolean,
   index,
   uniqueIndex,
   primaryKey,
@@ -854,6 +855,43 @@ export const projectAssignments = pgTable(
 );
 
 // API keys table - for reporter/CI authentication
+// Test function catalog — per-project page-object methods/helpers, matched against
+// recorded browser-extension sessions to substitute a raw locator span with a call
+// to the project's own code. `params`, `steps` and `paramSources` are JSON — see
+// `packages/core/src/function-match.ts` for the shapes they deserialize to
+// (`FunctionParam[]`, `FunctionPatternStep[]`, `FunctionParamSource[]`).
+export const testFunctions = pgTable(
+  'test_functions',
+  {
+    id: serial('id').primaryKey(),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    kind: text('kind').notNull(), // 'page-object-method' | 'helper' | 'fixture'
+    module: text('module').notNull(), // import specifier, e.g. './pages/CartPage'
+    receiver: text('receiver'), // instance variable name for page-object-method, e.g. 'cartPage'; null otherwise
+    importName: text('import_name'), // class name to import + instantiate for page-object-method; null otherwise
+    params: text('params').notNull(), // JSON: FunctionParam[]
+    returnsPage: boolean('returns_page').notNull().default(false),
+    urlPattern: text('url_pattern'), // glob matched against a recorded step's page URL; null matches any page
+    steps: text('steps').notNull(), // JSON: FunctionPatternStep[] — the DOM pattern this function drives
+    paramSources: text('param_sources').notNull(), // JSON: FunctionParamSource[]
+    source: text('source').notNull().default('manual'), // 'manual' | 'scanned' | 'recorded' | 'ai-extracted'
+    confidence: doublePrecision('confidence').notNull().default(1), // 0-1; 1 for manual/reviewed entries
+    createdAt: timestamp('created_at', { mode: 'date' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp('updated_at', { mode: 'date' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    projectIdIdx: index('idx_test_functions_project_id').on(table.projectId),
+    uniqueName: uniqueIndex('idx_test_functions_project_module_name').on(table.projectId, table.module, table.name),
+  }),
+);
+
 export const apiKeys = pgTable(
   'api_keys',
   {
@@ -924,3 +962,5 @@ export type NetworkRequest = typeof networkRequests.$inferSelect;
 export type NewNetworkRequest = typeof networkRequests.$inferInsert;
 export type LocatorSnapshotRow = typeof locatorSnapshots.$inferSelect;
 export type NewLocatorSnapshotRow = typeof locatorSnapshots.$inferInsert;
+export type TestFunction = typeof testFunctions.$inferSelect;
+export type NewTestFunction = typeof testFunctions.$inferInsert;

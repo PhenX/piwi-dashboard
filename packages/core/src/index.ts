@@ -18,3 +18,6 @@ export * from './status-classify';
 export * from './step-analysis';
 export * from './test-meta';
 export * from './wire';
+export * from './recording';
+export * from './function-match';
+export * from './codegen';

@@ -34,6 +34,10 @@ export interface ProbedAttrs {
     id?: number;
     name?: number;
     classes?: Record<string, number>;
+    /** How many elements share this element's role *and* accessible name — i.e. what `getByRole(role, { name })` would really match. */
+    roleName?: number;
+    /** How many role-bearing elements share this element's exact text. Undefined for a role-less element, which never reaches the structural probe. */
+    text?: number;
   };
   rolePosition?: {
     role: string;
@@ -49,8 +53,13 @@ export interface ProbedAttrs {
     role: string | null;
     ariaLabel: string | null;
     scopedRoleCount?: number;
+    scopedTextCount?: number;
     testIdCount?: number;
     idCount?: number;
     roleCount?: number;
+    dataAttr?: { name: string; value: string };
+    dataAttrCount?: number;
+    filterText?: string;
+    filterRoleCount?: number;
   }>;
 }

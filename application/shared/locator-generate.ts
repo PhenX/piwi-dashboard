@@ -10,7 +10,7 @@
  * (`tests/unit/locator-generate-drift.test.ts`) that runs both over the same
  * fixtures and asserts identical output — keep the two in lockstep.
  */
-import type { ElementAttributes, RankedLocator } from './locator-healing.types';
+import type { AncestorAnchor, ElementAttributes, RankedLocator } from './locator-healing.types';
 
 /** Element attributes read by the in-page probe (`data-*`, aria, id, class, …). */
 export const CAPTURED_ATTRIBUTES: string[] = [
@@ -123,6 +123,14 @@ const escCssAttrValue = (s: string): string => s.replace(/\\/g, '\\\\').replace(
 const isCssSafeId = (id: string): boolean => /^[A-Za-z][A-Za-z0-9_-]*$/.test(id);
 
 /**
+ * `data-*` names that exist purely to be targeted by tests, so they score just
+ * under `data-testid`. Any other author-chosen `data-*` still beats a bare
+ * role anchor, but sits below `id`, which is at least guaranteed unique by the
+ * HTML spec.
+ */
+const TEST_DATA_ATTRS = new Set(['data-test', 'data-test-id', 'data-qa', 'data-qa-id', 'data-cy', 'data-e2e']);
+
+/**
  * Build a ranked list of alternative locators from the captured element
  * attributes, sorted descending by stability score. No duplicate expressions.
  */
@@ -141,6 +149,17 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
   const role = resolveAriaRole(attrs);
   const counts = attrs.selectorCounts;
   const isUnique = (n: number | undefined): boolean => n == null || n <= 1;
+  /**
+   * A locator matching more than one element is not usable as written — it
+   * needs `.first()` or a filter — so it has to rank below anything known to
+   * be unique. Subtracted rather than clamped, so the relative order among
+   * equally ambiguous candidates survives; sized to drop the highest ambiguous
+   * score (90) below the lowest unique one this generator emits (49, the
+   * text-filtered chain) without colliding with `getByTitle` at 50. No penalty
+   * when the count is unknown — an older capture must not be re-ranked on a
+   * guess.
+   */
+  const ambiguityPenalty = (n: number | undefined): number => (n != null && n > 1 ? 45 : 0);
   const text = attrs.textContent ? attrs.textContent.replace(/\s+/g, ' ').trim() : null;
 
   // 1. data-testid — highest stability (100)
@@ -160,7 +179,7 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
       locator: `getByRole('${role}', { name: '${esc(accessibleName)}'${levelPart} })`,
       method: 'getByRole',
       args: withLevel({ role, name: accessibleName }),
-      score: 90,
+      score: 90 - ambiguityPenalty(counts?.roleName),
     });
   }
 
@@ -171,7 +190,7 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
       locator: `getByRole('${role}', { name: '${esc(ariaLabel)}'${levelPart} })`,
       method: 'getByRole',
       args: withLevel({ role, name: ariaLabel }),
-      score: 85,
+      score: 85 - ambiguityPenalty(counts?.roleName),
     });
   }
 
@@ -202,7 +221,12 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
 
   // 6. getByText — from visible text content (70-80)
   if (text && text.length < 80) {
-    add({ locator: `getByText('${esc(text)}')`, method: 'getByText', args: { text }, score: 75 });
+    add({
+      locator: `getByText('${esc(text)}')`,
+      method: 'getByText',
+      args: { text },
+      score: 75 - ambiguityPenalty(counts?.text),
+    });
   }
 
   // 7. locator('#id') — if id exists and doesn't look auto-generated (50-70)
@@ -231,25 +255,36 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
     add({ locator: `getByTitle('${esc(title)}')`, method: 'getByTitle', args: { title }, score: 50 });
   }
 
-  // Structural alternatives (55-72) — name-free, survive label/text renames.
+  // Structural alternatives (51-72) — name-free, survive label/text renames.
   const hasOwnTestId = !!(testId && isUnique(counts?.testId));
-  if (role && !hasOwnTestId) {
-    const rolePart = level != null ? `'${role}', { level: ${level} }` : `'${role}'`;
-    const leafArgs = withLevel({ role });
 
+  /**
+   * Emit `<anchor>.<leaf>` chains for the nearest ancestor carrying each kind
+   * of hook. `scopedCount` is what proves a chain resolves to exactly one
+   * element: the leaf's role matches inside the ancestor for a role leaf, its
+   * text matches for a role-less one. Scores are per leaf kind — a text leaf is
+   * a weaker hook than a role one, so its chains sit a notch lower.
+   */
+  const addAnchoredChains = (
+    leaf: { expr: string; method: string; args: Record<string, unknown>; role: string | null },
+    scopedCount: (anc: AncestorAnchor) => number | undefined,
+    scores: { testId: number; testData: number; id: number; data: number; role: number; filter: number },
+  ): void => {
     let testIdAnchorDone = false;
     let idAnchorDone = false;
     let roleAnchorDone = false;
+    let dataAnchorDone = false;
+    let filterAnchorDone = false;
     for (const anc of attrs.ancestors ?? []) {
-      if (anc.scopedRoleCount !== 1) continue;
+      if (scopedCount(anc) !== 1) continue;
 
       if (!testIdAnchorDone && anc.testId && anc.testIdCount === 1) {
         testIdAnchorDone = true;
         add({
-          locator: `getByTestId('${esc(anc.testId)}').getByRole(${rolePart})`,
-          method: 'getByRole',
-          args: { ...leafArgs, anchorTestId: anc.testId },
-          score: 72,
+          locator: `getByTestId('${esc(anc.testId)}').${leaf.expr}`,
+          method: leaf.method,
+          args: { ...leaf.args, anchorTestId: anc.testId },
+          score: scores.testId,
         });
       }
 
@@ -257,29 +292,73 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
         idAnchorDone = true;
         const anchorSelector = isCssSafeId(anc.id) ? `#${anc.id}` : `[id="${escCssAttrValue(anc.id)}"]`;
         add({
-          locator: `locator('${esc(anchorSelector)}').getByRole(${rolePart})`,
-          method: 'getByRole',
-          args: { ...leafArgs, anchorSelector },
-          score: 64,
+          locator: `locator('${esc(anchorSelector)}').${leaf.expr}`,
+          method: leaf.method,
+          args: { ...leaf.args, anchorSelector },
+          score: scores.id,
+        });
+      }
+
+      if (!dataAnchorDone && anc.dataAttr && anc.dataAttrCount === 1) {
+        dataAnchorDone = true;
+        const { name, value } = anc.dataAttr;
+        const anchorSelector = `[${name}="${escCssAttrValue(value)}"]`;
+        add({
+          locator: `locator('${esc(anchorSelector)}').${leaf.expr}`,
+          method: leaf.method,
+          args: { ...leaf.args, anchorSelector },
+          score: TEST_DATA_ATTRS.has(name) ? scores.testData : scores.data,
         });
       }
 
       const ancestorRole = anc.role || TAG_TO_ROLE[anc.tag] || null;
-      if (!roleAnchorDone && ancestorRole && ancestorRole !== role && anc.roleCount === 1) {
+      if (!roleAnchorDone && ancestorRole && ancestorRole !== leaf.role && anc.roleCount === 1) {
         roleAnchorDone = true;
         add({
-          locator: `getByRole('${esc(ancestorRole)}').getByRole(${rolePart})`,
-          method: 'getByRole',
-          args: { ...leafArgs, anchorRole: ancestorRole },
-          score: 55,
+          locator: `getByRole('${esc(ancestorRole)}').${leaf.expr}`,
+          method: leaf.method,
+          args: { ...leaf.args, anchorRole: ancestorRole },
+          score: scores.role,
+        });
+      }
+
+      // A card or row that repeats has no unique hook of its own — but the text
+      // it holds names it, which is how a person would describe it anyway.
+      if (!filterAnchorDone && ancestorRole && anc.filterText && anc.filterRoleCount === 1) {
+        filterAnchorDone = true;
+        add({
+          locator: `getByRole('${esc(ancestorRole)}')` + `.filter({ hasText: '${esc(anc.filterText)}' }).${leaf.expr}`,
+          method: leaf.method,
+          args: { ...leaf.args, anchorRole: ancestorRole, anchorHasText: anc.filterText },
+          score: scores.filter,
         });
       }
     }
+  };
+
+  if (role && !hasOwnTestId) {
+    const rolePart = level != null ? `'${role}', { level: ${level} }` : `'${role}'`;
+    const leafArgs = withLevel({ role });
+
+    addAnchoredChains(
+      { expr: `getByRole(${rolePart})`, method: 'getByRole', args: leafArgs, role },
+      (anc) => anc.scopedRoleCount,
+      { testId: 72, testData: 70, id: 64, data: 60, role: 55, filter: 53 },
+    );
 
     const pos = attrs.rolePosition;
     if (pos && pos.role === role && (pos.count === 1 || (level != null && pos.levelCount === 1))) {
       add({ locator: `getByRole(${rolePart})`, method: 'getByRole', args: leafArgs, score: 58 });
     }
+  } else if (!role && text && text.length < 80 && !hasOwnTestId) {
+    // A leaf with no role — a price `<span>`, a status badge — has nothing to
+    // scope but its text. Without a chain the only candidate is a bare
+    // getByText, which on a list of cards matches every one of them.
+    addAnchoredChains(
+      { expr: `getByText('${esc(text)}')`, method: 'getByText', args: { text }, role: null },
+      (anc) => anc.scopedTextCount,
+      { testId: 68, testData: 66, id: 60, data: 56, role: 51, filter: 49 },
+    );
   }
 
   // 11. CSS class-based locators — capped at 3 most stable classes.
@@ -322,7 +401,13 @@ export function classifyCssStability(className: string): number {
 export function isAutoGenerated(value: string): boolean {
   if (/^[a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(value)) return true;
   if (/^[a-f0-9]{8,}$/i.test(value)) return true;
-  if (/^[a-z]+-\d+$/.test(value)) return true;
+  // `word-digits` used to be treated as machine output wholesale, which threw
+  // away `product-43`, `row-7`, `user-12` — ordinary, stable, human-authored
+  // ids, and often the only thing that makes a repeated card addressable. Only
+  // long digit runs (`item-1748291`) read as generated; a short suffix is far
+  // more likely to be a real record id, and it still has to be
+  // document-unique before anything is built on it.
+  if (/^[a-z]+-\d{4,}$/.test(value)) return true;
   if (/^(emotion-|styled-|css-|sc-)/.test(value)) return true;
   if (value.startsWith('ng-')) return true;
   if (/^(radix-|headlessui-|mui-|mantine-|chakra-)/i.test(value)) return true;

@@ -1,3 +1,4 @@
+import { startTool, endTool, installEscapeToCancel } from '../shared/tool-session.js';
 import { scanForLintIssues, type LintFinding } from './lint-scan.js';
 
 const HOST_ID = 'piwi-lint-overlay-host';
@@ -180,14 +181,18 @@ function toggleLintOverlay(): void {
   };
   const reposition = () => drawBoxes();
 
+  let toolEpoch = 0;
   const off = () => {
     document.removeEventListener('keydown', onKeyDown, true);
     window.removeEventListener('scroll', reposition, true);
     window.removeEventListener('resize', reposition, true);
     host.remove();
     delete g.__piwiLintOverlayOff;
+    endTool(toolEpoch);
   };
   g.__piwiLintOverlayOff = off;
+  toolEpoch = startTool('lint-overlay', off);
+  installEscapeToCancel();
   document.addEventListener('keydown', onKeyDown, true);
   window.addEventListener('scroll', reposition, true);
   window.addEventListener('resize', reposition, true);

@@ -73,7 +73,7 @@ test.describe.serial('MCP server', () => {
   test('tools/list — returns all tools', async ({ request }) => {
     const body = await mcp(request, 'tools/list');
     const tools: { name: string }[] = body.result.tools;
-    expect(tools.length).toBe(39);
+    expect(tools.length).toBe(40);
     const names = tools.map((t) => t.name);
     expect(names).toContain('list_projects');
     expect(names).toContain('get_run');
@@ -93,6 +93,7 @@ test.describe.serial('MCP server', () => {
     expect(names).toContain('set_cluster_status');
     expect(names).toContain('list_open_clusters');
     expect(names).toContain('get_fix_plan');
+    expect(names).toContain('create_test_function');
     // Every tool has a description and inputSchema
     for (const t of tools) {
       expect(t).toHaveProperty('description');
@@ -309,6 +310,43 @@ test.describe.serial('MCP server', () => {
     expect(res.status).toBe('resolved');
   });
 
+  test('tools/call create_test_function — registers a catalog entry', async ({ request }) => {
+    const res = JSON.parse(
+      (
+        await mcp(request, 'tools/call', {
+          name: 'create_test_function',
+          arguments: {
+            projectId,
+            name: 'addToCart',
+            kind: 'helper',
+            module: './helpers/cart',
+            params: [],
+            steps: [{ action: 'click', target: { testId: 'add-to-cart' } }],
+          },
+        })
+      ).result.content[0].text,
+    );
+    expect(res.id).toBeGreaterThan(0);
+    expect(res.name).toBe('addToCart');
+    expect(res.module).toBe('./helpers/cart');
+    expect(res.source).toBe('ai-extracted');
+  });
+
+  test('tools/call create_test_function — rejects a name that is not a valid identifier', async ({ request }) => {
+    const body = await mcp(request, 'tools/call', {
+      name: 'create_test_function',
+      arguments: {
+        projectId,
+        name: 'not a valid name',
+        kind: 'helper',
+        module: './helpers/cart',
+        params: [],
+        steps: [{ action: 'click', target: { testId: 'x' } }],
+      },
+    });
+    expect(body.error).toBeDefined();
+  });
+
   test('tools/call with unknown tool — returns method error', async ({ request }) => {
     const body = await mcp(request, 'tools/call', { name: 'nonexistent_tool', arguments: {} });
     expect(body.error).toBeDefined();
@@ -332,6 +370,6 @@ test.describe.serial('MCP server', () => {
     const ping = body.find((r: any) => r.id === 1);
     const list = body.find((r: any) => r.id === 2);
     expect(ping.result).toEqual({});
-    expect(list.result.tools.length).toBe(39);
+    expect(list.result.tools.length).toBe(40);
   });
 });

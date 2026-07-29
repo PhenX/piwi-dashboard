@@ -11,6 +11,7 @@ import { test, expect } from './fixtures.js';
  * inject, tested directly).
  */
 const ACTION_BUTTON_NAMES = [
+  /Record actions/,
   /Pick an element/,
   /Hover-inspect/,
   /Locator console/,
@@ -19,6 +20,7 @@ const ACTION_BUTTON_NAMES = [
   /Assertions/,
   /Session/,
   /Agent context/,
+  /Test functions/,
 ];
 
 test.describe('popup.html', () => {
@@ -28,6 +30,162 @@ test.describe('popup.html', () => {
     for (const name of ACTION_BUTTON_NAMES) {
       await expect(page.getByRole('button', { name })).toBeVisible();
     }
-    await expect(page.getByText('Ctrl+Shift+E')).toBeVisible();
+    // The hint reports whatever the browser actually bound, not the key the
+    // manifest asked for — a suggested key is only assigned when it is free.
+    await expect(page.locator('#pick-shortcut')).not.toBeEmpty();
+  });
+
+  test('the pick-shortcut hint states the binding the browser actually made', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    const assigned = await page.evaluate(async () => {
+      const commands = await chrome.commands.getAll();
+      return commands.find((c) => c.name === 'pick-element')?.shortcut ?? '';
+    });
+    const hint = page.locator('#pick-shortcut');
+    if (assigned) {
+      await expect(hint.locator('kbd')).toHaveText(assigned);
+    } else {
+      // Nothing bound: offer a way to fix it rather than naming a dead key.
+      await expect(hint.locator('a')).toContainText('set one');
+    }
+  });
+
+  test('every action tile carries a digit shortcut, 1 through 0, in render order', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    const keys = await page.locator('.actions button').evaluateAll((buttons) =>
+      buttons.map((b) => ({
+        id: b.id,
+        badge: b.querySelector('.key')?.textContent ?? null,
+        announced: b.getAttribute('aria-keyshortcuts'),
+      })),
+    );
+    expect(keys.map((k) => k.badge)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
+    // The visible badge and the announced shortcut must agree, or screen-reader
+    // users get told a key that does nothing.
+    for (const k of keys) expect(k.announced, `${k.id}`).toBe(k.badge);
+  });
+
+  test('pressing a digit runs that tile, and a modified digit is left to the browser', async ({
+    context,
+    extensionId,
+  }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.evaluate(() => {
+      (globalThis as unknown as { clicked: string[] }).clicked = [];
+      for (const b of document.querySelectorAll<HTMLElement>('.actions button')) {
+        b.addEventListener('click', () => (globalThis as unknown as { clicked: string[] }).clicked.push(b.id));
+      }
+    });
+
+    await page.keyboard.press('3');
+    await page.keyboard.press('0');
+    await page.keyboard.press('Control+5');
+
+    expect(await page.evaluate(() => (globalThis as unknown as { clicked: string[] }).clicked)).toEqual([
+      'hover-inspect',
+      'test-function-panel',
+    ]);
+  });
+
+  test('digits typed into the project select drive its own typeahead, not the shortcuts', async ({
+    context,
+    extensionId,
+  }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          chrome.storage.local.set(
+            {
+              piwiConnection: {
+                instanceUrl: 'https://piwi.test',
+                apiKey: '',
+                projectMappings: [{ urlPattern: '**', projectId: 1, projectLabel: '2024 release' }],
+              },
+            },
+            resolve,
+          );
+        }),
+    );
+    await page.reload();
+    await page.evaluate(() => {
+      (globalThis as unknown as { clicked: string[] }).clicked = [];
+      for (const b of document.querySelectorAll<HTMLElement>('.actions button')) {
+        b.addEventListener('click', () => (globalThis as unknown as { clicked: string[] }).clicked.push(b.id));
+      }
+      document.getElementById('active-project')!.focus();
+    });
+    await page.keyboard.press('2');
+    expect(await page.evaluate(() => (globalThis as unknown as { clicked: string[] }).clicked)).toEqual([]);
+  });
+
+  test('shows a config button that opens the options page', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await expect(page.getByRole('button', { name: 'Configure Piwi connection' })).toBeVisible();
+  });
+
+  test('hides the active-project row when not connected to a Piwi instance', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await expect(page.locator('#active-project-row')).toBeHidden();
+  });
+
+  test('shows the active-project row with the mapped project once connected', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          chrome.storage.local.set(
+            {
+              piwiConnection: {
+                instanceUrl: 'https://piwi.test',
+                apiKey: '',
+                projectMappings: [{ urlPattern: '**', projectId: 1, projectLabel: 'Demo project' }],
+              },
+            },
+            resolve,
+          );
+        }),
+    );
+    await page.reload();
+
+    await expect(page.locator('#active-project-row')).toBeVisible();
+    await expect(page.locator('#active-project')).toHaveValue('');
+    const optionTexts = await page.locator('#active-project option').allTextContents();
+    expect(optionTexts).toContain('Demo project');
+  });
+
+  test('dedupes multiple URL patterns mapped to the same project into one option', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          chrome.storage.local.set(
+            {
+              piwiConnection: {
+                instanceUrl: 'https://piwi.test',
+                apiKey: '',
+                projectMappings: [
+                  { urlPattern: 'https://shop.example.com/**', projectId: 1, projectLabel: 'Demo project' },
+                  { urlPattern: 'https://admin.example.com/**', projectId: 1, projectLabel: 'Demo project' },
+                ],
+              },
+            },
+            resolve,
+          );
+        }),
+    );
+    await page.reload();
+
+    await expect(page.locator('#active-project-row')).toBeVisible();
+    const optionTexts = await page.locator('#active-project option').allTextContents();
+    expect(optionTexts.filter((t) => t === 'Demo project')).toHaveLength(1);
   });
 });

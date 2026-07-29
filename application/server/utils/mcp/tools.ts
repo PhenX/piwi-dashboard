@@ -23,6 +23,8 @@ import { searchProjectsTestRunsCases } from '#shared/handlers/search';
 import { listTags } from '#shared/handlers/tags';
 import { listLinks } from '#shared/handlers/links';
 import { getAdminStats } from '#shared/handlers/admin';
+import { createTestFunction } from '#shared/handlers/test-functions';
+import { createTestFunctionSchema } from '#shared/test-function-schemas';
 import { projects, testRuns, testRunsCases, testCases, failureClusters, failureDiagnoses } from '../../database/schema';
 import { buildDiagnosisContext, buildClusterDiagnosisContext } from '../ai-context';
 import { stripAnsi } from '#shared/error-fingerprint';
@@ -1598,6 +1600,38 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       rootCause: diag.rootCause || null,
       suggestedFix: det?.suggestedFix || null,
     });
+  },
+
+  // ── create_test_function ───────────────────────────────────────────────────
+  async create_test_function(db, params, ctx) {
+    assertWriteRole(ctx);
+    const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
+
+    const validation = createTestFunctionSchema.safeParse(params);
+    if (!validation.success) {
+      throw new Error(validation.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '));
+    }
+
+    try {
+      const { testFunction } = await createTestFunction(db, projectId, {
+        ...validation.data,
+        source: validation.data.source ?? 'ai-extracted',
+      });
+      return dropNulls({
+        id: testFunction.id,
+        projectId,
+        name: testFunction.name,
+        kind: testFunction.kind,
+        module: testFunction.module,
+        source: testFunction.source,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create test function';
+      throw new Error(
+        message.toLowerCase().includes('unique') ? 'A function with this name already exists in this module' : message,
+      );
+    }
   },
 };
 

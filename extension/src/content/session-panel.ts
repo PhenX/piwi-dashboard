@@ -1,4 +1,10 @@
-import { installPickerOverlay, highlightLocator, type PickerOverlayArg } from '@piwitests/picker-dom';
+import { startTool, endTool, installEscapeToCancel, teardownToolSurfaces } from '../shared/tool-session.js';
+import {
+  installPickerOverlay,
+  removePickerOverlay,
+  highlightLocator,
+  type PickerOverlayArg,
+} from '@piwitests/picker-dom';
 import { deriveTopLocator } from './top-locator.js';
 import {
   getSessionPicks,
@@ -8,6 +14,7 @@ import {
   type SessionPick,
 } from '../shared/session-storage.js';
 import { isValidPickName, renderFixture, renderMarkdown, renderJson } from '../shared/session-export.js';
+import { ensureSessionAccess } from '../shared/session-access.js';
 
 const HOST_ID = 'piwi-session-panel-host';
 const NAME_HOST_ID = 'piwi-session-name-host';
@@ -53,10 +60,10 @@ async function pickOne(): Promise<Element | null> {
   installPickerOverlay(overlayArg);
   const state = await waitForGlobal<string>('__piwiPickState');
   const el = state === 'picked' ? ((globalThis as any).__piwiPickedElement as Element) : null;
-  // A pick leaves the banner/highlight mounted (fine for a single pick) —
-  // this flow can run the overlay repeatedly across a session, so each cycle
-  // tears its own down before the name prompt (and any next pick) shows.
-  (globalThis as any).__piwiPickCleanup?.();
+  // A committed pick leaves the banner/highlight mounted, so every flow that
+  // owns the element from here has to take them down — this one runs the
+  // overlay repeatedly, so each cycle clears before the name prompt shows.
+  removePickerOverlay();
   clearPickGlobals();
   return el;
 }
@@ -346,7 +353,11 @@ async function runSessionPanel(): Promise<void> {
   const g = globalThis as any;
   if (g.__piwiSessionPanelRunning) return;
   g.__piwiSessionPanelRunning = true;
+  const toolEpoch = startTool('session-panel', teardownToolSurfaces);
+  installEscapeToCancel();
   try {
+    // Pick sessions live in session storage — see `session-access.ts`.
+    await ensureSessionAccess();
     for (;;) {
       const picks = await getSessionPicks();
       const action = await renderSessionPanelOnce(picks);
@@ -380,6 +391,7 @@ async function runSessionPanel(): Promise<void> {
     }
   } finally {
     g.__piwiSessionPanelRunning = false;
+    endTool(toolEpoch);
   }
 }
 

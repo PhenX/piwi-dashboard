@@ -1,3 +1,4 @@
+import { startTool, endTool, installEscapeToCancel } from '../shared/tool-session.js';
 import { probeElementAttrs } from '@piwitests/picker-dom';
 import {
   generateAlternatives,
@@ -81,13 +82,17 @@ function toggleHoverInspect(): void {
     if (e.key === 'Escape') off();
   };
 
+  let toolEpoch = 0;
   const off = () => {
     document.removeEventListener('mousemove', onMove, true);
     document.removeEventListener('keydown', onKey, true);
     host.remove();
     delete g.__piwiHoverInspectOff;
+    endTool(toolEpoch);
   };
   g.__piwiHoverInspectOff = off;
+  toolEpoch = startTool('hover-inspect', off);
+  installEscapeToCancel();
   document.addEventListener('mousemove', onMove, true);
   document.addEventListener('keydown', onKey, true);
 }

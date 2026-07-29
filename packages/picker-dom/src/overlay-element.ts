@@ -317,3 +317,34 @@ export function installPickerOverlay(arg: PickerOverlayArg): void {
     g.parent.postMessage({ type: 'pickerReady' }, '*');
   }
 }
+
+/**
+ * Tears down the element-picking overlay (highlight + banner).
+ *
+ * `installPickerOverlay` deliberately leaves both standing once a pick is
+ * committed: the reporter's flow hands the element back to Node, which drives
+ * whatever comes next, and multi-pick keeps the banner up between picks while
+ * only its footer text changes. Anything that finishes with the element
+ * itself — a single pick, an assertion or context panel — has to remove them,
+ * or the banner survives the whole flow still reading "Analyzing element…",
+ * which is indistinguishable from a pick that hung.
+ *
+ * Safe to call more than once, and when no overlay was ever installed.
+ */
+export function removePickerOverlay(): void {
+  const g = globalThis as any;
+  // `installPickerOverlay` stashes the teardown for exactly the nodes it
+  // mounted; prefer it, and fall back to removing by id so a half-torn-down
+  // or re-injected overlay still goes away.
+  const cleanup = g.__piwiPickCleanup;
+  if (typeof cleanup === 'function') {
+    cleanup();
+    g.__piwiPickCleanup = undefined;
+    return;
+  }
+  const doc = g.document;
+  if (!doc) return;
+  for (const id of ['__piwi_picker_highlight', '__piwi_picker_banner']) {
+    doc.getElementById(id)?.remove();
+  }
+}

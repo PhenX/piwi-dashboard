@@ -1,3 +1,4 @@
+import { startTool, endTool, installEscapeToCancel } from '../shared/tool-session.js';
 import { parseLocatorExpression } from '../shared/locator-expr.js';
 import { evaluateLocatorChain } from './locator-eval.js';
 import { TAG_TO_ROLE, INPUT_TYPE_TO_ROLE } from '@piwitests/core/locator-generation';
@@ -145,14 +146,18 @@ function toggleLocatorConsole(): void {
   };
   const reposition = () => drawBoxes();
 
+  let toolEpoch = 0;
   const off = () => {
     document.removeEventListener('keydown', onKeyDown, true);
     window.removeEventListener('scroll', reposition, true);
     window.removeEventListener('resize', reposition, true);
     host.remove();
     delete g.__piwiLocatorConsoleOff;
+    endTool(toolEpoch);
   };
   g.__piwiLocatorConsoleOff = off;
+  toolEpoch = startTool('locator-console', off);
+  installEscapeToCancel();
   document.addEventListener('keydown', onKeyDown, true);
   window.addEventListener('scroll', reposition, true);
   window.addEventListener('resize', reposition, true);
