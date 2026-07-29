@@ -120,6 +120,46 @@ test.describe('probeElementAttrs', () => {
     expect(attrs.ancestors).toEqual([]);
   });
 
+  test('walks ancestors for a role-less leaf and counts its text within each', async ({ page }) => {
+    await page.setContent(`<!doctype html><html><body>
+      <div data-testid="row-mouse"><span class="price">£49.99</span></div>
+      <div data-testid="row-keyboard"><span id="target" class="price">£49.99</span></div>
+    </body></html>`);
+    const attrs = await page.locator('#target').evaluate(probeElementAttrs, {
+      keep: ['id', 'class'],
+      tagRoles: { button: 'button' },
+      inputRoles: {},
+      roleSources: 'button,div',
+      includeStructural: true,
+      includeLabelText: false,
+    });
+    // A <span> has no role, so there is nothing role-shaped to scope — the
+    // walk used to stop here and the leaf got no chain at all.
+    expect(attrs.rolePosition).toBeNull();
+    expect(attrs.ancestors?.[0]).toMatchObject({ testId: 'row-keyboard', scopedTextCount: 1 });
+    expect(attrs.ancestors?.[0]?.scopedRoleCount).toBeUndefined();
+    expect(attrs.selectorCounts.text).toBe(2);
+  });
+
+  test('counts the smallest element containing the text, not every ancestor of it', async ({ page }) => {
+    await page.setContent(`<!doctype html><html><body>
+      <div><section><div class="badge">In <b>stock</b></div></section></div>
+      <div><section><div id="target" class="badge">In <b>stock</b></div></section></div>
+    </body></html>`);
+    const attrs = await page.locator('#target').evaluate(probeElementAttrs, {
+      keep: ['id'],
+      tagRoles: {},
+      inputRoles: {},
+      roleSources: 'button',
+      includeStructural: true,
+      includeLabelText: false,
+    });
+    // Two badges match. Their wrapping <section> and <div> contain the text too
+    // but only through a descendant, and Playwright resolves to the smallest
+    // element — counting them would wrongly report 6.
+    expect(attrs.selectorCounts.text).toBe(2);
+  });
+
   test('includes labelText only when includeLabelText is set', async ({ page }) => {
     await page.setContent(`<!doctype html><html><body>
       <label for="email">Email address</label>

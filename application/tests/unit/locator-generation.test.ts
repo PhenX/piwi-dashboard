@@ -325,6 +325,83 @@ describe('generateAlternatives — data-* anchors', () => {
 });
 
 /**
+ * A leaf with no role — a price `<span>`, a status badge — had no structural
+ * alternatives at all, so on a list of cards the single suggestion was a bare
+ * getByText matching every one of them.
+ */
+describe('generateAlternatives — text-scoped chains for role-less leaves', () => {
+  const price = (anc: Partial<ElementAttributes['ancestors']>[number], text = 2): ElementAttributes =>
+    el({
+      tagName: 'span',
+      textContent: '£49.99',
+      selectorCounts: { text },
+      ancestors: [{ tag: 'div', depth: 1, scopedTextCount: 1, ...anc }],
+    });
+
+  test('scopes the text to the nearest anchored ancestor', () => {
+    const alts = generateAlternatives(price({ testId: 'row-keyboard', testIdCount: 1 }));
+    expect(alts[0]).toMatchObject({
+      locator: "getByTestId('row-keyboard').getByText('£49.99')",
+      method: 'getByText',
+      args: { text: '£49.99', anchorTestId: 'row-keyboard' },
+      score: 68,
+    });
+  });
+
+  test('every anchor kind is available, one notch below its getByRole counterpart', () => {
+    expect(generateAlternatives(price({ testId: 'row', testIdCount: 1 }))[0]!.score).toBe(68);
+    expect(
+      generateAlternatives(price({ dataAttr: { name: 'data-qa', value: 'row' }, dataAttrCount: 1 }))[0]!.score,
+    ).toBe(66);
+    expect(generateAlternatives(price({ id: 'clearance', idCount: 1 }))[0]!.score).toBe(60);
+    expect(
+      generateAlternatives(price({ dataAttr: { name: 'data-product', value: '43' }, dataAttrCount: 1 }))[0]!.score,
+    ).toBe(56);
+    expect(generateAlternatives(price({ tag: 'nav', roleCount: 1 }))[0]).toMatchObject({
+      locator: "getByRole('navigation').getByText('£49.99')",
+      score: 51,
+    });
+  });
+
+  test('an ancestor holding several matches of the text anchors nothing', () => {
+    const alts = generateAlternatives(price({ testId: 'list', testIdCount: 1, scopedTextCount: 3 }));
+    expect(alts.some((a) => a.locator.includes('getByTestId'))).toBe(false);
+  });
+
+  test('a unique text keeps the plain getByText on top — the chain is only a fallback', () => {
+    const alts = generateAlternatives(price({ testId: 'row', testIdCount: 1 }, 1));
+    expect(alts[0]).toMatchObject({ locator: "getByText('£49.99')", score: 75 });
+    expect(alts[1]!.score).toBe(68);
+  });
+
+  test('a leaf that has a role gets role chains, not redundant text ones', () => {
+    const alts = generateAlternatives(
+      el({
+        textContent: 'Add to cart',
+        accessibleName: 'Add to cart',
+        selectorCounts: { roleName: 2, text: 2 },
+        ancestors: [{ tag: 'div', depth: 1, testId: 'row', testIdCount: 1, scopedRoleCount: 1, scopedTextCount: 1 }],
+      }),
+    );
+    expect(alts.some((a) => a.method === 'getByText' && a.args.anchorTestId)).toBe(false);
+    expect(alts[0]!.locator).toBe("getByTestId('row').getByRole('button')");
+  });
+
+  test('a leaf with its own unique testid needs no chain', () => {
+    const alts = generateAlternatives(
+      el({
+        tagName: 'span',
+        attributes: { 'data-testid': 'price' },
+        textContent: '£49.99',
+        selectorCounts: { testId: 1, text: 2 },
+        ancestors: [{ tag: 'div', depth: 1, testId: 'row', testIdCount: 1, scopedTextCount: 1 }],
+      }),
+    );
+    expect(alts.some((a) => a.args.anchorTestId)).toBe(false);
+  });
+});
+
+/**
  * `word-digits` ids used to be discarded wholesale as framework output, which
  * threw away the one hook that made a repeated card addressable.
  */

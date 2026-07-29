@@ -103,108 +103,150 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
       };
       const targetName = nameOf(el);
       const targetText = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      const textNeedle = targetText ? targetText.toLowerCase() : null;
 
-      if (targetRole) {
-        const nodes = doc.querySelectorAll(roleSources);
-        // A truncated scan would produce wrong counts/indexes — skip instead.
-        if (nodes.length <= 4000) {
-          let roleCountAll = 0;
-          let index = -1;
-          let levelCount = 0;
-          // How many elements a `getByRole(role, { name })` / `getByText(text)`
-          // would actually match. Without these, an ambiguous locator scores
-          // exactly as well as a unique one and wins on base score alone.
-          let roleNameCount = 0;
-          let textCount = 0;
-          for (let i = 0; i < nodes.length; i++) {
-            const n = nodes[i];
-            if (targetText && (n.textContent || '').replace(/\s+/g, ' ').trim() === targetText) textCount++;
-            if (roleOf(n) !== targetRole) continue;
-            if (n === el) index = roleCountAll;
-            roleCountAll++;
-            if (targetLevel != null && levelOf(n) === targetLevel) levelCount++;
-            if (targetName != null && nameOf(n) === targetName) roleNameCount++;
-          }
-          if (targetName != null) selectorCounts.roleName = roleNameCount;
-          if (targetText) selectorCounts.text = textCount;
-          if (index !== -1) {
-            rolePosition = {
-              role: targetRole,
-              count: roleCountAll,
-              index,
-              ...(targetLevel != null ? { levelCount } : {}),
-            };
-          }
-
-          const CONTAINER_TAGS = ['form', 'nav', 'main', 'article', 'section', 'dialog', 'table'];
-          // Framework bookkeeping rather than anything an author chose:
-          // Vue's scoped-style markers (`data-v-4f2a1b`), React's legacy
-          // `data-reactid`, Svelte/Angular/Ember instance ids.
-          const NOISY_DATA_ATTR = /^data-(v-[0-9a-f]+|reactid|react-checksum|svelte-\w+|ng-\w+|ember\w*)$/i;
-          /** The first `data-*` on a node that looks author-chosen and carries a usable value. `data-testid` is excluded — it has its own, higher-scoring path. */
-          const stableDataAttr = (n: any): { name: string; value: string } | null => {
-            const attrs = n.attributes;
-            if (!attrs) return null;
-            for (let i = 0; i < attrs.length; i++) {
-              const name = attrs[i].name;
-              if (!name || name.slice(0, 5) !== 'data-' || name === 'data-testid') continue;
-              if (NOISY_DATA_ATTR.test(name)) continue;
-              const value = attrs[i].value;
-              // A valueless marker (`data-open`) identifies nothing; an
-              // over-long one is almost always serialized state.
-              if (!value || value.length > 120) continue;
-              return { name, value };
+      const normText = (n: any): string => (n.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      /**
+       * How many elements `getByText(targetText)` would match inside `root`.
+       * Playwright's default text match is a case-insensitive substring over
+       * normalized whitespace and resolves to the *smallest* element containing
+       * the text, so an ancestor that only matches through a descendant is not
+       * a separate match. Returns -1 when the subtree is too large to scan,
+       * leaving the count unknown rather than reporting a wrong one.
+       */
+      const countTextOwners = (root: any, cap: number): number => {
+        if (!textNeedle) return -1;
+        const els = root.querySelectorAll('*');
+        if (els.length > cap) return -1;
+        let total = 0;
+        for (let i = 0; i < els.length; i++) {
+          const n = els[i];
+          if (normText(n).indexOf(textNeedle) === -1) continue;
+          let deeper = false;
+          const kids = n.children;
+          for (let j = 0; j < kids.length; j++) {
+            if (normText(kids[j]).indexOf(textNeedle) !== -1) {
+              deeper = true;
+              break;
             }
-            return null;
+          }
+          if (!deeper) total++;
+        }
+        return total;
+      };
+
+      // A truncated scan would produce wrong counts/indexes — skip instead.
+      const nodes = doc.querySelectorAll(roleSources);
+      const rolesUsable = !!targetRole && nodes.length <= 4000;
+
+      if (rolesUsable) {
+        let roleCountAll = 0;
+        let index = -1;
+        let levelCount = 0;
+        // How many elements a `getByRole(role, { name })` would actually
+        // match. Without it, an ambiguous locator scores exactly as well as a
+        // unique one and wins on base score alone.
+        let roleNameCount = 0;
+        for (let i = 0; i < nodes.length; i++) {
+          const n = nodes[i];
+          if (roleOf(n) !== targetRole) continue;
+          if (n === el) index = roleCountAll;
+          roleCountAll++;
+          if (targetLevel != null && levelOf(n) === targetLevel) levelCount++;
+          if (targetName != null && nameOf(n) === targetName) roleNameCount++;
+        }
+        if (targetName != null) selectorCounts.roleName = roleNameCount;
+        if (index !== -1) {
+          rolePosition = {
+            role: targetRole,
+            count: roleCountAll,
+            index,
+            ...(targetLevel != null ? { levelCount } : {}),
           };
-          const docRoleCount = (role: string): number => {
-            let c = 0;
-            for (let i = 0; i < nodes.length; i++) if (roleOf(nodes[i]) === role) c++;
-            return c;
-          };
-          let node = el.parentElement;
-          let depth = 0;
-          while (node && depth < 12 && ancestors.length < 4) {
-            depth++;
-            const tag = (node.tagName || '').toLowerCase();
-            if (tag === 'body' || tag === 'html') break;
-            const testId = node.getAttribute('data-testid');
-            const id = node.getAttribute('id');
-            const explicitRole = node.getAttribute('role');
-            const ariaLabel = node.getAttribute('aria-label');
-            const anchorRole = explicitRole || (CONTAINER_TAGS.includes(tag) ? tagRoles[tag] : null) || null;
-            const dataAttr = stableDataAttr(node);
-            if (testId || id || anchorRole || ariaLabel || dataAttr) {
+        }
+      }
+
+      if (textNeedle) {
+        const textCount = countTextOwners(doc.body || doc.documentElement, 4000);
+        if (textCount >= 0) selectorCounts.text = textCount;
+      }
+
+      // The anchor walk runs for role-less leaves too: a `<span class="price">`
+      // has no role to scope, but scoping its text to a parent is the only way
+      // to tell one repeated card from another.
+      if (rolesUsable || textNeedle) {
+        const CONTAINER_TAGS = ['form', 'nav', 'main', 'article', 'section', 'dialog', 'table'];
+        // Framework bookkeeping rather than anything an author chose:
+        // Vue's scoped-style markers (`data-v-4f2a1b`), React's legacy
+        // `data-reactid`, Svelte/Angular/Ember instance ids.
+        const NOISY_DATA_ATTR = /^data-(v-[0-9a-f]+|reactid|react-checksum|svelte-\w+|ng-\w+|ember\w*)$/i;
+        /** The first `data-*` on a node that looks author-chosen and carries a usable value. `data-testid` is excluded — it has its own, higher-scoring path. */
+        const stableDataAttr = (n: any): { name: string; value: string } | null => {
+          const attrs = n.attributes;
+          if (!attrs) return null;
+          for (let i = 0; i < attrs.length; i++) {
+            const name = attrs[i].name;
+            if (!name || name.slice(0, 5) !== 'data-' || name === 'data-testid') continue;
+            if (NOISY_DATA_ATTR.test(name)) continue;
+            const value = attrs[i].value;
+            // A valueless marker (`data-open`) identifies nothing; an
+            // over-long one is almost always serialized state.
+            if (!value || value.length > 120) continue;
+            return { name, value };
+          }
+          return null;
+        };
+        const docRoleCount = (role: string): number => {
+          let c = 0;
+          for (let i = 0; i < nodes.length; i++) if (roleOf(nodes[i]) === role) c++;
+          return c;
+        };
+        let node = el.parentElement;
+        let depth = 0;
+        while (node && depth < 12 && ancestors.length < 4) {
+          depth++;
+          const tag = (node.tagName || '').toLowerCase();
+          if (tag === 'body' || tag === 'html') break;
+          const testId = node.getAttribute('data-testid');
+          const id = node.getAttribute('id');
+          const explicitRole = node.getAttribute('role');
+          const ariaLabel = node.getAttribute('aria-label');
+          const anchorRole = explicitRole || (CONTAINER_TAGS.includes(tag) ? tagRoles[tag] : null) || null;
+          const dataAttr = stableDataAttr(node);
+          if (testId || id || anchorRole || ariaLabel || dataAttr) {
+            let scopedRoleCount = -1;
+            if (rolesUsable) {
               const scoped = node.querySelectorAll(roleSources);
-              let scopedRoleCount = 0;
+              // Truncated — unusable, so leave it at -1 and drop the field.
               if (scoped.length <= 2000) {
+                scopedRoleCount = 0;
                 for (let i = 0; i < scoped.length; i++) {
                   const n = scoped[i];
                   if (roleOf(n) !== targetRole) continue;
                   if (targetLevel != null && levelOf(n) !== targetLevel) continue;
                   scopedRoleCount++;
                 }
-              } else {
-                scopedRoleCount = -1; // truncated — unusable
               }
-              ancestors.push({
-                tag,
-                depth,
-                testId: testId || null,
-                id: id || null,
-                role: explicitRole || null,
-                ariaLabel: ariaLabel || null,
-                ...(scopedRoleCount >= 0 ? { scopedRoleCount } : {}),
-                ...(testId ? { testIdCount: count(`[data-testid=${JSON.stringify(testId)}]`) } : {}),
-                ...(id ? { idCount: count(`#${cssEsc(id)}`) } : {}),
-                ...(anchorRole ? { roleCount: docRoleCount(anchorRole) } : {}),
-                ...(dataAttr
-                  ? { dataAttr, dataAttrCount: count(`[${dataAttr.name}=${JSON.stringify(dataAttr.value)}]`) }
-                  : {}),
-              });
             }
-            node = node.parentElement;
+            const scopedTextCount = countTextOwners(node, 2000);
+            ancestors.push({
+              tag,
+              depth,
+              testId: testId || null,
+              id: id || null,
+              role: explicitRole || null,
+              ariaLabel: ariaLabel || null,
+              ...(scopedRoleCount >= 0 ? { scopedRoleCount } : {}),
+              ...(scopedTextCount >= 0 ? { scopedTextCount } : {}),
+              ...(testId ? { testIdCount: count(`[data-testid=${JSON.stringify(testId)}]`) } : {}),
+              ...(id ? { idCount: count(`#${cssEsc(id)}`) } : {}),
+              ...(anchorRole ? { roleCount: docRoleCount(anchorRole) } : {}),
+              ...(dataAttr
+                ? { dataAttr, dataAttrCount: count(`[${dataAttr.name}=${JSON.stringify(dataAttr.value)}]`) }
+                : {}),
+            });
           }
+          node = node.parentElement;
         }
       }
     } catch {

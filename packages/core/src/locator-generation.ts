@@ -325,24 +325,33 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
 
   // Structural alternatives — name-free, survive renames
   const hasOwnTestId = !!(testId && isUnique(counts?.testId));
-  if (role && !hasOwnTestId) {
-    const rolePart = level != null ? `'${role}', { level: ${level} }` : `'${role}'`;
-    const leafArgs = withLevel({ role });
 
+  /**
+   * Emit `<anchor>.<leaf>` chains for the nearest ancestor carrying each kind
+   * of hook. `scopedCount` is what proves a chain resolves to exactly one
+   * element: the leaf's role matches inside the ancestor for a role leaf, its
+   * text matches for a role-less one. Scores are per leaf kind — a text leaf is
+   * a weaker hook than a role one, so its chains sit a notch lower.
+   */
+  const addAnchoredChains = (
+    leaf: { expr: string; method: string; args: Record<string, unknown>; role: string | null },
+    scopedCount: (anc: AncestorAnchor) => number | undefined,
+    scores: { testId: number; testData: number; id: number; data: number; role: number },
+  ): void => {
     let testIdAnchorDone = false;
     let idAnchorDone = false;
     let roleAnchorDone = false;
     let dataAnchorDone = false;
     for (const anc of attrs.ancestors ?? []) {
-      if (anc.scopedRoleCount !== 1) continue;
+      if (scopedCount(anc) !== 1) continue;
 
       if (!testIdAnchorDone && anc.testId && anc.testIdCount === 1) {
         testIdAnchorDone = true;
         add({
-          locator: `getByTestId('${esc(anc.testId)}').getByRole(${rolePart})`,
-          method: 'getByRole',
-          args: { ...leafArgs, anchorTestId: anc.testId },
-          score: 72,
+          locator: `getByTestId('${esc(anc.testId)}').${leaf.expr}`,
+          method: leaf.method,
+          args: { ...leaf.args, anchorTestId: anc.testId },
+          score: scores.testId,
         });
       }
 
@@ -350,10 +359,10 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
         idAnchorDone = true;
         const anchorSelector = isCssSafeId(anc.id) ? `#${anc.id}` : `[id="${escCssAttrValue(anc.id)}"]`;
         add({
-          locator: `locator('${esc(anchorSelector)}').getByRole(${rolePart})`,
-          method: 'getByRole',
-          args: { ...leafArgs, anchorSelector },
-          score: 64,
+          locator: `locator('${esc(anchorSelector)}').${leaf.expr}`,
+          method: leaf.method,
+          args: { ...leaf.args, anchorSelector },
+          score: scores.id,
         });
       }
 
@@ -362,24 +371,35 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
         const { name, value } = anc.dataAttr;
         const anchorSelector = `[${name}="${escCssAttrValue(value)}"]`;
         add({
-          locator: `locator('${esc(anchorSelector)}').getByRole(${rolePart})`,
-          method: 'getByRole',
-          args: { ...leafArgs, anchorSelector },
-          score: TEST_DATA_ATTRS.has(name) ? 70 : 60,
+          locator: `locator('${esc(anchorSelector)}').${leaf.expr}`,
+          method: leaf.method,
+          args: { ...leaf.args, anchorSelector },
+          score: TEST_DATA_ATTRS.has(name) ? scores.testData : scores.data,
         });
       }
 
       const ancestorRole = anc.role || TAG_TO_ROLE[anc.tag] || null;
-      if (!roleAnchorDone && ancestorRole && ancestorRole !== role && anc.roleCount === 1) {
+      if (!roleAnchorDone && ancestorRole && ancestorRole !== leaf.role && anc.roleCount === 1) {
         roleAnchorDone = true;
         add({
-          locator: `getByRole('${esc(ancestorRole)}').getByRole(${rolePart})`,
-          method: 'getByRole',
-          args: { ...leafArgs, anchorRole: ancestorRole },
-          score: 55,
+          locator: `getByRole('${esc(ancestorRole)}').${leaf.expr}`,
+          method: leaf.method,
+          args: { ...leaf.args, anchorRole: ancestorRole },
+          score: scores.role,
         });
       }
     }
+  };
+
+  if (role && !hasOwnTestId) {
+    const rolePart = level != null ? `'${role}', { level: ${level} }` : `'${role}'`;
+    const leafArgs = withLevel({ role });
+
+    addAnchoredChains(
+      { expr: `getByRole(${rolePart})`, method: 'getByRole', args: leafArgs, role },
+      (anc) => anc.scopedRoleCount,
+      { testId: 72, testData: 70, id: 64, data: 60, role: 55 },
+    );
 
     // Name-free bare role
     const pos = attrs.rolePosition as RolePosition | undefined;
@@ -391,6 +411,15 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
         score: 58,
       });
     }
+  } else if (!role && text && text.length < 80 && !hasOwnTestId) {
+    // A leaf with no role — a price `<span>`, a status badge — has nothing to
+    // scope but its text. Without a chain the only candidate is a bare
+    // getByText, which on a list of cards matches every one of them.
+    addAnchoredChains(
+      { expr: `getByText('${esc(text)}')`, method: 'getByText', args: { text }, role: null },
+      (anc) => anc.scopedTextCount,
+      { testId: 68, testData: 66, id: 60, data: 56, role: 51 },
+    );
   }
 
   // CSS class-based

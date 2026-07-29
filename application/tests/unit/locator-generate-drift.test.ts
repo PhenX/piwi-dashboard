@@ -107,6 +107,68 @@ const FIXTURES: ElementAttributes[] = [
     ],
   }),
   el({ tagName: 'select', attributes: { name: 'country', multiple: '' }, accessibleName: 'Country' }),
+  // Ambiguity penalties, a data-* anchor, and a role-less leaf scoped by text —
+  // none of the above reaches those branches.
+  el({
+    tagName: 'button',
+    accessibleName: 'Add to cart',
+    textContent: 'Add to cart',
+    selectorCounts: { roleName: 2, text: 2 },
+    ancestors: [
+      {
+        tag: 'div',
+        depth: 1,
+        testId: null,
+        id: null,
+        role: null,
+        ariaLabel: null,
+        scopedRoleCount: 1,
+        scopedTextCount: 1,
+        dataAttr: { name: 'data-product', value: '43' },
+        dataAttrCount: 1,
+      },
+      {
+        tag: 'div',
+        depth: 2,
+        testId: null,
+        id: null,
+        role: null,
+        ariaLabel: null,
+        scopedRoleCount: 1,
+        dataAttr: { name: 'data-qa', value: 'grid' },
+        dataAttrCount: 1,
+      },
+    ],
+  }),
+  el({
+    tagName: 'span',
+    attributes: { class: 'price' },
+    textContent: '£49.99',
+    selectorCounts: { text: 2, classes: { price: 4 } },
+    ancestors: [
+      {
+        tag: 'div',
+        depth: 1,
+        testId: 'row-keyboard',
+        id: null,
+        role: null,
+        ariaLabel: null,
+        scopedTextCount: 1,
+        testIdCount: 1,
+      },
+      {
+        tag: 'nav',
+        depth: 3,
+        testId: null,
+        id: 'deals',
+        role: null,
+        ariaLabel: null,
+        scopedTextCount: 1,
+        idCount: 1,
+        roleCount: 1,
+      },
+    ],
+  }),
 ];
 
 describe('locator-generate drift guard (dashboard copy vs reporter source)', () => {

@@ -86,6 +86,12 @@ export interface AncestorAnchor {
   ariaLabel: string | null;
   /** Same-role matches for the captured element within this ancestor. */
   scopedRoleCount?: number;
+  /**
+   * Matches for the captured element's text within this ancestor. A role-less
+   * leaf (a price `<span>`, a status badge) has no role to scope, so this is
+   * what tells a chain that resolves to one element from one that does not.
+   */
+  scopedTextCount?: number;
   /** Document-wide match count for this ancestor's own data-testid. */
   testIdCount?: number;
   /** Document-wide match count for this ancestor's own id. */

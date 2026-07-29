@@ -66,7 +66,11 @@ nothing. The popup footer reports the key actually bound, and offers a link to
   app-specific `data-*` such as `data-product="43"` or `data-row-id="7"` — so a repeated card
   identified only by a `data-*` attribute still gets a chain
   (`locator('[data-product="43"]').getByRole('button')`). Framework bookkeeping (`data-v-4f2a1b`,
-  `data-reactid`, Svelte/Angular/Ember instance ids) is skipped, as are valueless markers.
+  `data-reactid`, Svelte/Angular/Ember instance ids) is skipped, as are valueless markers. An
+  element with no role at all — a price `<span>`, a status badge — is scoped the same way through
+  its text (`getByTestId('row-keyboard').getByText('£49.99')`), so a repeated value is still
+  addressable; when the text is already unique on the page the plain `getByText` stays on top and
+  the chain is just the fallback below it.
 - **Copy in three forms** — the bare locator, a full action line
   (`await page.getByRole(…).click();`), or a visibility assertion
   (`await expect(page.getByRole(…)).toBeVisible();`). Your last-used form is remembered for next

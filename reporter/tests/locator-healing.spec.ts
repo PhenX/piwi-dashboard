@@ -445,6 +445,43 @@ describe('generateAlternatives — structural (rename-proof) alternatives', () =
     expect(anchored('data-qa')!.score).toBe(70);
   });
 
+  it('scopes a role-less leaf by its text (68/51), one notch under the role chains', () => {
+    const attrs = makeAttrs({
+      tagName: 'span',
+      textContent: '£49.99',
+      selectorCounts: { text: 2 },
+      ancestors: [
+        makeAnchor({ tag: 'div', scopedRoleCount: undefined, scopedTextCount: 1, testId: 'row', testIdCount: 1 }),
+        makeAnchor({ tag: 'nav', depth: 3, scopedRoleCount: undefined, scopedTextCount: 1, roleCount: 1 }),
+      ],
+    });
+    const alts = generateAlternatives(attrs);
+    expect(alts[0]).toMatchObject({
+      locator: "getByTestId('row').getByText('£49.99')",
+      method: 'getByText',
+      args: { text: '£49.99', anchorTestId: 'row' },
+      score: 68,
+    });
+    expect(alts.find((a) => a.args.anchorRole)).toMatchObject({
+      locator: "getByRole('navigation').getByText('£49.99')",
+      score: 51,
+    });
+    // The bare getByText matches both rows, so it drops below both chains.
+    expect(alts.find((a) => a.method === 'getByText' && !a.args.anchorTestId && !a.args.anchorRole)!.score).toBe(30);
+  });
+
+  it('does not add text chains for a leaf that already has role chains', () => {
+    const attrs = makeAttrs({
+      tagName: 'button',
+      accessibleName: 'Add to cart',
+      textContent: 'Add to cart',
+      ancestors: [makeAnchor({ tag: 'div', testId: 'row', testIdCount: 1, scopedTextCount: 1 })],
+    });
+    const alts = generateAlternatives(attrs);
+    expect(alts.some((a) => a.method === 'getByText' && a.args.anchorTestId)).toBe(false);
+    expect(alts.some((a) => a.method === 'getByRole' && a.args.anchorTestId)).toBe(true);
+  });
+
   it('skips a data-* ancestor whose hook matches several elements', () => {
     const attrs = makeAttrs({
       tagName: 'input',

@@ -53,6 +53,7 @@ export interface ProbedAttrs {
     role: string | null;
     ariaLabel: string | null;
     scopedRoleCount?: number;
+    scopedTextCount?: number;
     testIdCount?: number;
     idCount?: number;
     roleCount?: number;
