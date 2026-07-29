@@ -53,6 +53,28 @@ function normalizeText(s: string): string {
 }
 
 /**
+ * A stable identity for an element, for as long as this document lives.
+ *
+ * `normalizeSteps` needs to know whether two consecutive `input` events came
+ * from the same field, and two unlabelled `<input>`s are indistinguishable by
+ * everything else a `RecordedTarget` carries — same tag, same role, no name, no
+ * test id, and no locator alternative either. The prefix keeps keys from two
+ * pages of one recording from ever colliding.
+ */
+const elementKeys = new WeakMap<Element, string>();
+const KEY_PREFIX = Math.random().toString(36).slice(2, 8);
+let nextElementKey = 0;
+
+function elementKeyFor(el: Element): string {
+  let key = elementKeys.get(el);
+  if (key == null) {
+    key = `${KEY_PREFIX}-${++nextElementKey}`;
+    elementKeys.set(el, key);
+  }
+  return key;
+}
+
+/**
  * Element → `RecordedTarget`, mirroring `top-locator.ts`'s probe pipeline but
  * keeping the top few ranked alternatives (not just the winner) and the
  * role/testId/text a catalog pattern match needs. Lives here rather than a
@@ -72,7 +94,29 @@ function deriveRecordedTarget(el: Element): RecordedTarget {
     testId: attrs.attributes['data-testid'] ?? null,
     text: el.textContent ? normalizeText(el.textContent).slice(0, 200) : null,
     alternatives: ranked.slice(0, 5).map((r) => ({ locator: r.locator, method: r.method, score: r.score })),
+    elementKey: elementKeyFor(el),
   };
+}
+
+/**
+ * `deriveRecordedTarget` for a field mid-burst, computed once per element.
+ *
+ * The probe behind it walks the document to count same-role and same-text
+ * elements and to score anchor ancestors — cheap once per click, but it used to
+ * run on *every* `input` event, so a probe of the whole page sat between one
+ * keystroke and the next. Coalescing already discards all but the last value of
+ * a burst, and `normalizeSteps` keeps the target from the burst's first event,
+ * so re-deriving it per keystroke changed nothing it produced.
+ */
+const fieldTargets = new WeakMap<Element, RecordedTarget>();
+
+function fieldTarget(el: Element): RecordedTarget {
+  let derived = fieldTargets.get(el);
+  if (derived == null) {
+    derived = deriveRecordedTarget(el);
+    fieldTargets.set(el, derived);
+  }
+  return derived;
 }
 
 function nearestActionable(el: Element): Element {
@@ -182,6 +226,8 @@ function renderHud(state: RecordingState, catalog: TestFunctionEntry[]): void {
     .match-badge.complete { background: rgba(34,197,94,.2); color: #22c55e; }
     .match-badge.partial { color: #9ca3af; }
     .empty { color: #9ca3af; font-size: 11px; }
+    .warn { color: #fca5a5; font-size: 11px; line-height: 1.35; }
+    @media (prefers-color-scheme: light) { .warn { color: #b91c1c; } }
   `;
   root.appendChild(style);
 
@@ -206,6 +252,14 @@ function renderHud(state: RecordingState, catalog: TestFunctionEntry[]): void {
   stopBtn.addEventListener('click', () => void handleStop());
   topRow.append(dot, title, stopBtn);
   bar.appendChild(topRow);
+
+  if (captureError) {
+    const warn = document.createElement('div');
+    warn.className = 'warn';
+    warn.setAttribute('role', 'alert');
+    warn.textContent = captureError;
+    bar.appendChild(warn);
+  }
 
   if (lastTarget?.alternatives[0]) {
     const locTitle = document.createElement('div');
@@ -446,7 +500,6 @@ function buildEvent(
 ): RawCaptureEvent {
   return {
     kind,
-    target: el ? deriveRecordedTarget(el) : null,
     value: null,
     checked: null,
     inputType: null,
@@ -454,6 +507,10 @@ function buildEvent(
     pageUrl: location.href,
     timestamp: Date.now(),
     ...extra,
+    // Resolved last, and only derived when the caller has not supplied one —
+    // deriving first and letting `extra` overwrite it would still pay for the
+    // probe the caller passed a cached target precisely to avoid.
+    target: extra.target !== undefined ? extra.target : el ? deriveRecordedTarget(el) : null,
   };
 }
 
@@ -467,6 +524,53 @@ async function refreshHud(): Promise<void> {
   const activeProject = resolveActiveProject(connection, override, location.href);
   const catalog = await getCachedCatalog(activeProject?.projectId ?? null);
   renderHud(state, catalog);
+}
+
+/**
+ * Records one captured event and refreshes the HUD, at most one redraw per
+ * `HUD_REFRESH_MS` with the last one always landing.
+ *
+ * The HUD re-runs `rankFunctionMatches` over the whole catalog and rebuilds its
+ * host from scratch, which is fine per click and wasteful per keystroke. It is
+ * pure presentation, so throttling it cannot reorder or drop a step — the
+ * `appendRecordingEvent` call it follows is what actually records, and that one
+ * is never skipped.
+ */
+const HUD_REFRESH_MS = 120;
+let hudRefreshAt = 0;
+let hudRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleHudRefresh(): void {
+  if (hudRefreshTimer != null) return;
+  const wait = Math.max(0, hudRefreshAt + HUD_REFRESH_MS - Date.now());
+  hudRefreshTimer = setTimeout(() => {
+    hudRefreshTimer = null;
+    hudRefreshAt = Date.now();
+    void refreshHud();
+  }, wait);
+}
+
+/**
+ * The last capture write that failed, surfaced in the HUD.
+ *
+ * A rejected write used to be an unhandled rejection: session storage filling
+ * up mid-recording looked exactly like a recording that was still going fine,
+ * and the steps after it were simply absent from the export.
+ */
+let captureError: string | null = null;
+
+function captureEvent(event: RawCaptureEvent): void {
+  void appendRecordingEvent(event)
+    .then(() => {
+      captureError = null;
+    })
+    .catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : '';
+      captureError = /quota|exceeded/i.test(message)
+        ? 'Out of storage — stop and export now, later steps are being lost.'
+        : 'A step could not be saved.';
+    })
+    .then(() => scheduleHudRefresh());
 }
 
 /** One TTL-guarded catalog re-fetch for whichever project this page maps to — called once per page load, never from `refreshHud`. */
@@ -525,7 +629,7 @@ function attachListeners(): void {
       const el = nearestActionable(raw);
       const kind = classifyInputKind(el.tagName, (el as HTMLInputElement).type ?? null);
       if (kind === 'checkbox' || kind === 'radio') return; // the resulting `change` event records this one
-      void appendRecordingEvent(buildEvent('click', el)).then(() => void refreshHud());
+      captureEvent(buildEvent('click', el));
     },
     opts,
   );
@@ -541,12 +645,15 @@ function attachListeners(): void {
       // The raw value never enters the event at all for a password field —
       // redacting later in normalizeSteps would still mean the plaintext sat
       // in chrome.storage.session in the meantime.
-      void appendRecordingEvent(
+      captureEvent(
         buildEvent('input', el, {
+          // Cached per field: the probe behind a target is a document-wide walk,
+          // and one per keystroke is what made typing lag on a large page.
+          target: fieldTarget(el),
           value: passwordField ? null : el.value,
           isPasswordField: passwordField,
         }),
-      ).then(() => void refreshHud());
+      );
     },
     opts,
   );
@@ -560,13 +667,9 @@ function attachListeners(): void {
       const typeAttr = el instanceof HTMLInputElement ? el.type : null;
       const kind = classifyInputKind(el.tagName, typeAttr);
       if (kind === 'checkbox' || kind === 'radio') {
-        void appendRecordingEvent(
-          buildEvent('change', el, { inputType: kind, checked: (el as HTMLInputElement).checked }),
-        ).then(() => void refreshHud());
+        captureEvent(buildEvent('change', el, { inputType: kind, checked: (el as HTMLInputElement).checked }));
       } else if (kind === 'select') {
-        void appendRecordingEvent(
-          buildEvent('change', el, { inputType: 'select', value: (el as HTMLSelectElement).value }),
-        ).then(() => void refreshHud());
+        captureEvent(buildEvent('change', el, { inputType: 'select', value: (el as HTMLSelectElement).value }));
       }
     },
     opts,
@@ -578,7 +681,7 @@ function attachListeners(): void {
       if (withinOwnUi(e)) return;
       if (e.key !== 'Enter') return;
       const el = e.target instanceof Element ? e.target : null;
-      void appendRecordingEvent(buildEvent('keydown', el, { value: 'Enter' })).then(() => void refreshHud());
+      captureEvent(buildEvent('keydown', el, { value: 'Enter' }));
     },
     opts,
   );

@@ -1,4 +1,4 @@
-import { startRecording, getRecordingState } from '../shared/recording-storage.js';
+import { startRecording, getRecordingState, discardRecording } from '../shared/recording-storage.js';
 import { getConnectionSettings } from '../shared/connection-settings.js';
 import { fetchCatalog } from '../shared/piwi-client.js';
 import { setCachedCatalog, isCatalogStale } from '../shared/catalog-cache.js';
@@ -82,6 +82,13 @@ async function handleStartRecording(originPattern: string, tabId: number): Promi
     await chrome.action.setBadgeBackgroundColor({ color: '#dc2626' });
     return { ok: true };
   } catch (err) {
+    // `startRecording` has already written `active: true`, so a failure after it
+    // used to leave a recording that captured nothing anywhere while the popup
+    // offered "Stop recording (0)" — a dead end reachable only via Discard.
+    // Unwind everything this function may have put in place.
+    await discardRecording().catch(() => undefined);
+    await chrome.scripting.unregisterContentScripts({ ids: [RECORD_SCRIPT_ID] }).catch(() => undefined);
+    await chrome.action.setBadgeText({ text: '' }).catch(() => undefined);
     return { ok: false, error: err instanceof Error ? err.message : 'Failed to start recording' };
   }
 }
