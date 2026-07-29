@@ -154,8 +154,8 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
    * needs `.first()` or a filter — so it has to rank below anything known to
    * be unique. Subtracted rather than clamped, so the relative order among
    * equally ambiguous candidates survives; sized to drop the highest ambiguous
-   * score (90) below the lowest unique one this generator emits (55, the
-   * role-anchored chain) without colliding with `getByTitle` at 50. No penalty
+   * score (90) below the lowest unique one this generator emits (49, the
+   * text-filtered chain) without colliding with `getByTitle` at 50. No penalty
    * when the count is unknown — an older capture must not be re-ranked on a
    * guess.
    */
@@ -268,12 +268,13 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
   const addAnchoredChains = (
     leaf: { expr: string; method: string; args: Record<string, unknown>; role: string | null },
     scopedCount: (anc: AncestorAnchor) => number | undefined,
-    scores: { testId: number; testData: number; id: number; data: number; role: number },
+    scores: { testId: number; testData: number; id: number; data: number; role: number; filter: number },
   ): void => {
     let testIdAnchorDone = false;
     let idAnchorDone = false;
     let roleAnchorDone = false;
     let dataAnchorDone = false;
+    let filterAnchorDone = false;
     for (const anc of attrs.ancestors ?? []) {
       if (scopedCount(anc) !== 1) continue;
 
@@ -320,6 +321,18 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
           score: scores.role,
         });
       }
+
+      // A card or row that repeats has no unique hook of its own — but the text
+      // it holds names it, which is how a person would describe it anyway.
+      if (!filterAnchorDone && ancestorRole && anc.filterText && anc.filterRoleCount === 1) {
+        filterAnchorDone = true;
+        add({
+          locator: `getByRole('${esc(ancestorRole)}')` + `.filter({ hasText: '${esc(anc.filterText)}' }).${leaf.expr}`,
+          method: leaf.method,
+          args: { ...leaf.args, anchorRole: ancestorRole, anchorHasText: anc.filterText },
+          score: scores.filter,
+        });
+      }
     }
   };
 
@@ -330,7 +343,7 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
     addAnchoredChains(
       { expr: `getByRole(${rolePart})`, method: 'getByRole', args: leafArgs, role },
       (anc) => anc.scopedRoleCount,
-      { testId: 72, testData: 70, id: 64, data: 60, role: 55 },
+      { testId: 72, testData: 70, id: 64, data: 60, role: 55, filter: 53 },
     );
 
     const pos = attrs.rolePosition;
@@ -344,7 +357,7 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
     addAnchoredChains(
       { expr: `getByText('${esc(text)}')`, method: 'getByText', args: { text }, role: null },
       (anc) => anc.scopedTextCount,
-      { testId: 68, testData: 66, id: 60, data: 56, role: 51 },
+      { testId: 68, testData: 66, id: 60, data: 56, role: 51, filter: 49 },
     );
   }
 

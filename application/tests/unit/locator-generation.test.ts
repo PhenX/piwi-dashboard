@@ -402,6 +402,79 @@ describe('generateAlternatives — text-scoped chains for role-less leaves', () 
 });
 
 /**
+ * A cart list, a results table: nothing on the page carries a hook, and the
+ * container role repeats once per row. The only thing that tells one row from
+ * another is the text it holds.
+ */
+describe('generateAlternatives — filter({ hasText }) chains', () => {
+  const row = (over: Partial<ElementAttributes['ancestors']>[number] = {}): ElementAttributes =>
+    el({
+      accessibleName: 'Remove',
+      textContent: 'Remove',
+      selectorCounts: { roleName: 3, text: 3 },
+      ancestors: [
+        {
+          tag: 'li',
+          depth: 1,
+          scopedRoleCount: 1,
+          roleCount: 3,
+          filterText: 'Keyboard',
+          filterRoleCount: 1,
+          ...over,
+        },
+      ],
+    });
+
+  test('singles out the repeated container by the text it holds', () => {
+    const alts = generateAlternatives(row());
+    expect(alts[0]).toMatchObject({
+      locator: "getByRole('listitem').filter({ hasText: 'Keyboard' }).getByRole('button')",
+      method: 'getByRole',
+      args: { role: 'button', anchorRole: 'listitem', anchorHasText: 'Keyboard' },
+      score: 53,
+    });
+  });
+
+  test('a text that does not narrow the container to one is not offered', () => {
+    const alts = generateAlternatives(row({ filterRoleCount: 2 }));
+    expect(alts.some((a) => a.locator.includes('filter('))).toBe(false);
+  });
+
+  test('a role-less leaf gets the same chain through its text, one notch lower', () => {
+    const alts = generateAlternatives(
+      el({
+        tagName: 'span',
+        textContent: '£49.99',
+        selectorCounts: { text: 3 },
+        ancestors: [
+          { tag: 'li', depth: 1, scopedTextCount: 1, roleCount: 3, filterText: 'Keyboard', filterRoleCount: 1 },
+        ],
+      }),
+    );
+    expect(alts[0]).toMatchObject({
+      locator: "getByRole('listitem').filter({ hasText: 'Keyboard' }).getByText('£49.99')",
+      score: 49,
+    });
+  });
+
+  test('a unique container role still prefers the plain chain, with the filter below it', () => {
+    const alts = generateAlternatives(row({ roleCount: 1 }));
+    expect(alts.find((a) => a.args.anchorRole && !a.args.anchorHasText)).toMatchObject({
+      locator: "getByRole('listitem').getByRole('button')",
+      score: 55,
+    });
+    expect(alts.find((a) => a.args.anchorHasText)!.score).toBe(53);
+  });
+
+  test('quotes in the filter text are escaped', () => {
+    const alts = generateAlternatives(row({ filterText: "Bob's laptop" }));
+    expect(alts[0]!.locator).toBe(
+      String.raw`getByRole('listitem').filter({ hasText: 'Bob\'s laptop' }).getByRole('button')`,
+    );
+  });
+});
+
+/**
  * `word-digits` ids used to be discarded wholesale as framework output, which
  * threw away the one hook that made a repeated card addressable.
  */

@@ -160,6 +160,49 @@ test.describe('probeElementAttrs', () => {
     expect(attrs.selectorCounts.text).toBe(2);
   });
 
+  test('picks discriminating text for a repeated container and counts what it narrows to', async ({ page }) => {
+    await page.setContent(`<!doctype html><html><body><ul>
+      <li><h3>Mouse</h3><button>Remove</button></li>
+      <li><h3>Keyboard</h3><button id="target">Remove</button></li>
+      <li><h3>Monitor</h3><button>Remove</button></li>
+    </ul></body></html>`);
+    const attrs = await page.locator('#target').evaluate(probeElementAttrs, {
+      keep: ['id'],
+      tagRoles: { button: 'button', li: 'listitem', h3: 'heading' },
+      inputRoles: {},
+      roleSources: 'button,li,h3',
+      includeStructural: true,
+      includeLabelText: false,
+    });
+    // Nothing on the page carries a hook and every <li> has the same role, so
+    // the heading inside the row is the only thing that names it.
+    expect(attrs.ancestors?.[0]).toMatchObject({
+      tag: 'li',
+      roleCount: 3,
+      filterText: 'Keyboard',
+      filterRoleCount: 1,
+      scopedRoleCount: 1,
+    });
+  });
+
+  test('never filters a container by the target element own text', async ({ page }) => {
+    await page.setContent(`<!doctype html><html><body><ul>
+      <li><button>Remove</button></li>
+      <li><button id="target">Remove</button></li>
+    </ul></body></html>`);
+    const attrs = await page.locator('#target').evaluate(probeElementAttrs, {
+      keep: ['id'],
+      tagRoles: { button: 'button', li: 'listitem' },
+      inputRoles: {},
+      roleSources: 'button,li',
+      includeStructural: true,
+      includeLabelText: false,
+    });
+    // filter({ hasText: 'Remove' }) would match every row — filtering on the
+    // very text being disambiguated singles out nothing.
+    expect(attrs.ancestors?.[0]?.filterText).toBeUndefined();
+  });
+
   test('includes labelText only when includeLabelText is set', async ({ page }) => {
     await page.setContent(`<!doctype html><html><body>
       <label for="email">Email address</label>

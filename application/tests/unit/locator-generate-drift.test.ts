@@ -141,6 +141,26 @@ const FIXTURES: ElementAttributes[] = [
     ],
   }),
   el({
+    tagName: 'button',
+    accessibleName: 'Remove',
+    textContent: 'Remove',
+    selectorCounts: { roleName: 3, text: 3 },
+    ancestors: [
+      {
+        tag: 'li',
+        depth: 1,
+        testId: null,
+        id: null,
+        role: null,
+        ariaLabel: null,
+        scopedRoleCount: 1,
+        roleCount: 3,
+        filterText: "Bob's laptop",
+        filterRoleCount: 1,
+      },
+    ],
+  }),
+  el({
     tagName: 'span',
     attributes: { class: 'price' },
     textContent: '£49.99',

@@ -59,5 +59,7 @@ export interface ProbedAttrs {
     roleCount?: number;
     dataAttr?: { name: string; value: string };
     dataAttrCount?: number;
+    filterText?: string;
+    filterRoleCount?: number;
   }>;
 }

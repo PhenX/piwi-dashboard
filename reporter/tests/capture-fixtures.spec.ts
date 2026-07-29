@@ -297,6 +297,10 @@ function fakeDomNode(tagName: string, attrs: Record<string, string> = {}): any {
     querySelectorAll(_sel: string) {
       return this.scopedNodes;
     },
+    // Used to look for a heading that names a repeated container.
+    querySelector(_sel: string) {
+      return null;
+    },
   };
 }
 

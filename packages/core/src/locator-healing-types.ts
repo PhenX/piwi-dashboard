@@ -107,6 +107,15 @@ export interface AncestorAnchor {
   dataAttr?: { name: string; value: string };
   /** Document-wide match count for `dataAttr` as an attribute selector. */
   dataAttrCount?: number;
+  /**
+   * Text inside this ancestor that tells it apart from its same-role siblings —
+   * the product name in a card, the customer name in a table row. A repeated
+   * container carries no unique hook of its own, so this is what makes
+   * `getByRole('listitem').filter({ hasText: 'Keyboard' })` land on one of them.
+   */
+  filterText?: string;
+  /** How many elements of this ancestor's role contain `filterText`. */
+  filterRoleCount?: number;
 }
 
 /** Raw element attributes captured after a successful action. */

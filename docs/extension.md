@@ -70,7 +70,11 @@ nothing. The popup footer reports the key actually bound, and offers a link to
   element with no role at all — a price `<span>`, a status badge — is scoped the same way through
   its text (`getByTestId('row-keyboard').getByText('£49.99')`), so a repeated value is still
   addressable; when the text is already unique on the page the plain `getByText` stays on top and
-  the chain is just the fallback below it.
+  the chain is just the fallback below it. And when the page carries no hooks at all — a cart list,
+  a results table — the repeated container is singled out by the text that names it:
+  `getByRole('listitem').filter({ hasText: 'Keyboard' }).getByRole('button')`. The filter text is
+  the row's heading where it has one, never the text of the element you picked (filtering on that
+  narrows nothing), and it is only offered when it leaves exactly one container matching.
 - **Copy in three forms** — the bare locator, a full action line
   (`await page.getByRole(…).click();`), or a visibility assertion
   (`await expect(page.getByRole(…)).toBeVisible();`). Your last-used form is remembered for next

@@ -482,6 +482,25 @@ describe('generateAlternatives — structural (rename-proof) alternatives', () =
     expect(alts.some((a) => a.method === 'getByRole' && a.args.anchorTestId)).toBe(true);
   });
 
+  it('filters a repeated container by the text that names it (53)', () => {
+    const attrs = makeAttrs({
+      tagName: 'input',
+      ancestors: [makeAnchor({ tag: 'li', roleCount: 4, filterText: 'Keyboard', filterRoleCount: 1 })],
+    });
+    const alt = generateAlternatives(attrs).find((a) => a.args.anchorHasText);
+    expect(alt!.locator).toBe("getByRole('listitem').filter({ hasText: 'Keyboard' }).getByRole('textbox')");
+    expect(alt!.args).toEqual({ role: 'textbox', anchorRole: 'listitem', anchorHasText: 'Keyboard' });
+    expect(alt!.score).toBe(53);
+  });
+
+  it('skips a filter text that still leaves several containers matching', () => {
+    const attrs = makeAttrs({
+      tagName: 'input',
+      ancestors: [makeAnchor({ tag: 'li', roleCount: 4, filterText: 'Item', filterRoleCount: 3 })],
+    });
+    expect(generateAlternatives(attrs).some((a) => a.args.anchorHasText)).toBe(false);
+  });
+
   it('skips a data-* ancestor whose hook matches several elements', () => {
     const attrs = makeAttrs({
       tagName: 'input',

@@ -137,7 +137,8 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
 
       // A truncated scan would produce wrong counts/indexes — skip instead.
       const nodes = doc.querySelectorAll(roleSources);
-      const rolesUsable = !!targetRole && nodes.length <= 4000;
+      const nodesUsable = nodes.length <= 4000;
+      const rolesUsable = !!targetRole && nodesUsable;
 
       if (rolesUsable) {
         let roleCountAll = 0;
@@ -175,7 +176,10 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
       // has no role to scope, but scoping its text to a parent is the only way
       // to tell one repeated card from another.
       if (rolesUsable || textNeedle) {
-        const CONTAINER_TAGS = ['form', 'nav', 'main', 'article', 'section', 'dialog', 'table'];
+        // `li` and `tr` are almost never document-unique, so they are useless
+        // as bare role anchors — but they are the repeated container a
+        // `filter({ hasText })` chain exists to single out.
+        const CONTAINER_TAGS = ['form', 'nav', 'main', 'article', 'section', 'dialog', 'table', 'li', 'tr'];
         // Framework bookkeeping rather than anything an author chose:
         // Vue's scoped-style markers (`data-v-4f2a1b`), React's legacy
         // `data-reactid`, Svelte/Angular/Ember instance ids.
@@ -199,6 +203,42 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
         const docRoleCount = (role: string): number => {
           let c = 0;
           for (let i = 0; i < nodes.length; i++) if (roleOf(nodes[i]) === role) c++;
+          return c;
+        };
+        const rawText = (n: any): string => (n.textContent || '').replace(/\s+/g, ' ').trim();
+        /**
+         * A short piece of text inside `anc` that tells it apart from its
+         * same-role siblings — what a human means by "the Keyboard row". A
+         * heading is the clearest signal; failing that, the first short
+         * text-bearing leaf. The target's own text is never used: filtering a
+         * container by the very text we are trying to disambiguate is circular
+         * and singles out nothing.
+         */
+        const discriminatingText = (anc: any): string | null => {
+          const heading = anc.querySelector('h1,h2,h3,h4,h5,h6,[role="heading"]');
+          if (heading) {
+            const t = rawText(heading);
+            if (t && t.length <= 60 && t !== targetText) return t;
+          }
+          const els = anc.querySelectorAll('*');
+          if (els.length > 200) return null;
+          for (let i = 0; i < els.length; i++) {
+            const n = els[i];
+            if (n === el || n.children.length > 0) continue;
+            const t = rawText(n);
+            if (!t || t.length > 60 || t === targetText) continue;
+            return t;
+          }
+          return null;
+        };
+        /** How many elements of `role` contain `text` — i.e. what `getByRole(role).filter({ hasText: text })` would resolve to. */
+        const filterMatchCount = (role: string, text: string): number => {
+          const needle = text.toLowerCase();
+          let c = 0;
+          for (let i = 0; i < nodes.length; i++) {
+            if (roleOf(nodes[i]) !== role) continue;
+            if (normText(nodes[i]).indexOf(needle) !== -1) c++;
+          }
           return c;
         };
         let node = el.parentElement;
@@ -229,6 +269,16 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
               }
             }
             const scopedTextCount = countTextOwners(node, 2000);
+            // A repeated container — a card, a row — has no unique hook of its
+            // own, but the text it holds still names it.
+            // Isolated: a hiccup finding the discriminator must cost this one
+            // optional field, not every anchor collected so far.
+            let filterText: string | null = null;
+            try {
+              if (anchorRole && nodesUsable) filterText = discriminatingText(node);
+            } catch {
+              filterText = null;
+            }
             ancestors.push({
               tag,
               depth,
@@ -240,7 +290,10 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
               ...(scopedTextCount >= 0 ? { scopedTextCount } : {}),
               ...(testId ? { testIdCount: count(`[data-testid=${JSON.stringify(testId)}]`) } : {}),
               ...(id ? { idCount: count(`#${cssEsc(id)}`) } : {}),
-              ...(anchorRole ? { roleCount: docRoleCount(anchorRole) } : {}),
+              ...(anchorRole && nodesUsable ? { roleCount: docRoleCount(anchorRole) } : {}),
+              ...(filterText
+                ? { filterText, filterRoleCount: filterMatchCount(anchorRole as string, filterText) }
+                : {}),
               ...(dataAttr
                 ? { dataAttr, dataAttrCount: count(`[${dataAttr.name}=${JSON.stringify(dataAttr.value)}]`) }
                 : {}),
