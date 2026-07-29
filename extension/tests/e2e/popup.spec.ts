@@ -33,6 +33,78 @@ test.describe('popup.html', () => {
     await expect(page.getByText('Ctrl+Shift+E')).toBeVisible();
   });
 
+  test('every action tile carries a digit shortcut, 1 through 0, in render order', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    const keys = await page.locator('.actions button').evaluateAll((buttons) =>
+      buttons.map((b) => ({
+        id: b.id,
+        badge: b.querySelector('.key')?.textContent ?? null,
+        announced: b.getAttribute('aria-keyshortcuts'),
+      })),
+    );
+    expect(keys.map((k) => k.badge)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']);
+    // The visible badge and the announced shortcut must agree, or screen-reader
+    // users get told a key that does nothing.
+    for (const k of keys) expect(k.announced, `${k.id}`).toBe(k.badge);
+  });
+
+  test('pressing a digit runs that tile, and a modified digit is left to the browser', async ({
+    context,
+    extensionId,
+  }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.evaluate(() => {
+      (globalThis as unknown as { clicked: string[] }).clicked = [];
+      for (const b of document.querySelectorAll<HTMLElement>('.actions button')) {
+        b.addEventListener('click', () => (globalThis as unknown as { clicked: string[] }).clicked.push(b.id));
+      }
+    });
+
+    await page.keyboard.press('3');
+    await page.keyboard.press('0');
+    await page.keyboard.press('Control+5');
+
+    expect(await page.evaluate(() => (globalThis as unknown as { clicked: string[] }).clicked)).toEqual([
+      'hover-inspect',
+      'test-function-panel',
+    ]);
+  });
+
+  test('digits typed into the project select drive its own typeahead, not the shortcuts', async ({
+    context,
+    extensionId,
+  }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          chrome.storage.local.set(
+            {
+              piwiConnection: {
+                instanceUrl: 'https://piwi.test',
+                apiKey: '',
+                projectMappings: [{ urlPattern: '**', projectId: 1, projectLabel: '2024 release' }],
+              },
+            },
+            resolve,
+          );
+        }),
+    );
+    await page.reload();
+    await page.evaluate(() => {
+      (globalThis as unknown as { clicked: string[] }).clicked = [];
+      for (const b of document.querySelectorAll<HTMLElement>('.actions button')) {
+        b.addEventListener('click', () => (globalThis as unknown as { clicked: string[] }).clicked.push(b.id));
+      }
+      document.getElementById('active-project')!.focus();
+    });
+    await page.keyboard.press('2');
+    expect(await page.evaluate(() => (globalThis as unknown as { clicked: string[] }).clicked)).toEqual([]);
+  });
+
   test('shows a config button that opens the options page', async ({ context, extensionId }) => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/popup.html`);

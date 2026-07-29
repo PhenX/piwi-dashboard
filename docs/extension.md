@@ -32,6 +32,10 @@ Then, in Chrome or Edge:
 
 ## What it does
 
+Every action in the toolbar popup has a digit shortcut, shown on its tile and numbered in
+reading order: `1` records, `2` picks an element, through to `0` for **Test functions**. With
+the popup open, press the digit instead of clicking.
+
 - **Pick an element** — click the toolbar icon → **Pick an element**, or press
   `Ctrl+Shift+E` (`Cmd+Shift+E` on macOS) on any page. Hover highlights, a click picks — the
   pick snaps to the nearest actionable ancestor (a click on the text inside a button picks the

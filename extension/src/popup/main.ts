@@ -43,6 +43,39 @@ configButton.addEventListener('click', () => {
   chrome.runtime.openOptionsPage();
 });
 
+/**
+ * Digit shortcuts for the action grid, in the order the tiles are rendered —
+ * the `kbd` badge on each tile and its `aria-keyshortcuts` must stay in step
+ * with this. Scoped to the popup rather than declared as `chrome.commands`,
+ * which caps a extension at four user-visible shortcuts and would burn
+ * global browser-wide bindings on actions that only make sense with this
+ * popup open.
+ */
+const KEY_TO_ACTION_ID: Record<string, string> = {
+  '1': 'record',
+  '2': 'pick',
+  '3': 'hover-inspect',
+  '4': 'locator-console',
+  '5': 'multi-pick',
+  '6': 'lint-overlay',
+  '7': 'assertion-panel',
+  '8': 'session-panel',
+  '9': 'agent-context-panel',
+  '0': 'test-function-panel',
+};
+
+document.addEventListener('keydown', (e) => {
+  // Let a modified key through — Ctrl+1 etc. belong to the browser — and stay
+  // out of the way of the project select, where digits drive its own typeahead.
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const target = e.target as HTMLElement | null;
+  if (target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return;
+  const id = KEY_TO_ACTION_ID[e.key];
+  if (!id) return;
+  e.preventDefault();
+  document.getElementById(id)?.click();
+});
+
 const AUTO_OPTION_VALUE = '';
 
 function dedupeMappings(mappings: ProjectMapping[]): Array<{ projectId: number; projectLabel: string }> {
