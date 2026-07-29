@@ -1,4 +1,9 @@
-import { installPickerOverlay, highlightLocator, type PickerOverlayArg } from '@piwitests/picker-dom';
+import {
+  installPickerOverlay,
+  removePickerOverlay,
+  highlightLocator,
+  type PickerOverlayArg,
+} from '@piwitests/picker-dom';
 import { suggestAssertions, type AssertionSuggestion } from './assertion-suggest.js';
 
 const HOST_ID = 'piwi-assertion-panel-host';
@@ -203,6 +208,9 @@ async function runAssertionSuggester(): Promise<void> {
     installPickerOverlay(overlayArg);
     const state = await waitForGlobal<string>('__piwiPickState');
     if (state !== 'picked') return;
+    // Done with the picking overlay — otherwise it stays up behind this
+    // tool's own panel, still reading "Analyzing element…".
+    removePickerOverlay();
 
     const el = g.__piwiPickedElement as Element;
     const suggestion = suggestAssertions(el);

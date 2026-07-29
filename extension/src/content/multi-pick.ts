@@ -1,4 +1,9 @@
-import { installPickerOverlay, highlightLocator, type PickerOverlayArg } from '@piwitests/picker-dom';
+import {
+  installPickerOverlay,
+  removePickerOverlay,
+  highlightLocator,
+  type PickerOverlayArg,
+} from '@piwitests/picker-dom';
 import { derivePattern, type PatternResult } from './multi-pick-derive.js';
 import { TAG_TO_ROLE, INPUT_TYPE_TO_ROLE } from '@piwitests/core/locator-generation';
 import { COPY_MODES, COPY_MODE_LABELS, renderCopyMode } from '../shared/copy-modes.js';
@@ -39,7 +44,7 @@ async function pickOne(): Promise<Element | null> {
   // A pick (as opposed to a skip) leaves the banner/highlight mounted — fine
   // for pick.ts's single-shot flow, but this runs the overlay 2-3 times in a
   // row, so each cycle must tear its own down before the next installs one.
-  (globalThis as any).__piwiPickCleanup?.();
+  removePickerOverlay();
   clearPickGlobals();
   return el;
 }

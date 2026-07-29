@@ -1,4 +1,4 @@
-import { installPickerOverlay, type PickerOverlayArg } from '@piwitests/picker-dom';
+import { installPickerOverlay, removePickerOverlay, type PickerOverlayArg } from '@piwitests/picker-dom';
 import { buildAgentContext } from './agent-context.js';
 
 const HOST_ID = 'piwi-agent-context-host';
@@ -171,6 +171,9 @@ async function runAgentContextPanel(): Promise<void> {
     installPickerOverlay(overlayArg);
     const state = await waitForGlobal<string>('__piwiPickState');
     if (state !== 'picked') return;
+    // Done with the picking overlay — otherwise it stays up behind this
+    // tool's own panel, still reading "Analyzing element…".
+    removePickerOverlay();
 
     const el = g.__piwiPickedElement as Element;
     const context = buildAgentContext(el, location.href);
