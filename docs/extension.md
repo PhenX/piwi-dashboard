@@ -94,7 +94,8 @@ Then, in Chrome or Edge:
   page you're on right now: which pattern steps resolve to exactly one element (**ready to use
   here**), which are ambiguous or missing (**partial match**), and which don't apply here at all
   (**not found on this page**) — no recording or replay needed, just a live read of the current
-  DOM against each function's stored pattern.
+  DOM against each function's stored pattern. A **Manage catalog in Piwi ↗** link in the panel
+  header opens that project's **Test functions** page in a new tab.
 
 ## Permissions, explained
 

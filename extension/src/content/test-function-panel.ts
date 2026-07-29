@@ -2,6 +2,7 @@ import { TAG_TO_ROLE, INPUT_TYPE_TO_ROLE } from '@piwitests/core/locator-generat
 import { testCatalogAgainstPage, type FunctionTestResult } from './test-function-scan.js';
 import { getCachedCatalog } from '../shared/catalog-cache.js';
 import { getConnectionSettings } from '../shared/connection-settings.js';
+import { projectCatalogUrl } from '../shared/piwi-client.js';
 import { getActiveProjectOverride, resolveActiveProject } from '../shared/active-project.js';
 
 const HOST_ID = 'piwi-test-function-host';
@@ -67,6 +68,8 @@ async function renderPanel(): Promise<void> {
     .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
     .title { font-weight: 600; font-size: 14px; }
     .sub { color: #9ca3af; font-size: 12px; }
+    .manage-link { color: #7c3aed; text-decoration: none; }
+    .manage-link:hover, .manage-link:focus-visible { text-decoration: underline; }
     .close { background: none; border: none; color: inherit; opacity: .7; cursor: pointer; font-size: 18px; line-height: 1; padding: 4px 8px; border-radius: 6px; }
     .close:hover, .close:focus-visible { opacity: 1; background: rgba(128,128,128,.15); }
     .empty { color: #9ca3af; font-size: 12.5px; padding: 8px 0; }
@@ -92,6 +95,10 @@ async function renderPanel(): Promise<void> {
   panel.setAttribute('aria-label', 'Test catalog functions against this page');
   panel.tabIndex = -1;
 
+  const [connection, override] = await Promise.all([getConnectionSettings(), getActiveProjectOverride()]);
+  const activeProject = resolveActiveProject(connection, override, location.href);
+  const catalog = await getCachedCatalog(activeProject?.projectId ?? null);
+
   const header = document.createElement('div');
   header.className = 'header';
   const titleWrap = document.createElement('div');
@@ -100,7 +107,17 @@ async function renderPanel(): Promise<void> {
   title.textContent = 'Test functions on this page';
   const sub = document.createElement('div');
   sub.className = 'sub';
-  sub.textContent = 'Esc to close';
+  sub.append('Esc to close');
+  if (activeProject != null && connection.instanceUrl.trim()) {
+    sub.append(' · ');
+    const manageLink = document.createElement('a');
+    manageLink.className = 'manage-link';
+    manageLink.href = projectCatalogUrl(connection.instanceUrl, activeProject.projectId);
+    manageLink.target = '_blank';
+    manageLink.rel = 'noopener noreferrer';
+    manageLink.textContent = `Manage ${activeProject.projectLabel}'s catalog in Piwi ↗`;
+    sub.appendChild(manageLink);
+  }
   titleWrap.append(title, sub);
   const closeBtn = document.createElement('button');
   closeBtn.className = 'close';
@@ -108,10 +125,6 @@ async function renderPanel(): Promise<void> {
   closeBtn.textContent = '×';
   header.append(titleWrap, closeBtn);
   panel.appendChild(header);
-
-  const [connection, override] = await Promise.all([getConnectionSettings(), getActiveProjectOverride()]);
-  const activeProject = resolveActiveProject(connection, override, location.href);
-  const catalog = await getCachedCatalog(activeProject?.projectId ?? null);
 
   if (catalog.length === 0) {
     const empty = document.createElement('div');

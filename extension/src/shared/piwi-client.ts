@@ -15,8 +15,14 @@ export interface ProjectOption {
   label: string | null;
 }
 
-function normalizeBaseUrl(instanceUrl: string): string {
+/** Exported so anything building a link into the dashboard (not just this client's own fetches) normalizes the same way — e.g. `projectCatalogUrl` below. */
+export function normalizeBaseUrl(instanceUrl: string): string {
   return instanceUrl.trim().replace(/\/+$/, '');
+}
+
+/** Deep link to a project's "Test functions" catalog page in the dashboard — used by `test-function-panel.ts`'s "Manage catalog" link. */
+export function projectCatalogUrl(instanceUrl: string, projectId: number): string {
+  return `${normalizeBaseUrl(instanceUrl)}/projects/${projectId}/test-functions`;
 }
 
 function authHeaders(settings: ConnectionSettings): HeadersInit {
