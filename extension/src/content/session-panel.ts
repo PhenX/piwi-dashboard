@@ -8,6 +8,7 @@ import {
   type SessionPick,
 } from '../shared/session-storage.js';
 import { isValidPickName, renderFixture, renderMarkdown, renderJson } from '../shared/session-export.js';
+import { ensureSessionAccess } from '../shared/session-access.js';
 
 const HOST_ID = 'piwi-session-panel-host';
 const NAME_HOST_ID = 'piwi-session-name-host';
@@ -347,6 +348,8 @@ async function runSessionPanel(): Promise<void> {
   if (g.__piwiSessionPanelRunning) return;
   g.__piwiSessionPanelRunning = true;
   try {
+    // Pick sessions live in session storage — see `session-access.ts`.
+    await ensureSessionAccess();
     for (;;) {
       const picks = await getSessionPicks();
       const action = await renderSessionPanelOnce(picks);

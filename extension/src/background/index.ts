@@ -21,7 +21,16 @@ chrome.commands.onCommand.addListener((command, tab) => {
 // written directly from content scripts, so this widens access once at
 // startup rather than routing every storage call through a background
 // message handler.
-void chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' });
+//
+// Kept as a promise because this worker is torn down when idle and restarted
+// on demand: a content script injected at `document_start` can easily run
+// before the restart has applied the wider access level, and a session-storage
+// read from a content script *throws* until it has. `piwi-ping` below lets a
+// content script wait for exactly that (see `shared/session-access.ts`) —
+// without it the recorder's HUD failed to appear at random.
+const sessionAccessReady = chrome.storage.session
+  .setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' })
+  .catch(() => undefined);
 
 const RECORD_SCRIPT_ID = 'piwi-record-panel';
 
@@ -100,6 +109,12 @@ async function handleRefreshCatalog(projectId: unknown, force: boolean): Promise
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === 'piwi-ping') {
+    // Resolves only once session storage is readable from content scripts —
+    // the whole point of the ping.
+    void sessionAccessReady.then(() => sendResponse({ ok: true }));
+    return true;
+  }
   if (message?.type === 'piwi-start-recording') {
     void handleStartRecording(message.originPattern, message.tabId).then(sendResponse);
     return true; // keep the message channel open for the async response

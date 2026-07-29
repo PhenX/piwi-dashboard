@@ -72,7 +72,8 @@ Then, in Chrome or Edge:
 - **Record actions across pages** — click **Record actions** and Piwi Picker grants itself
   access to the one site you're on, then captures clicks, fills, checks/unchecks, select
   changes, and Enter-to-submit as you browse — across as many pages on that site as you like.
-  A small HUD tracks the step count and shows the top-ranked locator for whatever you just
+  A red border around the page marks the tab as being recorded, and a small HUD tracks the
+  step count and shows the top-ranked locator for whatever you just
   interacted with. Click **Stop** to open the review panel: reorder or drop steps, then **Copy
   as TypeScript** for a runnable Playwright spec (`page.goto`, then one line per step). Password
   fields are never captured — their value is replaced with a `process.env.*` placeholder in the

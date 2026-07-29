@@ -2,6 +2,7 @@ import { TAG_TO_ROLE, INPUT_TYPE_TO_ROLE } from '@piwitests/core/locator-generat
 import { testCatalogAgainstPage, type FunctionTestResult } from './test-function-scan.js';
 import { getCachedCatalog } from '../shared/catalog-cache.js';
 import { requestCatalogRefresh } from '../shared/catalog-refresh.js';
+import { ensureSessionAccess } from '../shared/session-access.js';
 import { getConnectionSettings } from '../shared/connection-settings.js';
 import { projectCatalogUrl } from '../shared/piwi-client.js';
 import { getActiveProjectOverride, resolveActiveProject } from '../shared/active-project.js';
@@ -102,6 +103,8 @@ async function renderPanel(): Promise<void> {
   panel.setAttribute('aria-label', 'Test catalog functions against this page');
   panel.tabIndex = -1;
 
+  // `getActiveProjectOverride` reads session storage — see `session-access.ts`.
+  await ensureSessionAccess();
   const [connection, override] = await Promise.all([getConnectionSettings(), getActiveProjectOverride()]);
   const activeProject = resolveActiveProject(connection, override, location.href);
   const projectId = activeProject?.projectId ?? null;

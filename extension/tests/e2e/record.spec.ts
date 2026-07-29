@@ -105,6 +105,13 @@ test.describe('record-panel.js', () => {
     await page.goto(`${ORIGIN}/login`);
     await page.addScriptTag({ path: path.join(DIST, 'record-panel.js') });
     await expect.poll(() => page.evaluate(() => !!document.getElementById('piwi-record-hud-host'))).toBe(true);
+    // A border around the viewport marks the tab as being captured, and must
+    // survive a navigation the same way the HUD does.
+    expect(await page.evaluate(() => !!document.getElementById('piwi-record-frame-host'))).toBe(true);
+    expect(
+      await page.evaluate(() => getComputedStyle(document.getElementById('piwi-record-frame-host')!).pointerEvents),
+      'the border must never intercept a click the recorder should capture',
+    ).toBe('none');
 
     await page.fill('#username', 'alice');
     // Blur commits the pending fill before the click navigates away.
@@ -113,6 +120,7 @@ test.describe('record-panel.js', () => {
     await page.waitForURL('**/dashboard');
     await page.addScriptTag({ path: path.join(DIST, 'record-panel.js') });
     await expect.poll(() => page.evaluate(() => !!document.getElementById('piwi-record-hud-host'))).toBe(true);
+    expect(await page.evaluate(() => !!document.getElementById('piwi-record-frame-host'))).toBe(true);
     await page.click('#add');
 
     await expect.poll(() => readStoredEvents(page).then((e) => e.length)).toBeGreaterThanOrEqual(4);
@@ -211,6 +219,8 @@ test.describe('record-panel.js', () => {
     await page.goto(`${ORIGIN}/dashboard`);
     await page.addScriptTag({ path: path.join(DIST, 'record-panel.js') });
     await expect.poll(() => page.evaluate(() => !!document.getElementById('piwi-record-review-host'))).toBe(true);
+    // The recording border must not outlive the capture it signals.
+    expect(await page.evaluate(() => !!document.getElementById('piwi-record-frame-host'))).toBe(false);
 
     // The review panel is in a closed shadow root (deliberate, same reasoning
     // as session-panel.ts/results-panel.ts) — Tab/Enter reaches its buttons

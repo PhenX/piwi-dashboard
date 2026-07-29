@@ -42,6 +42,13 @@ recording against a project's own function catalog. See "Connected mode" below.
   `chrome.runtime.openOptionsPage()`, never linked to from a content script.
 - `src/shared/` — code shared between content scripts, background, popup, and options.
 
+**Reading `chrome.storage.session` from a content script requires `ensureSessionAccess()`
+(`src/shared/session-access.ts`) first.** The background worker widens the access level at
+startup, but it is torn down when idle, so a script injected at `document_start` can run
+before that has been applied — and the read *throws* rather than returning empty. The helper
+pings the worker, which both wakes it and withholds its reply until the widening resolves.
+Skipping this is what made the recorder's HUD appear only sometimes.
+
 ## Connected mode (recording → your own functions)
 
 The recorder (`record-panel.ts`, `record-capture.ts`, `packages/core/src/recording.ts`,

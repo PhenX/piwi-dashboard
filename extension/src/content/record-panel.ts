@@ -26,11 +26,13 @@ import {
 } from '../shared/recording-storage.js';
 import { getCachedCatalog } from '../shared/catalog-cache.js';
 import { requestCatalogRefresh } from '../shared/catalog-refresh.js';
+import { ensureSessionAccess } from '../shared/session-access.js';
 import { getConnectionSettings } from '../shared/connection-settings.js';
 import { getActiveProjectOverride, resolveActiveProject } from '../shared/active-project.js';
 
 const HUD_HOST_ID = 'piwi-record-hud-host';
 const PANEL_HOST_ID = 'piwi-record-review-host';
+const FRAME_HOST_ID = 'piwi-record-frame-host';
 
 const ROLE_SOURCES = [...new Set(['[role]', 'input', 'select', ...Object.keys(TAG_TO_ROLE)])].join(',');
 const PROBE_ARG: ProbeArg = {
@@ -79,7 +81,47 @@ function nearestActionable(el: Element): Element {
 
 function withinOwnUi(e: Event): boolean {
   const path = e.composedPath();
-  return path.some((n) => n instanceof HTMLElement && (n.id === HUD_HOST_ID || n.id === PANEL_HOST_ID));
+  return path.some(
+    (n) => n instanceof HTMLElement && (n.id === HUD_HOST_ID || n.id === PANEL_HOST_ID || n.id === FRAME_HOST_ID),
+  );
+}
+
+/**
+ * A border drawn around the viewport for as long as the recording runs, so
+ * it's obvious at a glance that this tab is being captured — the HUD alone
+ * is easy to overlook, and easy to mistake for a leftover from a previous
+ * session.
+ *
+ * Its own host rather than part of the HUD: `renderHud` tears its host down
+ * and rebuilds it on *every* captured step, which would make a border flicker
+ * constantly. `pointer-events: none` throughout so it never intercepts a
+ * click the recorder is supposed to be capturing.
+ */
+function ensureRecordingFrame(): void {
+  if (document.getElementById(FRAME_HOST_ID)) return;
+  const host = document.createElement('div');
+  host.id = FRAME_HOST_ID;
+  host.style.cssText = 'all:initial;position:fixed;inset:0;z-index:2147483646;pointer-events:none;';
+  document.documentElement.appendChild(host);
+  const root = host.attachShadow({ mode: 'closed' });
+  const style = document.createElement('style');
+  style.textContent = `
+    .frame {
+      position: fixed; inset: 0; pointer-events: none;
+      border: 3px solid rgba(239,68,68,.9);
+      box-shadow: inset 0 0 0 1px rgba(239,68,68,.35), inset 0 0 18px rgba(239,68,68,.18);
+      animation: breathe 2.6s ease-in-out infinite;
+    }
+    @keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+    @media (prefers-reduced-motion: reduce) { .frame { animation: none; } }
+  `;
+  const frame = document.createElement('div');
+  frame.className = 'frame';
+  root.append(style, frame);
+}
+
+function removeRecordingFrame(): void {
+  document.getElementById(FRAME_HOST_ID)?.remove();
 }
 
 async function copyToClipboard(text: string, btn: HTMLButtonElement): Promise<void> {
@@ -103,6 +145,7 @@ const SHARED_STYLE = `
 function renderHud(state: RecordingState, catalog: TestFunctionEntry[]): void {
   document.getElementById(HUD_HOST_ID)?.remove();
   document.getElementById(PANEL_HOST_ID)?.remove();
+  ensureRecordingFrame();
 
   const host = document.createElement('div');
   host.id = HUD_HOST_ID;
@@ -222,6 +265,9 @@ function describeStep(step: RecordedStep): string {
 async function renderReviewPanel(events: RawCaptureEvent[]): Promise<void> {
   document.getElementById(HUD_HOST_ID)?.remove();
   document.getElementById(PANEL_HOST_ID)?.remove();
+  // Recording is over by the time the review panel opens — drop the border
+  // before anything else, so it never outlives the capture it signals.
+  removeRecordingFrame();
 
   const steps = normalizeSteps(events);
   const session = buildSession(steps, events[0]?.timestamp ?? Date.now());
@@ -513,6 +559,21 @@ async function runRecordPanel(): Promise<void> {
   if (g.__piwiRecordPanelActive) return;
   g.__piwiRecordPanelActive = true;
 
+  try {
+    await initRecordPanel();
+  } catch (err) {
+    // Clear the guard so a later injection can retry: the usual cause is the
+    // background worker not having widened session-storage access yet, which
+    // is transient. Latching the guard here is what used to turn one unlucky
+    // read into "no HUD on this page at all".
+    g.__piwiRecordPanelActive = false;
+    console.warn('[Piwi Picker] recorder failed to start on this page:', err);
+  }
+}
+
+async function initRecordPanel(): Promise<void> {
+  // Before any session-storage read — see `session-access.ts`.
+  await ensureSessionAccess();
   const state = await getRecordingState();
   if (state.active) {
     // Seed this page's own URL so a mid-recording navigation's `RecordedStep`s
