@@ -35,6 +35,13 @@ async function installFakeBridge(page: Page) {
         detail: null,
       },
       {
+        id: 'opencode',
+        label: 'Opencode',
+        config_path: '/home/dev/.config/opencode/opencode.json',
+        status: 'not_connected',
+        detail: null,
+      },
+      {
         id: 'claude-desktop',
         label: 'Claude Desktop',
         config_path: '/home/dev/.config/Claude/claude_desktop_config.json',

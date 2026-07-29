@@ -37,6 +37,7 @@ const prompts = MCP_PROMPT_DEFS;
 
 const clientItems = [
   { label: 'Claude Code', slot: 'claude-code' },
+  { label: 'Opencode', slot: 'opencode' },
   { label: 'Cursor', slot: 'cursor' },
   { label: 'VS Code', slot: 'vscode' },
   { label: 'Claude Desktop', slot: 'claude-desktop' },
@@ -47,6 +48,22 @@ const clientItems = [
 const claudeCodeSnippet = computed(
   () =>
     `claude mcp add --transport http piwi ${mcpUrl.value} \\\n  --header "Authorization: Bearer ${bearerToken.value}"`,
+);
+
+const opencodeSnippet = computed(() =>
+  JSON.stringify(
+    {
+      mcp: {
+        piwi: {
+          type: 'remote',
+          url: mcpUrl.value,
+          headers: { Authorization: `Bearer ${bearerToken.value}` },
+        },
+      },
+    },
+    null,
+    2,
+  ),
 );
 
 const cursorSnippet = computed(() =>
@@ -199,6 +216,20 @@ const windsurfSnippet = computed(() =>
                   After adding, restart Claude Code and use
                   <code class="font-mono">/mcp</code> to verify <strong>piwi</strong> is connected. Claude will call the
                   tools automatically when you ask about test results or failures.
+                </p>
+              </div>
+            </template>
+
+            <!-- Opencode -->
+            <template #opencode>
+              <div class="space-y-3">
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                  Add to <code class="font-mono text-xs">~/.config/opencode/opencode.json</code> (global config):
+                </p>
+                <CodeBlock :code="opencodeSnippet" lang="json" />
+                <p class="text-xs text-gray-400">
+                  Restart Opencode to pick up the new MCP server. Tools become available automatically in the next
+                  session.
                 </p>
               </div>
             </template>

@@ -38,10 +38,11 @@ impl ServerInfo {
     }
 }
 
-const CLIENT_IDS: [&str; 6] = [
+const CLIENT_IDS: [&str; 7] = [
     "claude-code",
     "claude-desktop",
     "cursor",
+    "opencode",
     "vscode",
     "windsurf",
     "gemini-cli",
@@ -50,6 +51,7 @@ const CLIENT_IDS: [&str; 6] = [
 /// The key under which clients keep their MCP server map.
 fn container_key(id: &str) -> &'static str {
     match id {
+        "opencode" => "mcp",
         "vscode" => "servers",
         _ => "mcpServers",
     }
@@ -60,6 +62,7 @@ fn label_of(id: &str) -> &'static str {
         "claude-code" => "Claude Code",
         "claude-desktop" => "Claude Desktop",
         "cursor" => "Cursor",
+        "opencode" => "Opencode",
         "vscode" => "VS Code",
         "windsurf" => "Windsurf",
         "gemini-cli" => "Gemini CLI",
@@ -73,6 +76,7 @@ fn entry_for(id: &str, info: &ServerInfo) -> Value {
     let bearer = info.bearer();
     match id {
         "cursor" => json!({ "url": url, "headers": { "Authorization": bearer } }),
+        "opencode" => json!({ "type": "remote", "url": url, "headers": { "Authorization": bearer } }),
         "windsurf" => json!({ "serverUrl": url, "headers": { "Authorization": bearer } }),
         "gemini-cli" => json!({ "httpUrl": url, "headers": { "Authorization": bearer } }),
         // Claude Code, Claude Desktop and VS Code share the `type: http` shape.
@@ -151,6 +155,10 @@ fn paths_of(app: &AppHandle, id: &str) -> Option<(PathBuf, PathBuf)> {
             Some((dir.join(CLAUDE_DESKTOP_CONFIG), dir))
         }
         "cursor" => Some((home.join(".cursor").join("mcp.json"), home.join(".cursor"))),
+        "opencode" => Some((
+            home.join(".config").join("opencode").join("opencode.json"),
+            home.join(".config").join("opencode"),
+        )),
         "vscode" => Some((
             config.join("Code").join("User").join("mcp.json"),
             config.join("Code").join("User"),
@@ -411,6 +419,10 @@ mod tests {
         assert_eq!(
             entry_for("gemini-cli", &i)["httpUrl"],
             "http://127.0.0.1:3000/mcp"
+        );
+        assert_eq!(
+            entry_for("opencode", &i),
+            json!({ "type": "remote", "url": "http://127.0.0.1:3000/mcp", "headers": { "Authorization": "Bearer pd_test" } })
         );
         for id in ["claude-code", "claude-desktop", "vscode"] {
             assert_eq!(entry_for(id, &i)["type"], "http");
