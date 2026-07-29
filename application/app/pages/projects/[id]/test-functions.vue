@@ -356,13 +356,28 @@ async function save() {
   }
 }
 
-async function remove(entry: TestFunctionInfo) {
+// Deleting used to happen on the click itself. A catalog entry is hand-authored
+// work — a pattern, its params, their sources — and nothing here undoes it.
+const functionToDelete = ref<TestFunctionInfo | null>(null);
+const isDeleteConfirmOpen = ref(false);
+
+function confirmRemove(entry: TestFunctionInfo) {
+  functionToDelete.value = entry;
+  isDeleteConfirmOpen.value = true;
+}
+
+async function remove() {
+  const entry = functionToDelete.value;
+  if (!entry) return;
+  isDeleteConfirmOpen.value = false;
   try {
     await $fetch(`/api/test-functions/${entry.id}`, { method: 'DELETE' });
     toast.add({ title: 'Function removed', color: 'success' });
     await refresh();
   } catch (error: unknown) {
     toast.add({ title: 'Failed to remove function', description: errorMessage(error), color: 'error' });
+  } finally {
+    functionToDelete.value = null;
   }
 }
 
@@ -442,7 +457,7 @@ function describeSteps(entry: TestFunctionInfo): string {
                   variant="ghost"
                   size="sm"
                   :aria-label="`Remove ${entry.name}`"
-                  @click="remove(entry)"
+                  @click="confirmRemove(entry)"
                 />
               </div>
             </div>
@@ -685,6 +700,19 @@ function describeSteps(entry: TestFunctionInfo): string {
           :loading="saving"
           @click="save"
         />
+      </template>
+    </UModal>
+    <UModal :open="isDeleteConfirmOpen" title="Remove test function" @update:open="isDeleteConfirmOpen = $event">
+      <template #body>
+        <p>
+          Remove <code class="font-mono">{{ functionToDelete?.name }}</code> from this project’s catalog? Recordings
+          will stop matching against it and export raw locators instead. The function’s own source code is not touched.
+        </p>
+      </template>
+
+      <template #footer>
+        <UButton color="neutral" variant="ghost" label="Cancel" @click="isDeleteConfirmOpen = false" />
+        <UButton color="error" label="Remove" icon="i-lucide-trash-2" @click="remove" />
       </template>
     </UModal>
   </ClientOnly>

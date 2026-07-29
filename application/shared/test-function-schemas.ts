@@ -115,9 +115,6 @@ export const aiExtractedFunctionSchema = z.object({
  * fields no extraction step can infer). Shared by the create endpoint
  * (`server/api/projects/[id]/test-functions.post.ts`) and the MCP
  * `create_test_function` tool so both hold a caller to the same shape.
- *
- * `updateTestFunctionSchema` in `server/api/test-functions/[id].put.ts` is this
- * shape with every field optional — keep the two in step.
  */
 export const createTestFunctionSchema = z.object({
   name: testFunctionNameSchema,
@@ -129,6 +126,28 @@ export const createTestFunctionSchema = z.object({
   returnsPage: z.boolean().optional(),
   urlPattern: z.string().max(240).nullish(),
   steps: z.array(patternStepSchema).min(1, 'At least one pattern step is required').max(30),
+  paramSources: z.array(paramSourceSchema).max(10).optional(),
+  source: z.enum(['manual', 'scanned', 'recorded', 'ai-extracted']).optional(),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
+/**
+ * The same shape with every field optional — a PATCH-style update where an
+ * absent field means "leave it alone". Lives here beside the create schema
+ * rather than inline in the endpoint so the demo router's mirror validates
+ * against the identical rules; two copies of "what a valid update looks like"
+ * is exactly how the demo drifted into accepting entries the API rejects.
+ */
+export const updateTestFunctionSchema = z.object({
+  name: testFunctionNameSchema.optional(),
+  kind: testFunctionKindSchema.optional(),
+  module: moduleSchema.optional(),
+  receiver: optionalIdentifierSchema,
+  importName: optionalIdentifierSchema,
+  params: z.array(paramSchema).max(10).optional(),
+  returnsPage: z.boolean().optional(),
+  urlPattern: z.string().max(240).nullish(),
+  steps: z.array(patternStepSchema).min(1).max(30).optional(),
   paramSources: z.array(paramSourceSchema).max(10).optional(),
   source: z.enum(['manual', 'scanned', 'recorded', 'ai-extracted']).optional(),
   confidence: z.number().min(0).max(1).optional(),
