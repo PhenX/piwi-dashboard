@@ -64,6 +64,42 @@ const KEY_TO_ACTION_ID: Record<string, string> = {
   '0': 'test-function-panel',
 };
 
+/**
+ * Reports the *actual* binding for the pick shortcut rather than the one the
+ * manifest suggests. A browser only assigns `suggested_key` when it is free —
+ * another extension (or, on Firefox, the built-in Network Monitor) already
+ * holding Ctrl+Shift+E means ours is silently left unbound, and hardcoding the
+ * hint made that look like the extension was broken.
+ */
+async function renderPickShortcutHint(): Promise<void> {
+  const el = document.getElementById('pick-shortcut');
+  if (!el) return;
+  let shortcut = '';
+  try {
+    const commands = await chrome.commands.getAll();
+    shortcut = commands.find((c) => c.name === 'pick-element')?.shortcut ?? '';
+  } catch {
+    // `chrome.commands` unavailable — leave the fallback link below.
+  }
+
+  el.replaceChildren();
+  if (shortcut) {
+    const key = document.createElement('kbd');
+    key.textContent = shortcut;
+    el.append(key, ' picks without the popup');
+    return;
+  }
+  const link = document.createElement('a');
+  link.href = '#';
+  link.textContent = 'no pick shortcut assigned — set one';
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    // chrome:// URLs can't be opened with a plain link from an extension page.
+    void chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+  });
+  el.appendChild(link);
+}
+
 document.addEventListener('keydown', (e) => {
   // Let a modified key through — Ctrl+1 etc. belong to the browser — and stay
   // out of the way of the project select, where digits drive its own typeahead.
@@ -217,3 +253,4 @@ recordBtn.addEventListener('click', () => {
 
 void refreshRecordButton();
 void refreshActiveProjectSelect();
+void renderPickShortcutHint();

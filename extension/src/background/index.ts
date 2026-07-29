@@ -12,9 +12,24 @@ import type { RefreshCatalogResult } from '../shared/catalog-refresh.js';
  * user gesture for `activeTab`, so this can inject directly.
  */
 chrome.commands.onCommand.addListener((command, tab) => {
-  if (command !== 'pick-element' || !tab?.id) return;
-  void chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['pick.js'] });
+  if (command !== 'pick-element') return;
+  void runPickCommand(tab);
 });
+
+async function runPickCommand(tab?: chrome.tabs.Tab): Promise<void> {
+  // The event usually carries the tab, but not on every platform or path —
+  // falling back to the active tab beats silently doing nothing, which is
+  // indistinguishable from the shortcut not being bound at all.
+  const tabId = tab?.id ?? (await chrome.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+  if (tabId == null) return;
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['pick.js'] });
+  } catch (err) {
+    // Restricted page (chrome://, the Web Store, the PDF viewer): nothing to
+    // inject into. Logged rather than left as an unhandled rejection.
+    console.warn('[Piwi Picker] the pick shortcut cannot run on this page:', err);
+  }
+}
 
 // chrome.storage.session defaults to extension-page-only access; the pick
 // session (C3/C7) and the recording (`recording-storage.ts`) are read and

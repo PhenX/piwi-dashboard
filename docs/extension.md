@@ -36,6 +36,13 @@ Every action in the toolbar popup has a digit shortcut, shown on its tile and nu
 reading order: `1` records, `2` picks an element, through to `0` for **Test functions**. With
 the popup open, press the digit instead of clicking.
 
+Picking also has a shortcut that works *without* opening the popup, suggested as
+`Ctrl+Shift+E` (`Cmd+Shift+E` on macOS). A browser only assigns a suggested key when it is
+free, so if another extension already holds that combination — or you're on Firefox, where
+`Ctrl+Shift+E` opens the built-in Network Monitor — it stays unbound and pressing it does
+nothing. The popup footer reports the key actually bound, and offers a link to
+`chrome://extensions/shortcuts` to assign one when there is none.
+
 - **Pick an element** — click the toolbar icon → **Pick an element**, or press
   `Ctrl+Shift+E` (`Cmd+Shift+E` on macOS) on any page. Hover highlights, a click picks — the
   pick snaps to the nearest actionable ancestor (a click on the text inside a button picks the

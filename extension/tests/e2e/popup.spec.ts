@@ -30,7 +30,25 @@ test.describe('popup.html', () => {
     for (const name of ACTION_BUTTON_NAMES) {
       await expect(page.getByRole('button', { name })).toBeVisible();
     }
-    await expect(page.getByText('Ctrl+Shift+E')).toBeVisible();
+    // The hint reports whatever the browser actually bound, not the key the
+    // manifest asked for — a suggested key is only assigned when it is free.
+    await expect(page.locator('#pick-shortcut')).not.toBeEmpty();
+  });
+
+  test('the pick-shortcut hint states the binding the browser actually made', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/popup.html`);
+    const assigned = await page.evaluate(async () => {
+      const commands = await chrome.commands.getAll();
+      return commands.find((c) => c.name === 'pick-element')?.shortcut ?? '';
+    });
+    const hint = page.locator('#pick-shortcut');
+    if (assigned) {
+      await expect(hint.locator('kbd')).toHaveText(assigned);
+    } else {
+      // Nothing bound: offer a way to fix it rather than naming a dead key.
+      await expect(hint.locator('a')).toContainText('set one');
+    }
   });
 
   test('every action tile carries a digit shortcut, 1 through 0, in render order', async ({ context, extensionId }) => {
