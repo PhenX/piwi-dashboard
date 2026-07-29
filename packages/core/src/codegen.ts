@@ -4,9 +4,11 @@
  * Two modes, one function: with no catalog, every step becomes a raw
  * `page.*` line (the extension's fully offline path — works with no Piwi
  * connection at all). With a catalog, `matchFunctionAt` (see
- * `function-match.ts`) greedily collapses complete, in-order matches into
- * calls against the project's own page-object methods/helpers, leaving
- * anything unmatched as raw lines — never a partial or guessed call.
+ * `function-match.ts`) greedily collapses a *contiguous* run of steps that
+ * matches a function's whole pattern into a call against the project's own
+ * page-object methods/helpers, leaving anything unmatched as raw lines — never
+ * a partial or guessed call, and never a call that quietly swallows a step it
+ * does not perform.
  */
 import type { RecordedSession, RecordedStep } from './recording';
 import { matchFunctionAt, type TestFunctionEntry, type RankedFunctionMatch } from './function-match';
@@ -24,8 +26,24 @@ export interface CodegenResult {
   matchedSpans: Array<{ startStep: number; endStep: number; functionName: string }>;
 }
 
+/**
+ * A line terminator inside a single-quoted literal is a syntax error, not a
+ * newline — and a recorded value reaches codegen unnormalized (`normalizeSteps`
+ * collapses whitespace on a target's *text*, never on the value the user typed),
+ * so one multi-line paste into a textarea used to be enough to make the whole
+ * exported spec unparseable.
+ */
+const QUOTE_ESCAPES: Record<string, string> = {
+  '\\': '\\\\',
+  "'": "\\'",
+  '\n': '\\n',
+  '\r': '\\r',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029',
+};
+
 function quote(s: string): string {
-  return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  return `'${s.replace(/[\\'\n\r\u2028\u2029]/g, (c) => QUOTE_ESCAPES[c]!)}'`;
 }
 
 /** The best-ranked locator for a step's target, or a comment placeholder when the step captured no element. */
