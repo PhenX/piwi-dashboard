@@ -137,6 +137,26 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
           }
 
           const CONTAINER_TAGS = ['form', 'nav', 'main', 'article', 'section', 'dialog', 'table'];
+          // Framework bookkeeping rather than anything an author chose:
+          // Vue's scoped-style markers (`data-v-4f2a1b`), React's legacy
+          // `data-reactid`, Svelte/Angular/Ember instance ids.
+          const NOISY_DATA_ATTR = /^data-(v-[0-9a-f]+|reactid|react-checksum|svelte-\w+|ng-\w+|ember\w*)$/i;
+          /** The first `data-*` on a node that looks author-chosen and carries a usable value. `data-testid` is excluded — it has its own, higher-scoring path. */
+          const stableDataAttr = (n: any): { name: string; value: string } | null => {
+            const attrs = n.attributes;
+            if (!attrs) return null;
+            for (let i = 0; i < attrs.length; i++) {
+              const name = attrs[i].name;
+              if (!name || name.slice(0, 5) !== 'data-' || name === 'data-testid') continue;
+              if (NOISY_DATA_ATTR.test(name)) continue;
+              const value = attrs[i].value;
+              // A valueless marker (`data-open`) identifies nothing; an
+              // over-long one is almost always serialized state.
+              if (!value || value.length > 120) continue;
+              return { name, value };
+            }
+            return null;
+          };
           const docRoleCount = (role: string): number => {
             let c = 0;
             for (let i = 0; i < nodes.length; i++) if (roleOf(nodes[i]) === role) c++;
@@ -153,7 +173,8 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
             const explicitRole = node.getAttribute('role');
             const ariaLabel = node.getAttribute('aria-label');
             const anchorRole = explicitRole || (CONTAINER_TAGS.includes(tag) ? tagRoles[tag] : null) || null;
-            if (testId || id || anchorRole || ariaLabel) {
+            const dataAttr = stableDataAttr(node);
+            if (testId || id || anchorRole || ariaLabel || dataAttr) {
               const scoped = node.querySelectorAll(roleSources);
               let scopedRoleCount = 0;
               if (scoped.length <= 2000) {
@@ -177,6 +198,9 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
                 ...(testId ? { testIdCount: count(`[data-testid=${JSON.stringify(testId)}]`) } : {}),
                 ...(id ? { idCount: count(`#${cssEsc(id)}`) } : {}),
                 ...(anchorRole ? { roleCount: docRoleCount(anchorRole) } : {}),
+                ...(dataAttr
+                  ? { dataAttr, dataAttrCount: count(`[${dataAttr.name}=${JSON.stringify(dataAttr.value)}]`) }
+                  : {}),
               });
             }
             node = node.parentElement;

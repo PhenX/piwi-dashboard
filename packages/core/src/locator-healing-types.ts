@@ -92,6 +92,15 @@ export interface AncestorAnchor {
   idCount?: number;
   /** Document-wide count of elements resolving to this ancestor's landmark/explicit role. */
   roleCount?: number;
+  /**
+   * A stable non-testid `data-*` hook on this ancestor (`data-product="43"`,
+   * `data-row-id="7"`). Many apps identify a repeated card or row this way and
+   * nothing else, so without it the only locator left is one that matches every
+   * card on the page.
+   */
+  dataAttr?: { name: string; value: string };
+  /** Document-wide match count for `dataAttr` as an attribute selector. */
+  dataAttrCount?: number;
 }
 
 /** Raw element attributes captured after a successful action. */

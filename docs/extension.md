@@ -61,7 +61,12 @@ nothing. The popup footer reports the key actually bound, and offers a link to
   never silently dropped. A locator that matches more than one element is ranked *below* every
   candidate known to resolve to exactly one, so a parent-scoped chain like
   `getByTestId('product-43').getByRole('button')` comes out on top of a bare
-  `getByRole('button', { name: 'Add to cart' })` that hits every card on the page.
+  `getByRole('button', { name: 'Add to cart' })` that hits every card on the page. Parents are
+  anchored on whatever hook they actually carry — `data-testid`, `id`, a landmark role, or an
+  app-specific `data-*` such as `data-product="43"` or `data-row-id="7"` — so a repeated card
+  identified only by a `data-*` attribute still gets a chain
+  (`locator('[data-product="43"]').getByRole('button')`). Framework bookkeeping (`data-v-4f2a1b`,
+  `data-reactid`, Svelte/Angular/Ember instance ids) is skipped, as are valueless markers.
 - **Copy in three forms** — the bare locator, a full action line
   (`await page.getByRole(…).click();`), or a visibility assertion
   (`await expect(page.getByRole(…)).toBeVisible();`). Your last-used form is remembered for next

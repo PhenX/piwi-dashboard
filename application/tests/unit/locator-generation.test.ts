@@ -253,6 +253,78 @@ describe('generateAlternatives — ambiguity', () => {
 });
 
 /**
+ * Plenty of apps identify a repeated card or row with a `data-*` hook and
+ * nothing else — no testid, no id, no landmark role. Those ancestors used not
+ * to be collected at all, so the leaf inside them got no scoped chain and fell
+ * back to a locator matching every card on the page.
+ */
+describe('generateAlternatives — data-* anchors', () => {
+  const card = (dataAttr: { name: string; value: string }, dataAttrCount = 1): ElementAttributes =>
+    el({
+      textContent: 'Add to cart',
+      accessibleName: 'Add to cart',
+      selectorCounts: { roleName: 2, text: 2 },
+      ancestors: [{ tag: 'div', depth: 1, dataAttr, dataAttrCount, scopedRoleCount: 1 }],
+    });
+
+  test('an app-specific data-* hook anchors the chain and outranks the ambiguous leaf', () => {
+    const alts = generateAlternatives(card({ name: 'data-product', value: '43' }));
+    expect(alts[0]).toMatchObject({
+      locator: `locator('[data-product="43"]').getByRole('button')`,
+      method: 'getByRole',
+      score: 60,
+    });
+    expect(alts[0]!.args).toMatchObject({ role: 'button', anchorSelector: '[data-product="43"]' });
+  });
+
+  test('test-oriented names score above app-specific ones, but under data-testid', () => {
+    expect(generateAlternatives(card({ name: 'data-qa', value: 'row-7' }))[0]!.score).toBe(70);
+    expect(generateAlternatives(card({ name: 'data-cy', value: 'row-7' }))[0]!.score).toBe(70);
+    expect(generateAlternatives(card({ name: 'data-product', value: '43' }))[0]!.score).toBe(60);
+  });
+
+  test('a hook shared by several elements anchors nothing', () => {
+    const alts = generateAlternatives(card({ name: 'data-kind', value: 'card' }, 4));
+    expect(alts.some((a) => a.locator.includes('data-kind'))).toBe(false);
+  });
+
+  test('quotes in the value are escaped so the selector stays parseable', () => {
+    const alts = generateAlternatives(card({ name: 'data-label', value: 'the "big" one' }));
+    // Escaped twice on purpose: once for CSS, once for the TypeScript string
+    // literal the expression is pasted into — evaluating it yields the CSS
+    // selector [data-label="the \"big\" one"].
+    expect(alts[0]!.locator).toBe(String.raw`locator('[data-label="the \\"big\\" one"]').getByRole('button')`);
+  });
+
+  test('only the closest usable data-* ancestor is used', () => {
+    const alts = generateAlternatives(
+      el({
+        accessibleName: 'Add to cart',
+        selectorCounts: { roleName: 2 },
+        ancestors: [
+          {
+            tag: 'div',
+            depth: 1,
+            dataAttr: { name: 'data-product', value: '43' },
+            dataAttrCount: 1,
+            scopedRoleCount: 1,
+          },
+          {
+            tag: 'div',
+            depth: 2,
+            dataAttr: { name: 'data-section', value: 'deals' },
+            dataAttrCount: 1,
+            scopedRoleCount: 1,
+          },
+        ],
+      }),
+    );
+    expect(alts.filter((a) => a.locator.startsWith("locator('[data-"))).toHaveLength(1);
+    expect(alts[0]!.locator).toContain('data-product');
+  });
+});
+
+/**
  * `word-digits` ids used to be discarded wholesale as framework output, which
  * threw away the one hook that made a repeated card addressable.
  */

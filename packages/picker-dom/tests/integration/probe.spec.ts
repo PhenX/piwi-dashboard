@@ -79,6 +79,47 @@ test.describe('probeElementAttrs', () => {
     expect(withoutStructural.ancestors).toBeUndefined();
   });
 
+  test('collects a stable data-* hook on an ancestor that has no other anchor', async ({ page }) => {
+    await page.setContent(`<!doctype html><html><body>
+      <div data-product="42"><button>Add to cart</button></div>
+      <div data-product="43" data-v-4f2a1b><button id="target">Add to cart</button></div>
+    </body></html>`);
+    const attrs = await page.locator('#target').evaluate(probeElementAttrs, {
+      keep: ['id'],
+      tagRoles: { button: 'button' },
+      inputRoles: {},
+      roleSources: 'button,div',
+      includeStructural: true,
+      includeLabelText: false,
+    });
+    // Vue's scoped-style marker sits first in the attribute list and would win
+    // a naive "first data-*" scan — it identifies a build, not an element.
+    expect(attrs.ancestors?.[0]).toMatchObject({
+      tag: 'div',
+      dataAttr: { name: 'data-product', value: '43' },
+      dataAttrCount: 1,
+      scopedRoleCount: 1,
+    });
+    // Both cards say "Add to cart", so the leaf's own locators are ambiguous —
+    // the anchor is the only thing that resolves to one element.
+    expect(attrs.selectorCounts.roleName).toBe(2);
+  });
+
+  test('ignores valueless and over-long data-* markers', async ({ page }) => {
+    await page.setContent(`<!doctype html><html><body>
+      <div data-open data-state="${'x'.repeat(200)}"><button id="target">Go</button></div>
+    </body></html>`);
+    const attrs = await page.locator('#target').evaluate(probeElementAttrs, {
+      keep: ['id'],
+      tagRoles: { button: 'button' },
+      inputRoles: {},
+      roleSources: 'button,div',
+      includeStructural: true,
+      includeLabelText: false,
+    });
+    expect(attrs.ancestors).toEqual([]);
+  });
+
   test('includes labelText only when includeLabelText is set', async ({ page }) => {
     await page.setContent(`<!doctype html><html><body>
       <label for="email">Email address</label>

@@ -123,6 +123,14 @@ const escCssAttrValue = (s: string): string => s.replace(/\\/g, '\\\\').replace(
 const isCssSafeId = (id: string): boolean => /^[A-Za-z][A-Za-z0-9_-]*$/.test(id);
 
 /**
+ * `data-*` names that exist purely to be targeted by tests, so they score just
+ * under `data-testid`. Any other author-chosen `data-*` still beats a bare
+ * role anchor, but sits below `id`, which is at least guaranteed unique by the
+ * HTML spec.
+ */
+const TEST_DATA_ATTRS = new Set(['data-test', 'data-test-id', 'data-qa', 'data-qa-id', 'data-cy', 'data-e2e']);
+
+/**
  * Build a ranked list of alternative locators from the captured element
  * attributes, sorted descending by stability score. No duplicate expressions.
  */
@@ -256,6 +264,7 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
     let testIdAnchorDone = false;
     let idAnchorDone = false;
     let roleAnchorDone = false;
+    let dataAnchorDone = false;
     for (const anc of attrs.ancestors ?? []) {
       if (anc.scopedRoleCount !== 1) continue;
 
@@ -277,6 +286,18 @@ export function generateAlternatives(attrs: ElementAttributes): RankedLocator[] 
           method: 'getByRole',
           args: { ...leafArgs, anchorSelector },
           score: 64,
+        });
+      }
+
+      if (!dataAnchorDone && anc.dataAttr && anc.dataAttrCount === 1) {
+        dataAnchorDone = true;
+        const { name, value } = anc.dataAttr;
+        const anchorSelector = `[${name}="${escCssAttrValue(value)}"]`;
+        add({
+          locator: `locator('${esc(anchorSelector)}').getByRole(${rolePart})`,
+          method: 'getByRole',
+          args: { ...leafArgs, anchorSelector },
+          score: TEST_DATA_ATTRS.has(name) ? 70 : 60,
         });
       }
 
