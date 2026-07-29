@@ -38,6 +38,12 @@ export interface ProbedAttrs {
     roleName?: number;
     /** How many elements `getByText` would match on this element's text, counted no further than 2 — every consumer only asks whether that is exactly one. Undefined when the element has no text, or the subtree was too large to scan. */
     text?: number;
+    /** How many elements share this element's `placeholder` — what `getByPlaceholder` would really match. */
+    placeholder?: number;
+    /** How many elements share this element's `alt` — what `getByAltText` would really match. */
+    alt?: number;
+    /** How many elements share this element's `title` — what `getByTitle` would really match. */
+    title?: number;
   };
   rolePosition?: {
     role: string;

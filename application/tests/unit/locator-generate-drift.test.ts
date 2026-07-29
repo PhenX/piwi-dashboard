@@ -70,6 +70,19 @@ const FIXTURES: ElementAttributes[] = [
     textContent: 'Go',
   }),
   el({ tagName: 'img', attributes: { alt: 'Logo', id: 'radix-3ab' } }),
+  // Widget-kind stem vs domain stem — the two sides must agree on which
+  // `word-digits` ids count as machine output.
+  el({ tagName: 'div', attributes: { id: 'tab-2' }, textContent: 'Details', selectorCounts: { id: 1 } }),
+  el({ tagName: 'div', attributes: { id: 'product-43' }, textContent: 'Keyboard', selectorCounts: { id: 1 } }),
+  // Ambiguity penalties on the attribute-counted candidates.
+  el({
+    tagName: 'input',
+    attributes: { type: 'text', placeholder: 'Search' },
+    hasLabel: false,
+    selectorCounts: { placeholder: 4 },
+  }),
+  el({ tagName: 'img', attributes: { alt: 'Logo' }, selectorCounts: { alt: 3 } }),
+  el({ tagName: 'span', attributes: { title: 'More' }, textContent: 'i', selectorCounts: { title: 3 } }),
   el({
     tagName: 'span',
     attributes: { id: 'main-title', class: 'title text-lg' },

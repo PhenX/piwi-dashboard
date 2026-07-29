@@ -40,6 +40,15 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
     }
     if (attrMap['id']) selectorCounts.id = count(`#${cssEsc(attrMap['id'])}`);
     if (attrMap['name']) selectorCounts.name = count(`[name=${JSON.stringify(attrMap['name'])}]`);
+    // `getByPlaceholder`/`getByAltText`/`getByTitle` each resolve to exactly the
+    // elements carrying that attribute value, so an attribute selector counts
+    // their real match set — without these, a placeholder repeated across a
+    // wizard's steps scored as though it were unique.
+    if (attrMap['placeholder']) {
+      selectorCounts.placeholder = count(`[placeholder=${JSON.stringify(attrMap['placeholder'])}]`);
+    }
+    if (attrMap['alt']) selectorCounts.alt = count(`[alt=${JSON.stringify(attrMap['alt'])}]`);
+    if (attrMap['title']) selectorCounts.title = count(`[title=${JSON.stringify(attrMap['title'])}]`);
     const classList = (attrMap['class'] || '')
       .split(/\s+/)
       .filter((c: string) => c.length > 1)
@@ -257,18 +266,35 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
         };
         const rawText = (n: any): string => (n.textContent || '').replace(/\s+/g, ' ').trim();
         /**
+         * Whether a candidate discriminator names the container or merely
+         * reports its current state. A price, a count, a timestamp, a currency
+         * amount and a percentage all change without the row changing, so
+         * filtering on one produces a locator that passes today and fails after
+         * the next data refresh — the exact fragility an anchored locator is for.
+         * The test is deliberately crude: at least two letters, and not
+         * predominantly digits and punctuation.
+         */
+        const namesRatherThanReports = (t: string): boolean => {
+          const letters = t.replace(/[^A-Za-z]/g, '').length;
+          if (letters < 2) return false;
+          const digits = t.replace(/[^0-9]/g, '').length;
+          return digits <= letters;
+        };
+        /**
          * A short piece of text inside `anc` that tells it apart from its
          * same-role siblings — what a human means by "the Keyboard row". A
          * heading is the clearest signal; failing that, the first short
-         * text-bearing leaf. The target's own text is never used: filtering a
-         * container by the very text we are trying to disambiguate is circular
-         * and singles out nothing.
+         * text-bearing leaf that names the row rather than reporting its state.
+         * The target's own text is never used: filtering a container by the very
+         * text we are trying to disambiguate is circular and singles out nothing.
          */
+        const usableDiscriminator = (t: string): boolean =>
+          !!t && t.length <= 60 && t !== targetText && namesRatherThanReports(t);
         const discriminatingText = (anc: any): string | null => {
           const heading = anc.querySelector('h1,h2,h3,h4,h5,h6,[role="heading"]');
           if (heading) {
             const t = rawText(heading);
-            if (t && t.length <= 60 && t !== targetText) return t;
+            if (usableDiscriminator(t)) return t;
           }
           const els = anc.querySelectorAll('*');
           if (els.length > 200) return null;
@@ -276,7 +302,7 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
             const n = els[i];
             if (n === el || n.children.length > 0) continue;
             const t = rawText(n);
-            if (!t || t.length > 60 || t === targetText) continue;
+            if (!usableDiscriminator(t)) continue;
             return t;
           }
           return null;

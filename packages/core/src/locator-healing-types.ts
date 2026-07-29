@@ -53,6 +53,12 @@ export interface SelectorCounts {
   roleName?: number;
   /** How many role-bearing elements share this element's exact text. Absent when unknown. */
   text?: number;
+  /** How many elements share this element's `placeholder` — what `getByPlaceholder` would really match. Absent when unknown. */
+  placeholder?: number;
+  /** How many elements share this element's `alt` — what `getByAltText` would really match. Absent when unknown. */
+  alt?: number;
+  /** How many elements share this element's `title` — what `getByTitle` would really match. Absent when unknown. */
+  title?: number;
 }
 
 /**

@@ -146,16 +146,12 @@ function renderFunctionCall(match: RankedFunctionMatch): string {
 function renderImports(usedEntries: TestFunctionEntry[]): string[] {
   const lines: string[] = [];
   const seenModules = new Set<string>();
-  const seenReceivers = new Set<string>();
   for (const entry of usedEntries) {
     if (entry.kind === 'page-object-method' && entry.receiver && entry.importName) {
       const moduleKey = `${entry.module}#${entry.importName}`;
       if (!seenModules.has(moduleKey)) {
         seenModules.add(moduleKey);
         lines.push(`import { ${entry.importName} } from ${quote(entry.module)};`);
-      }
-      if (!seenReceivers.has(entry.receiver)) {
-        seenReceivers.add(entry.receiver);
       }
     } else if (!seenModules.has(entry.module + entry.name)) {
       seenModules.add(entry.module + entry.name);
