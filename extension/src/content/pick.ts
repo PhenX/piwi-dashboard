@@ -1,3 +1,4 @@
+import { startTool, endTool, installEscapeToCancel, teardownToolSurfaces } from '../shared/tool-session.js';
 import {
   installPickerOverlay,
   removePickerOverlay,
@@ -68,6 +69,8 @@ async function runPick(): Promise<void> {
   const g = globalThis as any;
   if (g.__piwiPicking) return;
   g.__piwiPicking = true;
+  const toolEpoch = startTool('pick', teardownToolSurfaces);
+  installEscapeToCancel();
   try {
     clearPickGlobals();
     installPickerOverlay({ transport: 'global', failing: null });
@@ -120,6 +123,7 @@ async function runPick(): Promise<void> {
     removePickerOverlay();
     clearPickGlobals();
     g.__piwiPicking = false;
+    endTool(toolEpoch);
   }
 }
 

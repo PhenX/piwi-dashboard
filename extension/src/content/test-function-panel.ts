@@ -1,3 +1,4 @@
+import { startTool, endTool, installEscapeToCancel } from '../shared/tool-session.js';
 import { TAG_TO_ROLE, INPUT_TYPE_TO_ROLE } from '@piwitests/core/locator-generation';
 import { testCatalogAgainstPage, type FunctionTestResult } from './test-function-scan.js';
 import { getCachedCatalog } from '../shared/catalog-cache.js';
@@ -192,7 +193,13 @@ async function renderPanel(): Promise<void> {
   // TTL-guarded so repeated opens don't hit the instance every time.
   void revalidate(false);
 
-  const finish = () => host.remove();
+  let toolEpoch = 0;
+  const finish = () => {
+    host.remove();
+    endTool(toolEpoch);
+  };
+  toolEpoch = startTool('test-function-panel', finish);
+  installEscapeToCancel();
   closeBtn.addEventListener('click', finish);
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) finish();

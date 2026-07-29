@@ -65,6 +65,38 @@ const KEY_TO_ACTION_ID: Record<string, string> = {
 };
 
 /**
+ * Marks the tile whose tool is currently running in the active tab.
+ *
+ * Read live from the page rather than tracked here or in the worker: the tool
+ * lives in the content script's world and ends on its own (Escape, closing a
+ * panel, a navigation), so any copy kept elsewhere would go stale the moment
+ * it mattered. Injecting the probe needs no extra permission — opening the
+ * popup is itself the `activeTab` grant, the same one the tool buttons use.
+ */
+async function highlightActiveTool(): Promise<void> {
+  const tab = await activeTab();
+  if (tab?.id == null) return;
+  let active: string | null = null;
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => (globalThis as { __piwiActiveTool?: { id: string } }).__piwiActiveTool?.id ?? null,
+    });
+    active = (result?.result as string | null) ?? null;
+  } catch {
+    // Restricted page, or nothing injected yet — nothing is running either way.
+    return;
+  }
+  for (const button of document.querySelectorAll<HTMLElement>('.actions button')) {
+    const running = button.id === active;
+    button.classList.toggle('running', running);
+    // Conveys the same thing the ring does, for anyone not seeing the ring.
+    if (running) button.setAttribute('aria-current', 'true');
+    else button.removeAttribute('aria-current');
+  }
+}
+
+/**
  * Reports the *actual* binding for the pick shortcut rather than the one the
  * manifest suggests. A browser only assigns `suggested_key` when it is free —
  * another extension (or, on Firefox, the built-in Network Monitor) already
@@ -254,3 +286,4 @@ recordBtn.addEventListener('click', () => {
 void refreshRecordButton();
 void refreshActiveProjectSelect();
 void renderPickShortcutHint();
+void highlightActiveTool();

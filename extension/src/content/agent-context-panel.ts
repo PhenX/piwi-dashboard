@@ -1,3 +1,4 @@
+import { startTool, endTool, installEscapeToCancel, teardownToolSurfaces } from '../shared/tool-session.js';
 import { installPickerOverlay, removePickerOverlay, type PickerOverlayArg } from '@piwitests/picker-dom';
 import { buildAgentContext } from './agent-context.js';
 
@@ -165,6 +166,8 @@ async function runAgentContextPanel(): Promise<void> {
   const g = globalThis as any;
   if (g.__piwiPicking) return;
   g.__piwiPicking = true;
+  const toolEpoch = startTool('agent-context-panel', teardownToolSurfaces);
+  installEscapeToCancel();
   try {
     clearPickGlobals();
     const overlayArg: PickerOverlayArg = { transport: 'global', failing: null };
@@ -181,6 +184,7 @@ async function runAgentContextPanel(): Promise<void> {
   } finally {
     clearPickGlobals();
     g.__piwiPicking = false;
+    endTool(toolEpoch);
   }
 }
 

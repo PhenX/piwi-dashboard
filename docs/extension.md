@@ -36,6 +36,11 @@ Every action in the toolbar popup has a digit shortcut, shown on its tile and nu
 reading order: `1` records, `2` picks an element, through to `0` for **Test functions**. With
 the popup open, press the digit instead of clicking.
 
+Only one tool runs at a time: starting one closes whatever was open, and the popup marks the
+running tool as **running** so you can see what is live on the page. **Esc** cancels it from
+anywhere. Recording is the exception — it is a capture mode rather than a momentary tool, so
+it keeps running while you use the others, and only its own **Stop** ends it.
+
 Picking also has a shortcut that works *without* opening the popup, suggested as
 `Ctrl+Shift+E` (`Cmd+Shift+E` on macOS). A browser only assigns a suggested key when it is
 free, so if another extension already holds that combination — or you're on Firefox, where

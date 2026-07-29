@@ -1,3 +1,4 @@
+import { startTool, endTool, installEscapeToCancel, teardownToolSurfaces } from '../shared/tool-session.js';
 import {
   installPickerOverlay,
   removePickerOverlay,
@@ -352,6 +353,8 @@ async function runSessionPanel(): Promise<void> {
   const g = globalThis as any;
   if (g.__piwiSessionPanelRunning) return;
   g.__piwiSessionPanelRunning = true;
+  const toolEpoch = startTool('session-panel', teardownToolSurfaces);
+  installEscapeToCancel();
   try {
     // Pick sessions live in session storage — see `session-access.ts`.
     await ensureSessionAccess();
@@ -388,6 +391,7 @@ async function runSessionPanel(): Promise<void> {
     }
   } finally {
     g.__piwiSessionPanelRunning = false;
+    endTool(toolEpoch);
   }
 }
 

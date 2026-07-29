@@ -1,3 +1,4 @@
+import { startTool, endTool, installEscapeToCancel, teardownToolSurfaces } from '../shared/tool-session.js';
 import {
   installPickerOverlay,
   removePickerOverlay,
@@ -328,6 +329,8 @@ async function runMultiPick(): Promise<void> {
   const g = globalThis as any;
   if (g.__piwiMultiPicking) return;
   g.__piwiMultiPicking = true;
+  const toolEpoch = startTool('multi-pick', teardownToolSurfaces);
+  installEscapeToCancel();
   try {
     const picked: Element[] = [];
     for (let i = 0; i < MIN_PICKS; i++) {
@@ -355,6 +358,7 @@ async function runMultiPick(): Promise<void> {
     await renderPatternPanel(result);
   } finally {
     g.__piwiMultiPicking = false;
+    endTool(toolEpoch);
   }
 }
 

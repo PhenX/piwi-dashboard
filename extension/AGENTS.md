@@ -42,6 +42,15 @@ recording against a project's own function catalog. See "Connected mode" below.
   `chrome.runtime.openOptionsPage()`, never linked to from a content script.
 - `src/shared/` — code shared between content scripts, background, popup, and options.
 
+**A momentary tool must claim the page through `src/shared/tool-session.ts`.** `startTool(id,
+teardown)` on entry, `endTool(epoch)` when it finishes; starting one tears down its
+predecessor, and Escape cancels the current one. Pass `teardownToolSurfaces` unless the tool
+needs something more specific — note it answers the `__piwiPickState`/`__piwiAnchorState`
+globals, because a pick-driven flow polls those and only resets its re-entry guard in a
+`finally`, so tearing its UI out without an answer strands it for the life of the page. The
+recorder deliberately stays outside this: it is a capture mode, and stopping it because
+another panel opened would discard a recording in progress.
+
 **Reading `chrome.storage.session` from a content script requires `ensureSessionAccess()`
 (`src/shared/session-access.ts`) first.** The background worker widens the access level at
 startup, but it is torn down when idle, so a script injected at `document_start` can run

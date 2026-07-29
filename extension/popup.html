@@ -135,6 +135,21 @@
         border-color: var(--accent);
         color: #fff;
       }
+      /* The tool currently running on the page. Only one can be, so this also
+         answers "did that actually start?" at a glance. */
+      .actions button.running {
+        border-color: var(--accent);
+        box-shadow: inset 0 0 0 1px var(--accent);
+      }
+      .actions button.running .label::after {
+        content: ' ·  running';
+        color: var(--accent);
+        font-weight: 500;
+        font-size: 10.5px;
+      }
+      .actions button.primary.running .label::after {
+        color: #fff;
+      }
       .actions .text {
         flex: 1;
         min-width: 0;

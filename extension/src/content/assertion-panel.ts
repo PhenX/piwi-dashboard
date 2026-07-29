@@ -1,3 +1,4 @@
+import { startTool, endTool, installEscapeToCancel, teardownToolSurfaces } from '../shared/tool-session.js';
 import {
   installPickerOverlay,
   removePickerOverlay,
@@ -202,6 +203,8 @@ async function runAssertionSuggester(): Promise<void> {
   const g = globalThis as any;
   if (g.__piwiPicking) return;
   g.__piwiPicking = true;
+  const toolEpoch = startTool('assertion-panel', teardownToolSurfaces);
+  installEscapeToCancel();
   try {
     clearPickGlobals();
     const overlayArg: PickerOverlayArg = { transport: 'global', failing: null };
@@ -218,6 +221,7 @@ async function runAssertionSuggester(): Promise<void> {
   } finally {
     clearPickGlobals();
     g.__piwiPicking = false;
+    endTool(toolEpoch);
   }
 }
 
