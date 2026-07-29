@@ -106,8 +106,9 @@ nothing. The popup footer reports the key actually bound, and offers a link to
   changes, and Enter-to-submit as you browse — across as many pages on that site as you like.
   A red border around the page marks the tab as being recorded, and a small HUD tracks the
   step count and shows the top-ranked locator for whatever you just
-  interacted with. Click **Stop** to open the review panel: reorder or drop steps, then **Copy
-  as TypeScript** for a runnable Playwright spec (`page.goto`, then one line per step). Password
+  interacted with. Click **Stop** to open the review panel: check the captured steps, then **Copy
+  as TypeScript** for a runnable Playwright spec (`page.goto`, then one line per step), or
+  **Discard** to throw the recording away. Password
   fields are never captured — their value is replaced with a `process.env.*` placeholder in the
   generated code.
 - **Matching functions, ranked live** *(needs a Piwi connection)* — connect to a Piwi instance

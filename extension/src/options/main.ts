@@ -226,6 +226,12 @@ saveBtn.addEventListener('click', () => {
 
     const parts = [`Saved ${valid.length} mapping${valid.length === 1 ? '' : 's'}`];
     if (incompleteCount > 0) parts.push(`${incompleteCount} incomplete row${incompleteCount === 1 ? '' : 's'} skipped`);
+    // The API key travels on every catalog fetch; over plain HTTP it travels in
+    // the clear. Worth saying once, at the moment the choice is made — not a
+    // reason to refuse a local instance on `http://localhost`.
+    if (/^http:\/\//i.test(settings.instanceUrl) && settings.apiKey) {
+      parts.push('this instance is plain HTTP, so the API key is sent unencrypted');
+    }
     // Without the host permission the catalog can still be fetched from this
     // page if the instance happens to allow the origin, but the background
     // refresh never can — so the catalog would silently stop updating.
@@ -241,10 +247,32 @@ saveBtn.addEventListener('click', () => {
   })();
 });
 
+/**
+ * Gives back the host permission for an instance we are no longer connected to.
+ *
+ * Disconnecting used to clear the settings and the cached catalogs but leave the
+ * granted origin in place indefinitely — a standing grant for a host the
+ * extension has no further business with, and one the user would reasonably
+ * assume "Disconnect" had withdrawn. Never touches anything but that one origin:
+ * a recording's own granted site is a separate grant with its own lifetime.
+ */
+async function revokeInstanceHostPermission(instanceUrl: string): Promise<void> {
+  if (!instanceUrl.trim()) return;
+  let origin: string;
+  try {
+    origin = new URL(instanceUrl).origin;
+  } catch {
+    return;
+  }
+  await chrome.permissions.remove({ origins: [`${origin}/*`] }).catch(() => undefined);
+}
+
 disconnectBtn.addEventListener('click', () => {
   void (async () => {
+    const previousUrl = instanceUrlEl.value;
     await clearConnectionSettings();
     await pruneCachedCatalogs([]);
+    await revokeInstanceHostPermission(previousUrl);
     instanceUrlEl.value = '';
     apiKeyEl.value = '';
     projectOptions = [];

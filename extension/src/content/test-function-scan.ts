@@ -37,6 +37,22 @@ export function testCatalogAgainstPage(catalog: TestFunctionEntry[], maps: DomRo
     return s.replace(/\s+/g, ' ').trim();
   }
 
+  /**
+   * Mirrors core's `approximateAccessibleName` — aria-label, then text, then
+   * title, then placeholder. Inlined rather than imported because this function
+   * is re-serialized via `Function.prototype.toString()` (see the note above),
+   * the same reason `probe.ts` keeps its own copy. Reading only `aria-label`
+   * here meant a step scored one way in "Try it" and another way during a real
+   * recording, against the claim that both use one rule.
+   */
+  function accessibleNameOf(el: Element): string | null {
+    const ariaLabel = el.getAttribute('aria-label');
+    if (ariaLabel) return ariaLabel;
+    const text = normalize(el.textContent || '');
+    if (text) return text;
+    return el.getAttribute('title') || el.getAttribute('placeholder') || null;
+  }
+
   function elementCandidate(el: Element): {
     role: string | null;
     testId: string | null;
@@ -46,7 +62,7 @@ export function testCatalogAgainstPage(catalog: TestFunctionEntry[], maps: DomRo
     return {
       role: domRoleOf(el, maps),
       testId: el.getAttribute('data-testid'),
-      accessibleName: el.getAttribute('aria-label'),
+      accessibleName: accessibleNameOf(el),
       text: normalize(el.textContent || ''),
     };
   }
@@ -61,6 +77,10 @@ export function testCatalogAgainstPage(catalog: TestFunctionEntry[], maps: DomRo
     const pool = target.testId
       ? [...document.querySelectorAll('[data-testid]')]
       : [...document.querySelectorAll(ROLE_CANDIDATES)];
+    // A target naming nothing at all describes every element, which is
+    // "ambiguous", not "missing" — and scoring it would say missing, since an
+    // unconstrained pattern scores below the confidence threshold everywhere.
+    if (!target.testId && !target.role && !target.name) return pool.length;
     return pool.filter((el) => scoreTargetMatch(target, elementCandidate(el)) >= MATCH_THRESHOLD).length;
   }
 

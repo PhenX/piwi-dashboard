@@ -398,7 +398,17 @@ async function renderReviewPanel(events: RawCaptureEvent[]): Promise<void> {
   closeBtn.className = 'close';
   closeBtn.setAttribute('aria-label', 'Close');
   closeBtn.textContent = '×';
-  closeBtn.addEventListener('click', () => host.remove());
+  // Every close path goes through one function, so the document-level Escape
+  // listener below is always detached with the panel. Registering it and only
+  // removing it on Escape itself meant closing any other way (the ×, the
+  // backdrop, Discard) left it attached to the page for good, and each reopen
+  // stacked another.
+  const closeController = new AbortController();
+  const closePanel = (): void => {
+    closeController.abort();
+    host.remove();
+  };
+  closeBtn.addEventListener('click', closePanel);
   header.append(titleWrap, closeBtn);
   panel.appendChild(header);
 
@@ -456,25 +466,21 @@ async function renderReviewPanel(events: RawCaptureEvent[]): Promise<void> {
   discardBtn.type = 'button';
   discardBtn.className = 'action danger';
   discardBtn.textContent = 'Discard';
-  discardBtn.addEventListener('click', async () => {
-    await discardRecording();
-    host.remove();
+  discardBtn.addEventListener('click', () => {
+    void discardRecording().then(closePanel, closePanel);
   });
   actions.appendChild(discardBtn);
   panel.appendChild(actions);
 
   backdrop.addEventListener('click', (e) => {
-    if (e.target === backdrop) host.remove();
+    if (e.target === backdrop) closePanel();
   });
   document.addEventListener(
     'keydown',
-    function onKeyDown(e) {
-      if (e.key === 'Escape') {
-        document.removeEventListener('keydown', onKeyDown, true);
-        host.remove();
-      }
+    (e) => {
+      if (e.key === 'Escape') closePanel();
     },
-    true,
+    { capture: true, signal: closeController.signal },
   );
 
   backdrop.appendChild(panel);
