@@ -171,17 +171,41 @@ Add to your Claude Desktop config file:
 {
   "mcpServers": {
     "piwi": {
-      "type": "http",
-      "url": "<your-piwi-url>/mcp",
-      "headers": {
-        "Authorization": "Bearer pd_YOUR_API_KEY"
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "<your-piwi-url>/mcp",
+        "--transport",
+        "http-only",
+        "--header",
+        "Authorization:${PIWI_AUTH}"
+      ],
+      "env": {
+        "PIWI_AUTH": "Bearer pd_YOUR_API_KEY"
       }
     }
   }
 }
 ```
 
-Requires Claude Desktop with remote MCP support (early 2025 release). Restart the app after saving.
+Restart Claude Desktop after saving.
+
+::: warning `claude_desktop_config.json` only takes local commands
+Claude Desktop starts each server in that file as a **command**; an entry
+carrying a `url` is refused on startup with *"the following entries in
+claude_desktop_config.json are not valid MCP server configurations and were
+ignored"*. [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) is a small
+Node bridge that gives the HTTP endpoint the shape it wants — hence `npx` above,
+which needs Node on your PATH. The header is passed through `env` because Claude
+Desktop mishandles arguments containing spaces. On plans that offer them,
+**Settings → Connectors → Add custom connector** takes the `/mcp` URL directly
+and skips the bridge.
+
+In the [desktop app](/desktop#connecting-ai-assistants) none of this applies:
+one click points Claude Desktop at the app's own built-in bridge, with no Node
+and no token in the file.
+:::
 
 ### Gemini CLI
 

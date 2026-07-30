@@ -97,14 +97,27 @@ const vscodeSnippet = computed(() =>
   ),
 );
 
+// Claude Desktop loads only *stdio* servers from claude_desktop_config.json: an
+// entry with a `url` is refused at startup ("… are not valid MCP server
+// configurations and were ignored"), so the endpoint goes behind the `mcp-remote`
+// bridge. The header travels in `env` because Claude Desktop mangles arguments
+// containing spaces.
 const claudeDesktopSnippet = computed(() =>
   JSON.stringify(
     {
       mcpServers: {
         piwi: {
-          type: 'http',
-          url: mcpUrl.value,
-          headers: { Authorization: `Bearer ${bearerToken.value}` },
+          command: 'npx',
+          args: [
+            '-y',
+            'mcp-remote',
+            mcpUrl.value,
+            '--transport',
+            'http-only',
+            '--header',
+            'Authorization:${PIWI_AUTH}',
+          ],
+          env: { PIWI_AUTH: `Bearer ${bearerToken.value}` },
         },
       },
     },
@@ -278,7 +291,14 @@ const windsurfSnippet = computed(() =>
                 </ul>
                 <CodeBlock :code="claudeDesktopSnippet" lang="json" />
                 <p class="text-xs text-gray-400">
-                  Requires Claude Desktop with remote MCP support (released early 2025). Restart the app after saving.
+                  That file only accepts servers started as a local command — pasting a
+                  <code class="font-mono">url</code> entry there makes Claude Desktop report it as invalid and ignore
+                  it. <code class="font-mono">mcp-remote</code> (needs Node) bridges the HTTP endpoint to that shape.
+                  Restart Claude Desktop after saving.
+                  <template v-if="reporterConfig"
+                    >On this machine, <strong>Connect</strong> above does it without Node — it points Claude Desktop at
+                    this app's own bridge.</template
+                  >
                 </p>
               </div>
             </template>

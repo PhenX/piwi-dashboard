@@ -167,6 +167,15 @@ Gemini CLI — and connects each with one click:
 - Written entries embed this app's address, which can change when port 3000 is
   taken — on every launch the app checks the clients it configured and
   rewrites any entry that drifted.
+- **Claude Desktop** is wired differently, because its config file accepts only
+  servers started as a local command — a URL entry there is reported as invalid
+  and ignored. It is pointed at this app's own built-in bridge instead
+  (`piwi-desktop mcp-stdio`), which speaks MCP over stdin/stdout and forwards to
+  the local endpoint. Nothing to install, no Node, and no token written into
+  Claude's config: the bridge looks the address up when it runs, so that entry
+  never drifts. The app has to be **running** for Claude Desktop to reach it —
+  keep *Run in background* (or *Start on login*) on if you want it always
+  available.
 
 Restart the client after connecting; most MCP clients read their config at
 startup.
