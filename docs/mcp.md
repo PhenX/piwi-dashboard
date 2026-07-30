@@ -179,10 +179,10 @@ Add to your Claude Desktop config file:
         "--transport",
         "http-only",
         "--header",
-        "Authorization:${PIWI_AUTH}"
+        "Authorization:${AUTH_HEADER}"
       ],
       "env": {
-        "PIWI_AUTH": "Bearer pd_YOUR_API_KEY"
+        "AUTH_HEADER": "Bearer pd_YOUR_API_KEY"
       }
     }
   }
