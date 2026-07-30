@@ -29,9 +29,11 @@ recording against a project's own function catalog. See "Connected mode" below.
   itself on every navigation for the lifetime of a recording — see `background/index.ts`.
 - `src/background/` — the service worker. Handles the `chrome.commands` keyboard shortcut
   (the toolbar icon opens the popup instead, which injects content scripts itself) and the
-  recorder's start/stop messages (`piwi-start-recording` / `piwi-recording-stopped`) — the
-  only two places `chrome.scripting.registerContentScripts`/`unregisterContentScripts` and
-  `chrome.action.*` are called from, since content scripts can't reach either API.
+  recorder's start/stop messages (`piwi-start-recording` / `piwi-recording-stopped`, plus the
+  `chrome.permissions.onAdded` fallback that starts a recording when the grant prompt closed
+  the popup — see below) — the only places `chrome.scripting.registerContentScripts`/
+  `unregisterContentScripts` and `chrome.action.*` are called from, since content scripts can't
+  reach either API.
 - `src/popup/` — the toolbar popup. Plain TypeScript + DOM, no UI framework — keep it that
   way unless the popup's own complexity genuinely outgrows it. Has a config (gear) button
   (`chrome.runtime.openOptionsPage()`) and, once connected, an **Active project** select that
@@ -140,11 +142,20 @@ instead of needing a live browser for everything.
 - **The recorder's host permission is requested per-origin, per-recording, from the popup's
   own click handler — never pre-granted, never `<all_urls>`.** `chrome.permissions.request`
   only counts as satisfying a user gesture when called synchronously inside one, so this can't
-  move into `background/index.ts` (see `src/popup/main.ts`'s `startRecordingFlow`). Recording
-  covers the one origin granted at start; navigating to a different origin mid-recording is a
-  known, documented limit (see `docs/extension.md`), not a silent gap — a future phase could
-  detect it and prompt to expand, but that also needs a fresh user gesture, which the HUD (a
-  content script, no `chrome.permissions` access) can't provide on its own either.
+  move into `background/index.ts` (see `src/popup/main.ts`'s `startRecordingFlow`). But the
+  prompt that request shows *takes focus and closes the popup on a first-time grant*, killing
+  the code that would have messaged the worker to start — which is why a first recording used
+  to need a second click. So the popup parks a `RecordIntent` (origin + tab, in session
+  storage) inside that same click, and the worker's `chrome.permissions.onAdded` picks it back
+  up when the grant lands and starts the recording itself. Both starts (the popup's own message
+  when it *does* survive, and the `onAdded` fallback) funnel through `startRecordingOnce`, which
+  dedupes; `decideRecordIntent` (pure, unit-tested) is what keeps the fallback from firing on an
+  unrelated grant — the options page granting the instance origin fires the same event — or on a
+  stale intent. Recording covers the one origin granted at start; navigating to a different
+  origin mid-recording is a known, documented limit (see `docs/extension.md`), not a silent gap
+  — a future phase could detect it and prompt to expand, but that also needs a fresh user
+  gesture, which the HUD (a content script, no `chrome.permissions` access) can't provide on its
+  own either.
 - Reuse `@piwitests/picker-dom`'s exports (`installPickerOverlay`, `showAnchorPicker`,
   probe, role-resolution, syntax highlighting) rather than re-deriving picker logic here —
   that package exists so this workspace doesn't become a third hand-synced copy.

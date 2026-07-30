@@ -5,6 +5,12 @@ import {
   stopRecording,
   discardRecording,
   appendRecordingEvent,
+  setRecordIntent,
+  getRecordIntent,
+  clearRecordIntent,
+  decideRecordIntent,
+  RECORD_INTENT_TTL_MS,
+  type RecordIntent,
 } from '../../src/shared/recording-storage.js';
 import type { RawCaptureEvent } from '@piwitests/core/recording';
 
@@ -131,5 +137,66 @@ describe('recording state', () => {
     const state = await getRecordingState();
     expect(state.active).toBe(false);
     expect(state.events).toEqual([]);
+  });
+});
+
+describe('record intent', () => {
+  it('round-trips the origin pattern and tab, stamping a creation time', async () => {
+    const before = Date.now();
+    await setRecordIntent({ originPattern: 'https://x.test/*', tabId: 7 });
+    const intent = await getRecordIntent();
+    expect(intent).not.toBeNull();
+    expect(intent!.originPattern).toBe('https://x.test/*');
+    expect(intent!.tabId).toBe(7);
+    expect(intent!.createdAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it('reads back null when nothing is parked', async () => {
+    expect(await getRecordIntent()).toBeNull();
+  });
+
+  it('reads back null for a malformed intent rather than a half-populated one', async () => {
+    (globalThis as any).chrome.storage.session.set({ piwiRecordIntent: { originPattern: 'https://x.test/*' } });
+    expect(await getRecordIntent()).toBeNull();
+  });
+
+  it('clearRecordIntent removes it', async () => {
+    await setRecordIntent({ originPattern: 'https://x.test/*', tabId: 7 });
+    await clearRecordIntent();
+    expect(await getRecordIntent()).toBeNull();
+  });
+});
+
+describe('decideRecordIntent', () => {
+  const intent: RecordIntent = { originPattern: 'https://x.test/*', tabId: 7, createdAt: 1_000 };
+
+  it('ignores a grant when nothing is parked', () => {
+    expect(decideRecordIntent(null, ['https://x.test/*'], 1_000)).toEqual({ action: 'ignore' });
+  });
+
+  it('ignores a grant for some other origin — the options page granting the instance origin fires the same event', () => {
+    expect(decideRecordIntent(intent, ['https://piwi.test/*'], 1_000)).toEqual({ action: 'ignore' });
+  });
+
+  it('starts the recording when a fresh intent matches the granted origin', () => {
+    expect(decideRecordIntent(intent, ['https://x.test/*'], 1_500)).toEqual({
+      action: 'start',
+      originPattern: 'https://x.test/*',
+      tabId: 7,
+    });
+  });
+
+  it('starts when the granted set includes the origin among others', () => {
+    expect(decideRecordIntent(intent, ['https://other.test/*', 'https://x.test/*'], 1_500).action).toBe('start');
+  });
+
+  it('clears a stale intent instead of reviving a recording on a much later grant', () => {
+    expect(decideRecordIntent(intent, ['https://x.test/*'], 1_000 + RECORD_INTENT_TTL_MS + 1)).toEqual({
+      action: 'clear',
+    });
+  });
+
+  it('still starts right at the TTL boundary', () => {
+    expect(decideRecordIntent(intent, ['https://x.test/*'], 1_000 + RECORD_INTENT_TTL_MS).action).toBe('start');
   });
 });
