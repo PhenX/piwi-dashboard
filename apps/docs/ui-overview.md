@@ -176,7 +176,7 @@ The exported HTML carries a restrictive `Content-Security-Policy` and escapes ev
 | Storage | `/settings/storage` | Storage stats and cleanup (bulk-delete runs older than N days) — see [Storage](./storage#storage-management) |
 | Tags | `/settings/tags` | Create, color, edit, and delete the tags used to organize projects |
 | Pull requests | `/settings/pr-feedback` | What Piwi posts back to a pull request when a run finishes — see [Pull-request feedback](./ci#pull-request-feedback) |
-| Wasted time | `/settings/wasted-time` | Patterns that classify which Playwright waits count as "wasted time" on the timeline — see [Configuration](./configuration#wasted-time) |
+| Performance | `/settings/performance` | Wasted-time patterns (which Playwright waits count as "wasted time") and timeout-hygiene thresholds (oversized per-test timeouts, stale `test.slow()` marks) — see [Configuration](./configuration#wasted-time) |
 | AI | `/settings/ai` | Provider/model roles, auto-diagnose, global instructions, and context limits — see [AI diagnosis](./ai-diagnosis#enabling-ai-diagnosis) |
 | Notifications | `/settings/notifications` | Channels, subscriptions, and SMTP — see [Notifications & alerts](./notifications) |
 

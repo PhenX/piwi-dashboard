@@ -1,24 +1,12 @@
 <script setup lang="ts">
-import type { NavigationMenuItem } from '@nuxt/ui';
-
 useHead({ title: 'Settings — Piwi Dashboard' });
 
 const { envManaged } = useSettingsEnvState();
-const navItems = useSettingsNav(envManaged);
 
-// `navItems` already arrives grouped (Instance / Analysis / meta); the docs link
-// is appended as its own trailing section.
-const links = computed<NavigationMenuItem[][]>(() => [
-  ...navItems.value,
-  [
-    {
-      label: 'Documentation',
-      icon: 'i-lucide-book-open',
-      to: 'https://piwitests.github.io',
-      target: '_blank',
-    },
-  ],
-]);
+// Already grouped (Instance / Analysis / meta) and rendered as the tab bar.
+// Documentation is not a settings page — it lives in Settings → About →
+// Resources and behind every inline-help "Learn more" link.
+const navItems = useSettingsNav(envManaged);
 </script>
 
 <template>
@@ -34,7 +22,7 @@ const links = computed<NavigationMenuItem[][]>(() => [
       <UDashboardToolbar>
         <!-- NOTE: The `-mx-1` class is used to align with the `DashboardSidebarCollapse` button here. -->
         <UNavigationMenu
-          :items="links"
+          :items="navItems"
           highlight
           class="-mx-1 flex-1"
           :ui="{ list: 'overflow-x-auto', root: 'min-w-0' }"

@@ -17,9 +17,10 @@ interface WastedSettings {
  *
  * Reuses the existing `GET /api/settings/*` endpoints — no new server API. The
  * AI page is env-managed when its provider is env-pinned (`AiSettings.envManaged`);
- * SMTP is always env-only (read-only display); wasted-time when its patterns
- * come from env. Pages with no env-overridable fields (account, users, tags) are
- * never env-managed. Storage backend is env-only by design but no endpoint
+ * SMTP is always env-only (read-only display); the Performance page when its
+ * wasted-wait patterns come from env. Pages with no env-overridable fields
+ * (account, users, tags) are never env-managed. Storage backend is env-only by
+ * design but no endpoint
  * reports it today, so it is treated as "overridable but not necessarily locked"
  * (the page shows the env-var reference card regardless).
  *
@@ -33,8 +34,7 @@ export function useSettingsEnvState() {
     notifications: false,
     tags: false,
     storage: false,
-    'wasted-time': false,
-    'timeout-hygiene': false,
+    performance: false,
     'pr-feedback': false,
     ai: false,
     about: false,
@@ -55,7 +55,9 @@ export function useSettingsEnvState() {
     tasks.push(
       $fetch<WastedSettings>('/api/settings/wasted-waits')
         .then((s) => {
-          envManaged.value['wasted-time'] = Boolean(s.envManaged);
+          // Performance groups wasted-time + timeout-hygiene; wasted-wait patterns
+          // are the only env-pinnable field, so they drive the page's lock badge.
+          envManaged.value.performance = Boolean(s.envManaged);
         })
         .catch(() => {}),
     );

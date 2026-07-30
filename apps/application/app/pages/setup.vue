@@ -66,7 +66,15 @@ const activeCount = computed(() => rows.value.filter((r) => r.active).length);
              generic reporter steps, since the token/URL are specific to it. -->
         <template v-if="isDesktop">
           <DesktopReporterCard v-if="reporterConfig" :url="reporterConfig.url" :token="reporterConfig.token" />
-          <DesktopMcpCard v-if="reporterConfig" :url="reporterConfig.url" :token="reporterConfig.token" />
+          <SectionCard icon="i-lucide-plug" title="Connect an AI assistant (MCP)">
+            <template #subtitle>
+              This app exposes a local MCP endpoint so agents like Claude can query your test results. The MCP server
+              page has the URL and access token for this instance already baked into one-click setup for every client.
+            </template>
+            <UButton to="/mcp" color="neutral" variant="soft" trailing-icon="i-lucide-arrow-right">
+              Open MCP setup
+            </UButton>
+          </SectionCard>
           <DataLocationCard v-if="stats" :database="stats.databaseLocation" :storage="stats.storageLocation" />
           <DesktopServiceCard />
         </template>

@@ -21,7 +21,7 @@ watchEffect(() => {
 });
 
 const envManaged = computed(() => settings.value?.envManaged ?? false);
-const envVars = pageEnvVars(getSettingsPage('wasted-time'));
+const envVars = pageEnvVars(getSettingsPage('performance'));
 
 function parseText(value: string): string[] {
   return value
