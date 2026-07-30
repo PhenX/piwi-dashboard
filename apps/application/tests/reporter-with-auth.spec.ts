@@ -323,7 +323,7 @@ test.describe.serial('Reporter with authentication enabled', () => {
   // ---------------------------------------------------------------------------
 
   test('PiwiDashboardReporter submits results with username/password options', async ({ request }) => {
-    const reporterPath = resolve(process.cwd(), '..', 'reporter', 'dist', 'index.js');
+    const reporterPath = resolve(process.cwd(), '..', '..', 'packages', 'reporter', 'dist', 'index.js');
     const testFilePath = join(resolve(process.cwd()), 'tests', 'home.spec.ts');
 
     const { exitCode, stderr } = await runReporterScript(`
@@ -372,7 +372,7 @@ test.describe.serial('Reporter with authentication enabled', () => {
   });
 
   test('PiwiDashboardReporter fails when auth is required but no credentials given', async () => {
-    const reporterPath = resolve(process.cwd(), '..', 'reporter', 'dist', 'index.js');
+    const reporterPath = resolve(process.cwd(), '..', '..', 'packages', 'reporter', 'dist', 'index.js');
 
     const { exitCode } = await runReporterScript(`
       const _mod = require(${JSON.stringify(reporterPath)}); const PiwiDashboardReporter = _mod.default ?? _mod;
@@ -564,7 +564,7 @@ test.describe.serial('Reporter with authentication enabled', () => {
   test('PiwiDashboardReporter submits results with apiKey option', async ({ request }) => {
     expect(reporterApiKey).not.toBeNull();
 
-    const reporterPath = resolve(process.cwd(), '..', 'reporter', 'dist', 'index.js');
+    const reporterPath = resolve(process.cwd(), '..', '..', 'packages', 'reporter', 'dist', 'index.js');
     const testFilePath = join(resolve(process.cwd()), 'tests', 'api-key.spec.ts');
 
     const { exitCode, stderr } = await runReporterScript(`

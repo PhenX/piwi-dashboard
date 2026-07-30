@@ -401,7 +401,7 @@ test.describe.serial('Reporter live upload end-to-end', () => {
     writeFileSync(tracePath, `live e2e trace data ${Date.now()}`);
     writeFileSync(screenshotPath, 'PNG live e2e screenshot bytes');
 
-    const reporterPath = resolve(process.cwd(), '..', 'reporter', 'dist', 'index.js');
+    const reporterPath = resolve(process.cwd(), '..', '..', 'packages', 'reporter', 'dist', 'index.js');
     const testFilePath = join(process.cwd(), 'tests', 'live-e2e.spec.ts');
 
     const { exitCode, stdout, stderr } = await runReporterScript(`
