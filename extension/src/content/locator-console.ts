@@ -51,14 +51,26 @@ function toggleLocatorConsole(): void {
     .verdict.ok { color: #4ade80; }
     .verdict.warn { color: #fbbf24; }
     .verdict.err { color: #f87171; }
+    @media (prefers-color-scheme: light) {
+      .verdict.ok { color: #15803d; }
+      .verdict.warn { color: #b45309; }
+      .verdict.err { color: #b91c1c; }
+    }
     .close {
       background: none; border: none; color: inherit; opacity: .7; cursor: pointer; font-size: 16px;
       line-height: 1; padding: 2px 6px; border-radius: 6px; flex-shrink: 0;
     }
     .close:hover, .close:focus-visible { opacity: 1; background: rgba(128,128,128,.2); }
     .box {
-      position: fixed; pointer-events: none; box-sizing: border-box; border: 2px solid #7c3aed;
-      background: rgba(124,58,237,.10); border-radius: 3px;
+      position: fixed; pointer-events: none; box-sizing: border-box; border-radius: 4px;
+      border: 2px solid #a855f7; background: rgba(168,85,247,.14);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.9), 0 0 0 3px rgba(59,7,100,.55), inset 0 0 0 1px rgba(255,255,255,.5);
+    }
+    .box.ok { border-color: #22c55e; background: rgba(34,197,94,.14); box-shadow: 0 0 0 1px rgba(255,255,255,.9), 0 0 0 3px rgba(5,46,22,.5), inset 0 0 0 1px rgba(255,255,255,.5); }
+    .box.warn { border-color: #f59e0b; background: rgba(245,158,11,.16); box-shadow: 0 0 0 1px rgba(255,255,255,.9), 0 0 0 3px rgba(69,26,3,.5), inset 0 0 0 1px rgba(255,255,255,.5); }
+    .box .n {
+      position: absolute; top: -9px; left: -2px; padding: 0 5px; border-radius: 999px;
+      background: #f59e0b; color: #1c1917; font: 700 10.5px/16px ui-sans-serif, system-ui, sans-serif;
     }
   `;
   root.appendChild(style);
@@ -87,16 +99,26 @@ function toggleLocatorConsole(): void {
   };
 
   let lastElements: Element[] = [];
+  // Green for the one match that passes strict mode, amber (and numbered) for
+  // each of several — the outline itself carries the verdict, so a locator that
+  // matches too much reads as wrong without looking away from the page.
   const drawBoxes = () => {
     clearBoxes();
-    for (const el of lastElements.slice(0, MAX_HIGHLIGHTS)) {
+    const ambiguous = lastElements.length > 1;
+    for (const [i, el] of lastElements.slice(0, MAX_HIGHLIGHTS).entries()) {
       const r = el.getBoundingClientRect();
       const box = document.createElement('div');
-      box.className = 'box';
+      box.className = `box ${ambiguous ? 'warn' : 'ok'}`;
       box.style.left = `${r.left}px`;
       box.style.top = `${r.top}px`;
       box.style.width = `${r.width}px`;
       box.style.height = `${r.height}px`;
+      if (ambiguous) {
+        const n = document.createElement('span');
+        n.className = 'n';
+        n.textContent = String(i + 1);
+        box.appendChild(n);
+      }
       root.appendChild(box);
       boxes.push(box);
     }

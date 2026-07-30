@@ -52,6 +52,26 @@ test.describe('installPickerOverlay — global transport (live page)', () => {
     await expect(page.locator('#__piwi_picker_banner')).toHaveCount(0);
   });
 
+  test('shows the hovered element locator on the element and in the banner', async ({ page }) => {
+    await page.setContent(FIXTURE);
+    await install(page, { transport: 'global', failing: null });
+    await page.hover('#submit');
+    await expect(page.locator('#__piwi_picker_label')).toBeVisible();
+    await expect(page.locator('#__piwi_picker_label')).toContainText("getByTestId('submit-btn')");
+    await expect(page.locator('#__piwi_picker_label')).toContainText('<button>');
+    await expect(page.locator('#__piwi_picker_locator')).toContainText("getByTestId('submit-btn')");
+  });
+
+  test('a host describe hook supplies the locator the overlay shows', async ({ page }) => {
+    await page.setContent(FIXTURE);
+    await page.evaluate(() => {
+      (globalThis as any).__piwiDescribeElement = (el: Element) => `getByRole('button', { name: '${el.id}' })`;
+    });
+    await install(page, { transport: 'global', failing: null });
+    await page.hover('#submit');
+    await expect(page.locator('#__piwi_picker_locator')).toContainText("getByRole('button', { name: 'submit' })");
+  });
+
   test('ArrowUp walks to the parent before the click commits', async ({ page }) => {
     await page.setContent(FIXTURE);
     await install(page, { transport: 'global', failing: null });
@@ -114,12 +134,12 @@ test.describe('installPickerOverlay — postMessage transport (snapshot picker)'
       probeArg: { keep: ['id'], includeStructural: false, includeLabelText: false },
     });
     await page.hover('#inner');
-    await expect(page.locator('#__piwi_picker_foot')).toContainText("locator('#inner')");
+    await expect(page.locator('#__piwi_picker_locator')).toContainText("locator('#inner')");
     // The iframe rarely holds focus in the real snapshot picker, so its host
     // forwards arrow keys via postMessage instead of a real keydown — confirm
     // the walk actually moves before asserting on the eventual pick.
     await page.evaluate(() => window.postMessage({ type: 'piwiPickerKey', key: 'ArrowUp' }, '*'));
-    await expect(page.locator('#__piwi_picker_foot')).toContainText("locator('#wrap')");
+    await expect(page.locator('#__piwi_picker_locator')).toContainText("locator('#wrap')");
     await page.click('#inner', { force: true });
     const picked = await messagesOfType(page, 'elementPicked');
     expect(picked[picked.length - 1]!.attrs.attributes.id).toBe('wrap');

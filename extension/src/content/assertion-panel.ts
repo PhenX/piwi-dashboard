@@ -3,6 +3,7 @@ import {
   installPickerOverlay,
   removePickerOverlay,
   highlightLocator,
+  LOCATOR_SYNTAX_CSS,
   type PickerOverlayArg,
 } from '@piwitests/picker-dom';
 import { suggestAssertions, type AssertionSuggestion } from './assertion-suggest.js';
@@ -62,6 +63,7 @@ async function renderAssertionPanel(suggestion: AssertionSuggestion): Promise<vo
 
   const style = document.createElement('style');
   style.textContent = `
+    ${LOCATOR_SYNTAX_CSS}
     :host { all: initial; }
     * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
     .backdrop {
@@ -87,14 +89,18 @@ async function renderAssertionPanel(suggestion: AssertionSuggestion): Promise<vo
     .empty { color: #9ca3af; font-size: 12.5px; }
     .row { border: 1px solid rgba(128,128,128,.3); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
     .row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-    .method { color: #a78bfa; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+    .method { color: #c4b5fd; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
     .detail { color: #9ca3af; font-size: 11.5px; margin-bottom: 6px; word-break: break-word; }
-    code { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; margin-bottom: 6px; }
+    .row code { display: block; font-size: 13px; line-height: 1.55; margin-bottom: 6px; }
     button.copy {
       background: rgba(128,128,128,.12); color: inherit; border: 1px solid rgba(128,128,128,.3);
       border-radius: 6px; padding: 4px 9px; font-size: 11.5px; cursor: pointer; flex-shrink: 0;
     }
     button.copy:hover, button.copy:focus-visible { background: rgba(128,128,128,.25); }
+    @media (prefers-color-scheme: light) {
+      .sub, .empty, .detail { color: #6b7280; }
+      .method { color: #6d28d9; }
+    }
   `;
   root.appendChild(style);
 
@@ -117,7 +123,9 @@ async function renderAssertionPanel(suggestion: AssertionSuggestion): Promise<vo
       : `${suggestion.candidates.length} suggested assertion${suggestion.candidates.length === 1 ? '' : 's'}`;
   const sub = document.createElement('div');
   sub.className = 'sub';
-  sub.innerHTML = suggestion.locator ? `against ${highlightLocator(suggestion.locator)}` : '';
+  sub.innerHTML = suggestion.locator
+    ? `against <span class="piwi-loc">${highlightLocator(suggestion.locator)}</span>`
+    : '';
   titleWrap.append(title, sub);
   const closeBtn = document.createElement('button');
   closeBtn.className = 'close';
@@ -179,7 +187,8 @@ async function renderAssertionPanel(suggestion: AssertionSuggestion): Promise<vo
       }
 
       const code = document.createElement('code');
-      code.textContent = candidate.expectLine;
+      code.className = 'piwi-loc';
+      code.innerHTML = highlightLocator(candidate.expectLine);
       row.appendChild(code);
 
       panel.appendChild(row);

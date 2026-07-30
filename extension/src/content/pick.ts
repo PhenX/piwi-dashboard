@@ -19,6 +19,7 @@ import {
   INPUT_TYPE_TO_ROLE,
 } from '@piwitests/core/locator-generation';
 import { renderResultsPanel } from './results-panel.js';
+import { installDescribeHook } from './top-locator.js';
 
 const ROLE_SOURCES = [...new Set(['[role]', 'input', 'select', ...Object.keys(TAG_TO_ROLE)])].join(',');
 
@@ -71,6 +72,7 @@ async function runPick(): Promise<void> {
   g.__piwiPicking = true;
   const toolEpoch = startTool('pick', teardownToolSurfaces);
   installEscapeToCancel();
+  const removeDescribeHook = installDescribeHook();
   try {
     clearPickGlobals();
     installPickerOverlay({ transport: 'global', failing: null });
@@ -121,6 +123,7 @@ async function runPick(): Promise<void> {
     // Belt and braces: covers the early returns above (no locators generated,
     // pick skipped) as well as anything thrown.
     removePickerOverlay();
+    removeDescribeHook();
     clearPickGlobals();
     g.__piwiPicking = false;
     endTool(toolEpoch);

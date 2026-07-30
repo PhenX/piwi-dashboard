@@ -31,6 +31,12 @@ export interface PickerOverlayArg {
  *    `globalThis.__piwiSnapshotExtras` (`onPick`/`onClose`) for its own
  *    snapshot-only chrome (search, highlight hints, extended inertness).
  *
+ * The hovered element's locator is shown twice — in a chip pinned to the
+ * element itself and on its own line in the banner. Both render whatever
+ * `globalThis.__piwiDescribeElement(el)` returns when a host installs one (the
+ * extension points it at the real ranked locator engine), falling back to this
+ * function's own attribute-order approximation.
+ *
  * Must stay fully self-contained (no module-closure references) — both hosts
  * re-serialize this function via `Function.prototype.toString()` (the
  * reporter through `page.evaluate`, the snapshot picker through `String()`
@@ -46,23 +52,27 @@ export function installPickerOverlay(arg: PickerOverlayArg): void {
   }
   const Z = 2147483600;
 
+  // A light hairline outside the purple ring and a dark one outside that, so the
+  // highlight keeps its edge over white, black and busy backgrounds alike.
   const highlight = doc.createElement('div');
   highlight.id = '__piwi_picker_highlight';
   highlight.style.cssText =
     `position:fixed;pointer-events:none;z-index:${Z};display:none;box-sizing:border-box;` +
-    'border:2px solid #7c3aed;background:rgba(124,58,237,.12);border-radius:3px;';
+    'border:2px solid #a855f7;background:rgba(168,85,247,.14);border-radius:4px;' +
+    'box-shadow:0 0 0 1px rgba(255,255,255,.9),0 0 0 3px rgba(59,7,100,.55),inset 0 0 0 1px rgba(255,255,255,.5);';
   const banner = doc.createElement('div');
   banner.id = '__piwi_picker_banner';
   banner.style.cssText =
     `position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:${Z + 2};` +
-    'background:#111827;color:#f9fafb;font:13px/1.5 system-ui,sans-serif;' +
-    'padding:10px 16px;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.4);max-width:80vw;';
+    'background:#111827;color:#f9fafb;font:13px/1.5 system-ui,sans-serif;border:1px solid #312e81;' +
+    'padding:10px 16px;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,.5);max-width:min(680px,86vw);';
   // Syntax-highlight a Playwright locator expression to inline-styled HTML —
   // method purple, option keys blue, strings green, literals amber, punctuation
-  // muted. Nested rather than imported, and kept in sync by hand with the copy
-  // in overlay-confirm.ts: both must stay self-contained, since each is
-  // serialized independently.
-  const hlLocator = (expr: string): string => {
+  // muted; the palette is read on the dark chips this overlay mounts. Nested
+  // rather than imported, and kept in sync by hand with `syntax-highlight.ts`
+  // and the copy in overlay-confirm.ts: each must stay self-contained, since
+  // each is serialized independently.
+  const hlTokens = (expr: string): string => {
     const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const re =
       /('(?:\\.|[^'])*'|"(?:\\.|[^"])*")|([A-Za-z_$][\w$]*)(?=\s*\()|([A-Za-z_$][\w$]*)(?=\s*:)|(true|false|null|\d+)|([{}(),.])/g;
@@ -71,13 +81,15 @@ export function installPickerOverlay(arg: PickerOverlayArg): void {
     let m: RegExpExecArray | null;
     while ((m = re.exec(expr)) !== null) {
       if (m.index > last) html += escHtml(expr.slice(last, m.index));
-      const color = m[1] ? '#4ade80' : m[2] ? '#c084fc' : m[3] ? '#93c5fd' : m[4] ? '#fbbf24' : '#9ca3af';
+      const color = m[1] ? '#86efac' : m[2] ? '#d8b4fe' : m[3] ? '#93c5fd' : m[4] ? '#fcd34d' : '#9ca3af';
       html += `<span style="color:${color}">${escHtml(m[0])}</span>`;
       last = re.lastIndex;
     }
     if (last < expr.length) html += escHtml(expr.slice(last));
-    return `<code style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace">${html}</code>`;
+    return html;
   };
+  const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+  const hlLocator = (expr: string): string => `<code style="font-family:${MONO}">${hlTokens(expr)}</code>`;
   const head = doc.createElement('div');
   head.innerHTML =
     arg.transport === 'postMessage'
@@ -85,13 +97,32 @@ export function installPickerOverlay(arg: PickerOverlayArg): void {
       : arg.failing
         ? `Piwi locator picker — click the element that should replace ${hlLocator(arg.failing)}`
         : 'Piwi inspector — click any element to generate locators for it';
+  // The hovered element's locator, given a line of its own at reading size
+  // rather than tucked into the hint text.
+  const locatorLine = doc.createElement('div');
+  locatorLine.id = '__piwi_picker_locator';
+  locatorLine.style.cssText =
+    'display:none;margin-top:7px;padding:5px 9px;border-radius:7px;background:#0b1120;' +
+    `border:1px solid #4c1d95;font:13.5px/1.55 ${MONO};word-break:break-word;overflow-wrap:anywhere;`;
   const foot = doc.createElement('div');
   foot.id = '__piwi_picker_foot';
-  foot.style.cssText = 'color:#9ca3af;margin-top:3px;';
+  foot.style.cssText = 'color:#9ca3af;margin-top:6px;font-size:12px;';
   foot.textContent = '↑ parent · ↓ child · Esc skip';
   banner.appendChild(head);
+  banner.appendChild(locatorLine);
   banner.appendChild(foot);
+
+  // The same locator pinned to the element itself, so the eye never has to
+  // travel to the banner and back to know what a hover would produce.
+  const label = doc.createElement('div');
+  label.id = '__piwi_picker_label';
+  label.style.cssText =
+    `position:fixed;pointer-events:none;z-index:${Z + 1};display:none;box-sizing:border-box;` +
+    'max-width:min(620px,92vw);background:#0b1120;color:#f9fafb;border:1px solid #7c3aed;' +
+    `border-radius:7px;padding:4px 8px;font:12.5px/1.45 ${MONO};white-space:nowrap;` +
+    'overflow:hidden;text-overflow:ellipsis;box-shadow:0 4px 18px rgba(0,0,0,.5);';
   doc.body.appendChild(highlight);
+  doc.body.appendChild(label);
   doc.body.appendChild(banner);
 
   // Short descriptor of an element for the banner breadcrumb.
@@ -151,15 +182,50 @@ export function installPickerOverlay(arg: PickerOverlayArg): void {
     return 0;
   };
 
+  // The host's locator engine when one is installed, else the approximation
+  // above. Called once per element the hover settles on, not once per mouse
+  // move — a real engine ranks every candidate, which is not free.
+  const locatorOf = (el: any): string => {
+    const hook = g.__piwiDescribeElement;
+    if (typeof hook === 'function') {
+      try {
+        const derived = hook(el);
+        if (typeof derived === 'string' && derived) return derived;
+      } catch {
+        // Fall through to the built-in descriptor.
+      }
+    }
+    return describe(el);
+  };
+
   let chain: any[] = [];
   let idx = 0;
   let lastRaw: any = null;
+  let labeled: any = null;
+
+  // Pin the chip above the element, flipping below when the top edge is too
+  // close to the viewport, and keep it inside the horizontal bounds.
+  const placeLabel = (r: any) => {
+    label.style.display = 'block';
+    const lr = label.getBoundingClientRect();
+    const vw = g.innerWidth || doc.documentElement.clientWidth || 0;
+    const vh = g.innerHeight || doc.documentElement.clientHeight || 0;
+    let top = r.top - lr.height - 6;
+    if (top < 4) top = r.bottom + 6;
+    if (top + lr.height > vh - 4) top = Math.max(4, vh - lr.height - 4);
+    let left = r.left;
+    if (left + lr.width > vw - 6) left = vw - lr.width - 6;
+    if (left < 6) left = 6;
+    label.style.left = left + 'px';
+    label.style.top = top + 'px';
+  };
 
   const current = (): any => chain[idx] ?? null;
   const refresh = () => {
     const el = current();
     if (!el) {
       highlight.style.display = 'none';
+      label.style.display = 'none';
       return;
     }
     const r = el.getBoundingClientRect();
@@ -168,7 +234,16 @@ export function installPickerOverlay(arg: PickerOverlayArg): void {
     highlight.style.top = r.top + 'px';
     highlight.style.width = r.width + 'px';
     highlight.style.height = r.height + 'px';
-    foot.textContent = `${describe(el)} — click to pick · ↑ parent · ↓ child · Esc skip`;
+    if (el !== labeled) {
+      labeled = el;
+      const tag = (el.tagName || '?').toLowerCase();
+      const locatorHtml = hlTokens(locatorOf(el));
+      label.innerHTML = `<span style="color:#c4b5fd">&lt;${tag}&gt;</span> ${locatorHtml}`;
+      locatorLine.innerHTML = locatorHtml;
+      locatorLine.style.display = 'block';
+    }
+    placeLabel(r);
+    foot.textContent = 'click to pick · ↑ parent · ↓ child · Esc skip';
   };
 
   const stop = (e: any) => {
@@ -176,7 +251,11 @@ export function installPickerOverlay(arg: PickerOverlayArg): void {
     e.stopImmediatePropagation();
   };
   const isOwn = (el: any) =>
-    el === banner || el === highlight || (banner.contains && banner.contains(el)) || !!(el && el.__piwiHint);
+    el === banner ||
+    el === highlight ||
+    el === label ||
+    (banner.contains && banner.contains(el)) ||
+    !!(el && el.__piwiHint);
   let bannerDocked: 'top' | 'bottom' = 'top';
   const dockBanner = (side: 'top' | 'bottom') => {
     if (bannerDocked === side) return;
@@ -193,6 +272,7 @@ export function installPickerOverlay(arg: PickerOverlayArg): void {
     const raw = e.target;
     if (!raw || isOwn(raw)) {
       highlight.style.display = 'none';
+      label.style.display = 'none';
       return;
     }
     if (raw !== lastRaw) {
@@ -231,6 +311,7 @@ export function installPickerOverlay(arg: PickerOverlayArg): void {
   };
   const cleanup = () => {
     highlight.remove();
+    label.remove();
     banner.remove();
   };
 
@@ -244,6 +325,7 @@ export function installPickerOverlay(arg: PickerOverlayArg): void {
   const reportPicked = (el: any) => {
     removePickingListeners();
     highlight.style.display = 'none';
+    label.style.display = 'none';
     if (arg.transport === 'postMessage') {
       const probeFn = g.__piwiProbe;
       const attrs = typeof probeFn === 'function' ? probeFn(el, arg.probeArg) : null;
@@ -344,7 +426,7 @@ export function removePickerOverlay(): void {
   }
   const doc = g.document;
   if (!doc) return;
-  for (const id of ['__piwi_picker_highlight', '__piwi_picker_banner']) {
+  for (const id of ['__piwi_picker_highlight', '__piwi_picker_label', '__piwi_picker_banner']) {
     doc.getElementById(id)?.remove();
   }
 }

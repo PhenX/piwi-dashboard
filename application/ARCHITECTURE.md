@@ -162,7 +162,8 @@ Shared building blocks worth knowing before writing new markup (`AGENTS.md` make
 - **States** — `EmptyState`, `LoadingState`, `ErrorState` (with an `action` slot).
 - **Data display** — `StatTile` + `StatTileGrid` (auto-fitting, no per-page breakpoints), `TableScroller`,
   `FilterToolbar`, `ChartCard`, `ChartLegend`, `ChartMarkerTooltip`, `MiniRunBars`, `DurationValue` (tight `210ms` via
-  the pure `splitDuration`), `CodeBlock`, `MarkdownPreview`, `DiffPatch` / `DiffFile`.
+  the pure `splitDuration`), `CodeBlock`, `MarkdownPreview`, `DiffPatch` / `DiffFile`, `LocatorCode` (a locator
+  expression syntax-highlighted through `@piwitests/picker-dom`'s `tokenizeLocator`).
 - **Navigation & actions** — `NavbarActions` (every `UDashboardNavbar` `#right` group; labels collapse to icons below
   `sm`), `BreadcrumbNav` (drop-in for `UBreadcrumb`, collapses ancestors below `sm`), `OpenInIdeLink` +
   `OpenInIdeSettingsModal`, `DocLink`, `LinkChip` / `EntityLinks`.

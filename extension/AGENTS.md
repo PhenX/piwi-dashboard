@@ -148,6 +148,14 @@ instead of needing a live browser for everything.
 - Reuse `@piwitests/picker-dom`'s exports (`installPickerOverlay`, `showAnchorPicker`,
   probe, role-resolution, syntax highlighting) rather than re-deriving picker logic here —
   that package exists so this workspace doesn't become a third hand-synced copy.
+- **A locator is always rendered through `highlightLocator`, inside a `.piwi-loc` element,
+  in a panel whose `<style>` includes `LOCATOR_SYNTAX_CSS`** — never as bare `textContent`.
+  The token colors live in that stylesheet (dark-first, with a light-scheme override) because
+  a panel that flips to a white background needs a different palette, which inline colors
+  can't express. A chip that stays dark in both schemes — anything floating over the page
+  rather than sitting in a panel — adds `piwi-loc-dark` to opt out of the light override.
+  Panel text carrying a verdict or accent color (`.verdict`, `.score`, `.unique`, `.warn`, …)
+  needs its own `@media (prefers-color-scheme: light)` entry for the same reason.
 - **`chrome.storage.session` needs `setAccessLevel` to be reachable from a content script.**
   It defaults to extension-page/service-worker-only access; `src/background/index.ts` widens
   it once at startup (`TRUSTED_AND_UNTRUSTED_CONTEXTS`) specifically so `session-panel.ts` and

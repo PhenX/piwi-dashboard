@@ -1,5 +1,5 @@
 import { startTool, endTool, installEscapeToCancel } from '../shared/tool-session.js';
-import { probeElementAttrs } from '@piwitests/picker-dom';
+import { probeElementAttrs, highlightLocator, LOCATOR_SYNTAX_CSS } from '@piwitests/picker-dom';
 import {
   generateAlternatives,
   approximateAccessibleName,
@@ -32,18 +32,27 @@ function toggleHoverInspect(): void {
   document.documentElement.appendChild(host);
   const root = host.attachShadow({ mode: 'closed' });
   const style = document.createElement('style');
+  // The box carries a light hairline outside its ring and a dark one outside
+  // that, so its edge survives white, black and busy backgrounds alike.
   style.textContent = `
-    .box { position: fixed; pointer-events: none; box-sizing: border-box; border: 2px solid #7c3aed; background: rgba(124,58,237,.10); border-radius: 3px; display: none; }
-    .tip {
-      position: fixed; pointer-events: none; background: #111827; color: #f9fafb; font: 12px/1.4 ui-monospace, monospace;
-      padding: 5px 9px; border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,.4); display: none; max-width: 60vw;
+    ${LOCATOR_SYNTAX_CSS}
+    .box {
+      position: fixed; pointer-events: none; box-sizing: border-box; display: none;
+      border: 2px solid #a855f7; background: rgba(168,85,247,.14); border-radius: 4px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.9), 0 0 0 3px rgba(59,7,100,.55), inset 0 0 0 1px rgba(255,255,255,.5);
     }
-    @media (prefers-color-scheme: light) { .tip { background: #ffffff; color: #111827; box-shadow: 0 4px 20px rgba(0,0,0,.2); } }
+    .tip {
+      position: fixed; pointer-events: none; background: #0b1120; color: #f9fafb; font-size: 12.5px; line-height: 1.5;
+      padding: 5px 9px; border-radius: 7px; border: 1px solid #7c3aed; box-shadow: 0 4px 18px rgba(0,0,0,.5);
+      display: none; max-width: 60vw;
+    }
   `;
   const box = document.createElement('div');
   box.className = 'box';
   const tip = document.createElement('div');
-  tip.className = 'tip';
+  // Dark in both color schemes: the chip floats over an unknown page, so it
+  // keeps its own high-contrast backing and the token palette to match.
+  tip.className = 'tip piwi-loc piwi-loc-dark';
   root.append(style, box, tip);
 
   let lastEl: Element | null = null;
@@ -63,20 +72,25 @@ function toggleHoverInspect(): void {
       tip.style.display = 'none';
       return;
     }
-    tip.textContent = ranked[0]!.locator;
+    const tag = target.tagName.toLowerCase();
+    tip.innerHTML = `<span style="color:#c4b5fd">&lt;${tag}&gt;</span> ${highlightLocator(ranked[0]!.locator)}`;
     tip.style.display = 'block';
     box.style.display = 'block';
     position(target, e);
   };
+  // Pin the tip above the element, flipping below when the top edge is too
+  // close to the viewport, and keep the whole chip inside the horizontal bounds.
   const position = (target: Element, e: MouseEvent) => {
     const r = target.getBoundingClientRect();
     box.style.left = `${r.left}px`;
     box.style.top = `${r.top}px`;
     box.style.width = `${r.width}px`;
     box.style.height = `${r.height}px`;
-    const tipTop = r.top > 32 ? r.top - 28 : r.bottom + 6;
-    tip.style.left = `${Math.min(e.clientX, window.innerWidth - 320)}px`;
-    tip.style.top = `${tipTop}px`;
+    const tipRect = tip.getBoundingClientRect();
+    const top = r.top - tipRect.height - 6 < 4 ? r.bottom + 6 : r.top - tipRect.height - 6;
+    const left = Math.max(6, Math.min(e.clientX, window.innerWidth - tipRect.width - 6));
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Escape') off();

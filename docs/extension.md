@@ -51,7 +51,9 @@ nothing. The popup footer reports the key actually bound, and offers a link to
 - **Pick an element** — click the toolbar icon → **Pick an element**, or press
   `Ctrl+Shift+E` (`Cmd+Shift+E` on macOS) on any page. Hover highlights, a click picks — the
   pick snaps to the nearest actionable ancestor (a click on the text inside a button picks the
-  button), and ↑/↓ walk the DOM tree before it commits. When the element has a role, an
+  button), and ↑/↓ walk the DOM tree before it commits. The locator the hovered element would
+  produce is shown as you move: syntax-highlighted in a chip pinned to the element, and again on
+  its own line in the picker banner, so ↑/↓ walking shows what each step in the tree is worth. When the element has a role, an
   **anchors** step follows: bless one or more stable parent elements to scope the locator to,
   with a live "matches N" count.
 - **Ranked locators, re-checked live** — every candidate is scored the way the dashboard scores
@@ -80,11 +82,12 @@ nothing. The popup footer reports the key actually bound, and offers a link to
   (`await expect(page.getByRole(…)).toBeVisible();`). Your last-used form is remembered for next
   time.
 - **Hover-inspect** — toggle from the popup: hover any element to see its best-ranked locator in
-  a tooltip, no click needed.
+  a syntax-highlighted tooltip, no click needed.
 - **Locator console** — type or paste a locator expression (a safe subset — `getBy*` chains,
   `locator(css)`, `filter({ hasText })`, `.first()`/`.last()`/`.nth()` — parsed, never
   `eval`'d) and see every match highlighted on the page live, with a strict-mode verdict and
-  count.
+  count. The outlines carry the verdict: green for the single match that passes strict mode,
+  amber and numbered for each of several.
 - **Multi-pick pattern derivation** — pick 2–3 similar items (table rows, cards) and derive the
   shared list pattern (e.g. `getByRole('row').filter({ hasText: … })`), with a warning when only
   index-based (`.nth()`) discrimination was possible.

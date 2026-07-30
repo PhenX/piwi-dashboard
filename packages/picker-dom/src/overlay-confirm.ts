@@ -27,9 +27,10 @@ export function showPickerChoices(arg: PickerChoicesArg): void {
   panel.style.cssText =
     'background:#111827;color:#f9fafb;border-radius:10px;padding:20px;' +
     'max-width:640px;width:90vw;max-height:70vh;overflow:auto;box-shadow:0 8px 40px rgba(0,0,0,.5);';
-  // Syntax-highlight a locator expression (self-contained — this whole function
-  // is serialized into the page). Kept in sync by hand with the copy in
-  // overlay-element.ts: both must stay self-contained, since each is
+  // Syntax-highlight a locator expression, in the palette read on this panel's
+  // dark background (self-contained — this whole function is serialized into
+  // the page). Kept in sync by hand with `syntax-highlight.ts` and the copy in
+  // overlay-element.ts: each must stay self-contained, since each is
   // serialized independently.
   const hlLocator = (expr: string): string => {
     const escHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -40,7 +41,7 @@ export function showPickerChoices(arg: PickerChoicesArg): void {
     let m: RegExpExecArray | null;
     while ((m = re.exec(expr)) !== null) {
       if (m.index > last) html += escHtml(expr.slice(last, m.index));
-      const color = m[1] ? '#4ade80' : m[2] ? '#c084fc' : m[3] ? '#93c5fd' : m[4] ? '#fbbf24' : '#9ca3af';
+      const color = m[1] ? '#86efac' : m[2] ? '#d8b4fe' : m[3] ? '#93c5fd' : m[4] ? '#fcd34d' : '#9ca3af';
       html += `<span style="color:${color}">${escHtml(m[0])}</span>`;
       last = re.lastIndex;
     }
@@ -76,14 +77,14 @@ export function showPickerChoices(arg: PickerChoicesArg): void {
     const btn = doc.createElement('button');
     btn.style.cssText =
       'display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;' +
-      'text-align:left;background:#1f2937;color:#e5e7eb;border:1px solid #374151;border-radius:6px;' +
-      'padding:8px 12px;margin:0 0 8px;cursor:pointer;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;';
+      'text-align:left;background:#0b1120;color:#f3f4f6;border:1px solid #374151;border-radius:6px;' +
+      'padding:8px 12px;margin:0 0 8px;cursor:pointer;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;';
     const code = doc.createElement('span');
     code.innerHTML = hlLocator(c.locator);
     code.style.cssText = 'word-break:break-all;';
     const score = doc.createElement('span');
     score.textContent = String(c.score);
-    score.style.cssText = 'color:#a78bfa;flex-shrink:0;';
+    score.style.cssText = 'color:#c4b5fd;flex-shrink:0;font-variant-numeric:tabular-nums;';
     btn.appendChild(code);
     btn.appendChild(score);
     btn.addEventListener('click', (e: any) => {
