@@ -60,7 +60,7 @@ export default eventHandler(async (event) => {
       const isOwnPersonal = c.type === 'personal_email' && c.userId === user.id;
       const config = isOwnPersonal
         ? { address: dbUser?.email ?? '' }
-        : sanitizeConfig(c.type, (c.config ?? {}) as Record<string, unknown>);
+        : sanitizeConfig((c.config ?? {}) as Record<string, unknown>);
       const verified = isOwnPersonal ? Boolean(dbUser?.emailVerified) : Boolean(c.verified);
 
       return {
@@ -77,7 +77,19 @@ export default eventHandler(async (event) => {
   };
 });
 
-function sanitizeConfig(type: string, config: Record<string, unknown>): Record<string, unknown> {
-  if (type === 'webhook') return { url: config.url }; // redact secret
-  return config;
+// Config fields that are themselves credentials and must never be returned by
+// the list endpoint: the webhook signing `secret`, and the Slack incoming-
+// webhook URL (`webhookUrl`) — anyone holding that URL can post to the channel.
+// Channels are created/deleted (no edit form re-reads these), and the list UI
+// only renders an email `address` or a webhook `url`, so dropping the secrets
+// doesn't affect the dashboard. Global channels are visible to every user, so
+// this stops a low-privilege user from reading another team's Slack URL.
+const SECRET_CONFIG_FIELDS = new Set(['webhookUrl', 'secret', 'token', 'apiKey', 'password']);
+
+function sanitizeConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(config)) {
+    if (!SECRET_CONFIG_FIELDS.has(key)) safe[key] = value;
+  }
+  return safe;
 }
