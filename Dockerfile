@@ -8,6 +8,7 @@ WORKDIR /app
 # Copy workspace manifest files first so npm ci is cached separately from source
 COPY package.json package-lock.json ./
 COPY packages/core/package.json ./packages/core/
+COPY packages/picker-dom/package.json ./packages/picker-dom/
 COPY application/package.json ./application/
 COPY reporter/package.json ./reporter/
 COPY integrations/nitro/package.json ./integrations/nitro/
@@ -21,10 +22,12 @@ RUN --mount=type=cache,target=/root/.npm \
 # Copy root tsconfig (extended by application/tsconfig.json)
 COPY tsconfig.json ./
 
-# Copy the shared core workspace package (@piwitests/core). The app imports it
-# via #shared/* shims; Vite transpiles it (nuxt.config transpile) and Nitro
-# inlines it into .output (noExternals), so its source must be present at build.
+# Copy the shared workspace packages (@piwitests/core, @piwitests/picker-dom).
+# Both ship TypeScript source: Vite transpiles them (nuxt.config transpile) and
+# Nitro inlines them into .output (noExternals), so their source must be present
+# at build time or Rollup fails to resolve the imports.
 COPY packages/core/ ./packages/core/
+COPY packages/picker-dom/ ./packages/picker-dom/
 
 # Copy application source
 COPY application/ ./application/
@@ -32,15 +35,24 @@ COPY application/ ./application/
 # Copy integrations (imported by server/plugins/piwi-test-logs.ts via relative path)
 COPY integrations/ ./integrations/
 
-# Build the application
+# Build the application. The glibc-flavoured native packages are pruned from the
+# bundled output: this image is Alpine (musl), so only the *-musl* builds are ever
+# loaded. TARGETARCH is set by buildx; map it to the arch string npm packages use.
 ARG PIWI_BUILD_SHA
+ARG TARGETARCH
 ENV NITRO_PRESET=node-server
 ENV PIWI_BUILD_SHA=${PIWI_BUILD_SHA}
-RUN npm run app:build --workspace=application && \
-    rm -rf application/.output/server/node_modules/@img/sharp-libvips-linux-x64 && \
-    rm -rf application/.output/server/node_modules/@img/sharp-linux-x64 && \
-    rm -rf application/.output/server/node_modules/@libsql/linux-x64-gnu && \
-    rm -rf application/.output/server/node_modules/sql.js && \
+RUN set -eux; \
+    npm run app:build --workspace=application; \
+    case "${TARGETARCH:-}" in \
+      amd64) NODE_ARCH=x64 ;; \
+      arm64) NODE_ARCH=arm64 ;; \
+      *) echo "unsupported TARGETARCH: '${TARGETARCH:-}'" >&2; exit 1 ;; \
+    esac; \
+    rm -rf "application/.output/server/node_modules/@img/sharp-libvips-linux-${NODE_ARCH}"; \
+    rm -rf "application/.output/server/node_modules/@img/sharp-linux-${NODE_ARCH}"; \
+    rm -rf "application/.output/server/node_modules/@libsql/linux-${NODE_ARCH}-gnu"; \
+    rm -rf application/.output/server/node_modules/sql.js; \
     rm -rf application/.output/public/demo
 
 # Stage 2: Production stage
@@ -64,8 +76,10 @@ RUN addgroup -g 1001 -S nodejs && \
     chown nodejs:nodejs /app
 
 # Copy workspace files for native module install (sharp, libsql, sql.js)
-# Pure-JS deps are inlined by Nitro noExternals — only native binaries needed here
-COPY package.json package-lock.json ./
+# Pure-JS deps are inlined by Nitro noExternals — only native binaries needed here.
+# --chown is required: `npm install` below runs as nodejs and rewrites package.json
+# to record the added deps, which fails with EACCES on a root-owned copy.
+COPY --chown=nodejs:nodejs package.json package-lock.json ./
 
 # Trim workspaces to just application
 RUN printf "import{readFileSync,writeFileSync}from'node:fs';const p=JSON.parse(readFileSync('package.json','utf8'));p.workspaces=['application'];writeFileSync('package.json',JSON.stringify(p));" > /tmp/fix.mjs && node /tmp/fix.mjs && rm /tmp/fix.mjs
@@ -77,15 +91,28 @@ USER nodejs
 
 ENV npm_config_cache=/home/nodejs/.npm
 
+# TARGETARCH is set by buildx per matrix leg; the libsql binding is arch-specific,
+# so it must not be hardcoded (@libsql/linux-x64-musl fails EBADPLATFORM on arm64).
+# `set -eux` matters here: the previous `;`-joined chain ended in `|| true`, which
+# masked a failing npm install and shipped an image with no native modules at all.
+ARG TARGETARCH
+
 RUN --mount=type=cache,target=/home/nodejs/.npm,uid=1001,gid=1001 \
+    set -eux; \
+    case "${TARGETARCH:-}" in \
+      amd64) NODE_ARCH=x64 ;; \
+      arm64) NODE_ARCH=arm64 ;; \
+      *) echo "unsupported TARGETARCH: '${TARGETARCH:-}'" >&2; exit 1 ;; \
+    esac; \
     npm install --omit=dev --ignore-scripts \
-    sharp @libsql/client @libsql/linux-x64-musl && \
-    npm cache clean --force && \
-    rm -rf node_modules/@img/sharp-libvips-linux-x64 && \
-    rm -rf node_modules/@img/sharp-linux-x64 && \
-    rm -rf node_modules/@libsql/linux-x64-gnu && \
-    rm -rf node_modules/sql.js 2>/dev/null; \
-    find node_modules -type d \( -name "test" -o -name "tests" -o -name ".devcontainer" \) -exec rm -rf {} + 2>/dev/null || true
+      sharp @libsql/client "@libsql/linux-${NODE_ARCH}-musl"; \
+    npm cache clean --force; \
+    rm -rf "node_modules/@img/sharp-libvips-linux-${NODE_ARCH}"; \
+    rm -rf "node_modules/@img/sharp-linux-${NODE_ARCH}"; \
+    rm -rf "node_modules/@libsql/linux-${NODE_ARCH}-gnu"; \
+    rm -rf node_modules/sql.js; \
+    find node_modules -type d \( -name "test" -o -name "tests" -o -name ".devcontainer" \) -exec rm -rf {} + 2>/dev/null || true; \
+    node -e "require.resolve('sharp'); require.resolve('@libsql/client')"
 
 # Copy built application — pure-JS deps inlined by Nitro noExternals
 COPY --chown=nodejs:nodejs --from=builder /app/application/.output ./application/.output
