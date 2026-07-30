@@ -1,12 +1,13 @@
 import type { H3Event } from 'h3';
 import { useSession, updateSession, clearSession as h3ClearSession } from 'h3';
 import { getDatabase } from '../database';
-import { users, apiKeys } from '../database/schema';
+import { users, apiKeys, appSettings } from '../database/schema';
 import { eq, sql } from 'drizzle-orm';
 import type { User } from '../database/schema';
 import { scrypt, randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { Role } from '#shared/types';
+import type { DrizzleDB } from '#shared/handlers/db';
 import { getRouteRequiredRoles } from './route-required-roles';
 
 const scryptAsync = promisify(scrypt);
@@ -180,6 +181,44 @@ export async function createUser(username: string, password: string, role: Role,
   }
 
   return user;
+}
+
+/** Sentinel key marking that initial setup has been performed. */
+const INITIAL_SETUP_KEY = 'initial_setup_completed';
+
+/**
+ * Atomically claim the one-time initial-setup slot, returning true for exactly
+ * one caller.
+ *
+ * `needsInitialSetup` (a SELECT) and `createUser` (a later INSERT) are separate
+ * statements, so two concurrent `POST /api/auth/setup` requests could both see
+ * an empty users table and each create an administrator. Claiming a sentinel row
+ * with `INSERT ... ON CONFLICT DO NOTHING` closes that window: SQLite and
+ * Postgres both resolve the primary-key conflict atomically, so only the first
+ * of any set of concurrent callers inserts the row (and goes on to create the
+ * admin) while the rest conflict and get false. Callers must still gate on
+ * `needsInitialSetup()` first, so an instance seeded by other means (OAuth, a
+ * fixture) is never re-opened merely because the sentinel is absent.
+ */
+export async function claimInitialSetup(db?: DrizzleDB): Promise<boolean> {
+  const database = db ?? (await getDatabase());
+  const inserted = await database
+    .insert(appSettings)
+    .values({ key: INITIAL_SETUP_KEY, value: true, updatedAt: new Date() })
+    .onConflictDoNothing({ target: appSettings.key })
+    .returning({ key: appSettings.key });
+  return inserted.length > 0;
+}
+
+/**
+ * Release a claim made by `claimInitialSetup` so setup can be retried. Only the
+ * claim winner calls this, and only when admin creation failed after the claim —
+ * the losing callers were already rejected, so there is no window for a second
+ * admin to slip through.
+ */
+export async function releaseInitialSetup(db?: DrizzleDB): Promise<void> {
+  const database = db ?? (await getDatabase());
+  await database.delete(appSettings).where(eq(appSettings.key, INITIAL_SETUP_KEY));
 }
 
 // Check if user has required role
