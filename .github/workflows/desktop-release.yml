@@ -129,7 +129,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          projectPath: desktop
+          projectPath: apps/desktop
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && '--config src-tauri/tauri.updater.conf.json' || '' }}
           # Attach to the release release-please already made for this tag. On a
           # manual dispatch (no tag) tagName is empty, so tauri-action just builds.
