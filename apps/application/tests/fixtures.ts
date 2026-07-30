@@ -30,29 +30,29 @@ import {
   EXPECT_CAPTURE_EXPRESSIONS,
   type LocatorSnapshot,
   type FailedLocatorInfo,
-} from '../../reporter/dist/internal/capture/locator-healing.js';
+} from '../../../packages/reporter/dist/internal/capture/locator-healing.js';
 import {
   ariaSnapshotBestEffort,
   buildPageState,
   computeCoreVitals,
   probeElementAttrs,
   CAPTURED_ATTRS_ARG,
-} from '../../reporter/dist/internal/capture/capture-fixtures.js';
+} from '../../../packages/reporter/dist/internal/capture/capture-fixtures.js';
 import {
   inspectionGateFromTestInfo,
   shouldInspectOnFailure,
-} from '../../reporter/dist/internal/capture/inspect-on-failure.js';
+} from '../../../packages/reporter/dist/internal/capture/inspect-on-failure.js';
 import {
   applyPickToSnapshots,
   deriveFailedLocator,
   runLocatorPicker,
   type UserPickResult,
-} from '../../reporter/dist/internal/capture/pick-on-failure.js';
+} from '../../../packages/reporter/dist/internal/capture/pick-on-failure.js';
 import {
   ATTACHMENT_NAMES,
   LOCATOR_SUGGESTION_ANNOTATION,
   USER_PICK_ANNOTATION,
-} from '../../reporter/dist/internal/capture/attachments.js';
+} from '../../../packages/reporter/dist/internal/capture/attachments.js';
 
 type NetworkRequest = {
   method: string;
