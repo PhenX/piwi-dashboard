@@ -372,9 +372,45 @@ fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
+/// Write `bytes` into `dir` under `name` without ever overwriting an existing
+/// file. Tries the plain name first, then inserts a ` (n)` counter before the
+/// extension — the disambiguation a browser applies — retrying on collision.
+/// `create_new` makes each attempt atomic (no check-then-write race), so the
+/// caller-controlled bytes of a download can never replace a file already on
+/// disk, e.g. clobber or trojan an installer/DLL the user already trusts.
+fn write_new_download(dir: &Path, name: &str, bytes: &[u8]) -> Result<PathBuf, String> {
+    use std::io::Write as _;
+    let as_path = Path::new(name);
+    let stem = as_path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "download".to_string());
+    let ext = as_path.extension().map(|e| e.to_string_lossy().to_string());
+    for n in 0..=1000 {
+        let candidate_name = if n == 0 {
+            name.to_string()
+        } else if let Some(ext) = &ext {
+            format!("{stem} ({n}).{ext}")
+        } else {
+            format!("{stem} ({n})")
+        };
+        let candidate = dir.join(&candidate_name);
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&candidate) {
+            Ok(mut file) => {
+                file.write_all(bytes).map_err(|e| e.to_string())?;
+                return Ok(candidate);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    Err("could not find an unused download filename".to_string())
+}
+
 /// Write a file the webview fetched to the user's Downloads folder and reveal it.
 /// Returns the saved path. The name is reduced to its base component so a caller
-/// can't traverse out of the Downloads directory.
+/// can't traverse out of the Downloads directory, and an existing file is never
+/// overwritten — a name collision is disambiguated with a ` (n)` suffix.
 ///
 /// `encoding` selects how `contents` is interpreted: omitted or `"utf8"` writes
 /// the string as-is, `"base64"` decodes it first so archives, PDFs and images
@@ -392,13 +428,12 @@ fn desktop_save_download(
         .map(|n| n.to_string_lossy().to_string())
         .filter(|n| !n.is_empty())
         .unwrap_or_else(|| "download".to_string());
-    let target = dir.join(&name);
 
     let bytes = match encoding.as_deref() {
         Some("base64") => decode_base64(&contents)?,
         _ => contents.into_bytes(),
     };
-    std::fs::write(&target, bytes).map_err(|e| e.to_string())?;
+    let target = write_new_download(&dir, &name, &bytes)?;
 
     let _ = app.opener().reveal_item_in_dir(&target);
     Ok(node_path(&target))
@@ -815,4 +850,47 @@ pub fn run() {
             }
             _ => {}
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_new_download;
+    use std::fs;
+
+    #[test]
+    fn does_not_overwrite_an_existing_download() {
+        let dir = std::env::temp_dir().join(format!("piwi-dl-a-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let p1 = write_new_download(&dir, "report.zip", b"one").unwrap();
+        assert_eq!(p1.file_name().unwrap(), "report.zip");
+        // A second download of the same name must not overwrite the first.
+        let p2 = write_new_download(&dir, "report.zip", b"two").unwrap();
+        assert_ne!(p1, p2);
+        assert_eq!(p2.file_name().unwrap(), "report (1).zip");
+        assert_eq!(fs::read(&p1).unwrap(), b"one"); // original bytes intact
+        assert_eq!(fs::read(&p2).unwrap(), b"two");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn disambiguates_extensionless_names() {
+        let dir = std::env::temp_dir().join(format!("piwi-dl-b-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let p1 = write_new_download(&dir, "LICENSE", b"a").unwrap();
+        let p2 = write_new_download(&dir, "LICENSE", b"b").unwrap();
+        assert_eq!(p1.file_name().unwrap(), "LICENSE");
+        assert_eq!(p2.file_name().unwrap(), "LICENSE (1)");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn increments_counter_on_repeated_collisions() {
+        let dir = std::env::temp_dir().join(format!("piwi-dl-c-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let _ = write_new_download(&dir, "a.txt", b"1").unwrap();
+        let _ = write_new_download(&dir, "a.txt", b"2").unwrap();
+        let p3 = write_new_download(&dir, "a.txt", b"3").unwrap();
+        assert_eq!(p3.file_name().unwrap(), "a (2).txt");
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
