@@ -9,8 +9,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY packages/core/package.json ./packages/core/
 COPY packages/picker-dom/package.json ./packages/picker-dom/
-COPY application/package.json ./application/
-COPY reporter/package.json ./reporter/
+COPY apps/application/package.json ./apps/application/
+COPY packages/reporter/package.json ./packages/reporter/
 COPY integrations/nitro/package.json ./integrations/nitro/
 
 # Install all dependencies; --ignore-scripts skips application's postinstall
@@ -19,7 +19,7 @@ COPY integrations/nitro/package.json ./integrations/nitro/
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --ignore-scripts
 
-# Copy root tsconfig (extended by application/tsconfig.json)
+# Copy root tsconfig (extended by apps/application/tsconfig.json)
 COPY tsconfig.json ./
 
 # Copy the shared workspace packages (@piwitests/core, @piwitests/picker-dom).
@@ -30,7 +30,7 @@ COPY packages/core/ ./packages/core/
 COPY packages/picker-dom/ ./packages/picker-dom/
 
 # Copy application source
-COPY application/ ./application/
+COPY apps/application/ ./apps/application/
 
 # Copy integrations (imported by server/plugins/piwi-test-logs.ts via relative path)
 COPY integrations/ ./integrations/
@@ -43,17 +43,17 @@ ARG TARGETARCH
 ENV NITRO_PRESET=node-server
 ENV PIWI_BUILD_SHA=${PIWI_BUILD_SHA}
 RUN set -eux; \
-    npm run app:build --workspace=application; \
+    npm run app:build --workspace=apps/application; \
     case "${TARGETARCH:-}" in \
       amd64) NODE_ARCH=x64 ;; \
       arm64) NODE_ARCH=arm64 ;; \
       *) echo "unsupported TARGETARCH: '${TARGETARCH:-}'" >&2; exit 1 ;; \
     esac; \
-    rm -rf "application/.output/server/node_modules/@img/sharp-libvips-linux-${NODE_ARCH}"; \
-    rm -rf "application/.output/server/node_modules/@img/sharp-linux-${NODE_ARCH}"; \
-    rm -rf "application/.output/server/node_modules/@libsql/linux-${NODE_ARCH}-gnu"; \
-    rm -rf application/.output/server/node_modules/sql.js; \
-    rm -rf application/.output/public/demo
+    rm -rf "apps/application/.output/server/node_modules/@img/sharp-libvips-linux-${NODE_ARCH}"; \
+    rm -rf "apps/application/.output/server/node_modules/@img/sharp-linux-${NODE_ARCH}"; \
+    rm -rf "apps/application/.output/server/node_modules/@libsql/linux-${NODE_ARCH}-gnu"; \
+    rm -rf apps/application/.output/server/node_modules/sql.js; \
+    rm -rf apps/application/.output/public/demo
 
 # Stage 2: Production stage
 FROM node:${NODE_VERSION}-alpine AS production
@@ -82,7 +82,7 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY --chown=nodejs:nodejs package.json package-lock.json ./
 
 # Trim workspaces to just application
-RUN printf "import{readFileSync,writeFileSync}from'node:fs';const p=JSON.parse(readFileSync('package.json','utf8'));p.workspaces=['application'];writeFileSync('package.json',JSON.stringify(p));" > /tmp/fix.mjs && node /tmp/fix.mjs && rm /tmp/fix.mjs
+RUN printf "import{readFileSync,writeFileSync}from'node:fs';const p=JSON.parse(readFileSync('package.json','utf8'));p.workspaces=['apps/application'];writeFileSync('package.json',JSON.stringify(p));" > /tmp/fix.mjs && node /tmp/fix.mjs && rm /tmp/fix.mjs
 
 # Install only the native packages needed at runtime (sharp + libsql + sql.js)
 # All pure-JS deps are bundled into .output by Nitro's noExternals
@@ -115,7 +115,7 @@ RUN --mount=type=cache,target=/home/nodejs/.npm,uid=1001,gid=1001 \
     node -e "require.resolve('sharp'); require.resolve('@libsql/client')"
 
 # Copy built application — pure-JS deps inlined by Nitro noExternals
-COPY --chown=nodejs:nodejs --from=builder /app/application/.output ./application/.output
+COPY --chown=nodejs:nodejs --from=builder /app/apps/application/.output ./apps/application/.output
 
 # Reconciles operator-facing PIWI_AUTH_* env onto the NUXT_* runtime overrides
 # the prebuilt server reads (see the file for why). Preloaded before the entry.
@@ -128,4 +128,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget -qO /dev/null "http://127.0.0.1:${PORT}/api/health" || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "--import", "./docker-server-env.mjs", "application/.output/server/index.mjs"]
+CMD ["node", "--import", "./docker-server-env.mjs", "apps/application/.output/server/index.mjs"]

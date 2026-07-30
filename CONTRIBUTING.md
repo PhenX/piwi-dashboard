@@ -13,11 +13,11 @@ npm install
 npm run app:dev      # dashboard at http://localhost:3000
 ```
 
-The SQLite database and `.data/` storage are created automatically on first API call — no configuration needed. To hack on the reporter package instead, work in `reporter/` (`npm run reporter:build`, or `npm run reporter:dev` for watch mode).
+The SQLite database and `.data/` storage are created automatically on first API call — no configuration needed. To hack on the reporter package instead, work in `packages/reporter/` (`npm run reporter:build`, or `npm run reporter:dev` for watch mode).
 
 ## Quality checks & tests
 
-Run from `application/` unless noted:
+Run from `apps/application/` unless noted:
 
 | Command | What it does |
 |---|---|
@@ -27,9 +27,9 @@ Run from `application/` unless noted:
 | `npm run app:test:unit` | Unit tests (Vitest) |
 | `npm run app:test` | E2E tests (Playwright — needs browsers: `npx playwright install chromium`) |
 | `npm test` | Everything (unit first, then E2E) |
-| `npm run reporter:test` | Reporter unit tests (from `reporter/`) |
+| `npm run reporter:test` | Reporter unit tests (from `packages/reporter/`) |
 
-If an E2E test creates a project, use a static name registered in `application/shared/test-project-names.ts` (see the conventions in [AGENTS.md](AGENTS.md)).
+If an E2E test creates a project, use a static name registered in `apps/application/shared/test-project-names.ts` (see the conventions in [AGENTS.md](AGENTS.md)).
 
 ## Database & demo data
 

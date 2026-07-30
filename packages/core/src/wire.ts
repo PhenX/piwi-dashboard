@@ -6,7 +6,7 @@
  * The per-case *payloads* are intentionally NOT here: the reporter produces a
  * loose `WireTestCase` superset while the server receives the stricter
  * `TestCasePayload` / `StreamEventPayload`. Those live on each side and are kept
- * field-compatible by `application/tests/unit/wire-shared-drift.test.ts`.
+ * field-compatible by `apps/application/tests/unit/wire-shared-drift.test.ts`.
  */
 
 /** One entry per level in a test's suite path (parallel to `suitePath`). */

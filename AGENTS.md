@@ -11,15 +11,15 @@ how to run and verify things, and the conventions that apply everywhere.
 
 | Editing… | Read first |
 |---|---|
-| `application/` — the Nuxt dashboard (app, server, demo, MCP) | [`application/AGENTS.md`](application/AGENTS.md) |
-| `reporter/` — the Playwright reporter package | [`reporter/AGENTS.md`](reporter/AGENTS.md) |
-| `desktop/` — the Tauri desktop shell | [`desktop/AGENTS.md`](desktop/AGENTS.md) |
-| `extension/` — the browser extension (Manifest V3) | [`extension/AGENTS.md`](extension/AGENTS.md) |
-| `docs/` — the VitePress documentation site | [`docs/AGENTS.md`](docs/AGENTS.md) |
+| `apps/application/` — the Nuxt dashboard (app, server, demo, MCP) | [`apps/application/AGENTS.md`](apps/application/AGENTS.md) |
+| `packages/reporter/` — the Playwright reporter package | [`packages/reporter/AGENTS.md`](packages/reporter/AGENTS.md) |
+| `apps/desktop/` — the Tauri desktop shell | [`apps/desktop/AGENTS.md`](apps/desktop/AGENTS.md) |
+| `apps/extension/` — the browser extension (Manifest V3) | [`apps/extension/AGENTS.md`](apps/extension/AGENTS.md) |
+| `apps/docs/` — the VitePress documentation site | [`apps/docs/AGENTS.md`](apps/docs/AGENTS.md) |
 
 Reference material worth opening when you need the map rather than the rules:
-[`application/ARCHITECTURE.md`](application/ARCHITECTURE.md) (dashboard) and
-[`reporter/ARCHITECTURE.md`](reporter/ARCHITECTURE.md) (reporter).
+[`apps/application/ARCHITECTURE.md`](apps/application/ARCHITECTURE.md) (dashboard) and
+[`packages/reporter/ARCHITECTURE.md`](packages/reporter/ARCHITECTURE.md) (reporter).
 
 ## Project overview
 
@@ -31,20 +31,38 @@ locator healing, notifications and an MCP server for AI agents. Self-hosted only
 ## Repository layout
 
 ```
-application/          Nuxt 4 dashboard — app (UI), server (API), demo SPA, MCP server
-application/shared/   Types, constants & pure utilities shared app-wide (import via `#shared/...`)
-packages/core/        @piwitests/core — private, zero-dependency logic shared by app AND reporter
-packages/server/      @piwitests/server — published npm run-option (`npx @piwitests/server`)
-packages/picker-dom/  @piwitests/picker-dom — shared DOM picker overlay used by the reporter, dashboard, and extension
-reporter/             @piwitests/reporter — the Playwright reporter (TypeScript → bundled via tsup)
-desktop/              Tauri desktop shell that bundles and runs the same server locally
-extension/            Piwi Picker — browser extension (Manifest V3), standalone, no server dependency
-docs/                 VitePress documentation site, published to GitHub Pages
-integrations/nitro/   @piwitests/instrumentation-nitro — backend-log instrumentation for Nitro apps
-integrations/aspnetcore/  PiwiTests.Instrumentation.AspNetCore — the same for ASP.NET Core (NuGet)
-examples/             Standalone usage examples (Playwright fixtures)
-plans/                Local working docs — gitignored, never committed
+apps/                      Deployable surfaces — the things you run, install, download or read.
+  application/             Nuxt 4 dashboard — app (UI), server (API), demo SPA, MCP server
+  application/shared/      Types, constants & pure utilities shared app-wide (import via `#shared/...`)
+  desktop/                 Tauri desktop shell that bundles and runs the same server locally
+  extension/               Piwi Picker — browser extension (Manifest V3), standalone, no server dependency
+  docs/                    VitePress documentation site, published to GitHub Pages
+packages/                  Packages consumed by name (`@piwitests/*`) — published to npm or imported by a workspace.
+  core/                    @piwitests/core — private, zero-dependency logic shared by app AND reporter
+  picker-dom/              @piwitests/picker-dom — shared DOM picker overlay (reporter, dashboard, extension)
+  reporter/                @piwitests/reporter — the Playwright reporter (TypeScript → bundled via tsup)
+  server/                  @piwitests/server — published npm run-option (`npx @piwitests/server`)
+integrations/              Framework-specific instrumentation adapters.
+  nitro/                   @piwitests/instrumentation-nitro — backend-log instrumentation for Nitro apps
+  aspnetcore/              PiwiTests.Instrumentation.AspNetCore — the same for ASP.NET Core (NuGet)
+examples/                  Standalone usage examples (Playwright fixtures)
+shared/                    Base oxlint/oxfmt configs extended by every workspace
+plans/                     Local working docs — gitignored, never committed
 ```
+
+**Where a new workspace goes** — the split is deliberate, keep it consistent:
+
+- `apps/*` — a deployable surface: something you run, install, download or read (the dashboard, the desktop app, the
+  extension, the docs site).
+- `packages/*` — a package consumed *by name* (`@piwitests/*`): either published to npm (`reporter`, `server`) or
+  imported by another workspace (`core`, `picker-dom`).
+- `integrations/*` — a framework-specific instrumentation adapter, one directory per framework.
+
+Every JS workspace is listed in the root [`package.json`](package.json) `workspaces` array. Three directories carry a
+`package.json` but are **intentionally not workspaces**: `apps/desktop` and `apps/docs` install and build on their own
+toolchains (Tauri, VitePress) rather than through the root install, and `examples/playwright-fixtures` must resolve
+`@piwitests/*` from the published npm registry — release-please bumps its pinned versions — so making it a workspace
+would symlink the local copies and defeat the example.
 
 `plans/` holds two tracked-by-hand files: `plans/roadmap.md` (working priorities) and `plans/exploration-findings.md`
 (a log of bugs, tech debt and inconsistencies found while exploring). Both are local-only. Public direction lives in the
@@ -52,7 +70,7 @@ committed [`ROADMAP.md`](ROADMAP.md).
 
 ## Quick start
 
-Prerequisites: **Node.js 24+**, npm, Git. Commands run from `application/` unless noted.
+Prerequisites: **Node.js 24+**, npm, Git. Commands run from `apps/application/` unless noted.
 
 ```bash
 cd application
@@ -64,7 +82,7 @@ The SQLite database and `.data/` storage are created automatically on the first 
 
 ## Commands
 
-From `application/`:
+From `apps/application/`:
 
 | Command | Purpose |
 |---|---|
@@ -84,7 +102,7 @@ From `application/`:
 | `npm run app:generate:deploy` | Regenerate the one-click deploy manifests (`render.yaml`, `fly.toml`, `deploy/`) |
 | `node scripts/db-query.mjs "<sql>" [--json]` | Query the local SQLite DB directly |
 
-From `reporter/`: `reporter:build`, `reporter:dev` (watch), `reporter:typecheck`, `reporter:lint[:fix]`,
+From `packages/reporter/`: `reporter:build`, `reporter:dev` (watch), `reporter:typecheck`, `reporter:lint[:fix]`,
 `reporter:format[:check]`, `reporter:test[:watch|:coverage|:integration]`.
 
 Run typecheck, lint and tests **once at the end** before the final commit — not after every edit.
@@ -144,12 +162,12 @@ other `curl` examples may stay bash-only. `.env` file contents are not shell com
 ### Documentation
 
 - Update the affected doc **in the same commit** as the code change.
-- User-facing docs live in `docs/` (VitePress → GitHub Pages); `README.md` is the landing page.
-- API reference is **generated** — never hand-write endpoint docs. See [`docs/AGENTS.md`](docs/AGENTS.md).
+- User-facing docs live in `apps/docs/` (VitePress → GitHub Pages); `README.md` is the landing page.
+- API reference is **generated** — never hand-write endpoint docs. See [`apps/docs/AGENTS.md`](apps/docs/AGENTS.md).
 - The one-click deploy manifests (`render.yaml`, `fly.toml`, `railway.json`, `deploy/**`) are **generated and
   committed** — Render and Fly read them from the repository. Edit
-  `application/scripts/generate-deploy-manifests.mjs` or the per-provider emitters in
-  `application/shared/deploy/`, then run `npm run app:generate:deploy`; a unit test fails if the committed files drift.
+  `apps/application/scripts/generate-deploy-manifests.mjs` or the per-provider emitters in
+  `apps/application/shared/deploy/`, then run `npm run app:generate:deploy`; a unit test fails if the committed files drift.
 
 #### One canonical positioning line (MUST follow)
 
@@ -165,20 +183,20 @@ Seven surfaces carry it, and they drift the moment one changes alone. Update the
 | Surface | Where |
 |---|---|
 | README subtitle | `README.md` |
-| Docs hero (`text` + `tagline`) | `docs/index.md` frontmatter |
-| Site description (meta + search index) | `docs/.vitepress/config.mts` → `description` |
-| Social cards | `docs/.vitepress/config.mts` → `og:`/`twitter:` title + description |
+| Docs hero (`text` + `tagline`) | `apps/docs/index.md` frontmatter |
+| Site description (meta + search index) | `apps/docs/.vitepress/config.mts` → `description` |
+| Social cards | `apps/docs/.vitepress/config.mts` → `og:`/`twitter:` title + description |
 | Docker Hub overview | `DOCKER_HUB.md` first paragraph |
-| npm package descriptions | `packages/server/package.json`, `reporter/package.json` |
+| npm package descriptions | `packages/server/package.json`, `packages/reporter/package.json` |
 | GitHub repo description + topics | Repository settings — not in the repo, so check it by hand |
 
-Voice rules for all of them, and for `docs/`: see [`docs/AGENTS.md`](docs/AGENTS.md#voice).
+Voice rules for all of them, and for `apps/docs/`: see [`apps/docs/AGENTS.md`](apps/docs/AGENTS.md#voice).
 
 ### Tests
 
-- **Vitest** for unit tests (pure functions, no server/browser): `application/tests/unit/*.test.ts` and
-  `packages/*/tests/`, `reporter/tests/`.
-- **Playwright** for E2E/integration (needs a server or browser): `application/tests/*.spec.ts`.
+- **Vitest** for unit tests (pure functions, no server/browser): `apps/application/tests/unit/*.test.ts` and
+  `packages/*/tests/`, `packages/reporter/tests/`.
+- **Playwright** for E2E/integration (needs a server or browser): `apps/application/tests/*.spec.ts`.
 - A test that creates a project MUST use a static name from `#shared/test-project-names` (`PROJECT.YOUR_KEY`) and
   register it there alphabetically, so global-setup cleanup removes it. Never use `Date.now()` suffixes.
 
@@ -207,7 +225,7 @@ Voice rules for all of them, and for `docs/`: see [`docs/AGENTS.md`](docs/AGENTS
 - **DB locked?** Stop other processes touching `.data/piwi.db` (the dev server holds it — `app:seed:dev` needs it down).
 - **Port 3000 in use?** `PORT=3001 npm run app:dev` (Linux/macOS) or `$env:PORT=3001; npm run app:dev` (PowerShell).
 - **Tests failing?** Make sure no dev server is on port 3000 — the Playwright config starts its own.
-- **Reporter not found?** `npm link` in `reporter/`, then in the target project.
+- **Reporter not found?** `npm link` in `packages/reporter/`, then in the target project.
 - **Migration not applying?** A hand-written migration file or `_journal.json` edit makes the Drizzle migrator skip it
   silently. Delete it, revert the journal entry, and re-run `npm run db:generate` (or `db:generate:pg`).
 - **Command appears frozen?** It probably opened an interactive pager. Use `git --no-pager <cmd>` for `diff`/`log`/`show`

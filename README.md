@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./docs/public/logo-wide.svg" alt="Piwi Dashboard" height="64">
+  <img src="./apps/docs/public/logo-wide.svg" alt="Piwi Dashboard" height="64">
 </p>
 
 <p align="center">
@@ -26,7 +26,7 @@
 
 <p align="center">
   <a href="https://piwitests.github.io/demo/">
-    <img src="./docs/public/screenshots/demo-live-run-poster.png" alt="A test run streaming live into Piwi Dashboard" width="100%">
+    <img src="./apps/docs/public/screenshots/demo-live-run-poster.png" alt="A test run streaming live into Piwi Dashboard" width="100%">
   </a>
 </p>
 
@@ -169,11 +169,11 @@ metadata and `--shard` merging are detected automatically. See
 
 | | |
 |---|---|
-| [![Failure cluster with AI diagnosis](./docs/public/screenshots/failure-cluster.png)](https://piwitests.github.io/ai-diagnosis) | [![AI diagnosis grounded in your SCM diff](./docs/public/screenshots/ai-diagnosis.png)](https://piwitests.github.io/ai-diagnosis) |
+| [![Failure cluster with AI diagnosis](./apps/docs/public/screenshots/failure-cluster.png)](https://piwitests.github.io/ai-diagnosis) | [![AI diagnosis grounded in your SCM diff](./apps/docs/public/screenshots/ai-diagnosis.png)](https://piwitests.github.io/ai-diagnosis) |
 | **Failure clusters** — forty red tests, three root causes | **AI diagnosis** — read against your actual git diff |
-| [![Flaky test detection](./docs/public/screenshots/flaky-detection.png)](https://piwitests.github.io/flaky-tests) | [![Test run detail with worker timeline](./docs/public/screenshots/test-run.png)](https://piwitests.github.io/ui-overview) |
+| [![Flaky test detection](./apps/docs/public/screenshots/flaky-detection.png)](https://piwitests.github.io/flaky-tests) | [![Test run detail with worker timeline](./apps/docs/public/screenshots/test-run.png)](https://piwitests.github.io/ui-overview) |
 | **Flaky tests** — scored, classified, ranked by wasted CI time | **Run detail** — cases, worker timeline, traces, retry command |
-| [![Locator healing suggestions](./docs/public/screenshots/locator-healing.png)](https://piwitests.github.io/reporter#locator-healing) | [![Performance trends](./docs/public/screenshots/performance-trends.png)](https://piwitests.github.io/flaky-tests#performance) |
+| [![Locator healing suggestions](./apps/docs/public/screenshots/locator-healing.png)](https://piwitests.github.io/reporter#locator-healing) | [![Performance trends](./apps/docs/public/screenshots/performance-trends.png)](https://piwitests.github.io/flaky-tests#performance) |
 | **Locator healing** — replacements from the last passing run | **Performance** — P90 trends and slowest-test tracking |
 
 ## Where this fits

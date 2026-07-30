@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'extension/**'
+      - 'apps/extension/**'
       - 'packages/core/**'
       - 'packages/picker-dom/**'
       - '.github/workflows/extension-e2e.yml'
@@ -40,7 +40,7 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Run extension E2E
-        working-directory: ./extension
+        working-directory: ./apps/extension
         run: npm run extension:test:e2e
 
       - name: Upload Playwright report
@@ -48,5 +48,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: extension-e2e-report
-          path: extension/playwright-report
+          path: apps/extension/playwright-report
           if-no-files-found: ignore

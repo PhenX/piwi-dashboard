@@ -36,12 +36,12 @@ jobs:
         run: npm ci
 
       - name: Build reporter
-        working-directory: reporter
+        working-directory: packages/reporter
         run: npm run reporter:build
 
       - name: Publish to npm
         run: npm publish --access public --provenance
-        working-directory: reporter
+        working-directory: packages/reporter
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -83,7 +83,7 @@ jobs:
         run: npm ci
 
       - name: Build application (node-server preset)
-        run: npm run app:build --workspace=application
+        run: npm run app:build --workspace=apps/application
         env:
           NITRO_PRESET: node-server
 

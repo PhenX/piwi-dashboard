@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 env:
-  # Match the runtime the app is built and tested against (application/engines).
+  # Match the runtime the app is built and tested against (apps/application/engines).
   PIWI_NODE_VERSION: 24.4.1
 
 jobs:
@@ -28,14 +28,14 @@ jobs:
           node-version: '24'
       - run: npm ci
       - name: Build server bundle (node-server preset)
-        run: npm run app:build --workspace=application
+        run: npm run app:build --workspace=apps/application
         env:
           NITRO_PRESET: node-server
           PIWI_BUILD_SHA: ${{ github.sha }}
       - uses: actions/upload-artifact@v7
         with:
           name: app-output
-          path: application/.output
+          path: apps/application/.output
           # .output is dot-prefixed; upload-artifact@v4 skips hidden paths by default.
           include-hidden-files: true
           if-no-files-found: error
@@ -71,20 +71,20 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: desktop/src-tauri
+          workspaces: apps/desktop/src-tauri
 
       - name: Install desktop tooling
-        working-directory: desktop
+        working-directory: apps/desktop
         run: npm install
 
       - name: Download server bundle
         uses: actions/download-artifact@v8
         with:
           name: app-output
-          path: application/.output
+          path: apps/application/.output
 
       - name: Fetch Node sidecar
-        working-directory: desktop
+        working-directory: apps/desktop
         run: node scripts/fetch-node.mjs --target ${{ matrix.target }} --node ${{ env.PIWI_NODE_VERSION }}
 
       # Shrink the bundled Node runtime with UPX (roughly halves it). Windows
@@ -94,18 +94,18 @@ jobs:
       - name: Compress Node sidecar (Windows)
         if: runner.os == 'Windows'
         continue-on-error: true
-        working-directory: desktop
+        working-directory: apps/desktop
         shell: pwsh
         run: |
           choco install upx -y --no-progress
           upx --best --lzma "src-tauri/binaries/node-${{ matrix.target }}.exe"
 
       - name: Stage server (native modules for this OS)
-        working-directory: desktop
+        working-directory: apps/desktop
         run: node scripts/stage-server.mjs
 
       - name: Generate app icons
-        working-directory: desktop
+        working-directory: apps/desktop
         run: npx tauri icon ../application/public/logo.svg
 
       - name: Build & release desktop app
@@ -144,7 +144,7 @@ jobs:
         with:
           name: piwi-desktop-${{ matrix.target }}
           path: |
-            desktop/src-tauri/target/**/release/bundle/**/*.msi
-            desktop/src-tauri/target/**/release/bundle/**/*.dmg
+            apps/desktop/src-tauri/target/**/release/bundle/**/*.msi
+            apps/desktop/src-tauri/target/**/release/bundle/**/*.dmg
           if-no-files-found: warn
           retention-days: 7

@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
-/** An already-installed Chromium to use instead of the revision Playwright pins — see application/playwright.config.ts's own copy of this. */
+/** An already-installed Chromium to use instead of the revision Playwright pins — see apps/application/playwright.config.ts's own copy of this. */
 const chromiumExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?.trim() || '';
 
 /**

@@ -20,4 +20,4 @@ Thanks for contributing! Two things to know:
 
 - [ ] PR title follows [Conventional Commits](CONTRIBUTING.md) (`type(scope): subject`)
 - [ ] Tests added/updated for behavior changes
-- [ ] Docs updated if user-facing (`docs/`, README, or reporter README)
+- [ ] Docs updated if user-facing (`apps/docs/`, README, or reporter README)
