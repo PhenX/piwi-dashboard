@@ -1,4 +1,4 @@
-import { getRecordingState, stopRecording } from '../shared/recording-storage.js';
+import { getRecordingState, stopRecording, setRecordIntent, clearRecordIntent } from '../shared/recording-storage.js';
 import { getConnectionSettings, isConnected, type ProjectMapping } from '../shared/connection-settings.js';
 import { getActiveProjectOverride, setActiveProjectOverride, resolveActiveProject } from '../shared/active-project.js';
 
@@ -254,6 +254,9 @@ function recordOriginPattern(url: string | undefined): string | null {
 
 async function startRecordingFlow(originPattern: string, tabId: number, granted: Promise<boolean>): Promise<void> {
   if (!(await granted)) {
+    // Drop the intent the click parked for the worker, so a later unrelated
+    // grant for this same origin can't revive a recording the user declined.
+    await clearRecordIntent().catch(() => undefined);
     statusEl.textContent = 'Permission for this site is needed to record across pages.';
     return;
   }
@@ -307,6 +310,7 @@ recordBtn.addEventListener('click', () => {
     statusEl.textContent = "Can't record on this page.";
     return;
   }
+  const tabId = recordTab.id;
   // Synchronous, before any await: this is the user gesture the request needs.
   let granted: Promise<boolean>;
   try {
@@ -315,7 +319,13 @@ recordBtn.addEventListener('click', () => {
     statusEl.textContent = 'Permission for this site is needed to record across pages.';
     return;
   }
-  void startRecordingFlow(originPattern, recordTab.id, granted);
+  // Park the intent so the background can still start the recording if this
+  // popup is torn down when the prompt takes focus — the first-time grant that
+  // used to leave the recorder needing a second click. Fire-and-forget: it must
+  // not delay the request above, and `startRecordingFlow` still starts things
+  // directly whenever the popup does survive.
+  void setRecordIntent({ originPattern, tabId });
+  void startRecordingFlow(originPattern, tabId, granted);
 });
 
 recordBtn.disabled = true;

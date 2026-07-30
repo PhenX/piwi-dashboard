@@ -1,4 +1,11 @@
-import { startRecording, getRecordingState, discardRecording } from '../shared/recording-storage.js';
+import {
+  startRecording,
+  getRecordingState,
+  discardRecording,
+  getRecordIntent,
+  clearRecordIntent,
+  decideRecordIntent,
+} from '../shared/recording-storage.js';
 import { getConnectionSettings } from '../shared/connection-settings.js';
 import { fetchCatalog } from '../shared/piwi-client.js';
 import { setCachedCatalog, isCatalogStale } from '../shared/catalog-cache.js';
@@ -94,6 +101,59 @@ async function handleStartRecording(originPattern: string, tabId: number): Promi
 }
 
 /**
+ * Guards against starting the same recording twice.
+ *
+ * A first "Record actions" click resolves its grant down two paths that both
+ * land here: the popup's own `piwi-start-recording` message (when the popup
+ * survives the permission prompt) and `chrome.permissions.onAdded` (when the
+ * prompt closed it). `startInFlight` is set synchronously before the first
+ * await, so a second trigger arriving mid-start sees it and bails; the
+ * persisted `active` flag covers the two arriving far enough apart — or the
+ * worker being torn down between them — that the flag has already reset.
+ */
+let startInFlight = false;
+
+async function startRecordingOnce(originPattern: string, tabId: number): Promise<{ ok: boolean; error?: string }> {
+  if (startInFlight) return { ok: true };
+  startInFlight = true;
+  try {
+    if ((await getRecordingState()).active) return { ok: true };
+    return await handleStartRecording(originPattern, tabId);
+  } finally {
+    startInFlight = false;
+    // The intent has done its job (or failed to) — never leave it to revive a
+    // recording on some later, unrelated grant.
+    await clearRecordIntent().catch(() => undefined);
+  }
+}
+
+/**
+ * Finishes a recording the popup asked for but couldn't start itself.
+ *
+ * The popup requests the host permission inside its click (the only place the
+ * gesture is live), but the prompt takes focus and closes the popup on a
+ * first-time grant — killing the code that would have sent
+ * `piwi-start-recording`. The popup leaves a `RecordIntent` in session storage
+ * before requesting; this fires when the grant lands and picks the intent back
+ * up. `decideRecordIntent` filters out grants that aren't ours (the options
+ * page granting the Piwi instance origin fires the same event) and intents too
+ * old to still be this prompt's answer.
+ */
+async function handlePermissionAdded(addedOrigins: string[]): Promise<void> {
+  const decision = decideRecordIntent(await getRecordIntent(), addedOrigins, Date.now());
+  if (decision.action === 'ignore') return;
+  if (decision.action === 'clear') {
+    await clearRecordIntent().catch(() => undefined);
+    return;
+  }
+  await startRecordingOnce(decision.originPattern, decision.tabId);
+}
+
+chrome.permissions.onAdded.addListener((permissions) => {
+  void handlePermissionAdded(permissions.origins ?? []);
+});
+
+/**
  * Tells every tab still running the recorder that capture is over, so each one
  * drops its HUD and its "this tab is being recorded" border.
  *
@@ -172,7 +232,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message?.type === 'piwi-start-recording') {
-    void handleStartRecording(message.originPattern, message.tabId).then(sendResponse);
+    // Through the dedupe guard, not `handleStartRecording` directly: on a
+    // first-time grant `chrome.permissions.onAdded` may already be starting the
+    // same recording (see `startRecordingOnce`).
+    void startRecordingOnce(message.originPattern, message.tabId).then(sendResponse);
     return true; // keep the message channel open for the async response
   }
   if (message?.type === 'piwi-refresh-catalog') {
