@@ -80,7 +80,7 @@ const displayNote = computed(() => props.note ?? defaultNote(props.alt));
     </UBadge>
 
     <div class="flex-1 min-w-0">
-      <code class="text-xs font-mono block truncate" :title="alt.locator">{{ alt.locator }}</code>
+      <LocatorCode :locator="alt.locator" truncate class="text-xs" />
       <p v-if="displayNote" class="text-[11px] leading-4 text-gray-500 truncate">{{ displayNote }}</p>
     </div>
 

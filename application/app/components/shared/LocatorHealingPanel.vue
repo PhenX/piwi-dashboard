@@ -262,9 +262,7 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
     help="locator-healing"
   >
     <template v-if="storageKey" #folded>
-      <code v-if="recommendation?.recommended" class="text-xs font-mono">
-        {{ recommendation.recommended.locator }}
-      </code>
+      <LocatorCode v-if="recommendation?.recommended" :locator="recommendation.recommended.locator" class="text-xs" />
       <span v-else>{{ alternatives.length }} alternative{{ alternatives.length === 1 ? '' : 's' }}</span>
     </template>
     <template #subtitle>
@@ -325,7 +323,7 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
           Your pick
           <UBadge size="sm" color="primary" variant="subtle">confirmed on the failing page</UBadge>
         </p>
-        <code class="text-sm font-mono block truncate mt-0.5">{{ userPick.locator }}</code>
+        <LocatorCode :locator="userPick.locator" truncate class="text-sm mt-0.5" />
       </div>
       <UButton
         size="sm"
@@ -388,7 +386,7 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
         <DiffPatch :patch="suggestedEdit.patch" />
       </div>
       <template v-else>
-        <code class="text-sm font-mono block truncate">{{ recommended.locator }}</code>
+        <LocatorCode :locator="recommended.locator" truncate class="text-sm" />
         <!-- Only the changed args, when the fix keeps the method family -->
         <p v-if="argChanges.length" class="text-xs flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
           <template v-for="(c, i) in argChanges" :key="i">
@@ -440,7 +438,7 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
         <p class="text-xs font-medium text-success-600 dark:text-success-400">
           Most stable option (score: {{ recommendation.durable.score }})
         </p>
-        <code class="text-sm font-mono block truncate mt-0.5">{{ recommendation.durable.locator }}</code>
+        <LocatorCode :locator="recommendation.durable.locator" truncate class="text-sm mt-0.5" />
         <p class="text-xs text-gray-500 mt-0.5">Sturdier, but changes the locator style</p>
       </div>
       <UButton

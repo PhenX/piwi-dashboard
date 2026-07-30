@@ -672,7 +672,7 @@ onBeforeUnmount(() => {
               <p class="text-xs font-medium text-primary">
                 Recommended (score: {{ recommendation.recommended.score }})
               </p>
-              <code class="text-sm font-mono block truncate mt-0.5">{{ recommendation.recommended.locator }}</code>
+              <LocatorCode :locator="recommendation.recommended.locator" truncate class="text-sm mt-0.5" />
             </div>
             <UButton
               size="sm"

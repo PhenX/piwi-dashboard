@@ -40,6 +40,21 @@ test.describe('pick.js', () => {
     await expect(page.locator('#__piwi_picker_banner')).toHaveCount(0);
   });
 
+  test('the hover preview shows the ranked locator, not the overlay approximation', async ({ context }) => {
+    const page = await context.newPage();
+    // An id and an accessible name: the overlay's own descriptor would settle
+    // for `locator('#target')`, the ranking engine prefers the role+name.
+    await page.setContent(`<!doctype html><html><body style="margin-top:120px">
+      <button id="target">Join now</button>
+    </body></html>`);
+    await page.addScriptTag({ path: path.join(DIST, 'pick.js') });
+    await expect(page.getByText('click any element to generate locators')).toBeVisible();
+
+    await page.hover('#target');
+    await expect(page.locator('#__piwi_picker_locator')).toContainText("getByRole('button', { name: 'Join now' })");
+    await expect(page.locator('#__piwi_picker_label')).toContainText("getByRole('button', { name: 'Join now' })");
+  });
+
   test('Escape at the element step ends the flow with no results panel', async ({ context }) => {
     const page = await context.newPage();
     await page.setContent(`<!doctype html><html><body><button id="x">X</button></body></html>`);

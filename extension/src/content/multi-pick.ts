@@ -3,12 +3,14 @@ import {
   installPickerOverlay,
   removePickerOverlay,
   highlightLocator,
+  LOCATOR_SYNTAX_CSS,
   type PickerOverlayArg,
 } from '@piwitests/picker-dom';
 import { derivePattern, type PatternResult } from './multi-pick-derive.js';
 import { TAG_TO_ROLE, INPUT_TYPE_TO_ROLE } from '@piwitests/core/locator-generation';
 import { COPY_MODES, COPY_MODE_LABELS, renderCopyMode } from '../shared/copy-modes.js';
 import { getLastCopyMode, setLastCopyMode } from '../shared/storage.js';
+import { installDescribeHook } from './top-locator.js';
 
 const ROLE_MAPS = { tagRoles: TAG_TO_ROLE, inputRoles: INPUT_TYPE_TO_ROLE };
 const MIN_PICKS = 2;
@@ -192,6 +194,7 @@ async function renderPatternPanel(result: PatternResult): Promise<void> {
 
   const style = document.createElement('style');
   style.textContent = `
+    ${LOCATOR_SYNTAX_CSS}
     :host { all: initial; }
     * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
     .backdrop {
@@ -215,7 +218,7 @@ async function renderPatternPanel(result: PatternResult): Promise<void> {
     }
     .close:hover, .close:focus-visible { opacity: 1; background: rgba(128,128,128,.15); }
     .row { border: 1px solid rgba(128,128,128,.3); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
-    code { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; margin-bottom: 6px; }
+    .row code { display: block; font-size: 13px; line-height: 1.55; margin-bottom: 6px; }
     .warn { color: #fbbf24; font-size: 11px; margin-bottom: 6px; }
     .copy-row { display: flex; gap: 6px; flex-wrap: wrap; }
     button.copy {
@@ -224,6 +227,11 @@ async function renderPatternPanel(result: PatternResult): Promise<void> {
     }
     button.copy:hover, button.copy:focus-visible { background: rgba(128,128,128,.25); }
     button.copy[data-active="true"] { border-color: #7c3aed; color: #a78bfa; }
+    @media (prefers-color-scheme: light) {
+      .sub { color: #6b7280; }
+      .warn { color: #b45309; }
+      button.copy[data-active="true"] { border-color: #6d28d9; color: #6d28d9; }
+    }
   `;
   root.appendChild(style);
 
@@ -280,6 +288,7 @@ async function renderPatternPanel(result: PatternResult): Promise<void> {
       const rowEl = document.createElement('div');
       rowEl.className = 'row';
       const code = document.createElement('code');
+      code.className = 'piwi-loc';
       code.innerHTML = highlightLocator(row.locator);
       rowEl.appendChild(code);
 
@@ -331,6 +340,7 @@ async function runMultiPick(): Promise<void> {
   g.__piwiMultiPicking = true;
   const toolEpoch = startTool('multi-pick', teardownToolSurfaces);
   installEscapeToCancel();
+  const removeDescribeHook = installDescribeHook();
   try {
     const picked: Element[] = [];
     for (let i = 0; i < MIN_PICKS; i++) {
@@ -357,6 +367,7 @@ async function runMultiPick(): Promise<void> {
     }
     await renderPatternPanel(result);
   } finally {
+    removeDescribeHook();
     g.__piwiMultiPicking = false;
     endTool(toolEpoch);
   }

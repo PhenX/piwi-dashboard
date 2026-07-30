@@ -3,6 +3,7 @@ import {
   installPickerOverlay,
   removePickerOverlay,
   highlightLocator,
+  LOCATOR_SYNTAX_CSS,
   type PickerOverlayArg,
 } from '@piwitests/picker-dom';
 import { deriveTopLocator } from './top-locator.js';
@@ -178,6 +179,7 @@ function renderSessionPanelOnce(picks: SessionPick[]): Promise<PanelAction> {
 
   const style = document.createElement('style');
   style.textContent = `
+    ${LOCATOR_SYNTAX_CSS}
     :host { all: initial; }
     * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
     .backdrop {
@@ -204,7 +206,7 @@ function renderSessionPanelOnce(picks: SessionPick[]): Promise<PanelAction> {
     .row { border: 1px solid rgba(128,128,128,.3); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
     .row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .name { font-weight: 600; }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+    .row code { font-size: 13px; line-height: 1.55; }
     .url { color: #9ca3af; font-size: 11px; margin-top: 4px; word-break: break-all; }
     button.remove {
       background: none; border: none; color: inherit; opacity: .6; cursor: pointer; font-size: 15px;
@@ -219,6 +221,9 @@ function renderSessionPanelOnce(picks: SessionPick[]): Promise<PanelAction> {
     button.action:hover, button.action:focus-visible { background: rgba(128,128,128,.25); }
     button.action.primary { background: #7c3aed; border-color: #7c3aed; color: #fff; }
     button.action.danger:hover, button.action.danger:focus-visible { background: rgba(248,113,113,.2); border-color: #f87171; }
+    @media (prefers-color-scheme: light) {
+      .sub, .empty, .url { color: #6b7280; }
+    }
   `;
   root.appendChild(style);
 
@@ -286,6 +291,7 @@ function renderSessionPanelOnce(picks: SessionPick[]): Promise<PanelAction> {
         name.className = 'name';
         name.textContent = pick.name;
         const code = document.createElement('code');
+        code.className = 'piwi-loc';
         code.innerHTML = highlightLocator(pick.locator);
         nameWrap.append(name, code);
         const removeBtn = document.createElement('button');

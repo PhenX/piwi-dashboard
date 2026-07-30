@@ -1,5 +1,5 @@
 import type { RankedLocator } from '@piwitests/picker-dom';
-import { highlightLocator } from '@piwitests/picker-dom';
+import { highlightLocator, LOCATOR_SYNTAX_CSS } from '@piwitests/picker-dom';
 import { TAG_TO_ROLE, INPUT_TYPE_TO_ROLE } from '@piwitests/core/locator-generation';
 import { COPY_MODES, COPY_MODE_LABELS, renderCopyMode } from '../shared/copy-modes.js';
 import { getLastCopyMode, setLastCopyMode } from '../shared/storage.js';
@@ -29,6 +29,7 @@ export async function renderResultsPanel(ranked: RankedLocator[]): Promise<void>
 
   const style = document.createElement('style');
   style.textContent = `
+    ${LOCATOR_SYNTAX_CSS}
     :host { all: initial; }
     * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
     .backdrop {
@@ -60,10 +61,10 @@ export async function renderResultsPanel(ranked: RankedLocator[]): Promise<void>
     }
     .row-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .score {
-      color: #a78bfa; font-variant-numeric: tabular-nums; font-size: 11px; flex-shrink: 0;
-      border: 1px solid #a78bfa55; border-radius: 999px; padding: 1px 7px;
+      color: #c4b5fd; font-variant-numeric: tabular-nums; font-size: 11px; flex-shrink: 0;
+      border: 1px solid #c4b5fd66; border-radius: 999px; padding: 1px 7px;
     }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+    .row code { font-size: 13px; line-height: 1.55; }
     .copy-row { display: flex; gap: 6px; flex-wrap: wrap; }
     button.copy {
       background: rgba(128,128,128,.12); color: inherit; border: 1px solid rgba(128,128,128,.3);
@@ -75,6 +76,14 @@ export async function renderResultsPanel(ranked: RankedLocator[]): Promise<void>
     .footer { color: #9ca3af; font-size: 11px; margin-top: 4px; }
     .unique { color: #4ade80; font-size: 11px; }
     .ambiguous { color: #fbbf24; font-size: 11px; }
+    @media (prefers-color-scheme: light) {
+      .sub, .footer { color: #6b7280; }
+      .score { color: #6d28d9; border-color: #6d28d966; }
+      .unique { color: #15803d; }
+      .ambiguous { color: #b45309; }
+      button.copy[data-active="true"] { border-color: #6d28d9; color: #6d28d9; }
+      button.copy .done { color: #15803d; }
+    }
   `;
   root.appendChild(style);
 
@@ -136,6 +145,7 @@ export async function renderResultsPanel(ranked: RankedLocator[]): Promise<void>
       score.className = 'score';
       score.textContent = String(alt.score);
       const code = document.createElement('code');
+      code.className = 'piwi-loc';
       code.innerHTML = highlightLocator(alt.locator);
       top.append(score, code);
       row.appendChild(top);

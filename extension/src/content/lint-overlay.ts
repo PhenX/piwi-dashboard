@@ -63,8 +63,9 @@ function toggleLintOverlay(): void {
   const style = document.createElement('style');
   style.textContent = `
     .box {
-      position: fixed; pointer-events: none; box-sizing: border-box; border: 2px dashed #f87171;
-      background: rgba(248,113,113,.08); border-radius: 3px;
+      position: fixed; pointer-events: none; box-sizing: border-box; border: 2px dashed #ef4444;
+      background: rgba(239,68,68,.14); border-radius: 4px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.9), 0 0 0 3px rgba(69,10,10,.5);
     }
     .panel {
       position: fixed; top: 12px; right: 12px; pointer-events: auto; width: min(360px, 88vw);
@@ -92,8 +93,12 @@ function toggleLintOverlay(): void {
     .row .tag { color: #f87171; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     .row .name { color: #9ca3af; }
     .row code {
-      display: block; margin-top: 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      display: block; margin-top: 5px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       word-break: break-all; cursor: pointer; border: 1px dashed rgba(128,128,128,.4); border-radius: 5px; padding: 3px 6px;
+    }
+    @media (prefers-color-scheme: light) {
+      .empty, .row .name { color: #6b7280; }
+      .row .tag { color: #b91c1c; }
     }
   `;
   root.appendChild(style);

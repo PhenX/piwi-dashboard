@@ -42,8 +42,8 @@ export interface AnchorPickerArg {
  * scope the locator to. Each row shows the ancestor's strongest hook and how
  * many leaf matches it contains; the footer shows a live "matches N" count for
  * the combined selection, recomputed against the real page on every toggle
- * (exactly 1 = green). Hovering a row outlines that ancestor in the page.
- * Resolves through `__piwiAnchorState` ('done' | 'skipped'); selected anchors
+ * (exactly 1 = green). Hovering a row outlines that ancestor in the page and
+ * names it in a chip pinned to it. Resolves through `__piwiAnchorState` ('done' | 'skipped'); selected anchors
  * land in `__piwiPickAnchors` (+ `__piwiPickChainCount`). Role resolution
  * reuses the maps passed in `arg` (single source of truth in
  * `@piwitests/core`). Must stay fully self-contained.
@@ -174,15 +174,27 @@ export function showAnchorPicker(arg: AnchorPickerArg): void {
     return;
   }
 
+  const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+  // A light hairline outside each ring and a dark one outside that, so both
+  // outlines keep their edge over white, black and busy backgrounds alike.
   const outline = doc.createElement('div');
   outline.style.cssText =
     `position:fixed;pointer-events:none;z-index:${Z};box-sizing:border-box;` +
-    'border:2px solid #22c55e;border-radius:3px;display:none;';
+    'border:2px solid #22c55e;background:rgba(34,197,94,.10);border-radius:4px;display:none;' +
+    'box-shadow:0 0 0 1px rgba(255,255,255,.9),0 0 0 3px rgba(5,46,22,.5);';
+  // Names the ancestor the hovered row would scope to, pinned to that ancestor.
+  const outlineLabel = doc.createElement('div');
+  outlineLabel.style.cssText =
+    `position:fixed;pointer-events:none;z-index:${Z + 1};display:none;box-sizing:border-box;` +
+    'max-width:min(420px,90vw);background:#0b1120;color:#f9fafb;border:1px solid #22c55e;' +
+    `border-radius:6px;padding:3px 7px;font:12px/1.45 ${MONO};white-space:nowrap;` +
+    'overflow:hidden;text-overflow:ellipsis;box-shadow:0 4px 18px rgba(0,0,0,.5);';
   const pickedOutline = doc.createElement('div');
   const pr = el.getBoundingClientRect();
   pickedOutline.style.cssText =
     `position:fixed;pointer-events:none;z-index:${Z};box-sizing:border-box;` +
-    'border:2px solid #7c3aed;background:rgba(124,58,237,.10);border-radius:3px;' +
+    'border:2px solid #a855f7;background:rgba(168,85,247,.14);border-radius:4px;' +
+    'box-shadow:0 0 0 1px rgba(255,255,255,.9),0 0 0 3px rgba(59,7,100,.55);' +
     `left:${pr.left}px;top:${pr.top}px;width:${pr.width}px;height:${pr.height}px;`;
   const panel = doc.createElement('div');
   panel.style.cssText =
@@ -268,7 +280,7 @@ export function showAnchorPicker(arg: AnchorPickerArg): void {
     const text = doc.createElement('span');
     text.style.cssText = 'flex:1;min-width:0;';
     const code = doc.createElement('code');
-    code.style.cssText = 'display:block;font:11px ui-monospace,monospace;color:#e5e7eb;word-break:break-all;';
+    code.style.cssText = `display:block;font:12px ${MONO};color:#f3f4f6;word-break:break-all;`;
     code.textContent = `<${row.info.tag}> ${row.hookLabel}`;
     const hint = doc.createElement('span');
     hint.style.cssText = 'color:#9ca3af;';
@@ -288,9 +300,17 @@ export function showAnchorPicker(arg: AnchorPickerArg): void {
       outline.style.top = r.top + 'px';
       outline.style.width = r.width + 'px';
       outline.style.height = r.height + 'px';
+      outlineLabel.textContent = `<${row.info.tag}> ${row.hookLabel}`;
+      outlineLabel.style.display = 'block';
+      const lr = outlineLabel.getBoundingClientRect();
+      const vw = g.innerWidth || doc.documentElement.clientWidth || 0;
+      const top = r.top - lr.height - 6 < 4 ? r.bottom + 6 : r.top - lr.height - 6;
+      outlineLabel.style.left = Math.max(6, Math.min(r.left, vw - lr.width - 6)) + 'px';
+      outlineLabel.style.top = top + 'px';
     });
     line.addEventListener('mouseleave', () => {
       outline.style.display = 'none';
+      outlineLabel.style.display = 'none';
     });
     box.addEventListener('change', () => {
       if (box.checked) selected.add(i);
@@ -306,6 +326,7 @@ export function showAnchorPicker(arg: AnchorPickerArg): void {
     doc.removeEventListener('keydown', onKey, true);
     panel.remove();
     outline.remove();
+    outlineLabel.remove();
     pickedOutline.remove();
   };
   const done = (state: 'done' | 'skipped') => {
@@ -349,5 +370,6 @@ export function showAnchorPicker(arg: AnchorPickerArg): void {
   doc.addEventListener('keydown', onKey, true);
   doc.body.appendChild(pickedOutline);
   doc.body.appendChild(outline);
+  doc.body.appendChild(outlineLabel);
   doc.body.appendChild(panel);
 }
