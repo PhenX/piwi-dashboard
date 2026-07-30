@@ -42,7 +42,7 @@ jobs:
       # npm hoists the workspace, so the build cache lands in the root
       # node_modules; the application copy holds the font and jiti caches.
       - name: Cache Nuxt build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             node_modules/.cache
@@ -61,7 +61,7 @@ jobs:
         run: npm run app:build
 
       - name: Upload build output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-output
           path: |
@@ -135,7 +135,7 @@ jobs:
 
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -239,7 +239,7 @@ jobs:
         run: npm ci --prefer-offline --no-audit --fund=false
 
       - name: Download build output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-output
 
@@ -273,7 +273,7 @@ jobs:
 
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -315,7 +315,7 @@ jobs:
 
       - name: Upload blob report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: blob-report-${{ matrix.storage }}-${{ matrix.database }}-${{ matrix.shard }}
           path: application/blob-report
