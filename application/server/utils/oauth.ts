@@ -573,6 +573,7 @@ export async function handleOAuthCallback(event: H3Event, provider: string): Pro
       userId: user.id,
       username: user.username,
       role: user.role as Role,
+      sessionEpoch: user.sessionEpoch,
     };
     await setUserSession(event, sessionData);
 

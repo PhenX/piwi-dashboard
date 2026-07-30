@@ -269,7 +269,7 @@ describe('emitKoyebDeployUrl', () => {
 
   test('spells out the volume caveat and defers what the URL cannot carry', () => {
     expect(out).toContain('koyeb service update piwi/piwi --volumes piwi-data:/app/.data');
-    expect(out).toContain('Set in the Koyeb console after the first deploy: PIWI_SECRET_KEY.');
+    expect(out).toContain('Set in the Koyeb console: PIWI_SECRET_KEY.');
     expect(out).not.toContain('env[PIWI_SECRET_KEY]');
   });
 

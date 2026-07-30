@@ -2,8 +2,9 @@ import { eq } from 'drizzle-orm';
 import { getDatabase } from '../../database';
 import { users } from '../../database/schema';
 import { validateAccountToken, consumeAccountToken } from '../../utils/account-tokens';
-import { hashPassword } from '../../utils/auth';
+import { hashPassword, revokeUserSessions } from '../../utils/auth';
 import { clearUserSession } from '../../utils/auth';
+import { checkRateLimit } from '../../utils/rate-limit';
 import { z } from 'zod';
 
 defineRouteMeta({
@@ -22,6 +23,11 @@ const schema = z.object({
 });
 
 export default eventHandler(async (event) => {
+  const ip = getRequestIP(event) ?? 'unknown';
+  if (!checkRateLimit(`reset:${ip}`, 10, 15 * 60 * 1000)) {
+    throw createError({ statusCode: 429, message: 'Too many requests. Please wait before trying again.' });
+  }
+
   const body = await readBody(event);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
@@ -51,7 +57,9 @@ export default eventHandler(async (event) => {
 
   await consumeAccountToken(db, validated.tokenId);
 
-  // Clear current session to invalidate it (best-effort; h3 session doesn't support user-wide invalidation)
+  // Revoke every existing session for this account so a stolen session cannot
+  // outlive the reset, then clear the current cookie for good measure.
+  await revokeUserSessions(user.id);
   await clearUserSession(event).catch(() => {});
 
   console.info('[auth/reset-password] Password reset for user %d', user.id);

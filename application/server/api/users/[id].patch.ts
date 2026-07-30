@@ -1,6 +1,6 @@
 import { getDatabase } from '../../database';
 import { updateUserRecord } from '#shared/handlers/users';
-import { requireAuth } from '../../utils/auth';
+import { requireAuth, revokeUserSessions } from '../../utils/auth';
 import { Role } from '#shared/types';
 import { z } from 'zod';
 
@@ -22,7 +22,7 @@ const schema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  const currentUser = await requireAuth(event, []);
+  const currentUser = await requireAuth(event);
 
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) throw createError({ statusCode: 400, message: 'Invalid user ID' });
@@ -48,6 +48,10 @@ export default eventHandler(async (event) => {
   try {
     const user = await updateUserRecord(await getDatabase(), id, parsed.data);
     if (!user) throw createError({ statusCode: 404, message: 'User not found' });
+    // A role change takes effect immediately by revoking the user's sessions.
+    if (parsed.data.role !== undefined) {
+      await revokeUserSessions(id);
+    }
     return {
       success: true,
       user: { id: user.id, username: user.username, role: user.role as Role, name: user.name, email: user.email },

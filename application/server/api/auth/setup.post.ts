@@ -1,5 +1,6 @@
 import { Role } from '#shared/types';
 import { createUser, isAuthEnabled, needsInitialSetup } from '../../utils/auth';
+import { checkRateLimit } from '../../utils/rate-limit';
 import { z } from 'zod';
 
 defineRouteMeta({
@@ -15,7 +16,7 @@ defineRouteMeta({
 
 const createAdminSchema = z.object({
   username: z.string().min(3),
-  password: z.string().min(6),
+  password: z.string().min(8),
   name: z.string().optional(),
 });
 
@@ -25,6 +26,11 @@ export default eventHandler(async (event) => {
       statusCode: 400,
       message: 'Authentication is not enabled',
     });
+  }
+
+  const ip = getRequestIP(event) ?? 'unknown';
+  if (!checkRateLimit(`setup:${ip}`, 5, 15 * 60 * 1000)) {
+    throw createError({ statusCode: 429, message: 'Too many requests. Please wait before trying again.' });
   }
 
   if (!(await needsInitialSetup())) {

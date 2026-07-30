@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { getDatabase } from '../../database';
 import { users } from '../../database/schema';
-import { requireAuth, hashPassword, verifyPassword } from '../../utils/auth';
+import { requireAuth, hashPassword, verifyPassword, revokeUserSessions, setUserSession } from '../../utils/auth';
+import { Role } from '#shared/types';
 import { z } from 'zod';
 
 defineRouteMeta({
@@ -44,6 +45,16 @@ export default eventHandler(async (event) => {
 
   const hashed = await hashPassword(newPassword);
   await db.update(users).set({ password: hashed, updatedAt: new Date() }).where(eq(users.id, user.id));
+
+  // Revoke every existing session, then re-issue one for the current device so
+  // the password change signs out other devices without signing out this one.
+  const epoch = await revokeUserSessions(user.id);
+  await setUserSession(event, {
+    userId: user.id,
+    username: user.username,
+    role: user.role as Role,
+    sessionEpoch: epoch,
+  });
 
   console.info('[auth/change-password] Password changed for user %d', user.id);
   return { success: true };

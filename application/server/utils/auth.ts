@@ -2,7 +2,7 @@ import type { H3Event } from 'h3';
 import { useSession, updateSession, clearSession as h3ClearSession } from 'h3';
 import { getDatabase } from '../database';
 import { users, apiKeys } from '../database/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { User } from '../database/schema';
 import { scrypt, randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -33,18 +33,28 @@ export interface SessionData {
   userId: number;
   username: string;
   role: Role;
+  // The user's session epoch at sign-in. A later bump (password/role change,
+  // unlink) makes this stale, which invalidates the session server-side.
+  sessionEpoch?: number;
+}
+
+// The key h3 uses to seal/unseal the session cookie. `PIWI_AUTH_SECRET` from the
+// runtime environment wins over the build-time-baked config value, so the
+// prebuilt image honors a secret supplied at run time (see isAuthEnabled).
+function getSessionPassword(config: ReturnType<typeof useRuntimeConfig>): string {
+  return process.env.PIWI_AUTH_SECRET || config.authSecret;
 }
 
 // Get session from cookie
 export async function getUserSession(event: H3Event): Promise<SessionData | null> {
   const config = useRuntimeConfig(event);
-  if (!config.authEnabled) {
+  if (!isAuthEnabled(event)) {
     return null;
   }
 
   try {
     const session = await useSession<SessionData>(event, {
-      password: config.authSecret,
+      password: getSessionPassword(config),
       maxAge: 60 * 60 * 24 * 7, // 7 days
     });
 
@@ -66,7 +76,7 @@ export async function setUserSession(event: H3Event, sessionData: SessionData): 
   await updateSession<SessionData>(
     event,
     {
-      password: config.authSecret,
+      password: getSessionPassword(config),
       maxAge: 60 * 60 * 24 * 7, // 7 days
     },
     sessionData,
@@ -77,7 +87,7 @@ export async function setUserSession(event: H3Event, sessionData: SessionData): 
 export async function clearUserSession(event: H3Event): Promise<void> {
   const config = useRuntimeConfig(event);
   await h3ClearSession(event, {
-    password: config.authSecret,
+    password: getSessionPassword(config),
   });
 }
 
@@ -90,7 +100,33 @@ export async function getCurrentUser(event: H3Event): Promise<User | null> {
 
   const db = await getDatabase();
   const userResults = await db.select().from(users).where(eq(users.id, session.userId));
-  return userResults[0] || null;
+  const user = userResults[0];
+  if (!user) {
+    return null;
+  }
+
+  // A session minted before the user's epoch was last bumped is revoked.
+  if ((session.sessionEpoch ?? 0) !== (user.sessionEpoch ?? 0)) {
+    return null;
+  }
+
+  return user;
+}
+
+/**
+ * Revoke every existing session for a user by advancing their session epoch.
+ * Sessions carry the epoch they were minted with; `getCurrentUser` rejects any
+ * whose epoch no longer matches. Returns the new epoch so the caller can
+ * immediately re-issue the current device a valid session if desired.
+ */
+export async function revokeUserSessions(userId: number): Promise<number> {
+  const db = await getDatabase();
+  const rows = await db
+    .update(users)
+    .set({ sessionEpoch: sql`${users.sessionEpoch} + 1` })
+    .where(eq(users.id, userId))
+    .returning({ sessionEpoch: users.sessionEpoch });
+  return rows[0]?.sessionEpoch ?? 0;
 }
 
 // Verify user credentials and return user
@@ -154,12 +190,18 @@ export function hasRole(user: User | null, requiredRoles: Role[]): boolean {
   return requiredRoles.includes(user.role as Role);
 }
 
-// Check if authentication is enabled
+// Check if authentication is enabled.
+//
+// `PIWI_AUTH_ENABLED` is read from the runtime environment first: on the
+// prebuilt image the config value is baked at build time (when the variable is
+// unset), so the env check is what lets an operator turn auth on at run time.
+// The baked `config.authEnabled` remains the fallback for source builds and for
+// the `NUXT_AUTH_ENABLED` runtime override.
 export function isAuthEnabled(event?: H3Event): boolean {
+  if (process.env.PIWI_AUTH_ENABLED === 'true') {
+    return true;
+  }
   const config = event ? useRuntimeConfig(event) : useRuntimeConfig();
-  // Nitro overrides runtimeConfig from NUXT_* env vars at startup. Since
-  // environment variables are always strings, a boolean `true` from the
-  // config file becomes the string `"true"` after the override.
   return String(config.authEnabled) === 'true';
 }
 
@@ -262,6 +304,7 @@ export async function requireAuth(event: H3Event, allowedRoles?: Role[]): Promis
       oauthProviderId: null,
       email: null,
       emailVerified: false,
+      sessionEpoch: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

@@ -117,6 +117,10 @@ RUN --mount=type=cache,target=/home/nodejs/.npm,uid=1001,gid=1001 \
 # Copy built application — pure-JS deps inlined by Nitro noExternals
 COPY --chown=nodejs:nodejs --from=builder /app/application/.output ./application/.output
 
+# Reconciles operator-facing PIWI_AUTH_* env onto the NUXT_* runtime overrides
+# the prebuilt server reads (see the file for why). Preloaded before the entry.
+COPY --chown=nodejs:nodejs docker-server-env.mjs ./
+
 EXPOSE ${PORT}
 
 # Readiness for compose/k8s/monitors — /api/health verifies DB connectivity
@@ -124,4 +128,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget -qO /dev/null "http://127.0.0.1:${PORT}/api/health" || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "application/.output/server/index.mjs"]
+CMD ["node", "--import", "./docker-server-env.mjs", "application/.output/server/index.mjs"]

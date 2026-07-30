@@ -17,3 +17,26 @@ export function checkRateLimit(key: string, limit: number, windowMs: number): bo
   entry.count++;
   return true;
 }
+
+/** Whether `key` has reached `limit` within its current window, without counting this call. */
+export function isRateLimited(key: string, limit: number): boolean {
+  const entry = store.get(key);
+  if (!entry || entry.resetAt < Date.now()) return false;
+  return entry.count >= limit;
+}
+
+/** Record one hit against `key`, starting a fresh window if none is active. Used to count failures. */
+export function recordRateLimitHit(key: string, windowMs: number): void {
+  const now = Date.now();
+  const entry = store.get(key);
+  if (!entry || entry.resetAt < now) {
+    store.set(key, { count: 1, resetAt: now + windowMs });
+  } else {
+    entry.count++;
+  }
+}
+
+/** Clear a key's counter (e.g. after a success), so it no longer counts toward a lockout. */
+export function resetRateLimit(key: string): void {
+  store.delete(key);
+}
