@@ -6,6 +6,7 @@ import { cancelInstanceRuns } from '../../../utils/cancel-instance-runs';
 import { sanitizeMetadata } from '../../../utils/sanitize';
 import { runEventBus } from '../../../utils/run-events';
 import { persistShardToken } from '../../../utils/shard-tokens';
+import { timingSafeEqualStr } from '../../../utils/timing-safe';
 
 defineRouteMeta({
   openAPI: {
@@ -80,7 +81,7 @@ export default eventHandler(async (event) => {
   // For sharded runs, accept the setup token from the shardTokens set
   const isValidShardSetupToken = isSharded && runEventBus.isValidShardToken(id, body.setupToken);
 
-  if (testRun.streamToken !== body.setupToken && !isValidShardSetupToken) {
+  if (!timingSafeEqualStr(testRun.streamToken ?? '', body.setupToken) && !isValidShardSetupToken) {
     throw createError({
       statusCode: 403,
       message: 'Invalid setup token',

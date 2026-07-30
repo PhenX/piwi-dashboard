@@ -144,18 +144,24 @@ export async function revokeUserSessions(userId: number): Promise<number> {
   return rows[0]?.sessionEpoch ?? 0;
 }
 
+// A syntactically-valid scrypt hash (salt:hex) used only to spend the same
+// verification work for a nonexistent or password-less account as for a real
+// one. Its value is irrelevant — the comparison always fails; it exists solely
+// so login response timing can't be used to tell whether a username exists.
+const DUMMY_PASSWORD_HASH = `${'0'.repeat(32)}:${'0'.repeat(128)}`;
+
 // Verify user credentials and return user
 export async function verifyUser(username: string, password: string): Promise<User | null> {
   const db = await getDatabase();
   const userResults = await db.select().from(users).where(eq(users.username, username));
   const user = userResults[0];
 
-  if (!user) {
-    return null;
-  }
-
-  // OAuth-only users have empty password and cannot log in with credentials
-  if (!user.password) {
+  // Equalize response time whether or not the account exists and has a
+  // password: a missing or OAuth-only (password-less) account still spends one
+  // scrypt verification against a dummy hash, so login timing can't be used to
+  // enumerate which usernames are registered (audit L3).
+  if (!user || !user.password) {
+    await verifyPassword(password, DUMMY_PASSWORD_HASH);
     return null;
   }
 

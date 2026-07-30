@@ -13,6 +13,8 @@
 // Combined with the loopback-only bind, this keeps the bundled server reachable
 // only by the app itself and by tools the user has given the token to — not by
 // other local processes or web pages open in the user's browser.
+import { timingSafeEqualStr } from '../utils/timing-safe';
+
 export default defineEventHandler((event) => {
   const token = process.env.PIWI_DESKTOP_TOKEN;
   if (!token) return; // not the desktop build — no-op
@@ -26,7 +28,7 @@ export default defineEventHandler((event) => {
   const authz = getRequestHeader(event, 'authorization');
   const bearer = authz && authz.startsWith('Bearer ') ? authz.slice('Bearer '.length) : undefined;
   const presented = getCookie(event, 'piwi_token') || getRequestHeader(event, 'x-piwi-token') || bearer;
-  if (presented === token) return;
+  if (presented && timingSafeEqualStr(presented, token)) return;
 
   throw createError({ statusCode: 401, statusMessage: 'Desktop access token required' });
 });
