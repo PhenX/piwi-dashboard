@@ -4,6 +4,7 @@ import { notificationChannels, users } from '../../../database/schema';
 import { requireAuth, isAuthEnabled } from '../../../utils/auth';
 import { decryptSecret, getEncryptionKey } from '../../../utils/crypto';
 import { sendEmail, renderTestEmail, isEmailConfigured } from '../../../utils/email';
+import { safeFetch } from '../../../utils/safe-fetch';
 import { Role } from '#shared/types';
 
 defineRouteMeta({
@@ -50,7 +51,7 @@ export default eventHandler(async (event) => {
     } else if (channel.type === 'slack') {
       const webhookUrl = config.webhookUrl as string;
       if (!webhookUrl) throw new Error('No Slack webhook URL');
-      const res = await fetch(webhookUrl, {
+      const res = await safeFetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: ':bell: Test notification from Piwi Dashboard' }),
@@ -67,7 +68,7 @@ export default eventHandler(async (event) => {
         const { createHmac } = await import('node:crypto');
         headers['X-Piwi-Signature'] = `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
       }
-      const res = await fetch(url, { method: 'POST', headers, body });
+      const res = await safeFetch(url, { method: 'POST', headers, body });
       if (!res.ok) throw new Error(`Webhook returned ${res.status}`);
     } else if (channel.type === 'browser') {
       return { success: true };

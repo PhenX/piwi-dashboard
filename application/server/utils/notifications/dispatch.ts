@@ -2,6 +2,7 @@ import { and, eq, lte, lt } from 'drizzle-orm';
 import { notificationDeliveries, notificationChannels, users } from '../../database/schema';
 import { sendEmail, renderRunNotificationEmail, renderNewClusterEmail, isEmailConfigured } from '../email';
 import { decryptSecret, getEncryptionKey } from '../crypto';
+import { safeFetch } from '../safe-fetch';
 import type {
   NotificationEvent,
   NotificationPayload,
@@ -87,7 +88,7 @@ async function sendToSlack(config: Record<string, unknown>, event: NotificationE
 
   const body = { text: `${emoji} *${text}*`, blocks };
 
-  const res = await fetch(webhookUrl, {
+  const res = await safeFetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -113,7 +114,7 @@ async function sendToWebhook(config: Record<string, unknown>, event: Notificatio
     headers['X-Piwi-Signature'] = `sha256=${sig}`;
   }
 
-  const res = await fetch(url, { method: 'POST', headers, body });
+  const res = await safeFetch(url, { method: 'POST', headers, body });
   if (!res.ok) throw new Error(`Webhook returned ${res.status}`);
 }
 

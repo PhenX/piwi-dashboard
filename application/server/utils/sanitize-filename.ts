@@ -11,6 +11,6 @@ export function sanitizeFilename(filename: string): string {
  * entries) must still resolve — so containment, not rewriting, is the guard. */
 export function safeStorageSegment(name: string): string | null {
   if (!name || name === '.' || name === '..') return null;
-  if (/[/\\\0]/.test(name)) return null;
+  if (/[/\\]/.test(name) || name.includes(String.fromCharCode(0))) return null;
   return name;
 }
