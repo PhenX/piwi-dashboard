@@ -11,6 +11,12 @@ const serverCommand = useBuiltServer ? 'node .output/server/index.mjs' : 'npm ru
 /** An already-installed Chromium to use instead of the revision Playwright pins. */
 const chromiumExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?.trim() || '';
 
+// Stored third-party secrets (AI keys, webhook secrets) refuse to persist under
+// the built-in default encryption key. Give every test server a real one — it is
+// merged into each webServer via the inherited process.env — so the settings and
+// channel flows the suite exercises can save.
+process.env.PIWI_SECRET_KEY ||= 'test-encryption-secret-key-not-for-production';
+
 // `PIWI_AUTH_*` is resolved into `runtimeConfig` when the Nuxt config is
 // evaluated, which for a production build is build time. Nitro maps the
 // `NUXT_`-prefixed forms onto the same keys at startup, so auth-enabled servers
