@@ -21,7 +21,12 @@ Linux is deferred.
   reach the bundled API. Any new desktop-only route must stay behind that guard.
 - **The reporter discovery file is a cross-package contract.** The shell publishes `{ url, token }` to
   `~/.piwi/desktop.json` while it runs and deletes it on quit; `@piwitests/reporter` reads it from
-  `src/internal/config/desktop.ts`. The two ship separately, so changing the path or the shape means changing both.
+  `src/internal/config/desktop.ts`, and `src-tauri/src/mcp_stdio.rs` resolves the app's address from it on every
+  message. The three ship separately, so changing the path or the shape means changing all of them.
+- **`piwi-desktop mcp-stdio` is a published entry point.** Claude Desktop takes only stdio MCP servers, so its
+  one-click setup writes that command into `claude_desktop_config.json` on the user's machine. Renaming the argument
+  breaks every config already written — it can only be added to, and the bridge must keep speaking newline-delimited
+  JSON-RPC on stdin/stdout.
 - Front-end code that behaves differently inside the shell uses the `useIsDesktop` / `useTauri` composables and the
   `app/components/desktop/` cards — do not sniff user agents.
 - The sidecar layout (`src-tauri/binaries/node-<triple>`, `src-tauri/resources/app-server/.output/`) is what the

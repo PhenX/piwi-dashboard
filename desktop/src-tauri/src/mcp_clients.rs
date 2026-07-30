@@ -2,9 +2,11 @@
 //
 // The dashboard's /mcp page shows copy-paste snippets for connecting MCP
 // clients; on this machine the shell can do better and write the client's own
-// config file. Every client is configured the same way: a `piwi` entry inside
-// the client's server map, pointing at this app's /mcp endpoint with the local
-// access token as the Bearer header.
+// config file. Almost every client is configured the same way: a `piwi` entry
+// inside the client's server map, pointing at this app's /mcp endpoint with the
+// local access token as the Bearer header. Claude Desktop is the exception —
+// it accepts only stdio servers there, so it gets a command instead (see
+// `stdio_bridge_entry`).
 //
 // Editing another app's config is done conservatively:
 //   - only strict JSON is ever rewritten — a file that does not parse (JSONC
@@ -13,15 +15,17 @@
 //   - only the `piwi` key is added, updated or removed — everything else in
 //     the file is preserved as parsed.
 //
-// The written URL embeds the port picked at launch, which is not guaranteed
+// A written URL embeds the port picked at launch, which is not guaranteed
 // across launches — so `heal_configured_clients` runs at startup and rewrites
-// any entry that no longer matches the live URL/token.
+// any entry that no longer matches what this app would write today.
 
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Map, Value};
 use tauri::{AppHandle, Manager as _};
 use tauri_plugin_opener::OpenerExt as _;
+
+use crate::mcp_stdio;
 
 /// The live connection details every written entry must match.
 pub struct ServerInfo {
@@ -75,13 +79,38 @@ fn entry_for(id: &str, info: &ServerInfo) -> Value {
     let url = info.mcp_url();
     let bearer = info.bearer();
     match id {
+        "claude-desktop" => stdio_bridge_entry(&bridge_command()),
         "cursor" => json!({ "url": url, "headers": { "Authorization": bearer } }),
         "opencode" => json!({ "type": "remote", "url": url, "headers": { "Authorization": bearer } }),
         "windsurf" => json!({ "serverUrl": url, "headers": { "Authorization": bearer } }),
         "gemini-cli" => json!({ "httpUrl": url, "headers": { "Authorization": bearer } }),
-        // Claude Code, Claude Desktop and VS Code share the `type: http` shape.
+        // Claude Code and VS Code share the `type: http` shape.
         _ => json!({ "type": "http", "url": url, "headers": { "Authorization": bearer } }),
     }
+}
+
+/// Claude Desktop reads **only stdio servers** from `claude_desktop_config.json`
+/// — an entry carrying a `url` is refused at startup ("the following entries in
+/// claude_desktop_config.json are not valid MCP server configurations and were
+/// ignored"), so a remote endpoint has to arrive behind a local command.
+///
+/// That command is this very app in bridge mode (see `mcp_stdio`): nothing to
+/// install, no Node or `npx` on PATH, and because the bridge resolves the
+/// address from the reporter discovery file when it runs, the entry never
+/// drifts with the port and no token is copied into another app's config.
+fn stdio_bridge_entry(command: &str) -> Value {
+    json!({ "command": command, "args": [mcp_stdio::STDIO_ARG] })
+}
+
+/// This executable, as the path another app can spawn it by. `current_exe`
+/// fails only in pathological cases (the binary unlinked mid-run); the bare
+/// name is a last resort that at least resolves if the app is on PATH.
+fn bridge_command() -> String {
+    std::env::current_exe()
+        // Windows hands paths back with the `\\?\` verbatim prefix, which
+        // launchers mishandle — strip it (see `node_path`).
+        .map(|exe| crate::node_path(&exe))
+        .unwrap_or_else(|_| "piwi-desktop".to_string())
 }
 
 const CLAUDE_DESKTOP_CONFIG: &str = "claude_desktop_config.json";
@@ -309,9 +338,9 @@ fn set_entry(app: &AppHandle, id: &str, connect: bool) -> Result<McpClientStatus
     Ok(status_of(app, id, &info))
 }
 
-/// Rewrite the entry of every already-configured client whose URL or token no
-/// longer matches — the port is not guaranteed across launches. Quietly skips
-/// anything unreadable or manual.
+/// Rewrite the entry of every already-configured client that no longer matches
+/// what this app would write — the port is not guaranteed across launches.
+/// Quietly skips anything unreadable or manual.
 pub fn heal_configured_clients(app: &AppHandle) {
     let Some(info) = app.try_state::<ServerInfo>() else {
         return;
@@ -424,9 +453,55 @@ mod tests {
             entry_for("opencode", &i),
             json!({ "type": "remote", "url": "http://127.0.0.1:3000/mcp", "headers": { "Authorization": "Bearer pd_test" } })
         );
-        for id in ["claude-code", "claude-desktop", "vscode"] {
+        for id in ["claude-code", "vscode"] {
             assert_eq!(entry_for(id, &i)["type"], "http");
         }
+    }
+
+    /// Claude Desktop ignores any entry that is not a local command, so it gets
+    /// this app in bridge mode — never a URL.
+    #[test]
+    fn claude_desktop_gets_a_stdio_command_not_a_url() {
+        let entry = stdio_bridge_entry(r"C:\Program Files\Piwi Dashboard\piwi-desktop.exe");
+        assert_eq!(
+            entry,
+            json!({
+                "command": r"C:\Program Files\Piwi Dashboard\piwi-desktop.exe",
+                "args": ["mcp-stdio"],
+            })
+        );
+
+        let live = entry_for("claude-desktop", &info());
+        assert!(live.get("url").is_none());
+        assert!(live.get("type").is_none());
+        assert!(live["command"].as_str().is_some_and(|c| !c.is_empty()));
+    }
+
+    /// The bridge entry carries no port and no token, so it stays correct
+    /// whatever port the app lands on — while a URL entry, the shape Claude
+    /// Desktop refuses, is classified stale and rewritten on the next launch.
+    #[test]
+    fn the_claude_desktop_entry_survives_a_port_change() {
+        let expected = entry_for("claude-desktop", &info());
+        let other_port = entry_for(
+            "claude-desktop",
+            &ServerInfo {
+                port: 51234,
+                token: "pd_other".into(),
+            },
+        );
+        assert_eq!(expected, other_port);
+
+        let configured = json!({ "mcpServers": { "piwi": expected } });
+        assert_eq!(
+            classify(Some(&configured), "mcpServers", &expected),
+            "connected"
+        );
+
+        let old_shape = json!({
+            "mcpServers": { "piwi": { "type": "http", "url": "http://127.0.0.1:3000/mcp" } }
+        });
+        assert_eq!(classify(Some(&old_shape), "mcpServers", &expected), "stale");
     }
 
     #[test]

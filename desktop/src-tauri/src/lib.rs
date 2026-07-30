@@ -11,6 +11,7 @@
 // network.
 
 mod mcp_clients;
+mod mcp_stdio;
 mod runner;
 mod updates;
 
@@ -45,10 +46,11 @@ const READY_TIMEOUT_SECS: u64 = 60;
 /// Preferred loopback port — stable so the reporter can target it; falls back to
 /// a free port if it's already in use (see `pick_port`).
 const PREFERRED_PORT: u16 = 3000;
-/// Home-relative location of the file the Playwright reporter reads to find this
-/// app: `~/.piwi/desktop.json` (see `write_discovery_file`).
-const DISCOVERY_DIR: &str = ".piwi";
-const DISCOVERY_FILE: &str = "desktop.json";
+/// Home-relative location of the file the Playwright reporter — and this app's
+/// own MCP stdio bridge — read to find this app: `~/.piwi/desktop.json` (see
+/// `write_discovery_file`).
+pub(crate) const DISCOVERY_DIR: &str = ".piwi";
+pub(crate) const DISCOVERY_FILE: &str = "desktop.json";
 
 /// Holds the running Node sidecar so it can be stopped cleanly on quit.
 #[derive(Default)]
@@ -417,6 +419,15 @@ const E2E_PLAYWRIGHT_CAPABILITY: &str = r#"{
 }"#;
 
 pub fn run() {
+    // Claude Desktop only loads stdio MCP servers, so its one-click setup points
+    // it at this same binary in bridge mode: it proxies MCP over stdin/stdout to
+    // the running app's /mcp endpoint. Handled before anything else — no window,
+    // no tray icon, no second server, and no hand-off to the running instance.
+    if std::env::args().skip(1).any(|a| mcp_stdio::is_bridge_arg(&a)) {
+        mcp_stdio::run_bridge();
+        return;
+    }
+
     let launched_hidden = std::env::args().any(|a| a == "--hidden");
 
     #[allow(unused_mut)]
