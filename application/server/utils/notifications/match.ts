@@ -1,5 +1,6 @@
 import { and, eq, or, isNull } from 'drizzle-orm';
-import { subscriptions, notificationChannels, notificationDeliveries } from '../../database/schema';
+import { subscriptions, notificationChannels, notificationDeliveries, users } from '../../database/schema';
+import { getProjectScope, scopeAllows, type DrizzleDB } from '../project-access';
 import type { NotificationEvent, NotificationPayload, RunFinishedPayload } from '#shared/notification-events';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 
@@ -87,7 +88,22 @@ export async function matchAndEnqueue(
   let enqueued = 0;
   const now = new Date();
 
+  // Re-check project access at delivery time so a subscription never leaks a
+  // project the subscriber can no longer reach — whether it predates
+  // creation-time scoping or the user was since removed from the project.
+  const accessByUser = new Map<number, boolean>();
+  const subscriberCanAccess = async (userId: number): Promise<boolean> => {
+    const cached = accessByUser.get(userId);
+    if (cached !== undefined) return cached;
+    const [u] = await db.select().from(users).where(eq(users.id, userId));
+    const allowed = u ? scopeAllows(await getProjectScope(db as unknown as DrizzleDB, u), projectId) : false;
+    accessByUser.set(userId, allowed);
+    return allowed;
+  };
+
   for (const { sub, channel } of rows) {
+    if (sub.userId == null || !(await subscriberCanAccess(sub.userId))) continue;
+
     // Check event is subscribed
     const events = (sub.events as string[] | null) ?? [];
     if (!events.includes(event)) continue;
