@@ -720,6 +720,8 @@ export const users = sqliteTable(
     avatarUrl: text('avatar_url'), // Avatar from OAuth provider
     oauthProvider: text('oauth_provider'), // 'google', 'github', etc.
     oauthProviderId: text('oauth_provider_id'), // User ID from the OAuth provider
+    // Incremented to revoke all of a user's existing sessions (password change/reset, role change, unlink).
+    sessionEpoch: integer('session_epoch').notNull().default(0),
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),

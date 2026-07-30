@@ -309,6 +309,13 @@
       "when": 1785273985552,
       "tag": "0043_watery_dragon_lord",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1785430061283,
+      "tag": "0044_panoramic_eddie_brock",
+      "breakpoints": true
     }
   ]
 }

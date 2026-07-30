@@ -26,6 +26,9 @@ const PRIVATE_PATTERNS = [
 
 export function isPrivateHost(hostname: string): boolean {
   const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal') || host.endsWith('.local')) {
+    return true;
+  }
   return PRIVATE_PATTERNS.some((p) => p.test(host));
 }
 

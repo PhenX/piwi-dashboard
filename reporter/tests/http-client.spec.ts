@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as http from 'node:http';
 import { HttpClient } from '../src/internal/transport/http-client.js';
 import { Logger } from '../src/internal/support/logger.js';
@@ -10,9 +10,11 @@ interface RecordedReq {
   body: string;
 }
 
-function startServer(
-  handler: (req: RecordedReq, res: http.ServerResponse) => void,
-): { server: http.Server; url: string; requests: RecordedReq[] } {
+function startServer(handler: (req: RecordedReq, res: http.ServerResponse) => void): {
+  server: http.Server;
+  url: string;
+  requests: RecordedReq[];
+} {
   const requests: RecordedReq[] = [];
   const server = http.createServer((req, res) => {
     let body = '';
@@ -209,6 +211,33 @@ describe('HttpClient (against fake http.Server)', () => {
         server.close();
         await new Promise<void>((r) => server.on('close', () => r()));
       }
+    });
+  });
+
+  describe('insecure transport warning', () => {
+    function warningsFor(url: string): string[] {
+      const logger = new Logger(false);
+      const spy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+      new HttpClient(url, logger);
+      const calls = spy.mock.calls.map((c) => String(c[0]));
+      spy.mockRestore();
+      return calls;
+    }
+
+    it('warns when the dashboard URL is plaintext http:// to a remote host', () => {
+      const w = warningsFor('http://dashboard.example.com:3000');
+      expect(w).toHaveLength(1);
+      expect(w[0]).toMatch(/plaintext http/i);
+    });
+
+    it('does not warn for loopback http:// (localhost / 127.0.0.1 / ::1)', () => {
+      expect(warningsFor('http://localhost:3000')).toHaveLength(0);
+      expect(warningsFor('http://127.0.0.1:3000')).toHaveLength(0);
+      expect(warningsFor('http://[::1]:3000')).toHaveLength(0);
+    });
+
+    it('does not warn for https:// endpoints', () => {
+      expect(warningsFor('https://dashboard.example.com')).toHaveLength(0);
     });
   });
 });

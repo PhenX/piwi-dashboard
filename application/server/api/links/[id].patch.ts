@@ -1,5 +1,4 @@
-import { requireAuth } from '../../utils/auth';
-import { getDatabase } from '../../database';
+import { requireResolvedProjectAccess, resolveLinkProjectId } from '../../utils/project-access';
 import { patchLink } from '#shared/handlers/links';
 import { z } from 'zod';
 
@@ -19,12 +18,12 @@ const updateLinkSchema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event);
-
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) {
     throw createError({ statusCode: 400, message: 'Invalid link ID' });
   }
+
+  const { db } = await requireResolvedProjectAccess(event, id, resolveLinkProjectId, 'Link');
 
   const body = await readBody(event);
   const validation = updateLinkSchema.safeParse(body);
@@ -38,7 +37,6 @@ export default eventHandler(async (event) => {
   }
 
   try {
-    const db = await getDatabase();
     return await patchLink(db, id, validation.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update link';

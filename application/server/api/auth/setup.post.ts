@@ -1,5 +1,6 @@
 import { Role } from '#shared/types';
-import { createUser, isAuthEnabled, needsInitialSetup } from '../../utils/auth';
+import { createUser, isAuthEnabled, needsInitialSetup, claimInitialSetup, releaseInitialSetup } from '../../utils/auth';
+import { checkRateLimit } from '../../utils/rate-limit';
 import { z } from 'zod';
 
 defineRouteMeta({
@@ -15,7 +16,7 @@ defineRouteMeta({
 
 const createAdminSchema = z.object({
   username: z.string().min(3),
-  password: z.string().min(6),
+  password: z.string().min(8),
   name: z.string().optional(),
 });
 
@@ -25,6 +26,11 @@ export default eventHandler(async (event) => {
       statusCode: 400,
       message: 'Authentication is not enabled',
     });
+  }
+
+  const ip = getRequestIP(event) ?? 'unknown';
+  if (!checkRateLimit(`setup:${ip}`, 5, 15 * 60 * 1000)) {
+    throw createError({ statusCode: 429, message: 'Too many requests. Please wait before trying again.' });
   }
 
   if (!(await needsInitialSetup())) {
@@ -47,16 +53,31 @@ export default eventHandler(async (event) => {
 
   const { username, password, name } = validation.data;
 
-  // Create admin user
-  const user = await createUser(username, password, Role.ADMINISTRATOR, name);
+  // Close the check-then-create race: two concurrent setup requests can both
+  // pass the needsInitialSetup() check above and each create an administrator.
+  // claimInitialSetup() lets exactly one of them proceed; the rest are rejected.
+  if (!(await claimInitialSetup())) {
+    throw createError({
+      statusCode: 400,
+      message: 'Users already exist. This endpoint is only for initial setup.',
+    });
+  }
 
-  return {
-    success: true,
-    user: {
-      id: user.id,
-      username: user.username,
-      role: user.role as Role,
-      name: user.name,
-    },
-  };
+  try {
+    const user = await createUser(username, password, Role.ADMINISTRATOR, name);
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role as Role,
+        name: user.name,
+      },
+    };
+  } catch (err) {
+    // Roll back the claim so a transient failure doesn't permanently lock setup.
+    await releaseInitialSetup();
+    throw err;
+  }
 });

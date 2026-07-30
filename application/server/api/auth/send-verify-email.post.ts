@@ -2,6 +2,7 @@ import { getDatabase } from '../../database';
 import { requireAuth } from '../../utils/auth';
 import { mintAccountToken } from '../../utils/account-tokens';
 import { isEmailConfigured, sendEmail, renderVerifyEmail } from '../../utils/email';
+import { checkRateLimit } from '../../utils/rate-limit';
 
 defineRouteMeta({
   openAPI: {
@@ -16,6 +17,11 @@ export default eventHandler(async (event) => {
   const user = await requireAuth(event);
   if (!user.email) throw createError({ statusCode: 400, message: 'No email address on this account' });
   if (!isEmailConfigured()) throw createError({ statusCode: 503, message: 'SMTP is not configured' });
+
+  // Bound how often a user can trigger verification emails.
+  if (!checkRateLimit(`verify-email:${user.id}`, 5, 15 * 60 * 1000)) {
+    throw createError({ statusCode: 429, message: 'Too many requests. Please wait before trying again.' });
+  }
 
   const db = await getDatabase();
   const token = await mintAccountToken(db, user.id, 'verify');

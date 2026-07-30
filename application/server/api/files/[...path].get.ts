@@ -20,12 +20,20 @@ defineRouteMeta({
 
 const gunzipAsync = promisify(gunzip);
 
+// Cap decompressed archive size to prevent gzip bombs. Stored report archives
+// originate from uploads (open when auth is disabled) and are inflated fully
+// into memory here, so an unbounded ratio could expand a few kilobytes to
+// gigabytes and OOM the server. 1 GiB exceeds any realistic report while
+// stopping bombs; zlib throws ERR_BUFFER_TOO_LARGE past the cap (callers
+// already treat a decompression failure as "not found" and fall through).
+const MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024; // 1 GiB
+
 /**
  * Parse a compressed report archive and find a specific file by name.
  * Archive format: custom binary with LE length-prefixed path+content pairs.
  */
 async function findInArchive(buffer: Buffer, targetName: string): Promise<Buffer | null> {
-  const uncompressed = await gunzipAsync(buffer);
+  const uncompressed = await gunzipAsync(buffer, { maxOutputLength: MAX_ARCHIVE_BYTES });
   let offset = 0;
   while (offset < uncompressed.length) {
     if (offset + 4 > uncompressed.length) break;
@@ -48,6 +56,20 @@ async function findInArchive(buffer: Buffer, targetName: string): Promise<Buffer
 }
 
 const COMPRESSIBLE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+
+// Content types a browser can execute as a scriptable document. Untrusted stored
+// files are never served as one of these on the strength of a caller override.
+const ACTIVE_CONTENT_TYPES = new Set([
+  'text/html',
+  'application/xhtml+xml',
+  'image/svg+xml',
+  'application/xml',
+  'text/xml',
+]);
+
+function isActiveContentType(value: string): boolean {
+  return ACTIVE_CONTENT_TYPES.has(value.split(';')[0]!.trim().toLowerCase());
+}
 
 export default eventHandler(async (event) => {
   const path = getRouterParam(event, 'path');
@@ -161,9 +183,13 @@ export default eventHandler(async (event) => {
   }
 
   function resolveContentType(ext: string): string {
-    // If caller provided a content type override, use it for unrecognized extensions
+    // If the caller supplied a content-type for an extension-less attachment,
+    // honor it only for inert types. An override that names an active type
+    // (text/html, image/svg+xml, XML) would turn arbitrary stored bytes into a
+    // scriptable document served from the dashboard origin, so it is ignored —
+    // the file then falls back to octet-stream, which `nosniff` keeps inert.
     const guessed = setContentType(ext);
-    if (guessed === 'application/octet-stream' && overrideContentType) {
+    if (guessed === 'application/octet-stream' && overrideContentType && !isActiveContentType(overrideContentType)) {
       return overrideContentType;
     }
     return guessed;
@@ -171,16 +197,25 @@ export default eventHandler(async (event) => {
 
   /**
    * Apply a Content-Security-Policy sandbox to untrusted HTML responses.
-   * User-uploaded report HTML can contain arbitrary scripts; sandboxing
-   * prevents them from executing in the dashboard's origin.
+   *
+   * Playwright/Monocart reports rely on JavaScript to render, so scripts stay
+   * enabled — but `allow-same-origin` is deliberately omitted, giving the
+   * document a unique opaque origin. Its scripts can no longer read the
+   * dashboard's cookies or localStorage, or make credentialed same-origin calls
+   * to `/api`, so a malicious uploaded report cannot act as the viewer. Bundled
+   * relative resources still load (they are fetched from the dashboard by URL).
    */
   function applyHtmlCsp(): void {
-    // Sandbox with allow-scripts so Playwright/Monocart reports (which rely on
-    // JavaScript to render) are usable.  allow-same-origin is needed for
-    // self-contained resource loads (CSS, JS, fonts, images bundled in the
-    // same directory).  All other sandbox restrictions — no forms, no popups,
-    // no navigation — remain in place.
-    setResponseHeader(event, 'Content-Security-Policy', 'sandbox allow-scripts allow-same-origin');
+    setResponseHeader(event, 'Content-Security-Policy', 'sandbox allow-scripts');
+  }
+
+  /**
+   * SVGs can embed scripts that execute when the file is opened top-level. A
+   * no-scripts sandbox renders it as an inert image and blocks any network
+   * callout, while `<img>` embedding elsewhere in the app is unaffected.
+   */
+  function applySvgCsp(): void {
+    setResponseHeader(event, 'Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
   }
 
   // 1. Try exact path
@@ -242,6 +277,8 @@ export default eventHandler(async (event) => {
     applyInlineDisposition(contentType);
     if (contentType === 'text/html') {
       applyHtmlCsp();
+    } else if (contentType === 'image/svg+xml') {
+      applySvgCsp();
     }
     return fileContent;
   }

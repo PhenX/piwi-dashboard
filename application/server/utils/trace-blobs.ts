@@ -4,6 +4,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { getStorage } from '../storage';
 import { parseZipDirectory, decompressEntry, buildZip } from './trace-zip';
 import type { ZipEntry } from './trace-zip';
+import { safeStorageSegment } from './sanitize-filename';
 
 /**
  * Return the set of hashes that already have a stored blob for the given project.
@@ -65,22 +66,27 @@ export async function upsertTraceBlob(
       const resourcesDir = `project-${projectId}/trace-resources`;
       await storage.mkdir(resourcesDir);
 
+      // Resource entry names come from the untrusted ZIP central directory.
+      // Reduce each to a single safe path segment so a crafted name such as
+      // `resources/../../evil` can never be written outside the project prefix.
+      const safeResources: { meta: (typeof resourceMetas)[number]; name: string }[] = [];
+      for (const meta of resourceMetas) {
+        const name = safeStorageSegment(meta.name.slice('resources/'.length));
+        if (name) safeResources.push({ meta, name });
+      }
+
       // 2. Determine which resource names are genuinely new (no decompression needed)
-      const names = resourceMetas.map((e) => e.name.slice('resources/'.length)).filter(Boolean);
+      const names = safeResources.map((r) => r.name);
       const existingRows = await db
         .select({ name: traceResources.name })
         .from(traceResources)
         .where(and(eq(traceResources.projectId, projectId), inArray(traceResources.name, names)));
       const existingNames = new Set(existingRows.map((r) => r.name));
 
-      const newMetas = resourceMetas.filter((e) => {
-        const name = e.name.slice('resources/'.length);
-        return name && !existingNames.has(name);
-      });
+      const newResources = safeResources.filter((r) => !existingNames.has(r.name));
 
       // 3. Decompress and store new resources one at a time to limit peak memory
-      for (const meta of newMetas) {
-        const name = meta.name.slice('resources/'.length);
+      for (const { meta, name } of newResources) {
         const resourceData = await decompressEntry(data, meta);
         const resourcePath = `${resourcesDir}/${name}`;
         await storage.writeFile(resourcePath, resourceData);
@@ -106,8 +112,8 @@ export async function upsertTraceBlob(
         }
       }
 
-      // 5. Collect all resource names (new + pre-existing) for the manifest
-      const resourceNames = resourceMetas.map((e) => e.name.slice('resources/'.length)).filter(Boolean);
+      // 5. All resource names (new + pre-existing) for the manifest
+      const resourceNames = names;
 
       const slimZip = buildZip(eventEntries);
       const manifestJson = Buffer.from(JSON.stringify({ resources: resourceNames }), 'utf8');
@@ -118,7 +124,7 @@ export async function upsertTraceBlob(
       const savedBytes = data.length - slimZip.length;
       console.log(
         `[TraceBlob] ${resourceNames.length} resources extracted for project ${projectId}` +
-          ` (${newMetas.length} new), slim ZIP saves ${Math.round(savedBytes / 1024)} KB`,
+          ` (${newResources.length} new), slim ZIP saves ${Math.round(savedBytes / 1024)} KB`,
       );
     }
   } catch (err) {

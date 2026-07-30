@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `session_epoch` integer DEFAULT 0 NOT NULL;

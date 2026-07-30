@@ -18,6 +18,16 @@ if (!existsSync(entry)) {
   process.exit(1)
 }
 
+// The prebuilt server bakes its runtime config at build time and only honors
+// NUXT_*-prefixed overrides at run time. Map the operator-facing PIWI_AUTH_*
+// variables onto those overrides — before the server loads — so enabling auth at
+// run time takes effect on both the server and the browser (public) config.
+if (process.env.PIWI_AUTH_ENABLED === 'true') {
+  process.env.NUXT_AUTH_ENABLED ??= 'true'
+  process.env.NUXT_PUBLIC_AUTH_ENABLED ??= 'true'
+}
+if (process.env.PIWI_AUTH_SECRET) process.env.NUXT_AUTH_SECRET ??= process.env.PIWI_AUTH_SECRET
+
 const port = process.env.PORT || process.env.NITRO_PORT || '3000'
 console.log(`Starting Piwi Dashboard on http://localhost:${port}`)
 console.log(`Data (SQLite database + file storage) will be stored in ${resolve(process.cwd(), '.data')}`)

@@ -70,7 +70,36 @@ export class HttpClient {
     private readonly serverUrl: string,
     private readonly logger: Logger = new Logger(),
     private readonly timeout = 30000,
-  ) {}
+  ) {
+    this.warnIfInsecureTransport();
+  }
+
+  /**
+   * Warn once when the dashboard URL is plaintext `http://` to a non-loopback
+   * host. The reporter sends the API key as a Bearer token — and uploads
+   * captured test data, including request URLs whose query strings the server
+   * only strips after receipt — over this connection, so a non-TLS remote
+   * endpoint exposes the key and payloads on the wire. Loopback (localhost /
+   * 127.0.0.1 / ::1) is exempt: that traffic never leaves the machine. This
+   * warns rather than refuses so internal HTTP deployments (e.g. behind a VPN)
+   * still work, but the exposure is no longer silent.
+   */
+  private warnIfInsecureTransport(): void {
+    let url: URL;
+    try {
+      url = new URL(this.serverUrl);
+    } catch {
+      return; // a malformed URL surfaces on the first request instead
+    }
+    if (url.protocol !== 'http:') return;
+    const host = url.hostname.toLowerCase();
+    const isLoopback =
+      host === 'localhost' || host.endsWith('.localhost') || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+    if (isLoopback) return;
+    this.logger.warn(
+      `Dashboard URL ${this.serverUrl} uses plaintext http:// — the API key and captured test data are transmitted unencrypted. Use https:// for any non-local server.`,
+    );
+  }
 
   /** Base URL of the Piwi Dashboard server this client talks to (used to print run links). */
   get baseUrl(): string {

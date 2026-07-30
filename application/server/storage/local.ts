@@ -1,6 +1,6 @@
 import { readFile as fsReadFile, writeFile as fsWriteFile, mkdir as fsMkdir, existsSync } from 'fs';
 import { rm } from 'fs/promises';
-import { join, dirname } from 'path';
+import { join, dirname, resolve, relative, isAbsolute } from 'path';
 import { promisify } from 'util';
 import type { StorageAdapter } from './types';
 
@@ -19,8 +19,22 @@ export class LocalStorageAdapter implements StorageAdapter {
     this.basePath = basePath;
   }
 
-  async writeFile(path: string, data: Buffer): Promise<void> {
+  /**
+   * Resolve a relative storage path and guarantee it stays inside `basePath`.
+   * Throws on any path that would escape the storage root (e.g. a `..` sequence
+   * from an untrusted archive entry), so traversal can never reach the disk.
+   */
+  private resolvePath(path: string): string {
     const fullPath = join(this.basePath, path);
+    const rel = relative(resolve(this.basePath), resolve(fullPath));
+    if (rel.startsWith('..') || isAbsolute(rel)) {
+      throw new Error(`Storage path escapes the storage root: ${path}`);
+    }
+    return fullPath;
+  }
+
+  async writeFile(path: string, data: Buffer): Promise<void> {
+    const fullPath = this.resolvePath(path);
     const dirPath = dirname(fullPath);
 
     // Ensure directory exists
@@ -32,28 +46,28 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   async readFile(path: string): Promise<Buffer> {
-    const fullPath = join(this.basePath, path);
+    const fullPath = this.resolvePath(path);
     return await readFileAsync(fullPath);
   }
 
   async exists(path: string): Promise<boolean> {
-    const fullPath = join(this.basePath, path);
+    const fullPath = this.resolvePath(path);
     return existsSync(fullPath);
   }
 
   async mkdir(path: string): Promise<void> {
-    const fullPath = join(this.basePath, path);
+    const fullPath = this.resolvePath(path);
     if (!existsSync(fullPath)) {
       await mkdirAsync(fullPath, { recursive: true });
     }
   }
 
   getFullPath(path: string): string {
-    return join(this.basePath, path);
+    return this.resolvePath(path);
   }
 
   async deleteFile(path: string): Promise<void> {
-    const fullPath = join(this.basePath, path);
+    const fullPath = this.resolvePath(path);
     try {
       await rm(fullPath, { force: true });
     } catch {
@@ -62,7 +76,7 @@ export class LocalStorageAdapter implements StorageAdapter {
   }
 
   async deleteDirectory(path: string): Promise<void> {
-    const fullPath = join(this.basePath, path);
+    const fullPath = this.resolvePath(path);
     if (existsSync(fullPath)) {
       await rm(fullPath, { recursive: true, force: true });
     }

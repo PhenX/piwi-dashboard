@@ -1,6 +1,7 @@
 import { getDatabase } from '../../database';
 import { subscriptions, notificationChannels } from '../../database/schema';
 import { requireAuth, isAuthEnabled } from '../../utils/auth';
+import { getProjectScope, scopeAllows } from '../../utils/project-access';
 import { NOTIFICATION_EVENTS } from '#shared/notification-events';
 import { Role } from '#shared/types';
 import { z } from 'zod';
@@ -54,6 +55,22 @@ export default eventHandler(async (event) => {
   const isAdmin = user.role === Role.ADMINISTRATOR;
   if (channel.userId !== null && channel.userId !== user.id && !isAdmin) {
     throw createError({ statusCode: 403, message: "Cannot subscribe to another user's channel" });
+  }
+
+  // Only let the caller subscribe to projects they can access. A null projectId
+  // is a wildcard across every project, so it is reserved for global scope —
+  // otherwise notifications (failing-test titles, files, error excerpts) would
+  // leak from projects the subscriber is not a member of.
+  const scope = await getProjectScope(db, user);
+  if (projectId == null) {
+    if (scope !== 'all') {
+      throw createError({
+        statusCode: 403,
+        message: 'Only users with access to all projects can subscribe to every project',
+      });
+    }
+  } else if (!scopeAllows(scope, projectId)) {
+    throw createError({ statusCode: 403, message: 'No access to this project' });
   }
 
   const [sub] = await db

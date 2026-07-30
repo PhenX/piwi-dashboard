@@ -1,5 +1,6 @@
-import { requireAuth } from '../../../../utils/auth';
+import { requireAuth, revokeUserSessions, setUserSession } from '../../../../utils/auth';
 import { unlinkProvider } from '../../../../utils/oauth';
+import { Role } from '#shared/types';
 
 defineRouteMeta({
   openAPI: {
@@ -21,6 +22,15 @@ export default eventHandler(async (event) => {
   }
 
   await unlinkProvider(user.id, provider);
+
+  // Removing a sign-in method revokes other sessions; keep the current device in.
+  const epoch = await revokeUserSessions(user.id);
+  await setUserSession(event, {
+    userId: user.id,
+    username: user.username,
+    role: user.role as Role,
+    sessionEpoch: epoch,
+  });
 
   return { success: true };
 });
