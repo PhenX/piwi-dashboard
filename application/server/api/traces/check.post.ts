@@ -2,6 +2,7 @@ import { getDatabase } from '../../database';
 import { projects } from '../../database/schema';
 import { eq } from 'drizzle-orm';
 import { requireAuth } from '../../utils/auth';
+import { canAccessProject } from '../../utils/project-access';
 import { checkExistingBlobs } from '../../utils/trace-blobs';
 
 defineRouteMeta({
@@ -15,7 +16,7 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event);
+  const user = await requireAuth(event);
 
   const body = await readBody(event);
   const projectName = body?.projectName as string | undefined;
@@ -35,8 +36,11 @@ export default eventHandler(async (event) => {
   const projectRows = await db.select({ id: projects.id }).from(projects).where(eq(projects.name, projectName));
   const project = projectRows[0];
 
-  // Unknown project → all hashes are missing
-  if (!project) {
+  // Unknown project — or one the caller cannot access — returns all-missing, so
+  // this endpoint can't be used as a cross-project oracle for blob (or project)
+  // existence. With auth disabled the instance is single-user, so access is
+  // granted and behavior is unchanged.
+  if (!project || !(await canAccessProject(db, user, project.id))) {
     return { existing: [], missing: validHashes };
   }
 
