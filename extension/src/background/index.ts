@@ -1,4 +1,4 @@
-import { startRecording } from '../shared/recording-storage.js';
+import { startRecording, getRecordingState, discardRecording } from '../shared/recording-storage.js';
 import { getConnectionSettings } from '../shared/connection-settings.js';
 import { fetchCatalog } from '../shared/piwi-client.js';
 import { setCachedCatalog, isCatalogStale } from '../shared/catalog-cache.js';
@@ -82,13 +82,54 @@ async function handleStartRecording(originPattern: string, tabId: number): Promi
     await chrome.action.setBadgeBackgroundColor({ color: '#dc2626' });
     return { ok: true };
   } catch (err) {
+    // `startRecording` has already written `active: true`, so a failure after it
+    // used to leave a recording that captured nothing anywhere while the popup
+    // offered "Stop recording (0)" — a dead end reachable only via Discard.
+    // Unwind everything this function may have put in place.
+    await discardRecording().catch(() => undefined);
+    await chrome.scripting.unregisterContentScripts({ ids: [RECORD_SCRIPT_ID] }).catch(() => undefined);
+    await chrome.action.setBadgeText({ text: '' }).catch(() => undefined);
     return { ok: false, error: err instanceof Error ? err.message : 'Failed to start recording' };
   }
 }
 
-async function handleRecordingStopped(): Promise<void> {
+/**
+ * Tells every tab still running the recorder that capture is over, so each one
+ * drops its HUD and its "this tab is being recorded" border.
+ *
+ * `chrome.tabs.sendMessage` rather than `chrome.runtime.sendMessage`: the
+ * latter reaches extension pages and this worker but never a content script,
+ * so a stop from the popup left the recorder's surfaces standing on every page
+ * it was attached to. Scoped to the origin the user granted for this recording
+ * — the only tabs the script was ever registered for, and the only ones this
+ * extension has host access to.
+ */
+async function notifyRecorderTabs(originPattern: string | null, exceptTabId?: number): Promise<void> {
+  if (!originPattern) return;
+  let tabs: chrome.tabs.Tab[];
+  try {
+    tabs = await chrome.tabs.query({ url: originPattern });
+  } catch {
+    return; // Malformed pattern, or access revoked mid-recording — nothing to notify.
+  }
+  await Promise.all(
+    tabs.map(async (tab) => {
+      if (tab.id == null || tab.id === exceptTabId) return;
+      // A tab with no recorder attached (never navigated into the recording,
+      // or already torn down) rejects with "no receiving end" — expected.
+      await chrome.tabs.sendMessage(tab.id, { type: 'piwi-recording-stopped' }).catch(() => undefined);
+    }),
+  );
+}
+
+async function handleRecordingStopped(senderTabId?: number): Promise<void> {
+  // Read before unregistering: the granted pattern is the only record of which
+  // tabs could be running the recorder.
+  const { grantedOriginPattern } = await getRecordingState();
   await chrome.scripting.unregisterContentScripts({ ids: [RECORD_SCRIPT_ID] }).catch(() => undefined);
   await chrome.action.setBadgeText({ text: '' });
+  // The sender, if it was a content script, has already torn itself down.
+  await notifyRecorderTabs(grantedOriginPattern, senderTabId);
 }
 
 /**
@@ -123,7 +164,7 @@ async function handleRefreshCatalog(projectId: unknown, force: boolean): Promise
   }
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'piwi-ping') {
     // Resolves only once session storage is readable from content scripts —
     // the whole point of the ping.
@@ -141,9 +182,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'piwi-recording-stopped') {
     // Also received here even though a content script or the popup already
     // wrote `active: false` to storage directly — this handler owns the
-    // chrome.scripting/chrome.action side effects regardless of who
-    // requested the stop.
-    void handleRecordingStopped().then(() => sendResponse({ ok: true }));
+    // chrome.scripting/chrome.action side effects, and the fan-out to every
+    // other tab still showing the recorder, regardless of who requested the
+    // stop.
+    void handleRecordingStopped(sender.tab?.id).then(() => sendResponse({ ok: true }));
     return true;
   }
   return undefined;

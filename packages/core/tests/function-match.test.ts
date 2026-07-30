@@ -148,6 +148,17 @@ describe('matchFunctionAt', () => {
     const match = matchFunctionAt(steps, 0, [loginEntry]);
     expect(match).toBeNull();
   });
+
+  test('an unrelated step interleaved into the pattern breaks the match rather than being swallowed', () => {
+    const steps = [usernameStep, step({ action: 'click' }), passwordStep, submitStep];
+    expect(matchFunctionAt(steps, 0, [loginEntry])).toBeNull();
+  });
+
+  test('a trailing extra step does not stop the contiguous run before it from matching', () => {
+    const steps = [usernameStep, passwordStep, submitStep, step({ action: 'click' })];
+    const match = matchFunctionAt(steps, 0, [loginEntry]);
+    expect(match!.matchedIndices).toEqual([0, 1, 2]);
+  });
 });
 
 describe('scoreTargetMatch', () => {
@@ -199,5 +210,19 @@ describe('urlMatches', () => {
 
   test('a pattern for a different origin does not match', () => {
     expect(urlMatches('https://shop.test/**', 'https://other.test/cart')).toBe(false);
+  });
+
+  test('a query string in the pattern is matched literally, not as a regex quantifier', () => {
+    expect(urlMatches('https://shop.test/search?tab=orders', 'https://shop.test/search?tab=orders')).toBe(true);
+    expect(urlMatches('**/search?q=**', 'https://shop.test/search?q=shoes')).toBe(true);
+    // `?` must not make the preceding character optional.
+    expect(urlMatches('https://shop.test/ab?c', 'https://shop.test/abc')).toBe(false);
+  });
+
+  test('every regex metacharacter in a pattern stays literal', () => {
+    expect(urlMatches('https://shop.test/a+b', 'https://shop.test/a+b')).toBe(true);
+    expect(urlMatches('https://shop.test/a+b', 'https://shop.test/aab')).toBe(false);
+    expect(urlMatches('https://shop.test/(x)', 'https://shop.test/(x)')).toBe(true);
+    expect(urlMatches('https://shop.test/a.b', 'https://shop.test/axb')).toBe(false);
   });
 });

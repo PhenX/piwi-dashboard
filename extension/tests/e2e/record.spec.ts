@@ -18,8 +18,10 @@ const ORIGIN = 'https://record-test.local';
  * chrome.storage backed by `window.name` — one of the few things that
  * survives a real cross-page navigation in the same tab, which a plain
  * in-memory stub (reset by addInitScript re-running on every new document)
- * would not. `chrome.runtime` is a no-op stub; nothing here exercises
- * background messaging.
+ * would not. `chrome.runtime.sendMessage` is a no-op stub, but `onMessage`
+ * keeps its listeners so a test can play the part of the service worker
+ * fanning a stop out with `chrome.tabs.sendMessage` (see
+ * `dispatchRuntimeMessage`).
  */
 async function stubChromeStorage(
   context: BrowserContext,
@@ -59,14 +61,35 @@ async function stubChromeStorage(
       };
     }
 
+    const listeners: Array<(message: unknown) => void> = [];
+    (globalThis as any).__piwiTestRuntimeListeners = listeners;
     (globalThis as any).chrome = {
       storage: { session: makeArea('session'), local: makeArea('local') },
       runtime: {
         sendMessage: async () => ({ ok: true }),
-        onMessage: { addListener: () => {} },
+        onMessage: {
+          addListener: (fn: (message: unknown) => void) => {
+            listeners.push(fn);
+          },
+        },
       },
     };
   }, seed);
+}
+
+/** Plays the service worker's `chrome.tabs.sendMessage` fan-out — the only way a stop reaches a content script. */
+async function dispatchRuntimeMessage(page: Page, message: unknown): Promise<void> {
+  await page.evaluate((msg) => {
+    for (const fn of (globalThis as any).__piwiTestRuntimeListeners ?? []) fn(msg);
+  }, message);
+}
+
+async function setRecordingActive(page: Page, active: boolean): Promise<void> {
+  await page.evaluate(async (isActive) => {
+    const chromeApi = (globalThis as any).chrome;
+    const stored = await chromeApi.storage.session.get('piwiRecording');
+    await chromeApi.storage.session.set({ piwiRecording: { ...stored.piwiRecording, active: isActive } });
+  }, active);
 }
 
 async function readStoredEvents(page: Page): Promise<RawCaptureEvent[]> {
@@ -84,10 +107,25 @@ const DASHBOARD_PAGE = `<!doctype html><html><body>
   <button id="add" data-testid="add-to-cart">Add to cart</button>
 </body></html>`;
 
+/**
+ * Two text inputs with nothing to tell them apart — no label, no placeholder,
+ * no id the probe would use, no test id — plus a real submit button to press
+ * Enter on. Both fields resolve to the same tag, role and (absent) accessible
+ * name, and neither gets a locator alternative, since a bare role anchor needs
+ * the role to be document-unique.
+ */
+const BARE_FORM_PAGE = `<!doctype html><html><body>
+  <form onsubmit="return false">
+    <input type="text" /><input type="text" />
+    <button type="submit">Save</button>
+  </form>
+</body></html>`;
+
 async function routePages(context: BrowserContext): Promise<void> {
   await context.route(`${ORIGIN}/**`, async (route) => {
     const url = new URL(route.request().url());
-    const body = url.pathname === '/dashboard' ? DASHBOARD_PAGE : LOGIN_PAGE;
+    const body =
+      url.pathname === '/dashboard' ? DASHBOARD_PAGE : url.pathname === '/bare' ? BARE_FORM_PAGE : LOGIN_PAGE;
     await route.fulfill({ contentType: 'text/html', body });
   });
 }
@@ -136,6 +174,38 @@ test.describe('record-panel.js', () => {
     expect(new Set(events.map((e) => e.pageUrl)).size).toBeGreaterThanOrEqual(2);
   });
 
+  test('two indistinguishable fields record as two fills, and Enter does not double up with its own click', async ({
+    context,
+  }) => {
+    await routePages(context);
+    await stubChromeStorage(context, {
+      session: {
+        piwiRecording: { active: true, events: [], startedAt: Date.now(), grantedOriginPattern: `${ORIGIN}/*` },
+      },
+    });
+
+    const page = await context.newPage();
+    await page.goto(`${ORIGIN}/bare`);
+    await page.addScriptTag({ path: path.join(DIST, 'record-panel.js') });
+    await expect.poll(() => page.evaluate(() => !!document.getElementById('piwi-record-hud-host'))).toBe(true);
+
+    const fields = page.locator('input[type="text"]');
+    await fields.nth(0).fill('alice');
+    await fields.nth(1).fill('smith');
+    // Enter on a focused submit button fires keydown *and* a synthetic click.
+    await page.locator('button[type="submit"]').focus();
+    await page.keyboard.press('Enter');
+
+    await expect.poll(() => readStoredEvents(page).then((e) => e.length)).toBeGreaterThanOrEqual(4);
+    await page.waitForTimeout(200);
+
+    const steps = normalizeSteps(await readStoredEvents(page));
+    // Neither field's value may be absorbed into the other's, and the submit
+    // must be activated once, not twice.
+    expect(steps.map((s) => s.action)).toEqual(['goto', 'fill', 'fill', 'press']);
+    expect(steps.filter((s) => s.action === 'fill').map((s) => s.value)).toEqual(['alice', 'smith']);
+  });
+
   test('a password field is never captured — redacted with no value in storage', async ({ context }) => {
     await routePages(context);
     await stubChromeStorage(context, {
@@ -163,6 +233,61 @@ test.describe('record-panel.js', () => {
     const fillStep = steps.find((s) => s.action === 'fill');
     expect(fillStep?.redacted).toBe(true);
     expect(fillStep?.value).toBeNull();
+  });
+
+  /** Seeds a live recording and drives it to a page that already has the recorder attached. */
+  async function recordingInProgress(context: BrowserContext): Promise<Page> {
+    await routePages(context);
+    await stubChromeStorage(context, {
+      session: {
+        piwiRecording: { active: true, events: [], startedAt: Date.now(), grantedOriginPattern: `${ORIGIN}/*` },
+      },
+    });
+    const page = await context.newPage();
+    await page.goto(`${ORIGIN}/login`);
+    await page.addScriptTag({ path: path.join(DIST, 'record-panel.js') });
+    await expect.poll(() => page.evaluate(() => !!document.getElementById('piwi-record-hud-host'))).toBe(true);
+    return page;
+  }
+
+  test('a stop from the popup reaches an already-recording page: HUD and border go, review panel opens', async ({
+    context,
+  }) => {
+    const page = await recordingInProgress(context);
+
+    // Exactly what the popup's Stop does — `stopRecording()` writes the state,
+    // then it re-injects this script. It cannot message the content script:
+    // `chrome.runtime.sendMessage` reaches extension pages and the worker only.
+    await setRecordingActive(page, false);
+    await page.addScriptTag({ path: path.join(DIST, 'record-panel.js') });
+
+    // Neither surface may outlive the capture — the border especially, since it
+    // is the only always-visible signal that the tab is being recorded.
+    await expect.poll(() => page.evaluate(() => !!document.getElementById('piwi-record-hud-host'))).toBe(false);
+    await expect.poll(() => page.evaluate(() => !!document.getElementById('piwi-record-frame-host'))).toBe(false);
+    await expect.poll(() => page.evaluate(() => !!document.getElementById('piwi-record-review-host'))).toBe(true);
+  });
+
+  test('the worker’s stop fan-out tears a non-initiating tab down without opening a review panel there', async ({
+    context,
+  }) => {
+    const page = await recordingInProgress(context);
+
+    // The worker's `chrome.tabs.sendMessage` fan-out, as received by a tab that
+    // did not ask for the stop.
+    await setRecordingActive(page, false);
+    await dispatchRuntimeMessage(page, { type: 'piwi-recording-stopped' });
+
+    await expect.poll(() => page.evaluate(() => !!document.getElementById('piwi-record-hud-host'))).toBe(false);
+    await expect.poll(() => page.evaluate(() => !!document.getElementById('piwi-record-frame-host'))).toBe(false);
+    // The review belongs to the tab the user stopped from, not to every tab.
+    expect(await page.evaluate(() => !!document.getElementById('piwi-record-review-host'))).toBe(false);
+
+    // Capture is really over, not just its UI: further interaction records nothing.
+    const before = (await readStoredEvents(page)).length;
+    await page.click('#submit');
+    await page.waitForTimeout(200);
+    expect((await readStoredEvents(page)).length).toBe(before);
   });
 
   test('stopping shows the review panel, and Copy as TypeScript substitutes a matching catalog function', async ({

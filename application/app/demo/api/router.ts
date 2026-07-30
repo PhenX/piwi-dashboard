@@ -48,6 +48,7 @@ import {
   deleteTestFunction,
 } from '#shared/handlers/test-functions';
 import { validateExtractedFunction } from '#shared/test-function-extract-prompt';
+import { createTestFunctionSchema, updateTestFunctionSchema } from '#shared/test-function-schemas';
 import {
   addQuarantine,
   listQuarantine,
@@ -693,17 +694,19 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/projects\/(\d+)\/test-functions$/,
     handler: async (m) => listProjectTestFunctions(await getDemoDb(), +m[1]!),
   },
+  // Validated with the same schemas the real endpoints use, not cast straight
+  // through: demo mode is meant to behave like the API, and accepting an entry
+  // the live instance would reject is a divergence the user only discovers
+  // after switching.
   {
     method: 'POST',
     pattern: /^\/api\/projects\/(\d+)\/test-functions$/,
-    handler: async (m, body) =>
-      createTestFunction(await getDemoDb(), +m[1]!, body as Parameters<typeof createTestFunction>[2]),
+    handler: async (m, body) => createTestFunction(await getDemoDb(), +m[1]!, createTestFunctionSchema.parse(body)),
   },
   {
     method: 'PUT',
     pattern: /^\/api\/test-functions\/(\d+)$/,
-    handler: async (m, body) =>
-      updateTestFunction(await getDemoDb(), +m[1]!, body as Parameters<typeof updateTestFunction>[2]),
+    handler: async (m, body) => updateTestFunction(await getDemoDb(), +m[1]!, updateTestFunctionSchema.parse(body)),
   },
   {
     method: 'DELETE',

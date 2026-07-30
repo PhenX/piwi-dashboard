@@ -1,14 +1,7 @@
-import { z } from 'zod';
 import { requireResolvedProjectAccess, resolveTestFunctionProjectId, requireRouteId } from '../../utils/project-access';
 import { updateTestFunction } from '#shared/handlers/test-functions';
 import { Role } from '#shared/types';
-import {
-  testFunctionNameSchema,
-  testFunctionKindSchema,
-  paramSchema,
-  patternStepSchema,
-  paramSourceSchema,
-} from '#shared/test-function-schemas';
+import { updateTestFunctionSchema } from '#shared/test-function-schemas';
 
 defineRouteMeta({
   openAPI: {
@@ -18,21 +11,6 @@ defineRouteMeta({
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
     'x-required-roles': ['administrator', 'reporter'],
   },
-});
-
-const updateTestFunctionSchema = z.object({
-  name: testFunctionNameSchema.optional(),
-  kind: testFunctionKindSchema.optional(),
-  module: z.string().min(1).max(240).optional(),
-  receiver: z.string().max(120).nullish(),
-  importName: z.string().max(120).nullish(),
-  params: z.array(paramSchema).max(10).optional(),
-  returnsPage: z.boolean().optional(),
-  urlPattern: z.string().max(240).nullish(),
-  steps: z.array(patternStepSchema).min(1).max(30).optional(),
-  paramSources: z.array(paramSourceSchema).max(10).optional(),
-  source: z.enum(['manual', 'scanned', 'recorded', 'ai-extracted']).optional(),
-  confidence: z.number().min(0).max(1).optional(),
 });
 
 export default eventHandler(async (event) => {
@@ -52,6 +30,12 @@ export default eventHandler(async (event) => {
     return await updateTestFunction(db, id, validation.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update test function';
-    throw createError({ statusCode: message === 'Test function not found' ? 404 : 400, message });
+    if (message === 'Test function not found') throw createError({ statusCode: 404, message });
+    // Same collision, same status as the create endpoint reports for it — the
+    // unique index is on (project, module, name), which a rename can trip.
+    if (message.toLowerCase().includes('unique')) {
+      throw createError({ statusCode: 409, message: 'A function with this name already exists in this module' });
+    }
+    throw createError({ statusCode: 400, message });
   }
 });

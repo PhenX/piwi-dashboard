@@ -93,6 +93,38 @@ describe('renderSpec — raw mode (no catalog)', () => {
   });
 });
 
+describe('renderSpec — value escaping', () => {
+  test('a multi-line fill value stays on one line as an escaped literal', () => {
+    const textarea = target({ role: 'textbox', tagName: 'textarea', accessibleName: 'Notes' });
+    const session = buildSession([step({ action: 'fill', value: 'line one\nline two', target: textarea })], 0);
+    const { code } = renderSpec(session);
+    expect(code).toContain(`.fill('line one\\nline two');`);
+    // The emitted line must not be split by the value it carries.
+    expect(code.split('\n').filter((l) => l.includes('.fill('))).toHaveLength(1);
+  });
+
+  test('carriage returns and line/paragraph separators are escaped too', () => {
+    const textarea = target({ role: 'textbox', tagName: 'textarea', accessibleName: 'Notes' });
+    const value = 'a\r\nb\u2028c\u2029d';
+    const session = buildSession([step({ action: 'fill', value, target: textarea })], 0);
+    const { code } = renderSpec(session);
+    expect(code).toContain(`.fill('a\\r\\nb\\u2028c\\u2029d');`);
+  });
+
+  test('a quote or backslash in a value is still escaped', () => {
+    const textarea = target({ role: 'textbox', tagName: 'textarea', accessibleName: 'Notes' });
+    const session = buildSession([step({ action: 'fill', value: `it's a\\path`, target: textarea })], 0);
+    const { code } = renderSpec(session);
+    expect(code).toContain(`.fill('it\\'s a\\\\path');`);
+  });
+
+  test('a newline in the test title does not break the test() line', () => {
+    const session = buildSession([step()], 0);
+    const { code } = renderSpec(session, { title: 'flow\nwith a newline' });
+    expect(code).toContain(`test('flow\\nwith a newline'`);
+  });
+});
+
 describe('renderSpec — with a catalog', () => {
   const loginEntry: TestFunctionEntry = {
     id: 1,
@@ -157,6 +189,45 @@ describe('renderSpec — with a catalog', () => {
     expect(code).not.toContain('loginPage.login');
     expect(code).toContain(`.fill('alice');`);
     expect(matchedSpans).toEqual([]);
+  });
+
+  test('a step interleaved into an otherwise matching span is never swallowed by the call', () => {
+    const [username, password, submit] = loginSteps();
+    const interloper = step({ action: 'click', target: target({ role: 'button', accessibleName: 'Show password' }) });
+    const session = buildSession([username!, interloper, password!, submit!], 0);
+    const { code, matchedSpans } = renderSpec(session, { catalog: [loginEntry] });
+    // Every recorded action has to survive into the spec — collapsing this span
+    // would have dropped the "Show password" click entirely.
+    expect(code).toContain(`getByRole('button', { name: 'Show password' })`);
+    expect(code).toContain(`.fill('alice');`);
+    expect(code).toContain(`.fill('secret');`);
+    expect(matchedSpans).toEqual([]);
+  });
+
+  test('an entry whose identifiers are not identifiers is never emitted as a call', () => {
+    // These fields land in the generated source unquoted. The API rejects them
+    // on the way in; codegen refuses them on the way out as well, since an MCP
+    // agent can also fill a catalog from repository source.
+    const injected: TestFunctionEntry = {
+      ...loginEntry,
+      receiver: `loginPage); await page.goto('https://evil.test'); (0`,
+      importName: `LoginPage } from 'node:child_process'; import { execSync`,
+    };
+    const session = buildSession(loginSteps(), 0);
+    const { code, matchedSpans } = renderSpec(session, { catalog: [injected] });
+    expect(code).not.toContain('evil.test');
+    expect(code).not.toContain('child_process');
+    expect(matchedSpans).toEqual([]);
+    // The steps still come out — refusing the call must not lose the recording.
+    expect(code).toContain(`.fill('alice');`);
+  });
+
+  test('a name that is not an identifier is refused for a helper too', () => {
+    const injected: TestFunctionEntry = { ...loginEntry, kind: 'helper', receiver: null, name: 'do(); evil' };
+    const session = buildSession(loginSteps(), 0);
+    const { code } = renderSpec(session, { catalog: [injected] });
+    expect(code).not.toContain('evil');
+    expect(code).toContain(`.fill('alice');`);
   });
 
   test('a helper (no receiver) is imported and called directly with page as the first arg', () => {

@@ -3,10 +3,13 @@
  * functions (page-object methods / helpers), ranked by how well each
  * function's own DOM pattern covers the most recent steps.
  *
- * Two callers, one algorithm: the extension calls `rankFunctionMatches` on
- * every captured step to show live-ranked candidates while recording, and
- * `codegen.ts` calls it again over the whole finished session to decide
- * which spans of steps collapse into a function call. Pure and
+ * Two callers, one scoring rule (`stepPairScore`), two different questions.
+ * The extension calls `rankFunctionMatches` on every captured step to show
+ * live-ranked candidates while recording — "how close are we?", so it aligns
+ * loosely, allowing gaps on either side. `codegen.ts` calls `matchFunctionAt`
+ * over the finished session to decide which spans collapse into a call —
+ * "is this exactly that function?", which admits no gaps at all, since a
+ * substituted call has to stand for precisely the steps it replaces. Pure and
  * deterministic on purpose — an optional AI pass may choose *among* the
  * matches this returns, but never invents a match of its own (see
  * `ROADMAP.md`'s grounded-diagnosis precedent for why).
@@ -88,11 +91,20 @@ export function paramArgKey(source: Pick<FunctionParamSource, 'param' | 'path'>)
   return source.path ? `${source.param}.${source.path}` : source.param;
 }
 
-/** Splits on the literal `**` separator first so escaping/single-`*` handling never needs an intermediate placeholder character to tell a glob `**` apart from a literal `*`. */
+/**
+ * Splits on the literal `**` separator first so escaping/single-`*` handling
+ * never needs an intermediate placeholder character to tell a glob `**` apart
+ * from a literal `*`.
+ *
+ * `?` belongs in the escaped set even though it is not glob syntax here: a URL
+ * pattern that names a query string (`**\/search?tab=orders`) is entirely
+ * ordinary, and leaving `?` as a regex quantifier made every one of them match
+ * nothing at all.
+ */
 function globToRegExp(glob: string): RegExp {
   const escaped = glob
     .split('**')
-    .map((part) => part.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*'))
+    .map((part) => part.replace(/[.?+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*'))
     .join('.*');
   return new RegExp(`^${escaped}$`);
 }
@@ -282,34 +294,61 @@ export function rankFunctionMatches(
 }
 
 /**
- * Finds the best *complete* catalog match that starts exactly at `steps[startIndex]`
- * — i.e. the matched pattern's first step pairs with `steps[startIndex]` itself, so a
- * caller (codegen's cover pass) can collapse a contiguous-enough span into one call
- * and advance past it with nothing left unaccounted for in between. Returns null when
- * no entry's first pattern step matches there, or no candidate completes.
+ * Aligns a pattern against the run of steps starting at `startIndex`, one
+ * pattern step per recorded step with nothing skipped on either side.
+ *
+ * Deliberately *not* `bestAlignment`: that one maximizes score over an
+ * in-order-but-gapped alignment, which is the right rule for ranking how close
+ * a recording is to a function, and the wrong one for substitution. A gapped
+ * match let codegen collapse `[click user, click UNRELATED, click submit]` into
+ * a single `login(page)` and advance past all three — the interleaved action
+ * vanished from the exported spec with nothing to show it had ever been
+ * recorded. Requiring a contiguous run means a substituted call always stands
+ * for exactly the steps it replaced.
+ */
+function contiguousAlignment(
+  steps: RecordedStep[],
+  startIndex: number,
+  pattern: FunctionPatternStep[],
+): { total: number; pairs: Array<[number, number]> } | null {
+  if (startIndex + pattern.length > steps.length) return null;
+  const pairs: Array<[number, number]> = [];
+  let total = 0;
+  for (let j = 0; j < pattern.length; j++) {
+    const score = stepPairScore(pattern[j]!, steps[startIndex + j]!);
+    if (score <= 0) return null;
+    total += score;
+    pairs.push([j, j]);
+  }
+  return { total, pairs };
+}
+
+/**
+ * Finds the best catalog match covering the run of steps that begins exactly at
+ * `steps[startIndex]` — every pattern step paired with a consecutive recorded
+ * step, so a caller (codegen's cover pass) can collapse the span into one call
+ * and advance past it with nothing left unaccounted for in between. Returns null
+ * when no entry's pattern lines up there.
  */
 export function matchFunctionAt(
   steps: RecordedStep[],
   startIndex: number,
   catalog: TestFunctionEntry[],
-  opts?: { windowSize?: number },
 ): RankedFunctionMatch | null {
   const anchor = steps[startIndex];
   if (!anchor) return null;
 
   let best: RankedFunctionMatch | null = null;
   for (const entry of catalog) {
-    const firstPattern = entry.steps[0];
-    if (!firstPattern || stepPairScore(firstPattern, anchor) <= 0) continue;
+    if (entry.steps.length === 0) continue;
     if (!urlMatches(entry.urlPattern, anchor.pageUrl)) continue;
 
-    const windowSize = opts?.windowSize ?? Math.max(entry.steps.length * 3, 8);
-    const window = steps.slice(startIndex, startIndex + windowSize);
-    const { total, matchedCount, pairs } = bestAlignment(window, entry.steps);
-    if (matchedCount !== entry.steps.length) continue; // codegen only substitutes complete matches
-    if (pairs[0]?.[0] !== 0) continue; // must genuinely start at the anchor, not a few steps in
+    const aligned = contiguousAlignment(steps, startIndex, entry.steps);
+    if (!aligned) continue;
 
-    const score = total / matchedCount;
+    const { total, pairs } = aligned;
+    const window = steps.slice(startIndex, startIndex + entry.steps.length);
+    const score = total / entry.steps.length;
     const match: RankedFunctionMatch = {
       entry,
       score,
@@ -317,7 +356,14 @@ export function matchFunctionAt(
       complete: true,
       args: extractArgs(entry, window, pairs),
     };
-    if (!best || match.score > best.score) best = match;
+    // A longer pattern wins a tie: collapsing more of the recording into one
+    // known function beats leaving its tail as raw locator lines.
+    if (
+      !best ||
+      match.score > best.score ||
+      (match.score === best.score && entry.steps.length > best.entry.steps.length)
+    )
+      best = match;
   }
   return best;
 }

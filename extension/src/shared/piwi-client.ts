@@ -35,6 +35,22 @@ function authHeaders(settings: ConnectionSettings): HeadersInit {
   return settings.apiKey.trim() ? { 'X-API-Key': settings.apiKey.trim() } : {};
 }
 
+/**
+ * How long to wait on an instance before giving up.
+ *
+ * Every call here is either something the user is watching (the options page's
+ * Test connection / Save) or a background revalidation whose caller has already
+ * rendered from cache. Neither has anything to gain from waiting indefinitely,
+ * and an unresponsive host — a stale URL, a VPN-only address, a hung server —
+ * used to leave the options page's status stuck on "Testing…" with no way
+ * forward but a reload.
+ */
+const REQUEST_TIMEOUT_MS = 10_000;
+
+function timeout(): AbortSignal {
+  return AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+}
+
 export type ConnectionCheckResult = { ok: true } | { ok: false; error: string };
 
 /** Hits `/api/projects/menu` — cheap, always available, and exercises auth the same way the rest of the client does. */
@@ -43,6 +59,7 @@ export async function testConnection(settings: ConnectionSettings): Promise<Conn
   try {
     const res = await fetch(`${normalizeBaseUrl(settings.instanceUrl)}/api/projects/menu`, {
       headers: authHeaders(settings),
+      signal: timeout(),
     });
     if (res.status === 401 || res.status === 403) return { ok: false, error: 'Rejected — check the API key.' };
     if (!res.ok) return { ok: false, error: `Instance responded with ${res.status}.` };
@@ -56,6 +73,7 @@ export async function fetchProjects(settings: ConnectionSettings): Promise<Proje
   if (!settings.instanceUrl.trim()) return [];
   const res = await fetch(`${normalizeBaseUrl(settings.instanceUrl)}/api/projects/menu`, {
     headers: authHeaders(settings),
+    signal: timeout(),
   });
   if (!res.ok) throw new Error(`Failed to list projects (${res.status})`);
   return (await res.json()) as ProjectOption[];
@@ -76,6 +94,7 @@ export async function fetchCatalog(settings: ConnectionSettings, projectId: numb
   if (!settings.instanceUrl.trim()) return [];
   const res = await fetch(`${normalizeBaseUrl(settings.instanceUrl)}/api/projects/${projectId}/test-functions`, {
     headers: authHeaders(settings),
+    signal: timeout(),
   });
   if (!res.ok) throw new Error(`Failed to fetch the function catalog (${res.status})`);
   const body = (await res.json()) as TestFunctionsApiResponse;

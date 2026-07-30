@@ -53,6 +53,28 @@ function normalizeText(s: string): string {
 }
 
 /**
+ * A stable identity for an element, for as long as this document lives.
+ *
+ * `normalizeSteps` needs to know whether two consecutive `input` events came
+ * from the same field, and two unlabelled `<input>`s are indistinguishable by
+ * everything else a `RecordedTarget` carries — same tag, same role, no name, no
+ * test id, and no locator alternative either. The prefix keeps keys from two
+ * pages of one recording from ever colliding.
+ */
+const elementKeys = new WeakMap<Element, string>();
+const KEY_PREFIX = Math.random().toString(36).slice(2, 8);
+let nextElementKey = 0;
+
+function elementKeyFor(el: Element): string {
+  let key = elementKeys.get(el);
+  if (key == null) {
+    key = `${KEY_PREFIX}-${++nextElementKey}`;
+    elementKeys.set(el, key);
+  }
+  return key;
+}
+
+/**
  * Element → `RecordedTarget`, mirroring `top-locator.ts`'s probe pipeline but
  * keeping the top few ranked alternatives (not just the winner) and the
  * role/testId/text a catalog pattern match needs. Lives here rather than a
@@ -72,7 +94,29 @@ function deriveRecordedTarget(el: Element): RecordedTarget {
     testId: attrs.attributes['data-testid'] ?? null,
     text: el.textContent ? normalizeText(el.textContent).slice(0, 200) : null,
     alternatives: ranked.slice(0, 5).map((r) => ({ locator: r.locator, method: r.method, score: r.score })),
+    elementKey: elementKeyFor(el),
   };
+}
+
+/**
+ * `deriveRecordedTarget` for a field mid-burst, computed once per element.
+ *
+ * The probe behind it walks the document to count same-role and same-text
+ * elements and to score anchor ancestors — cheap once per click, but it used to
+ * run on *every* `input` event, so a probe of the whole page sat between one
+ * keystroke and the next. Coalescing already discards all but the last value of
+ * a burst, and `normalizeSteps` keeps the target from the burst's first event,
+ * so re-deriving it per keystroke changed nothing it produced.
+ */
+const fieldTargets = new WeakMap<Element, RecordedTarget>();
+
+function fieldTarget(el: Element): RecordedTarget {
+  let derived = fieldTargets.get(el);
+  if (derived == null) {
+    derived = deriveRecordedTarget(el);
+    fieldTargets.set(el, derived);
+  }
+  return derived;
 }
 
 function nearestActionable(el: Element): Element {
@@ -182,6 +226,8 @@ function renderHud(state: RecordingState, catalog: TestFunctionEntry[]): void {
     .match-badge.complete { background: rgba(34,197,94,.2); color: #22c55e; }
     .match-badge.partial { color: #9ca3af; }
     .empty { color: #9ca3af; font-size: 11px; }
+    .warn { color: #fca5a5; font-size: 11px; line-height: 1.35; }
+    @media (prefers-color-scheme: light) { .warn { color: #b91c1c; } }
   `;
   root.appendChild(style);
 
@@ -206,6 +252,14 @@ function renderHud(state: RecordingState, catalog: TestFunctionEntry[]): void {
   stopBtn.addEventListener('click', () => void handleStop());
   topRow.append(dot, title, stopBtn);
   bar.appendChild(topRow);
+
+  if (captureError) {
+    const warn = document.createElement('div');
+    warn.className = 'warn';
+    warn.setAttribute('role', 'alert');
+    warn.textContent = captureError;
+    bar.appendChild(warn);
+  }
 
   if (lastTarget?.alternatives[0]) {
     const locTitle = document.createElement('div');
@@ -344,7 +398,17 @@ async function renderReviewPanel(events: RawCaptureEvent[]): Promise<void> {
   closeBtn.className = 'close';
   closeBtn.setAttribute('aria-label', 'Close');
   closeBtn.textContent = '×';
-  closeBtn.addEventListener('click', () => host.remove());
+  // Every close path goes through one function, so the document-level Escape
+  // listener below is always detached with the panel. Registering it and only
+  // removing it on Escape itself meant closing any other way (the ×, the
+  // backdrop, Discard) left it attached to the page for good, and each reopen
+  // stacked another.
+  const closeController = new AbortController();
+  const closePanel = (): void => {
+    closeController.abort();
+    host.remove();
+  };
+  closeBtn.addEventListener('click', closePanel);
   header.append(titleWrap, closeBtn);
   panel.appendChild(header);
 
@@ -402,25 +466,21 @@ async function renderReviewPanel(events: RawCaptureEvent[]): Promise<void> {
   discardBtn.type = 'button';
   discardBtn.className = 'action danger';
   discardBtn.textContent = 'Discard';
-  discardBtn.addEventListener('click', async () => {
-    await discardRecording();
-    host.remove();
+  discardBtn.addEventListener('click', () => {
+    void discardRecording().then(closePanel, closePanel);
   });
   actions.appendChild(discardBtn);
   panel.appendChild(actions);
 
   backdrop.addEventListener('click', (e) => {
-    if (e.target === backdrop) host.remove();
+    if (e.target === backdrop) closePanel();
   });
   document.addEventListener(
     'keydown',
-    function onKeyDown(e) {
-      if (e.key === 'Escape') {
-        document.removeEventListener('keydown', onKeyDown, true);
-        host.remove();
-      }
+    (e) => {
+      if (e.key === 'Escape') closePanel();
     },
-    true,
+    { capture: true, signal: closeController.signal },
   );
 
   backdrop.appendChild(panel);
@@ -430,6 +490,7 @@ async function renderReviewPanel(events: RawCaptureEvent[]): Promise<void> {
 
 async function handleStop(): Promise<void> {
   const state = await stopRecording();
+  stopCapture();
   try {
     chrome.runtime.sendMessage({ type: 'piwi-recording-stopped' });
   } catch {
@@ -445,7 +506,6 @@ function buildEvent(
 ): RawCaptureEvent {
   return {
     kind,
-    target: el ? deriveRecordedTarget(el) : null,
     value: null,
     checked: null,
     inputType: null,
@@ -453,6 +513,10 @@ function buildEvent(
     pageUrl: location.href,
     timestamp: Date.now(),
     ...extra,
+    // Resolved last, and only derived when the caller has not supplied one —
+    // deriving first and letting `extra` overwrite it would still pay for the
+    // probe the caller passed a cached target precisely to avoid.
+    target: extra.target !== undefined ? extra.target : el ? deriveRecordedTarget(el) : null,
   };
 }
 
@@ -468,6 +532,53 @@ async function refreshHud(): Promise<void> {
   renderHud(state, catalog);
 }
 
+/**
+ * Records one captured event and refreshes the HUD, at most one redraw per
+ * `HUD_REFRESH_MS` with the last one always landing.
+ *
+ * The HUD re-runs `rankFunctionMatches` over the whole catalog and rebuilds its
+ * host from scratch, which is fine per click and wasteful per keystroke. It is
+ * pure presentation, so throttling it cannot reorder or drop a step — the
+ * `appendRecordingEvent` call it follows is what actually records, and that one
+ * is never skipped.
+ */
+const HUD_REFRESH_MS = 120;
+let hudRefreshAt = 0;
+let hudRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleHudRefresh(): void {
+  if (hudRefreshTimer != null) return;
+  const wait = Math.max(0, hudRefreshAt + HUD_REFRESH_MS - Date.now());
+  hudRefreshTimer = setTimeout(() => {
+    hudRefreshTimer = null;
+    hudRefreshAt = Date.now();
+    void refreshHud();
+  }, wait);
+}
+
+/**
+ * The last capture write that failed, surfaced in the HUD.
+ *
+ * A rejected write used to be an unhandled rejection: session storage filling
+ * up mid-recording looked exactly like a recording that was still going fine,
+ * and the steps after it were simply absent from the export.
+ */
+let captureError: string | null = null;
+
+function captureEvent(event: RawCaptureEvent): void {
+  void appendRecordingEvent(event)
+    .then(() => {
+      captureError = null;
+    })
+    .catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : '';
+      captureError = /quota|exceeded/i.test(message)
+        ? 'Out of storage — stop and export now, later steps are being lost.'
+        : 'A step could not be saved.';
+    })
+    .then(() => scheduleHudRefresh());
+}
+
 /** One TTL-guarded catalog re-fetch for whichever project this page maps to — called once per page load, never from `refreshHud`. */
 async function refreshCatalogForThisPage(): Promise<void> {
   const [connection, override] = await Promise.all([getConnectionSettings(), getActiveProjectOverride()]);
@@ -475,7 +586,46 @@ async function refreshCatalogForThisPage(): Promise<void> {
   await requestCatalogRefresh(activeProject?.projectId ?? null);
 }
 
+interface RecorderGlobals {
+  /** Aborting this detaches every capture listener at once — see `stopCapture`. */
+  __piwiRecordCapture?: AbortController;
+  /** Serializes concurrent injections of this script into one document. */
+  __piwiRecordPanelRun?: Promise<void>;
+  /** Whether this document's `chrome.runtime` stop listener is already registered. */
+  __piwiRecordStopListener?: boolean;
+}
+
+function recorderGlobals(): RecorderGlobals {
+  return globalThis as RecorderGlobals;
+}
+
+/**
+ * Ends capture on this page: detaches the listeners, drops the HUD, and drops
+ * the border that says the tab is being recorded.
+ *
+ * Idempotent, and safe when nothing was ever attached — it runs both from the
+ * HUD's own Stop button and from a stop initiated elsewhere (the popup, or
+ * another tab), which reaches this document as a `piwi-recording-stopped`
+ * message from the service worker.
+ */
+function stopCapture(): void {
+  const g = recorderGlobals();
+  g.__piwiRecordCapture?.abort();
+  g.__piwiRecordCapture = undefined;
+  document.getElementById(HUD_HOST_ID)?.remove();
+  removeRecordingFrame();
+}
+
 function attachListeners(): void {
+  const g = recorderGlobals();
+  g.__piwiRecordCapture?.abort();
+  const controller = new AbortController();
+  g.__piwiRecordCapture = controller;
+  // Capture phase throughout, so a page that stops propagation on its own
+  // handlers can't hide an interaction from the recorder; `signal` is what
+  // makes the whole set removable in one go from `stopCapture`.
+  const opts = { capture: true, signal: controller.signal };
+
   document.addEventListener(
     'click',
     (e) => {
@@ -485,9 +635,9 @@ function attachListeners(): void {
       const el = nearestActionable(raw);
       const kind = classifyInputKind(el.tagName, (el as HTMLInputElement).type ?? null);
       if (kind === 'checkbox' || kind === 'radio') return; // the resulting `change` event records this one
-      void appendRecordingEvent(buildEvent('click', el)).then(() => void refreshHud());
+      captureEvent(buildEvent('click', el));
     },
-    true,
+    opts,
   );
 
   document.addEventListener(
@@ -501,14 +651,17 @@ function attachListeners(): void {
       // The raw value never enters the event at all for a password field —
       // redacting later in normalizeSteps would still mean the plaintext sat
       // in chrome.storage.session in the meantime.
-      void appendRecordingEvent(
+      captureEvent(
         buildEvent('input', el, {
+          // Cached per field: the probe behind a target is a document-wide walk,
+          // and one per keystroke is what made typing lag on a large page.
+          target: fieldTarget(el),
           value: passwordField ? null : el.value,
           isPasswordField: passwordField,
         }),
-      ).then(() => void refreshHud());
+      );
     },
-    true,
+    opts,
   );
 
   document.addEventListener(
@@ -520,16 +673,12 @@ function attachListeners(): void {
       const typeAttr = el instanceof HTMLInputElement ? el.type : null;
       const kind = classifyInputKind(el.tagName, typeAttr);
       if (kind === 'checkbox' || kind === 'radio') {
-        void appendRecordingEvent(
-          buildEvent('change', el, { inputType: kind, checked: (el as HTMLInputElement).checked }),
-        ).then(() => void refreshHud());
+        captureEvent(buildEvent('change', el, { inputType: kind, checked: (el as HTMLInputElement).checked }));
       } else if (kind === 'select') {
-        void appendRecordingEvent(
-          buildEvent('change', el, { inputType: 'select', value: (el as HTMLSelectElement).value }),
-        ).then(() => void refreshHud());
+        captureEvent(buildEvent('change', el, { inputType: 'select', value: (el as HTMLSelectElement).value }));
       }
     },
-    true,
+    opts,
   );
 
   document.addEventListener(
@@ -538,10 +687,30 @@ function attachListeners(): void {
       if (withinOwnUi(e)) return;
       if (e.key !== 'Enter') return;
       const el = e.target instanceof Element ? e.target : null;
-      void appendRecordingEvent(buildEvent('keydown', el, { value: 'Enter' })).then(() => void refreshHud());
+      captureEvent(buildEvent('keydown', el, { value: 'Enter' }));
     },
-    true,
+    opts,
   );
+}
+
+/**
+ * Listens for a stop that came from somewhere other than this page's own HUD —
+ * the popup's Stop button, or the HUD in a different tab of the same recording.
+ * The service worker fans the stop out with `chrome.tabs.sendMessage`, which is
+ * the only thing that reaches a content script: `chrome.runtime.sendMessage`
+ * goes to extension pages and the worker, never here, so a stop from the popup
+ * used to leave this page's HUD and border standing indefinitely.
+ *
+ * Registered once per document — repeated starts on the same page must not
+ * stack handlers.
+ */
+function installStopListener(): void {
+  const g = recorderGlobals();
+  if (g.__piwiRecordStopListener) return;
+  g.__piwiRecordStopListener = true;
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === 'piwi-recording-stopped') stopCapture();
+  });
 }
 
 /**
@@ -555,44 +724,56 @@ function attachListeners(): void {
  * nothing.
  */
 async function runRecordPanel(): Promise<void> {
-  const g = globalThis as any;
-  if (g.__piwiRecordPanelActive) return;
-  g.__piwiRecordPanelActive = true;
-
-  try {
-    await initRecordPanel();
-  } catch (err) {
-    // Clear the guard so a later injection can retry: the usual cause is the
-    // background worker not having widened session-storage access yet, which
-    // is transient. Latching the guard here is what used to turn one unlucky
-    // read into "no HUD on this page at all".
-    g.__piwiRecordPanelActive = false;
-    console.warn('[Piwi Picker] recorder failed to start on this page:', err);
-  }
+  const g = recorderGlobals();
+  // Chained rather than latched: this script is injected both by the dynamic
+  // registration (on every navigation) and one-off from the popup, and the two
+  // can land together. A plain boolean guard would let both pass the
+  // "already capturing?" check below before either had attached — and, worse,
+  // a guard that stayed latched after a stop made the review panel
+  // unreachable, since a re-injection returned before rendering anything.
+  // Errors are swallowed into the chain so one bad run never blocks the next:
+  // the usual cause is the worker not having widened session-storage access
+  // yet, which is transient.
+  g.__piwiRecordPanelRun = (g.__piwiRecordPanelRun ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(() => initRecordPanel())
+    .catch((err: unknown) => {
+      console.warn('[Piwi Picker] recorder failed to start on this page:', err);
+    });
+  await g.__piwiRecordPanelRun;
 }
 
 async function initRecordPanel(): Promise<void> {
   // Before any session-storage read — see `session-access.ts`.
   await ensureSessionAccess();
   const state = await getRecordingState();
-  if (state.active) {
-    // Seed this page's own URL so a mid-recording navigation's `RecordedStep`s
-    // carry the right `pageUrl`; only the very first one across the whole
-    // recording survives into a `page.goto()` — see `normalizeSteps`.
-    await appendRecordingEvent(buildEvent('navigate', null, { value: location.href }));
-    attachListeners();
-    // Once per page, not per step — `refreshHud` runs on every captured
-    // interaction and must stay local-only. TTL-guarded, so a recording that
-    // crosses many pages still only re-fetches occasionally.
-    void refreshCatalogForThisPage().then(() => void refreshHud());
-    await refreshHud();
-    chrome.runtime.onMessage.addListener((message) => {
-      if (message?.type === 'piwi-recording-stopped')
-        void getRecordingState().then((s) => void renderReviewPanel(s.events));
-    });
-  } else if (state.events.length > 0) {
-    await renderReviewPanel(state.events);
+
+  if (!state.active) {
+    // The recording is over, however it ended. Tear the capture surfaces down
+    // first — a border that outlives the capture it signals is worse than no
+    // border at all — then show whatever is left to review.
+    stopCapture();
+    if (state.events.length > 0) await renderReviewPanel(state.events);
+    return;
   }
+
+  if (recorderGlobals().__piwiRecordCapture) {
+    // Already capturing in this document; a second injection only refreshes.
+    await refreshHud();
+    return;
+  }
+
+  // Seed this page's own URL so a mid-recording navigation's `RecordedStep`s
+  // carry the right `pageUrl`; only the very first one across the whole
+  // recording survives into a `page.goto()` — see `normalizeSteps`.
+  await appendRecordingEvent(buildEvent('navigate', null, { value: location.href }));
+  attachListeners();
+  installStopListener();
+  // Once per page, not per step — `refreshHud` runs on every captured
+  // interaction and must stay local-only. TTL-guarded, so a recording that
+  // crosses many pages still only re-fetches occasionally.
+  void refreshCatalogForThisPage().then(() => void refreshHud());
+  await refreshHud();
 }
 
 void runRecordPanel();

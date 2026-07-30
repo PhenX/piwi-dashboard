@@ -4,9 +4,11 @@
  * Two modes, one function: with no catalog, every step becomes a raw
  * `page.*` line (the extension's fully offline path — works with no Piwi
  * connection at all). With a catalog, `matchFunctionAt` (see
- * `function-match.ts`) greedily collapses complete, in-order matches into
- * calls against the project's own page-object methods/helpers, leaving
- * anything unmatched as raw lines — never a partial or guessed call.
+ * `function-match.ts`) greedily collapses a *contiguous* run of steps that
+ * matches a function's whole pattern into a call against the project's own
+ * page-object methods/helpers, leaving anything unmatched as raw lines — never
+ * a partial or guessed call, and never a call that quietly swallows a step it
+ * does not perform.
  */
 import type { RecordedSession, RecordedStep } from './recording';
 import { matchFunctionAt, type TestFunctionEntry, type RankedFunctionMatch } from './function-match';
@@ -24,8 +26,24 @@ export interface CodegenResult {
   matchedSpans: Array<{ startStep: number; endStep: number; functionName: string }>;
 }
 
+/**
+ * A line terminator inside a single-quoted literal is a syntax error, not a
+ * newline — and a recorded value reaches codegen unnormalized (`normalizeSteps`
+ * collapses whitespace on a target's *text*, never on the value the user typed),
+ * so one multi-line paste into a textarea used to be enough to make the whole
+ * exported spec unparseable.
+ */
+const QUOTE_ESCAPES: Record<string, string> = {
+  '\\': '\\\\',
+  "'": "\\'",
+  '\n': '\\n',
+  '\r': '\\r',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029',
+};
+
 function quote(s: string): string {
-  return `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  return `'${s.replace(/[\\'\n\r\u2028\u2029]/g, (c) => QUOTE_ESCAPES[c]!)}'`;
 }
 
 /** The best-ranked locator for a step's target, or a comment placeholder when the step captured no element. */
@@ -65,6 +83,26 @@ function renderRawStep(step: RecordedStep, index: number): string {
 
 /** A bare identifier can be an object key as-is; anything else has to be quoted. */
 const IDENTIFIER_RE = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/**
+ * Whether a catalog entry's own names are safe to emit unquoted.
+ *
+ * `name`, `receiver` and `importName` are interpolated straight into the
+ * generated source — `import { X } from …`, `new X(page)`, `await r.name()` —
+ * so anything that is not a plain identifier is arbitrary code, not a call. The
+ * API validates these on the way in; this is the second line of defence, on the
+ * way out, because a catalog can also be filled by the MCP tool from an agent
+ * reading repository source, and the generated spec's whole promise is that it
+ * is deterministic rather than invented. An entry that fails this is skipped for
+ * matching entirely, so its steps come out as ordinary locator lines.
+ */
+export function callIdentifiersAreSafe(entry: TestFunctionEntry): boolean {
+  if (!IDENTIFIER_RE.test(entry.name)) return false;
+  if (entry.kind !== 'page-object-method') return true;
+  if (entry.receiver != null && !IDENTIFIER_RE.test(entry.receiver)) return false;
+  if (entry.importName != null && !IDENTIFIER_RE.test(entry.importName)) return false;
+  return true;
+}
 
 /**
  * An `object` param renders as a literal built from whichever of its `fields`
@@ -108,16 +146,12 @@ function renderFunctionCall(match: RankedFunctionMatch): string {
 function renderImports(usedEntries: TestFunctionEntry[]): string[] {
   const lines: string[] = [];
   const seenModules = new Set<string>();
-  const seenReceivers = new Set<string>();
   for (const entry of usedEntries) {
     if (entry.kind === 'page-object-method' && entry.receiver && entry.importName) {
       const moduleKey = `${entry.module}#${entry.importName}`;
       if (!seenModules.has(moduleKey)) {
         seenModules.add(moduleKey);
         lines.push(`import { ${entry.importName} } from ${quote(entry.module)};`);
-      }
-      if (!seenReceivers.has(entry.receiver)) {
-        seenReceivers.add(entry.receiver);
       }
     } else if (!seenModules.has(entry.module + entry.name)) {
       seenModules.add(entry.module + entry.name);
@@ -142,7 +176,7 @@ function renderInstantiations(usedEntries: TestFunctionEntry[]): string[] {
 export function renderSpec(session: RecordedSession, options: CodegenOptions = {}): CodegenResult {
   const { steps } = session;
   const title = options.title ?? 'recorded flow';
-  const catalog = options.catalog ?? [];
+  const catalog = (options.catalog ?? []).filter(callIdentifiersAreSafe);
 
   const bodyLines: string[] = [];
   const matchedSpans: CodegenResult['matchedSpans'] = [];

@@ -31,6 +31,19 @@ export interface RecordedTarget {
   text: string | null;
   /** Ranked locator alternatives for this element, best first — computed once at capture time. */
   alternatives: RecordedLocatorAlternative[];
+  /**
+   * An opaque per-document identity for the element itself, assigned by the
+   * recorder at capture time. Only ever compared for equality (see
+   * `sameTarget`) and never emitted into generated code.
+   *
+   * Exists because nothing else here identifies an element reliably: two
+   * unlabelled `<input>`s on one form share tag, role, accessible name *and*
+   * text, and neither gets any locator alternative at all (a bare role anchor
+   * needs the role to be document-unique). Without this, typing into the second
+   * field looked like a continuation of the first and its value overwrote it.
+   * Optional so a recording captured before this existed still deserializes.
+   */
+  elementKey?: string | null;
 }
 
 /** One recorded, already-normalized user action. */
@@ -65,16 +78,36 @@ export interface RawCaptureEvent {
   timestamp: number;
 }
 
+/**
+ * The narrowest identity available for a target, best first: the recorder's own
+ * per-element token, then a test id, then the best locator alternative, and only
+ * as a last resort the element's shape — which two unlabelled fields on the same
+ * form share exactly.
+ */
+function targetKey(t: RecordedTarget): string {
+  if (t.elementKey) return `el:${t.elementKey}`;
+  if (t.testId) return `testid:${t.testId}`;
+  const best = t.alternatives[0]?.locator;
+  if (best) return `loc:${best}`;
+  return `shape:${t.tagName}|${t.role ?? ''}|${t.accessibleName ?? ''}`;
+}
+
 function sameTarget(a: RecordedTarget | null, b: RecordedTarget | null): boolean {
   if (!a || !b) return a === b;
-  const ka = a.testId ?? `${a.tagName}|${a.role ?? ''}|${a.accessibleName ?? ''}`;
-  const kb = b.testId ?? `${b.tagName}|${b.role ?? ''}|${b.accessibleName ?? ''}`;
-  return ka === kb;
+  return targetKey(a) === targetKey(b);
 }
 
 function normalizeText(s: string): string {
   return s.replace(/\s+/g, ' ').trim().slice(0, 120);
 }
+
+/**
+ * How long after an `Enter` press a click on the same element still counts as
+ * the browser's own synthetic activation rather than a second, deliberate
+ * click. The synthetic one lands in the same task; the allowance is for a busy
+ * event loop, not for human timing.
+ */
+const ENTER_CLICK_WINDOW_MS = 500;
 
 /**
  * Coalesce a stream of raw capture events into `RecordedStep`s:
@@ -84,8 +117,9 @@ function normalizeText(s: string): string {
  *  - `change` on a checkbox/radio becomes `check`/`uncheck` from the
  *    resulting `checked` state, not a raw `click`;
  *  - `change` on a `<select>` becomes `selectOption`;
- *  - `Enter` on a text field becomes `press('Enter')`, replacing the click
- *    that would otherwise double up with it;
+ *  - `Enter` on a text field becomes `press('Enter')`, and the browser's own
+ *    synthetic click on the same element right after it is dropped rather than
+ *    recorded a second time;
  *  - a plain `click` becomes a `click` step;
  *  - `navigate` events become `goto` steps only for the session's very first
  *    page — later navigations are implied by the click/press that caused
@@ -199,6 +233,19 @@ export function normalizeSteps(events: RawCaptureEvent[]): RecordedStep[] {
       flushPendingFill();
       // A checkbox/radio click that will also fire `change` is handled there; a plain click on anything else records here.
       if (ev.inputType === 'checkbox' || ev.inputType === 'radio') continue;
+      // Enter on a focused button or link fires `keydown` *and* a synthetic
+      // `click`. The press already records the intent, so keeping both made the
+      // generated spec activate the same control twice — a duplicate submit on
+      // any real form.
+      const prev = steps[steps.length - 1];
+      if (
+        prev?.action === 'press' &&
+        prev.value === 'Enter' &&
+        sameTarget(prev.target, ev.target) &&
+        ev.timestamp - prev.timestamp <= ENTER_CLICK_WINDOW_MS
+      ) {
+        continue;
+      }
       steps.push({
         action: 'click',
         target: ev.target,

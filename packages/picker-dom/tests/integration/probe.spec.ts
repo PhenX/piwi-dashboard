@@ -120,6 +120,74 @@ test.describe('probeElementAttrs', () => {
     expect(attrs.ancestors).toEqual([]);
   });
 
+  test('prefers a test-oriented data-* over whichever one happens to come first', async ({ page }) => {
+    // Attribute order is whatever the author typed. Core scores an anchor built
+    // on a test attribute above an ordinary one, so returning `data-index` here
+    // would hand that scoring an arbitrary winner — and a positional attribute
+    // at that.
+    await page.setContent(`<!doctype html><html><body>
+      <div data-index="3" data-qa="cart-row"><button id="target">Remove</button></div>
+    </body></html>`);
+    const attrs = await page.locator('#target').evaluate(probeElementAttrs, {
+      keep: ['id'],
+      tagRoles: { button: 'button' },
+      inputRoles: {},
+      roleSources: 'button,div',
+      includeStructural: true,
+      includeLabelText: false,
+    });
+    expect(attrs.ancestors?.[0]?.dataAttr).toEqual({ name: 'data-qa', value: 'cart-row' });
+  });
+
+  test('never anchors on a positional data-* attribute', async ({ page }) => {
+    await page.setContent(`<!doctype html><html><body>
+      <div data-index="3"><button id="target">Remove</button></div>
+    </body></html>`);
+    const attrs = await page.locator('#target').evaluate(probeElementAttrs, {
+      keep: ['id'],
+      tagRoles: { button: 'button' },
+      inputRoles: {},
+      roleSources: 'button,div',
+      includeStructural: true,
+      includeLabelText: false,
+    });
+    // A row's ordinal changes the moment the list is sorted or filtered.
+    expect(attrs.ancestors?.[0]?.dataAttr).toBeUndefined();
+  });
+
+  test('an ordinary author-chosen data-* is still used when there is no test attribute', async ({ page }) => {
+    await page.setContent(`<!doctype html><html><body>
+      <div data-index="3" data-product-sku="KB-9"><button id="target">Remove</button></div>
+    </body></html>`);
+    const attrs = await page.locator('#target').evaluate(probeElementAttrs, {
+      keep: ['id'],
+      tagRoles: { button: 'button' },
+      inputRoles: {},
+      roleSources: 'button,div',
+      includeStructural: true,
+      includeLabelText: false,
+    });
+    expect(attrs.ancestors?.[0]?.dataAttr).toEqual({ name: 'data-product-sku', value: 'KB-9' });
+  });
+
+  test('a text count stops at two — only "exactly one" is ever asked of it', async ({ page }) => {
+    await page.setContent(`<!doctype html><html><body>
+      <span class="badge">In stock</span>
+      <span class="badge">In stock</span>
+      <span class="badge">In stock</span>
+      <span id="target" class="badge">In stock</span>
+    </body></html>`);
+    const attrs = await page.locator('#target').evaluate(probeElementAttrs, {
+      keep: ['id'],
+      tagRoles: {},
+      inputRoles: {},
+      roleSources: 'button',
+      includeStructural: true,
+      includeLabelText: false,
+    });
+    expect(attrs.selectorCounts.text).toBe(2);
+  });
+
   test('walks ancestors for a role-less leaf and counts its text within each', async ({ page }) => {
     await page.setContent(`<!doctype html><html><body>
       <div data-testid="row-mouse"><span class="price">£49.99</span></div>
