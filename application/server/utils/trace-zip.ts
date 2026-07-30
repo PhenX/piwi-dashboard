@@ -3,6 +3,17 @@ import { promisify } from 'util';
 
 const inflateRawAsync = promisify(inflateRaw);
 
+/**
+ * Upper bound on the decompressed size of a single ZIP entry. Deflate can
+ * expand its input by up to ~1000×, so an attacker-supplied trace archive
+ * (uploads are open when auth is disabled) could pair a few kilobytes of
+ * compressed data with gigabytes of output and exhaust server memory. Real
+ * trace files — events, network log, screenshots — never approach this ceiling,
+ * so it stops decompression bombs without affecting legitimate traces. zlib
+ * throws ERR_BUFFER_TOO_LARGE once output would exceed the cap.
+ */
+const MAX_ENTRY_BYTES = 512 * 1024 * 1024; // 512 MiB
+
 export interface ZipEntry {
   name: string;
   data: Buffer;
@@ -121,7 +132,7 @@ export async function decompressEntry(data: Buffer, meta: ZipEntryMeta): Promise
   }
   const compressed = data.subarray(meta.dataStart, meta.dataStart + meta.compressedSize);
   if (meta.method === 0) return Buffer.from(compressed);
-  if (meta.method === 8) return inflateRawAsync(compressed);
+  if (meta.method === 8) return inflateRawAsync(compressed, { maxOutputLength: MAX_ENTRY_BYTES });
   throw new Error(`Unsupported ZIP compression method ${meta.method} for "${meta.name}"`);
 }
 
@@ -231,7 +242,7 @@ export function parseZipSync(data: Buffer): ZipEntry[] {
       if (meta.method === 0) {
         entryData = Buffer.from(compressed);
       } else if (meta.method === 8) {
-        entryData = inflateRawSync(compressed);
+        entryData = inflateRawSync(compressed, { maxOutputLength: MAX_ENTRY_BYTES });
       } else {
         continue;
       }

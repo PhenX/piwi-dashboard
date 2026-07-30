@@ -20,12 +20,20 @@ defineRouteMeta({
 
 const gunzipAsync = promisify(gunzip);
 
+// Cap decompressed archive size to prevent gzip bombs. Stored report archives
+// originate from uploads (open when auth is disabled) and are inflated fully
+// into memory here, so an unbounded ratio could expand a few kilobytes to
+// gigabytes and OOM the server. 1 GiB exceeds any realistic report while
+// stopping bombs; zlib throws ERR_BUFFER_TOO_LARGE past the cap (callers
+// already treat a decompression failure as "not found" and fall through).
+const MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024; // 1 GiB
+
 /**
  * Parse a compressed report archive and find a specific file by name.
  * Archive format: custom binary with LE length-prefixed path+content pairs.
  */
 async function findInArchive(buffer: Buffer, targetName: string): Promise<Buffer | null> {
-  const uncompressed = await gunzipAsync(buffer);
+  const uncompressed = await gunzipAsync(buffer, { maxOutputLength: MAX_ARCHIVE_BYTES });
   let offset = 0;
   while (offset < uncompressed.length) {
     if (offset + 4 > uncompressed.length) break;

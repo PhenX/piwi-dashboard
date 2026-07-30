@@ -6,11 +6,22 @@ import { promisify } from 'util';
 const gunzipAsync = promisify(gunzip);
 
 /**
+ * Upper bound on the decompressed size of a report archive. The archive packs
+ * an entire report/trace directory into one gzip stream that is inflated fully
+ * into memory here, and uploads are attacker-controllable (open when auth is
+ * disabled), so an unbounded compression ratio would let a few kilobytes expand
+ * to gigabytes and OOM the server. 1 GiB comfortably exceeds any realistic
+ * report (even a large blob report with hundreds of traced tests) while
+ * stopping decompression bombs. zlib throws ERR_BUFFER_TOO_LARGE past the cap.
+ */
+const MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024; // 1 GiB
+
+/**
  * Decompress a gzip-compressed archive buffer into a target directory.
  */
 export async function decompressDirectory(compressedBuffer: Buffer, targetDir: string): Promise<void> {
   try {
-    const uncompressed = await gunzipAsync(compressedBuffer);
+    const uncompressed = await gunzipAsync(compressedBuffer, { maxOutputLength: MAX_ARCHIVE_BYTES });
 
     await mkdir(targetDir, { recursive: true });
 
