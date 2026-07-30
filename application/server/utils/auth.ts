@@ -46,6 +46,33 @@ function getSessionPassword(config: ReturnType<typeof useRuntimeConfig>): string
   return process.env.PIWI_AUTH_SECRET || config.authSecret;
 }
 
+const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 7; // 7 days
+
+/**
+ * Config for the sealed session cookie, shared by every session operation so its
+ * attributes stay consistent (including on clear).
+ *
+ * `httpOnly` and `secure` keep the cookie out of reach of page scripts and off
+ * plaintext connections. `sameSite: 'lax'` is set explicitly rather than left to
+ * the browser's implicit default so the cookie is withheld from cross-site
+ * subrequests — a CSRF defense for the cookie-authenticated API — while still
+ * riding top-level navigations, which OAuth callbacks and ordinary links into
+ * the dashboard depend on. These are pinned here rather than inherited from h3's
+ * defaults so the posture cannot silently change across h3 versions.
+ */
+function sessionOptions(config: ReturnType<typeof useRuntimeConfig>) {
+  return {
+    password: getSessionPassword(config),
+    maxAge: SESSION_MAX_AGE_SEC,
+    cookie: {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax' as const,
+      path: '/',
+    },
+  };
+}
+
 // Get session from cookie
 export async function getUserSession(event: H3Event): Promise<SessionData | null> {
   const config = useRuntimeConfig(event);
@@ -54,10 +81,7 @@ export async function getUserSession(event: H3Event): Promise<SessionData | null
   }
 
   try {
-    const session = await useSession<SessionData>(event, {
-      password: getSessionPassword(config),
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-    });
+    const session = await useSession<SessionData>(event, sessionOptions(config));
 
     if (!session.data || !session.data.userId) {
       return null;
@@ -73,23 +97,13 @@ export async function getUserSession(event: H3Event): Promise<SessionData | null
 // Set session in cookie
 export async function setUserSession(event: H3Event, sessionData: SessionData): Promise<void> {
   const config = useRuntimeConfig(event);
-
-  await updateSession<SessionData>(
-    event,
-    {
-      password: getSessionPassword(config),
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-    },
-    sessionData,
-  );
+  await updateSession<SessionData>(event, sessionOptions(config), sessionData);
 }
 
 // Clear session cookie
 export async function clearUserSession(event: H3Event): Promise<void> {
   const config = useRuntimeConfig(event);
-  await h3ClearSession(event, {
-    password: getSessionPassword(config),
-  });
+  await h3ClearSession(event, sessionOptions(config));
 }
 
 // Get current user from session
