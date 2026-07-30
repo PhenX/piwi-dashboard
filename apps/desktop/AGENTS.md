@@ -42,4 +42,8 @@ npm run stage        # build the server and stage it into src-tauri/resources
 npm run dev          # tauri dev — run the shell against a staged server
 npm run build        # produce the platform installer
 npm run e2e          # Playwright smoke test of the shell integration
+cargo test --manifest-path src-tauri/Cargo.toml   # the shell's Rust unit tests
 ```
+
+`build.rs` copies the Node sidecar, the staged server and the app icons into the bundle, and fails when any of them is missing — so `cargo test` needs `fetch-node`, `stage` and
+`npx tauri icon ../application/public/logo.svg` to have run first. `desktop-e2e.yml` does all three before it runs the tests.

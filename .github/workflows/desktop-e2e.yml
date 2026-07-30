@@ -1,10 +1,11 @@
 name: Desktop E2E
 
-# Smoke-tests the real desktop shell by driving its webview with Playwright via
-# tauri-plugin-playwright (the app is built with the `e2e-testing` feature, which
-# embeds the control plugin). This boots the whole app — server sidecar + native
-# window — so it is heavier and slower than the unit/integration CI; it runs only
-# on desktop changes and on demand.
+# Runs the Rust crate's unit tests, then smoke-tests the real desktop shell by
+# driving its webview with Playwright via tauri-plugin-playwright (the app is
+# built with the `e2e-testing` feature, which embeds the control plugin). The
+# smoke test boots the whole app — server sidecar + native window — so this is
+# heavier and slower than the unit/integration CI; it runs only on desktop
+# changes and on demand.
 on:
   workflow_dispatch:
   pull_request:
@@ -64,6 +65,14 @@ jobs:
       - name: Install Playwright runtime
         working-directory: apps/desktop
         run: npx playwright install chromium
+
+      # The shell's own unit tests (MCP client entries, the stdio bridge, the
+      # local-run helpers). Runs ahead of the app build so a logic regression
+      # fails here instead of minutes later in the webview. `build.rs` needs the
+      # icons, the Node sidecar and the staged server, all present by this step.
+      - name: Run Rust unit tests
+        working-directory: apps/desktop/src-tauri
+        run: cargo test
 
       # Compile up front so `tauri dev` (launched by the fixture) only has to boot,
       # keeping startup inside the fixture's startTimeout.
