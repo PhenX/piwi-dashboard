@@ -1,5 +1,4 @@
-import { requireAuth } from '../../utils/auth';
-import { getDatabase } from '../../database';
+import { requireResolvedProjectAccess, resolveLinkProjectId } from '../../utils/project-access';
 import { deleteLink } from '#shared/handlers/links';
 
 defineRouteMeta({
@@ -13,15 +12,14 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event);
-
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) {
     throw createError({ statusCode: 400, message: 'Invalid link ID' });
   }
 
+  const { db } = await requireResolvedProjectAccess(event, id, resolveLinkProjectId, 'Link');
+
   try {
-    const db = await getDatabase();
     return await deleteLink(db, id);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to delete link';

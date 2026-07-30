@@ -1,4 +1,4 @@
-import { requireAuth } from '../../utils/auth';
+import { requireProjectAccess, resolveLinkEntityProjectId } from '../../utils/project-access';
 import { getDatabase } from '../../database';
 import { listLinks } from '#shared/handlers/links';
 
@@ -21,8 +21,6 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event);
-
   const query = getQuery(event);
   const entityType = query.entityType as string;
   const entityId = parseInt(query.entityId as string, 10);
@@ -31,5 +29,10 @@ export default eventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Invalid entityType or entityId' });
   }
 
-  return listLinks(await getDatabase(), entityType, entityId);
+  const db = await getDatabase();
+  const projectId = await resolveLinkEntityProjectId(db, entityType, entityId);
+  if (!projectId) throw createError({ statusCode: 404, message: 'Entity not found' });
+  await requireProjectAccess(event, projectId);
+
+  return listLinks(db, entityType, entityId);
 });

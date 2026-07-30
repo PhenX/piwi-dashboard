@@ -10,6 +10,7 @@ import {
   failureDiagnoses,
   markers,
   testFunctions,
+  entityLinks,
 } from '../database/schema';
 import { eq } from 'drizzle-orm';
 import { requireAuth, isAuthEnabled } from './auth';
@@ -134,6 +135,29 @@ export async function resolveTestFunctionProjectId(db: DrizzleDB, testFunctionId
     .from(testFunctions)
     .where(eq(testFunctions.id, testFunctionId));
   return rows[0]?.projectId ?? null;
+}
+
+/** Resolve the project owning the entity an entity-link targets (list/create). */
+export async function resolveLinkEntityProjectId(
+  db: DrizzleDB,
+  entityType: string,
+  entityId: number,
+): Promise<number | null> {
+  if (entityType === 'test_run') return resolveRunProjectId(db, entityId);
+  if (entityType === 'test_runs_case') return resolveTestRunCaseProjectId(db, entityId);
+  if (entityType === 'test_case') return resolveCaseProjectId(db, entityId);
+  return null;
+}
+
+/** Resolve the project owning an existing entity link, via its target entity. */
+export async function resolveLinkProjectId(db: DrizzleDB, linkId: number): Promise<number | null> {
+  const rows = await db.select().from(entityLinks).where(eq(entityLinks.id, linkId)).limit(1);
+  const link = rows[0];
+  if (!link) return null;
+  if (link.testRunId != null) return resolveRunProjectId(db, link.testRunId);
+  if (link.testRunsCaseId != null) return resolveTestRunCaseProjectId(db, link.testRunsCaseId);
+  if (link.testCaseId != null) return resolveCaseProjectId(db, link.testCaseId);
+  return null;
 }
 
 export async function resolveDiagnosisProjectId(db: DrizzleDB, diagnosisId: number): Promise<number | null> {

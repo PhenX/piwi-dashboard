@@ -1,4 +1,4 @@
-import { requireAuth } from '../../utils/auth';
+import { requireProjectAccess, resolveLinkEntityProjectId } from '../../utils/project-access';
 import { getDatabase } from '../../database';
 import { entityLinks } from '../../database/schema';
 import { eq } from 'drizzle-orm';
@@ -24,8 +24,6 @@ const createLinkSchema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  await requireAuth(event);
-
   const body = await readBody(event);
   const validation = createLinkSchema.safeParse(body);
 
@@ -39,6 +37,10 @@ export default eventHandler(async (event) => {
 
   const { entityType, entityId, url, title } = validation.data;
   const db = await getDatabase();
+
+  const projectId = await resolveLinkEntityProjectId(db, entityType, entityId);
+  if (!projectId) throw createError({ statusCode: 404, message: 'Entity not found' });
+  await requireProjectAccess(event, projectId);
 
   let result: { link: any };
   try {
