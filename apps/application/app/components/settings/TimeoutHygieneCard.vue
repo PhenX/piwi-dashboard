@@ -107,45 +107,43 @@ async function resetToDefaults() {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <SectionCard icon="i-lucide-scissors" title="Timeout hygiene" help="settings.timeout-hygiene">
-      <template #subtitle>
-        Tune how timeout opportunities are detected — oversized per-test timeouts and stale <code>test.slow()</code>
-        marks — surfaced per project (Performance tab) and in Analytics. Opportunities are recomputed when viewed, so
-        changes apply to existing runs immediately.
-      </template>
+  <SectionCard icon="i-lucide-scissors" title="Timeout hygiene" help="settings.timeout-hygiene">
+    <template #subtitle>
+      Tune how timeout opportunities are detected — oversized per-test timeouts and stale <code>test.slow()</code>
+      marks — surfaced per project (Performance tab) and in Analytics. Opportunities are recomputed when viewed, so
+      changes apply to existing runs immediately.
+    </template>
 
-      <div class="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-        <UFormField
-          v-for="f in fields"
-          :key="f.key"
-          :label="f.label"
-          :description="f.description"
-          :hint="`default ${settings?.defaults[f.key] ?? ''}`"
-        >
-          <UInput
-            v-model.number="values[f.key]"
-            type="number"
-            :min="f.min"
-            :step="f.step"
-            :placeholder="`default ${settings?.defaults[f.key] ?? ''}`"
-            class="w-full"
-          />
-        </UFormField>
+    <div class="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+      <UFormField
+        v-for="f in fields"
+        :key="f.key"
+        :label="f.label"
+        :description="f.description"
+        :hint="`default ${settings?.defaults[f.key] ?? ''}`"
+      >
+        <UInput
+          v-model.number="values[f.key]"
+          type="number"
+          :min="f.min"
+          :step="f.step"
+          :placeholder="`default ${settings?.defaults[f.key] ?? ''}`"
+          class="w-full"
+        />
+      </UFormField>
+    </div>
+
+    <template #footer>
+      <div class="flex items-center justify-end gap-2">
+        <UButton
+          variant="ghost"
+          color="neutral"
+          :disabled="saving"
+          label="Reset to defaults"
+          @click="resetToDefaults"
+        />
+        <UButton color="primary" :loading="saving" icon="i-lucide-save" @click="save">Save</UButton>
       </div>
-
-      <template #footer>
-        <div class="flex items-center justify-end gap-2">
-          <UButton
-            variant="ghost"
-            color="neutral"
-            :disabled="saving"
-            label="Reset to defaults"
-            @click="resetToDefaults"
-          />
-          <UButton color="primary" :loading="saving" icon="i-lucide-save" @click="save">Save</UButton>
-        </div>
-      </template>
-    </SectionCard>
-  </div>
+    </template>
+  </SectionCard>
 </template>

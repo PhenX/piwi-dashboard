@@ -93,7 +93,7 @@ test.describe('Inline help (HelpHint)', () => {
   });
 
   test('settings wasted-time hint names PIWI_WASTED_WAIT_PATTERNS', async ({ page }) => {
-    await page.goto('/settings/wasted-time');
+    await page.goto('/settings/performance');
 
     // The "Wasted-time patterns" topic is used by both the card header and the
     // Patterns field label; target the first one (the card header).
