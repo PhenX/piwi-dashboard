@@ -53,6 +53,82 @@ export async function discardRecording(): Promise<void> {
 }
 
 /**
+ * A "Record actions" click that still needs its host permission, parked in
+ * `chrome.storage.session` so the *background* can finish starting the
+ * recording after the popup is gone.
+ *
+ * The popup can't do it itself: `chrome.permissions.request` shows a prompt
+ * that takes focus and closes the popup on a first-time grant, tearing down the
+ * code that awaited the grant before it can message the worker — which is why a
+ * first recording used to need a second click. The popup writes this intent
+ * inside the same click, then `chrome.permissions.onAdded` in the worker reads
+ * it back when the grant lands (see `decideRecordIntent`).
+ */
+const RECORD_INTENT_KEY = 'piwiRecordIntent';
+
+export interface RecordIntent {
+  /** The origin pattern the popup requested (e.g. `https://app.example.com/*`). */
+  originPattern: string;
+  /** The tab the click applied to — the already-loaded page that needs the one-off inject. */
+  tabId: number;
+  /** When the popup requested the grant; a stale intent is ignored rather than reviving a recording on some later, unrelated grant. */
+  createdAt: number;
+}
+
+/**
+ * How long a parked intent stays actionable. A permission prompt is answered in
+ * seconds; well past that, a matching grant is more likely an unrelated one
+ * (the options page granting the instance origin, say) than a slow answer to
+ * this prompt, so the worker ignores it instead of starting a surprise recording.
+ */
+export const RECORD_INTENT_TTL_MS = 60_000;
+
+export async function setRecordIntent(intent: Omit<RecordIntent, 'createdAt'>): Promise<void> {
+  await chrome.storage.session.set({ [RECORD_INTENT_KEY]: { ...intent, createdAt: Date.now() } });
+}
+
+export async function getRecordIntent(): Promise<RecordIntent | null> {
+  const stored = await chrome.storage.session.get(RECORD_INTENT_KEY);
+  const value = stored[RECORD_INTENT_KEY];
+  if (!value || typeof value !== 'object') return null;
+  const intent = value as Partial<RecordIntent>;
+  if (typeof intent.originPattern !== 'string' || typeof intent.tabId !== 'number') return null;
+  return { originPattern: intent.originPattern, tabId: intent.tabId, createdAt: intent.createdAt ?? 0 };
+}
+
+export async function clearRecordIntent(): Promise<void> {
+  await chrome.storage.session.remove(RECORD_INTENT_KEY);
+}
+
+export type RecordIntentDecision =
+  | { action: 'start'; originPattern: string; tabId: number }
+  | { action: 'clear' }
+  | { action: 'ignore' };
+
+/**
+ * Pure half of the worker's `chrome.permissions.onAdded` handler: given the
+ * parked intent and the origins a grant just added, decide whether to start the
+ * recording, drop a stale intent, or leave everything alone.
+ *
+ * - `ignore` when there's no intent, or the grant didn't include the intent's
+ *   own origin — the options page granting the Piwi instance origin fires the
+ *   same event and must not start a recording.
+ * - `clear` when the intent is older than {@link RECORD_INTENT_TTL_MS}: the
+ *   prompt was left long enough that this grant is unlikely to be its answer.
+ * - `start` otherwise.
+ */
+export function decideRecordIntent(
+  intent: RecordIntent | null,
+  addedOrigins: string[],
+  now: number,
+): RecordIntentDecision {
+  if (!intent) return { action: 'ignore' };
+  if (!addedOrigins.includes(intent.originPattern)) return { action: 'ignore' };
+  if (now - intent.createdAt > RECORD_INTENT_TTL_MS) return { action: 'clear' };
+  return { action: 'start', originPattern: intent.originPattern, tabId: intent.tabId };
+}
+
+/**
  * Serializes appends within one document.
  *
  * An append is read-modify-write against a single storage key, and every DOM
