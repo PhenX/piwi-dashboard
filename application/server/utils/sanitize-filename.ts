@@ -4,10 +4,13 @@ export function sanitizeFilename(filename: string): string {
   return filename.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
-/** Reduce a (possibly hostile) name to a single safe path segment, or `null`
- * when nothing usable remains. The result contains only `[A-Za-z0-9._-]` and is
- * never `.` or `..`, so appending it to a storage prefix can never escape it. */
+/** Return `name` when it is a single, traversal-free path segment that is safe
+ * to append to a storage prefix, or `null` when it is not (empty, `.`/`..`, or
+ * containing a path separator or NUL). The name is preserved exactly — content
+ * that references a resource by name (e.g. Playwright trace `resources/src@…`
+ * entries) must still resolve — so containment, not rewriting, is the guard. */
 export function safeStorageSegment(name: string): string | null {
-  const safe = sanitizeFilename(name);
-  return safe && safe !== '.' && safe !== '..' ? safe : null;
+  if (!name || name === '.' || name === '..') return null;
+  if (/[/\\\0]/.test(name)) return null;
+  return name;
 }
