@@ -4,7 +4,7 @@
 # Three things are missing from a fresh container, and each one makes a whole
 # class of verification impossible:
 #   1. node_modules — nothing runs at all.
-#   2. reporter/dist — playwright.config.ts imports the built reporter, so the
+#   2. packages/reporter/dist — playwright.config.ts imports the built reporter, so the
 #      E2E suite cannot even load its config, and a unit test that compares the
 #      app against the reporter's build fails.
 #   3. A Chromium matching the pinned Playwright — without it every
@@ -22,7 +22,7 @@ echo "[session-start] installing workspace dependencies"
 npm install --no-audit --fund=false
 
 echo "[session-start] building the reporter (playwright.config.ts imports it)"
-npm run reporter:build --workspace reporter
+npm run reporter:build --workspace packages/reporter
 
 # Prefer the browser Playwright pins. When the download is unavailable, fall
 # back to whatever Chromium the image already provides and tell Playwright

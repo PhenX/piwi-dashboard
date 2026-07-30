@@ -27,7 +27,7 @@ For each checklist item, search the codebase to determine whether it's been impl
 # Check if specified files exist
 Test-Path "<path>"
 # Search for key symbols introduced by the plan
-rg "<symbol>" --include "*.ts" --include "*.vue" application/ reporter/
+rg "<symbol>" --include "*.ts" --include "*.vue" apps/application/ packages/reporter/
 # Check type definitions, schema, API handlers, UI components, demo mirror, tests
 ```
 
@@ -107,26 +107,26 @@ Plans in this project follow this structure:
 
 | Area                     | Where to look                                                  |
 |--------------------------|----------------------------------------------------------------|
-| DB schema                | `application/server/database/schema.sqlite.ts`, `schema.pg.ts` |
-| API endpoints            | `application/server/api/`                                      |
-| Shared types             | `application/shared/types.ts`                                  |
-| Shared handlers          | `application/shared/handlers/`                                 |
-| Frontend types           | `application/types/api.ts`                                     |
-| Frontend pages           | `application/app/pages/`                                       |
-| Frontend components      | `application/app/components/` (organized by domain subfolder)  |
-| Frontend composables     | `application/app/composables/`                                 |
-| Settings metadata        | `application/app/utils/settings-metadata.ts`                   |
-| Help content             | `application/app/utils/help-content.ts`                        |
-| Layout (sidebar, footer) | `application/app/layouts/default.vue`                          |
-| Env var registry         | `application/shared/piwi-env-vars.ts`                          |
-| Reporter source          | `reporter/src/`                                                |
-| Reporter tests           | `reporter/tests/`                                              |
-| Demo API mirror          | `application/app/demo/api/`                                    |
-| Demo simulator           | `application/app/demo/simulator.ts`                            |
-| Demo seed script         | `application/scripts/generate-demo-seed.mjs`                   |
-| Unit tests               | `application/tests/unit/`                                      |
-| E2E tests                | `application/tests/`                                           |
+| DB schema                | `apps/application/server/database/schema.sqlite.ts`, `schema.pg.ts` |
+| API endpoints            | `apps/application/server/api/`                                      |
+| Shared types             | `apps/application/shared/types.ts`                                  |
+| Shared handlers          | `apps/application/shared/handlers/`                                 |
+| Frontend types           | `apps/application/types/api.ts`                                     |
+| Frontend pages           | `apps/application/app/pages/`                                       |
+| Frontend components      | `apps/application/app/components/` (organized by domain subfolder)  |
+| Frontend composables     | `apps/application/app/composables/`                                 |
+| Settings metadata        | `apps/application/app/utils/settings-metadata.ts`                   |
+| Help content             | `apps/application/app/utils/help-content.ts`                        |
+| Layout (sidebar, footer) | `apps/application/app/layouts/default.vue`                          |
+| Env var registry         | `apps/application/shared/piwi-env-vars.ts`                          |
+| Reporter source          | `packages/reporter/src/`                                                |
+| Reporter tests           | `packages/reporter/tests/`                                              |
+| Demo API mirror          | `apps/application/app/demo/api/`                                    |
+| Demo simulator           | `apps/application/app/demo/simulator.ts`                            |
+| Demo seed script         | `apps/application/scripts/generate-demo-seed.mjs`                   |
+| Unit tests               | `apps/application/tests/unit/`                                      |
+| E2E tests                | `apps/application/tests/`                                           |
 | CI workflows             | `.github/workflows/`                                           |
-| Docs                     | `docs/`                                                        |
-| MCP tools                | `application/server/utils/mcp/tools.ts`                        |
-| MCP tool defs            | `application/shared/mcp-tools.ts`                              |
+| Docs                     | `apps/docs/`                                                        |
+| MCP tools                | `apps/application/server/utils/mcp/tools.ts`                        |
+| MCP tool defs            | `apps/application/shared/mcp-tools.ts`                              |

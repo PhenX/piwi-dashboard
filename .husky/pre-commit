@@ -18,8 +18,8 @@ format_staged() {
   printf '%s\n' "$staged" | tr '\n' '\0' | xargs -0 git add --
 }
 
-format_staged application app:format application/
-format_staged reporter reporter:format reporter/src/
+format_staged apps/application app:format apps/application/
+format_staged packages/reporter reporter:format packages/reporter/src/
 format_staged packages/core core:format packages/core/
 format_staged packages/picker-dom picker-dom:format packages/picker-dom/
-format_staged extension extension:format extension/
+format_staged apps/extension extension:format apps/extension/

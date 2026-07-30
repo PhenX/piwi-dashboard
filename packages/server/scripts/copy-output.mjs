@@ -1,6 +1,6 @@
 // prepack step: copy the application's freshly built Nitro output into this package
 // so it ships inside the published tarball (`files: [".output/"]`). The build artifact
-// is intentionally not committed to git — CI runs `npm run app:build --workspace=application`
+// is intentionally not committed to git — CI runs `npm run app:build --workspace=apps/application`
 // (with NITRO_PRESET=node-server) before packing.
 //
 // The build bundles a `node_modules` into `.output/server/` (Nitro's noExternals does
@@ -17,13 +17,13 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const source = resolve(here, '../../../application/.output')
+const source = resolve(here, '../../../apps/application/.output')
 const target = resolve(here, '../.output')
 
 if (!existsSync(source)) {
   console.error(
     `[copy-output] Application build output not found at ${source}.\n` +
-      'Build it first: NITRO_PRESET=node-server npm run app:build --workspace=application',
+      'Build it first: NITRO_PRESET=node-server npm run app:build --workspace=apps/application',
   )
   process.exit(1)
 }

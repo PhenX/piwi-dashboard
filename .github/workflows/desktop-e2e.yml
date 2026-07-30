@@ -9,11 +9,11 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
-      - 'desktop/**'
+      - 'apps/desktop/**'
       - '.github/workflows/desktop-e2e.yml'
 
 env:
-  # Match the runtime the app bundles (application/engines / desktop-release.yml).
+  # Match the runtime the app bundles (apps/application/engines / desktop-release.yml).
   PIWI_NODE_VERSION: 24.4.1
 
 jobs:
@@ -37,16 +37,16 @@ jobs:
         # The Nuxt/Vite SSR build needs more heap than Node's default cap on the
         # macOS runner (it OOMs at ~2 GB otherwise; the ubuntu builds get a higher
         # default and don't need this).
-        run: npm run app:build --workspace=application
+        run: npm run app:build --workspace=apps/application
         env:
           NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Install desktop deps
-        working-directory: desktop
+        working-directory: apps/desktop
         run: npm ci
 
       - name: Stage the Node sidecar + bundled server
-        working-directory: desktop
+        working-directory: apps/desktop
         run: |
           node scripts/fetch-node.mjs --node "$PIWI_NODE_VERSION"
           npm run stage
@@ -55,24 +55,24 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: desktop/src-tauri
+          workspaces: apps/desktop/src-tauri
 
       - name: Generate app icons
-        working-directory: desktop
+        working-directory: apps/desktop
         run: npx tauri icon ../application/public/logo.svg
 
       - name: Install Playwright runtime
-        working-directory: desktop
+        working-directory: apps/desktop
         run: npx playwright install chromium
 
       # Compile up front so `tauri dev` (launched by the fixture) only has to boot,
       # keeping startup inside the fixture's startTimeout.
       - name: Pre-build the shell (e2e feature)
-        working-directory: desktop/src-tauri
+        working-directory: apps/desktop/src-tauri
         run: cargo build --features e2e-testing
 
       - name: Run e2e
-        working-directory: desktop
+        working-directory: apps/desktop
         run: npx playwright test --config e2e/playwright.config.ts
 
       - name: Upload Playwright report
@@ -80,5 +80,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: desktop-e2e-report
-          path: desktop/playwright-report
+          path: apps/desktop/playwright-report
           if-no-files-found: ignore

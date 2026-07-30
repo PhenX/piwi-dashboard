@@ -11,7 +11,7 @@ concurrency:
 
 defaults:
   run:
-    working-directory: ./application
+    working-directory: ./apps/application
 
 jobs:
   # Builds once for every E2E cell: the storage and database backends are read
@@ -46,7 +46,7 @@ jobs:
         with:
           path: |
             node_modules/.cache
-            application/node_modules/.cache
+            apps/application/node_modules/.cache
           key: nuxt-build-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
           restore-keys: |
             nuxt-build-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
@@ -54,7 +54,7 @@ jobs:
 
       # The reporter dist is imported by playwright.config.ts.
       - name: Build reporter
-        working-directory: ./reporter
+        working-directory: ./packages/reporter
         run: npm run reporter:build
 
       - name: Build application
@@ -65,8 +65,8 @@ jobs:
         with:
           name: build-output
           path: |
-            application/.output
-            reporter/dist
+            apps/application/.output
+            packages/reporter/dist
           # `.output` is dot-prefixed, so without this the upload silently skips it.
           include-hidden-files: true
           retention-days: 1
@@ -105,11 +105,11 @@ jobs:
         run: npm run app:typecheck
 
       - name: Lint reporter
-        working-directory: ./reporter
+        working-directory: ./packages/reporter
         run: npm run reporter:lint
 
       - name: Typecheck reporter
-        working-directory: ./reporter
+        working-directory: ./packages/reporter
         run: npm run reporter:typecheck
 
       - name: Lint, typecheck and test core
@@ -127,7 +127,7 @@ jobs:
           npm run picker-dom:test
 
       - name: Lint, typecheck and unit-test extension
-        working-directory: ./extension
+        working-directory: ./apps/extension
         run: |
           npm run extension:lint
           npm run extension:typecheck
@@ -149,21 +149,21 @@ jobs:
         run: npm run picker-dom:test:integration
 
       - name: Test reporter
-        working-directory: ./reporter
+        working-directory: ./packages/reporter
         run: npm run reporter:test:coverage
 
       - name: Report reporter coverage on the PR
         if: github.event_name == 'pull_request'
         uses: davelosert/vitest-coverage-report-action@v2
         with:
-          working-directory: ./reporter
+          working-directory: ./packages/reporter
           name: Reporter
           file-coverage-mode: changes
 
       # locator-generate-drift.test.ts compares the app copy of the locator
       # helpers against the reporter's compiled one, so it needs the dist.
       - name: Build reporter
-        working-directory: ./reporter
+        working-directory: ./packages/reporter
         run: npm run reporter:build
 
       - name: Test application unit tests
@@ -173,7 +173,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: davelosert/vitest-coverage-report-action@v2
         with:
-          working-directory: ./application
+          working-directory: ./apps/application
           name: Application
           file-coverage-mode: changes
 
@@ -318,7 +318,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: blob-report-${{ matrix.storage }}-${{ matrix.database }}-${{ matrix.shard }}
-          path: application/blob-report
+          path: apps/application/blob-report
           retention-days: 3
 
   demo:

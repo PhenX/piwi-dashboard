@@ -6,9 +6,9 @@
     "packages/core",
     "packages/picker-dom",
     "packages/server",
-    "application",
-    "reporter",
-    "extension",
+    "packages/reporter",
+    "apps/application",
+    "apps/extension",
     "integrations/nitro"
   ],
   "engines": {
