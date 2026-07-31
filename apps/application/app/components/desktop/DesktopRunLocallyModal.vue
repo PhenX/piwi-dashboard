@@ -1,121 +1,74 @@
 <script setup lang="ts">
 /**
- * Desktop shell only: run the given test cases locally, in the folder linked to
- * the project. The shell executes the folder's own Playwright with the bundled
- * Node sidecar and streams output back here; results land in the dashboard
- * through the project's regular Piwi reporter (which discovers the running app
- * via `~/.piwi/desktop.json`).
+ * Desktop shell only: the "run with options" dialog — first-time folder setup,
+ * the full options form, the spec check and the exact command preview. Running
+ * hands the plan to the app-wide local runs store and closes; progress streams
+ * in the runs tray, so this dialog never holds a process hostage. Day-to-day
+ * one-click runs bypass it entirely (the split button uses the saved options).
  */
-import type { RetryCase, RetryMode } from '~/utils/retry-command';
-import { buildLocalRunPlan, type LocalRunMode } from '~/utils/local-run-args';
+import type { RetryCase } from '~/utils/retry-command';
+import { buildLocalRunPlan } from '~/utils/local-run-args';
 
 const props = defineProps<{
   /** Piwi project id owning the linked folder. */
   projectId: string | number;
   projectLabel?: string | null;
-  /** The failing cases to retry. */
+  /** The cases to run. */
   cases: RetryCase[];
 }>();
 
 const open = defineModel<boolean>('open', { default: false });
 
+const store = useDesktopLocalRuns();
 const { link, busy, pickAndLink } = useDesktopProjectLink(() => props.projectId);
-const { status, running, lines, exitCode, stepIndex, stepCount, start, stop } = useDesktopLocalRunner();
-
-const mode = ref<RetryMode>('file-line');
-const runMode = ref<LocalRunMode>('normal');
-const trace = ref(false);
-const repeatEach = ref(1);
-
-const modeItems = [
-  { label: 'File:line', value: 'file-line' },
-  { label: 'Title (grep)', value: 'grep' },
-  { label: 'File only', value: 'file' },
-];
-const runModeItems = [
-  { label: 'Headless', value: 'normal' },
-  { label: 'Headed', value: 'headed' },
-  { label: 'Debug (inspector)', value: 'debug' },
-  { label: 'UI mode', value: 'ui' },
-];
+const { missingSpecs, wrongFolder, checkSpecs } = useDesktopSpecCheck(
+  () => props.projectId,
+  () => props.cases,
+);
 
 const linked = computed(() => !!link.value?.exists);
 
-// A project linked to the wrong checkout is the likeliest reason a local run
-// dies immediately, and Playwright reports it as a module-resolution stack
-// trace from whatever config that folder happens to hold. Ask the shell which
-// spec files are actually there before anything is spawned.
-const specFiles = computed(() => [...new Set(props.cases.map((c) => c.filePath).filter(Boolean))]);
-const missingSpecs = ref<string[]>([]);
+// The form edits the project's saved options directly — what runs from here is
+// what the split button's one-click run repeats next time.
+const options = computed({
+  get: () => store.getProjectOptions(props.projectId),
+  set: (value) => store.saveProjectOptions(props.projectId, value),
+});
+const mode = computed({
+  get: () => options.value.mode,
+  set: (value) => (options.value = { ...options.value, mode: value }),
+});
+const runMode = computed({
+  get: () => options.value.runMode,
+  set: (value) => (options.value = { ...options.value, runMode: value }),
+});
+const trace = computed({
+  get: () => options.value.trace,
+  set: (value) => (options.value = { ...options.value, trace: value }),
+});
+const repeatEach = computed({
+  get: () => options.value.repeatEach,
+  set: (value) => (options.value = { ...options.value, repeatEach: value }),
+});
 
-async function checkSpecs() {
-  const core = tauriCore();
-  missingSpecs.value = [];
-  if (!core || !linked.value || specFiles.value.length === 0) return;
-  try {
-    const result = await core.invoke<{ folder: string; missing: string[] }>('desktop_check_local_specs', {
-      projectId: String(props.projectId),
-      files: specFiles.value,
-    });
-    missingSpecs.value = result?.missing ?? [];
-  } catch {
-    // An older shell without the command — the run itself still reports.
-  }
-}
+const modeItems = RETRY_MODE_ITEMS;
+const runModeItems = LOCAL_RUN_MODE_ITEMS;
 
 watch([open, () => link.value?.path, linked], () => {
-  if (open.value) void checkSpecs();
+  if (open.value) void checkSpecs(linked.value);
 });
 
-/** Every spec absent points at the folder rather than at any one test. */
-const wrongFolder = computed(() => specFiles.value.length > 0 && missingSpecs.value.length === specFiles.value.length);
-const plan = computed(() =>
-  buildLocalRunPlan(props.cases, {
-    mode: mode.value,
-    runMode: runMode.value,
-    trace: trace.value,
-    repeatEach: repeatEach.value,
-  }),
-);
+const plan = computed(() => buildLocalRunPlan(props.cases, options.value));
 const preview = computed(() => plan.value.map((s) => s.display).join('\n'));
 
-const statusBadge = computed(() => {
-  switch (status.value) {
-    case 'running':
-      return {
-        label: stepCount.value > 1 ? `Running ${stepIndex.value + 1}/${stepCount.value}…` : 'Running…',
-        color: 'info' as const,
-      };
-    case 'passed':
-      return { label: 'Passed', color: 'success' as const };
-    case 'failed':
-      return { label: exitCode.value != null ? `Failed (exit ${exitCode.value})` : 'Failed', color: 'error' as const };
-    case 'stopped':
-      return { label: 'Stopped', color: 'neutral' as const };
-    case 'error':
-      return { label: 'Could not run', color: 'error' as const };
-    default:
-      return null;
-  }
-});
-
-async function run() {
-  await start(props.projectId, plan.value);
+function run() {
+  store.startRun({
+    projectId: props.projectId,
+    projectLabel: props.projectLabel,
+    cases: props.cases,
+  });
+  open.value = false;
 }
-
-// Closing the modal mid-run stops the process — nothing keeps running unseen.
-watch(open, (value) => {
-  if (!value && running.value) void stop();
-});
-
-const outputEl = ref<HTMLElement | null>(null);
-watch(
-  () => lines.value.length,
-  async () => {
-    await nextTick();
-    outputEl.value?.scrollTo({ top: outputEl.value.scrollHeight });
-  },
-);
 </script>
 
 <template>
@@ -160,7 +113,6 @@ watch(
               variant="ghost"
               icon="i-lucide-folder-search"
               :loading="busy"
-              :disabled="running"
               @click="pickAndLink"
             >
               Change
@@ -169,20 +121,20 @@ watch(
 
           <div class="grid grid-cols-2 gap-3">
             <UFormField label="Select tests by" name="mode">
-              <USelect v-model="mode" :items="modeItems" :disabled="running" class="w-full" />
+              <USelect v-model="mode" :items="modeItems" class="w-full" />
             </UFormField>
             <UFormField label="Browser" name="runMode">
-              <USelect v-model="runMode" :items="runModeItems" :disabled="running" class="w-full" />
+              <USelect v-model="runMode" :items="runModeItems" class="w-full" />
             </UFormField>
             <UFormField
               label="Repeat each"
               name="repeatEach"
               description="Run every test N times — flake reproduction."
             >
-              <UInput v-model.number="repeatEach" type="number" min="1" max="1000" :disabled="running" class="w-full" />
+              <UInput v-model.number="repeatEach" type="number" min="1" max="1000" class="w-full" />
             </UFormField>
             <UFormField label="Trace" name="trace" description="Force trace recording (--trace=on).">
-              <USwitch v-model="trace" :disabled="running" />
+              <USwitch v-model="trace" />
             </UFormField>
           </div>
 
@@ -215,7 +167,6 @@ watch(
                 icon="i-lucide-folder-search"
                 class="mt-2"
                 :loading="busy"
-                :disabled="running"
                 @click="pickAndLink"
               >
                 Choose the right folder…
@@ -229,37 +180,18 @@ watch(
           </div>
 
           <p class="text-xs text-muted">
-            Results are reported by the folder's own Playwright config — with the Piwi reporter set up, the new run
-            appears in this app automatically.
+            The run streams into the Local runs tray and keeps going while you browse. Results are reported by the
+            folder's own Playwright config — with the Piwi reporter set up, the new run appears in this app
+            automatically.
           </p>
-
-          <div v-if="status !== 'idle'" class="space-y-2">
-            <div ref="outputEl" class="h-64 overflow-y-auto rounded-md bg-zinc-950 p-3">
-              <p
-                v-for="(line, i) in lines"
-                :key="i"
-                class="font-mono text-xs whitespace-pre-wrap"
-                :class="line.error ? 'text-red-400' : 'text-zinc-300'"
-              >
-                {{ line.text || ' ' }}
-              </p>
-            </div>
-          </div>
         </template>
       </div>
     </template>
 
     <template #footer>
-      <div class="flex items-center justify-between w-full gap-3">
-        <UBadge v-if="statusBadge" :color="statusBadge.color" variant="subtle">{{ statusBadge.label }}</UBadge>
-        <span v-else />
-        <div class="flex items-center gap-2">
-          <UButton color="neutral" variant="ghost" @click="open = false">Close</UButton>
-          <UButton v-if="running" color="error" icon="i-lucide-square" @click="stop()">Stop</UButton>
-          <UButton v-else icon="i-lucide-play" :disabled="!linked || plan.length === 0 || busy" @click="run()">
-            {{ status === 'idle' ? 'Run' : 'Run again' }}
-          </UButton>
-        </div>
+      <div class="flex items-center justify-end w-full gap-2">
+        <UButton color="neutral" variant="ghost" @click="open = false">Close</UButton>
+        <UButton icon="i-lucide-play" :disabled="!linked || plan.length === 0 || busy" @click="run()">Run</UButton>
       </div>
     </template>
   </UModal>
