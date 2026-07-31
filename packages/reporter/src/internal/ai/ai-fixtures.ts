@@ -26,12 +26,14 @@ import type {
 import { ariaSnapshotBestEffort } from '../capture/capture-fixtures.js';
 import { ATTACHMENT_NAMES } from '../capture/attachments.js';
 import { captureCallerLocation } from '../capture/locator-healing.js';
-import type { AiEntry, LocatorEntry, RunEntry } from './artifact.js';
-import { readEntry } from './artifact.js';
+import type { AiEntry } from './artifact.js';
+import { readEntry, writeEntry } from './artifact.js';
 import { DEFAULT_AI_DIR, entryPath, findTemplateSites, ordinalForLocation } from './keys.js';
 import { buildLocator, executeRun } from './interpreter.js';
 import type { ParamArgs, ParamValues } from './params.js';
 import { validateParams } from './params.js';
+import type { StepResolver } from './resolution.js';
+import { lazyLocator, resolveLocator, resolveRun, ServerStepResolver } from './resolution.js';
 
 /** How the fixture behaves on a cache miss. */
 export type AiMode = 'replay' | 'resolve' | 'heal';
@@ -56,6 +58,8 @@ interface AiConfig {
   mode: AiMode;
   dir: string;
   onMiss: AiOnMiss;
+  /** Force re-resolution of already-valid entries (`--update-ai`). */
+  update: boolean;
 }
 
 /** Parse the mode env value; anything unrecognized is the safe `replay` default. */
@@ -68,6 +72,7 @@ function readAiConfig(env: NodeJS.ProcessEnv): AiConfig {
     mode: parseAiMode(env.PIWI_AI),
     dir: env.PIWI_AI_DIR || DEFAULT_AI_DIR,
     onMiss: env.PIWI_AI_ON_MISS === 'fixme' ? 'fixme' : 'fail',
+    update: env.PIWI_AI_UPDATE === 'true',
   };
 }
 
@@ -128,13 +133,8 @@ function createAiApi(page: Page, testInfo: TestInfo, config: AiConfig, used: Set
     return entryPath({ specFile: testInfo.file, testTitle, template, ordinal, dir: config.dir });
   };
 
-  const handleMiss = (template: string, file: string): never => {
+  const missInReplay = (template: string, file: string): never => {
     const message = missMessage(template, testTitle, relativeToCwd(file));
-    if (config.mode !== 'replay') {
-      throw new Error(
-        `${message}\n  resolve/heal mode needs a configured authoring resolver, which is not available in this build`,
-      );
-    }
     if (config.onMiss === 'fixme') {
       testInfo.annotations.push({ type: 'fixme', description: message });
       testInfo.fixme();
@@ -142,31 +142,64 @@ function createAiApi(page: Page, testInfo: TestInfo, config: AiConfig, used: Set
     throw new Error(message);
   };
 
-  const load = <K extends AiEntry['kind']>(template: string, kind: K): Extract<AiEntry, { kind: K }> => {
-    const file = resolveFile(template);
-    const entry = readEntry(file);
-    if (entry && entry.kind === kind) {
-      used.add(file);
-      return entry as Extract<AiEntry, { kind: K }>;
+  const requireResolver = (): StepResolver => {
+    const serverUrl = process.env.PIWI_DASHBOARD_URL;
+    if (!serverUrl) {
+      throw new Error(`piwi AI: ${config.mode} mode needs PIWI_DASHBOARD_URL (the authoring server) to be set`);
     }
-    return handleMiss(template, file);
+    return new ServerStepResolver(serverUrl, process.env.PIWI_API_KEY ?? null);
   };
 
   const readAria = (p: Page): Promise<string | null> => ariaSnapshotBestEffort(p.locator('body'));
   const step = <T>(title: string, body: () => Promise<T>): Promise<T> => playwrightTest.step(title, body);
 
+  /** A hit is reusable unless we are authoring and were asked to force regeneration. */
+  const canReuse = <K extends AiEntry['kind']>(
+    entry: AiEntry | null,
+    kind: K,
+  ): entry is Extract<AiEntry, { kind: K }> => entry?.kind === kind && !(config.mode !== 'replay' && config.update);
+
   return {
     piwiLocator(template, ...params) {
+      const values = (params[0] ?? {}) as ParamValues;
       validateParams(template, params[0]);
-      const entry: LocatorEntry = load(template, 'locator');
-      return buildLocator(page, entry.locator, (params[0] ?? {}) as ParamValues);
+      const file = resolveFile(template);
+      const existing = readEntry(file);
+      if (canReuse(existing, 'locator')) {
+        used.add(file);
+        return buildLocator(page, existing.locator, values);
+      }
+      if (config.mode === 'replay') return missInReplay(template, file);
+      // Resolve/heal: return a lazy locator that authors + verifies + commits the
+      // entry on first use, then delegates to the freshly-built real locator.
+      const resolver = requireResolver();
+      return lazyLocator(async () => {
+        const entry = await resolveLocator(template, { page, params: values, resolver });
+        writeEntry(file, entry);
+        used.add(file);
+        return buildLocator(page, entry.locator, values);
+      });
     },
     async piwiRun(template, ...params) {
+      const values = (params[0] ?? {}) as ParamValues;
       validateParams(template, params[0]);
-      const entry: RunEntry = load(template, 'run');
-      await step(`piwiRun: ${template}`, () =>
-        executeRun(entry, { page, params: (params[0] ?? {}) as ParamValues, readAria, step }),
-      );
+      const file = resolveFile(template);
+      const existing = readEntry(file);
+      if (canReuse(existing, 'run')) {
+        used.add(file);
+        await step(`piwiRun: ${template}`, () => executeRun(existing, { page, params: values, readAria, step }));
+        return;
+      }
+      if (config.mode === 'replay') {
+        missInReplay(template, file);
+        return;
+      }
+      const resolver = requireResolver();
+      await step(`piwiRun (resolve): ${template}`, async () => {
+        const entry = await resolveRun(template, { page, params: values, resolver });
+        writeEntry(file, entry);
+        used.add(file);
+      });
     },
   };
 }

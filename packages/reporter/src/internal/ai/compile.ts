@@ -5,8 +5,14 @@
  * flat candidate into structured data plus a drift fingerprint. Same page + same
  * element ⇒ same artifact, regardless of model sampling.
  */
-import type { ElementAttributes, ElementFingerprint, RankedLocator } from '@piwitests/core';
-import { approximateAccessibleName, generateAlternatives, headingLevel, resolveAriaRole } from '@piwitests/core';
+import type { AriaCandidate, ElementAttributes, ElementFingerprint, RankedLocator } from '@piwitests/core';
+import {
+  approximateAccessibleName,
+  freshLocatorsFromCandidate,
+  generateAlternatives,
+  headingLevel,
+  resolveAriaRole,
+} from '@piwitests/core';
 import type { LocatorArg, StructuredLocator } from './artifact.js';
 
 /** A compiled locator plus the fingerprint used to detect later drift. */
@@ -77,6 +83,22 @@ export function compileLocator(attrs: ElementAttributes): CompiledLocator | null
   for (const ranked of generateAlternatives(attrs)) {
     const structured = rankedToStructured(ranked);
     if (structured) return { locator: structured, fingerprint: fingerprintOf(attrs), score: ranked.score };
+  }
+  return null;
+}
+
+/**
+ * Compile a locator from an ARIA candidate (role + accessible name + level) — the
+ * form the authoring model points at. `@piwitests/core` generates the ranked
+ * semantic locators; the top flat one is committed. Returns `null` when the
+ * candidate has no usable name to address it by.
+ */
+export function compileFromCandidate(candidate: AriaCandidate): CompiledLocator | null {
+  const fingerprint: ElementFingerprint = { role: candidate.role, name: candidate.name };
+  if (candidate.level != null) fingerprint.level = candidate.level;
+  for (const ranked of freshLocatorsFromCandidate(candidate)) {
+    const structured = rankedToStructured(ranked);
+    if (structured) return { locator: structured, fingerprint, score: ranked.score };
   }
   return null;
 }

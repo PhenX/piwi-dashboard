@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { checkAiTree } from '../src/internal/ai/check.js';
 import { serializeEntry, type LocatorEntry } from '../src/internal/ai/artifact.js';
 import { entryPath } from '../src/internal/ai/keys.js';
-import { runAi, runCheck } from '../src/cli/ai.js';
+import { buildResolveInvocation, runAi, runCheck } from '../src/cli/ai.js';
 
 function locatorEntry(template: string): LocatorEntry {
   return {
@@ -104,7 +104,28 @@ describe('runCheck / runAi', () => {
     expect(await runAi(['bogus'], {})).toBe(2);
   });
 
-  it('resolve reports that the authoring resolver is unavailable', async () => {
+  it('resolve refuses to run without an authoring server configured', async () => {
     expect(await runAi(['resolve'], {})).toBe(2);
+  });
+});
+
+describe('buildResolveInvocation', () => {
+  it('runs playwright in resolve mode, single-worker, threading grep/project/env', () => {
+    const inv = buildResolveInvocation(
+      ['--grep', 'checkout', '--project', 'chromium', '--update-ai', '--env', 'FLAG=on'],
+      { PIWI_DASHBOARD_URL: 'https://d', PATH: '/usr/bin' },
+    );
+    expect(inv.command).toBe('npx');
+    expect(inv.args).toEqual(['playwright', 'test', '--grep', 'checkout', '--project', 'chromium', '--workers=1']);
+    expect(inv.env.PIWI_AI).toBe('resolve');
+    expect(inv.env.PIWI_AI_UPDATE).toBe('true');
+    expect(inv.env.FLAG).toBe('on');
+    expect(inv.env.PIWI_DASHBOARD_URL).toBe('https://d');
+  });
+
+  it('omits the update flag when --update-ai is absent', () => {
+    const inv = buildResolveInvocation([], {});
+    expect(inv.args).toEqual(['playwright', 'test', '--workers=1']);
+    expect(inv.env.PIWI_AI_UPDATE).toBeUndefined();
   });
 });

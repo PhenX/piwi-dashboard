@@ -1,0 +1,237 @@
+/**
+ * The authoring loop, reporter-side: drive the agent to compile a prompt into a
+ * committed entry, then verify it. Each iteration sends the server a stateless
+ * `{ template, param names, action history, masked snapshot }` and gets back one
+ * decision — an element (role + name) + action, or done + postcondition. The
+ * model's picks are turned into the committed locator by the deterministic
+ * `@piwitests/core` scorer, so sampling never changes the bytes. Param values are
+ * masked out of every outbound snapshot; secrets never leave the machine.
+ *
+ * The wire types mirror the server's `#shared/ai-step-resolution` (the reporter
+ * must not import app `shared/`); a change here is a server-contract change.
+ */
+import type { AriaCandidate } from '@piwitests/core';
+import type { Locator, Page } from '@playwright/test';
+import { ariaSnapshotBestEffort } from '../capture/capture-fixtures.js';
+import type { LocatorEntry, Postcondition, RunEntry, RunStep } from './artifact.js';
+import { ARTIFACT_VERSION } from './artifact.js';
+import { compileFromCandidate, type CompiledLocator } from './compile.js';
+import { assertPostcondition, buildLocator, executeStep } from './interpreter.js';
+import { extractPlaceholders, isParametric, maskValues, type ParamValues } from './params.js';
+
+/** ARIA snapshots can be large; cap what we send so cost/latency stay bounded. */
+export const MAX_SNAPSHOT_CHARS = 24_000;
+
+/** Default ceiling on how many steps one flow resolution may take. */
+export const DEFAULT_MAX_STEPS = 20;
+
+// ── Wire contract (mirror of #shared/ai-step-resolution) ─────────────────────
+
+export interface ResolvedElement {
+  role: string;
+  name?: string;
+  level?: number;
+  ref?: string;
+}
+
+export interface StepHistoryItem {
+  action: string;
+  element?: ResolvedElement;
+  value?: string;
+}
+
+export interface StepResolutionRequest {
+  kind: 'locator' | 'run';
+  template: string;
+  paramNames: string[];
+  ariaSnapshot: string;
+  history: StepHistoryItem[];
+  screenshot?: { mediaType: 'image/png' | 'image/jpeg'; data: string };
+}
+
+export interface ResolvedPostcondition {
+  assert: 'visible' | 'hidden' | 'attached' | 'url';
+  element?: ResolvedElement;
+  url?: string;
+}
+
+export interface StepResolutionResponse {
+  done?: boolean;
+  element?: ResolvedElement;
+  action?: string;
+  value?: string;
+  optional?: boolean;
+  postcondition?: ResolvedPostcondition;
+  reason?: string;
+}
+
+/** The transport that turns one iteration into one decision (an LLM call, server-side). */
+export interface StepResolver {
+  resolveStep(request: StepResolutionRequest): Promise<StepResolutionResponse>;
+}
+
+/** Posts each iteration to the dashboard's reporter-authenticated resolution endpoint. */
+export class ServerStepResolver implements StepResolver {
+  constructor(
+    private readonly serverUrl: string,
+    private readonly apiKey: string | null,
+  ) {}
+
+  async resolveStep(request: StepResolutionRequest): Promise<StepResolutionResponse> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.apiKey) headers['X-API-Key'] = this.apiKey;
+    const url = `${this.serverUrl.replace(/\/+$/, '')}/api/ai/step-resolution`;
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(request) });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { message?: string };
+      throw new Error(body.message || `piwi AI: step resolution failed (${res.status})`);
+    }
+    return (await res.json()) as StepResolutionResponse;
+  }
+}
+
+// ── Mapping model output → deterministic artifact ────────────────────────────
+
+function candidateOf(element: ResolvedElement): AriaCandidate {
+  return { role: element.role, name: element.name ?? null, level: element.level ?? null };
+}
+
+/** Compile a model-chosen element into a structured locator + fingerprint. */
+export function locatorFromElement(element: ResolvedElement): CompiledLocator | null {
+  return compileFromCandidate(candidateOf(element));
+}
+
+/**
+ * A `Locator`-shaped proxy that defers to `resolveOnce()` on first use — so a
+ * `piwiLocator` cache miss in resolve mode can return synchronously, then author
+ * and commit the entry when the caller first acts on or asserts it. Each method
+ * returns a promise that resolves the real locator once (memoized) and delegates.
+ */
+export function lazyLocator(resolveOnce: () => Promise<Locator>): Locator {
+  let pending: Promise<Locator> | null = null;
+  const ensure = (): Promise<Locator> => (pending ??= resolveOnce());
+  const handler: ProxyHandler<Record<string, never>> = {
+    get(_t, prop) {
+      if (typeof prop !== 'string' || prop === 'then' || prop === 'catch' || prop === 'finally') return undefined;
+      return (...args: unknown[]) =>
+        ensure().then((loc) => (loc as unknown as Record<string, (...a: unknown[]) => unknown>)[prop](...args));
+    },
+  };
+  return new Proxy({}, handler) as unknown as Locator;
+}
+
+function buildPostcondition(resolved: ResolvedPostcondition | undefined, template: string): Postcondition {
+  if (!resolved)
+    throw new Error(`piwi AI: flow "${template}" resolved without a postcondition (the oracle is mandatory)`);
+  if (resolved.assert === 'url') {
+    if (!resolved.url) throw new Error(`piwi AI: flow "${template}" postcondition is a url assert without a url`);
+    return { assert: 'url', url: resolved.url };
+  }
+  const compiled = resolved.element ? locatorFromElement(resolved.element) : null;
+  if (!compiled) throw new Error(`piwi AI: flow "${template}" postcondition element could not be compiled`);
+  return { assert: resolved.assert, locator: compiled.locator };
+}
+
+// ── Snapshot capture (trimmed + masked) ──────────────────────────────────────
+
+/** How a resolution reads the page snapshot — injectable so tests need no browser. */
+export type SnapshotReader = (page: Page, params: ParamValues) => Promise<string>;
+
+export const readMaskedSnapshot: SnapshotReader = async (page, params) => {
+  const raw = await ariaSnapshotBestEffort(page.locator('body'));
+  const masked = raw ? maskValues(raw, params) : '';
+  return masked.slice(0, MAX_SNAPSHOT_CHARS);
+};
+
+/** Everything one resolution needs; the browser-facing pieces are injectable. */
+export interface ResolutionContext {
+  page: Page;
+  params: ParamValues;
+  resolver: StepResolver;
+  readSnapshot?: SnapshotReader;
+  maxSteps?: number;
+}
+
+function assertParametric(template: string, locatorJson: string): void {
+  if (extractPlaceholders(template).length > 0 && !isParametric(template, locatorJson)) {
+    throw new Error(
+      `piwi AI: resolved locator for "${template}" is not parametric — the grounding pinned a concrete value instead of a placeholder`,
+    );
+  }
+}
+
+/**
+ * Resolve a single element `template` into a committed entry, then verify it is
+ * reachable on the live page with the real parameter values.
+ */
+export async function resolveLocator(template: string, ctx: ResolutionContext): Promise<LocatorEntry> {
+  const readSnapshot = ctx.readSnapshot ?? readMaskedSnapshot;
+  const ariaSnapshot = await readSnapshot(ctx.page, ctx.params);
+  const decision = await ctx.resolver.resolveStep({
+    kind: 'locator',
+    template,
+    paramNames: Object.keys(ctx.params),
+    ariaSnapshot,
+    history: [],
+  });
+  if (!decision.element) throw new Error(`piwi AI: resolver returned no element for "${template}"`);
+  const compiled = locatorFromElement(decision.element);
+  if (!compiled) throw new Error(`piwi AI: element for "${template}" could not be compiled to a stable locator`);
+
+  const entry: LocatorEntry = {
+    version: ARTIFACT_VERSION,
+    kind: 'locator',
+    template,
+    locator: compiled.locator,
+    fingerprint: compiled.fingerprint,
+  };
+  assertParametric(template, JSON.stringify(compiled.locator));
+
+  // Verify: the built locator must resolve on the live page with real values.
+  const built: Locator = buildLocator(ctx.page, compiled.locator, ctx.params);
+  await built.first().waitFor({ state: 'visible' });
+  return entry;
+}
+
+/**
+ * Resolve a flow into a committed entry: iterate the agent, executing each step
+ * with real parameter values so the page advances, until it declares the flow
+ * done. The postcondition is asserted immediately (the verify oracle) before the
+ * entry is returned, so a subtly wrong flow never lands.
+ */
+export async function resolveRun(template: string, ctx: ResolutionContext): Promise<RunEntry> {
+  const readSnapshot = ctx.readSnapshot ?? readMaskedSnapshot;
+  const maxSteps = ctx.maxSteps ?? DEFAULT_MAX_STEPS;
+  const paramNames = Object.keys(ctx.params);
+  const steps: RunStep[] = [];
+  const history: StepHistoryItem[] = [];
+
+  for (let i = 0; i < maxSteps; i++) {
+    const ariaSnapshot = await readSnapshot(ctx.page, ctx.params);
+    const decision = await ctx.resolver.resolveStep({ kind: 'run', template, paramNames, ariaSnapshot, history });
+
+    if (decision.done) {
+      const postcondition = buildPostcondition(decision.postcondition, template);
+      await assertPostcondition(postcondition, { page: ctx.page, params: ctx.params });
+      return { version: ARTIFACT_VERSION, kind: 'run', template, steps, postcondition };
+    }
+
+    if (!decision.element || !decision.action) {
+      throw new Error(`piwi AI: resolver returned neither a step nor done for "${template}"`);
+    }
+    const compiled = locatorFromElement(decision.element);
+    if (!compiled) throw new Error(`piwi AI: a step element for "${template}" could not be compiled`);
+
+    const step: RunStep = { locator: compiled.locator, action: decision.action, fingerprint: compiled.fingerprint };
+    if (decision.value !== undefined) step.value = decision.value;
+    if (decision.optional) step.optional = true;
+    steps.push(step);
+
+    // Execute with real values so the page advances for the next iteration. No
+    // drift guard here — the element was just read off this very snapshot.
+    await executeStep(step, { page: ctx.page, params: ctx.params });
+    history.push({ action: decision.action, element: decision.element, value: decision.value });
+  }
+
+  throw new Error(`piwi AI: exceeded the ${maxSteps}-step budget resolving "${template}"`);
+}
