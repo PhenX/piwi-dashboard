@@ -248,6 +248,7 @@ export function useDesktopLocalRuns() {
     const label = run.projectLabel || 'Local run';
     const tests = `${run.cases.length} test${run.cases.length === 1 ? '' : 's'}`;
     const seconds = Math.max(1, Math.round(((run.finishedAt ?? Date.now()) - run.startedAt) / 1000));
+    notifyUnfocused(run, label, tests, seconds);
     const viewOutput = {
       label: 'View output',
       color: 'neutral' as const,
@@ -296,6 +297,32 @@ export function useDesktopLocalRuns() {
     }
   }
 
+  /**
+   * A headless run can take minutes — when the window is hidden or unfocused,
+   * also raise an OS notification. Inside the shell, `window.Notification` is
+   * shimmed onto native notifications (and the dock/taskbar unread badge) by
+   * the desktop plugin.
+   */
+  function notifyUnfocused(run: LocalRun, label: string, tests: string, seconds: number) {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    if (!document.hidden && document.hasFocus()) return;
+    const title =
+      run.status === 'passed'
+        ? 'Local run passed'
+        : run.status === 'failed'
+          ? 'Local run failed'
+          : 'Local run could not start';
+    const body =
+      run.status === 'failed'
+        ? `${label} — exit ${run.exitCode ?? 1} after ${seconds}s`
+        : `${label} — ${tests} in ${seconds}s`;
+    try {
+      new Notification(title, { body });
+    } catch {
+      // Notifications unavailable in this webview — the toast still shows.
+    }
+  }
+
   function trimFinished() {
     const finished = runs.value.filter((r) => r.status !== 'running');
     if (finished.length <= MAX_FINISHED) return;
@@ -314,12 +341,15 @@ export function useDesktopLocalRuns() {
     projectLabel?: string | null;
     cases: RetryCase[];
     options?: LocalRunOptions;
+    /** `false` keeps the merged options out of the project's saved defaults —
+     * for preset entry points like "Reproduce locally". */
+    persistOptions?: boolean;
   }): LocalRun | null {
     if (!tauriCore() || input.cases.length === 0) return null;
     const options = { ...getProjectOptions(input.projectId), ...input.options };
     const steps = buildLocalRunPlan(input.cases, options);
     if (steps.length === 0) return null;
-    saveProjectOptions(input.projectId, options);
+    if (input.persistOptions !== false) saveProjectOptions(input.projectId, options);
     const run: LocalRun = {
       key: nextKey++,
       projectId: String(input.projectId),
@@ -384,11 +414,14 @@ export function useDesktopLocalRuns() {
   }
 
   function rerun(run: LocalRun): LocalRun | null {
+    // Re-running repeats the run exactly; only explicit choices change the
+    // project's saved defaults.
     return startRun({
       projectId: run.projectId,
       projectLabel: run.projectLabel,
       cases: run.cases,
       options: run.options,
+      persistOptions: false,
     });
   }
 

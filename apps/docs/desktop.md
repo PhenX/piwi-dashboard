@@ -125,8 +125,14 @@ the output streams into the **Local runs** tray in the corner of the window.
 - **The button is also the run's status:** it shows progress while tests run
   and the result when they finish; clicking it opens the tray. Runs keep going
   while you browse other pages — closing the tray or navigating never kills
-  anything. Stopping is always explicit, from the tray, and a toast reports
-  the result when a run ends.
+  anything. Stopping is always explicit, from the tray; a toast reports the
+  result when a run ends, an OS notification does when the window is in the
+  background, and leaving the app while runs are active — closing the window,
+  quitting from the tray, or restarting for an update — asks first.
+- **More places to run from:** a test case's evolution page has **Reproduce
+  locally** (matched by title, ×20 with a trace — the flake-hunting preset,
+  without touching your saved defaults), and a failure cluster's test evidence
+  has **Run affected locally** for every test in the cluster.
 - **Wrong folder?** If none of the tests exist in the linked folder (usually a
   project linked to a different checkout), the button opens the dialog instead
   of spawning a run that would die with a module-resolution error — fix the

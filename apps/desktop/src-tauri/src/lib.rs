@@ -23,10 +23,11 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Emitter as _, Manager, RunEvent, WindowEvent};
+use tauri::{AppHandle, Emitter as _, Manager, RunEvent, WindowEvent};
 
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_autostart::ManagerExt as _;
+use tauri_plugin_dialog::{DialogExt as _, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_notification::NotificationExt as _;
 use tauri_plugin_opener::OpenerExt as _;
 use tauri_plugin_shell::process::CommandChild;
@@ -59,6 +60,12 @@ struct ServerProcess(Mutex<Option<CommandChild>>);
 
 /// Shared "keep serving after the window closes" flag (tray toggle + close handler).
 struct RunInBackground(Arc<AtomicBool>);
+
+/// Set once the user agrees to quit with local test runs still going. The
+/// confirmed close reaches the close handler as a fresh request, and this is
+/// what tells it apart from the one the user made.
+#[derive(Default)]
+struct QuitConfirmed(AtomicBool);
 
 /// The user's data directory — used by the "Open data folder" tray item.
 struct DataDir(PathBuf);
@@ -442,6 +449,86 @@ fn desktop_save_download(
     Ok(node_path(&target))
 }
 
+// ── Leaving the app while local test runs are in flight ───────────────────────
+
+/// Every way out of the app kills the local test runs (see
+/// `LocalRuns::kill_all`), so each exit path asks first while any is going:
+/// `proceed` runs at once when nothing is active, and only on confirmation
+/// otherwise. `verb` fills the question ("quitting" / "restarting"), and
+/// `confirm_label` names its confirm button.
+///
+/// The callback form keeps the event loop free — a blocking dialog here would
+/// freeze the very window the question is about.
+pub(crate) fn confirm_stopping_local_runs(
+    app: &AppHandle,
+    title: &str,
+    verb: &str,
+    confirm_label: &str,
+    proceed: impl FnOnce() + Send + 'static,
+) {
+    let active = app
+        .try_state::<runner::LocalRuns>()
+        .map(|runs| runs.active_count())
+        .unwrap_or(0);
+    if active == 0 {
+        proceed();
+        return;
+    }
+    app.dialog()
+        .message(format!(
+            "{active} local test run(s) are still running — {verb} stops them."
+        ))
+        .title(title)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            confirm_label.into(),
+            "Cancel".into(),
+        ))
+        .show(move |confirmed| {
+            if confirmed {
+                proceed();
+            }
+        });
+}
+
+/// The window-close variant of the question above.
+///
+/// Reports whether the close has to be held back: `true` once the question is on
+/// screen, `false` when the close may proceed — nothing is running, or the user
+/// has already agreed to stop it. Confirming closes the window again, which runs
+/// the normal exit path; `QuitConfirmed` is what tells that close apart from the
+/// one the user made.
+fn hold_close_for_local_runs(window: &tauri::Window) -> bool {
+    let confirmed = window
+        .try_state::<QuitConfirmed>()
+        .is_some_and(|s| s.0.load(Ordering::SeqCst));
+    if confirmed {
+        return false;
+    }
+    let active = window
+        .try_state::<runner::LocalRuns>()
+        .map(|runs| runs.active_count())
+        .unwrap_or(0);
+    if active == 0 {
+        return false;
+    }
+
+    let target = window.clone();
+    confirm_stopping_local_runs(
+        window.app_handle(),
+        "Quit Piwi?",
+        "quitting",
+        "Quit",
+        move || {
+            if let Some(state) = target.try_state::<QuitConfirmed>() {
+                state.0.store(true, Ordering::SeqCst);
+            }
+            let _ = target.close();
+        },
+    );
+    true
+}
+
 /// e2e-only capability granting the Playwright plugin's `pw_result` callback
 /// command to the loopback origin the dashboard is served from. Added at runtime
 /// (see `add_capability`) so it never ships in production installers.
@@ -533,6 +620,7 @@ pub fn run() {
         ])
         .manage(ServerProcess::default())
         .manage(runner::LocalRuns::default())
+        .manage(QuitConfirmed::default())
         .manage(PendingOpenFiles::default())
         .manage(updates::UpdaterSupport(updater_supported))
         .manage(updates::PendingUpdate::default())
@@ -783,7 +871,12 @@ pub fn run() {
                         let _ = if enabled { mgr.disable() } else { mgr.enable() };
                         let _ = login_i.set_checked(!enabled);
                     }
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        let handle = app.clone();
+                        confirm_stopping_local_runs(app, "Quit Piwi?", "quitting", "Quit", move || {
+                            handle.exit(0);
+                        });
+                    }
                     _ => {}
                 })
                 .build(app)?;
@@ -817,6 +910,10 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
+                // The dashboard window is the one whose close ends the app.
+                if window.label() != "main" {
+                    return;
+                }
                 let keep = window
                     .try_state::<RunInBackground>()
                     .map(|s| s.0.load(Ordering::SeqCst))
@@ -824,6 +921,10 @@ pub fn run() {
                 if keep {
                     // Hide to tray and keep the server running.
                     let _ = window.hide();
+                    api.prevent_close();
+                    return;
+                }
+                if hold_close_for_local_runs(window) {
                     api.prevent_close();
                 }
             }

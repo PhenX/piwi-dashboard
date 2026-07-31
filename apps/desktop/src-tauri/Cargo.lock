@@ -2616,7 +2616,7 @@ dependencies = [
 
 [[package]]
 name = "piwi-desktop"
-version = "0.20.0"
+version = "0.22.1"
 dependencies = [
  "rand 0.8.7",
  "serde",

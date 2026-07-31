@@ -20,7 +20,10 @@ Targets for v1: **Windows (`.msi`)** and **macOS (`.dmg`)**. Linux is deferred.
 4. The dashboard can link a Piwi project to a folder on this machine and run
    `playwright test` there (`src-tauri/src/runner.rs`): the shell resolves the
    folder's own Playwright package, executes it with the bundled Node sidecar,
-   and streams output back to the webview as `piwi:local-run` events.
+   and streams output back to the webview as `piwi:local-run` events. Those
+   processes die with the shell, so every way out — closing the window, the
+   tray's Quit, or an update restart — asks for confirmation first while any
+   of them is still running.
 5. Archives the OS hands to the app (drag & drop, "Open with", second-launch
    file arguments, macOS open events) are queued shell-side and drained by the
    dashboard over IPC (`desktop_take_pending_open_files` + a `piwi:open-files`

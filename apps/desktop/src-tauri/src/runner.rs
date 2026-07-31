@@ -61,6 +61,12 @@ pub struct LocalRuns {
 }
 
 impl LocalRuns {
+    /// How many test processes are running. A run is tracked only while it
+    /// lives — it drops out of the map as soon as the process terminates.
+    pub fn active_count(&self) -> usize {
+        self.children.lock().unwrap().len()
+    }
+
     /// Kill every process still tracked — called when the app exits so no
     /// orphaned test run outlives the shell.
     pub fn kill_all(&self) {
@@ -378,6 +384,11 @@ pub fn desktop_stop_local_tests(app: AppHandle, run_id: u32) -> Result<(), Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nothing_is_running_before_a_run_starts() {
+        assert_eq!(LocalRuns::default().active_count(), 0);
+    }
 
     /// A folder holding `tests/a.spec.ts`, removed when the test ends.
     struct Checkout(PathBuf);
