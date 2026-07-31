@@ -18,17 +18,35 @@ interface FakeInvocation {
 
 declare global {
   interface Window {
-    __piwiFakeTauri: { invocations: FakeInvocation[] };
+    __piwiFakeTauri: {
+      invocations: FakeInvocation[];
+      finish: (code: number | null) => void;
+    };
   }
 }
 
+interface FakeBridgeOptions {
+  linked: boolean;
+  missingSpecs?: string[];
+  /** Emit two stdout lines and an exit event shortly after each spawn (default true). */
+  autoExit?: boolean;
+  exitCode?: number;
+}
+
 /** Install a fake `window.__TAURI__` before any app script runs. */
-async function installFakeBridge(page: Page, options: { linked: boolean; missingSpecs?: string[] }) {
-  await page.addInitScript((opts: { linked: boolean; missingSpecs?: string[] }) => {
+async function installFakeBridge(page: Page, options: FakeBridgeOptions) {
+  await page.addInitScript((opts: FakeBridgeOptions) => {
     const listeners: ((event: { payload: unknown }) => void)[] = [];
+    const emit = (payload: unknown) => {
+      for (const cb of listeners) cb({ payload });
+    };
     const state = {
       link: opts.linked ? { path: '/home/dev/acme', exists: true } : null,
-      invocations: [] as { cmd: string; args: Record<string, unknown> | undefined }[],
+      invocations: [] as FakeInvocation[],
+      lastRunId: 6,
+      finish: (code: number | null) => {
+        emit({ id: state.lastRunId, kind: 'exit', line: null, code });
+      },
     };
     Object.assign(window, { __piwiFakeTauri: state });
     Object.assign(window, {
@@ -46,15 +64,17 @@ async function installFakeBridge(page: Page, options: { linked: boolean; missing
                 return null;
               case 'desktop_check_local_specs':
                 return { folder: '/home/dev/acme', missing: opts.missingSpecs ?? [] };
-              case 'desktop_run_local_tests':
+              case 'desktop_run_local_tests': {
+                const id = ++state.lastRunId;
                 setTimeout(() => {
-                  for (const emit of listeners) {
-                    emit({ payload: { id: 7, kind: 'stdout', line: 'Running 1 test using 1 worker', code: null } });
-                    emit({ payload: { id: 7, kind: 'stdout', line: '  1 passed (2.0s)', code: null } });
-                    emit({ payload: { id: 7, kind: 'exit', line: null, code: 0 } });
+                  emit({ id, kind: 'stdout', line: 'Running 1 test using 1 worker', code: null });
+                  if (opts.autoExit !== false) {
+                    emit({ id, kind: 'stdout', line: '  1 passed (2.0s)', code: null });
+                    emit({ id, kind: 'exit', line: null, code: opts.exitCode ?? 0 });
                   }
                 }, 50);
-                return 7;
+                return id;
+              }
               case 'desktop_stop_local_tests':
                 return null;
               default:
@@ -71,6 +91,14 @@ async function installFakeBridge(page: Page, options: { linked: boolean; missing
       },
     });
   }, options);
+}
+
+function tray(page: Page) {
+  return page.getByRole('region', { name: 'Local runs' });
+}
+
+function runInvocations(page: Page) {
+  return page.evaluate(() => window.__piwiFakeTauri.invocations.filter((i) => i.cmd === 'desktop_run_local_tests'));
 }
 
 test.describe('Desktop local run', () => {
@@ -127,37 +155,94 @@ test.describe('Desktop local run', () => {
     await expect(page.getByRole('button', { name: 'Run locally' })).toHaveCount(0);
   });
 
-  test('runs the failed tests in the linked folder and streams output', async ({ page }) => {
+  test('one click runs the failed tests and streams output into the tray', async ({ page }) => {
     await installFakeBridge(page, { linked: true });
     await page.goto(`/test-runs/${runId}`);
     await waitForHydration(page);
 
+    // A linked, healthy project runs immediately — no dialog in between.
     await page.getByRole('button', { name: 'Run locally' }).click();
-    const dialog = page.getByRole('dialog');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
 
-    // The linked folder and the exact command are shown before anything runs.
-    await expect(dialog.getByText('/home/dev/acme')).toBeVisible();
-    await expect(dialog.getByText('playwright test tests/checkout.spec.ts:42 --project=chromium')).toBeVisible();
+    await expect(tray(page)).toBeVisible();
+    await expect(tray(page).getByText('Running 1 test using 1 worker')).toBeVisible();
+    await expect(tray(page).getByText('1 passed (2.0s)')).toBeVisible();
+    await expect(tray(page).getByText('Passed', { exact: true })).toBeVisible();
 
-    await dialog.getByRole('button', { name: 'Run', exact: true }).click();
-
-    await expect(dialog.getByText('Running 1 test using 1 worker')).toBeVisible();
-    await expect(dialog.getByText('1 passed (2.0s)')).toBeVisible();
-    await expect(dialog.getByText('Passed', { exact: true })).toBeVisible();
-
-    const runInvocation = await page.evaluate(() =>
-      window.__piwiFakeTauri.invocations.find((i) => i.cmd === 'desktop_run_local_tests'),
-    );
-    expect(runInvocation).toBeTruthy();
-    expect(runInvocation!.args!.args).toEqual(['tests/checkout.spec.ts:42', '--project=chromium']);
-    expect(String(runInvocation!.args!.projectId)).toMatch(/^\d+$/);
+    const invocations = await runInvocations(page);
+    expect(invocations).toHaveLength(1);
+    expect(invocations[0]!.args!.args).toEqual(['tests/checkout.spec.ts:42', '--project=chromium']);
+    expect(String(invocations[0]!.args!.projectId)).toMatch(/^\d+$/);
   });
 
-  test('warns before running when the linked folder holds none of the tests', async ({ page }) => {
+  test('a run keeps going across navigation and is never killed by closing UI', async ({ page }) => {
+    await installFakeBridge(page, { linked: true, autoExit: false });
+    await page.goto(`/test-runs/${runId}`);
+    await waitForHydration(page);
+
+    await page.getByRole('button', { name: 'Run locally' }).click();
+    await expect(tray(page).getByText('Running…', { exact: true })).toBeVisible();
+
+    // Leave the run page entirely — the store, not the page, owns the run.
+    await page.getByRole('link', { name: 'Projects' }).first().click();
+    await expect(page).toHaveURL(/\/projects/);
+    await expect(tray(page).getByText('Running…', { exact: true })).toBeVisible();
+    await expect(tray(page).getByText('Running 1 test using 1 worker')).toBeVisible();
+
+    await page.evaluate(() => window.__piwiFakeTauri.finish(0));
+    await expect(tray(page).getByText('Passed', { exact: true })).toBeVisible();
+
+    const stops = await page.evaluate(
+      () => window.__piwiFakeTauri.invocations.filter((i) => i.cmd === 'desktop_stop_local_tests').length,
+    );
+    expect(stops).toBe(0);
+  });
+
+  test('stopping is explicit, from the tray', async ({ page }) => {
+    await installFakeBridge(page, { linked: true, autoExit: false });
+    await page.goto(`/test-runs/${runId}`);
+    await waitForHydration(page);
+
+    await page.getByRole('button', { name: 'Run locally' }).click();
+    await expect(tray(page).getByText('Running…', { exact: true })).toBeVisible();
+
+    await tray(page).getByRole('button', { name: 'Stop' }).click();
+    await expect(tray(page).getByText('Stopped', { exact: true })).toBeVisible();
+
+    const stopped = await page.evaluate(() =>
+      window.__piwiFakeTauri.invocations.find((i) => i.cmd === 'desktop_stop_local_tests'),
+    );
+    expect(stopped).toBeTruthy();
+  });
+
+  test('run presets from the dropdown run immediately and persist per project', async ({ page }) => {
+    await installFakeBridge(page, { linked: true });
+    await page.goto(`/test-runs/${runId}`);
+    await waitForHydration(page);
+
+    await page.getByRole('button', { name: 'Run options' }).click();
+    await page.getByRole('menuitemcheckbox', { name: 'Headed' }).click();
+
+    await expect(tray(page).getByText('Passed', { exact: true })).toBeVisible();
+    let invocations = await runInvocations(page);
+    expect(invocations[0]!.args!.args).toEqual(['tests/checkout.spec.ts:42', '--project=chromium', '--headed']);
+
+    // The choice is the new default: a plain one-click run repeats it, even
+    // after a full reload (options are stored per project).
+    await page.reload();
+    await waitForHydration(page);
+    await page.getByRole('button', { name: 'Run locally' }).click();
+    await expect(tray(page).getByText('Passed', { exact: true })).toBeVisible();
+    invocations = await runInvocations(page);
+    expect(invocations[0]!.args!.args).toEqual(['tests/checkout.spec.ts:42', '--project=chromium', '--headed']);
+  });
+
+  test('warns via the dialog when the linked folder holds none of the tests', async ({ page }) => {
     await installFakeBridge(page, { linked: true, missingSpecs: ['tests/checkout.spec.ts'] });
     await page.goto(`/test-runs/${runId}`);
     await waitForHydration(page);
 
+    // A wrong checkout demotes the one-click run to the dialog, which explains.
     await page.getByRole('button', { name: 'Run locally' }).click();
     const dialog = page.getByRole('dialog');
 
@@ -168,6 +253,9 @@ test.describe('Desktop local run', () => {
 
     // A warning, never a block: the config may put specs elsewhere.
     await expect(dialog.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();
+    await dialog.getByRole('button', { name: 'Run', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(tray(page).getByText('Passed', { exact: true })).toBeVisible();
   });
 
   test('prompts to link a folder when none is linked yet', async ({ page }) => {

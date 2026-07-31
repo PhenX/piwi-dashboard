@@ -465,5 +465,8 @@ onMounted(async () => {
 
     <!-- Desktop shell: import dialog for archives dropped on the window or opened with the app -->
     <DesktopImportModal />
+
+    <!-- Desktop shell: the Local runs tray — local test runs keep streaming here across navigation -->
+    <DesktopLocalRunsTray />
   </UDashboardGroup>
 </template>

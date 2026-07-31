@@ -107,19 +107,30 @@ actual one).
 ## Running tests from the app
 
 A failing run is one click from a local retry. On a run page (or a single
-execution page), **Run locally** re-runs the failed tests on this machine:
+execution page), **Run locally** re-runs the failed tests on this machine —
+immediately, with the options you used last time. The app executes the folder's
+*own* Playwright with the app's bundled Node — nothing extra to install — and
+the output streams into the **Local runs** tray in the corner of the window.
 
-1. **Link the Piwi project to its checkout** — the folder that contains the
-   tests. The app asks on first use, or link it any time on the project page
-   under **Local folder**. The link stays on this machine; it is never sent
-   anywhere.
-2. **Pick what to re-run and how** — by `file:line`, title or file; headless,
-   headed, the Playwright inspector or UI mode; optional trace recording; and
-   `--repeat-each` up to 1000× for flake reproduction.
-3. **Run.** The app executes the folder's *own* Playwright with the app's
-   bundled Node — nothing extra to install — and streams the output into the
-   dialog. The exact command is shown before anything runs, and **Stop** (or
-   closing the dialog) kills the process.
+- **First use:** a dialog asks you to link the Piwi project to its checkout —
+  the folder that contains the tests. Link it any time on the project page
+  under **Local folder**. The link stays on this machine; it is never sent
+  anywhere.
+- **The arrow next to the button** holds everything else: run headless, headed,
+  under the Playwright inspector or in UI mode; select tests by `file:line`,
+  title or file; force trace recording; `--repeat-each` up to 1000× for flake
+  reproduction. Whatever you pick becomes the new one-click default for that
+  project. **Run with options…** opens the full dialog with the exact command
+  preview.
+- **The button is also the run's status:** it shows progress while tests run
+  and the result when they finish; clicking it opens the tray. Runs keep going
+  while you browse other pages — closing the tray or navigating never kills
+  anything. Stopping is always explicit, from the tray, and a toast reports
+  the result when a run ends.
+- **Wrong folder?** If none of the tests exist in the linked folder (usually a
+  project linked to a different checkout), the button opens the dialog instead
+  of spawning a run that would die with a module-resolution error — fix the
+  link there, or run anyway if your Playwright config resolves specs elsewhere.
 
 Results flow back automatically: the run executes your project's regular
 Playwright config, so the Piwi reporter in it reports to this app through the
