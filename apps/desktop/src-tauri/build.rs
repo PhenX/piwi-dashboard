@@ -25,6 +25,7 @@ fn main() {
             "desktop_run_local_tests",
             "desktop_stop_local_tests",
             "desktop_check_local_specs",
+            "desktop_check_local_env",
             "desktop_take_pending_open_files",
             "desktop_mcp_clients",
             "desktop_mcp_connect",

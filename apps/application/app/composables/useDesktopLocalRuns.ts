@@ -48,6 +48,20 @@ export interface LocalRun {
   /** Shell id of the step currently spawned, for stopping it. */
   shellId: number | null;
   stopRequested: boolean;
+  /** Tests announced by Playwright's "Running N tests" lines, across steps. */
+  progressTotal: number | null;
+  /** Per-test result lines seen so far. */
+  progressDone: number;
+  /** The Piwi run this local process produced, once the reporter checked in. */
+  piwiRunId: number | null;
+  /** Latest Piwi run id for the project at spawn — anything newer is ours. */
+  piwiRunBaseline: number | null;
+}
+
+/** Live label for a running run — test counts when Playwright announced them. */
+export function localRunProgressLabel(run: LocalRun): string {
+  if (run.progressTotal) return `Running ${run.progressDone}/${run.progressTotal}…`;
+  return run.steps.length > 1 ? `Running ${run.stepIndex + 1}/${run.steps.length}…` : 'Running…';
 }
 
 export const DEFAULT_LOCAL_RUN_OPTIONS: SavedLocalRunOptions = {
@@ -92,13 +106,23 @@ let pendingEvents: LocalRunEventPayload[] = [];
 const runByShellId = new Map<number, LocalRun>();
 const exitResolvers = new Map<number, (code: number | null) => void>();
 let toastApi: ReturnType<typeof useToast> | null = null;
+let routerApi: ReturnType<typeof useRouter> | null = null;
 let optionsLoaded = false;
+
+// Playwright's list reporter, as the shell captures it (plain, non-TTY): a
+// "Running N tests using M workers" announcement per step, then one line per
+// finished test starting with a result mark (✓/✘ or the ASCII fallbacks).
+const PROGRESS_TOTAL_RE = /^Running (\d+) tests? using \d+ workers?$/;
+const PROGRESS_RESULT_RE = /^\s{1,6}(?:✓|✘|✗|x|ok|-)\s+\d+\s/;
 
 export function useDesktopLocalRuns() {
   const runs = useState<LocalRun[]>('desktop-local-runs', () => []);
   const trayOpen = useState<boolean>('desktop-local-runs-tray', () => false);
   const optionsByProject = useState<Record<string, SavedLocalRunOptions>>('desktop-local-run-options', () => ({}));
-  if (import.meta.client) toastApi = useToast();
+  if (import.meta.client) {
+    toastApi = useToast();
+    routerApi = useRouter();
+  }
 
   const activeCount = computed(() => runs.value.filter((r) => r.status === 'running').length);
 
@@ -132,6 +156,14 @@ export function useDesktopLocalRuns() {
   function pushLine(run: LocalRun, text: string, error: boolean) {
     run.lines.push({ text, error });
     if (run.lines.length > MAX_LINES) run.lines.splice(0, run.lines.length - MAX_LINES);
+    if (error) return;
+    const total = PROGRESS_TOTAL_RE.exec(text);
+    if (total) {
+      run.progressTotal = (run.progressTotal ?? 0) + Number(total[1]);
+    } else if (PROGRESS_RESULT_RE.test(text)) {
+      // Retried tests print extra result lines, so clamp to the announced total.
+      run.progressDone = Math.min(run.progressDone + 1, run.progressTotal ?? run.progressDone + 1);
+    }
   }
 
   function dispatch(run: LocalRun, payload: LocalRunEventPayload) {
@@ -224,13 +256,26 @@ export function useDesktopLocalRuns() {
         trayOpen.value = true;
       },
     };
+    const openPiwiRun =
+      run.piwiRunId == null
+        ? []
+        : [
+            {
+              label: `Open run #${run.piwiRunId}`,
+              color: 'neutral' as const,
+              variant: 'outline' as const,
+              onClick: () => {
+                void routerApi?.push(`/test-runs/${run.piwiRunId}`);
+              },
+            },
+          ];
     if (run.status === 'passed') {
       toastApi?.add({
         title: 'Local run passed',
         description: `${label} — ${tests} in ${seconds}s`,
         icon: 'i-lucide-check',
         color: 'success',
-        actions: [viewOutput],
+        actions: [viewOutput, ...openPiwiRun],
       });
     } else if (run.status === 'failed') {
       toastApi?.add({
@@ -238,7 +283,7 @@ export function useDesktopLocalRuns() {
         description: `${label} — exit ${run.exitCode ?? 1} after ${seconds}s`,
         icon: 'i-lucide-x',
         color: 'error',
-        actions: [viewOutput],
+        actions: [viewOutput, ...openPiwiRun],
       });
     } else {
       toastApi?.add({
@@ -290,14 +335,52 @@ export function useDesktopLocalRuns() {
       finishedAt: null,
       shellId: null,
       stopRequested: false,
+      progressTotal: null,
+      progressDone: 0,
+      piwiRunId: null,
+      piwiRunBaseline: null,
     };
     runs.value = [run, ...runs.value];
     // Mutations must go through the reactive proxy the array hands back, not
     // the plain object above — the tray and button render from it live.
     const tracked = runs.value[0]!;
     trayOpen.value = true;
+    void captureBaseline(tracked);
     void drive(tracked);
     return tracked;
+  }
+
+  /**
+   * Record the project's newest Piwi run id before our process can report:
+   * any run the server announces later with a higher id is the one this local
+   * process produced (the reporter finds the app via `~/.piwi/desktop.json`).
+   */
+  async function captureBaseline(run: LocalRun) {
+    try {
+      const latest = await $fetch<{ id: number } | null>(`/api/projects/${run.projectId}/latest-run`);
+      run.piwiRunBaseline = latest?.id ?? 0;
+    } catch {
+      // Unknown baseline — this run just won't get a Piwi link.
+    }
+  }
+
+  /**
+   * Match local processes to the Piwi runs they produced. Driven by the shared
+   * SSE stream (the tray subscribes), so the link appears as soon as the
+   * reporter checks in.
+   */
+  async function correlatePiwiRuns() {
+    const cutoff = Date.now() - 2 * 60_000;
+    for (const run of runs.value) {
+      if (run.piwiRunId != null || run.piwiRunBaseline == null) continue;
+      if (run.status !== 'running' && (run.finishedAt ?? 0) < cutoff) continue;
+      try {
+        const latest = await $fetch<{ id: number } | null>(`/api/projects/${run.projectId}/latest-run`);
+        if (latest && latest.id > run.piwiRunBaseline) run.piwiRunId = latest.id;
+      } catch {
+        // Server briefly unavailable — the next stream event retries.
+      }
+    }
   }
 
   function rerun(run: LocalRun): LocalRun | null {
@@ -347,5 +430,6 @@ export function useDesktopLocalRuns() {
     latestForProject,
     getProjectOptions,
     saveProjectOptions,
+    correlatePiwiRuns,
   };
 }

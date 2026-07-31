@@ -30,6 +30,7 @@ const { missingSpecs, wrongFolder, checkSpecs } = useDesktopSpecCheck(
   () => props.projectId,
   () => props.cases,
 );
+const { playwrightMissing, checkEnv } = useDesktopEnvCheck(() => props.projectId);
 const { copy } = useCopy();
 
 const modalOpen = ref(false);
@@ -41,10 +42,12 @@ watch(modalOpen, (isOpen) => {
 
 const canRun = computed(() => available.value && props.projectId != null && props.cases.length > 0);
 const linked = computed(() => !!link.value?.exists);
-const attention = computed(() => !linked.value || wrongFolder.value);
+const attention = computed(() => !linked.value || wrongFolder.value || playwrightMissing.value);
 
 watch([available, () => link.value?.path, linked], () => {
-  if (available.value) void checkSpecs(linked.value);
+  if (!available.value) return;
+  void checkSpecs(linked.value);
+  void checkEnv();
 });
 
 const options = computed(() => store.getProjectOptions(props.projectId ?? ''));
@@ -69,7 +72,7 @@ const face = computed(() => {
   const run = contextRun.value;
   if (run && running.value) {
     return {
-      label: run.steps.length > 1 ? `Running ${run.stepIndex + 1}/${run.steps.length}…` : 'Running…',
+      label: localRunProgressLabel(run),
       color: 'info' as const,
       icon: undefined,
       tooltip: 'A local run is going — view its output',
@@ -119,7 +122,7 @@ function onPrimaryClick() {
     store.trayOpen.value = true;
     return;
   }
-  if (!linked.value || wrongFolder.value) {
+  if (attention.value) {
     modalOpen.value = true;
     return;
   }
@@ -144,6 +147,19 @@ const menuItems = computed<DropdownMenuItem[][]>(() => {
     groups.push([
       { type: 'label', label: 'Tests not found in the linked folder' },
       { label: 'Choose the right folder…', icon: 'i-lucide-folder-search', onSelect: () => void pickAndLink() },
+      { label: 'Run anyway', icon: 'i-lucide-play', onSelect: () => runNow() },
+    ]);
+  } else if (playwrightMissing.value) {
+    groups.push([
+      { type: 'label', label: 'No Playwright found in the linked folder' },
+      {
+        label: 'Re-check after installing',
+        icon: 'i-lucide-refresh-cw',
+        onSelect: (e: Event) => {
+          e.preventDefault();
+          void checkEnv();
+        },
+      },
       { label: 'Run anyway', icon: 'i-lucide-play', onSelect: () => runNow() },
     ]);
   }

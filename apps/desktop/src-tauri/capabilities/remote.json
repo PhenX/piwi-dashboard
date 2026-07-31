@@ -20,6 +20,7 @@
     "allow-desktop-run-local-tests",
     "allow-desktop-stop-local-tests",
     "allow-desktop-check-local-specs",
+    "allow-desktop-check-local-env",
     "allow-desktop-take-pending-open-files",
     "allow-desktop-mcp-clients",
     "allow-desktop-mcp-connect",
