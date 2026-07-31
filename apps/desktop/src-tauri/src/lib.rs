@@ -36,8 +36,9 @@ use tauri_plugin_store::StoreExt as _;
 use mcp_clients::{desktop_mcp_clients, desktop_mcp_connect, desktop_mcp_disconnect, desktop_mcp_reveal};
 use updates::{desktop_check_update, desktop_install_update, desktop_restart_app};
 use runner::{
-    desktop_check_local_specs, desktop_get_project_link, desktop_pick_folder,
-    desktop_run_local_tests, desktop_set_project_link, desktop_stop_local_tests,
+    desktop_check_local_env, desktop_check_local_specs, desktop_get_project_link,
+    desktop_pick_folder, desktop_run_local_tests, desktop_set_project_link,
+    desktop_stop_local_tests,
 };
 
 pub(crate) const STORE_FILE: &str = "settings.json";
@@ -519,6 +520,7 @@ pub fn run() {
             desktop_run_local_tests,
             desktop_stop_local_tests,
             desktop_check_local_specs,
+            desktop_check_local_env,
             desktop_take_pending_open_files,
             desktop_mcp_clients,
             desktop_mcp_connect,

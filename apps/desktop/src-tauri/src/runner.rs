@@ -214,6 +214,46 @@ fn resolve_playwright_cli(start: &Path) -> Option<PathBuf> {
     None
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalEnvCheck {
+    folder: String,
+    exists: bool,
+    /// Absolute path of the Playwright CLI entry the run would use, when found.
+    playwright_cli: Option<String>,
+}
+
+/// What a local run would find at `folder`: whether the folder is still on disk,
+/// and which Playwright CLI it would execute. A folder that is gone reports no
+/// CLI — its ancestors say nothing about a checkout that is not there.
+fn local_env(folder: &Path) -> LocalEnvCheck {
+    let exists = folder.is_dir();
+    LocalEnvCheck {
+        folder: folder.to_string_lossy().to_string(),
+        exists,
+        playwright_cli: exists
+            .then(|| resolve_playwright_cli(folder))
+            .flatten()
+            .map(|p| p.to_string_lossy().to_string()),
+    }
+}
+
+/// Whether a local run could start at all: the linked folder is still there and
+/// holds a Playwright installation. A missing folder or a missing Playwright is
+/// reported rather than raised, so the dashboard can show the state before
+/// anyone asks for a run.
+#[tauri::command]
+pub fn desktop_check_local_env(
+    app: AppHandle,
+    project_id: String,
+) -> Result<LocalEnvCheck, String> {
+    let folder = read_links(&app)
+        .get(&project_id)
+        .map(PathBuf::from)
+        .ok_or("no folder is linked to this project")?;
+    Ok(local_env(&folder))
+}
+
 fn validate_args(args: &[String]) -> Result<(), String> {
     for arg in args {
         if arg.contains('\0') {
@@ -411,5 +451,69 @@ mod tests {
             missing_specs(&checkout.0, &["tests".into()]),
             vec!["tests".to_string()]
         );
+    }
+
+    /// Put a Playwright package in this folder's own `node_modules`.
+    fn install_playwright(dir: &Path) {
+        let package = dir.join("node_modules").join("@playwright").join("test");
+        std::fs::create_dir_all(&package).expect("create playwright package");
+        std::fs::write(package.join("cli.js"), "").expect("write cli");
+    }
+
+    /// Where `install_playwright` leaves the CLI, in the form the check reports.
+    fn installed_cli(dir: &Path) -> String {
+        dir.join("node_modules")
+            .join("@playwright")
+            .join("test")
+            .join("cli.js")
+            .to_string_lossy()
+            .to_string()
+    }
+
+    #[test]
+    fn finds_the_playwright_installed_in_the_folder() {
+        let checkout = Checkout::new("env-installed");
+        install_playwright(&checkout.0);
+
+        let env = local_env(&checkout.0);
+
+        assert!(env.exists);
+        assert_eq!(env.playwright_cli, Some(installed_cli(&checkout.0)));
+    }
+
+    #[test]
+    fn finds_a_playwright_hoisted_to_a_parent_folder() {
+        let root = Checkout::new("env-hoisted");
+        install_playwright(&root.0);
+        let package = root.0.join("packages").join("web");
+        std::fs::create_dir_all(&package).expect("create package folder");
+
+        let env = local_env(&package);
+
+        assert!(env.exists);
+        assert_eq!(env.playwright_cli, Some(installed_cli(&root.0)));
+    }
+
+    #[test]
+    fn reports_no_cli_when_the_folder_has_no_playwright() {
+        let checkout = Checkout::new("env-bare");
+
+        let env = local_env(&checkout.0);
+
+        assert!(env.exists);
+        assert_eq!(env.playwright_cli, None);
+    }
+
+    #[test]
+    fn reports_a_folder_that_is_not_on_disk() {
+        let checkout = Checkout::new("env-missing");
+        install_playwright(&checkout.0);
+        let gone = checkout.0.join("moved-away");
+
+        let env = local_env(&gone);
+
+        assert!(!env.exists);
+        assert_eq!(env.playwright_cli, None);
+        assert_eq!(env.folder, gone.to_string_lossy());
     }
 }
