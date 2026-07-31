@@ -7,6 +7,7 @@
  * setting a project up in the first place (`init`, `skills`) and acting on the
  * dashboard's history once a run has landed (`gate`).
  */
+import { runAi } from './ai.js';
 import { runGate } from './gate.js';
 import { runInit } from './init.js';
 import { findTemplatesDir, runSkills } from './skills.js';
@@ -21,6 +22,7 @@ Commands:
   init      Wire a Playwright project up to a Piwi Dashboard
   skills    Install the Piwi agent skills into this project
   gate      Fail a CI job on the dashboard's analysis of a run
+  ai        Manage committed natural-language AI-step artifacts
 
 Run \`npx @piwitests/reporter <command> --help\` for a command's options.
 (The published package is @piwitests/reporter; its command is piwi. Invoke it
@@ -37,6 +39,8 @@ async function main(): Promise<number> {
       return runSkills(rest, findTemplatesDir(__dirname));
     case 'gate':
       return runGate(rest);
+    case 'ai':
+      return runAi(rest);
     case undefined:
     case '-h':
     case '--help':

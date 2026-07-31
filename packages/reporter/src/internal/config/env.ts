@@ -53,6 +53,9 @@ export const PIWI_ENV_KEYS = {
   inspectOnFailure: 'PIWI_INSPECT_ON_FAIL',
   pickLocatorOnFailure: 'PIWI_PICK_LOCATOR_ON_FAIL',
   outputFile: 'PIWI_OUTPUT_FILE',
+  aiMode: 'PIWI_AI',
+  aiDir: 'PIWI_AI_DIR',
+  aiOnMiss: 'PIWI_AI_ON_MISS',
 } as const;
 
 /**
@@ -213,4 +216,9 @@ export function applyOptionsToEnv(options: PiwiDashboardOptions): void {
   if (options.inspectOnFailure !== undefined) env[PIWI_ENV_KEYS.inspectOnFailure] = String(options.inspectOnFailure);
   if (options.pickLocatorOnFailure !== undefined)
     env[PIWI_ENV_KEYS.pickLocatorOnFailure] = String(options.pickLocatorOnFailure);
+  // AI-step config is nested, so it can't ride the flat env-fallback table; bridge
+  // it into the worker env by hand (the AI fixtures read these directly).
+  if (options.ai?.mode !== undefined) env[PIWI_ENV_KEYS.aiMode] = options.ai.mode;
+  if (options.ai?.dir !== undefined) env[PIWI_ENV_KEYS.aiDir] = options.ai.dir;
+  if (options.ai?.onMiss !== undefined) env[PIWI_ENV_KEYS.aiOnMiss] = options.ai.onMiss;
 }

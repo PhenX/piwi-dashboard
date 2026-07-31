@@ -139,6 +139,33 @@ export interface PiwiDashboardOptions {
   /** Additional custom metadata as key-value pairs */
   customData?: Record<string, unknown>;
 
+  // ── AI steps ───────────────────────────────────────────────────────────────
+  /**
+   * Natural-language locators and flows (`page.piwiLocator(...)` /
+   * `page.piwiRun(...)`). An agent resolves each prompt once into a committed,
+   * deterministic artifact; every run replays that artifact with plain
+   * Playwright calls — zero LLM calls in the default `replay` mode.
+   */
+  ai?: {
+    /**
+     * `replay` (default) executes committed artifacts read-only and fails closed
+     * on a miss; `resolve` authors missing entries; `heal` repairs entries that
+     * no longer replay. Can also be set with `PIWI_AI`.
+     */
+    mode?: 'replay' | 'resolve' | 'heal';
+    /**
+     * Directory name (per spec) that holds the committed entries. Defaults to
+     * `__piwi__`. Can also be set with `PIWI_AI_DIR`.
+     */
+    dir?: string;
+    /**
+     * On a replay miss: `fail` (default) errors with repro instructions, or
+     * `fixme` marks the test fixme (yellow) instead. Can also be set with
+     * `PIWI_AI_ON_MISS`.
+     */
+    onMiss?: 'fail' | 'fixme';
+  };
+
   // ── Output & diagnostics ───────────────────────────────────────────────────
   /**
    * Write a JSON file with the submitted run's dashboard URL, id, project id and

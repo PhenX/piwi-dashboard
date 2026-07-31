@@ -14,6 +14,8 @@ export const ATTACHMENT_NAMES = {
   locatorSuggestion: 'piwi-locator-suggestion',
   pageState: 'piwi-page-state',
   userPick: 'piwi-user-pick',
+  aiUsage: 'piwi-ai-usage',
+  aiMeta: 'piwi-ai-meta',
 } as const;
 
 /** Set of every internal attachment name — used to skip them when collecting user attachments. */

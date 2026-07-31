@@ -19,6 +19,10 @@ export { createGlobalSetup } from './public/global-setup.js';
 // ── Capture fixtures ─────────────────────────────────────────────────────────
 export { piwiFixtures, extendPiwiFixtures } from './internal/capture/capture-fixtures.js';
 
+// ── AI-step fixtures ─────────────────────────────────────────────────────────
+export { piwiAiFixtures, extendPiwiAi } from './internal/ai/ai-fixtures.js';
+
 // ── Public types ─────────────────────────────────────────────────────────────
 export type { PiwiFixtures } from './internal/capture/capture-fixtures.js';
+export type { PiwiAi, AiMode, AiOnMiss } from './internal/ai/ai-fixtures.js';
 export type { PiwiDashboardOptions, PlaywrightTestConfig } from './public/options.js';

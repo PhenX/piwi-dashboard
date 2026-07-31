@@ -1,0 +1,223 @@
+/**
+ * The `piwiAi` fixtures: they add `page.piwiLocator(...)` and `page.piwiRun(...)`
+ * to Playwright's `page`, resolving each prompt from a committed artifact and
+ * replaying it with plain Playwright calls — zero LLM calls, zero network in the
+ * default `replay` mode.
+ *
+ * The `page` fixture is overridden and its methods attached in place, so when
+ * these compose over the capture fixtures the replayed actions flow through the
+ * instrumented page (feeding trace, report and healing history like hand-written
+ * code). Shipped separately from `piwiFixtures` and composable with it.
+ */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { test as playwrightTest } from '@playwright/test';
+import type {
+  Fixtures,
+  Locator,
+  Page,
+  PlaywrightTestArgs,
+  PlaywrightTestOptions,
+  PlaywrightWorkerArgs,
+  PlaywrightWorkerOptions,
+  TestInfo,
+  TestType,
+} from '@playwright/test';
+import { ariaSnapshotBestEffort } from '../capture/capture-fixtures.js';
+import { ATTACHMENT_NAMES } from '../capture/attachments.js';
+import { captureCallerLocation } from '../capture/locator-healing.js';
+import type { AiEntry, LocatorEntry, RunEntry } from './artifact.js';
+import { readEntry } from './artifact.js';
+import { DEFAULT_AI_DIR, entryPath, findTemplateSites, ordinalForLocation } from './keys.js';
+import { buildLocator, executeRun } from './interpreter.js';
+import type { ParamArgs, ParamValues } from './params.js';
+import { validateParams } from './params.js';
+
+/** How the fixture behaves on a cache miss. */
+export type AiMode = 'replay' | 'resolve' | 'heal';
+
+/** What to do when replay finds no committed entry. */
+export type AiOnMiss = 'fail' | 'fixme';
+
+/**
+ * The natural-language surface attached to `page`. Template-literal types make a
+ * missing or misspelled `{param}` a compile error (`ParamArgs`): a template with
+ * placeholders requires a matching params object, one without takes no argument.
+ */
+export interface PiwiAi {
+  /** Resolve a single element by description. Returns a real, synchronous `Locator`. */
+  piwiLocator<S extends string>(template: S, ...params: ParamArgs<S>): Locator;
+  /** Replay a compiled flow (steps + postcondition oracle). */
+  piwiRun<S extends string>(template: S, ...params: ParamArgs<S>): Promise<void>;
+}
+
+/** Resolved fixture configuration, read from the bridged `PIWI_AI*` env vars. */
+interface AiConfig {
+  mode: AiMode;
+  dir: string;
+  onMiss: AiOnMiss;
+}
+
+/** Parse the mode env value; anything unrecognized is the safe `replay` default. */
+export function parseAiMode(value: string | undefined): AiMode {
+  return value === 'resolve' || value === 'heal' ? value : 'replay';
+}
+
+function readAiConfig(env: NodeJS.ProcessEnv): AiConfig {
+  return {
+    mode: parseAiMode(env.PIWI_AI),
+    dir: env.PIWI_AI_DIR || DEFAULT_AI_DIR,
+    onMiss: env.PIWI_AI_ON_MISS === 'fixme' ? 'fixme' : 'fail',
+  };
+}
+
+/** The stable per-test identity used for keying (describe path + test title). */
+function testIdentity(testInfo: TestInfo): string {
+  const titles = testInfo.titlePath.slice(1);
+  return titles.length > 0 ? titles.join(' › ') : testInfo.title;
+}
+
+/** Render a path relative to cwd with forward slashes (matches caller locations). */
+function relativeToCwd(file: string): string {
+  return path.relative(process.cwd(), file).split(path.sep).join('/');
+}
+
+/** The exact, actionable message shown when replay finds no committed entry. */
+export function missMessage(template: string, testTitle: string, relPath: string): string {
+  return [
+    `piwi AI: no committed entry for "${template}" in test "${testTitle}".`,
+    `  expected file: ${relPath}`,
+    `  run:  piwi ai resolve --grep ${JSON.stringify(testTitle)}`,
+    `  (requires a configured authoring model; commit the generated file afterwards)`,
+  ].join('\n');
+}
+
+/**
+ * Build the `PiwiAi` surface for one running test. Reads the spec source once to
+ * assign stable source-position ordinals to duplicate templates, resolves each
+ * prompt to its entry file, and replays hits. Records which entries were used so
+ * teardown can attach the usage manifest for the dashboard.
+ */
+function createAiApi(page: Page, testInfo: TestInfo, config: AiConfig, used: Set<string>): PiwiAi {
+  const testTitle = testIdentity(testInfo);
+  let source: string | null = null;
+  const readSource = (): string => {
+    if (source === null) {
+      try {
+        source = fs.readFileSync(testInfo.file, 'utf8');
+      } catch {
+        source = '';
+      }
+    }
+    return source;
+  };
+
+  const ordinalFor = (template: string, location: string | null): number => {
+    if (!location) return 0;
+    const sites = findTemplateSites(readSource(), template);
+    if (sites.length <= 1) return 0;
+    const callLine = /:(\d+):\d+$/.exec(location)?.[1];
+    const perFileSites = sites.map((s) => `${testInfo.file}:${s}`);
+    const match = perFileSites.find((s) => /:(\d+):\d+$/.exec(s)?.[1] === callLine);
+    return match ? ordinalForLocation(perFileSites, match) : 0;
+  };
+
+  const resolveFile = (template: string): string => {
+    const location = captureCallerLocation();
+    const ordinal = ordinalFor(template, location);
+    return entryPath({ specFile: testInfo.file, testTitle, template, ordinal, dir: config.dir });
+  };
+
+  const handleMiss = (template: string, file: string): never => {
+    const message = missMessage(template, testTitle, relativeToCwd(file));
+    if (config.mode !== 'replay') {
+      throw new Error(
+        `${message}\n  resolve/heal mode needs a configured authoring resolver, which is not available in this build`,
+      );
+    }
+    if (config.onMiss === 'fixme') {
+      testInfo.annotations.push({ type: 'fixme', description: message });
+      testInfo.fixme();
+    }
+    throw new Error(message);
+  };
+
+  const load = <K extends AiEntry['kind']>(template: string, kind: K): Extract<AiEntry, { kind: K }> => {
+    const file = resolveFile(template);
+    const entry = readEntry(file);
+    if (entry && entry.kind === kind) {
+      used.add(file);
+      return entry as Extract<AiEntry, { kind: K }>;
+    }
+    return handleMiss(template, file);
+  };
+
+  const readAria = (p: Page): Promise<string | null> => ariaSnapshotBestEffort(p.locator('body'));
+  const step = <T>(title: string, body: () => Promise<T>): Promise<T> => playwrightTest.step(title, body);
+
+  return {
+    piwiLocator(template, ...params) {
+      validateParams(template, params[0]);
+      const entry: LocatorEntry = load(template, 'locator');
+      return buildLocator(page, entry.locator, (params[0] ?? {}) as ParamValues);
+    },
+    async piwiRun(template, ...params) {
+      validateParams(template, params[0]);
+      const entry: RunEntry = load(template, 'run');
+      await step(`piwiRun: ${template}`, () =>
+        executeRun(entry, { page, params: (params[0] ?? {}) as ParamValues, readAria, step }),
+      );
+    },
+  };
+}
+
+/** Attach the per-test usage manifest so the dashboard can aggregate liveness. */
+async function attachUsage(testInfo: TestInfo, used: Set<string>): Promise<void> {
+  if (used.size === 0) return;
+  const entries = [...used].map(relativeToCwd).sort();
+  await testInfo.attach(ATTACHMENT_NAMES.aiUsage, {
+    contentType: 'application/json',
+    body: Buffer.from(JSON.stringify({ entries })),
+  });
+}
+
+/** Local `{ [key: string]: any }` used by the extend signature (mirrors capture fixtures). */
+type FixtureArgs = { [key: string]: any };
+
+/**
+ * Fixtures that override `page` to carry the `PiwiAi` surface. Composable with
+ * `piwiFixtures`; keep this separate so a project can opt into AI steps without
+ * the capture fixtures (and vice versa).
+ */
+export const piwiAiFixtures: Fixtures<
+  {},
+  {},
+  PlaywrightTestArgs & PlaywrightTestOptions,
+  PlaywrightWorkerArgs & PlaywrightWorkerOptions
+> = {
+  page: async ({ page }: PlaywrightTestArgs, use: (value: Page) => Promise<void>, testInfo: TestInfo) => {
+    const config = readAiConfig(process.env);
+    const used = new Set<string>();
+    const ai = createAiApi(page, testInfo, config, used);
+    Object.assign(page, ai);
+    try {
+      await use(page);
+    } finally {
+      await attachUsage(testInfo, used);
+    }
+  },
+};
+
+/**
+ * Add the `PiwiAi` surface to a test's `page`. Compose over `extendPiwiFixtures`
+ * (or a base `test`) — e.g. `export const test = extendPiwiAi(extendPiwiFixtures(base))`.
+ */
+export function extendPiwiAi<TestArgs extends FixtureArgs, WorkerArgs extends FixtureArgs>(
+  test: TestType<TestArgs, WorkerArgs>,
+): TestType<TestArgs & { page: Page & PiwiAi }, WorkerArgs> {
+  return (
+    test as unknown as {
+      extend: (f: typeof piwiAiFixtures) => TestType<TestArgs & { page: Page & PiwiAi }, WorkerArgs>;
+    }
+  ).extend(piwiAiFixtures);
+}
