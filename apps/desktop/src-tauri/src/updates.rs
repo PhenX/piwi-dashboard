@@ -107,5 +107,8 @@ pub async fn desktop_install_update(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub fn desktop_restart_app(app: AppHandle) {
-    app.restart();
+    let handle = app.clone();
+    crate::confirm_stopping_local_runs(&app, "Restart Piwi?", "restarting", "Restart", move || {
+        handle.restart();
+    });
 }

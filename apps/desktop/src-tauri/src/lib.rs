@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 use serde_json::json;
 use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Emitter as _, Manager, RunEvent, WindowEvent};
+use tauri::{AppHandle, Emitter as _, Manager, RunEvent, WindowEvent};
 
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_autostart::ManagerExt as _;
@@ -449,15 +449,55 @@ fn desktop_save_download(
     Ok(node_path(&target))
 }
 
-// ── Closing the dashboard window while local test runs are in flight ──────────
+// ── Leaving the app while local test runs are in flight ───────────────────────
 
-/// Quitting kills every local test run (see `LocalRuns::kill_all`), so the user
-/// is asked first while any is still going.
+/// Every way out of the app kills the local test runs (see
+/// `LocalRuns::kill_all`), so each exit path asks first while any is going:
+/// `proceed` runs at once when nothing is active, and only on confirmation
+/// otherwise. `verb` fills the question ("quitting" / "restarting"), and
+/// `confirm_label` names its confirm button.
+///
+/// The callback form keeps the event loop free — a blocking dialog here would
+/// freeze the very window the question is about.
+pub(crate) fn confirm_stopping_local_runs(
+    app: &AppHandle,
+    title: &str,
+    verb: &str,
+    confirm_label: &str,
+    proceed: impl FnOnce() + Send + 'static,
+) {
+    let active = app
+        .try_state::<runner::LocalRuns>()
+        .map(|runs| runs.active_count())
+        .unwrap_or(0);
+    if active == 0 {
+        proceed();
+        return;
+    }
+    app.dialog()
+        .message(format!(
+            "{active} local test run(s) are still running — {verb} stops them."
+        ))
+        .title(title)
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            confirm_label.into(),
+            "Cancel".into(),
+        ))
+        .show(move |confirmed| {
+            if confirmed {
+                proceed();
+            }
+        });
+}
+
+/// The window-close variant of the question above.
 ///
 /// Reports whether the close has to be held back: `true` once the question is on
 /// screen, `false` when the close may proceed — nothing is running, or the user
 /// has already agreed to stop it. Confirming closes the window again, which runs
-/// the normal exit path.
+/// the normal exit path; `QuitConfirmed` is what tells that close apart from the
+/// one the user made.
 fn hold_close_for_local_runs(window: &tauri::Window) -> bool {
     let confirmed = window
         .try_state::<QuitConfirmed>()
@@ -474,28 +514,18 @@ fn hold_close_for_local_runs(window: &tauri::Window) -> bool {
     }
 
     let target = window.clone();
-    // The callback form keeps the event loop free — a blocking dialog here would
-    // freeze the very window the question is about.
-    window
-        .dialog()
-        .message(format!(
-            "{active} local test run(s) are still running — quitting stops them."
-        ))
-        .title("Quit Piwi?")
-        .kind(MessageDialogKind::Warning)
-        .buttons(MessageDialogButtons::OkCancelCustom(
-            "Quit".into(),
-            "Cancel".into(),
-        ))
-        .show(move |quit| {
-            if !quit {
-                return;
-            }
+    confirm_stopping_local_runs(
+        window.app_handle(),
+        "Quit Piwi?",
+        "quitting",
+        "Quit",
+        move || {
             if let Some(state) = target.try_state::<QuitConfirmed>() {
                 state.0.store(true, Ordering::SeqCst);
             }
             let _ = target.close();
-        });
+        },
+    );
     true
 }
 
@@ -841,7 +871,12 @@ pub fn run() {
                         let _ = if enabled { mgr.disable() } else { mgr.enable() };
                         let _ = login_i.set_checked(!enabled);
                     }
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        let handle = app.clone();
+                        confirm_stopping_local_runs(app, "Quit Piwi?", "quitting", "Quit", move || {
+                            handle.exit(0);
+                        });
+                    }
                     _ => {}
                 })
                 .build(app)?;

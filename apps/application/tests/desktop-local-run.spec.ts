@@ -365,6 +365,29 @@ test.describe('Desktop local run', () => {
     expect(saved?.trace ?? false).toBe(false);
   });
 
+  test('raises an OS notification when a run finishes while the window is unfocused', async ({ page }) => {
+    await installFakeBridge(page, { linked: true, autoExit: false });
+    await page.goto(`/test-runs/${runId}`);
+    await waitForHydration(page);
+
+    await page.getByRole('button', { name: 'Run locally' }).click();
+    await expect(tray(page).getByText('Running 0/1…', { exact: true })).toBeVisible();
+
+    // Headless focus reporting is unreliable, so unfocus deterministically;
+    // the subject here is the gate + the shell's Notification shim, which
+    // turns the notification into a desktop_notify invoke.
+    await page.evaluate(() => {
+      document.hasFocus = () => false;
+    });
+    await page.evaluate(() => window.__piwiFakeTauri.finish(1));
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__piwiFakeTauri.invocations.find((i) => i.cmd === 'desktop_notify')?.args ?? null),
+      )
+      .toMatchObject({ title: 'Local run failed' });
+  });
+
   test('the copy-only Retry button yields to the split button inside the shell', async ({ page }) => {
     await installFakeBridge(page, { linked: true });
     await page.goto(`/test-runs/${runId}`);
