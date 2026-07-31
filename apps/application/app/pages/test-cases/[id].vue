@@ -39,6 +39,12 @@ const passRate = computed(() => {
   return Math.round(((t.passedRuns + t.skippedRuns) / t.totalRuns) * 100);
 });
 
+// Desktop shell: reproduce this test on this machine. Selected by title so no
+// line number is needed; repeat ×20 with a trace is the flake-hunting preset.
+const reproduceCases = computed(() =>
+  testCase.value?.filePath ? [{ filePath: testCase.value.filePath, title: testCase.value.title, line: null }] : [],
+);
+
 const clusterColor = (status: string) => {
   return status === 'open' ? 'error' : status === 'resolved' ? 'success' : 'neutral';
 };
@@ -112,6 +118,14 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
           />
         </template>
         <template #right>
+          <DesktopRunLocallyButton
+            :project-id="testCase?.project?.id"
+            :project-label="testCase?.project?.label ?? testCase?.project?.name"
+            :cases="reproduceCases"
+            label="Reproduce locally"
+            :preset-options="{ mode: 'grep', repeatEach: 20, trace: true }"
+            class="mr-2"
+          />
           <NavbarActions :actions="[{ label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() }]" />
         </template>
       </UDashboardNavbar>

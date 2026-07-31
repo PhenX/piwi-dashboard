@@ -40,6 +40,13 @@ const { copy, copied } = useCopy();
 const retryMode = ref<RetryMode>('file-line');
 const retryCopied = ref(false);
 
+// Inside the desktop shell the run-locally split button covers copying the
+// command ("Copy as command"), so the copy-only Retry button stays web-only.
+const desktopBridge = ref(false);
+onMounted(() => {
+  desktopBridge.value = !!tauriCore();
+});
+
 const failedCases = computed(() => {
   if (!props.testRun?.testCases) return [];
   return props.testRun.testCases
@@ -324,7 +331,7 @@ function onLabelKeydown(e: KeyboardEvent) {
                   @click="copy(buildRunSummary(), { toast: 'Run summary copied' })"
                 />
               </UTooltip>
-              <UPopover v-if="failedCases.length > 0">
+              <UPopover v-if="failedCases.length > 0 && !desktopBridge">
                 <UButton
                   size="xs"
                   color="warning"

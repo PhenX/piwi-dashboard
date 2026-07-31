@@ -90,6 +90,8 @@ async function installFakeBridge(page: Page, options: FakeBridgeOptions) {
                 return id;
               }
               case 'desktop_stop_local_tests':
+              case 'desktop_notify':
+              case 'desktop_set_activity':
                 return null;
               default:
                 throw new Error(`unexpected command: ${cmd}`);
@@ -117,6 +119,8 @@ function runInvocations(page: Page) {
 
 test.describe('Desktop local run', () => {
   let runId: number;
+  let projectId: number;
+  let caseId: number;
 
   test.beforeAll(async ({ request }) => {
     const startTime = Date.now();
@@ -158,6 +162,9 @@ test.describe('Desktop local run', () => {
     const data = await res.json();
     const proj = await (await request.get(`/api/projects/${data.projectId}`)).json();
     runId = proj.testRuns[0].id;
+    projectId = data.projectId;
+    const cases = await (await request.get(`/api/projects/${projectId}/test-cases`)).json();
+    caseId = cases.items.find((c: { title: string; id: number }) => c.title === 'checkout completes')!.id;
   });
 
   test('without the bridge the button does not exist', async ({ page }) => {
@@ -335,6 +342,36 @@ test.describe('Desktop local run', () => {
 
     await page.evaluate(() => window.__piwiFakeTauri.finish(0));
     await expect(tray(page).getByText('Passed', { exact: true })).toBeVisible();
+  });
+
+  test('reproduces a test from its evolution page without touching saved defaults', async ({ page }) => {
+    await installFakeBridge(page, { linked: true });
+    await page.goto(`/test-cases/${caseId}`);
+    await waitForHydration(page);
+
+    await page.getByRole('button', { name: 'Reproduce locally' }).click();
+    await expect(tray(page).getByText('Passed', { exact: true })).toBeVisible();
+
+    const invocations = await runInvocations(page);
+    expect(invocations).toHaveLength(1);
+    expect(invocations[0]!.args!.args).toEqual(['--grep', 'checkout completes', '--trace=on', '--repeat-each=20']);
+
+    // The preset stays out of the project's saved defaults.
+    const saved = await page.evaluate(
+      (id) => JSON.parse(localStorage.getItem('piwi:desktop-local-run-options') ?? '{}')[String(id)],
+      projectId,
+    );
+    expect(saved?.repeatEach ?? 1).toBe(1);
+    expect(saved?.trace ?? false).toBe(false);
+  });
+
+  test('the copy-only Retry button yields to the split button inside the shell', async ({ page }) => {
+    await installFakeBridge(page, { linked: true });
+    await page.goto(`/test-runs/${runId}`);
+    await waitForHydration(page);
+
+    await expect(page.getByRole('button', { name: 'Run locally' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
   });
 
   test('warns when the linked folder has no Playwright installation', async ({ page }) => {

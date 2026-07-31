@@ -17,6 +17,14 @@ const props = defineProps<{
   projectId?: string | number | null;
   projectLabel?: string | null;
   cases: RetryCase[];
+  /** Primary label while idle — entry points like "Reproduce locally". */
+  label?: string;
+  /**
+   * One-off option overrides for runs started from this button (e.g. repeat
+   * ×20 with trace). Applied on top of the project's saved options and kept
+   * out of its saved defaults.
+   */
+  presetOptions?: LocalRunOptions;
 }>();
 
 const available = ref(false);
@@ -50,7 +58,7 @@ watch([available, () => link.value?.path, linked], () => {
   void checkEnv();
 });
 
-const options = computed(() => store.getProjectOptions(props.projectId ?? ''));
+const options = computed(() => ({ ...store.getProjectOptions(props.projectId ?? ''), ...props.presetOptions }));
 const contextRun = computed(() => store.latestForProject(props.projectId));
 const running = computed(() => contextRun.value?.status === 'running');
 
@@ -93,14 +101,14 @@ const face = computed(() => {
   }
   if (!linked.value) {
     return {
-      label: 'Run locally',
+      label: props.label ?? 'Run locally',
       color: 'warning' as const,
       icon: 'i-lucide-monitor-play',
       tooltip: 'Link this project to its local checkout to run tests here',
     };
   }
   return {
-    label: 'Run locally',
+    label: props.label ?? 'Run locally',
     color: 'warning' as const,
     icon: 'i-lucide-monitor-play',
     tooltip: `Run ${testsLabel.value} on this machine · ${runModeLabel.value} · in ${link.value?.path}`,
@@ -113,7 +121,8 @@ function runNow(patch?: LocalRunOptions) {
     projectId: props.projectId,
     projectLabel: props.projectLabel,
     cases: props.cases,
-    options: patch,
+    options: { ...props.presetOptions, ...patch },
+    persistOptions: props.presetOptions ? false : undefined,
   });
 }
 

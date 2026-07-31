@@ -120,16 +120,15 @@ const errorPeek = computed(() => {
 const { scmStatus } = useScmStatusSummary(clusterDiagnosis.coverage);
 
 // Retry command for the test-evidence header (built from all affected cases).
-const retryCommand = computed(() =>
-  buildRetryCommand(
-    (cluster.value?.affectedTestCases ?? []).map((tc) => ({
-      filePath: tc.filePath,
-      title: tc.title,
-      line: null,
-      projectName: null,
-    })),
-  ),
+const affectedRetryCases = computed(() =>
+  (cluster.value?.affectedTestCases ?? []).map((tc) => ({
+    filePath: tc.filePath,
+    title: tc.title,
+    line: null,
+    projectName: null,
+  })),
 );
+const retryCommand = computed(() => buildRetryCommand(affectedRetryCases.value));
 const { copy: copyRetry, copied: retryCopied } = useCopy();
 
 // Reveal-on-citation: a diagnosis evidence citation (right column) can unfold and
@@ -326,6 +325,13 @@ const breadcrumbItems = computed(() => [
                 >
                   Copy retry command
                 </UButton>
+                <DesktopRunLocallyButton
+                  :project-id="cluster.project?.id"
+                  :project-label="cluster.project?.name"
+                  :cases="affectedRetryCases"
+                  label="Run affected locally"
+                  :preset-options="{ mode: 'grep' }"
+                />
                 <UTooltip text="Unlink incorrectly clustered test cases from this group">
                   <UButton
                     size="xs"
