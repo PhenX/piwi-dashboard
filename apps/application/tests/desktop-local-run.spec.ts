@@ -21,6 +21,7 @@ declare global {
     __piwiFakeTauri: {
       invocations: FakeInvocation[];
       finish: (code: number | null) => void;
+      emitLine: (line: string) => void;
     };
   }
 }
@@ -31,6 +32,8 @@ interface FakeBridgeOptions {
   /** Emit two stdout lines and an exit event shortly after each spawn (default true). */
   autoExit?: boolean;
   exitCode?: number;
+  /** Report no Playwright installation from the env pre-flight. */
+  playwrightMissing?: boolean;
 }
 
 /** Install a fake `window.__TAURI__` before any app script runs. */
@@ -46,6 +49,9 @@ async function installFakeBridge(page: Page, options: FakeBridgeOptions) {
       lastRunId: 6,
       finish: (code: number | null) => {
         emit({ id: state.lastRunId, kind: 'exit', line: null, code });
+      },
+      emitLine: (line: string) => {
+        emit({ id: state.lastRunId, kind: 'stdout', line, code: null });
       },
     };
     Object.assign(window, { __piwiFakeTauri: state });
@@ -64,6 +70,14 @@ async function installFakeBridge(page: Page, options: FakeBridgeOptions) {
                 return null;
               case 'desktop_check_local_specs':
                 return { folder: '/home/dev/acme', missing: opts.missingSpecs ?? [] };
+              case 'desktop_check_local_env': {
+                if (!state.link) throw new Error('no folder is linked to this project');
+                return {
+                  folder: state.link.path,
+                  exists: state.link.exists,
+                  playwrightCli: opts.playwrightMissing ? null : '/home/dev/acme/node_modules/@playwright/test/cli.js',
+                };
+              }
               case 'desktop_run_local_tests': {
                 const id = ++state.lastRunId;
                 setTimeout(() => {
@@ -181,12 +195,12 @@ test.describe('Desktop local run', () => {
     await waitForHydration(page);
 
     await page.getByRole('button', { name: 'Run locally' }).click();
-    await expect(tray(page).getByText('Running…', { exact: true })).toBeVisible();
+    await expect(tray(page).getByText('Running 0/1…', { exact: true })).toBeVisible();
 
     // Leave the run page entirely — the store, not the page, owns the run.
     await page.getByRole('link', { name: 'Projects' }).first().click();
     await expect(page).toHaveURL(/\/projects/);
-    await expect(tray(page).getByText('Running…', { exact: true })).toBeVisible();
+    await expect(tray(page).getByText('Running 0/1…', { exact: true })).toBeVisible();
     await expect(tray(page).getByText('Running 1 test using 1 worker')).toBeVisible();
 
     await page.evaluate(() => window.__piwiFakeTauri.finish(0));
@@ -204,7 +218,7 @@ test.describe('Desktop local run', () => {
     await waitForHydration(page);
 
     await page.getByRole('button', { name: 'Run locally' }).click();
-    await expect(tray(page).getByText('Running…', { exact: true })).toBeVisible();
+    await expect(tray(page).getByText('Running 0/1…', { exact: true })).toBeVisible();
 
     await tray(page).getByRole('button', { name: 'Stop' }).click();
     await expect(tray(page).getByText('Stopped', { exact: true })).toBeVisible();
@@ -256,6 +270,87 @@ test.describe('Desktop local run', () => {
     await dialog.getByRole('button', { name: 'Run', exact: true }).click();
     await expect(dialog).toHaveCount(0);
     await expect(tray(page).getByText('Passed', { exact: true })).toBeVisible();
+  });
+
+  test('live test counts reach the button, the tray and the sidebar pill', async ({ page }) => {
+    await installFakeBridge(page, { linked: true, autoExit: false });
+    await page.goto(`/test-runs/${runId}`);
+    await waitForHydration(page);
+
+    await page.getByRole('button', { name: 'Run locally' }).click();
+    await page.evaluate(() => window.__piwiFakeTauri.emitLine('Running 3 tests using 2 workers'));
+    // The fake spawn already announced 1 test; the second announcement adds 3.
+    await expect(tray(page).getByText('Running 0/4…', { exact: true })).toBeVisible();
+
+    await page.evaluate(() =>
+      window.__piwiFakeTauri.emitLine('  ✓  1 [chromium] › tests/checkout.spec.ts:42:18 › checkout completes (1.2s)'),
+    );
+    await expect(tray(page).getByText('Running 1/4…', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Running 1/4…' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '1 local run' })).toBeVisible();
+
+    await page.evaluate(() => window.__piwiFakeTauri.finish(0));
+    await expect(tray(page).getByText('Passed', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '1 local run' })).toHaveCount(0);
+  });
+
+  test('links the local process to the Piwi run it produced', async ({ page, request }) => {
+    await installFakeBridge(page, { linked: true, autoExit: false });
+    await page.goto(`/test-runs/${runId}`);
+    await waitForHydration(page);
+
+    await page.getByRole('button', { name: 'Run locally' }).click();
+    await expect(tray(page).getByText('Running 0/1…', { exact: true })).toBeVisible();
+
+    // The local process reports through the project's own Piwi reporter; here
+    // that check-in is a real submit to the same server, which announces it on
+    // the SSE stream the app correlates from.
+    const res = await retryPost(request, '/api/test-runs/submit', {
+      data: {
+        projectName: PROJECT.DESKTOP_LOCAL_RUN,
+        status: 'passed',
+        startTime: new Date().toISOString(),
+        duration: 2000,
+        totalTests: 1,
+        passedTests: 1,
+        failedTests: 0,
+        skippedTests: 0,
+        testCases: [
+          {
+            title: 'checkout completes',
+            status: 'passed',
+            duration: 2000,
+            location: 'tests/checkout.spec.ts:42:18',
+            browser: { name: 'chromium', projectName: 'chromium' },
+            retries: 0,
+            workerIndex: 0,
+            startedAt: Date.now(),
+          },
+        ],
+      },
+    });
+    expect(res.ok()).toBeTruthy();
+
+    await expect(tray(page).getByRole('link', { name: /Live in Piwi — Run #\d+/ })).toBeVisible({ timeout: 15000 });
+
+    await page.evaluate(() => window.__piwiFakeTauri.finish(0));
+    await expect(tray(page).getByText('Passed', { exact: true })).toBeVisible();
+  });
+
+  test('warns when the linked folder has no Playwright installation', async ({ page }) => {
+    await installFakeBridge(page, { linked: true, playwrightMissing: true });
+    await page.goto(`/test-runs/${runId}`);
+    await waitForHydration(page);
+
+    await page.getByRole('button', { name: 'Run options' }).click();
+    await expect(page.getByText('No Playwright found in the linked folder')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // The primary click demotes to the dialog, which explains — but never blocks.
+    await page.getByRole('button', { name: 'Run locally' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('No Playwright installation found')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();
   });
 
   test('prompts to link a folder when none is linked yet', async ({ page }) => {

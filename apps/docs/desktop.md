@@ -135,12 +135,15 @@ the output streams into the **Local runs** tray in the corner of the window.
 Results flow back automatically: the run executes your project's regular
 Playwright config, so the Piwi reporter in it reports to this app through the
 [discovery file](#sending-results-to-it), exactly like a run started from your
-terminal.
+terminal. As soon as the reporter checks in, the run's tray entry links
+straight to the new run — **Live in Piwi** — and while anything is running a
+pill in the sidebar keeps the tray one click away from every page.
 
 Two prerequisites, both usually already true for a project that reports to
 Piwi: the linked folder has `@playwright/test` installed (`node_modules`
 present — monorepos with a hoisted root install work too), and its Playwright
-config includes the Piwi reporter.
+config includes the Piwi reporter. The app checks the first one up front and
+warns before running when no Playwright installation is found.
 
 The linked folder also completes [Open in IDE](/ide-integration): when no
 workspace root is configured there, source links resolve against the linked

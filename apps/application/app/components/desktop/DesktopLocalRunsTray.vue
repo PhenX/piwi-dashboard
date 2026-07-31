@@ -16,6 +16,11 @@ onMounted(() => {
   available.value = !!tauriCore();
 });
 
+// This component is mounted once in the layout, which makes it the natural
+// owner of the store's Piwi-run correlation: every server run event (the
+// reporter checking in counts) re-checks pending local runs.
+useRunStream(() => store.correlatePiwiRuns());
+
 /** Manual expand/collapse choices; unset falls back to the default below. */
 const expandedByKey = ref<Record<number, boolean>>({});
 
@@ -39,10 +44,7 @@ function duration(run: LocalRun): string {
 function badge(run: LocalRun): { label: string; color: 'info' | 'success' | 'error' | 'neutral' } {
   switch (run.status) {
     case 'running':
-      return {
-        label: run.steps.length > 1 ? `Running ${run.stepIndex + 1}/${run.steps.length}…` : 'Running…',
-        color: 'info',
-      };
+      return { label: localRunProgressLabel(run), color: 'info' };
     case 'passed':
       return { label: 'Passed', color: 'success' };
     case 'failed':
@@ -134,6 +136,18 @@ const hasFinished = computed(() => runs.value.some((r) => r.status !== 'running'
               :aria-label="isExpanded(run) ? 'Collapse output' : 'Expand output'"
               @click="toggleExpanded(run)"
             />
+          </div>
+          <div v-if="run.piwiRunId != null" class="mt-1.5">
+            <UButton
+              size="xs"
+              color="success"
+              variant="soft"
+              icon="i-lucide-external-link"
+              :to="`/test-runs/${run.piwiRunId}`"
+              @click="trayOpen = false"
+            >
+              Live in Piwi — Run #{{ run.piwiRunId }}
+            </UButton>
           </div>
           <DesktopLocalRunConsole v-if="isExpanded(run)" :lines="run.lines" class="mt-2" />
         </article>

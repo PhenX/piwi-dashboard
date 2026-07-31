@@ -441,6 +441,7 @@ onMounted(async () => {
 
       <template #footer="{ collapsed }">
         <div class="flex flex-col gap-1 w-full">
+          <DesktopLocalRunsIndicator :collapsed="collapsed" />
           <UserMenu :collapsed="collapsed" />
           <ULink
             v-if="!collapsed"

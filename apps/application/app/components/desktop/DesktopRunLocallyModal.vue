@@ -25,6 +25,7 @@ const { missingSpecs, wrongFolder, checkSpecs } = useDesktopSpecCheck(
   () => props.projectId,
   () => props.cases,
 );
+const { playwrightMissing, checkEnv } = useDesktopEnvCheck(() => props.projectId);
 
 const linked = computed(() => !!link.value?.exists);
 
@@ -55,7 +56,9 @@ const modeItems = RETRY_MODE_ITEMS;
 const runModeItems = LOCAL_RUN_MODE_ITEMS;
 
 watch([open, () => link.value?.path, linked], () => {
-  if (open.value) void checkSpecs(linked.value);
+  if (!open.value) return;
+  void checkSpecs(linked.value);
+  void checkEnv();
 });
 
 const plan = computed(() => buildLocalRunPlan(props.cases, options.value));
@@ -137,6 +140,20 @@ function run() {
               <USwitch v-model="trace" />
             </UFormField>
           </div>
+
+          <UAlert
+            v-if="playwrightMissing"
+            color="warning"
+            variant="soft"
+            icon="i-lucide-package-x"
+            title="No Playwright installation found"
+          >
+            <template #description>
+              Neither <code class="text-xs">{{ link?.path }}</code> nor its parents hold a
+              <code class="text-xs">node_modules</code> with Playwright. Run your package manager's install in the
+              checkout first — the app executes that folder's own Playwright.
+            </template>
+          </UAlert>
 
           <UAlert
             v-if="missingSpecs.length > 0"
