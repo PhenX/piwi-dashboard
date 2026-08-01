@@ -171,6 +171,21 @@ export const observeXhrResponses: ResponseObserver = async (page, action, settle
   return urls;
 };
 
+/** A base64 screenshot the model can fall back to when the ARIA snapshot is empty. */
+export type Screenshot = { mediaType: 'image/png' | 'image/jpeg'; data: string };
+
+/** Capture a viewport screenshot (browser-facing; injectable for tests). Null on failure. */
+export type ScreenshotCapturer = (page: Page) => Promise<Screenshot | null>;
+
+export const captureViewportScreenshot: ScreenshotCapturer = async (page) => {
+  try {
+    const buffer = await page.screenshot({ type: 'jpeg', quality: 60 });
+    return { mediaType: 'image/jpeg', data: buffer.toString('base64') };
+  } catch {
+    return null;
+  }
+};
+
 /** Everything one resolution needs; the browser-facing pieces and caps are injectable. */
 export interface ResolutionContext {
   page: Page;
@@ -179,6 +194,13 @@ export interface ResolutionContext {
   readSnapshot?: SnapshotReader;
   /** Observe the responses an action triggers (default `observeXhrResponses`). */
   observeResponses?: ResponseObserver;
+  /**
+   * Opt-in vision fallback: when the ARIA snapshot is empty (a canvas-heavy page),
+   * attach a screenshot so a vision-capable model can still ground the element.
+   * Off by default — leave it off for models that do not accept images.
+   */
+  screenshotFallback?: boolean;
+  captureScreenshot?: ScreenshotCapturer;
   /** Max steps one flow resolution may take (default `DEFAULT_MAX_STEPS`). */
   maxSteps?: number;
   /** Max characters of the snapshot sent per iteration (default `MAX_SNAPSHOT_CHARS`). */
@@ -187,6 +209,13 @@ export interface ResolutionContext {
   optionalProbeTimeout?: number;
   /** Timeout (ms) for a step's `waitForResponse` (replay) and the authoring settle. */
   responseWaitTimeout?: number;
+}
+
+/** A vision-fallback screenshot, only when enabled and the ARIA snapshot is empty. */
+async function maybeScreenshot(ctx: ResolutionContext, ariaSnapshot: string): Promise<Screenshot | undefined> {
+  if (!ctx.screenshotFallback || ariaSnapshot.length > 0) return undefined;
+  const capture = ctx.captureScreenshot ?? captureViewportScreenshot;
+  return (await capture(ctx.page)) ?? undefined;
 }
 
 function assertParametric(template: string, locatorJson: string): void {
@@ -205,12 +234,14 @@ export async function resolveLocator(template: string, ctx: ResolutionContext): 
   const readSnapshot = ctx.readSnapshot ?? readMaskedSnapshot;
   const cap = ctx.maxSnapshotChars ?? MAX_SNAPSHOT_CHARS;
   const ariaSnapshot = (await readSnapshot(ctx.page, ctx.params)).slice(0, cap);
+  const screenshot = await maybeScreenshot(ctx, ariaSnapshot);
   const decision = await ctx.resolver.resolveStep({
     kind: 'locator',
     template,
     paramNames: Object.keys(ctx.params),
     ariaSnapshot,
     history: [],
+    ...(screenshot ? { screenshot } : {}),
   });
   if (!decision.element) throw new Error(`piwi AI: resolver returned no element for "${template}"`);
   const compiled = locatorFromElement(decision.element);
@@ -247,7 +278,15 @@ export async function resolveRun(template: string, ctx: ResolutionContext): Prom
 
   for (let i = 0; i < maxSteps; i++) {
     const ariaSnapshot = (await readSnapshot(ctx.page, ctx.params)).slice(0, cap);
-    const decision = await ctx.resolver.resolveStep({ kind: 'run', template, paramNames, ariaSnapshot, history });
+    const screenshot = await maybeScreenshot(ctx, ariaSnapshot);
+    const decision = await ctx.resolver.resolveStep({
+      kind: 'run',
+      template,
+      paramNames,
+      ariaSnapshot,
+      history,
+      ...(screenshot ? { screenshot } : {}),
+    });
 
     if (decision.done) {
       const postcondition = buildPostcondition(decision.postcondition, template);

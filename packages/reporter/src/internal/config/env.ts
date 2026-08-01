@@ -60,6 +60,7 @@ export const PIWI_ENV_KEYS = {
   aiMaxSnapshotChars: 'PIWI_AI_MAX_SNAPSHOT_CHARS',
   aiOptionalProbeTimeout: 'PIWI_AI_OPTIONAL_PROBE_TIMEOUT',
   aiResponseWaitTimeout: 'PIWI_AI_RESPONSE_WAIT_TIMEOUT',
+  aiScreenshotFallback: 'PIWI_AI_SCREENSHOT_FALLBACK',
 } as const;
 
 /**
@@ -232,4 +233,6 @@ export function applyOptionsToEnv(options: PiwiDashboardOptions): void {
     env[PIWI_ENV_KEYS.aiOptionalProbeTimeout] = String(options.ai.optionalProbeTimeout);
   if (options.ai?.responseWaitTimeout !== undefined)
     env[PIWI_ENV_KEYS.aiResponseWaitTimeout] = String(options.ai.responseWaitTimeout);
+  if (options.ai?.screenshotFallback !== undefined)
+    env[PIWI_ENV_KEYS.aiScreenshotFallback] = String(options.ai.screenshotFallback);
 }

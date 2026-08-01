@@ -186,6 +186,14 @@ export interface PiwiDashboardOptions {
      * default action timeout. Can also be set with `PIWI_AI_RESPONSE_WAIT_TIMEOUT`.
      */
     responseWaitTimeout?: number;
+    /**
+     * Send a screenshot to the authoring model as a vision fallback when the page's
+     * ARIA snapshot is empty (a canvas-heavy page the model otherwise can't ground
+     * against). **Requires a vision-capable model** — leave it off (the default) for
+     * models that don't accept images. Only affects `resolve`/`heal`, never replay.
+     * Can also be set with `PIWI_AI_SCREENSHOT_FALLBACK`.
+     */
+    screenshotFallback?: boolean;
   };
 
   // ── Output & diagnostics ───────────────────────────────────────────────────

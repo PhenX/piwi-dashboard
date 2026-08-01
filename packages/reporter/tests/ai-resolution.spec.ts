@@ -231,6 +231,56 @@ describe('resolveRun — Ajax wait', () => {
   });
 });
 
+describe('screenshot vision fallback', () => {
+  const shot = { mediaType: 'image/jpeg' as const, data: 'BASE64' };
+
+  it('attaches a screenshot only when enabled AND the ARIA snapshot is empty', async () => {
+    const { page } = recorderPage();
+    const { resolver, requests } = scripted([{ element: { role: 'button', name: 'Go' } }]);
+    await resolveLocator('the go button', {
+      page,
+      params: {},
+      resolver,
+      readSnapshot: async () => '', // canvas-heavy: no ARIA
+      screenshotFallback: true,
+      captureScreenshot: async () => shot,
+    });
+    expect(requests[0].screenshot).toEqual(shot);
+  });
+
+  it('sends no screenshot when the ARIA snapshot is usable', async () => {
+    const { page } = recorderPage();
+    const { resolver, requests } = scripted([{ element: { role: 'button', name: 'Go' } }]);
+    await resolveLocator('the go button', {
+      page,
+      params: {},
+      resolver,
+      readSnapshot: async () => '- button "Go"',
+      screenshotFallback: true,
+      captureScreenshot: async () => shot,
+    });
+    expect(requests[0].screenshot).toBeUndefined();
+  });
+
+  it('never captures when the fallback is off (default — safe for non-vision models)', async () => {
+    const { page } = recorderPage();
+    const { resolver, requests } = scripted([{ element: { role: 'button', name: 'Go' } }]);
+    let captured = false;
+    await resolveLocator('the go button', {
+      page,
+      params: {},
+      resolver,
+      readSnapshot: async () => '',
+      captureScreenshot: async () => {
+        captured = true;
+        return shot;
+      },
+    });
+    expect(captured).toBe(false);
+    expect(requests[0].screenshot).toBeUndefined();
+  });
+});
+
 describe('lazyLocator', () => {
   it('defers resolution until first use and memoizes it', async () => {
     const log: Call[] = [];

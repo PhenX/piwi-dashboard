@@ -65,6 +65,8 @@ interface AiConfig {
   maxSnapshotChars?: number;
   optionalProbeTimeout?: number;
   responseWaitTimeout?: number;
+  /** Opt-in vision fallback (off unless the model supports images). */
+  screenshotFallback: boolean;
 }
 
 /** Parse the mode env value; anything unrecognized is the safe `replay` default. */
@@ -89,6 +91,7 @@ function readAiConfig(env: NodeJS.ProcessEnv): AiConfig {
     maxSnapshotChars: readPositiveInt(env.PIWI_AI_MAX_SNAPSHOT_CHARS),
     optionalProbeTimeout: readPositiveInt(env.PIWI_AI_OPTIONAL_PROBE_TIMEOUT),
     responseWaitTimeout: readPositiveInt(env.PIWI_AI_RESPONSE_WAIT_TIMEOUT),
+    screenshotFallback: env.PIWI_AI_SCREENSHOT_FALLBACK === 'true',
   };
 }
 
@@ -195,6 +198,7 @@ function createAiApi(page: Page, testInfo: TestInfo, config: AiConfig, used: Set
           params: values,
           resolver,
           maxSnapshotChars: config.maxSnapshotChars,
+          screenshotFallback: config.screenshotFallback,
         });
         writeEntry(file, entry);
         used.add(file);
@@ -234,6 +238,7 @@ function createAiApi(page: Page, testInfo: TestInfo, config: AiConfig, used: Set
           maxSnapshotChars: config.maxSnapshotChars,
           optionalProbeTimeout: config.optionalProbeTimeout,
           responseWaitTimeout: config.responseWaitTimeout,
+          screenshotFallback: config.screenshotFallback,
         });
         writeEntry(file, entry);
         used.add(file);
