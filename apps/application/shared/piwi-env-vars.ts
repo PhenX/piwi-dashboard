@@ -40,6 +40,7 @@ export type PiwiEnvVarCategory =
   | 'oauth'
   | 'ai'
   | 'ai-limits'
+  | 'ai-steps'
   | 'ingest'
   | 'export'
   | 'markers'
@@ -168,6 +169,15 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     intro:
       'Cap how much evidence (and how many tokens) go into each AI diagnosis. Resolution order: defaults ← values stored from **Settings → AI** ← environment; the environment wins and locks the field in the UI. Values are clamped to the min–max range; a `0` disables a section only where the minimum is `0`.',
     note: 'See [AI diagnosis → Context limits](./ai-diagnosis#context-limits-and-token-cost) for section-by-section guidance.',
+  },
+  'ai-steps': {
+    title: 'AI steps',
+    // Sits between the diagnosis limits (8) and ingest limits (9); a fractional
+    // order keeps it there without renumbering every later category.
+    order: 8.5,
+    intro:
+      "Bounds on the reporter's AI-step **authoring** pass (`page.piwiLocator(...)` / `page.piwiRun(...)` in `resolve`/`heal` mode), which calls the model through this server. They cap how much of the page snapshot and how many output tokens go into each authoring iteration. They never apply during normal `replay` runs, which make no model calls. Values are clamped to the min–max range.",
+    note: 'Reasoning models spend output tokens on hidden chain-of-thought, so raise `PIWI_AI_STEP_MAX_OUTPUT_TOKENS` for them. See [AI steps](./ai-steps) for the full authoring/replay model and the reporter-side `PIWI_AI*` options.',
   },
   ingest: {
     title: 'Ingest limits',
@@ -631,7 +641,7 @@ export const PIWI_ENV_VARS = {
   },
   PIWI_AI_STEP_MAX_SNAPSHOT_CHARS: {
     description: 'Max characters of the page ARIA snapshot the reporter sends per AI-step authoring iteration.',
-    category: 'ai-limits',
+    category: 'ai-steps',
     type: 'number',
     default: '24000',
     min: 0,
@@ -639,8 +649,9 @@ export const PIWI_ENV_VARS = {
     since: '0.24.0',
   },
   PIWI_AI_STEP_MAX_OUTPUT_TOKENS: {
-    description: 'Max output tokens the model may return per AI-step authoring iteration.',
-    category: 'ai-limits',
+    description:
+      'Max output tokens the model may return per AI-step authoring iteration. Reasoning models count hidden chain-of-thought against this, so raise it (up to 8192) when authoring with one.',
+    category: 'ai-steps',
     type: 'number',
     default: '1024',
     min: 256,
