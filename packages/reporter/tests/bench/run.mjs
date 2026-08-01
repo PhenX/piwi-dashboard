@@ -71,12 +71,13 @@ function parseArgs(argv) {
     json: null,
     only: null,
     target: 'role',
+    sites: 'distinct',
   };
   for (let i = 0; i < argv.length; i += 2) {
     const flag = argv[i]?.replace(/^--/, '');
     const value = argv[i + 1];
     if (flag === undefined || value === undefined) continue;
-    if (flag === 'json' || flag === 'only' || flag === 'target') options[flag] = value;
+    if (flag === 'json' || flag === 'only' || flag === 'target' || flag === 'sites') options[flag] = value;
     else if (flag in options) options[flag] = Number.parseInt(value, 10);
     else throw new Error(`unknown flag --${flag}`);
   }
@@ -114,6 +115,7 @@ function runVariant(variant, options, outputFile) {
       PIWI_BENCH_ACTIONS: String(options.actions),
       PIWI_BENCH_ASSERTIONS: String(options.assertions),
       PIWI_BENCH_TARGET: options.target,
+      PIWI_BENCH_SITES: options.sites,
       PLAYWRIGHT_JSON_OUTPUT_NAME: outputFile,
       // The reporter package itself is never loaded here — only the capture
       // fixtures are — but keep any ambient dashboard config from making the
@@ -162,7 +164,8 @@ function main() {
   console.log(
     `\nPiwi capture benchmark — ${options.tests} tests × ` +
       `(${options.actions} actions + ${options.assertions} assertions) on a ${options.rows}-row page, ` +
-      `targeting ${options.target === 'roleless' ? 'role-less spans' : 'buttons'}`,
+      `targeting ${options.target === 'roleless' ? 'role-less spans' : 'buttons'}, ` +
+      `${options.sites} call sites`,
   );
   console.log(`${options.rounds} measured round(s) + 1 warm-up, ${variants.length} variants per round\n`);
 

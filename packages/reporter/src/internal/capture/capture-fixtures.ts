@@ -21,8 +21,10 @@ import {
   approximateAccessibleName,
   captureCallerLocation,
   dedupeSnapshotsByLocation,
+  exactAccessibleName,
   resolveAriaRole,
   suggestLocatorsFromAria,
+  FORM_FIELD_TAGS,
   LOCATOR_METHODS,
   CHAIN_METHODS,
   ACTION_METHODS,
@@ -150,10 +152,13 @@ interface CaptureSink {
   capturedLocators: LocatorSnapshot[];
   capturePromises: Promise<void>[];
   failedLocators: FailedLocatorInfo[];
-  // Call sites already captured via a passing assertion this test. Assertions
-  // are far denser than actions (a loop can assert the same line dozens of
-  // times), so unlike actions they probe each call site only once per test.
-  expectCapturedLocations: Set<string>;
+  // Call sites already probed this test, by action or by assertion. Only one
+  // snapshot per location survives `dedupeSnapshotsByLocation` and the server
+  // stores one row per location, so every probe after the first at a given
+  // line is work whose result is thrown away — a loop or a page-object method
+  // called repeatedly hits the same line many times over. A location is
+  // removed again if its probe fails, so a later call still gets to try.
+  probedLocations: Set<string>;
   // Most-recently-touched instrumented page — used at teardown for the failure
   // ARIA snapshot and web-vitals read when a test drives several pages.
   lastActivePage: Page | null;
@@ -181,7 +186,7 @@ function createSink(): CaptureSink {
     capturedLocators: [],
     capturePromises: [],
     failedLocators: [],
-    expectCapturedLocations: new Set(),
+    probedLocations: new Set(),
     lastActivePage: null,
     testInfo: null,
     stashedWebVitals: null,
@@ -544,7 +549,6 @@ const PATCHED_BROWSERS = new WeakSet<Browser>();
 // turned into Sets once here.
 const CHAIN_METHOD_SET = new Set(CHAIN_METHODS);
 const ACTION_METHOD_SET = new Set(ACTION_METHODS);
-const FORM_FIELD_TAGS = new Set(['input', 'select', 'textarea']);
 
 /**
  * Everything the in-page probe needs, serialized into the browser on every
@@ -562,10 +566,12 @@ export const CAPTURED_ATTRS_ARG: ProbeArg = {
   // special-cased logic in the probe, so add them explicitly).
   roleSources: [...new Set(['[role]', 'input', 'select', ...Object.keys(TAG_TO_ROLE)])].join(','),
   // The reporter always wants ancestor-anchored alternatives (the picker's
-  // anchors step and generateAnchoredAlternatives both need them); it derives
-  // the accessible name itself, so the probe's own labelText is unneeded.
+  // anchors step and generateAnchoredAlternatives both need them). `labelText`
+  // is what names a form field, and the probe reads it from `el.labels` in the
+  // same pass — so asking for it here is free and settles the accessible name
+  // of a labeled field without a second round trip (`exactAccessibleName`).
   includeStructural: true,
-  includeLabelText: false,
+  includeLabelText: true,
 };
 
 /**
@@ -641,18 +647,24 @@ function startElementCapture(
 
       // The browser-computed accessible name only feeds role-based and
       // form-field alternatives, so only pay for the extra ARIA
-      // snapshot when the element actually has a role or is a field.
+      // snapshot when the element actually has a role or is a field —
+      // and, within that, only when the probed attributes have not
+      // already settled the name. The snapshot is a second protocol
+      // round trip on the same locator, which costs more than the whole
+      // probe body; skipping it where it cannot change the answer is
+      // the single cheapest saving on this path.
       const role = resolveAriaRole({ ...attrs, accessibleName: null });
       const isFormField = FORM_FIELD_TAGS.has(attrs.tagName);
+      const exactName = exactAccessibleName(attrs, role);
       // Bound with a timeout: without it, ariaSnapshot waits up to the
       // test timeout when the page is mid-navigation, which hangs the
       // teardown that drains these capture promises.
       // ariaSnapshotBestEffort adapts the options to the installed
       // Playwright version and never throws (see its doc comment).
-      const aria = role || isFormField ? await ariaSnapshotBestEffort(target, 500) : null;
+      const aria = exactName === null && (role || isFormField) ? await ariaSnapshotBestEffort(target, 500) : null;
 
       const accessibleName =
-        extractAccessibleName(aria) || approximateAccessibleName({ ...attrs, accessibleName: null });
+        exactName ?? (extractAccessibleName(aria) || approximateAccessibleName({ ...attrs, accessibleName: null }));
 
       sink.capturedLocators[seq] = {
         location: callerLocation,
@@ -673,7 +685,9 @@ function startElementCapture(
         alternatives: generateAlternatives({ ...attrs, accessibleName }),
       };
     } catch {
-      // element detached or timeout — keep the placeholder
+      // Element detached or timeout — keep the placeholder, and release the
+      // call site so a later action or assertion on the same line can retry.
+      if (callerLocation) sink.probedLocations.delete(callerLocation);
     } finally {
       clearTimeout(deadline);
     }
@@ -724,13 +738,12 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
             raw: `${originMethod}(${JSON.stringify(originArgs)})`,
           };
 
-          // One probe per call site: assertions are far denser than actions
-          // (loops, toPass blocks re-assert the same line), and the server
-          // keeps one row per location anyway. The placeholder still marks
-          // the location as exercised this run.
-          const alreadyCaptured = callerLocation !== null && sink.expectCapturedLocations.has(callerLocation);
+          // One probe per call site (see `probedLocations`). The placeholder
+          // pushed on the first visit already marks the location as exercised
+          // this run.
+          const alreadyProbed = callerLocation !== null && sink.probedLocations.has(callerLocation);
           let seq = -1;
-          if (!alreadyCaptured) {
+          if (!alreadyProbed) {
             seq = sink.capturedLocators.length;
             sink.capturedLocators.push({ location: callerLocation, used, element: null, alternatives: [] });
           }
@@ -742,8 +755,8 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
           // `matches` — a future result-shape change — degrades to no capture,
           // never to a broken assertion.
           const matches = (result as { matches?: boolean } | null | undefined)?.matches;
-          if (matches === true && !alreadyCaptured) {
-            if (callerLocation) sink.expectCapturedLocations.add(callerLocation);
+          if (matches === true && !alreadyProbed) {
+            if (callerLocation) sink.probedLocations.add(callerLocation);
             startElementCapture(sink, target, seq, callerLocation, used);
           } else if (matches === false) {
             // A presence assertion that missed is a failed-locator signal —
@@ -766,7 +779,6 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
         if (!sink) return fn.apply(target, callArgs);
 
         sink.lastActivePage = page;
-        const seq = sink.capturedLocators.length;
         // Capture the test call-site now (sync) so the snapshot's location
         // matches the error stack's first user frame — independent of
         // pw:api step ordering, worker interleaving, or concurrent actions.
@@ -778,15 +790,21 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
           raw: `${originMethod}(${JSON.stringify(originArgs)})`,
         };
 
-        // Push a placeholder immediately — DOM capture runs async below
-        sink.capturedLocators.push({
-          location: callerLocation,
-          used,
-          element: null,
-          alternatives: [],
-        });
+        // One probe per call site (see `probedLocations`). Push a placeholder
+        // immediately on the first visit — DOM capture runs async below.
+        const alreadyProbed = callerLocation !== null && sink.probedLocations.has(callerLocation);
+        let seq = -1;
+        if (!alreadyProbed) {
+          seq = sink.capturedLocators.length;
+          sink.capturedLocators.push({
+            location: callerLocation,
+            used,
+            element: null,
+            alternatives: [],
+          });
+        }
 
-        // The placeholder is already pushed. If the action throws, record the
+        // The location is already on record. If the action throws, note the
         // failed locator (so teardown can suggest a fresh one for the element's
         // current identity) and re-throw so the test still fails.
         let result: unknown;
@@ -798,7 +816,10 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
         }
 
         // Fire-and-forget: capture element data without blocking the test.
-        startElementCapture(sink, target, seq, callerLocation, used);
+        if (!alreadyProbed) {
+          if (callerLocation) sink.probedLocations.add(callerLocation);
+          startElementCapture(sink, target, seq, callerLocation, used);
+        }
 
         return result;
       };

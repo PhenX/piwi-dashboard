@@ -43,12 +43,33 @@ const targetFor = (page: Page, row: number): Locator =>
     : page.getByRole('button', { name: `Open order ${row}`, exact: true });
 
 /**
- * Assertion call sites, one per line. The fixtures probe an assertion's target
- * once per *call site* per test, so a loop over a single `expect` line would
- * measure one probe however high the count went. Real suites write each
- * assertion on its own line; these mirror that. Counts above the list length
- * cycle, and the repeats are deduped exactly as they would be in a loop.
+ * How the workload spreads its operations over source lines. The fixtures probe
+ * a target once per *call site* per test, so the two shapes bound the real
+ * range a suite can sit in and neither one alone is a fair summary:
+ *
+ *  - `distinct` — every operation on its own line, as a test that spells each
+ *    step out. Nothing is deduped, so this is the worst case for capture cost.
+ *  - `shared` — every operation through one line, as a loop or a page-object
+ *    method called repeatedly. One call site, so the dedupe does its most work.
  */
+const SITES = process.env.PIWI_BENCH_SITES === 'shared' ? 'shared' : 'distinct';
+const site = (i: number, count: number): number => (SITES === 'shared' ? 0 : i % count);
+
+/** Action call sites, one per line — see `SITES`. */
+const clickTarget: Array<(target: Locator) => Promise<void>> = [
+  async (target) => await target.click(),
+  async (target) => await target.click(),
+  async (target) => await target.click(),
+  async (target) => await target.click(),
+  async (target) => await target.click(),
+  async (target) => await target.click(),
+  async (target) => await target.click(),
+  async (target) => await target.click(),
+  async (target) => await target.click(),
+  async (target) => await target.click(),
+];
+
+/** Assertion call sites, one per line — see `SITES`. */
 const assertVisible: Array<(target: Locator) => Promise<void>> = [
   async (target) => await expect(target).toBeVisible(),
   async (target) => await expect(target).toBeVisible(),
@@ -76,7 +97,8 @@ test.afterAll(async () => {
  * A mixed workload: a navigation, form fills, clicks that each trigger a fetch,
  * and web-first assertions. Actions and assertions are separate capture paths
  * in the fixtures, so both are exercised, and every target is a different row
- * so no probe is served from a warm selector cache.
+ * so no probe is served from a warm selector cache. The two form fills sit on
+ * their own lines under either `SITES` shape — a page's fixed entry steps do.
  */
 for (let index = 0; index < TESTS; index++) {
   test(`workload ${index}`, async ({ page }) => {
@@ -86,11 +108,11 @@ for (let index = 0; index < TESTS; index++) {
     await page.getByLabel('Search').fill(`order ${index}`);
 
     for (let i = 0; i < ACTIONS; i++) {
-      await targetFor(page, (index * ACTIONS + i) % ROWS).click();
+      await clickTarget[site(i, clickTarget.length)]!(targetFor(page, (index * ACTIONS + i) % ROWS));
     }
 
     for (let i = 0; i < ASSERTIONS; i++) {
-      await assertVisible[i % assertVisible.length]!(targetFor(page, (index * ASSERTIONS + i) % ROWS));
+      await assertVisible[site(i, assertVisible.length)]!(targetFor(page, (index * ASSERTIONS + i) % ROWS));
     }
 
     await expect(page.getByRole('status')).toContainText('opened');

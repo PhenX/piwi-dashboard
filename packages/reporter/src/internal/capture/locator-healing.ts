@@ -204,6 +204,84 @@ export function extractAccessibleName(ariaSnapshot: string | null): string | nul
   return null;
 }
 
+/** Tags whose accessible name comes from an associated `<label>`. */
+export const FORM_FIELD_TAGS: ReadonlySet<string> = new Set(['input', 'select', 'textarea']);
+
+/**
+ * Roles whose accessible name is computed from the element's own content. For
+ * these, an element carrying neither `aria-label` nor `aria-labelledby` is
+ * named by its trimmed text — which the probe already returns.
+ */
+export const NAME_FROM_CONTENT_ROLES: ReadonlySet<string> = new Set([
+  'button',
+  'cell',
+  'checkbox',
+  'columnheader',
+  'gridcell',
+  'heading',
+  'link',
+  'menuitem',
+  'menuitemcheckbox',
+  'menuitemradio',
+  'option',
+  'radio',
+  'row',
+  'rowheader',
+  'switch',
+  'tab',
+  'tooltip',
+  'treeitem',
+]);
+
+/**
+ * Caps the in-page probe applies to the strings below. A value sitting exactly
+ * at its cap may have been cut short, and a truncated accessible name would
+ * build a locator that matches nothing — so those fall through to the browser
+ * instead of being trusted. Mirrors `probeElementAttrs`, which inlines its
+ * limits because it is serialized into the page and cannot read a constant.
+ */
+const PROBE_TEXT_CAP = 80;
+const PROBE_LABEL_TEXT_CAP = 120;
+
+/** The subset of a probe result the accessible-name shortcut reads. */
+export interface NameSource {
+  tagName: string;
+  attributes: Record<string, string | null>;
+  textContent: string | null;
+  labelText?: string | null;
+}
+
+/**
+ * The accessible name when the probed attributes already settle it, or null
+ * when only the browser can. Capture consults this before spending an
+ * `ariaSnapshot()` round trip on an element: in each case below the name is
+ * what the accessible-name computation would return anyway, so the round trip
+ * would buy nothing.
+ *
+ * Deliberately narrow — anything outside these cases (an `aria-labelledby`
+ * reference, an image named by `alt`, an element with no text) still goes to
+ * the browser, because a wrong name here becomes a wrong `getByRole` locator.
+ */
+export function exactAccessibleName(attrs: NameSource, role: string | null): string | null {
+  // Points at other elements — only the browser can resolve the reference.
+  if (attrs.attributes['aria-labelledby']) return null;
+
+  const ariaLabel = attrs.attributes['aria-label'];
+  if (ariaLabel) return ariaLabel;
+
+  if (FORM_FIELD_TAGS.has(attrs.tagName)) {
+    const labelText = attrs.labelText;
+    return labelText && labelText.length < PROBE_LABEL_TEXT_CAP ? labelText : null;
+  }
+
+  if (role && NAME_FROM_CONTENT_ROLES.has(role)) {
+    const text = attrs.textContent;
+    return text && text.length < PROBE_TEXT_CAP ? text : null;
+  }
+
+  return null;
+}
+
 // ── Runtime locator suggestion (the "element changed" case) ──────────────────
 
 /** A failed locator action, used to suggest a fresh locator from the live page. */

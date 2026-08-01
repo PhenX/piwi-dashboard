@@ -62,7 +62,9 @@ function fakeElement(opts: {
     ...props,
     getBoundingClientRect: () => rect,
     textContent,
-    labels: labelCount > 0 ? { length: labelCount } : null,
+    // A real `labels` is an indexable NodeList of elements, not just a count —
+    // `includeLabelText` reads the first one's text off it.
+    labels: labelCount > 0 ? Array.from({ length: labelCount }, (_, i) => ({ textContent: `Label ${i}` })) : null,
     ownerDocument: opts.brokenDocument
       ? undefined
       : {
@@ -208,6 +210,138 @@ describe('probeElementAttrs', () => {
     });
     const out = probe(el, ['class']);
     expect(Object.keys(out.selectorCounts.classes ?? {})).toHaveLength(10);
+  });
+});
+
+describe('per-call-site capture dedupe', () => {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  /** Probe result for a plain `<button>Save</button>`. */
+  const savedButton = {
+    tagName: 'button',
+    attributes: { 'data-testid': 'save' },
+    textContent: 'Save',
+    center: { x: 1, y: 1 },
+    hasLabel: false,
+    selectorCounts: {},
+  };
+
+  /**
+   * Drive `actions` through the real fixtures against a fake page, reporting
+   * what the capture path asked the browser for and what it attached.
+   */
+  async function runCapture(
+    evaluate: () => Promise<unknown>,
+    actions: (page: { getByTestId: (id: string) => { click: () => Promise<void> } }) => Promise<void>,
+  ) {
+    let ariaSnapshots = 0;
+    const fakeLocator = {
+      click: async () => {},
+      evaluate,
+      ariaSnapshot: async () => {
+        ariaSnapshots++;
+        return '- button "Save"';
+      },
+    };
+    const locatorFactory = () => fakeLocator;
+    const fakePage = {
+      getByRole: locatorFactory,
+      getByTestId: locatorFactory,
+      getByText: locatorFactory,
+      getByLabel: locatorFactory,
+      getByPlaceholder: locatorFactory,
+      getByAltText: locatorFactory,
+      getByTitle: locatorFactory,
+      locator: locatorFactory,
+      on: () => {},
+      evaluate: async () => null,
+    };
+
+    const attached: LocatorSnapshot[] = [];
+    const testInfo = {
+      status: 'passed',
+      attach: vi.fn(async (name: string, body: { body: Buffer }) => {
+        if (name === ATTACHMENT_NAMES.locators) attached.push(...JSON.parse(String(body.body)));
+      }),
+      annotations: [],
+    };
+
+    const pageFixture = piwiFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
+      (args: object, use: () => Promise<void>, info: unknown) => Promise<void>,
+    ];
+
+    await captureFixture({}, () => pageFixture({ page: fakePage }, (page) => actions(page as never)), testInfo);
+    return { attached, ariaSnapshots };
+  }
+
+  it('probes a call site once however many times that line runs', async () => {
+    let probes = 0;
+    const { attached } = await runCapture(
+      async () => {
+        probes++;
+        return savedButton;
+      },
+      async (page) => {
+        for (let i = 0; i < 5; i++) await page.getByTestId('save').click();
+      },
+    );
+
+    // Five actions, one source line — and `dedupeSnapshotsByLocation` would
+    // have discarded four of five captures anyway.
+    expect(probes).toBe(1);
+    expect(attached).toHaveLength(1);
+    expect(attached[0]!.element?.accessibleName).toBe('Save');
+  });
+
+  it('skips the ARIA snapshot when the probed attributes settle the name', async () => {
+    const { attached, ariaSnapshots } = await runCapture(
+      async () => savedButton,
+      async (page) => {
+        await page.getByTestId('save').click();
+      },
+    );
+
+    // A button with text and no aria-label/aria-labelledby is named by its
+    // content, so the second round trip cannot change the answer.
+    expect(ariaSnapshots).toBe(0);
+    expect(attached[0]!.element?.accessibleName).toBe('Save');
+  });
+
+  it('still asks the browser when only it can settle the name', async () => {
+    const { ariaSnapshots } = await runCapture(
+      async () => ({ ...savedButton, attributes: { 'aria-labelledby': 'heading-1' } }),
+      async (page) => {
+        await page.getByTestId('save').click();
+      },
+    );
+
+    expect(ariaSnapshots).toBe(1);
+  });
+
+  it('releases a call site whose probe failed so a later run of that line retries', async () => {
+    let probes = 0;
+    const { attached } = await runCapture(
+      async () => {
+        probes++;
+        if (probes === 1) throw new Error('element detached');
+        return savedButton;
+      },
+      async (page) => {
+        for (let i = 0; i < 2; i++) {
+          await page.getByTestId('save').click();
+          // Let the failed probe settle before the line runs again.
+          await sleep(20);
+        }
+      },
+    );
+
+    expect(probes).toBe(2);
+    expect(attached).toHaveLength(1);
+    expect(attached[0]!.element?.textContent).toBe('Save');
   });
 });
 

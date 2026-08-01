@@ -44,19 +44,24 @@ node tests/bench/run.mjs --json results.json                     # machine-reada
 | `--tests` | 12 | test cases per run |
 | `--actions` / `--assertions` | 10 / 10 | captured operations per test |
 | `--target` | `role` | `role` (buttons) or `roleless` (plain spans) |
+| `--sites` | `distinct` | `distinct` (one line per operation) or `shared` (one line, run repeatedly) |
 | `--only` | all | comma-separated variant keys |
 | `--json` | — | write the aggregated rows to a file |
 
-### Two things worth knowing before reading the output
+### Three things worth knowing before reading the output
 
-**DOM size is a primary axis.** The element probe runs several document-wide `querySelectorAll` scans (uniqueness
-counts, the role-source scan, the ancestor walk), so capture cost tracks page weight, not just action count. A number
-measured at `--rows 50` does not predict `--rows 800`. Run the size you care about.
+**Call-site shape sets the range.** The fixtures probe a target once per source location per test, so a suite that
+spells every step out on its own line pays for every operation, while a loop or a repeatedly-called page-object method
+pays once. `--sites distinct` and `--sites shared` bound that range; neither alone is a fair summary of "the" overhead.
 
-**Assertions capture once per call site.** The fixtures probe an assertion's target once per source location per test,
-so a loop over a single `expect` line would measure one probe however high the count went. `assertVisible` in the
-workload is therefore a list of one-per-line callers, mirroring how real suites write assertions. Actions have no such
-dedupe — they probe on every call.
+**DOM size is a primary axis.** Page weight drives what a capture costs — mostly through Playwright re-resolving the
+locator, and secondarily through the probe's document-wide scans. A number measured at `--rows 50` does not predict
+`--rows 800`. Run the size you care about.
+
+**Most of a capture is not our code.** Attributed at 200 rows: a `locator.evaluate` round trip is ~5.5 ms, of which
+~4.5 ms is Playwright resolving the selector again and ~0.9 ms is the protocol hop (`page.evaluate(() => 1)` costs
+0.94 ms). The probe body itself is ~1.8 ms, and its structural scan ~0.8 ms of that. So tuning the probe's DOM work
+buys little; removing whole round trips is what moves the number.
 
 ## Micro (`hot-path.bench.ts`)
 
@@ -73,32 +78,29 @@ fake page whose probe resolves immediately — no reimplementation of the hot pa
 Measured on the sandbox this was developed in — 4-core Xeon @ 2.10GHz, Node 22.22, Playwright 1.61.1, headless
 Chromium. Treat them as shape, not as a spec; re-run on your own hardware for absolute figures.
 
-End-to-end, 12 tests × (10 actions + 10 assertions), 3 rounds, median per test:
+End-to-end, 12 tests × (10 actions + 10 assertions) on a 200-row page, median per test:
 
-| Page size | baseline | + fixtures | + page state | + locator healing | per captured op |
-|---|---|---|---|---|---|
-| 50 rows (~420 elements) | 591 ms | −1.5% | −2.2% | **+17.7%** | 5.2 ms |
-| 200 rows (~1,620 elements) | 663 ms | +2.6% | +2.6% | **+38.7%** | 12.8 ms |
-| 800 rows (~6,420 elements) | 1086 ms | +2.1% | +3.7% | **+58.9%** | 32.0 ms |
+| Call sites | baseline | + fixtures | + page state | + locator healing |
+|---|---|---|---|---|
+| `distinct` | 798 ms | — | — | **+29.4%** (11.7 ms/op) |
+| `shared` | 803 ms | −0.7% | +0.6% | **+14.0%** (5.6 ms/op) |
 
-Everything except locator healing sits in the low single digits and is within run-to-run noise at the small sizes.
-Locator healing dominates, and its per-operation cost grows roughly linearly with DOM size.
-
-Splitting that cost with `--target roleless` at 200 rows: 7.4 ms per operation without the ARIA snapshot versus 12.8 ms
-with it, so the extra `ariaSnapshot()` round trip each role-bearing capture takes is a bit over 40% of the total.
+Everything except locator healing sits within run-to-run noise. Locator healing dominates, and its cost scales with
+page weight: on the same workload the locator layer runs roughly 2× cheaper at 50 rows and 2–3× dearer at 800.
 
 Micro, per captured operation:
 
 | | mean |
 |---|---|
-| `captureCallerLocation()` | 53 µs |
-| └ `new Error().stack` (capture half) | 40 µs |
-| └ walking the stack (parse half) | 4.4 µs |
-| `generateAlternatives()` | 1.9 µs |
+| `captureCallerLocation()` | 55 µs |
+| └ `new Error().stack` (capture half) | 38 µs |
+| └ walking the stack (parse half) | 4.9 µs |
+| `generateAlternatives()` | 2.4 µs |
 | `JSON.stringify` of the origin args | 0.3 µs |
-| dedupe + serialize 40 snapshots (per test, at teardown) | 58 µs |
-| locator property read, bare → through the proxy | 0.07 µs → 0.13 µs |
+| dedupe + serialize 40 snapshots (per test, at teardown) | 68 µs |
+| locator property read, bare → through the proxy | 0.09 µs → 0.16 µs |
 
 The Node-side total is ~60 µs per operation — three orders of magnitude below the browser round trips above, so it
-never shows up in the end-to-end numbers. Within it, though, materializing the stack for the call-site location is
-~88% of the cost, and the parsing this package controls is the remaining 12%.
+never shows up in the end-to-end numbers. Within it, materializing the stack for the call-site location is ~85% of the
+cost and the parsing this package controls is the rest. That location is what keys the per-call-site dedupe, so it is
+taken on every action whether or not a probe follows it.

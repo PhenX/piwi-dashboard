@@ -91,7 +91,7 @@ Semantics worth knowing:
 
 - **`beforeAll` / `afterAll` activity is intentionally not captured** — only what happens inside a test is attributed to that test.
 - **Multi-page tests** attribute Web Vitals and the failure ARIA snapshot to the most recently active page.
-- **Repeated call sites** (actions in loops) keep the latest capture per call site — the dashboard stores one locator snapshot per location. Repeated *assertions* at one call site probe the element only once per test.
+- **Repeated call sites** — actions in a loop, or a page-object method called several times — probe the element once per call site per test, for assertions and actions alike. The dashboard stores one locator snapshot per location, so further probes at the same line would be discarded anyway. If a probe fails, the next run of that line tries again.
 - **Assertion capture is positive-presence only** — negated assertions (`.not.…`), absence checks (`toBeHidden`, `toBeDetached`), multi-element checks (`toHaveCount`, array forms) and page-level ones (`toHaveTitle`, `toHaveURL`) never probe.
 
 ## Composing with your own fixtures
@@ -121,7 +121,7 @@ Two rules:
 
 Capture is designed to never fail or noticeably slow down a test:
 
-- Per action: one DOM read, and occasionally a bounded ARIA snapshot (500 ms deadline). Passing assertions pay the same, but at most once per call site per test.
+- Per call site: one DOM read, and — only when the element's attributes don't already settle its accessible name — a bounded ARIA snapshot (500 ms deadline). Actions and passing assertions alike pay this at most once per call site per test.
 - At teardown: draining in-flight captures is capped at 2 seconds.
 - A capture that can't complete (mid-navigation, detached element) is dropped silently — it never throws into your test.
 
