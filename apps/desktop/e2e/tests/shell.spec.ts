@@ -59,6 +59,16 @@ test('the dashboard can reach the shell IPC commands', async ({ tauriPage }) => 
   expect(rejected.rejected).toBe(true);
   expect(rejected.error).toContain('absolute');
 
+  // The folder inspector is granted, and refuses a relative path from inside
+  // the handler rather than at the ACL.
+  const inspect = (await tauriPage.evaluate(`
+    window.__TAURI__.core.invoke('desktop_inspect_folder', { path: 'not/absolute' })
+      .then(() => ({ rejected: false, error: '' }))
+      .catch((e) => ({ rejected: true, error: String((e && e.message) || e) }))
+  `)) as { rejected: boolean; error: string };
+  expect(inspect.rejected).toBe(true);
+  expect(inspect.error).toContain('absolute');
+
   // The spec pre-flight is granted too, and refuses an unlinked project from
   // inside the handler rather than at the ACL.
   const specs = (await tauriPage.evaluate(`

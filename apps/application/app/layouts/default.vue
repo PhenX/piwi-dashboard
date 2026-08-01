@@ -425,6 +425,9 @@ onMounted(async () => {
       </template>
 
       <template #default="{ collapsed }">
+        <!-- Desktop shell only: visible back/forward for the chrome-less webview -->
+        <DesktopNavButtons :collapsed="collapsed" />
+
         <UDashboardSearchButton :collapsed="collapsed" class="bg-transparent ring-default" />
 
         <UNavigationMenu

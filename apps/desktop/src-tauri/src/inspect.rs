@@ -1,0 +1,407 @@
+// Read-only inspection of a folder on this machine, so the dashboard can tell
+// what a checkout is before creating or linking a Piwi project to it: the name
+// it would report under, whether Playwright is present, and whether the
+// `@piwitests/reporter` package is installed and wired into the config.
+//
+// The heuristics deliberately mirror the reporter CLI's own `detect.ts`
+// (`packages/reporter/src/cli/detect.ts`): same config-file lookup order, same
+// name suggestion (unscoped package name, then folder name).
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use crate::runner::{resolve_node_module, resolve_playwright_cli};
+
+/// Playwright's own config lookup order.
+const CONFIG_NAMES: [&str; 6] = [
+    "playwright.config.ts",
+    "playwright.config.mts",
+    "playwright.config.cts",
+    "playwright.config.js",
+    "playwright.config.mjs",
+    "playwright.config.cjs",
+];
+
+const REPORTER_PACKAGE: &str = "@piwitests/reporter";
+
+/// Upper bound on how much of a config file is read; a Playwright config
+/// larger than this is not a config file.
+const MAX_CONFIG_BYTES: u64 = 512 * 1024;
+
+#[derive(Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderInspection {
+    /// The absolute folder that was inspected.
+    path: String,
+    /// The folder is a directory on disk. Everything below is `None`/`false`
+    /// when it is not.
+    exists: bool,
+    /// `package.json` `name` as written (scope kept), when present.
+    package_name: Option<String>,
+    /// The Piwi project name this folder would report under: the config's
+    /// `projectName`, else the unscoped package name, else the folder's name.
+    suggested_name: Option<String>,
+    /// File name of the Playwright config found at the folder root.
+    playwright_config: Option<String>,
+    /// A Playwright installation resolves from the folder (own or hoisted).
+    playwright_installed: bool,
+    /// `@piwitests/reporter` resolves from the folder or is a declared dependency.
+    reporter_installed: bool,
+    /// The Playwright config references `@piwitests/reporter`.
+    reporter_configured: bool,
+    /// `projectName` value parsed out of the Playwright config, when set.
+    configured_project_name: Option<String>,
+}
+
+#[derive(Default, serde::Deserialize)]
+struct PackageJson {
+    name: Option<String>,
+    #[serde(default)]
+    dependencies: HashMap<String, String>,
+    #[serde(default, rename = "devDependencies")]
+    dev_dependencies: HashMap<String, String>,
+}
+
+fn read_package_json(folder: &Path) -> Option<PackageJson> {
+    let raw = std::fs::read_to_string(folder.join("package.json")).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+fn find_config(folder: &Path) -> Option<&'static str> {
+    CONFIG_NAMES
+        .into_iter()
+        .find(|name| folder.join(name).is_file())
+}
+
+/// The config's contents, or `None` when there is no config or it is
+/// unreadable/oversized — in which case nothing can be said about it.
+fn read_config(folder: &Path, config: Option<&str>) -> Option<String> {
+    let path = folder.join(config?);
+    let size = std::fs::metadata(&path).ok()?.len();
+    if size > MAX_CONFIG_BYTES {
+        return None;
+    }
+    std::fs::read_to_string(&path).ok()
+}
+
+/// Pull a literal `projectName: '<value>'` out of the config source. A value
+/// that is not a plain single-line literal (template interpolation, an
+/// expression) is not detectable and yields `None`.
+fn parse_config_project_name(source: &str) -> Option<String> {
+    let bytes = source.as_bytes();
+    let mut from = 0;
+    while let Some(found) = source[from..].find("projectName") {
+        let mut i = from + found + "projectName".len();
+        from = i;
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i >= bytes.len() || bytes[i] != b':' {
+            continue;
+        }
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i >= bytes.len() || !matches!(bytes[i], b'\'' | b'"' | b'`') {
+            continue;
+        }
+        let quote = bytes[i] as char;
+        let start = i + 1;
+        let Some(end) = source[start..].find(quote) else {
+            continue;
+        };
+        let value = &source[start..start + end];
+        if !value.is_empty() && !value.contains('\n') && !value.contains("${") {
+            return Some(value.to_string());
+        }
+    }
+    None
+}
+
+/// Unscoped, filesystem-safe name: `@acme/checkout` → `checkout`.
+fn unscoped(name: &str) -> &str {
+    match name.strip_prefix('@') {
+        Some(rest) => rest.split_once('/').map_or(name, |(_, tail)| tail),
+        None => name,
+    }
+}
+
+fn inspect(folder: &Path) -> FolderInspection {
+    let path = folder.to_string_lossy().to_string();
+    if !folder.is_dir() {
+        return FolderInspection {
+            path,
+            exists: false,
+            package_name: None,
+            suggested_name: None,
+            playwright_config: None,
+            playwright_installed: false,
+            reporter_installed: false,
+            reporter_configured: false,
+            configured_project_name: None,
+        };
+    }
+
+    let package = read_package_json(folder);
+    let config = find_config(folder);
+    let config_source = read_config(folder, config);
+    let configured_project_name = config_source.as_deref().and_then(parse_config_project_name);
+
+    let package_name = package.as_ref().and_then(|p| p.name.clone());
+    let dependency_declared = package.as_ref().is_some_and(|p| {
+        p.dependencies.contains_key(REPORTER_PACKAGE)
+            || p.dev_dependencies.contains_key(REPORTER_PACKAGE)
+    });
+
+    let suggested_name = configured_project_name
+        .clone()
+        .or_else(|| {
+            package_name
+                .as_deref()
+                .map(unscoped)
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+                .map(str::to_string)
+        })
+        .or_else(|| {
+            folder
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .filter(|n| !n.is_empty())
+        });
+
+    FolderInspection {
+        path,
+        exists: true,
+        package_name,
+        suggested_name,
+        playwright_config: config.map(str::to_string),
+        playwright_installed: resolve_playwright_cli(folder).is_some(),
+        reporter_installed: dependency_declared
+            || resolve_node_module(folder, &["@piwitests/reporter/package.json"]).is_some(),
+        reporter_configured: config_source
+            .as_deref()
+            .is_some_and(|s| s.contains(REPORTER_PACKAGE)),
+        configured_project_name,
+    }
+}
+
+/// What a folder on this machine looks like to Piwi: the project name it would
+/// report under and whether Playwright and the Piwi reporter are set up. A
+/// folder that is gone reports `exists: false` rather than an error, so the
+/// dashboard can render the state.
+#[tauri::command]
+pub fn desktop_inspect_folder(path: String) -> Result<FolderInspection, String> {
+    let folder = PathBuf::from(&path);
+    if !folder.is_absolute() {
+        return Err("the folder path must be absolute".into());
+    }
+    Ok(inspect(&folder))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// A temp folder removed when the test ends.
+    struct Folder(PathBuf);
+
+    impl Folder {
+        fn new(label: &str) -> Self {
+            static COUNTER: AtomicU32 = AtomicU32::new(0);
+            let unique = COUNTER.fetch_add(1, Ordering::SeqCst);
+            let path = std::env::temp_dir().join(format!(
+                "piwi-inspect-{label}-{}-{unique}",
+                std::process::id()
+            ));
+            let _ = std::fs::remove_dir_all(&path);
+            std::fs::create_dir_all(&path).expect("create folder");
+            Self(path)
+        }
+
+        fn write(&self, name: &str, contents: &str) {
+            std::fs::write(self.0.join(name), contents).expect("write file");
+        }
+    }
+
+    impl Drop for Folder {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn a_missing_folder_reports_not_existing() {
+        let folder = Folder::new("gone");
+        let missing = folder.0.join("not-there");
+
+        let result = inspect(&missing);
+
+        assert!(!result.exists);
+        assert_eq!(result.suggested_name, None);
+        assert_eq!(result.path, missing.to_string_lossy());
+    }
+
+    #[test]
+    fn an_empty_folder_suggests_its_own_name() {
+        let folder = Folder::new("bare");
+
+        let result = inspect(&folder.0);
+
+        assert!(result.exists);
+        assert_eq!(result.package_name, None);
+        assert_eq!(
+            result.suggested_name.as_deref(),
+            folder.0.file_name().map(|n| n.to_str().unwrap()),
+        );
+        assert_eq!(result.playwright_config, None);
+        assert!(!result.playwright_installed);
+        assert!(!result.reporter_installed);
+        assert!(!result.reporter_configured);
+    }
+
+    #[test]
+    fn the_package_name_wins_over_the_folder_name_and_loses_its_scope() {
+        let folder = Folder::new("named");
+        folder.write("package.json", r#"{ "name": "@acme/checkout" }"#);
+
+        let result = inspect(&folder.0);
+
+        assert_eq!(result.package_name.as_deref(), Some("@acme/checkout"));
+        assert_eq!(result.suggested_name.as_deref(), Some("checkout"));
+    }
+
+    #[test]
+    fn the_configured_project_name_wins_over_the_package_name() {
+        let folder = Folder::new("configured-name");
+        folder.write("package.json", r#"{ "name": "checkout" }"#);
+        folder.write(
+            "playwright.config.ts",
+            "export default defineConfig(wrapConfig({\n  reporter: [['@piwitests/reporter', { projectName: 'web-app' }]],\n}));\n",
+        );
+
+        let result = inspect(&folder.0);
+
+        assert_eq!(result.configured_project_name.as_deref(), Some("web-app"));
+        assert_eq!(result.suggested_name.as_deref(), Some("web-app"));
+        assert!(result.reporter_configured);
+    }
+
+    #[test]
+    fn finds_the_config_in_playwrights_lookup_order() {
+        let folder = Folder::new("config-order");
+        folder.write("playwright.config.js", "module.exports = {};\n");
+        folder.write("playwright.config.ts", "export default {};\n");
+
+        let result = inspect(&folder.0);
+
+        assert_eq!(
+            result.playwright_config.as_deref(),
+            Some("playwright.config.ts")
+        );
+        assert!(!result.reporter_configured);
+    }
+
+    #[test]
+    fn a_declared_reporter_dependency_counts_as_installed() {
+        let folder = Folder::new("dependency");
+        folder.write(
+            "package.json",
+            r#"{ "name": "app", "devDependencies": { "@piwitests/reporter": "^1.0.0" } }"#,
+        );
+
+        let result = inspect(&folder.0);
+
+        assert!(result.reporter_installed);
+        assert!(!result.reporter_configured);
+    }
+
+    #[test]
+    fn a_reporter_in_node_modules_counts_as_installed() {
+        let folder = Folder::new("node-modules");
+        let package = folder
+            .0
+            .join("node_modules")
+            .join("@piwitests")
+            .join("reporter");
+        std::fs::create_dir_all(&package).expect("create package");
+        std::fs::write(package.join("package.json"), "{}").expect("write package.json");
+
+        let result = inspect(&folder.0);
+
+        assert!(result.reporter_installed);
+    }
+
+    #[test]
+    fn detects_a_playwright_installation() {
+        let folder = Folder::new("playwright");
+        let package = folder
+            .0
+            .join("node_modules")
+            .join("@playwright")
+            .join("test");
+        std::fs::create_dir_all(&package).expect("create package");
+        std::fs::write(package.join("cli.js"), "").expect("write cli");
+
+        let result = inspect(&folder.0);
+
+        assert!(result.playwright_installed);
+    }
+
+    #[test]
+    fn parses_the_project_name_literal_in_any_quote_style() {
+        for (label, source) in [
+            (
+                "single",
+                "reporter: [['@piwitests/reporter', { projectName: 'web' }]]",
+            ),
+            (
+                "double",
+                "reporter: [[\"@piwitests/reporter\", { projectName: \"web\" }]]",
+            ),
+            (
+                "backtick",
+                "reporter: [['@piwitests/reporter', { projectName: `web` }]]",
+            ),
+            ("spaced", "projectName  :   'web'"),
+        ] {
+            assert_eq!(
+                parse_config_project_name(source).as_deref(),
+                Some("web"),
+                "quote style: {label}",
+            );
+        }
+    }
+
+    #[test]
+    fn skips_project_names_that_are_not_literals() {
+        assert_eq!(
+            parse_config_project_name("projectName: process.env.NAME"),
+            None
+        );
+        assert_eq!(parse_config_project_name("projectName: `app-${env}`"), None);
+        assert_eq!(parse_config_project_name("projectName: ''"), None);
+        assert_eq!(
+            parse_config_project_name("const projectNameHint = 1;"),
+            None
+        );
+    }
+
+    #[test]
+    fn a_later_literal_is_found_after_a_non_literal_mention() {
+        let source = "// projectName comes from the package\nprojectName: 'real-name'";
+        assert_eq!(
+            parse_config_project_name(source).as_deref(),
+            Some("real-name")
+        );
+    }
+
+    #[test]
+    fn unscoped_strips_only_a_leading_scope() {
+        assert_eq!(unscoped("@acme/checkout"), "checkout");
+        assert_eq!(unscoped("checkout"), "checkout");
+        assert_eq!(unscoped("@malformed"), "@malformed");
+    }
+}

@@ -15,6 +15,10 @@ standing up a server.
 > Everything binds to `127.0.0.1` — the app is local-only and nothing is exposed
 > to the network.
 
+The window navigates like a browser without looking like one: **back/forward
+buttons** sit at the top of the sidebar, and the mouse side buttons and
+trackpad swipe gestures your OS uses for history work too.
+
 ## Download
 
 Grab the installer for your OS from the [latest release](https://github.com/PiwiTests/platform/releases/latest):
@@ -104,6 +108,24 @@ actual one).
 > *other machines* over the network is intentionally not supported in the desktop
 > build — run the [Docker image](/deployment) for a shared, always-on server.
 
+## Projects from local folders
+
+Runs create projects automatically, but the desktop app can also start from
+the code: **Projects → New project → Choose folder…** picks a checkout on this
+machine, detects the name it would report under (the `projectName` in its
+Playwright config, else the `package.json` name, else the folder name), and
+checks the setup — Playwright config present, Playwright installed, the
+[reporter](/reporter) installed and wired into the config. Anything missing is
+a warning, not a blocker: create the project anyway and run `npx piwi init` in
+the folder when you're ready. The chosen folder is linked to the new project
+automatically.
+
+The link itself is a per-machine setting, managed with the rest of the project
+settings: **project page → Edit → Local folder** shows the folder, the same
+setup checks, and the **Change**/**Unlink** actions. The project page shows the
+link's status — `ready`, `needs setup`, or `missing` when the folder is gone —
+and jumps there. The link never leaves this machine.
+
 ## Running tests from the app
 
 A failing run is one click from a local retry. On a run page (or a single
@@ -113,9 +135,9 @@ immediately, with the options you used last time. The app executes the folder's
 the output streams into the **Local runs** tray in the corner of the window.
 
 - **First use:** a dialog asks you to link the Piwi project to its checkout —
-  the folder that contains the tests. Link it any time on the project page
-  under **Local folder**. The link stays on this machine; it is never sent
-  anywhere.
+  the folder that contains the tests. Link it any time under
+  [**Edit → Local folder**](#projects-from-local-folders). The link stays on
+  this machine; it is never sent anywhere.
 - **The arrow next to the button** holds everything else: run headless, headed,
   under the Playwright inspector or in UI mode; select tests by `file:line`,
   title or file; force trace recording; `--repeat-each` up to 1000× for flake
@@ -148,8 +170,9 @@ pill in the sidebar keeps the tray one click away from every page.
 Two prerequisites, both usually already true for a project that reports to
 Piwi: the linked folder has `@playwright/test` installed (`node_modules`
 present — monorepos with a hoisted root install work too), and its Playwright
-config includes the Piwi reporter. The app checks the first one up front and
-warns before running when no Playwright installation is found.
+config includes the Piwi reporter. Both show in the
+[**Local folder** checks](#projects-from-local-folders), and the run dialog
+warns up front when no Playwright installation is found.
 
 The linked folder also completes [Open in IDE](/ide-integration): when no
 workspace root is configured there, source links resolve against the linked
