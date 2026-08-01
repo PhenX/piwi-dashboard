@@ -63,6 +63,12 @@ locator, and secondarily through the probe's document-wide scans. A number measu
 0.94 ms). The probe body itself is ~1.8 ms, and its structural scan ~0.8 ms of that. So tuning the probe's DOM work
 buys little; removing whole round trips is what moves the number.
 
+**This harness cannot resolve small effects.** Two runs of identical code on a loaded machine have landed 10% apart on
+the `distinct` shape and 2× apart on `shared` — the locator layer there is a handful of probes against a much larger
+baseline, so a per-capture change of 1–2 ms disappears into it. Before believing a small win, measure the mechanism
+directly: drive the two code paths against one page, alternating between them so warm-up and drift hit both, and
+compare medians over tens of samples. Reach for this harness to size a layer, not to A/B a micro-optimization.
+
 ## Micro (`hot-path.bench.ts`)
 
 Vitest benches for the Node-side work the fixtures do in the worker process: the stack capture taken on every action,
@@ -87,6 +93,15 @@ End-to-end, 12 tests × (10 actions + 10 assertions) on a 200-row page, median p
 
 Everything except locator healing sits within run-to-run noise. Locator healing dominates, and its cost scales with
 page weight: on the same workload the locator layer runs roughly 2× cheaper at 50 rows and 2–3× dearer at 800.
+
+The pieces of one capture, timed directly against a single page (medians over tens of alternating samples, which is
+how to measure anything this small — see above):
+
+| | 200 rows | 800 rows |
+|---|---|---|
+| DOM read, probe source shipped with the call | 12.4 ms | 16.4 ms |
+| DOM read, seeded probe called by name | 11.0 ms | 14.9 ms |
+| extra `ariaSnapshot()`, when the name isn't already settled | 2.0 ms | 3.7 ms |
 
 Micro, per captured operation:
 

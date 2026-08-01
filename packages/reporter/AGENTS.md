@@ -13,7 +13,9 @@ per-directory responsibilities.
    and must land with the matching dashboard change; `apps/application/tests/unit/wire-shared-drift.test.ts` pins the two
    together.
 3. **Side effects** — `PIWI_*` env vars (`internal/config/env.ts`), `piwi-*` attachment names
-   (`internal/capture/attachments.ts`), temp files in `os.tmpdir()`, and `[Piwi Dashboard]`-prefixed log output.
+   (`internal/capture/attachments.ts`), temp files in `os.tmpdir()`, `[Piwi Dashboard]`-prefixed log output, and the
+   `__piwiProbeElement` global the capture fixtures install into every instrumented page
+   (`internal/capture/capture-fixtures.ts`).
 4. **The desktop discovery file** — `~/.piwi/desktop.json` and its `{ url, token }` shape
    (`internal/config/desktop.ts`). The desktop shell writes it (`apps/desktop/src-tauri/src/lib.rs`) and this package reads
    it, on independent release cycles, so path and shape changes must land in both.

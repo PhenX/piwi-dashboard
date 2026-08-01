@@ -122,6 +122,7 @@ Two rules:
 Capture is designed to never fail or noticeably slow down a test:
 
 - Per call site: one DOM read, and — only when the element's attributes don't already settle its accessible name — a bounded ARIA snapshot (500 ms deadline). Actions and passing assertions alike pay this at most once per call site per test.
+- Per page: the element probe is installed once as an init script (a `__piwiProbeElement` global) so each DOM read sends a small call rather than the probe's source. Pages it doesn't reach fall back to sending the source, and nothing is installed when locator capture is off.
 - At teardown: draining in-flight captures is capped at 2 seconds.
 - A capture that can't complete (mid-navigation, detached element) is dropped silently — it never throws into your test.
 

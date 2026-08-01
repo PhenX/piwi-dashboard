@@ -14,6 +14,7 @@ import type { FullResult, Reporter, TestCase, TestResult } from '@playwright/tes
  *   - `expectedStatus === 'failed'` → the failure-capture test (ARIA + suggestion);
  *   - title starting `teardown race guard` → the teardown-race stress runs;
  *   - title starting `assertion-only` → the assertion-capture test (`_expect`);
+ *   - title starting `seeded probe` → the in-page probe install (asserts in the test itself);
  *   - otherwise → the main capture test (locators + network + console + web vitals).
  */
 export default class VerifyCaptureReporter implements Reporter {
@@ -21,6 +22,7 @@ export default class VerifyCaptureReporter implements Reporter {
   private sawMainCapture = false;
   private sawFailureCapture = false;
   private sawAssertionCapture = false;
+  private sawSeededProbe = false;
   private stressRuns = 0;
 
   onTestEnd(test: TestCase, result: TestResult): void {
@@ -63,6 +65,12 @@ export default class VerifyCaptureReporter implements Reporter {
     // ── Teardown-race stress runs: passing (checked above) is the whole point ─
     if (test.title.startsWith('teardown race guard')) {
       this.stressRuns += 1;
+      return;
+    }
+
+    // ── Seeded probe: the check is the test's own expect(); passing is it ────
+    if (test.title.startsWith('seeded probe')) {
+      this.sawSeededProbe = true;
       return;
     }
 
@@ -163,6 +171,7 @@ export default class VerifyCaptureReporter implements Reporter {
     if (!this.sawMainCapture) this.fail('the main capture test did not run — nothing verified its attachments');
     if (!this.sawFailureCapture) this.fail('the failure-capture test did not run — ARIA/suggestion unverified');
     if (!this.sawAssertionCapture) this.fail('the assertion-capture test did not run — _expect capture unverified');
+    if (!this.sawSeededProbe) this.fail('the seeded-probe test did not run — the in-page probe install is unverified');
     if (this.stressRuns < 1) this.fail('the teardown-race stress tests did not run');
 
     if (this.failures.length > 0) {

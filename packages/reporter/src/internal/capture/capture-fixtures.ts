@@ -575,6 +575,64 @@ export const CAPTURED_ATTRS_ARG: ProbeArg = {
 };
 
 /**
+ * Where the seeded probe lives on the page (see `PROBE_INIT_SCRIPT`).
+ * Deliberately unlikely to collide with anything a page defines — and if a page
+ * does clobber it, `probeElement` falls back rather than trusting it.
+ */
+const PROBE_GLOBAL = '__piwiProbeElement';
+
+/**
+ * The probe, seeded into the page once per context rather than shipped with
+ * every capture. Playwright re-serializes an `evaluate` callback's source and
+ * arguments on each call, and `probeElementAttrs` plus `CAPTURED_ATTRS_ARG` is
+ * by far the largest thing this path sends; installing it as an init script
+ * turns each capture into a small stub call instead. `addInitScript` re-runs on
+ * every navigation and in every frame, so it is present whenever a capture
+ * needs it.
+ *
+ * `probeElementAttrs` is already required to be self-contained (Playwright
+ * serializes it through `Function.prototype.toString()` today), so embedding
+ * its source here relies on nothing new.
+ */
+const PROBE_INIT_SCRIPT = `(() => {
+  const probe = ${probeElementAttrs.toString()};
+  const arg = ${JSON.stringify(CAPTURED_ATTRS_ARG)};
+  globalThis[${JSON.stringify(PROBE_GLOBAL)}] = (el) => probe(el, arg);
+})();`;
+
+/**
+ * Documents with no seeded probe — a page whose context was instrumented after
+ * it had already navigated, or one where the init script never landed. Cleared
+ * on navigation, because the init script runs for the next document even when
+ * it missed this one. Without the mark, every capture on such a page would
+ * spend a full locator resolution discovering the same thing again.
+ */
+const PROBE_UNSEEDED_PAGES = new WeakSet<Page>();
+
+/**
+ * Read the element through the seeded probe, falling back to shipping the
+ * probe's source when the page has none. The stub returns null rather than
+ * throwing when the global is absent, so "not seeded" is distinguishable from
+ * a genuine probe failure (a detached element, a closing page), which
+ * propagates as it would have anyway.
+ */
+function probeElement(page: Page | null, target: Locator): Promise<ProbedAttrs> {
+  const shipSource = () => target.evaluate(probeElementAttrs, CAPTURED_ATTRS_ARG);
+  if (!page || PROBE_UNSEEDED_PAGES.has(page)) return shipSource();
+
+  return target
+    .evaluate((el, name) => {
+      const seeded = (globalThis as Record<string, any>)[name];
+      return typeof seeded === 'function' ? (seeded(el) as ProbedAttrs) : null;
+    }, PROBE_GLOBAL)
+    .then((attrs) => {
+      if (attrs) return attrs;
+      PROBE_UNSEEDED_PAGES.add(page);
+      return shipSource();
+    });
+}
+
+/**
  * ARIA snapshot that tolerates every Playwright version the reporter supports,
  * returning null instead of throwing so a capture can never fail the test. The
  * options validator runs client-side in the user's installed Playwright, so an
@@ -621,12 +679,13 @@ export async function ariaSnapshotBestEffort(target: Locator, timeout?: number):
  */
 function startElementCapture(
   sink: CaptureSink,
+  page: Page,
   target: Locator,
   seq: number,
   callerLocation: string | null,
   used: LocatorSnapshot['used'],
 ): void {
-  const probe = target.evaluate(probeElementAttrs, CAPTURED_ATTRS_ARG);
+  const probe = probeElement(page, target);
   const settledProbe = probe.then(
     () => undefined,
     () => undefined,
@@ -757,7 +816,7 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
           const matches = (result as { matches?: boolean } | null | undefined)?.matches;
           if (matches === true && !alreadyProbed) {
             if (callerLocation) sink.probedLocations.add(callerLocation);
-            startElementCapture(sink, target, seq, callerLocation, used);
+            startElementCapture(sink, page, target, seq, callerLocation, used);
           } else if (matches === false) {
             // A presence assertion that missed is a failed-locator signal —
             // feeds the failure-time picker and the fresh-locator suggestion,
@@ -818,7 +877,7 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
         // Fire-and-forget: capture element data without blocking the test.
         if (!alreadyProbed) {
           if (callerLocation) sink.probedLocations.add(callerLocation);
-          startElementCapture(sink, target, seq, callerLocation, used);
+          startElementCapture(sink, page, target, seq, callerLocation, used);
         }
 
         return result;
@@ -874,6 +933,13 @@ function instrumentPage(page: Page): void {
         if (currentSink) currentSink.lastActivePage = page;
         return wrapLocator(page, original(...args), method, args);
       };
+    }
+
+    // A document that had no seeded probe says nothing about the next one —
+    // the init script runs for every navigation, so give each new document a
+    // fresh chance at the fast path.
+    if (typeof page.on === 'function') {
+      page.on('framenavigated', () => PROBE_UNSEEDED_PAGES.delete(page));
     }
   }
 
@@ -961,6 +1027,15 @@ function instrumentPage(page: Page): void {
 function instrumentContext(context: BrowserContext): void {
   if (!context || INSTRUMENTED_CONTEXTS.has(context)) return;
   INSTRUMENTED_CONTEXTS.add(context);
+
+  // Seed the probe for every document this context loads, so a capture ships a
+  // stub call instead of the probe's source. Best-effort: `probeElement` falls
+  // back to shipping the source for any document this does not reach.
+  if (process.env.PIWI_CAPTURE_LOCATORS !== 'false' && typeof context.addInitScript === 'function') {
+    void Promise.resolve(context.addInitScript({ content: PROBE_INIT_SCRIPT })).catch(() => {
+      /* the fallback covers it */
+    });
+  }
 
   const originalNewPage = context.newPage.bind(context);
   context.newPage = async (...args: Parameters<BrowserContext['newPage']>): Promise<Page> => {

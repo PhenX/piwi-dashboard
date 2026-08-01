@@ -231,8 +231,11 @@ describe('per-call-site capture dedupe', () => {
    * what the capture path asked the browser for and what it attached.
    */
   async function runCapture(
-    evaluate: () => Promise<unknown>,
-    actions: (page: { getByTestId: (id: string) => { click: () => Promise<void> } }) => Promise<void>,
+    evaluate: (fn: unknown, arg?: unknown) => Promise<unknown>,
+    actions: (
+      page: { getByTestId: (id: string) => { click: () => Promise<void> } },
+      emit: (event: string) => void,
+    ) => Promise<void>,
   ) {
     let ariaSnapshots = 0;
     const fakeLocator = {
@@ -244,6 +247,7 @@ describe('per-call-site capture dedupe', () => {
       },
     };
     const locatorFactory = () => fakeLocator;
+    const listeners = new Map<string, Array<() => void>>();
     const fakePage = {
       getByRole: locatorFactory,
       getByTestId: locatorFactory,
@@ -253,9 +257,14 @@ describe('per-call-site capture dedupe', () => {
       getByAltText: locatorFactory,
       getByTitle: locatorFactory,
       locator: locatorFactory,
-      on: () => {},
+      on: (event: string, handler: () => void) => {
+        const existing = listeners.get(event) ?? [];
+        existing.push(handler);
+        listeners.set(event, existing);
+      },
       evaluate: async () => null,
     };
+    const emit = (event: string) => (listeners.get(event) ?? []).forEach((handler) => handler());
 
     const attached: LocatorSnapshot[] = [];
     const testInfo = {
@@ -274,7 +283,7 @@ describe('per-call-site capture dedupe', () => {
       (args: object, use: () => Promise<void>, info: unknown) => Promise<void>,
     ];
 
-    await captureFixture({}, () => pageFixture({ page: fakePage }, (page) => actions(page as never)), testInfo);
+    await captureFixture({}, () => pageFixture({ page: fakePage }, (page) => actions(page as never, emit)), testInfo);
     return { attached, ariaSnapshots };
   }
 
@@ -342,6 +351,168 @@ describe('per-call-site capture dedupe', () => {
     expect(probes).toBe(2);
     expect(attached).toHaveLength(1);
     expect(attached[0]!.element?.textContent).toBe('Save');
+  });
+});
+
+describe('seeded in-page probe', () => {
+  const savedButton = {
+    tagName: 'button',
+    attributes: { 'data-testid': 'save' },
+    textContent: 'Save',
+    center: { x: 1, y: 1 },
+    hasLabel: false,
+    selectorCounts: {},
+  };
+
+  /**
+   * The two ways capture can reach the probe are told apart by the argument:
+   * the stub is handed the global's name (a string), while the fallback ships
+   * `probeElementAttrs` itself with the full `ProbeArg` object.
+   */
+  const isStubCall = (arg: unknown) => typeof arg === 'string';
+
+  /** Fake context that records what the fixtures seeded into it. */
+  function fakeContext() {
+    const initScripts: string[] = [];
+    return {
+      scripts: initScripts,
+      context: {
+        addInitScript: async (script: { content: string }) => {
+          initScripts.push(script.content);
+        },
+        newPage: async () => ({}),
+        close: async () => {},
+        on: () => {},
+      },
+    };
+  }
+
+  it('seeds the probe into the context so captures ship a stub instead of the source', async () => {
+    const calls: Array<'stub' | 'source'> = [];
+    const { scripts, context } = fakeContext();
+    const fakeLocator = {
+      click: async () => {},
+      evaluate: async (_fn: unknown, arg?: unknown) => {
+        calls.push(isStubCall(arg) ? 'stub' : 'source');
+        return savedButton;
+      },
+    };
+    const factory = () => fakeLocator;
+    const fakePage = {
+      getByRole: factory,
+      getByTestId: factory,
+      getByText: factory,
+      getByLabel: factory,
+      getByPlaceholder: factory,
+      getByAltText: factory,
+      getByTitle: factory,
+      locator: factory,
+      on: () => {},
+      context: () => context,
+      evaluate: async () => null,
+    };
+
+    const pageFixture = piwiFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
+      (args: object, use: () => Promise<void>, info: unknown) => Promise<void>,
+    ];
+
+    await captureFixture(
+      {},
+      () =>
+        pageFixture({ page: fakePage }, async (page) => {
+          await (page.getByTestId('save') as unknown as { click: () => Promise<void> }).click();
+        }),
+      { status: 'passed', attach: async () => {}, annotations: [] },
+    );
+
+    // The seeded script carries the probe and its argument, so the per-capture
+    // call needs neither.
+    expect(scripts).toHaveLength(1);
+    expect(scripts[0]).toContain('__piwiProbeElement');
+    expect(scripts[0]).toContain('roleSources');
+    expect(calls).toEqual(['stub']);
+  });
+
+  it('ships the probe source when the page has no seeded probe, and stops re-trying it', async () => {
+    const calls: Array<'stub' | 'source'> = [];
+    const fakeLocator = {
+      click: async () => {},
+      // A page the init script never reached: the stub finds no global and
+      // reports null rather than throwing.
+      evaluate: async (_fn: unknown, arg?: unknown) => {
+        if (isStubCall(arg)) {
+          calls.push('stub');
+          return null;
+        }
+        calls.push('source');
+        return savedButton;
+      },
+    };
+    const factory = () => fakeLocator;
+    const listeners = new Map<string, Array<() => void>>();
+    const fakePage = {
+      getByRole: factory,
+      getByTestId: factory,
+      getByText: factory,
+      getByLabel: factory,
+      getByPlaceholder: factory,
+      getByAltText: factory,
+      getByTitle: factory,
+      locator: factory,
+      on: (event: string, handler: () => void) => {
+        listeners.set(event, [...(listeners.get(event) ?? []), handler]);
+      },
+      evaluate: async () => null,
+    };
+    const emit = (event: string) => (listeners.get(event) ?? []).forEach((h) => h());
+
+    const attached: LocatorSnapshot[] = [];
+    const testInfo = {
+      status: 'passed',
+      attach: vi.fn(async (name: string, body: { body: Buffer }) => {
+        if (name === ATTACHMENT_NAMES.locators) attached.push(...JSON.parse(String(body.body)));
+      }),
+      annotations: [],
+    };
+
+    const pageFixture = piwiFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
+      (args: object, use: () => Promise<void>, info: unknown) => Promise<void>,
+    ];
+
+    const click = async (page: typeof fakePage) =>
+      await (page.getByTestId('save') as unknown as { click: () => Promise<void> }).click();
+
+    await captureFixture(
+      {},
+      () =>
+        pageFixture({ page: fakePage }, async (page) => {
+          // Separate lines, so the per-call-site dedupe does not hide the
+          // second capture.
+          await click(page);
+          await new Promise((r) => setTimeout(r, 10));
+          await (page.getByTestId('other') as unknown as { click: () => Promise<void> }).click();
+          await new Promise((r) => setTimeout(r, 10));
+          // A navigation seeds the next document, so the fast path is worth
+          // another try.
+          emit('framenavigated');
+          await (page.getByTestId('third') as unknown as { click: () => Promise<void> }).click();
+          await new Promise((r) => setTimeout(r, 10));
+        }),
+      testInfo,
+    );
+
+    // First capture discovers the miss and falls back; the second skips
+    // straight to the source; the navigation re-arms the stub.
+    expect(calls).toEqual(['stub', 'source', 'source', 'stub', 'source']);
+    expect(attached.every((snapshot) => snapshot.element !== null)).toBe(true);
   });
 });
 

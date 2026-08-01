@@ -25,7 +25,10 @@ Two **external contracts** beyond the npm API:
   dashboard's `wire-shared-drift.test.ts`. A change here is a server-contract change.
 - **Side effects** — `PIWI_*` env vars (`internal/config/env.ts`), `piwi-*` testInfo
   attachment names (`internal/capture/attachments.ts`), temp files in `os.tmpdir()`,
-  and `[Piwi Dashboard]`-prefixed logs (`internal/support/logger.ts`).
+  `[Piwi Dashboard]`-prefixed logs (`internal/support/logger.ts`), and the
+  `__piwiProbeElement` page global the capture fixtures seed via `addInitScript`
+  (`internal/capture/capture-fixtures.ts`) so a capture ships a stub call rather
+  than the probe's source.
 
 ## Two processes, two paths
 
