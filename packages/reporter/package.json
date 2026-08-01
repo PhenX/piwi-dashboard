@@ -53,6 +53,8 @@
     "reporter:test:integration": "npm run reporter:build && playwright test --config=tests/integration/playwright.config.ts",
     "reporter:test:integration:ai": "npm run reporter:build && node tests/integration/ai/run.mjs",
     "reporter:test:integration:ai:live": "npm run reporter:build && playwright test --config=tests/integration/ai/live.config.ts",
+    "reporter:bench": "npm run reporter:build && node tests/bench/run.mjs",
+    "reporter:bench:micro": "vitest bench --run",
     "test": "npm run reporter:test",
     "prepublishOnly": "npm run reporter:build"
   },

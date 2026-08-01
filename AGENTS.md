@@ -103,7 +103,7 @@ From `apps/application/`:
 | `node scripts/db-query.mjs "<sql>" [--json]` | Query the local SQLite DB directly |
 
 From `packages/reporter/`: `reporter:build`, `reporter:dev` (watch), `reporter:typecheck`, `reporter:lint[:fix]`,
-`reporter:format[:check]`, `reporter:test[:watch|:coverage|:integration]`.
+`reporter:format[:check]`, `reporter:test[:watch|:coverage|:integration]`, `reporter:bench[:micro]`.
 
 Run typecheck, lint and tests **once at the end** before the final commit — not after every edit.
 

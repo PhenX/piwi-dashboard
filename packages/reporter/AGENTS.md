@@ -39,7 +39,11 @@ npm run reporter:typecheck
 npm run reporter:lint       # :fix to auto-fix
 npm run reporter:format     # :check to verify only
 npm run reporter:test       # :watch, :coverage, :integration
+npm run reporter:bench      # capture-overhead benchmark; :micro for the Node-side hot path
 ```
+
+`tests/bench/` measures what the capture fixtures cost a suite — see its [`README.md`](tests/bench/README.md) for the
+variant ladder, the knobs, and reference numbers. Reach for it before optimizing anything under `internal/capture/`.
 
 Source is TypeScript in `src/`; `dist/` is generated — never edit it. To try the package in a real project, build then
 `npm link` here and in the target project.
