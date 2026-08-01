@@ -98,6 +98,18 @@ test('assertion-only locators build healing history', async ({ page }) => {
   await page.waitForTimeout(1000);
 });
 
+// The fixtures seed the element probe into the page once per context, so each
+// capture ships a small stub call instead of the probe's whole source. When
+// that stops landing, capture silently falls back to shipping the source every
+// time — slower, with no other symptom — so assert the fast path is live.
+test('seeded probe is installed in the page', async ({ page }) => {
+  await page.goto(baseUrl);
+  expect(await page.evaluate(() => typeof (globalThis as Record<string, any>).__piwiProbeElement)).toBe('function');
+  // Drive a capture too, so this test attaches locators like the others.
+  await page.getByRole('button', { name: 'Save' }).click();
+  await page.waitForTimeout(500);
+});
+
 // Failure-only capture: the ARIA snapshot and the fresh locator suggestion are
 // produced only when a test fails, so this test is expected to fail. It clicks
 // a button whose accessible name isn't on the page, so the suggestion resolves

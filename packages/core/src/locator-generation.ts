@@ -83,6 +83,7 @@ export const CAPTURED_ATTRIBUTES: string[] = [
   'alt',
   'title',
   'aria-label',
+  'aria-labelledby',
   'aria-level',
   'role',
   'type',

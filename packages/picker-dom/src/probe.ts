@@ -384,11 +384,18 @@ export function probeElementAttrs(el: any, arg: ProbeArg): ProbedAttrs {
   }
 
   const hasLabel = !!(el.labels && el.labels.length > 0);
-  const labelText = includeLabelText
-    ? hasLabel
-      ? (el.labels[0].textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120) || null
-      : null
-    : undefined;
+  // Reading the label is best-effort like every other probe: a host whose
+  // `labels` is not indexable must cost this one field, not the whole capture.
+  let labelText: string | null | undefined;
+  if (includeLabelText) {
+    labelText = null;
+    try {
+      const label = hasLabel ? el.labels[0] : null;
+      labelText = ((label && label.textContent) || '').replace(/\s+/g, ' ').trim().slice(0, 120) || null;
+    } catch {
+      labelText = null;
+    }
+  }
 
   return {
     tagName: el.tagName?.toLowerCase?.() ?? 'unknown',

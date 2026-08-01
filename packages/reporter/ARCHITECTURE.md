@@ -25,7 +25,10 @@ Two **external contracts** beyond the npm API:
   dashboard's `wire-shared-drift.test.ts`. A change here is a server-contract change.
 - **Side effects** — `PIWI_*` env vars (`internal/config/env.ts`), `piwi-*` testInfo
   attachment names (`internal/capture/attachments.ts`), temp files in `os.tmpdir()`,
-  and `[Piwi Dashboard]`-prefixed logs (`internal/support/logger.ts`).
+  `[Piwi Dashboard]`-prefixed logs (`internal/support/logger.ts`), and the
+  `__piwiProbeElement` page global the capture fixtures seed via `addInitScript`
+  (`internal/capture/capture-fixtures.ts`) so a capture ships a stub call rather
+  than the probe's source.
 
 ## Two processes, two paths
 
@@ -114,6 +117,7 @@ runtime that needs Node (`captureCallerLocation`) stays in `internal/capture/loc
 npm run reporter:build      # tsup: bundles src/ + @piwitests/core → dist/ (CJS + .d.ts)
 npm run reporter:typecheck  # tsc --noEmit
 npm run reporter:test       # vitest
+npm run reporter:bench      # capture-overhead benchmark (tests/bench/README.md)
 npm run reporter:lint
 npm run reporter:format
 ```
