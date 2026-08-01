@@ -152,6 +152,12 @@ jobs:
         working-directory: ./packages/reporter
         run: npm run reporter:test:coverage
 
+      # Full AI-step pipeline (resolve → compile → replay) end to end against a
+      # real browser, with a stub standing in for the LLM: no network, no tokens.
+      - name: Test reporter AI steps (integration, drives a real browser)
+        working-directory: ./packages/reporter
+        run: npm run reporter:test:integration:ai
+
       - name: Report reporter coverage on the PR
         if: github.event_name == 'pull_request'
         uses: davelosert/vitest-coverage-report-action@v2

@@ -12,6 +12,10 @@ import { defineConfig } from '@playwright/test';
  */
 export default defineConfig({
   testDir: '.',
+  // The AI-step integration spec lives in `ai/` with its own config and
+  // verification (its own `expect()`s, not the capture attachments this reporter
+  // checks); keep it out of this run.
+  testIgnore: '**/ai/**',
   timeout: 30_000,
   reporter: [['./verify-reporter.ts'], ['line']],
   use: {

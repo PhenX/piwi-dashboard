@@ -51,6 +51,7 @@
     "reporter:test:coverage": "vitest run --coverage",
     "reporter:test:watch": "vitest",
     "reporter:test:integration": "npm run reporter:build && playwright test --config=tests/integration/playwright.config.ts",
+    "reporter:test:integration:ai": "npm run reporter:build && node tests/integration/ai/run.mjs",
     "test": "npm run reporter:test",
     "prepublishOnly": "npm run reporter:build"
   },
