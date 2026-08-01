@@ -7,7 +7,7 @@
 
 import { recommendLocatorFix } from '#shared/locator-healing';
 import type { RankedLocator, LocatorFixRecommendation, LocatorHealingResult } from '#shared/locator-healing.types';
-import type { TraceInfo } from '~~/types/api';
+import type { AiStepIntent, TraceInfo } from '~~/types/api';
 import SectionCard from './SectionCard.vue';
 import CollapsibleSectionCard from './CollapsibleSectionCard.vue';
 import SnapshotLocatorPicker from './SnapshotLocatorPicker.vue';
@@ -23,6 +23,12 @@ const props = defineProps<{
    * cause, so the recommended locator applies across the group.
    */
   affectedCount?: number;
+  /**
+   * AI-step intent mappings from the execution's usage manifest. When the
+   * failing locator was compiled from a natural-language prompt, the panel
+   * shows that prompt next to it — the *intent* behind the broken selector.
+   */
+  aiIntents?: AiStepIntent[] | null;
 }>();
 
 // Fold on the cluster page (storageKey set); stay a plain card on the test-case page.
@@ -131,6 +137,22 @@ const sourceClass = computed(() => {
 const failingLocatorText = computed(() => {
   const f = healing.value?.failingLocator;
   return f ? `${f.method}(${JSON.stringify(f.args)})` : '';
+});
+
+/**
+ * Quote/whitespace/bracket-insensitive form so the failing locator (JSON-ish
+ * rendering) can be compared against an AI-step intent locator (Playwright
+ * source style) — both collapse to `getbyrole(textbox,name:email)`.
+ */
+function normalizeLocator(text: string): string {
+  return text.toLowerCase().replace(/[\s'"`{}[\]]/g, '');
+}
+
+/** The AI-step prompt the failing locator was compiled from, when there is one. */
+const failingIntent = computed<AiStepIntent | null>(() => {
+  if (!props.aiIntents?.length || !failingLocatorText.value) return null;
+  const failing = normalizeLocator(failingLocatorText.value);
+  return props.aiIntents.find((i) => normalizeLocator(i.locator) === failing) ?? null;
 });
 
 // The execution's failure trace, when one was uploaded — its recorded page
@@ -337,20 +359,28 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
     </div>
 
     <!-- Failing locator -->
-    <div
-      v-if="healing?.failingLocator"
-      class="flex items-center gap-2 bg-elevated rounded p-2 mb-3 border border-red-200 dark:border-red-800"
-    >
-      <UIcon name="i-lucide-x-circle" class="size-4 text-red-500 shrink-0" />
-      <code class="text-xs font-mono text-red-600 dark:text-red-400 flex-1 truncate">{{ failingLocatorText }}</code>
-      <UButton
-        size="xs"
-        variant="ghost"
-        color="neutral"
-        :icon="copiedKey === 'failing' ? 'i-lucide-check' : 'i-lucide-copy'"
-        :title="copiedKey === 'failing' ? 'Copied!' : 'Copy'"
-        @click="copyLocator(failingLocatorText, 'failing')"
-      />
+    <div v-if="healing?.failingLocator" class="bg-elevated rounded p-2 mb-3 border border-red-200 dark:border-red-800">
+      <div class="flex items-center gap-2">
+        <UIcon name="i-lucide-x-circle" class="size-4 text-red-500 shrink-0" />
+        <code class="text-xs font-mono text-red-600 dark:text-red-400 flex-1 truncate">{{ failingLocatorText }}</code>
+        <UButton
+          size="xs"
+          variant="ghost"
+          color="neutral"
+          :icon="copiedKey === 'failing' ? 'i-lucide-check' : 'i-lucide-copy'"
+          :title="copiedKey === 'failing' ? 'Copied!' : 'Copy'"
+          @click="copyLocator(failingLocatorText, 'failing')"
+        />
+      </div>
+      <!-- AI-step intent: the natural-language prompt this locator was compiled from -->
+      <div v-if="failingIntent" class="flex items-center gap-2 mt-1.5 pl-6">
+        <UIcon name="i-lucide-wand-sparkles" class="size-3.5 text-primary shrink-0" />
+        <span class="text-xs text-gray-500">
+          Compiled from prompt
+          <span class="font-medium text-gray-700 dark:text-gray-300">“{{ failingIntent.template }}”</span>
+          <template v-if="failingIntent.kind === 'run'"> (a <code class="text-xs">piwiRun</code> flow step)</template>
+        </span>
+      </div>
     </div>
 
     <!-- The stored accessible name is gone from the failing page — name-based

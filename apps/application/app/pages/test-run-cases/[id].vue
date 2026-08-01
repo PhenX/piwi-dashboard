@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import type { PerformanceStep, WebVitals, NetworkRequest, TestCaseHistoryPoint, TraceInfo } from '~~/types/api';
+import type {
+  AiStepIntent,
+  PerformanceStep,
+  WebVitals,
+  NetworkRequest,
+  TestCaseHistoryPoint,
+  TraceInfo,
+} from '~~/types/api';
 import type { TableColumn } from '@nuxt/ui';
 import { getPerformanceHints } from '~/utils/performance-hints';
 import { renderAnsi } from '~/utils';
@@ -63,6 +70,12 @@ const steps = computed(() => {
 
 const webVitals = computed<WebVitals | null>(() => {
   return (testCase.value?.webVitals as unknown as WebVitals | null) ?? null;
+});
+
+/** AI-step intent mappings from the execution's usage manifest (when the test replays AI steps). */
+const aiIntents = computed<AiStepIntent[] | null>(() => {
+  const usage = testCase.value?.aiUsage as unknown as { intents?: AiStepIntent[] } | null;
+  return usage?.intents ?? null;
 });
 
 const networkRequests = computed<NetworkRequest[]>(() => {
@@ -598,6 +611,7 @@ provide(clusterSectionLocatorKey, {
                   storage-key="case-locators"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
+                  :ai-intents="aiIntents"
                 />
 
                 <!-- What changed in the environment since the last pass -->

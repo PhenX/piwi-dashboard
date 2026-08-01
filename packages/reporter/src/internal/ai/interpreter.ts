@@ -13,7 +13,7 @@ import type { Locator, Page } from '@playwright/test';
 import type { ElementFingerprint } from '@piwitests/core';
 import { parseAriaCandidates, fingerprintPresent } from '@piwitests/core';
 import { LOCATOR_METHODS, ACTION_METHODS } from '../capture/locator-healing.js';
-import type { Postcondition, RunEntry, RunStep, StructuredLocator } from './artifact.js';
+import type { LocatorArg, Postcondition, RunEntry, RunStep, StructuredLocator } from './artifact.js';
 import type { ParamValues } from './params.js';
 import { substituteArgs, substituteMarkers } from './params.js';
 
@@ -50,6 +50,29 @@ export class PostconditionError extends Error {
 export function describeLocator(loc: StructuredLocator): string {
   const head = `${loc.method}(${loc.args.map((a) => JSON.stringify(a)).join(', ')})`;
   const tail = (loc.chain ?? []).map(describeLocator).join('.');
+  return tail ? `${head}.${tail}` : head;
+}
+
+function renderSourceArg(arg: LocatorArg): string {
+  if (typeof arg === 'string') return `'${arg.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  if (arg === null || typeof arg === 'number' || typeof arg === 'boolean') return String(arg);
+  if (Array.isArray(arg)) return `[${arg.map(renderSourceArg).join(', ')}]`;
+  return `{ ${Object.entries(arg)
+    .map(([key, value]) => `${key}: ${renderSourceArg(value)}`)
+    .join(', ')} }`;
+}
+
+/**
+ * Render a structured locator in Playwright's own source style —
+ * `getByRole('textbox', { name: 'Email' })` — the exact form Playwright prints
+ * in error messages and traces. Used for the intent mappings the usage manifest
+ * carries, so the dashboard and AI diagnosis can join a failing locator string
+ * back to the natural-language prompt it was compiled from. (`describeLocator`
+ * keeps its JSON style for interpreter error messages.)
+ */
+export function locatorSource(loc: StructuredLocator): string {
+  const head = `${loc.method}(${loc.args.map(renderSourceArg).join(', ')})`;
+  const tail = (loc.chain ?? []).map(locatorSource).join('.');
   return tail ? `${head}.${tail}` : head;
 }
 

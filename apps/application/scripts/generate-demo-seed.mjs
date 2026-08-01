@@ -595,7 +595,14 @@ function buildAiUsage(caseDef) {
     const h = createHash('sha256').update(`${caseDef.title}::${prompt}`).digest('hex').slice(0, 8);
     return `${dir}/__piwi__/${base}/${testSlug}.${aiUsageSlug(prompt)}.${h}.json`;
   });
-  return { entries };
+  // Intent mappings mirror what the reporter emits: the prompt each compiled
+  // locator came from, in Playwright source style (see reporter recordIntents).
+  const intents = prompts.map((prompt, i) =>
+    i === 0
+      ? { template: prompt, locator: "getByRole('textbox', { name: 'Primary action' })", kind: 'locator' }
+      : { template: prompt, locator: "getByRole('button', { name: 'Continue' })", kind: 'run' },
+  );
+  return { entries, intents };
 }
 
 for (const proj of DEMO_PROJECTS) {

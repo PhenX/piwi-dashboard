@@ -683,6 +683,16 @@ export interface SuiteInfo {
 }
 
 /**
+ * One AI-step intent mapping: the natural-language prompt a replayed locator
+ * was compiled from (`page.piwiLocator` / a `page.piwiRun` step).
+ */
+export interface AiStepIntent {
+  template: string;
+  locator: string;
+  kind: 'locator' | 'run';
+}
+
+/**
  * Test case result (for a specific test run)
  */
 export interface TestCaseResult {
@@ -710,6 +720,8 @@ export interface TestCaseResult {
   wastedTimeMs?: number | null;
   networkRequests?: NetworkRequest[] | null;
   webVitals?: WebVitals | null;
+  /** AI-step usage manifest: replayed artifacts + the prompts their locators compile from. */
+  aiUsage?: { entries: string[]; intents?: AiStepIntent[] } | null;
   consoleLogs?: ConsoleEntry[] | null;
   ariaSnapshot?: string | null;
   workerIndex?: number | null;

@@ -23,6 +23,7 @@ const limits = {
   serverLogEntryChars: 500,
   serverTraceSpans: 40,
   ariaSnapshotChars: 4000,
+  aiStepIntents: 20,
 } as unknown as ContextLimits;
 
 /** Build a representative-execution row with only the fields under test. */
@@ -119,6 +120,52 @@ describe('representativeExecutionSections — id alignment (Tier 0.2)', () => {
     });
     const sections = representativeExecutionSections(rep, null, { ...limits, serverTraceSpans: 0 });
     expect(sections.find((s) => s.id === 'serverTraces')).toBeUndefined();
+  });
+});
+
+describe('representativeExecutionSections — AI-step intents (aiSteps)', () => {
+  const intents = [
+    { template: 'the email address field', locator: "getByRole('textbox', { name: 'Email' })", kind: 'locator' },
+    { template: 'sign in as {email}', locator: "getByRole('button', { name: 'Sign in' })", kind: 'run' },
+  ];
+
+  test('renders one line per intent, quoting the prompt and the compiled locator', () => {
+    const sections = representativeExecutionSections(
+      makeRep({ aiUsage: { entries: ['e.json'], intents } }),
+      null,
+      limits,
+    );
+    const section = sections.find((s) => s.id === 'aiSteps');
+    expect(section).toBeTruthy();
+    expect(section!.markdown).toContain("\"the email address field\" → `getByRole('textbox', { name: 'Email' })`");
+    expect(section!.markdown).toContain('(flow step)');
+  });
+
+  test('omits the section without intents or when the limit is 0', () => {
+    const bare = representativeExecutionSections(makeRep({ aiUsage: { entries: ['e.json'] } }), null, limits);
+    expect(bare.find((s) => s.id === 'aiSteps')).toBeUndefined();
+    const disabled = representativeExecutionSections(makeRep({ aiUsage: { entries: ['e.json'], intents } }), null, {
+      ...limits,
+      aiStepIntents: 0,
+    });
+    expect(disabled.find((s) => s.id === 'aiSteps')).toBeUndefined();
+  });
+
+  test('caps at the limit with an overflow note and skips malformed items', () => {
+    const many = Array.from({ length: 5 }, (_, i) => ({
+      template: `prompt ${i}`,
+      locator: `getByTestId('t${i}')`,
+      kind: 'locator',
+    }));
+    const sections = representativeExecutionSections(
+      makeRep({ aiUsage: { entries: ['e.json'], intents: [...many, { template: 42 }, null] } }),
+      null,
+      { ...limits, aiStepIntents: 3 },
+    );
+    const md = sections.find((s) => s.id === 'aiSteps')!.markdown;
+    expect(md).toContain('prompt 2');
+    expect(md).not.toContain('prompt 3');
+    expect(md).toContain('…and 2 more');
   });
 });
 

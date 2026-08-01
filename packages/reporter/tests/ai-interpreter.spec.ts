@@ -7,6 +7,7 @@ import {
   describeLocator,
   executeStep,
   executeRun,
+  locatorSource,
   PostconditionError,
   StepDriftError,
 } from '../src/internal/ai/interpreter.js';
@@ -64,6 +65,28 @@ describe('describeLocator', () => {
     expect(describeLocator({ method: 'getByRole', args: ['list'], chain: [{ method: 'first', args: [] }] })).toBe(
       'getByRole("list").first()',
     );
+  });
+});
+
+describe('locatorSource', () => {
+  it("renders Playwright's own source style, matching its error messages", () => {
+    expect(locatorSource({ method: 'getByRole', args: ['textbox', { name: 'Email' }] })).toBe(
+      "getByRole('textbox', { name: 'Email' })",
+    );
+  });
+
+  it('renders chains, numbers and escaped quotes', () => {
+    expect(
+      locatorSource({
+        method: 'getByRole',
+        args: ['heading', { name: "Ada's page", level: 1 }],
+        chain: [{ method: 'first', args: [] }],
+      }),
+    ).toBe("getByRole('heading', { name: 'Ada\\'s page', level: 1 }).first()");
+  });
+
+  it('keeps {{param}} markers verbatim so values never appear', () => {
+    expect(locatorSource({ method: 'getByLabel', args: ['{{field}}'] })).toBe("getByLabel('{{field}}')");
   });
 });
 

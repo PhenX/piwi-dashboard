@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { extendPiwiAi, missMessage, parseAiMode, piwiAiFixtures, readPositiveInt } from '../src/internal/ai/ai-fixtures.js';
+import {
+  extendPiwiAi,
+  missMessage,
+  parseAiMode,
+  piwiAiFixtures,
+  readPositiveInt,
+  recordIntents,
+  type AiIntent,
+} from '../src/internal/ai/ai-fixtures.js';
+import type { LocatorEntry, RunEntry } from '../src/internal/ai/artifact.js';
 
 describe('parseAiMode', () => {
   it('recognizes resolve and heal', () => {
@@ -40,5 +49,64 @@ describe('exports', () => {
   it('exposes the fixtures object and the extend helper', () => {
     expect(typeof extendPiwiAi).toBe('function');
     expect(piwiAiFixtures).toHaveProperty('page');
+  });
+});
+
+describe('recordIntents', () => {
+  const locatorEntry: LocatorEntry = {
+    version: 1,
+    kind: 'locator',
+    template: 'the email address field',
+    locator: { method: 'getByRole', args: ['textbox', { name: 'Email' }] },
+  };
+  const runEntry: RunEntry = {
+    version: 1,
+    kind: 'run',
+    template: 'sign in as {email}',
+    steps: [
+      {
+        locator: { method: 'getByRole', args: ['textbox', { name: 'Email' }] },
+        action: 'fill',
+        value: '{{email}}',
+      },
+      { locator: { method: 'getByRole', args: ['button', { name: 'Sign in' }] }, action: 'click' },
+    ],
+    postcondition: { assert: 'visible', locator: { method: 'getByRole', args: ['heading', { name: 'Welcome' }] } },
+  };
+
+  it('maps a locator entry to one playwright-style intent', () => {
+    const intents = new Map<string, AiIntent>();
+    recordIntents(intents, locatorEntry);
+    expect([...intents.values()]).toEqual([
+      { template: 'the email address field', locator: "getByRole('textbox', { name: 'Email' })", kind: 'locator' },
+    ]);
+  });
+
+  it('maps every step and the postcondition of a run entry to the flow template', () => {
+    const intents = new Map<string, AiIntent>();
+    recordIntents(intents, runEntry);
+    const locators = [...intents.values()].map((i) => i.locator);
+    expect(locators).toEqual([
+      "getByRole('textbox', { name: 'Email' })",
+      "getByRole('button', { name: 'Sign in' })",
+      "getByRole('heading', { name: 'Welcome' })",
+    ]);
+    expect([...intents.values()].every((i) => i.template === 'sign in as {email}' && i.kind === 'run')).toBe(true);
+  });
+
+  it('dedupes a repeated template+locator pair across replays', () => {
+    const intents = new Map<string, AiIntent>();
+    recordIntents(intents, locatorEntry);
+    recordIntents(intents, locatorEntry);
+    expect(intents.size).toBe(1);
+  });
+
+  it('keeps a shared locator once per template (locator prompt vs flow step)', () => {
+    const intents = new Map<string, AiIntent>();
+    recordIntents(intents, locatorEntry);
+    recordIntents(intents, runEntry);
+    // The Email textbox appears under both templates — both intents survive.
+    const emailIntents = [...intents.values()].filter((i) => i.locator.includes('Email'));
+    expect(emailIntents).toHaveLength(2);
   });
 });

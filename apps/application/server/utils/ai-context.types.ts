@@ -34,6 +34,7 @@ export type SectionId =
   | 'sourceFiles'
   | 'steps'
   | 'failingSteps'
+  | 'aiSteps'
   | 'console'
   | 'networkRequests'
   | 'serverLogs'

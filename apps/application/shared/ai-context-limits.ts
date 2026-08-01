@@ -53,6 +53,8 @@ export interface ContextLimits {
   slowRequestMs: number;
   /** Screenshots are downscaled so their long edge is at most this many pixels before being sent. */
   imageMaxEdge: number;
+  /** Max AI-step intent mappings (prompt → compiled locator) included (0 disables the section). */
+  aiStepIntents: number;
 }
 
 export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
@@ -80,6 +82,7 @@ export const DEFAULT_CONTEXT_LIMITS: ContextLimits = {
   traceNetworkRequests: 20,
   domSnapshotChars: 8000,
   imageMaxEdge: 1920,
+  aiStepIntents: 20,
 };
 
 export interface ContextLimitField {
@@ -285,6 +288,14 @@ export const CONTEXT_LIMIT_FIELDS: ContextLimitField[] = [
     description: 'Screenshots are downscaled to at most this many pixels on the long edge before being sent.',
     min: 512,
     max: 8192,
+  },
+  {
+    key: 'aiStepIntents',
+    label: 'AI-step intents',
+    envVar: 'PIWI_AI_MAX_STEP_INTENTS',
+    description: 'Max AI-step intent mappings (prompt → compiled locator) included (0 disables the section).',
+    min: 0,
+    max: 100,
   },
 ];
 

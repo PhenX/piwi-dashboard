@@ -6,6 +6,7 @@ import {
   sanitizeGitRemoteUrl,
   sanitizeMetadata,
   sanitizeConsoleLogs,
+  sanitizeAiUsage,
 } from '../../server/utils/sanitize';
 
 describe('sanitizeUrl', () => {
@@ -109,5 +110,45 @@ describe('sanitizeConsoleLogs', () => {
 
   test('returns null for missing input', () => {
     expect(sanitizeConsoleLogs(null)).toBeNull();
+  });
+});
+
+describe('sanitizeAiUsage', () => {
+  const intent = {
+    template: 'the email address field',
+    locator: "getByRole('textbox', { name: 'Email' })",
+    kind: 'locator',
+  };
+
+  test('keeps well-shaped entries and intents', () => {
+    const out = sanitizeAiUsage({ entries: ['a/__piwi__/x.json'], intents: [intent] });
+    expect(out).toEqual({ entries: ['a/__piwi__/x.json'], intents: [intent] });
+  });
+
+  test('omits the intents field when none survive', () => {
+    expect(sanitizeAiUsage({ entries: ['a.json'] })).toEqual({ entries: ['a.json'] });
+    expect(sanitizeAiUsage({ entries: ['a.json'], intents: 'nope' })).toEqual({ entries: ['a.json'] });
+  });
+
+  test('drops malformed intents and clamps counts and lengths', () => {
+    const out = sanitizeAiUsage({
+      entries: ['a.json'],
+      intents: [
+        intent,
+        { template: 42, locator: 'x', kind: 'locator' }, // non-string template
+        { template: 'ok', locator: 'x', kind: 'evil' }, // unknown kind
+        null,
+        { template: 'long'.repeat(200), locator: 'y'.repeat(1000), kind: 'run' },
+      ],
+    });
+    expect(out?.intents).toHaveLength(2);
+    expect(out?.intents?.[1]?.template.length).toBe(300);
+    expect(out?.intents?.[1]?.locator.length).toBe(400);
+  });
+
+  test('returns null without entries, even when intents exist', () => {
+    expect(sanitizeAiUsage({ intents: [intent] })).toBeNull();
+    expect(sanitizeAiUsage({ entries: [], intents: [intent] })).toBeNull();
+    expect(sanitizeAiUsage(null)).toBeNull();
   });
 });
