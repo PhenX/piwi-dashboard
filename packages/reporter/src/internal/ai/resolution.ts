@@ -139,17 +139,21 @@ export type SnapshotReader = (page: Page, params: ParamValues) => Promise<string
 
 export const readMaskedSnapshot: SnapshotReader = async (page, params) => {
   const raw = await ariaSnapshotBestEffort(page.locator('body'));
-  const masked = raw ? maskValues(raw, params) : '';
-  return masked.slice(0, MAX_SNAPSHOT_CHARS);
+  return raw ? maskValues(raw, params) : '';
 };
 
-/** Everything one resolution needs; the browser-facing pieces are injectable. */
+/** Everything one resolution needs; the browser-facing pieces and caps are injectable. */
 export interface ResolutionContext {
   page: Page;
   params: ParamValues;
   resolver: StepResolver;
   readSnapshot?: SnapshotReader;
+  /** Max steps one flow resolution may take (default `DEFAULT_MAX_STEPS`). */
   maxSteps?: number;
+  /** Max characters of the snapshot sent per iteration (default `MAX_SNAPSHOT_CHARS`). */
+  maxSnapshotChars?: number;
+  /** Existence-probe timeout (ms) for `optional` steps executed while resolving. */
+  optionalProbeTimeout?: number;
 }
 
 function assertParametric(template: string, locatorJson: string): void {
@@ -166,7 +170,8 @@ function assertParametric(template: string, locatorJson: string): void {
  */
 export async function resolveLocator(template: string, ctx: ResolutionContext): Promise<LocatorEntry> {
   const readSnapshot = ctx.readSnapshot ?? readMaskedSnapshot;
-  const ariaSnapshot = await readSnapshot(ctx.page, ctx.params);
+  const cap = ctx.maxSnapshotChars ?? MAX_SNAPSHOT_CHARS;
+  const ariaSnapshot = (await readSnapshot(ctx.page, ctx.params)).slice(0, cap);
   const decision = await ctx.resolver.resolveStep({
     kind: 'locator',
     template,
@@ -202,12 +207,13 @@ export async function resolveLocator(template: string, ctx: ResolutionContext): 
 export async function resolveRun(template: string, ctx: ResolutionContext): Promise<RunEntry> {
   const readSnapshot = ctx.readSnapshot ?? readMaskedSnapshot;
   const maxSteps = ctx.maxSteps ?? DEFAULT_MAX_STEPS;
+  const cap = ctx.maxSnapshotChars ?? MAX_SNAPSHOT_CHARS;
   const paramNames = Object.keys(ctx.params);
   const steps: RunStep[] = [];
   const history: StepHistoryItem[] = [];
 
   for (let i = 0; i < maxSteps; i++) {
-    const ariaSnapshot = await readSnapshot(ctx.page, ctx.params);
+    const ariaSnapshot = (await readSnapshot(ctx.page, ctx.params)).slice(0, cap);
     const decision = await ctx.resolver.resolveStep({ kind: 'run', template, paramNames, ariaSnapshot, history });
 
     if (decision.done) {
@@ -229,7 +235,7 @@ export async function resolveRun(template: string, ctx: ResolutionContext): Prom
 
     // Execute with real values so the page advances for the next iteration. No
     // drift guard here — the element was just read off this very snapshot.
-    await executeStep(step, { page: ctx.page, params: ctx.params });
+    await executeStep(step, { page: ctx.page, params: ctx.params, optionalProbeTimeout: ctx.optionalProbeTimeout });
     history.push({ action: decision.action, element: decision.element, value: decision.value });
   }
 

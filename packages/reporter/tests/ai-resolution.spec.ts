@@ -90,6 +90,19 @@ describe('resolveLocator', () => {
       resolveLocator('row for {name}', { page, params: { name: 'Alice' }, resolver, readSnapshot: async () => '' }),
     ).rejects.toThrow(/not parametric/);
   });
+
+  it('caps the snapshot sent to the resolver at the configured maxSnapshotChars', async () => {
+    const { page } = recorderPage();
+    const { resolver, requests } = scripted([{ element: { role: 'button', name: 'Go' } }]);
+    await resolveLocator('the go button', {
+      page,
+      params: {},
+      resolver,
+      readSnapshot: async () => 'x'.repeat(1000),
+      maxSnapshotChars: 50,
+    });
+    expect(requests[0].ariaSnapshot).toHaveLength(50);
+  });
 });
 
 describe('resolveRun', () => {

@@ -26,13 +26,60 @@ export interface StepResolutionResult {
   >;
 }
 
-/** ARIA snapshots can be large; cap what we send so cost/latency stay bounded. */
-export const MAX_SNAPSHOT_CHARS = 24_000;
+/**
+ * Cost/latency caps for one authoring iteration. Defaults are overridable per
+ * deployment via the `PIWI_AI_STEP_MAX_*` env vars (parsed + clamped like the
+ * diagnosis context limits in `ai-context-limits.ts`).
+ */
+export const DEFAULT_STEP_MAX_SNAPSHOT_CHARS = 24_000;
+export const DEFAULT_STEP_MAX_OUTPUT_TOKENS = 1024;
+const SNAPSHOT_CHARS_RANGE = { min: 0, max: 100_000 };
+const OUTPUT_TOKENS_RANGE = { min: 256, max: 8192 };
 
-export async function resolveStep(role: ResolvedAiRole, request: StepResolutionRequest): Promise<StepResolutionResult> {
+export interface StepResolveLimits {
+  maxSnapshotChars: number;
+  maxOutputTokens: number;
+}
+
+function clampEnvInt(
+  name: string,
+  fallback: number,
+  range: { min: number; max: number },
+  env: NodeJS.ProcessEnv,
+): number {
+  const raw = env[name];
+  if (raw == null || raw.trim() === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(range.max, Math.max(range.min, Math.floor(n)));
+}
+
+/** Resolve the effective authoring caps: defaults, overridden by env vars (clamped). */
+export function resolveStepLimits(env: NodeJS.ProcessEnv = process.env): StepResolveLimits {
+  return {
+    maxSnapshotChars: clampEnvInt(
+      'PIWI_AI_STEP_MAX_SNAPSHOT_CHARS',
+      DEFAULT_STEP_MAX_SNAPSHOT_CHARS,
+      SNAPSHOT_CHARS_RANGE,
+      env,
+    ),
+    maxOutputTokens: clampEnvInt(
+      'PIWI_AI_STEP_MAX_OUTPUT_TOKENS',
+      DEFAULT_STEP_MAX_OUTPUT_TOKENS,
+      OUTPUT_TOKENS_RANGE,
+      env,
+    ),
+  };
+}
+
+export async function resolveStep(
+  role: ResolvedAiRole,
+  request: StepResolutionRequest,
+  limits: StepResolveLimits = resolveStepLimits(),
+): Promise<StepResolutionResult> {
   const trimmed: StepResolutionRequest = {
     ...request,
-    ariaSnapshot: request.ariaSnapshot.slice(0, MAX_SNAPSHOT_CHARS),
+    ariaSnapshot: request.ariaSnapshot.slice(0, limits.maxSnapshotChars),
   };
   const { user, stablePrefixChars } = buildStepResolutionPrompt(trimmed);
 
@@ -40,7 +87,7 @@ export async function resolveStep(role: ResolvedAiRole, request: StepResolutionR
     system: STEP_RESOLUTION_SYSTEM,
     user,
     jsonSchema: STEP_RESOLUTION_SCHEMA as unknown as object,
-    maxTokens: 1024,
+    maxTokens: limits.maxOutputTokens,
     // Single-element grounding is a cheap call; a flow's next step gets a little
     // more headroom. Both stay well below diagnosis-tier spend.
     effort: request.kind === 'run' ? 'medium' : 'low',

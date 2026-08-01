@@ -164,6 +164,22 @@ export interface PiwiDashboardOptions {
      * `PIWI_AI_ON_MISS`.
      */
     onMiss?: 'fail' | 'fixme';
+    /**
+     * Max steps the agent may take resolving one `piwiRun` flow (the authoring
+     * budget). Defaults to `20`. Can also be set with `PIWI_AI_MAX_FLOW_STEPS`.
+     */
+    maxSteps?: number;
+    /**
+     * Max characters of the page ARIA snapshot sent to the authoring model per
+     * iteration (cost control). Defaults to `24000`. Can also be set with
+     * `PIWI_AI_MAX_SNAPSHOT_CHARS`.
+     */
+    maxSnapshotChars?: number;
+    /**
+     * Timeout (ms) for the existence probe of an `optional` step during replay.
+     * Defaults to `2000`. Can also be set with `PIWI_AI_OPTIONAL_PROBE_TIMEOUT`.
+     */
+    optionalProbeTimeout?: number;
   };
 
   // ── Output & diagnostics ───────────────────────────────────────────────────

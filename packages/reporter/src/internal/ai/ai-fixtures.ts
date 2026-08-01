@@ -60,11 +60,22 @@ interface AiConfig {
   onMiss: AiOnMiss;
   /** Force re-resolution of already-valid entries (`--update-ai`). */
   update: boolean;
+  /** Caps; `undefined` falls back to the resolution/interpreter defaults. */
+  maxSteps?: number;
+  maxSnapshotChars?: number;
+  optionalProbeTimeout?: number;
 }
 
 /** Parse the mode env value; anything unrecognized is the safe `replay` default. */
 export function parseAiMode(value: string | undefined): AiMode {
   return value === 'resolve' || value === 'heal' ? value : 'replay';
+}
+
+/** Parse a non-negative integer env value, or `undefined` when unset/invalid. */
+export function readPositiveInt(value: string | undefined): number | undefined {
+  if (value === undefined || value.trim() === '') return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined;
 }
 
 function readAiConfig(env: NodeJS.ProcessEnv): AiConfig {
@@ -73,6 +84,9 @@ function readAiConfig(env: NodeJS.ProcessEnv): AiConfig {
     dir: env.PIWI_AI_DIR || DEFAULT_AI_DIR,
     onMiss: env.PIWI_AI_ON_MISS === 'fixme' ? 'fixme' : 'fail',
     update: env.PIWI_AI_UPDATE === 'true',
+    maxSteps: readPositiveInt(env.PIWI_AI_MAX_FLOW_STEPS),
+    maxSnapshotChars: readPositiveInt(env.PIWI_AI_MAX_SNAPSHOT_CHARS),
+    optionalProbeTimeout: readPositiveInt(env.PIWI_AI_OPTIONAL_PROBE_TIMEOUT),
   };
 }
 
@@ -174,7 +188,12 @@ function createAiApi(page: Page, testInfo: TestInfo, config: AiConfig, used: Set
       // entry on first use, then delegates to the freshly-built real locator.
       const resolver = requireResolver();
       return lazyLocator(async () => {
-        const entry = await resolveLocator(template, { page, params: values, resolver });
+        const entry = await resolveLocator(template, {
+          page,
+          params: values,
+          resolver,
+          maxSnapshotChars: config.maxSnapshotChars,
+        });
         writeEntry(file, entry);
         used.add(file);
         return buildLocator(page, entry.locator, values);
@@ -187,7 +206,15 @@ function createAiApi(page: Page, testInfo: TestInfo, config: AiConfig, used: Set
       const existing = readEntry(file);
       if (canReuse(existing, 'run')) {
         used.add(file);
-        await step(`piwiRun: ${template}`, () => executeRun(existing, { page, params: values, readAria, step }));
+        await step(`piwiRun: ${template}`, () =>
+          executeRun(existing, {
+            page,
+            params: values,
+            readAria,
+            step,
+            optionalProbeTimeout: config.optionalProbeTimeout,
+          }),
+        );
         return;
       }
       if (config.mode === 'replay') {
@@ -196,7 +223,14 @@ function createAiApi(page: Page, testInfo: TestInfo, config: AiConfig, used: Set
       }
       const resolver = requireResolver();
       await step(`piwiRun (resolve): ${template}`, async () => {
-        const entry = await resolveRun(template, { page, params: values, resolver });
+        const entry = await resolveRun(template, {
+          page,
+          params: values,
+          resolver,
+          maxSteps: config.maxSteps,
+          maxSnapshotChars: config.maxSnapshotChars,
+          optionalProbeTimeout: config.optionalProbeTimeout,
+        });
         writeEntry(file, entry);
         used.add(file);
       });

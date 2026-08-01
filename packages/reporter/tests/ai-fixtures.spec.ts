@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extendPiwiAi, missMessage, parseAiMode, piwiAiFixtures } from '../src/internal/ai/ai-fixtures.js';
+import { extendPiwiAi, missMessage, parseAiMode, piwiAiFixtures, readPositiveInt } from '../src/internal/ai/ai-fixtures.js';
 
 describe('parseAiMode', () => {
   it('recognizes resolve and heal', () => {
@@ -19,6 +19,20 @@ describe('missMessage', () => {
     expect(message).toContain('no committed entry for "log in as {email}"');
     expect(message).toContain('tests/__piwi__/x.json');
     expect(message).toContain('piwi ai resolve --grep "checkout › pays by card"');
+  });
+});
+
+describe('readPositiveInt', () => {
+  it('parses non-negative integers from configurable-cap env values', () => {
+    expect(readPositiveInt('20')).toBe(20);
+    expect(readPositiveInt('0')).toBe(0);
+    expect(readPositiveInt('12.9')).toBe(12);
+  });
+  it('returns undefined (fall back to default) for unset or invalid values', () => {
+    expect(readPositiveInt(undefined)).toBeUndefined();
+    expect(readPositiveInt('')).toBeUndefined();
+    expect(readPositiveInt('-5')).toBeUndefined();
+    expect(readPositiveInt('abc')).toBeUndefined();
   });
 });
 

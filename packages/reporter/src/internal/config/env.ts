@@ -56,6 +56,9 @@ export const PIWI_ENV_KEYS = {
   aiMode: 'PIWI_AI',
   aiDir: 'PIWI_AI_DIR',
   aiOnMiss: 'PIWI_AI_ON_MISS',
+  aiMaxSteps: 'PIWI_AI_MAX_FLOW_STEPS',
+  aiMaxSnapshotChars: 'PIWI_AI_MAX_SNAPSHOT_CHARS',
+  aiOptionalProbeTimeout: 'PIWI_AI_OPTIONAL_PROBE_TIMEOUT',
 } as const;
 
 /**
@@ -221,4 +224,9 @@ export function applyOptionsToEnv(options: PiwiDashboardOptions): void {
   if (options.ai?.mode !== undefined) env[PIWI_ENV_KEYS.aiMode] = options.ai.mode;
   if (options.ai?.dir !== undefined) env[PIWI_ENV_KEYS.aiDir] = options.ai.dir;
   if (options.ai?.onMiss !== undefined) env[PIWI_ENV_KEYS.aiOnMiss] = options.ai.onMiss;
+  if (options.ai?.maxSteps !== undefined) env[PIWI_ENV_KEYS.aiMaxSteps] = String(options.ai.maxSteps);
+  if (options.ai?.maxSnapshotChars !== undefined)
+    env[PIWI_ENV_KEYS.aiMaxSnapshotChars] = String(options.ai.maxSnapshotChars);
+  if (options.ai?.optionalProbeTimeout !== undefined)
+    env[PIWI_ENV_KEYS.aiOptionalProbeTimeout] = String(options.ai.optionalProbeTimeout);
 }
