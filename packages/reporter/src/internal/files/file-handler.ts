@@ -133,6 +133,18 @@ export class FileHandler {
         /* ignore */
       }
     }
+
+    // The AI-step usage manifest ({ entries: string[] }) — an internal
+    // attachment (never file-uploaded), read here so the dashboard can track
+    // which committed AI-step artifacts a run actually replayed.
+    const aiUsage = find(ATTACHMENT_NAMES.aiUsage);
+    if (aiUsage?.body) {
+      try {
+        testCase.aiUsage = JSON.parse((aiUsage.body as Buffer).toString());
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   /** Compute SHA-256 hash and size for a single test case's trace file. Returns `null` when the case has no trace on disk. */

@@ -761,6 +761,88 @@ export async function getProjectSpecHealth(db: DrizzleDB, projectId: number, day
   return { specs };
 }
 
+// ─── getProjectAiStepCoverage ─────────────────────────────────────────
+
+/**
+ * Aggregate AI-step *liveness* over a project's recent runs: for each committed
+ * AI-step artifact (`page.piwiLocator` / `page.piwiRun`) that was replayed, how
+ * many distinct tests exercise it, how often, and when it was last seen. Powers
+ * the project "AI steps" panel — a committed artifact that stops showing up is a
+ * candidate for `piwi ai prune`. Reads the per-execution `aiUsage` manifest
+ * (`{ entries: string[] }`) the reporter attaches while replaying.
+ */
+export async function getProjectAiStepCoverage(db: DrizzleDB, projectId: number, days: number) {
+  const boundedDays = Math.min(90, Math.max(1, days));
+  const since = new Date(Date.now() - boundedDays * 24 * 60 * 60 * 1000);
+
+  const projRows: any[] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId));
+  if (projRows.length === 0) throw new Error('Project not found');
+
+  const empty = { summary: { artifactCount: 0, testCount: 0, runCount: 0, replayCount: 0 }, artifacts: [] as const };
+
+  const recentRuns: any[] = await db
+    .select({ id: testRuns.id, startTime: testRuns.startTime })
+    .from(testRuns)
+    .where(and(eq(testRuns.projectId, projectId), gte(testRuns.startTime, since)))
+    .orderBy(desc(testRuns.startTime))
+    .limit(100);
+  if (recentRuns.length === 0) return empty;
+
+  const runStart = new Map<number, number>();
+  for (const r of recentRuns) runStart.set(r.id, new Date(r.startTime as any).getTime());
+  const runIds: number[] = recentRuns.map((r: any) => r.id);
+
+  const rows: any[] = await db
+    .select({
+      aiUsage: testRunsCases.aiUsage,
+      testCaseId: testRunsCases.testCaseId,
+      testRunId: testRunsCases.testRunId,
+    })
+    .from(testRunsCases)
+    .where(inArray(testRunsCases.testRunId, runIds));
+
+  const artifactMap = new Map<string, { tests: Set<number>; replayCount: number; lastSeen: number }>();
+  const usingTests = new Set<number>();
+
+  for (const row of rows) {
+    const usage = row.aiUsage as { entries?: unknown } | null;
+    const entries = usage && Array.isArray(usage.entries) ? usage.entries : null;
+    if (!entries || entries.length === 0) continue;
+    const seen = runStart.get(row.testRunId) ?? 0;
+    usingTests.add(row.testCaseId);
+    for (const raw of entries) {
+      if (typeof raw !== 'string') continue;
+      let a = artifactMap.get(raw);
+      if (!a) {
+        a = { tests: new Set(), replayCount: 0, lastSeen: 0 };
+        artifactMap.set(raw, a);
+      }
+      a.tests.add(row.testCaseId);
+      a.replayCount++;
+      if (seen > a.lastSeen) a.lastSeen = seen;
+    }
+  }
+
+  const artifacts = [...artifactMap.entries()]
+    .map(([entry, d]) => ({
+      entry,
+      testCount: d.tests.size,
+      replayCount: d.replayCount,
+      lastSeen: d.lastSeen ? new Date(d.lastSeen).toISOString() : null,
+    }))
+    .sort((a, b) => a.entry.localeCompare(b.entry));
+
+  return {
+    summary: {
+      artifactCount: artifacts.length,
+      testCount: usingTests.size,
+      runCount: recentRuns.length,
+      replayCount: artifacts.reduce((sum, a) => sum + a.replayCount, 0),
+    },
+    artifacts,
+  };
+}
+
 // ─── getProjectSlowTests ─────────────────────────────────────────
 
 export async function getProjectSlowTests(db: DrizzleDB, projectId: number, runsCount: number) {

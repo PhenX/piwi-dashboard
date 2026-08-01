@@ -567,6 +567,37 @@ function buildPageState(proj, storyEntry) {
   };
 }
 
+const aiUsageSlug = (text) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40) || 'x';
+
+/**
+ * The AI-step usage manifest ({ entries: string[] }) a browser test replayed —
+ * the committed `page.piwiLocator` / `page.piwiRun` artifacts. Derived purely
+ * from the test's identity (no `rng()`), so a given test yields the SAME entries
+ * in every run: the project "AI steps" panel then aggregates replays/liveness
+ * across runs. A deterministic ~1/3 of browser tests use AI steps.
+ */
+function buildAiUsage(caseDef) {
+  const idHash = createHash('sha256').update(`${caseDef.file}\x00${caseDef.title}`).digest('hex');
+  const pick = parseInt(idHash.slice(0, 2), 16);
+  if (pick % 3 !== 0) return null;
+
+  const dir = caseDef.file.replace(/[^/]+$/, '').replace(/\/$/, '');
+  const base = caseDef.file.split('/').pop();
+  const testSlug = aiUsageSlug(caseDef.title);
+  const prompts = ['the primary action field'];
+  if (pick % 2 === 0) prompts.push('complete the primary flow');
+  const entries = prompts.map((prompt) => {
+    const h = createHash('sha256').update(`${caseDef.title}::${prompt}`).digest('hex').slice(0, 8);
+    return `${dir}/__piwi__/${base}/${testSlug}.${aiUsageSlug(prompt)}.${h}.json`;
+  });
+  return { entries };
+}
+
 for (const proj of DEMO_PROJECTS) {
   const cfg = PROJECT_CONFIGS[proj.id];
   const caseIds = caseIdsByProject[proj.id];
@@ -835,6 +866,7 @@ for (const proj of DEMO_PROJECTS) {
         slowest_step_duration: slowestStep.duration,
         web_vitals: isDidNotRunCase || noPage ? null : buildWebVitals(proj, isFailedCase),
         page_state: isDidNotRunCase || noPage ? null : buildPageState(proj, storyEntry),
+        ai_usage: isDidNotRunCase || noPage ? null : buildAiUsage(caseDef),
         console_logs: consoleLogs,
         aria_snapshot: isFailedCase && !noPage ? story?.aria : null,
         test_source: isFailedCase ? buildTestSource(story, storyEntry.failingCase, caseDef.declLine) : null,

@@ -174,6 +174,7 @@ const validTabs = [
   'test-cases',
   'compare',
   'spec-health',
+  'ai-steps',
   'quarantine',
   'timeline',
   'members',
@@ -245,6 +246,7 @@ const tabGroups = computed(() => [
     label: 'Health',
     items: [
       { label: 'Spec health', icon: 'i-lucide-table-2', value: 'spec-health', slot: 'spec-health' },
+      { label: 'AI steps', icon: 'i-lucide-wand-sparkles', value: 'ai-steps', slot: 'ai-steps' },
       { label: 'Performance', icon: 'i-lucide-trending-up', value: 'performance', slot: 'performance' },
       {
         label: `Timeline${markers.value.length ? ` (${markers.value.length})` : ''}`,
@@ -1375,6 +1377,10 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
           <!-- SPEC HEALTH TAB -->
           <template #spec-health>
             <SpecHealthTable :project-id="String(projectId)" />
+          </template>
+
+          <template #ai-steps>
+            <AiStepCoverage :project-id="String(projectId)" />
           </template>
 
           <!-- QUARANTINE TAB -->

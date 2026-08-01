@@ -90,6 +90,8 @@ export interface CollectedTestCase {
   /** Parsed from `piwi-web-vitals` attachments. */
   webVitals?: unknown;
   pageState?: unknown;
+  /** Parsed from the `piwi-ai-usage` manifest: committed AI-step artifacts this test replayed. */
+  aiUsage?: unknown;
   /** Parsed from `piwi-console` attachments. */
   consoleLogs?: unknown;
   /** Parsed from `piwi-aria-snapshot` attachment. */

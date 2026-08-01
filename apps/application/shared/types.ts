@@ -73,6 +73,8 @@ export interface TestCasePayload {
   networkRequests?: unknown;
   webVitals?: unknown;
   pageState?: unknown;
+  /** AI-step usage manifest (`{ entries: string[] }`): committed AI-step artifacts this test replayed. */
+  aiUsage?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
   workerIndex?: number | null;
@@ -161,6 +163,7 @@ export interface StreamEventPayload {
   networkRequests?: unknown;
   webVitals?: unknown;
   pageState?: unknown;
+  aiUsage?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
   projectName?: string | null;

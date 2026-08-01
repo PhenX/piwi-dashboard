@@ -186,6 +186,26 @@ Capture works for the `page` fixture, `browser.newPage()`, `browser.newContext()
 
 Without the fixtures you still get full run history, statuses, errors, traces, reports, streaming, and clustering — the fixtures add the slow-endpoint, Web Vitals, console, ARIA, and locator-healing layers. See the [capture fixtures guide](https://piwitests.github.io/capture-fixtures) for the full feature matrix and composition patterns.
 
+## AI steps
+
+Locate elements and drive flows in plain English, without giving up determinism:
+
+```typescript
+await page.piwiLocator('the email address field').fill('ada@example.com')
+await page.piwiRun('sign in as {email}', { email: 'ada@example.com' })
+```
+
+The LLM is a **compiler, not a runtime**: each prompt is resolved **once** by an agent into a committed, deterministic JSON artifact, and every run after that replays that artifact with plain Playwright — **zero LLM calls and zero network** in the default `replay` mode. Add it by composing `extendPiwiAi` over your test:
+
+```typescript
+import { extendPiwiFixtures, extendPiwiAi } from '@piwitests/reporter'
+export const test = extendPiwiAi(extendPiwiFixtures(base))
+```
+
+Author missing entries once in `resolve` mode (`PIWI_AI=resolve`, pointed at a dashboard with an AI provider configured), commit the artifacts, and CI replays them offline. `{param}` placeholders are type-checked and masked out of everything sent to the model. Manage the committed entries with `piwi ai check | resolve | prune`.
+
+See the [AI steps guide](https://piwitests.github.io/ai-steps) for the authoring/replay lifecycle, the safety model (allowlisted, drift-guarded, postcondition-verified), and the full option/env-var reference.
+
 ## Authentication
 
 When the dashboard has authentication enabled, use an API key (recommended for CI):

@@ -60,6 +60,7 @@ export function toWireTestCase(tc: CollectedTestCase): WireTestCase {
     networkRequests: rest.networkRequests || null,
     webVitals: rest.webVitals || null,
     pageState: rest.pageState || null,
+    aiUsage: rest.aiUsage || null,
     consoleLogs: rest.consoleLogs || null,
     ariaSnapshot: rest.ariaSnapshot || null,
     testSource: rest.testSource || null,

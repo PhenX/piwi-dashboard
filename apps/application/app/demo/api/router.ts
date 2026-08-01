@@ -25,6 +25,7 @@ import { apiGetDemoTraceStacks, apiGetDemoTraceNetwork, apiGetDemoTraceNetworkBo
 import {
   listProjects,
   getProject,
+  getProjectAiStepCoverage,
   getProjectPerformance,
   getProjectTestCases,
   parseTestCasesQuery,
@@ -304,6 +305,14 @@ const routes: RouteEntry[] = [
     handler: async (m, _, q) => {
       const days = Math.min(90, Math.max(1, parseInt(q?.get('days') || '30')));
       return getProjectSpecHealth(await getDemoDb(), +m[1]!, days);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/ai-steps$/,
+    handler: async (m, _, q) => {
+      const days = Math.min(90, Math.max(1, parseInt(q?.get('days') || '30')));
+      return getProjectAiStepCoverage(await getDemoDb(), +m[1]!, days);
     },
   },
   {

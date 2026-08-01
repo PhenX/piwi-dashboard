@@ -142,6 +142,22 @@ export function sanitizePageState(state: unknown): Record<string, unknown> | nul
   };
 }
 
+/**
+ * Sanitize the AI-step usage manifest (`{ entries: string[] }` — the committed
+ * artifact paths a test replayed). Keeps only string entries, bounded in count
+ * and length against a verbose or hostile submitter. Returns null when empty.
+ */
+export function sanitizeAiUsage(usage: unknown): { entries: string[] } | null {
+  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return null;
+  const raw = (usage as Record<string, unknown>).entries;
+  if (!Array.isArray(raw)) return null;
+  const entries = raw
+    .filter((e): e is string => typeof e === 'string')
+    .slice(0, 500)
+    .map((e) => e.slice(0, 400));
+  return entries.length ? { entries } : null;
+}
+
 export function sanitizeConsoleLogs(
   logs: Array<Record<string, unknown>> | null | undefined,
 ): Array<Record<string, unknown>> | null {

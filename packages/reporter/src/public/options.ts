@@ -139,6 +139,63 @@ export interface PiwiDashboardOptions {
   /** Additional custom metadata as key-value pairs */
   customData?: Record<string, unknown>;
 
+  // ── AI steps ───────────────────────────────────────────────────────────────
+  /**
+   * Natural-language locators and flows (`page.piwiLocator(...)` /
+   * `page.piwiRun(...)`). An agent resolves each prompt once into a committed,
+   * deterministic artifact; every run replays that artifact with plain
+   * Playwright calls — zero LLM calls in the default `replay` mode.
+   */
+  ai?: {
+    /**
+     * `replay` (default) executes committed artifacts read-only and fails closed
+     * on a miss; `resolve` authors missing entries; `heal` repairs entries that
+     * no longer replay. Can also be set with `PIWI_AI`.
+     */
+    mode?: 'replay' | 'resolve' | 'heal';
+    /**
+     * Directory name (per spec) that holds the committed entries. Defaults to
+     * `__piwi__`. Can also be set with `PIWI_AI_DIR`.
+     */
+    dir?: string;
+    /**
+     * On a replay miss: `fail` (default) errors with repro instructions, or
+     * `fixme` marks the test fixme (yellow) instead. Can also be set with
+     * `PIWI_AI_ON_MISS`.
+     */
+    onMiss?: 'fail' | 'fixme';
+    /**
+     * Max steps the agent may take resolving one `piwiRun` flow (the authoring
+     * budget). Defaults to `20`. Can also be set with `PIWI_AI_MAX_FLOW_STEPS`.
+     */
+    maxSteps?: number;
+    /**
+     * Max characters of the page ARIA snapshot sent to the authoring model per
+     * iteration (cost control). Defaults to `24000`. Can also be set with
+     * `PIWI_AI_MAX_SNAPSHOT_CHARS`.
+     */
+    maxSnapshotChars?: number;
+    /**
+     * Timeout (ms) for the existence probe of an `optional` step during replay.
+     * Defaults to `2000`. Can also be set with `PIWI_AI_OPTIONAL_PROBE_TIMEOUT`.
+     */
+    optionalProbeTimeout?: number;
+    /**
+     * Timeout (ms) for a step's `waitForResponse` (the Ajax wait) during replay,
+     * and the network-settle window during authoring. Omitted uses Playwright's
+     * default action timeout. Can also be set with `PIWI_AI_RESPONSE_WAIT_TIMEOUT`.
+     */
+    responseWaitTimeout?: number;
+    /**
+     * Send a screenshot to the authoring model as a vision fallback when the page's
+     * ARIA snapshot is empty (a canvas-heavy page the model otherwise can't ground
+     * against). **Requires a vision-capable model** — leave it off (the default) for
+     * models that don't accept images. Only affects `resolve`/`heal`, never replay.
+     * Can also be set with `PIWI_AI_SCREENSHOT_FALLBACK`.
+     */
+    screenshotFallback?: boolean;
+  };
+
   // ── Output & diagnostics ───────────────────────────────────────────────────
   /**
    * Write a JSON file with the submitted run's dashboard URL, id, project id and

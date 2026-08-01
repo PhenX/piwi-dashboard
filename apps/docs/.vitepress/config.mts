@@ -92,6 +92,7 @@ export default defineConfig({
         items: [
           { text: 'Reporter', link: '/reporter' },
           { text: 'Capture fixtures', link: '/capture-fixtures' },
+          { text: 'AI steps', link: '/ai-steps' },
           { text: 'CI & sharding', link: '/ci' },
           { text: 'Backend logs', link: '/backend-logs' },
           { text: 'Importing past runs', link: '/importing-runs' },

@@ -10,6 +10,7 @@ import {
   sanitizeWebVitals,
   sanitizeConsoleLogs,
   sanitizePageState,
+  sanitizeAiUsage,
 } from './sanitize';
 import { resolveIngestLimits } from './ingest-limits';
 import { upsertCasePayloads } from './case-payloads';
@@ -59,6 +60,7 @@ export interface RunCaseInput {
   networkRequests?: unknown;
   webVitals?: unknown;
   pageState?: unknown;
+  aiUsage?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: string | null;
   testSource?: string | null;
@@ -393,6 +395,7 @@ export async function persistRunCases(
       wastedTimeMs: c.wastedTimeMs ?? null,
       webVitals: sanitizeWebVitals(c.webVitals as Record<string, unknown> | null | undefined) ?? null,
       pageState: sanitizePageState(c.pageState),
+      aiUsage: sanitizeAiUsage(c.aiUsage),
       consoleLogs:
         capConsoleLogs(
           sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined),

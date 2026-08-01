@@ -426,6 +426,7 @@ export const testRunsCases = pgTable(
     wastedTimeMs: integer('wasted_time_ms'), // Aggregated ms spent in wait steps
     webVitals: jsonb('web_vitals'), // { navigation: {...}, paint: {...} }
     pageState: jsonb('page_state'), // URL/history/storage-keys/cookie-flags at test end (values never captured)
+    aiUsage: jsonb('ai_usage'), // { entries: string[] } — committed AI-step artifacts this run replayed
     consoleLogs: jsonb('console_logs'), // Array of { type, text, timestamp, location } console entries
     // Legacy inline payload columns: still readable on old rows, no longer
     // written — new rows store these payloads content-addressed in

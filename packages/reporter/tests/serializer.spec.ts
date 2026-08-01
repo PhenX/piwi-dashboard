@@ -156,6 +156,7 @@ describe('toWireTestCase', () => {
   it('emits exactly the expected set of keys', () => {
     const out = toWireTestCase({ type: 'complete', title: 't', location: 'l' });
     expect(Object.keys(out).sort()).toEqual([
+      'aiUsage',
       'ariaSnapshot',
       'browser',
       'consoleLogs',
