@@ -116,8 +116,8 @@ machine, detects the name it would report under (the `projectName` in its
 Playwright config, else the `package.json` name, else the folder name), and
 checks the setup — Playwright config present, Playwright installed, the
 [reporter](/reporter) installed and wired into the config. Anything missing is
-a warning, not a blocker: create the project anyway and run `npx piwi init` in
-the folder when you're ready. The chosen folder is linked to the new project
+a warning, not a blocker: create the project anyway and run
+`npx @piwitests/reporter init` in the folder when you're ready. The chosen folder is linked to the new project
 automatically.
 
 The link itself is a per-machine setting, managed with the rest of the project

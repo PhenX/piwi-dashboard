@@ -42,9 +42,13 @@ const checks = computed<Check[]>(() => {
 
 const ready = computed(() => checks.value.every((c) => c.ok));
 
-/** One command fixes both "not installed" and "not configured". */
+/**
+ * One command fixes both "not installed" and "not configured". Invoked through
+ * the package name so npx resolves this package even before it is a dependency
+ * — a plain `npx piwi` would fetch an unrelated `piwi` from the registry.
+ */
 const showInitHint = computed(() => !props.inspection.reporterInstalled || !props.inspection.reporterConfigured);
-const INIT_COMMAND = 'npx piwi init';
+const INIT_COMMAND = 'npx @piwitests/reporter init';
 </script>
 
 <template>
@@ -63,15 +67,17 @@ const INIT_COMMAND = 'npx piwi init';
 
     <p v-if="showInitHint" class="flex flex-wrap items-center gap-1.5 text-xs text-muted">
       <span>Set it up from a terminal in that folder:</span>
-      <code class="px-1.5 py-0.5 rounded bg-elevated font-mono">{{ INIT_COMMAND }}</code>
-      <UButton
-        icon="i-lucide-copy"
-        color="neutral"
-        variant="ghost"
-        size="xs"
-        aria-label="Copy setup command"
-        @click="copy(INIT_COMMAND, { toast: true })"
-      />
+      <span class="inline-flex items-center gap-0.5">
+        <code class="px-1.5 py-0.5 rounded bg-elevated font-mono">{{ INIT_COMMAND }}</code>
+        <UButton
+          icon="i-lucide-copy"
+          color="neutral"
+          variant="ghost"
+          size="xs"
+          aria-label="Copy setup command"
+          @click="copy(INIT_COMMAND, { toast: true })"
+        />
+      </span>
       <DocLink to="reporter" class="text-xs">Reporter docs</DocLink>
     </p>
     <p v-else-if="ready" class="flex items-center gap-1.5 text-xs text-muted">

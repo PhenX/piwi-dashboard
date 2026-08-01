@@ -1,9 +1,11 @@
 <script setup lang="ts">
 /**
- * Desktop shell only: back/forward history buttons at the top of the sidebar.
- * The webview has no browser chrome, so this is the visible counterpart of the
- * mouse-button and trackpad-swipe navigation the webview already supports.
- * Renders nothing in a plain browser, which has its own chrome.
+ * Desktop shell only: back/forward history buttons, joined as one control the
+ * way a native toolbar pairs them. The webview has no browser chrome, so this
+ * is the visible counterpart of the mouse-button and trackpad-swipe navigation
+ * the webview already supports. Sits beside the project switcher at the top of
+ * the sidebar; in the collapsed rail it stacks vertically like every other
+ * rail control. Renders nothing in a plain browser, which has its own chrome.
  */
 defineProps<{ collapsed?: boolean }>();
 
@@ -12,7 +14,7 @@ const { canGoBack, canGoForward, goBack, goForward } = useDesktopHistoryNav();
 </script>
 
 <template>
-  <div v-if="isDesktop" class="flex gap-0.5" :class="collapsed ? 'flex-col items-stretch' : 'items-center'">
+  <UFieldGroup v-if="isDesktop" :orientation="collapsed ? 'vertical' : 'horizontal'" class="shrink-0">
     <UButton
       icon="i-lucide-chevron-left"
       color="neutral"
@@ -35,5 +37,5 @@ const { canGoBack, canGoForward, goBack, goForward } = useDesktopHistoryNav();
       title="Forward"
       @click="goForward"
     />
-  </div>
+  </UFieldGroup>
 </template>

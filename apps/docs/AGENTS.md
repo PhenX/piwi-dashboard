@@ -116,3 +116,10 @@ split. Capture them against the **live demo** (it already has seed data — no l
 
 Demo *evidence* media (the screenshots, traces and videos shown inside the product) is a different pipeline — see
 [`../application/AGENTS.md`](../application/AGENTS.md#demo-evidence-media-committed-binaries).
+
+**Feature illustrations** (a docs page showing a specific screen, including desktop-only UI the live demo cannot
+render) come from the feature-screenshot harness instead: from `apps/application/`, run
+`node scripts/take-feature-screenshots.mjs <scene> --out ../docs/public/screenshots` — add a scene to its `SCENES`
+registry if none fits (desktop UI is captured through the script's mocked Tauri bridge, no shell build needed). Images
+written into docs assets this way are committed; keep the scene in the script current so the illustration can be
+re-captured when the UI changes.
