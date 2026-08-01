@@ -162,6 +162,7 @@ export default eventHandler(async (event) => {
             networkRequests: testCase.networkRequests,
             webVitals: testCase.webVitals,
             pageState: testCase.pageState,
+            aiUsage: testCase.aiUsage,
             consoleLogs: testCase.consoleLogs,
             ariaSnapshot: testCase.ariaSnapshot as string | null | undefined,
             testSource: testCase.testSource ?? null,
@@ -280,6 +281,7 @@ export default eventHandler(async (event) => {
         networkRequests?: unknown;
         webVitals?: unknown;
         pageState?: unknown;
+        aiUsage?: unknown;
         consoleLogs?: unknown;
         ariaSnapshot?: unknown;
         testSource?: string | null;
@@ -322,6 +324,7 @@ export default eventHandler(async (event) => {
           networkRequests: testCase.networkRequests,
           webVitals: testCase.webVitals,
           pageState: testCase.pageState,
+          aiUsage: testCase.aiUsage,
           consoleLogs: testCase.consoleLogs,
           ariaSnapshot: testCase.ariaSnapshot as string | null | undefined,
           testSource: testCase.testSource ?? null,
