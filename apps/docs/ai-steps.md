@@ -109,6 +109,15 @@ An entry is **data, never code**: an allowlisted locator program plus, for a flo
 - **Postcondition oracle.** Every flow ends with an assertion the agent chose (an element became visible/hidden, or the URL changed). Replay verifies it, so a subtly wrong flow fails loudly instead of passing.
 - **Ajax waiting, race-proof.** A step can wait for a network response it triggers (an XHR/fetch the agent observed while authoring). The wait is armed *before* the action fires, so a fast reply can never slip through the gap.
 
+## Intent in the dashboard
+
+Each test's replayed AI steps are reported to the dashboard as a small usage manifest: the committed artifacts it exercised (powering the project's **AI steps** liveness tab) plus **intent mappings** — each compiled locator paired with the prompt it came from. Two places use them:
+
+- **Locator healing**: when the failing locator was compiled from a prompt, the healing panel shows it — *"Compiled from prompt: 'the email address field'"* — so you fix the intent, not just the selector.
+- **AI diagnosis**: the diagnosis context includes an *AI Steps* section listing the prompts behind the test's locators, so a root cause can be phrased in intent terms ("the element the test calls *the email address field* was renamed"). Capped by `PIWI_AI_MAX_STEP_INTENTS` (default 20, `0` disables).
+
+Intent mappings are as private as everything else here: templates keep their `{param}` placeholders and locators their `{{param}}` markers — parameter values never appear.
+
 ## Privacy
 
 Parameter values are **masked out of everything sent to the model**. The page snapshot the agent sees has your `{param}` values replaced with markers, and placeholders survive compilation as markers that are substituted locally at replay. Secrets in parameters never leave your machine. See [Privacy & data flow](./privacy) for the full picture.

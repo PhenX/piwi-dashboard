@@ -575,27 +575,97 @@ const aiUsageSlug = (text) =>
     .slice(0, 40) || 'x';
 
 /**
- * The AI-step usage manifest ({ entries: string[] }) a browser test replayed —
- * the committed `page.piwiLocator` / `page.piwiRun` artifacts. Derived purely
- * from the test's identity (no `rng()`), so a given test yields the SAME entries
- * in every run: the project "AI steps" panel then aggregates replays/liveness
- * across runs. A deterministic ~1/3 of browser tests use AI steps.
+ * Tests whose failing locator reads like something an AI step would have been
+ * authored from — a semantic, name-based locator. Keyed by spec + test title,
+ * the value pairs the natural-language prompt with the EXACT locator the story's
+ * failure is about, so the failing locator and the intent actually join up: the
+ * healing panel then shows "Compiled from prompt …" on those failures and the
+ * diagnosis `aiSteps` section carries a genuinely relevant intent.
+ *
+ * The showcase is `checkout-email-renamed` (cluster 2): a renamed label is the
+ * textbook case for reasoning about intent rather than the broken selector.
+ * Structural locators from other stories (`.modal.is-open`, bare `getByRole`)
+ * are deliberately absent — an AI step compiles to a named element, so pinning
+ * an intent on those would misrepresent the feature.
+ */
+const AI_STEP_STORY_INTENTS = new Map(
+  [
+    {
+      file: 'tests/checkout/checkout.spec.ts',
+      title: 'should complete checkout with Apple Pay',
+      template: 'the email address field',
+      locator: "getByLabel('Email address')",
+      kind: 'locator',
+    },
+    {
+      file: 'tests/mobile/forms.spec.ts',
+      title: 'Text input shows keyboard on focus',
+      template: 'the delivery notes field',
+      locator: "getByLabel('Delivery notes')",
+      kind: 'locator',
+    },
+    {
+      file: 'tests/admin/reports.spec.ts',
+      title: 'exports the monthly report as CSV',
+      template: 'export the report as CSV',
+      locator: "getByRole('button', { name: 'Export CSV' })",
+      kind: 'run',
+    },
+    {
+      file: 'tests/checkout/checkout.spec.ts',
+      title: 'should complete checkout with credit card',
+      template: 'pay for the order',
+      locator: "getByRole('button', { name: 'Pay' })",
+      kind: 'run',
+    },
+  ].map((e) => [`${e.file}\x00${e.title}`, e]),
+);
+
+/** The committed-artifact path an entry would live at, mirroring the reporter's key layout. */
+function aiEntryPath(caseDef, template) {
+  const dir = caseDef.file.replace(/[^/]+$/, '').replace(/\/$/, '');
+  const base = caseDef.file.split('/').pop();
+  const h = createHash('sha256').update(`${caseDef.title}::${template}`).digest('hex').slice(0, 8);
+  return `${dir}/__piwi__/${base}/${aiUsageSlug(caseDef.title)}.${aiUsageSlug(template)}.${h}.json`;
+}
+
+/**
+ * The AI-step usage manifest a browser test replayed: the committed
+ * `page.piwiLocator` / `page.piwiRun` artifacts (`entries`, powering the
+ * project "AI steps" liveness tab) plus the `intents` mapping each compiled
+ * locator back to its prompt (powering the healing panel's "Compiled from
+ * prompt" line and the diagnosis `aiSteps` section).
+ *
+ * Two sources, both deterministic (no `rng()`, so a test yields the SAME
+ * manifest in every run and liveness aggregates across runs):
+ *  - tests in `AI_STEP_STORY_INTENTS` always carry an intent whose locator IS
+ *    their story's failing locator — these are the ones the UI showcases;
+ *  - a deterministic ~1/3 of the remaining tests carry generic intents, so the
+ *    liveness tab has realistic volume beyond the handful of story cases.
  */
 function buildAiUsage(caseDef) {
+  const story = AI_STEP_STORY_INTENTS.get(`${caseDef.file}\x00${caseDef.title}`);
+  if (story) {
+    return {
+      entries: [aiEntryPath(caseDef, story.template)],
+      intents: [{ template: story.template, locator: story.locator, kind: story.kind }],
+    };
+  }
+
   const idHash = createHash('sha256').update(`${caseDef.file}\x00${caseDef.title}`).digest('hex');
   const pick = parseInt(idHash.slice(0, 2), 16);
   if (pick % 3 !== 0) return null;
 
-  const dir = caseDef.file.replace(/[^/]+$/, '').replace(/\/$/, '');
-  const base = caseDef.file.split('/').pop();
-  const testSlug = aiUsageSlug(caseDef.title);
-  const prompts = ['the primary action field'];
-  if (pick % 2 === 0) prompts.push('complete the primary flow');
-  const entries = prompts.map((prompt) => {
-    const h = createHash('sha256').update(`${caseDef.title}::${prompt}`).digest('hex').slice(0, 8);
-    return `${dir}/__piwi__/${base}/${testSlug}.${aiUsageSlug(prompt)}.${h}.json`;
-  });
-  return { entries };
+  const prompts = [
+    { template: 'the primary action field', locator: "getByRole('textbox', { name: 'Name' })", kind: 'locator' },
+  ];
+  if (pick % 2 === 0) {
+    prompts.push({ template: 'submit the form', locator: "getByRole('button', { name: 'Continue' })", kind: 'run' });
+  }
+  return {
+    entries: prompts.map((p) => aiEntryPath(caseDef, p.template)),
+    intents: prompts.map((p) => ({ template: p.template, locator: p.locator, kind: p.kind })),
+  };
 }
 
 for (const proj of DEMO_PROJECTS) {

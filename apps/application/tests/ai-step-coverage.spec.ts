@@ -10,6 +10,11 @@ import { PROJECT } from '#shared/test-project-names';
 const RUN_START = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 const SHARED = 'tests/__piwi__/login.spec.ts/sign-in.the-email-field.aaaa1111.json';
 const FLOW = 'tests/__piwi__/login.spec.ts/sign-in.sign-in-flow.bbbb2222.json';
+const EMAIL_INTENT = {
+  template: 'the email address field',
+  locator: "getByRole('textbox', { name: 'Email' })",
+  kind: 'locator',
+};
 
 test('project ai-steps endpoint aggregates the reporter AI-step usage manifest', async ({ request }) => {
   const res = await request.post('/api/test-runs/submit', {
@@ -28,8 +33,9 @@ test('project ai-steps endpoint aggregates the reporter AI-step usage manifest',
           status: 'passed',
           duration: 500,
           location: 'tests/auth/login.spec.ts:1:1',
-          // Two artifacts; the email locator is shared with the test below.
-          aiUsage: { entries: [FLOW, SHARED] },
+          // Two artifacts; the email locator is shared with the test below. The
+          // intent mapping ties the compiled locator back to its prompt.
+          aiUsage: { entries: [FLOW, SHARED], intents: [EMAIL_INTENT] },
         },
         {
           title: 'reset password',
@@ -42,7 +48,7 @@ test('project ai-steps endpoint aggregates the reporter AI-step usage manifest',
     },
   });
   expect(res.ok()).toBeTruthy();
-  const { projectId } = (await res.json()) as { projectId: number };
+  const { projectId, testRunId } = (await res.json()) as { projectId: number; testRunId: number };
   expect(projectId).toBeGreaterThan(0);
 
   const covRes = await request.get(`/api/projects/${projectId}/ai-steps`);
@@ -62,6 +68,22 @@ test('project ai-steps endpoint aggregates the reporter AI-step usage manifest',
   expect(shared!.testCount, 'email locator is exercised by both tests').toBe(2);
   expect(flow!.testCount).toBe(1);
   expect(typeof shared!.lastSeen).toBe('string');
+
+  // Intent round-trip: submit → sanitize → ai_usage column → case-detail payload,
+  // where the healing panel and AI diagnosis read the prompt behind the locator.
+  const runRes = await request.get(`/api/test-runs/${testRunId}`);
+  expect(runRes.ok()).toBeTruthy();
+  const run = (await runRes.json()) as { testCases: Array<{ id: number; title: string }> };
+  const signIn = run.testCases.find((c) => c.title === 'sign in');
+  expect(signIn, 'sign in run case present').toBeTruthy();
+
+  const caseRes = await request.get(`/api/test-run-cases/${signIn!.id}`);
+  expect(caseRes.ok()).toBeTruthy();
+  const detail = (await caseRes.json()) as {
+    aiUsage?: { entries: string[]; intents?: Array<{ template: string; locator: string; kind: string }> } | null;
+  };
+  expect(detail.aiUsage?.entries?.sort()).toEqual([FLOW, SHARED].sort());
+  expect(detail.aiUsage?.intents).toEqual([EMAIL_INTENT]);
 });
 
 test('ai-steps endpoint 404s for an unknown project', async ({ request }) => {

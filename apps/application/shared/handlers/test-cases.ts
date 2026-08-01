@@ -290,6 +290,7 @@ export async function getTestRunCase(
     networkRequests: networkRequestsData,
     webVitals: trc.webVitals,
     pageState: trc.pageState,
+    aiUsage: trc.aiUsage,
     consoleLogs: trc.consoleLogs,
     ariaSnapshot: evidence.ariaSnapshot,
     workerIndex: trc.workerIndex,

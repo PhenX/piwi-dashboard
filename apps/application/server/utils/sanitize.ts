@@ -142,12 +142,20 @@ export function sanitizePageState(state: unknown): Record<string, unknown> | nul
   };
 }
 
+/** One AI-step intent mapping: the prompt a replayed locator was compiled from. */
+export interface AiUsageIntent {
+  template: string;
+  locator: string;
+  kind: 'locator' | 'run';
+}
+
 /**
- * Sanitize the AI-step usage manifest (`{ entries: string[] }` — the committed
- * artifact paths a test replayed). Keeps only string entries, bounded in count
+ * Sanitize the AI-step usage manifest — `{ entries: string[], intents?: [...] }`,
+ * the committed artifact paths a test replayed plus the natural-language intent
+ * behind each compiled locator. Keeps only well-shaped values, bounded in count
  * and length against a verbose or hostile submitter. Returns null when empty.
  */
-export function sanitizeAiUsage(usage: unknown): { entries: string[] } | null {
+export function sanitizeAiUsage(usage: unknown): { entries: string[]; intents?: AiUsageIntent[] } | null {
   if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return null;
   const raw = (usage as Record<string, unknown>).entries;
   if (!Array.isArray(raw)) return null;
@@ -155,7 +163,30 @@ export function sanitizeAiUsage(usage: unknown): { entries: string[] } | null {
     .filter((e): e is string => typeof e === 'string')
     .slice(0, 500)
     .map((e) => e.slice(0, 400));
-  return entries.length ? { entries } : null;
+  if (entries.length === 0) return null;
+
+  const rawIntents = (usage as Record<string, unknown>).intents;
+  const intents = Array.isArray(rawIntents)
+    ? rawIntents
+        .filter(
+          (i): i is Record<string, unknown> =>
+            !!i &&
+            typeof i === 'object' &&
+            typeof (i as Record<string, unknown>).template === 'string' &&
+            typeof (i as Record<string, unknown>).locator === 'string' &&
+            ((i as Record<string, unknown>).kind === 'locator' || (i as Record<string, unknown>).kind === 'run'),
+        )
+        .slice(0, 100)
+        .map(
+          (i): AiUsageIntent => ({
+            template: (i.template as string).slice(0, 300),
+            locator: (i.locator as string).slice(0, 400),
+            kind: i.kind as AiUsageIntent['kind'],
+          }),
+        )
+    : [];
+
+  return intents.length > 0 ? { entries, intents } : { entries };
 }
 
 export function sanitizeConsoleLogs(

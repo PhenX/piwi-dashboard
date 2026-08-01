@@ -123,6 +123,7 @@ const SECTION_ORDER: SectionId[] = [
   'failingAction',
   'failingSteps',
   'steps',
+  'aiSteps',
   'ariaSnapshot',
   'domSnapshot',
   'screenshots',
@@ -370,6 +371,7 @@ async function loadExecutionRow(db: DbClient, where: SQL) {
       testSourcePayloadId: testRunsCases.testSourcePayloadId,
       webVitals: testRunsCases.webVitals,
       pageState: testRunsCases.pageState,
+      aiUsage: testRunsCases.aiUsage,
       testAnnotations: testRunsCases.testAnnotations,
       workerIndex: testRunsCases.workerIndex,
       shardIndex: testRunsCases.shardIndex,
@@ -1625,6 +1627,25 @@ export function representativeExecutionSections(
     });
   }
 
+  // AI-step intents: the natural-language prompts this test's replayed AI-step
+  // locators were compiled from. The intent states what the test *means* to
+  // interact with, so a failing locator can be reasoned about in those terms
+  // (a rename/restructure of the intended element) instead of selector terms.
+  const aiIntents = (
+    ((rep.aiUsage as { intents?: Array<{ template?: unknown; locator?: unknown; kind?: unknown }> } | null)?.intents ??
+      []) as Array<{ template?: unknown; locator?: unknown; kind?: unknown }>
+  ).filter((i) => typeof i?.template === 'string' && typeof i?.locator === 'string');
+  if (aiIntents.length > 0 && limits.aiStepIntents > 0) {
+    const shownIntents = aiIntents.slice(0, limits.aiStepIntents);
+    const extra = aiIntents.length > shownIntents.length ? `\n…and ${aiIntents.length - shownIntents.length} more` : '';
+    out.push({
+      id: 'aiSteps',
+      markdown: `### AI Steps (natural-language intents)\nThese locators were compiled once from natural-language prompts (Piwi AI steps) and replayed deterministically. Each line states what the test *means* to interact with. If the failing locator is one of these, reason about the intent — the intended element may have been renamed or restructured — and phrase the root cause in those terms:\n${shownIntents
+        .map((i) => `- "${i.template}" → \`${i.locator}\`${i.kind === 'run' ? ' (flow step)' : ''}`)
+        .join('\n')}${extra}`,
+    });
+  }
+
   // D8: Console — dedupe consecutive identical lines (SPA test failures
   // routinely repeat one error dozens of times, eating the window).
   const consoleLogs = (rep.consoleLogs as ConsoleLogEntry[] | null) ?? [];
@@ -1763,6 +1784,7 @@ const REP_SECTION_TITLES: Partial<Record<SectionId, string>> = {
   executionError: 'Execution Error',
   testSource: 'Test Source',
   steps: 'Steps',
+  aiSteps: 'AI Steps',
   console: 'Console',
   networkRequests: 'Network Requests',
   serverLogs: 'Backend Server Logs',

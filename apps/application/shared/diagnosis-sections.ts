@@ -25,6 +25,7 @@ export const DIAGNOSIS_SECTIONS: DiagnosisSectionMeta[] = [
   { id: 'sourceFiles', label: 'Full source files (suspect + imports)', short: 'Files' },
   { id: 'steps', label: 'Test steps', short: 'Steps' },
   { id: 'failingSteps', label: 'Failing steps', short: 'Steps' },
+  { id: 'aiSteps', label: 'AI-step prompts (natural-language intents)', short: 'AI steps' },
   { id: 'console', label: 'Browser console logs', short: 'Console' },
   { id: 'networkRequests', label: 'Network requests', short: 'Network' },
   { id: 'serverLogs', label: 'Backend server logs', short: 'Server logs' },

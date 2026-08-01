@@ -639,6 +639,16 @@ export const PIWI_ENV_VARS = {
     max: 500,
     since: '0.16.0',
   },
+  PIWI_AI_MAX_STEP_INTENTS: {
+    description:
+      'Max AI-step intent mappings (natural-language prompt → compiled locator) included in a diagnosis (0 disables the section).',
+    category: 'ai-limits',
+    type: 'number',
+    default: '20',
+    min: 0,
+    max: 100,
+    since: '0.24.0',
+  },
   PIWI_AI_STEP_MAX_SNAPSHOT_CHARS: {
     description: 'Max characters of the page ARIA snapshot the reporter sends per AI-step authoring iteration.',
     category: 'ai-steps',
