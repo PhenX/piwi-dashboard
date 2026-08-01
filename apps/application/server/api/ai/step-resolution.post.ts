@@ -23,13 +23,14 @@ const elementSchema = z.object({
 });
 
 const requestSchema = z.object({
-  kind: z.enum(['locator', 'run']),
+  kind: z.enum(['locator', 'run', 'wait']),
   template: z.string().min(1),
   paramNames: z.array(z.string()).default([]),
   ariaSnapshot: z.string().default(''),
   history: z
     .array(z.object({ action: z.string(), element: elementSchema.optional(), value: z.string().optional() }))
     .default([]),
+  observedResponses: z.array(z.string()).optional(),
   screenshot: z.object({ mediaType: z.enum(['image/png', 'image/jpeg']), data: z.string() }).optional(),
 });
 

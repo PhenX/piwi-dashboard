@@ -85,6 +85,8 @@ export interface StepContext {
   readAria?: (page: Page) => Promise<string | null>;
   /** Existence-probe timeout (ms) for `optional` steps. */
   optionalProbeTimeout?: number;
+  /** Timeout (ms) for a step's `waitForResponse`; omitted uses Playwright's default. */
+  responseWaitTimeout?: number;
   /**
    * Wraps each step/assert in a reporter step (`test.step`) so replayed actions
    * appear in the trace and HTML report like hand-written code. Omitted in unit
@@ -117,15 +119,25 @@ export function checkFingerprintDrift(
   return fingerprintPresent(fingerprint, candidates) ? 'present' : 'drifted';
 }
 
-async function runAction(
-  locator: Locator,
-  action: string,
-  value: string | undefined,
-  params: ParamValues,
-): Promise<void> {
-  if (!ACTION_METHOD_SET.has(action)) throw new Error(`piwi AI: action "${action}" is not allowlisted`);
-  const args = value === undefined ? [] : [substituteMarkers(value, params)];
-  await (locator as unknown as MethodBag)[action](...args);
+async function performAction(page: Page, locator: Locator, step: RunStep, ctx: StepContext): Promise<void> {
+  if (!ACTION_METHOD_SET.has(step.action)) throw new Error(`piwi AI: action "${step.action}" is not allowlisted`);
+  const args = step.value === undefined ? [] : [substituteMarkers(step.value, ctx.params)];
+  const act = (): unknown => (locator as unknown as MethodBag)[step.action](...args);
+
+  if (!step.waitForResponse) {
+    await act();
+    return;
+  }
+
+  // Arm the response wait BEFORE firing the action. Creating the wait promise
+  // registers Playwright's listener synchronously, so a fast Ajax reply can never
+  // land in the gap between the action and the wait (the race this guards against).
+  const pattern = substituteMarkers(step.waitForResponse, ctx.params);
+  const waitForResponse =
+    ctx.responseWaitTimeout === undefined
+      ? page.waitForResponse(pattern)
+      : page.waitForResponse(pattern, { timeout: ctx.responseWaitTimeout });
+  await Promise.all([waitForResponse, act()]);
 }
 
 /** Execute one flow step. Returns whether it ran or was skipped (optional absent). */
@@ -145,7 +157,7 @@ export async function executeStep(step: RunStep, ctx: StepContext): Promise<'ran
       }
     }
 
-    await runAction(locator, step.action, step.value, ctx.params);
+    await performAction(ctx.page, locator, step, ctx);
     return 'ran';
   };
 

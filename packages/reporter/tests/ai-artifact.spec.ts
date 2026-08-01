@@ -27,7 +27,7 @@ const runEntry: RunEntry = {
   template: 'log in as {email}',
   steps: [
     { locator: { method: 'getByLabel', args: ['Email'] }, action: 'fill', value: '{{email}}' },
-    { locator: { method: 'getByRole', args: ['button', { name: 'Sign in' }] }, action: 'click' },
+    { locator: { method: 'getByRole', args: ['button', { name: 'Sign in' }] }, action: 'click', waitForResponse: '**/api/login' },
   ],
   postcondition: { assert: 'visible', locator: { method: 'getByRole', args: ['heading', { name: 'Dashboard' }] } },
 };
@@ -81,6 +81,17 @@ describe('allowlist validation', () => {
   it('rejects a postcondition with an unsupported assert', () => {
     const bad = serializeEntry(runEntry).replace('"visible"', '"exists"');
     expect(() => parseEntry(bad)).toThrow(/assert/);
+  });
+
+  it('rejects a non-string waitForResponse', () => {
+    const bad = JSON.stringify({
+      version: ARTIFACT_VERSION,
+      kind: 'run',
+      template: 't',
+      steps: [{ locator: { method: 'getByRole', args: [] }, action: 'click', waitForResponse: 5 }],
+      postcondition: { assert: 'visible', locator: { method: 'getByRole', args: [] } },
+    });
+    expect(() => parseEntry(bad)).toThrow(/waitForResponse/);
   });
 });
 

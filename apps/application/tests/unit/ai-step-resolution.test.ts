@@ -60,6 +60,32 @@ describe('validateStepResolution', () => {
     expect(() => validateStepResolution(JSON.stringify({ element: { name: 'x' } }))).toThrow(/role is required/);
     expect(() => validateStepResolution('not json')).toThrow(/not valid JSON/);
   });
+
+  it('accepts a wait decision carrying a response glob (and an empty one for no wait)', () => {
+    expect(validateStepResolution(JSON.stringify({ waitForResponse: '**/api/login' })).waitForResponse).toBe(
+      '**/api/login',
+    );
+    expect(validateStepResolution(JSON.stringify({})).waitForResponse).toBeUndefined();
+  });
+});
+
+describe('buildStepResolutionPrompt — wait kind', () => {
+  it('lists the observed responses and the step that produced them', () => {
+    const { user } = buildStepResolutionPrompt({
+      kind: 'wait',
+      template: 'log in as {email}',
+      paramNames: ['email'],
+      ariaSnapshot: '',
+      history: [{ action: 'click', element: { role: 'button', name: 'Sign in' } }],
+      observedResponses: ['**/api/login', '**/analytics/collect'],
+    });
+    expect(user).toContain('KIND: wait');
+    expect(user).toContain('LAST STEP: click button "Sign in"');
+    expect(user).toContain('OBSERVED RESPONSES:');
+    expect(user).toContain('**/api/login');
+    // No page snapshot section for a wait pick.
+    expect(user).not.toContain('PAGE SNAPSHOT');
+  });
 });
 
 describe('STEP_RESOLUTION_SCHEMA', () => {

@@ -57,6 +57,12 @@ export interface RunStep {
   fingerprint?: ElementFingerprint;
   /** A short existence probe that skips cleanly when the element is absent. */
   optional?: boolean;
+  /**
+   * URL glob of a network response to wait for after the action (an Ajax call the
+   * action triggers). The wait is armed *before* the action fires, so it can never
+   * miss a fast response. May carry `{{param}}` markers substituted at replay.
+   */
+  waitForResponse?: string;
 }
 
 export interface LocatorEntry {
@@ -139,6 +145,9 @@ function validateRunStep(value: unknown, where: string): asserts value is RunSte
   assert(ACTION_METHOD_SET.has(step.action), `${where}: action "${String(step.action)}" is not allowlisted`);
   if (step.value !== undefined) assert(typeof step.value === 'string', `${where}: value must be a string`);
   if (step.optional !== undefined) assert(typeof step.optional === 'boolean', `${where}: optional must be a boolean`);
+  if (step.waitForResponse !== undefined) {
+    assert(typeof step.waitForResponse === 'string', `${where}: waitForResponse must be a string`);
+  }
 }
 
 function validatePostcondition(value: unknown): asserts value is Postcondition {

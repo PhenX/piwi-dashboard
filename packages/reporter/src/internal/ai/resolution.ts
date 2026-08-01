@@ -11,7 +11,7 @@
  * must not import app `shared/`); a change here is a server-contract change.
  */
 import type { AriaCandidate } from '@piwitests/core';
-import type { Locator, Page } from '@playwright/test';
+import type { Locator, Page, Response } from '@playwright/test';
 import { ariaSnapshotBestEffort } from '../capture/capture-fixtures.js';
 import type { LocatorEntry, Postcondition, RunEntry, RunStep } from './artifact.js';
 import { ARTIFACT_VERSION } from './artifact.js';
@@ -41,11 +41,13 @@ export interface StepHistoryItem {
 }
 
 export interface StepResolutionRequest {
-  kind: 'locator' | 'run';
+  kind: 'locator' | 'run' | 'wait';
   template: string;
   paramNames: string[];
   ariaSnapshot: string;
   history: StepHistoryItem[];
+  /** `wait` kind: the masked XHR/fetch URLs the just-run step triggered. */
+  observedResponses?: string[];
   screenshot?: { mediaType: 'image/png' | 'image/jpeg'; data: string };
 }
 
@@ -62,6 +64,8 @@ export interface StepResolutionResponse {
   value?: string;
   optional?: boolean;
   postcondition?: ResolvedPostcondition;
+  /** `wait` kind: URL glob replay should wait for after the step (absent = no wait). */
+  waitForResponse?: string;
   reason?: string;
 }
 
@@ -142,18 +146,47 @@ export const readMaskedSnapshot: SnapshotReader = async (page, params) => {
   return raw ? maskValues(raw, params) : '';
 };
 
+/**
+ * Observe the XHR/fetch response URLs an action triggers — browser-facing, so
+ * injectable for tests. Runs the action, then settles briefly to catch
+ * fire-and-forget replies before sampling.
+ */
+export type ResponseObserver = (page: Page, action: () => Promise<void>, settleMs?: number) => Promise<string[]>;
+
+export const observeXhrResponses: ResponseObserver = async (page, action, settleMs) => {
+  const urls: string[] = [];
+  const onResponse = (res: Response): void => {
+    const type = res.request().resourceType();
+    if (type === 'xhr' || type === 'fetch') urls.push(res.url());
+  };
+  page.on('response', onResponse);
+  try {
+    await action();
+    await page
+      .waitForLoadState('networkidle', settleMs === undefined ? undefined : { timeout: settleMs })
+      .catch(() => {});
+  } finally {
+    page.off('response', onResponse);
+  }
+  return urls;
+};
+
 /** Everything one resolution needs; the browser-facing pieces and caps are injectable. */
 export interface ResolutionContext {
   page: Page;
   params: ParamValues;
   resolver: StepResolver;
   readSnapshot?: SnapshotReader;
+  /** Observe the responses an action triggers (default `observeXhrResponses`). */
+  observeResponses?: ResponseObserver;
   /** Max steps one flow resolution may take (default `DEFAULT_MAX_STEPS`). */
   maxSteps?: number;
   /** Max characters of the snapshot sent per iteration (default `MAX_SNAPSHOT_CHARS`). */
   maxSnapshotChars?: number;
   /** Existence-probe timeout (ms) for `optional` steps executed while resolving. */
   optionalProbeTimeout?: number;
+  /** Timeout (ms) for a step's `waitForResponse` (replay) and the authoring settle. */
+  responseWaitTimeout?: number;
 }
 
 function assertParametric(template: string, locatorJson: string): void {
@@ -233,10 +266,35 @@ export async function resolveRun(template: string, ctx: ResolutionContext): Prom
     if (decision.optional) step.optional = true;
     steps.push(step);
 
-    // Execute with real values so the page advances for the next iteration. No
-    // drift guard here — the element was just read off this very snapshot.
-    await executeStep(step, { page: ctx.page, params: ctx.params, optionalProbeTimeout: ctx.optionalProbeTimeout });
+    // Execute with real values so the page advances for the next iteration, while
+    // observing the Ajax calls it triggers. No drift guard here — the element was
+    // just read off this very snapshot.
+    const observe = ctx.observeResponses ?? observeXhrResponses;
+    const observed = await observe(
+      ctx.page,
+      () =>
+        executeStep(step, {
+          page: ctx.page,
+          params: ctx.params,
+          optionalProbeTimeout: ctx.optionalProbeTimeout,
+        }).then(() => undefined),
+      ctx.responseWaitTimeout,
+    );
     history.push({ action: decision.action, element: decision.element, value: decision.value });
+
+    // Let the model pick the network response replay should wait for, from the
+    // real (masked) URLs the action produced. Prompt URLs never contain them.
+    if (observed.length > 0) {
+      const waitDecision = await ctx.resolver.resolveStep({
+        kind: 'wait',
+        template,
+        paramNames,
+        ariaSnapshot: '',
+        history,
+        observedResponses: observed.map((url) => maskValues(url, ctx.params)),
+      });
+      if (waitDecision.waitForResponse) step.waitForResponse = waitDecision.waitForResponse;
+    }
   }
 
   throw new Error(`piwi AI: exceeded the ${maxSteps}-step budget resolving "${template}"`);

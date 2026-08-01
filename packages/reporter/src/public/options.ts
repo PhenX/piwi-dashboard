@@ -180,6 +180,12 @@ export interface PiwiDashboardOptions {
      * Defaults to `2000`. Can also be set with `PIWI_AI_OPTIONAL_PROBE_TIMEOUT`.
      */
     optionalProbeTimeout?: number;
+    /**
+     * Timeout (ms) for a step's `waitForResponse` (the Ajax wait) during replay,
+     * and the network-settle window during authoring. Omitted uses Playwright's
+     * default action timeout. Can also be set with `PIWI_AI_RESPONSE_WAIT_TIMEOUT`.
+     */
+    responseWaitTimeout?: number;
   };
 
   // ── Output & diagnostics ───────────────────────────────────────────────────

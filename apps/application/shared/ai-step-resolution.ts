@@ -42,16 +42,24 @@ export interface StepHistoryItem {
 
 /** Reporter → server: one resolution iteration. */
 export interface StepResolutionRequest {
-  /** A single element (`locator`) or the next step of a flow (`run`). */
-  kind: 'locator' | 'run';
+  /**
+   * A single element (`locator`), the next step of a flow (`run`), or — after a
+   * step ran — picking the network response replay should wait for (`wait`).
+   */
+  kind: 'locator' | 'run' | 'wait';
   /** The natural-language template, with param values already masked to `{{name}}`. */
   template: string;
   /** Placeholder names available for the model to reference as `{{name}}`. */
   paramNames: string[];
   /** Trimmed, masked ARIA snapshot of the current page (with `[ref=…]` markers). */
   ariaSnapshot: string;
-  /** Actions already taken this resolution (`run` kind). */
+  /** Actions already taken this resolution (`run` kind; last item is the step under `wait`). */
   history: StepHistoryItem[];
+  /**
+   * `wait` kind: the XHR/fetch response URLs the just-run step triggered (param
+   * values masked). The model picks the stable one to wait on, or none.
+   */
+  observedResponses?: string[];
   /** Optional screenshot fallback for canvas-heavy pages. */
   screenshot?: { mediaType: 'image/png' | 'image/jpeg'; data: string };
 }
@@ -77,6 +85,8 @@ export interface StepResolutionResponse {
   optional?: boolean;
   /** `run` kind, with `done`: the oracle to assert. */
   postcondition?: ResolvedPostcondition;
+  /** `wait` kind: URL glob of the response replay should wait for (absent = no wait). */
+  waitForResponse?: string;
   /** Short rationale — ignored for storage, useful in logs. */
   reason?: string;
 }
@@ -112,6 +122,7 @@ export const STEP_RESOLUTION_SCHEMA = {
       required: ['assert'],
       additionalProperties: false,
     },
+    waitForResponse: { type: 'string' },
     reason: { type: 'string' },
   },
   additionalProperties: false,
@@ -127,23 +138,39 @@ Rules:
 - Placeholders: when an element's accessible name or an input value is a parameter, use its "{{name}}" marker verbatim (masked names appear that way in the snapshot). Prefer a "{{name}}" value over a literal whenever a placeholder was provided.
 - Single-element ("locator") requests: return exactly one "element". No action, no done.
 - Flow ("run") requests: return the SINGLE next step as an "element" plus an "action" from the allowed set, with "value" for fill/selectOption/press. Set "optional": true for a step that may legitimately be absent (a cookie banner). When the instruction's goal is achieved, return "done": true with a "postcondition" — a visible element (or a url) that proves the flow succeeded. The postcondition asserts what must be true, never how it was reached.
+- Wait ("wait") requests: the previous step just ran and triggered the listed network responses. If the flow needs one of those Ajax calls to finish before continuing (it loads data a later step depends on), reply with "waitForResponse": a URL glob matching the STABLE one — use "**" wildcards for host/version/id segments and "{{name}}" markers for parameterized parts; keep it as specific as the stable path allows. If no wait is needed (navigations, static assets, analytics beacons), reply with {} — do not invent a wait.
 - Choose the most stable, semantic element (a labelled control, a named button/heading) over an incidental one. One well-grounded step beats a guessed one.`;
 
 /** Build the per-iteration user prompt. The stable prefix (template, params, history) precedes the volatile snapshot. */
 export function buildStepResolutionPrompt(request: StepResolutionRequest): { user: string; stablePrefixChars: number } {
+  const describeElement = (item: StepHistoryItem): string =>
+    item.element ? `${item.element.role}${item.element.name ? ` "${item.element.name}"` : ''}` : '';
+
   const lines: string[] = [];
   lines.push(`KIND: ${request.kind}`);
   lines.push(`TEMPLATE: ${request.template}`);
   if (request.paramNames.length > 0)
     lines.push(`PLACEHOLDERS: ${request.paramNames.map((n) => `{{${n}}}`).join(', ')}`);
+
+  if (request.kind === 'wait') {
+    const last = request.history.at(-1);
+    if (last)
+      lines.push(`LAST STEP: ${last.action} ${describeElement(last)}${last.value ? ` = ${last.value}` : ''}`.trimEnd());
+    lines.push('OBSERVED RESPONSES:');
+    for (const url of request.observedResponses ?? []) lines.push(`  - ${url}`);
+    const wait = `${lines.join('\n')}\n`;
+    return { user: wait, stablePrefixChars: wait.length };
+  }
+
   if (request.kind === 'run') {
     if (request.history.length === 0) {
       lines.push('HISTORY: (none yet — this is the first step)');
     } else {
       lines.push('HISTORY:');
       request.history.forEach((item, i) => {
-        const el = item.element ? `${item.element.role}${item.element.name ? ` "${item.element.name}"` : ''}` : '';
-        lines.push(`  ${i + 1}. ${item.action} ${el}${item.value ? ` = ${item.value}` : ''}`.trimEnd());
+        lines.push(
+          `  ${i + 1}. ${item.action} ${describeElement(item)}${item.value ? ` = ${item.value}` : ''}`.trimEnd(),
+        );
       });
     }
   }
@@ -186,6 +213,7 @@ export function validateStepResolution(text: string): StepResolutionResponse {
   }
   if (typeof obj.value === 'string') response.value = obj.value;
   if (typeof obj.optional === 'boolean') response.optional = obj.optional;
+  if (typeof obj.waitForResponse === 'string') response.waitForResponse = obj.waitForResponse;
   if (typeof obj.reason === 'string') response.reason = obj.reason;
 
   if (obj.postcondition !== undefined) {

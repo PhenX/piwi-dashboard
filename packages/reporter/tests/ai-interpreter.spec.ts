@@ -114,6 +114,30 @@ describe('executeStep', () => {
     expect(log).toEqual([]);
   });
 
+  it('arms waitForResponse before firing the action (race-proof)', async () => {
+    const { page, log } = recorderPage();
+    const step: RunStep = {
+      locator: { method: 'getByRole', args: ['button', { name: 'Save' }] },
+      action: 'click',
+      waitForResponse: '**/api/save',
+    };
+    await executeStep(step, { page, params: {} });
+    // The wait is registered strictly before the click, so a fast reply can't slip through.
+    expect(log.map((c) => c.method)).toEqual(['getByRole', 'waitForResponse', 'click']);
+    expect(log.find((c) => c.method === 'waitForResponse')?.args[0]).toBe('**/api/save');
+  });
+
+  it('substitutes params into the wait pattern and forwards the configured timeout', async () => {
+    const { page, log } = recorderPage();
+    const step: RunStep = {
+      locator: { method: 'getByRole', args: ['button'] },
+      action: 'click',
+      waitForResponse: '**/api/users/{{id}}',
+    };
+    await executeStep(step, { page, params: { id: '42' }, responseWaitTimeout: 5000 });
+    expect(log.find((c) => c.method === 'waitForResponse')?.args).toEqual(['**/api/users/42', { timeout: 5000 }]);
+  });
+
   it('throws StepDriftError before acting when the fingerprint drifted', async () => {
     const { page, log } = recorderPage();
     const step: RunStep = {

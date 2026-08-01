@@ -35,6 +35,12 @@ function recorderPage(log: Call[] = []): { page: Page; log: Call[] } {
   return { page: makeRecorder(log) as unknown as Page, log };
 }
 
+/** A no-op response observer for tests not about Ajax capture (runs the action, sees nothing). */
+const noObserve = async (_page: Page, action: () => Promise<void>): Promise<string[]> => {
+  await action();
+  return [];
+};
+
 /** A resolver that replays a fixed script of decisions and records each request. */
 function scripted(responses: StepResolutionResponse[]): { resolver: StepResolver; requests: StepResolutionRequest[] } {
   const requests: StepResolutionRequest[] = [];
@@ -117,6 +123,7 @@ describe('resolveRun', () => {
       params: { email: 'a@b.c' },
       resolver,
       readSnapshot: async () => '- textbox "Email"',
+      observeResponses: noObserve,
     });
     expect(entry.steps).toHaveLength(1);
     expect(entry.steps[0]).toMatchObject({ action: 'fill', value: '{{email}}' });
@@ -140,8 +147,87 @@ describe('resolveRun', () => {
       Array.from({ length: 5 }, () => ({ element: { role: 'button', name: 'Next' }, action: 'click' as const })),
     );
     await expect(
-      resolveRun('click forever', { page, params: {}, resolver, readSnapshot: async () => '', maxSteps: 3 }),
+      resolveRun('click forever', {
+        page,
+        params: {},
+        resolver,
+        readSnapshot: async () => '',
+        maxSteps: 3,
+        observeResponses: noObserve,
+      }),
     ).rejects.toThrow(/budget/);
+  });
+});
+
+describe('resolveRun — Ajax wait', () => {
+  /** A resolver that emits one action step, then done, and answers wait-picks with a fixed glob. */
+  function loginResolver(waitGlob: string | null): { resolver: StepResolver; requests: StepResolutionRequest[] } {
+    const requests: StepResolutionRequest[] = [];
+    return {
+      requests,
+      resolver: {
+        async resolveStep(request) {
+          requests.push(request);
+          if (request.kind === 'wait') return waitGlob ? { waitForResponse: waitGlob } : {};
+          const priorSteps = requests.filter((r) => r.kind === 'run').length;
+          if (priorSteps === 1) return { element: { role: 'button', name: 'Sign in' }, action: 'click' };
+          return { done: true, postcondition: { assert: 'visible', element: { role: 'heading', name: 'Home' } } };
+        },
+      },
+    };
+  }
+
+  it('observes the Ajax the step triggered and stores the model-chosen wait pattern', async () => {
+    const { page } = recorderPage();
+    const { resolver, requests } = loginResolver('**/api/login');
+    const entry = await resolveRun('log in', {
+      page,
+      params: {},
+      resolver,
+      readSnapshot: async () => '- button "Sign in"',
+      observeResponses: async (_page, action) => {
+        await action();
+        return ['https://app.example/api/login'];
+      },
+    });
+    expect(entry.steps[0].waitForResponse).toBe('**/api/login');
+    const waitReq = requests.find((r) => r.kind === 'wait');
+    expect(waitReq?.observedResponses).toEqual(['https://app.example/api/login']);
+  });
+
+  it('masks parameter values out of observed response URLs before sending them', async () => {
+    const { page } = recorderPage();
+    const { resolver, requests } = loginResolver('**/api/users/**');
+    await resolveRun('open profile', {
+      page,
+      params: { email: 'alice@example.com' },
+      resolver,
+      readSnapshot: async () => '- button "Sign in"',
+      observeResponses: async (_page, action) => {
+        await action();
+        return ['https://app.example/api/users/alice@example.com'];
+      },
+    });
+    expect(requests.find((r) => r.kind === 'wait')?.observedResponses).toEqual([
+      'https://app.example/api/users/{{email}}',
+    ]);
+  });
+
+  it('skips the wait-pick entirely when the step triggered no Ajax', async () => {
+    const { page } = recorderPage();
+    const { resolver, requests } = loginResolver('**/never');
+    const entry = await resolveRun('log in', {
+      page,
+      params: {},
+      resolver,
+      readSnapshot: async () => '- button "Sign in"',
+      observeResponses: async (_page, action) => {
+        await action();
+        return [];
+      },
+    });
+    expect(entry.steps[0].waitForResponse).toBeUndefined();
+    expect(requests.some((r) => r.kind === 'wait')).toBe(false);
   });
 });
 

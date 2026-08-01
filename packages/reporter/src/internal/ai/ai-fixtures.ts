@@ -64,6 +64,7 @@ interface AiConfig {
   maxSteps?: number;
   maxSnapshotChars?: number;
   optionalProbeTimeout?: number;
+  responseWaitTimeout?: number;
 }
 
 /** Parse the mode env value; anything unrecognized is the safe `replay` default. */
@@ -87,6 +88,7 @@ function readAiConfig(env: NodeJS.ProcessEnv): AiConfig {
     maxSteps: readPositiveInt(env.PIWI_AI_MAX_FLOW_STEPS),
     maxSnapshotChars: readPositiveInt(env.PIWI_AI_MAX_SNAPSHOT_CHARS),
     optionalProbeTimeout: readPositiveInt(env.PIWI_AI_OPTIONAL_PROBE_TIMEOUT),
+    responseWaitTimeout: readPositiveInt(env.PIWI_AI_RESPONSE_WAIT_TIMEOUT),
   };
 }
 
@@ -213,6 +215,7 @@ function createAiApi(page: Page, testInfo: TestInfo, config: AiConfig, used: Set
             readAria,
             step,
             optionalProbeTimeout: config.optionalProbeTimeout,
+            responseWaitTimeout: config.responseWaitTimeout,
           }),
         );
         return;
@@ -230,6 +233,7 @@ function createAiApi(page: Page, testInfo: TestInfo, config: AiConfig, used: Set
           maxSteps: config.maxSteps,
           maxSnapshotChars: config.maxSnapshotChars,
           optionalProbeTimeout: config.optionalProbeTimeout,
+          responseWaitTimeout: config.responseWaitTimeout,
         });
         writeEntry(file, entry);
         used.add(file);
