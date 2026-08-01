@@ -21,6 +21,8 @@ const executablePath = fs.existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : unde
  */
 export default defineConfig({
   testDir: '.',
+  // Only the stub-driven spec — the live-LLM spec has its own config (live.config.ts).
+  testMatch: 'ai-steps.spec.ts',
   // Serial: the two tests share one committed-artifact directory and, in resolve
   // mode, author into it; a stable order keeps the stub's canned decisions simple.
   workers: 1,
