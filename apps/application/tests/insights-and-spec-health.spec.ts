@@ -16,6 +16,12 @@ interface SpecHealthRow {
   avgDuration: number;
 }
 
+// Fixture run times are relative to now so the seeded runs always fall inside
+// spec-health's default 30-day look-back window; a hardcoded date silently ages
+// out of range and drops the specs from the aggregation.
+const BASELINE_START = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+const REGRESSION_START = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+
 async function submit(request: APIRequestContext, body: Record<string, unknown>) {
   const res = await request.post('/api/test-runs/submit', {
     data: { projectName: PROJECT.INSIGHTS_SPEC_HEALTH, ...body },
@@ -32,7 +38,7 @@ test.describe.serial('Insights, spec health & flaky classification', () => {
     // Baseline: both tests pass, across two spec prefixes.
     const baseline = await submit(request, {
       status: 'passed',
-      startTime: '2026-07-01T10:00:00Z',
+      startTime: BASELINE_START,
       duration: 3000,
       totalTests: 2,
       passedTests: 2,
@@ -48,7 +54,7 @@ test.describe.serial('Insights, spec health & flaky classification', () => {
     // Current: checkout regresses with a timeout error.
     const current = await submit(request, {
       status: 'failed',
-      startTime: '2026-07-02T10:00:00Z',
+      startTime: REGRESSION_START,
       duration: 3000,
       totalTests: 2,
       passedTests: 1,
