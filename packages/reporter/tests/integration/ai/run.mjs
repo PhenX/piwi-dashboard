@@ -31,18 +31,21 @@ const SECRET_EMAIL = 'ada@example.com';
 const PAGE_HTML = `<!doctype html>
 <html>
   <body>
-    <form id="f">
-      <label for="email">Email</label>
-      <input id="email" type="email" />
-      <button type="submit">Sign in</button>
-    </form>
-    <div id="out"></div>
+    <div id="app">
+      <form id="f">
+        <label for="email">Email</label>
+        <input id="email" type="email" />
+        <button type="submit">Sign in</button>
+      </form>
+    </div>
     <script>
       document.getElementById('f').addEventListener('submit', async (e) => {
         e.preventDefault();
         const res = await fetch('/api/login', { method: 'POST' });
         await res.json();
-        document.getElementById('out').innerHTML = '<h1>Welcome</h1>';
+        // Replace the whole form with the success state — like a real login
+        // screen — so the Sign in button is gone once signed in.
+        document.getElementById('app').innerHTML = '<h1>Welcome</h1>';
       });
     </script>
   </body>

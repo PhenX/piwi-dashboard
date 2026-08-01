@@ -23,18 +23,23 @@ const test = extendPiwiAi(base);
 const PAGE_HTML = `<!doctype html>
 <html>
   <body>
-    <form id="f">
-      <label for="email">Email</label>
-      <input id="email" type="email" />
-      <button type="submit">Sign in</button>
-    </form>
-    <div id="out"></div>
+    <div id="app">
+      <form id="f">
+        <label for="email">Email</label>
+        <input id="email" type="email" />
+        <button type="submit">Sign in</button>
+      </form>
+    </div>
     <script>
       document.getElementById('f').addEventListener('submit', async (e) => {
         e.preventDefault();
         const res = await fetch('/api/login', { method: 'POST' });
         await res.json();
-        document.getElementById('out').innerHTML = '<h1>Welcome</h1>';
+        // Replace the whole form with the success state, so the login form (and
+        // its Sign in button) is gone — like a real login screen. This keeps the
+        // page unambiguous: any sensible postcondition the model picks (the
+        // Welcome heading appearing, or the Sign in button disappearing) holds.
+        document.getElementById('app').innerHTML = '<h1>Welcome</h1>';
       });
     </script>
   </body>
