@@ -49,6 +49,7 @@ describe('isScreenshotFileRow', () => {
     expect(isScreenshotFileRow(attachment('evidence', null, 'x/final-state.webp'))).toBe(true);
     expect(isScreenshotFileRow(attachment('evidence', null, 'x/notes.md'))).toBe(false);
     expect(isScreenshotFileRow(attachment('evidence', null, 'x/no-extension'))).toBe(false);
+    expect(isScreenshotFileRow(attachment('evidence', null, ''))).toBe(false);
   });
 
   test('rejects videos, other evidence kinds and unrelated file types', () => {
@@ -151,5 +152,6 @@ describe('contentTypeForPath', () => {
     expect(contentTypeForPath('x/blob.bin')).toBe('application/octet-stream');
     expect(contentTypeForPath('x/no-extension')).toBe('application/octet-stream');
     expect(contentTypeForPath('x/blob.bin', null)).toBe('application/octet-stream');
+    expect(contentTypeForPath('')).toBe('application/octet-stream');
   });
 });
