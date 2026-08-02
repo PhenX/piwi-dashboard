@@ -118,6 +118,7 @@ export default defineConfig({
           { text: 'Fix a broken locator', link: '/recipes/broken-locator' },
           { text: 'Triage a run gone red', link: '/recipes/mass-failure' },
           { text: 'Cut costly flakiness', link: '/recipes/flaky-cleanup' },
+          { text: 'Cut the time it costs', link: '/recipes/faster-suite' },
         ],
       },
       {

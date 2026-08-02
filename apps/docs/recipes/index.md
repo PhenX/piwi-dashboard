@@ -15,6 +15,7 @@ matters.
 | "The selector worked yesterday and the UI moved." | [Fix a broken locator](./broken-locator) |
 | "Forty tests are red and I don't know where to start." | [Triage a run that went mostly red](./mass-failure) |
 | "Our suite is unreliable and I have one afternoon." | [Cut the flakiness that costs the most](./flaky-cleanup) |
+| "CI takes forever and I don't know what's slow." | [Cut the time the suite costs](./faster-suite) |
 
 Every recipe assumes the [reporter](../reporter) is installed and has sent a few runs — that's the only
 hard requirement. Where a step needs more than that (the capture fixtures, an LLM key, an unpacked

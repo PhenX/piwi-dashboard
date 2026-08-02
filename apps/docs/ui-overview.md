@@ -113,7 +113,7 @@ between them:
 | Page | Path | Answers |
 |---|---|---|
 | **Execution** | `/test-run-cases/:id` | "why did this attempt fail?" — the diagnosis view below |
-| **Test case** | `/test-cases/:id` | "how has this test behaved over time?" — [its history](#the-test-cases-own-page) |
+| **Test case** | `/test-cases/:id` | "how has this test behaved over time?" — [its history](#the-test-case-page) |
 
 Most links from a run land on an execution; the test's title links to the test case above it.
 
@@ -143,7 +143,7 @@ When an execution has an uploaded trace, two evidence blocks go deeper — no co
 
 Executions without a trace keep the reporter-captured baseline — the blocks simply hint at what a trace would add. Traces recorded without embedded sources still show the full frame list.
 
-### The test case's own page
+### The test case page
 
 `/test-cases/:id` is the other axis: not one attempt, but the test's whole life. Total runs, pass rate,
 average duration and last run across every execution, a duration trend, a status-history strip, and the

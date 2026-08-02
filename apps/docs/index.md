@@ -101,6 +101,7 @@ features:
 
 ## Where to go next
 
+- **Facing a specific problem right now** — [Recipes](/recipes/) answer the question you arrived with: is this a regression or a flake, which locator to use instead, forty tests are red, the suite is unreliable, CI takes too long.
 - **Setting it up** — [Getting started](/getting-started) walks from a Docker command to your first run in the dashboard.
 - **Just want it on your laptop** — the [desktop app](/desktop) bundles the whole server in a native window: no Docker, no Node, your data in a local folder.
 - **Wondering how it models your tests** — [Core concepts](/concepts) defines runs, test cases, executions, and clusters. Worth five minutes before the rest.

@@ -35,6 +35,46 @@ use **open in IDE** to land on the exact line. That mapping is configured
 No IDE integration set up? The path and line number are plain text on the page; the fastest route is
 usually copying them.
 
+## Shortcut: if it broke on your machine, fix it before the browser closes
+
+Everything above assumes the failure is already in the dashboard. When you're running locally, there's
+a faster path — pause on the failing page and pick the replacement from the live DOM, while the app is
+still in the state that broke it.
+
+Two reporter options, both off by default:
+
+| Option | Env var | Opens |
+|---|---|---|
+| `pickLocatorOnFailure` | `PIWI_PICK_LOCATOR_ON_FAIL` | the picker, aimed at the locator that just broke |
+| `inspectOnFailure` | `PIWI_INSPECT_ON_FAIL` | the same overlay, but free to inspect any element on the page |
+
+```typescript
+['@piwitests/reporter', {
+  serverUrl: 'http://localhost:3000',
+  projectName: 'my-project',
+  pickLocatorOnFailure: true,
+}]
+```
+
+The run **pauses** with the failing page still open — the test timeout is lifted while the overlay is
+up — and you click the element you meant. Piwi generates ranked, uniqueness-checked candidates, and the
+one you confirm is recorded as a pick: it comes back in the dashboard with a **Your pick** badge and
+becomes the recommended fix. It works for a broken action (`.click()`, `.fill()`) and for a failed
+assertion (`expect(locator).toBeVisible()`), reading the locator from Playwright's own error in the
+latter case.
+
+This is Piwi's own overlay, not Playwright's inspector, which is why what you confirm flows back into
+the healing data instead of just into your clipboard.
+
+Worth knowing before you switch it on:
+
+- It needs a **headed** browser (`--headed`, or `headless: false`), and it **never activates under CI** —
+  any `CI` env var disables it.
+- With retries configured it only opens on the final attempt, and it skips expected failures
+  (`test.fail()`).
+- Because the run waits while the overlay is open, use `--workers=1` or your other workers sit idle.
+- **It never rewrites your test.** It records the choice; applying it is still your edit.
+
 ## Requirements, honestly
 
 Locator healing needs the [capture fixtures](../capture-fixtures) in your test setup. The reporter alone
@@ -61,7 +101,13 @@ has been captured with the fixtures in place.
 ## If you can't add the fixtures
 
 Some suites can't take the code change — a vendored test pack, a repo you don't own, a migration you
-don't want mid-release. Three routes that don't need it:
+don't want mid-release. Four routes that don't need it:
+
+**Pick from the trace, after the fact.** When the failing execution has an uploaded trace, the
+alternative-locators panel offers **Pick from trace**: it opens the trace in the dashboard's bundled
+[trace viewer](../ui-overview#trace-viewer), whose *Pick locator* tool works on the recorded page
+snapshots. So a CI failure nobody watched live can still be picked visually, days later, from the page
+as it actually was.
 
 **Pick against the live page.** The [browser extension](../extension) scores locators with the same
 engine the dashboard uses, directly on the page you're looking at. Picking and recording are fully
@@ -80,4 +126,6 @@ dashboard. This one does still depend on captured snapshots — it reads the sam
 
 - [Capture fixtures](../capture-fixtures) — everything else the fixtures unlock
 - [Reporter](../reporter#locator-healing) — configuration and how the scoring works
+- [Reporter → Inspect the failing page live](../reporter#inspect-the-failing-page-live-local-runs) — the
+  full reference for the pause-on-failure options
 - [Browser extension](../extension) — picking and recording locators against a live page
