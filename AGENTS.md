@@ -99,6 +99,7 @@ From `apps/application/`:
 | `npm run app:seed:dev` | Load the demo sample data into the local dev SQLite DB |
 | `npm run app:generate:demo` / `app:check:demo` | Build the demo SPA / verify every server route has a demo handler |
 | `npm run app:check:demo:runtime` | Drive the **built** demo from its real `/demo/` sub-path in a browser (run `app:generate:demo` first) |
+| `npm run app:screens -- <scene>` | Capture a feature screenshot — `app:screens:docs` for every committed docs illustration, `app:screens:check` to verify they all still have a scene |
 | `npm run app:generate:deploy` | Regenerate the one-click deploy manifests (`render.yaml`, `fly.toml`, `deploy/`) |
 | `node scripts/db-query.mjs "<sql>" [--json]` | Query the local SQLite DB directly |
 

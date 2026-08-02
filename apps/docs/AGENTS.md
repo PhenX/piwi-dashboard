@@ -118,8 +118,20 @@ Demo *evidence* media (the screenshots, traces and videos shown inside the produ
 [`../application/AGENTS.md`](../application/AGENTS.md#demo-evidence-media-committed-binaries).
 
 **Feature illustrations** (a docs page showing a specific screen, including desktop-only UI the live demo cannot
-render) come from the feature-screenshot harness instead: from `apps/application/`, run
-`node scripts/take-feature-screenshots.mjs <scene> --out ../docs/public/screenshots` — add a scene to its `SCENES`
-registry if none fits (desktop UI is captured through the script's mocked Tauri bridge, no shell build needed). Images
-written into docs assets this way are committed; keep the scene in the script current so the illustration can be
-re-captured when the UI changes.
+render) come from the feature-screenshot harness instead. Every one of them has a scene that writes it, and the scene
+name is the file name, so recapturing takes only the name:
+
+```bash
+cd apps/application
+npm run app:screens -- flaky-detection   # one illustration
+npm run app:screens:docs                 # all of them
+npm run app:screens:check                # every image has a scene, every scene has its image
+```
+
+Add a scene to the script's `SCENES` registry if none fits, tagged `docs` with `out: 'docs'`; target the screen through
+a `data-shot` attribute rather than a DOM path. Desktop-only UI is captured through the script's mocked Tauri bridge,
+no shell build needed. Images written this way are committed — keep the scene current so the illustration can be
+recaptured when the UI changes, and run `app:screens:check` after adding or deleting one.
+
+The hero/gallery images above are **not** produced by the harness; they are listed in its `EXTERNAL_DOCS_IMAGES` set so
+the check knows to leave them alone. `ai-diagnosis.png` stays there too — it needs a configured AI provider.
