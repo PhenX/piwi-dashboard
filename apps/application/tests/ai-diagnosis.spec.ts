@@ -728,8 +728,11 @@ test.describe.serial('AI diagnosis — a model that rejects images', () => {
     // The screenshot is in the context, so the first provider call carries it.
     const ctx = (await (await request.get(`/api/failure-clusters/${clusterId}/context?format=json`)).json()) as {
       imageTokenEstimate: number;
+      sections: Array<{ id: string; markdown: string }>;
     };
     expect(ctx.imageTokenEstimate).toBeGreaterThan(0);
+    // The image is titled with the attachment name, not with its content type.
+    expect(ctx.sections.find((s) => s.id === 'screenshots')?.markdown).toContain('![screenshot]');
 
     const res = await request.post(`/api/failure-clusters/${clusterId}/diagnose`);
     expect(res.ok()).toBeTruthy();
