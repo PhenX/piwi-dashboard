@@ -39,4 +39,4 @@ know what exists and what it costs to switch on.
 | **[Notifications](../notifications)** | Being told instead of looking | An email, Slack, or webhook target |
 
 If you only ever add one thing beyond the reporter, add the [capture fixtures](../capture-fixtures) —
-two of the four recipes below get materially better with them, and they're a single file.
+two of the five recipes above get materially better with them, and they're a single file.
