@@ -36,13 +36,13 @@ or connection error. That's one cluster, one fix, and no test code involved.
 
 ## 3. Triage each cluster once
 
-A cluster page has three tabs: **Details** (the affected tests and their evidence), **Triage**, and **AI
-Diagnosis**. Triage sets one status — open, resolved, or ignored — plus an optional note, for the whole
-group. Forty tests, three decisions.
+A cluster page puts the whole investigation on one screen: the signature and resolution at the top, a
+**Triage** rail on the right that sets one status — open, resolved, or ignored — plus a note for the
+entire group, and collapsible evidence sections down the left. Forty tests, three decisions.
 
 <figure>
-  <img src="/screenshots/failure-cluster-triage.png" alt="The Triage tab of a failure cluster, with open/resolved/ignored status, a note field, and the cluster header showing occurrence count and first and last seen runs">
-  <figcaption>The Triage tab — one status and one note for the whole cluster. The header carries what you need for the call: occurrences, tests affected, and the runs it was first and last seen in.</figcaption>
+  <img src="/screenshots/failure-cluster-triage.png" alt="A failure cluster page: signature, occurrence and affected-test counts, a resolution card marked Regressed, the triage rail with open/resolved/ignored and a note, and collapsed evidence sections for error message, alternative locators, environment diff, visual diff, DOM snapshot, test evidence and what changed">
+  <figcaption>One cluster, one screen — occurrences and affected tests up top, the resolution history beside them, triage in the right rail, and every piece of evidence one click away on the left.</figcaption>
 </figure>
 
 Clusters stay open across runs, so the next red build attaches to the same row rather than starting the

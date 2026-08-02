@@ -62,6 +62,9 @@
     "dist/",
     "templates/"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "peerDependencies": {
     "@playwright/test": "^1.61.1"
   },

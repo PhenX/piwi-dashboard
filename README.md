@@ -53,6 +53,9 @@ Piwi keeps the runs so you can answer them.
   failing call stack with real source, all served by your own instance.
 - **AI diagnosis, if you want it** — an LLM *you* configure explains a cluster against your actual git
   diff, and its suggested patch is checked against your source before you see it. Off by default.
+- **Plain-English steps that stay deterministic** — `page.piwiLocator('the email field')` is resolved
+  once by an agent into a committed artifact, then replayed as ordinary Playwright with zero model
+  calls and no network. The LLM is a compiler, not a runtime.
 
 Also in the box: cross-project analytics, live run streaming, notifications (email, Slack, webhook,
 browser), a REST API with in-app OpenAPI docs, and an MCP server so your coding agent can ask about

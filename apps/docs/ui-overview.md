@@ -82,6 +82,7 @@ The complete history for one project, organized into tabs:
 - **Compare** — side-by-side delta between two runs (new failures, recovered, duration changes).
 - **Spec health** — a heatmap grouping test cases by spec file and coloring each by pass rate, so an unhealthy area of the suite jumps out. See [Spec health heatmap](./flaky-tests#spec-health-heatmap).
 - **Quarantine** — tests excluded from the [CI gate](./ci#blocking-a-merge)'s verdict while still running, each with its passing streak and whether it has earned a release, plus the debt the list represents. See [Quarantine](./flaky-tests#quarantine-with-a-way-out).
+- **AI steps** — liveness for the committed [AI-step artifacts](./ai-steps) this project replays: which prompts are exercised by recent runs, and which have gone dormant.
 - **Members** *(admins, when auth is enabled)* — grant or scope project access per user. See [Project access](./authentication#project-access).
 
 Project **edit** (`/projects/:id/edit`) sets the label, description, tags, per-project SCM token, and **AI diagnosis instructions** (project-specific context combined with the global instructions for every diagnosis).
@@ -105,6 +106,18 @@ The right panel is tabbed:
 Administrators can **delete** the entire run and its files from the header.
 
 ## Test case detail
+
+Two different pages live under this heading, and [Core concepts](./concepts#execution) draws the line
+between them:
+
+| Page | Path | Answers |
+|---|---|---|
+| **Execution** | `/test-run-cases/:id` | "why did this attempt fail?" — the diagnosis view below |
+| **Test case** | `/test-cases/:id` | "how has this test behaved over time?" — [its history](#the-test-cases-own-page) |
+
+Most links from a run land on an execution; the test's title links to the test case above it.
+
+### One execution, diagnosis-first
 
 Everything about a single test execution, laid out **diagnosis-first**. A pinned **summary** carries the status, title, copyable location, duration, worker, retries and duration-vs-average, plus at-a-glance **signal badges** (new regression, new flaky, passed-on-retry), any test annotations (`@fixme`, `@slow`, …), the **wasted time** spent in fixed waits, and metadata cards (environment, CI, branch, commit, author, browser, storage). Traces stream in live while the parent run is still running.
 
@@ -130,9 +143,15 @@ When an execution has an uploaded trace, two evidence blocks go deeper — no co
 
 Executions without a trace keep the reporter-captured baseline — the blocks simply hint at what a trace would add. Traces recorded without embedded sources still show the full frame list.
 
+### The test case's own page
+
+`/test-cases/:id` is the other axis: not one attempt, but the test's whole life. Total runs, pass rate,
+average duration and last run across every execution, a duration trend, a status-history strip, and the
+list of recent executions — each linking back to the diagnosis view above.
+
 <figure>
-  <img src="/screenshots/test-case-detail.png" alt="Test case detail page with summary stats, duration trend, status history, and recent executions">
-  <figcaption>The test case detail page — pass rate and duration stats, a duration trend, a status-history strip, and every recent execution of this one test.</figcaption>
+  <img src="/screenshots/test-case-detail.png" alt="Test case page with total runs, pass rate, failed count, average duration, flaky count and last run, above a duration trend chart, a status history strip, and a table of recent executions">
+  <figcaption>The test case page — the across-time view: pass rate and duration stats, a duration trend, a status-history strip, and every recent execution of this one test.</figcaption>
 </figure>
 
 ## Trace viewer

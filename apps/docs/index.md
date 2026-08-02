@@ -40,6 +40,9 @@ features:
   - icon: 🤖
     title: AI diagnosis, if you want it
     details: Optional analysis by a provider you configure (a local model works), read against your actual git diff since the last green run, with suggested patches validated against your source. Off by default.
+  - icon: 🧭
+    title: Plain-English steps that stay deterministic
+    details: Write `page.piwiLocator('the email field')`; an agent resolves it once into a committed artifact your CI replays with zero model calls and no network. The LLM is a compiler, not a runtime.
   - icon: 📊
     title: Cross-project analytics
     details: Portfolio health, a pass-rate heatmap, wasted CI minutes, regression velocity, and an auto-generated insights feed — the view you need when someone asks how the suite is doing.
