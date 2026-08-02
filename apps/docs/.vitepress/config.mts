@@ -111,6 +111,17 @@ export default defineConfig({
         ],
       },
       {
+        text: 'Recipes',
+        items: [
+          { text: 'All recipes', link: '/recipes/' },
+          { text: 'Regression or flake?', link: '/recipes/regression-or-flaky' },
+          { text: 'Fix a broken locator', link: '/recipes/broken-locator' },
+          { text: 'Triage a run gone red', link: '/recipes/mass-failure' },
+          { text: 'Cut costly flakiness', link: '/recipes/flaky-cleanup' },
+          { text: 'Cut the time it costs', link: '/recipes/faster-suite' },
+        ],
+      },
+      {
         text: 'Running your instance',
         items: [
           { text: 'Deployment', link: '/deployment' },
@@ -134,7 +145,7 @@ export default defineConfig({
     ],
 
     editLink: {
-      pattern: 'https://github.com/PiwiTests/platform/edit/main/docs/:path',
+      pattern: 'https://github.com/PiwiTests/platform/edit/main/apps/docs/:path',
       text: 'Edit this page on GitHub',
     },
 

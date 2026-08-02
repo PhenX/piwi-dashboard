@@ -126,7 +126,7 @@ const triageStatusOptions = [
                   {{ resolution.label }}
                 </UBadge>
                 <span v-if="cluster.timeToResolutionMs != null" class="text-xs text-gray-500">
-                  open for {{ formatDuration(cluster.timeToResolutionMs) }}
+                  open for {{ formatLongDuration(cluster.timeToResolutionMs) }}
                 </span>
                 <HelpHint topic="cluster.resolution" />
               </div>

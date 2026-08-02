@@ -90,7 +90,7 @@ A subscription controls *what* is delivered and *how*:
 - **Events** — one or more of the events above.
 - **Scope** — all projects, or a single project.
 - **Filters** — by branch, status, **owner** (deliver only when the run broke a test that team owns — see
-  [Tags & ownership](./concepts#tags--ownership)), or a numeric threshold (e.g. only notify on flakiness above N%).
+  [Tags & ownership](./concepts#tags-ownership)), or a numeric threshold (e.g. only notify on flakiness above N%).
 - **Mode** — `realtime` (dispatched as events happen) or `digest` (batched, sent at a configured time). Browser channels only support `realtime`.
 - **Mute** — silence a subscription until a chosen time without deleting it.
 

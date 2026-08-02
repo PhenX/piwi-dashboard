@@ -46,9 +46,26 @@ group matching what the reader is doing, and each page stays single-purpose:
 | Sending results | getting data in | `reporter`, `capture-fixtures`, `ci`, `backend-logs` |
 | Reading the results | using the dashboard | `ui-overview`, `ai-diagnosis`, `flaky-tests`, `analytics`, `timeline-markers`, `notifications`, `ide-integration` |
 | Running your instance | operating it | `deployment`, `configuration`, `configuration/generator`, `authentication`, `storage`, `privacy`, `desktop` |
+| Recipes | task-first walkthroughs | `recipes/` |
 | Integrate | other tools | in-app API docs (external link), `mcp` |
 
 Extend an existing page before adding a new one.
+
+### `recipes/` — the one task-first group
+
+Every other group is organised by feature. `recipes/` is organised by the question a reader arrives
+with ("did I break this, or is it flaky?"), and each page crosses several features to answer one. It
+exists for the long-tail searches that never contain the word "Piwi", so:
+
+- **One question per page**, phrased as the reader would phrase it — that phrasing is the H1.
+- **Feature pages stay the source of truth.** A recipe links to them; it never becomes a second place
+  where the flaky score or the fingerprint algorithm is explained, because that copy will drift.
+- **Always give a route for readers who can't install the thing.** State what a step requires (capture
+  fixtures, an LLM key, a browser extension, a signed-installer-less desktop build) and offer the
+  alternative — dashboard, MCP, REST API, or plain trace evidence. Listing a requirement without an
+  alternative is the failure mode to avoid.
+- Recipes reuse **existing committed screenshots**; add a scene to the feature-screenshot harness only
+  if a recipe genuinely needs a screen no page shows yet.
 
 - **`concepts.md` is the vocabulary source of truth** — project / test run / **test case** (a test's identity across
   time) / **execution** (one attempt, one browser — the `test_runs_cases` row) / failure cluster / fingerprint /

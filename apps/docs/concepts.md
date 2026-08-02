@@ -156,8 +156,8 @@ It needs an [SCM token](./ai-diagnosis#scm-grounded-context); without one, owner
 |---|---|---|
 | Project | `/projects/:id` | [UI overview](./ui-overview#project-detail) |
 | Test run | `/test-runs/:id` | [UI overview](./ui-overview#test-run-detail) |
-| Test case | `/test-cases/:id` | [UI overview](./ui-overview#test-case-detail) |
-| Execution | `/test-run-cases/:id` | [UI overview](./ui-overview#test-case-detail) |
+| Test case | `/test-cases/:id` | [UI overview](./ui-overview#the-test-case-page) |
+| Execution | `/test-run-cases/:id` | [UI overview](./ui-overview#one-execution-diagnosis-first) |
 | Failure cluster | `/failure-clusters/:id` | [AI diagnosis & clustering](./ai-diagnosis) |
 | Cross-project view | `/analytics` | [Analytics](./analytics) |
 

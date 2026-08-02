@@ -40,6 +40,9 @@ features:
   - icon: 🤖
     title: AI diagnosis, if you want it
     details: Optional analysis by a provider you configure (a local model works), read against your actual git diff since the last green run, with suggested patches validated against your source. Off by default.
+  - icon: 🧭
+    title: Plain-English steps that stay deterministic
+    details: Write `page.piwiLocator('the email field')`; an agent resolves it once into a committed artifact your CI replays with zero model calls and no network. The LLM is a compiler, not a runtime.
   - icon: 📊
     title: Cross-project analytics
     details: Portfolio health, a pass-rate heatmap, wasted CI minutes, regression velocity, and an auto-generated insights feed — the view you need when someone asks how the suite is doing.
@@ -98,6 +101,7 @@ features:
 
 ## Where to go next
 
+- **Facing a specific problem right now** — [Recipes](/recipes/) answer the question you arrived with: is this a regression or a flake, which locator to use instead, forty tests are red, the suite is unreliable, CI takes too long.
 - **Setting it up** — [Getting started](/getting-started) walks from a Docker command to your first run in the dashboard.
 - **Just want it on your laptop** — the [desktop app](/desktop) bundles the whole server in a native window: no Docker, no Node, your data in a local folder.
 - **Wondering how it models your tests** — [Core concepts](/concepts) defines runs, test cases, executions, and clusters. Worth five minutes before the rest.

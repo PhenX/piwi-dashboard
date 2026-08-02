@@ -29,8 +29,9 @@ Every tool below is good at what it targets. The honest differences:
 | Failure clustering | ✅ error fingerprinting | ❌ | ❌ | ✅ ML-based | ✅ | ➖ |
 | AI failure diagnosis | ✅ optional, grounded in your git diff, patches validated server-side | ❌ | ❌ | ➖ ML triage | ➖ | ➖ |
 | Locator healing suggestions | ✅ from prior passing runs | ❌ | ❌ | ❌ | ❌ | ➖ |
+| Plain-English steps, compiled | ✅ [AI steps](./ai-steps) — resolved once, replayed with zero model calls | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Web vitals & network capture | ✅ | ➖ in traces | ❌ | ❌ | ✅ | ➖ |
-| MCP server for AI agents | ✅ 39 tools | ❌ | ❌ | ❌ | ✅ | ➖ |
+| MCP server for AI agents | ✅ 40 tools | ❌ | ❌ | ❌ | ✅ | ➖ |
 | Framework support | Playwright only (by design) | Playwright | Many | Many | Playwright, Cypress, Jest… | Playwright only |
 | Price | Free, MIT | Free | Free | Free (self-host) / paid SaaS | Paid | Free, OSS |
 
@@ -58,7 +59,7 @@ Start with SQLite — it's zero-config and easily handles a team's test volume. 
 
 ### Why does the dashboard require Node 24?
 
-The dashboard server targets current Node (the Docker image ships it, so this only matters when running from source). The **reporter** that runs inside your test project is much less demanding — Node 18+ — so your test suite's runtime doesn't need to change.
+The dashboard server targets current Node (the Docker image ships it, so this only matters when running from source). The **reporter** that runs inside your test project is much less demanding — Node 20+, the version it is built for and declares in its `engines` — so your test suite's runtime almost certainly doesn't need to change.
 
 ### Can I use it with Cypress / Jest / other frameworks?
 

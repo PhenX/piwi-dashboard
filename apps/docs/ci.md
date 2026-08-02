@@ -48,7 +48,7 @@ over the API, not from the checkout — so no `fetch-depth` change is required.
 
 ```yaml
 e2e:
-  image: mcr.microsoft.com/playwright:v1.54.0-noble
+  image: mcr.microsoft.com/playwright:v1.61.1-noble   # at or above the reporter's peer range
   script:
     - npm ci
     - npx playwright test

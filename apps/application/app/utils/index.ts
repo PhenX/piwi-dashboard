@@ -2,7 +2,7 @@ import { h } from 'vue';
 import { UIcon } from '#components';
 import type { Column } from '@tanstack/vue-table';
 import type { CommitListItem } from '~~/types/api';
-import { formatDuration as formatDurationLib, formatDistanceToNow } from 'date-fns';
+import { formatDuration as formatDurationLib, formatDistanceToNow, intervalToDuration } from 'date-fns';
 import { TEST_PRIORITIES, type TestPriority } from '@piwitests/core/test-meta';
 
 /**
@@ -90,6 +90,27 @@ export function formatDuration(ms?: number | null) {
   if (rounded === 0) return '0 seconds';
   const sign = ms < 0 ? '−' : '';
   return sign + formatDurationLib({ seconds: rounded / 1000 });
+}
+
+/**
+ * A duration in human units — "14 hours", "2 days 3 hours".
+ *
+ * `formatDuration` hands date-fns a bare `{ seconds }`, which it prints
+ * verbatim: correct for the sub-minute test durations it exists for, but a
+ * cluster open for half a day renders as "50400 seconds". Normalize through
+ * `intervalToDuration` first, and keep only the two largest units so a span
+ * stays readable.
+ */
+export function formatLongDuration(ms?: number | null) {
+  if (ms === null || ms === undefined) return 'N/A';
+  const rounded = Math.round(Math.abs(ms));
+  if (rounded < 1000) return 'less than a second';
+  const duration = intervalToDuration({ start: 0, end: rounded });
+  const units = (['years', 'months', 'days', 'hours', 'minutes', 'seconds'] as const).filter(
+    (u) => (duration[u] ?? 0) > 0,
+  );
+  const sign = ms < 0 ? '−' : '';
+  return sign + formatDurationLib(duration, { format: units.slice(0, 2), delimiter: ' ' });
 }
 
 /**

@@ -237,6 +237,6 @@ installer, which keeps your data (the data folder lives outside the app).
 
 ## Building from source
 
-See [`apps/desktop/README.md`](https://github.com/PiwiTests/platform/blob/main/desktop/README.md)
+See [`apps/desktop/README.md`](https://github.com/PiwiTests/platform/blob/main/apps/desktop/README.md)
 for the local build steps (Node 24+, the Rust toolchain, and the Tauri system
 dependencies).
