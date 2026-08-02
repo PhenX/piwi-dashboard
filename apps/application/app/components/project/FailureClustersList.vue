@@ -32,7 +32,7 @@ const columns: TableColumn<ProjectFailureCluster>[] = [
 </script>
 
 <template>
-  <UCard>
+  <UCard data-shot="failure-clusters">
     <template #header>
       <div class="flex items-center justify-between">
         <p class="text-sm text-gray-500 inline-flex items-center gap-1">

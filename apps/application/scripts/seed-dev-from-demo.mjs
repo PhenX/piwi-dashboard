@@ -7,15 +7,9 @@
  *
  * The dev server must NOT be running while this script runs (DB lock).
  * The script is idempotent: existing rows are skipped on conflict.
- *
- * Foreign keys are disabled for the load. The seed is one coherent snapshot
- * emitted in table order, not dependency order, so a child row routinely
- * precedes its parent; enforcing FKs row-by-row drops it, and then drops
- * everything hanging off it. A partially seeded database is worse than a
- * failed seed, so a row that fails for any *other* reason aborts the run.
  */
 
-import { readFileSync, mkdirSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
@@ -28,16 +22,16 @@ const sqlPath = join(__dirname, '../public/demo/seed.sql');
 const dbPath = join(__dirname, '../.data/piwi.db');
 
 const sql = readFileSync(sqlPath, 'utf8');
-// libsql cannot create the parent directory itself, and a missing .data/ is
-// the normal state of a fresh checkout.
-mkdirSync(dirname(dbPath), { recursive: true });
 const db = createClient({ url: `file:${dbPath}` });
 
 /**
- * Split a SQL script into statements on `;`, but ignore semicolons that sit
+ * Split a SQL script into statements on `;`, ignoring semicolons that sit
  * inside single-quoted string literals (e.g. a user-agent like
- * `Mozilla/5.0 (iPhone; CPU ...)` or a commit message). A naive `split(';')`
- * shatters those INSERTs and silently drops the data.
+ * `Mozilla/5.0 (iPhone; CPU ...)` or a commit message) and dropping `--` line
+ * comments, which the seed uses as section headers. A naive `split(';')`
+ * shatters the quoted INSERTs, and a statement that keeps its leading comment
+ * no longer starts with `INSERT INTO` — either way rows vanish without an
+ * error, so both are handled here rather than by the caller's filter.
  */
 function splitSqlStatements(script) {
   const out = [];
@@ -56,6 +50,12 @@ function splitSqlStatements(script) {
       cur += ch;
       continue;
     }
+    if (!inString && ch === '-' && script[i + 1] === '-') {
+      const eol = script.indexOf('\n', i);
+      if (eol === -1) break;
+      i = eol - 1;
+      continue;
+    }
     if (ch === ';' && !inString) {
       out.push(cur);
       cur = '';
@@ -67,94 +67,58 @@ function splitSqlStatements(script) {
   return out;
 }
 
-/**
- * Statements are split on `;`, so each one carries the section comment that
- * preceded it (`-- Projects\nINSERT INTO projects …`). Strip those leading
- * comment lines before matching: testing `startsWith('INSERT INTO')` against
- * the raw text silently drops the first row of every commented section — which
- * is how project 1 and 19 of its peers went missing from the dev database.
- */
-const stripLeadingComments = (s) => s.replace(/^(?:\s*--[^\n]*\n)+/, '').trim();
+// The seed ends with a block that shifts every timestamp from the generator's
+// fixed anchor to load time, so "2 hours ago" reads as 2 hours ago in the dev
+// DB too. It is the only non-INSERT part this script runs — the surrounding
+// DDL builds the demo SPA's in-browser database, while the dev schema comes
+// from the Drizzle migrations.
+const REBASE_START = 'CREATE TEMP TABLE _rebase';
+const rebaseAt = sql.indexOf(REBASE_START);
+if (rebaseAt === -1) throw new Error(`no timestamp rebase block in ${sqlPath} — regenerate it with app:seed:demo`);
 
-// seed.sql carries the migration DDL as well as the data, and two kinds of
-// INSERT in it belong to the schema rather than the seed:
-//   - `INSERT INTO __new_<table> SELECT …` — SQLite rebuilds a table by copying
-//     rows into `__new_<table>` and renaming it over the original.
-//   - the `network_requests` backfill, which reads a JSON column later dropped.
-// Both target a shape the migrated dev DB no longer has. drizzle-kit applies
-// the migrations separately, so only `INSERT … VALUES` rows are seed data.
-const statements = splitSqlStatements(sql)
-  .map(stripLeadingComments)
-  .filter((s) => /^INSERT INTO/.test(s) && !/^INSERT INTO\s+`?__new_/.test(s) && /\bVALUES\b/i.test(s));
+// Data rows are `INSERT INTO … VALUES (…)`. The seed's schema section also
+// carries `INSERT INTO … SELECT` statements that copy rows into the `__new_*`
+// tables of SQLite's table-rebuild dance; those belong to the demo SPA's own
+// schema build and have no counterpart here.
+const statements = splitSqlStatements(sql.slice(0, rebaseAt))
+  .map((s) => s.trim())
+  .filter((s) => s.startsWith('INSERT INTO') && /\bVALUES\s*\(/i.test(s));
 
-/**
- * The seed's timestamps are anchored to a fixed generation-time window, and the
- * tail of seed.sql shifts them all to load time (`_rebase` temp table). Running
- * only the INSERTs leaves a database dated whenever the seed was generated —
- * which is how the dev data drifted to "about 1 year ago" and made every
- * screenshot taken against it look abandoned.
- *
- * The shift is relative, so it must run exactly once per load: it is applied
- * only when rows were actually inserted, never on a re-run over a seeded DB.
- */
-const rebaseStart = sql.indexOf('CREATE TEMP TABLE _rebase');
-const rebaseEnd = sql.indexOf('DROP TABLE _rebase;');
-if (rebaseStart === -1 || rebaseEnd === -1) {
-  console.error('seed.sql has no _rebase block — regenerate it with `npm run app:seed:demo`.');
-  process.exit(1);
-}
-const rebaseStatements = splitSqlStatements(sql.slice(rebaseStart, rebaseEnd + 'DROP TABLE _rebase;'.length))
-  .map(stripLeadingComments)
-  .filter(Boolean);
+const rebaseStatements = splitSqlStatements(sql.slice(rebaseAt))
+  .map((s) => s.trim())
+  .filter((s) => /^(CREATE TEMP TABLE|UPDATE|DROP TABLE)\b/.test(s));
 
 console.log(`Seeding ${statements.length} INSERT statements into ${dbPath}...`);
-// The snapshot is emitted in table order, so children can precede parents.
-// Load it with FKs off and check integrity once at the end instead.
-await db.execute('PRAGMA foreign_keys = OFF');
-
 let ok = 0,
-  existing = 0;
-const failures = [];
+  existing = 0,
+  skip = 0;
 for (const stmt of statements) {
   // Use OR IGNORE to be idempotent
   const idempotent = stmt.replace(/^INSERT INTO/, 'INSERT OR IGNORE INTO');
-  try {
-    const res = await db.execute(idempotent);
-    // OR IGNORE turns an existing row into a no-op rather than an error.
-    if (res.rowsAffected === 0) existing++;
-    else ok++;
-  } catch (e) {
-    failures.push(`${e.message}\n   in: ${stmt.slice(0, 120)}…`);
-  }
+  await db
+    .execute(idempotent)
+    .then((res) => (res.rowsAffected > 0 ? ok++ : existing++))
+    .catch((e) => {
+      skip++;
+      console.error(' skip:', e.message);
+    });
 }
 
-await db.execute('PRAGMA foreign_keys = ON');
-const violations = await db.execute('PRAGMA foreign_key_check');
-
-if (ok > 0) {
-  for (const stmt of rebaseStatements) {
-    try {
-      await db.execute(stmt);
-    } catch (e) {
-      failures.push(`${e.message}\n   in: ${stmt.slice(0, 120)}…`);
-    }
-  }
-  console.log(`Rebased ${rebaseStatements.length} timestamp statements to now.`);
-} else {
-  console.log('Nothing inserted — skipping the timestamp rebase (it shifts relative to now).');
-}
-
-console.log(`Done. ${ok} inserted, ${existing} already present.`);
-
-if (failures.length) {
-  console.error(`\n${failures.length} statement(s) failed:`);
-  for (const f of failures.slice(0, 10)) console.error(' -', f);
-  if (failures.length > 10) console.error(`   …and ${failures.length - 10} more`);
-}
-if (violations.rows.length) {
-  console.error(`\n${violations.rows.length} foreign-key violation(s) left in the database.`);
-}
-if (failures.length || violations.rows.length) {
-  console.error('\nThe database is incomplete — fix the seed rather than developing against it.');
+// A partial load leaves the dev DB missing whole projects and runs, which shows
+// up as an empty or wrong-looking screen rather than an error.
+if (skip > 0) {
+  console.error(`Done. ${ok} inserted, ${skip} failed — the dev database is incomplete.`);
   process.exit(1);
+}
+
+// The rebase adds a fixed delta to every timestamp, so it may only run over a
+// load that brought in the whole seed. Re-running it against rows that already
+// carry a shift would push them into the future.
+if (existing > 0) {
+  console.log(`Done. ${ok} inserted, ${existing} already present — timestamps left as they are.`);
+  console.log('Delete .data/piwi.db and re-run to reseed with timestamps rebased to now.');
+} else {
+  console.log(`Rebasing timestamps to now (${rebaseStatements.length} statements)...`);
+  for (const stmt of rebaseStatements) await db.execute(stmt);
+  console.log(`Done. ${ok} inserted, timestamps rebased to now.`);
 }

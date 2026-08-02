@@ -78,7 +78,7 @@ const columns: TableColumn<FlakyTest>[] = [
 </script>
 
 <template>
-  <UCard>
+  <UCard data-shot="flaky-table">
     <template #header>
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">

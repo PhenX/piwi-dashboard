@@ -1004,7 +1004,12 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
               />
             </div>
 
-            <ChartCard title="Performance trend" subtitle="Duration metrics over time" help="project.performance">
+            <ChartCard
+              title="Performance trend"
+              subtitle="Duration metrics over time"
+              help="project.performance"
+              data-shot="performance-trend"
+            >
               <LoadingState v-if="performanceInitialLoading" text="Loading chart…" />
               <PerformanceTrendChart
                 v-else
@@ -1015,7 +1020,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
               />
             </ChartCard>
 
-            <UCard>
+            <UCard data-shot="slowest-tests">
               <template #header>
                 <h2 class="text-xl font-semibold inline-flex items-center gap-1">
                   Slowest tests <HelpHint topic="project.slowest-tests" />
