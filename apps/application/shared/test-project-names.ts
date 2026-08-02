@@ -58,6 +58,7 @@ export const PROJECT = {
   EXPORT_OFFLINE: 'export-offline-test',
   AI_DIAGNOSIS: 'ai-diagnosis-test',
   AI_IMAGE_FALLBACK: 'ai-image-fallback-test',
+  AI_LIVE_DIAGNOSIS: 'ai-live-diagnosis-test',
   AI_STEPS: 'ai-steps-coverage-test',
   EXTRACT_CASES: 'extract-cases-test',
   FAILURE_CLUSTERS: 'failure-clusters-test',

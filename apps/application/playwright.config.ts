@@ -46,6 +46,9 @@ const reporters: ReporterDescription[] = process.env.CI
 const baseConfig = defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.ts',
+  // `tests/live/` talks to a real LLM and has its own config + npm script; a
+  // normal run must never spend tokens.
+  testIgnore: '**/live/**',
 
   /* Run tests in files in parallel */
   fullyParallel: true,

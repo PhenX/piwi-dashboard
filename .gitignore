@@ -42,6 +42,11 @@ coverage/
 .test-temp-gzip/
 .temp-dashboard/
 
+# Live AI E2E scratch: the throwaway server state and the artifacts the
+# authoring run writes instead of committing.
+.live-temp/
+.ai-live-artifacts/
+
 
 # Playwright artifacts
 .playwright-cli/
