@@ -93,6 +93,7 @@ From `apps/application/`:
 | `npm run app:format` / `app:format:check` | oxfmt |
 | `npm run app:test:unit` | Unit tests (Vitest) — add `:coverage` for coverage |
 | `npm run app:test` | E2E tests (Playwright) — add `:ui` / `:report` |
+| `npm run app:test:ai:live` | Diagnosis E2E against a **real** model (`tests/live/`) — needs `OPENCODE_API_KEY`, spends tokens |
 | `npm test` | Everything: unit first, then E2E |
 | `npm run db:generate` / `db:migrate` / `db:push` / `db:studio` | Drizzle, SQLite — append `:pg` for PostgreSQL |
 | `npm run app:seed:demo` | Regenerate demo seed data (`public/demo/seed.sql`) |

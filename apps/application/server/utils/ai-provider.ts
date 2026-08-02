@@ -383,8 +383,8 @@ type OAIUsage = {
   prompt_tokens_details?: { cached_tokens?: number };
 };
 
-function openAiUserContent(opts: AiCallOptions): string | OAIPart[] {
-  return opts.images?.length
+function openAiUserContent(opts: AiCallOptions, attempt: OpenAiAttempt): string | OAIPart[] {
+  return attempt.withImages && opts.images?.length
     ? [
         ...opts.images.map(
           (img): OAIPart => ({
@@ -397,20 +397,27 @@ function openAiUserContent(opts: AiCallOptions): string | OAIPart[] {
     : opts.user;
 }
 
+/** Which rungs of the OpenAI-compatibility ladder this request body still uses. */
+interface OpenAiAttempt {
+  /** Enforce the JSON schema with `response_format: json_schema` rather than `json_object`. */
+  strictFormat: boolean;
+  /** Send `opts.images` as `image_url` parts. */
+  withImages: boolean;
+}
+
 /**
  * Base chat-completions body. The JSON schema is enforced with
- * `response_format: json_schema` where the server supports it (`strictFormat`);
- * callers retry with the older `json_object` mode on HTTP 400. The schema also
- * stays inlined in the system prompt so servers that ignore response_format
- * still see it.
+ * `response_format: json_schema` where the server supports it; callers step down
+ * to the older `json_object` mode on HTTP 400. The schema also stays inlined in
+ * the system prompt so servers that ignore response_format still see it.
  */
-function buildOpenAiBody(config: ResolvedAiRole, opts: AiCallOptions, strictFormat: boolean): Record<string, unknown> {
+function buildOpenAiBody(config: ResolvedAiRole, opts: AiCallOptions, attempt: OpenAiAttempt): Record<string, unknown> {
   const systemContent = opts.jsonSchema
     ? `${opts.system}\n\nRespond ONLY with a JSON object matching this schema:\n${JSON.stringify(opts.jsonSchema)}`
     : opts.system;
 
   const responseFormat = opts.jsonSchema
-    ? strictFormat
+    ? attempt.strictFormat
       ? { type: 'json_schema', json_schema: { name: 'response', schema: opts.jsonSchema } }
       : { type: 'json_object' }
     : undefined;
@@ -422,9 +429,47 @@ function buildOpenAiBody(config: ResolvedAiRole, opts: AiCallOptions, strictForm
     ...(responseFormat ? { response_format: responseFormat } : {}),
     messages: [
       { role: 'system', content: systemContent },
-      { role: 'user', content: openAiUserContent(opts) },
+      { role: 'user', content: openAiUserContent(opts, attempt) },
     ],
   };
+}
+
+/** A rejection from a text-only model handed `image_url` parts. */
+function rejectsImages(status: number, body: string): boolean {
+  return status === 400 && /image|vision/i.test(body);
+}
+
+/**
+ * POST the chat-completions body, stepping down the compatibility ladder when
+ * the server refuses a rung: `image_url` parts are dropped for a model with no
+ * vision (its text context still carries the failure evidence), and
+ * `response_format: json_schema` falls back to `json_object` for servers that
+ * only know the older mode. Returns the last response, plus its body whenever
+ * that response failed (an ok response is left unread for the caller).
+ */
+async function postOpenAiWithFallbacks(
+  send: (attempt: OpenAiAttempt) => Promise<Response>,
+  opts: AiCallOptions,
+  model: string,
+): Promise<{ res: Response; errorBody: string }> {
+  const attempt: OpenAiAttempt = { strictFormat: true, withImages: true };
+  let res = await send(attempt);
+  let errorBody = res.ok ? '' : await res.text().catch(() => '');
+
+  if (!res.ok && opts.images?.length && rejectsImages(res.status, errorBody)) {
+    console.warn(`[ai-provider] ${model} rejected the attached image(s) — retrying text-only`);
+    attempt.withImages = false;
+    res = await send(attempt);
+    errorBody = res.ok ? '' : await res.text().catch(() => '');
+  }
+
+  if (!res.ok && res.status === 400 && opts.jsonSchema && attempt.strictFormat) {
+    attempt.strictFormat = false;
+    res = await send(attempt);
+    errorBody = res.ok ? '' : await res.text().catch(() => '');
+  }
+
+  return { res, errorBody };
 }
 
 async function callOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions): Promise<AiCallResult> {
@@ -434,23 +479,20 @@ async function callOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions): Pr
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (config.apiKey) headers['authorization'] = `Bearer ${config.apiKey}`;
 
-  const post = (strictFormat: boolean) =>
-    fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(buildOpenAiBody(config, opts, strictFormat)),
-      signal: AbortSignal.timeout(120_000),
-    });
-
-  let res = await post(true);
-  if (res.status === 400 && opts.jsonSchema) {
-    // Server rejects response_format json_schema (older OpenAI-compat) — fall back to json_object.
-    res = await post(false);
-  }
+  const { res, errorBody } = await postOpenAiWithFallbacks(
+    (attempt) =>
+      fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(buildOpenAiBody(config, opts, attempt)),
+        signal: AbortSignal.timeout(120_000),
+      }),
+    opts,
+    config.model,
+  );
 
   if (!res.ok) {
-    const bodyText = await res.text().catch(() => '');
-    throw new Error(`openai provider returned HTTP ${res.status}: ${bodyText.slice(0, 300)}`);
+    throw new Error(`openai provider returned HTTP ${res.status}: ${errorBody.slice(0, 300)}`);
   }
 
   const data = (await res.json()) as {
@@ -555,12 +597,12 @@ async function* streamOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions):
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
-  const post = (strictFormat: boolean) =>
+  const post = (attempt: OpenAiAttempt) =>
     fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        ...buildOpenAiBody(config, opts, strictFormat),
+        ...buildOpenAiBody(config, opts, attempt),
         stream: true,
         stream_options: { include_usage: true },
       }),
@@ -568,15 +610,10 @@ async function* streamOpenAiCompat(config: ResolvedAiRole, opts: AiCallOptions):
     });
 
   try {
-    let res = await post(true);
-    if (res.status === 400 && opts.jsonSchema) {
-      // Server rejects response_format json_schema (older OpenAI-compat) — fall back to json_object.
-      res = await post(false);
-    }
+    const { res, errorBody } = await postOpenAiWithFallbacks(post, opts, config.model);
 
     if (!res.ok) {
-      const bodyText = await res.text().catch(() => '');
-      throw new Error(`openai provider returned HTTP ${res.status}: ${bodyText.slice(0, 300)}`);
+      throw new Error(`openai provider returned HTTP ${res.status}: ${errorBody.slice(0, 300)}`);
     }
 
     const reader = res.body?.getReader();

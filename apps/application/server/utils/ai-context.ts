@@ -46,6 +46,7 @@ import { getLocatorHealing } from './locator-healing';
 import { getEnvironmentDiff } from './environment-diff';
 import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
 import { selectCaseScreenshots } from './case-screenshots';
+import { supportedImageMediaType } from '#shared/file-classify';
 import { getOrComputeVisualDiff } from './visual-diff';
 import { parseAriaCandidates, textSimilarity } from '#shared/locator-fingerprint';
 import type {
@@ -1025,19 +1026,13 @@ async function resolveScreenshots(
 
   for (const f of screenshotRows) {
     if (images.length >= limits.maxImages) break;
+    const mediaType = supportedImageMediaType(f);
+    if (!mediaType) continue;
     try {
       const buf = await storage.readFile(f.path);
-      const ext = f.path.toLowerCase().split('.').pop() || 'png';
-      const mediaType =
-        ext === 'jpg' || ext === 'jpeg'
-          ? ('image/jpeg' as const)
-          : ext === 'gif'
-            ? ('image/gif' as const)
-            : ext === 'webp'
-              ? ('image/webp' as const)
-              : ('image/png' as const);
       images.push({
-        name: f.label || f.path.split('/').pop() || 'screenshot',
+        // `subtype` is the Playwright attachment name; `label` is its content type.
+        name: f.subtype || f.path.split('/').pop() || 'screenshot',
         mediaType,
         data: buf.toString('base64'),
       });
