@@ -52,9 +52,9 @@ unreleased fix; don't run it in production — it has had no release testing and
 | Tag | Description | Docker Hub | GHCR |
 |-----|-------------|:---:|:---:|
 | `latest` | Latest stable release | ✅ | ✅ |
-| `0.18.2` | Specific version (semver) | ✅ | ✅ |
-| `0.18` | Latest patch of a minor version | ✅ | ✅ |
-| `0` | Latest release of the major version | ✅ | ✅ |
+| `MAJOR.MINOR.PATCH` | One exact release (e.g. `0.25.0`) | ✅ | ✅ |
+| `MAJOR.MINOR` | Latest patch of that minor (e.g. `0.25`) | ✅ | ✅ |
+| `MAJOR` | Latest release of that major (e.g. `0`) | ✅ | ✅ |
 | `edge` | Built from `main`, unreleased | — | ✅ |
 
 Pin a specific version in production — and read [Upgrading](./upgrading) before you bump it, because
