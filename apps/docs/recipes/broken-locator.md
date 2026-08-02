@@ -65,8 +65,9 @@ don't want mid-release. Three routes that don't need it:
 
 **Pick against the live page.** The [browser extension](../extension) scores locators with the same
 engine the dashboard uses, directly on the page you're looking at. Picking and recording are fully
-standalone — nothing is sent anywhere, and it works without a Piwi instance at all. The cost: it isn't
-in the Chrome Web Store yet, so you install an unpacked build.
+standalone — nothing is sent anywhere, and it works without a Piwi instance at all. The cost: one
+click from the [Chrome Web Store](https://chromewebstore.google.com/detail/piwi-picker/pakhnokpjboejcghgcmkjlpnogfjihhe),
+which is also how you install it in Edge.
 
 **Read the failure evidence you already have.** Without fixtures you still get the trace, the
 screenshot, and the failing call stack. Playwright's trace viewer is bundled and served by your own
