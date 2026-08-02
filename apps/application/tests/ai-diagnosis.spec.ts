@@ -156,6 +156,63 @@ function startStreamingMockAiServer(port: number): http.Server {
   return server;
 }
 
+/**
+ * Like `startMockAiServer`, but refuses any request carrying an `image_url`
+ * part the way a text-only OpenAI-compatible model does, so the provider's
+ * drop-the-images retry runs without needing a real model. `imageAttempts`
+ * counts the requests that arrived with images.
+ */
+function startTextOnlyMockAiServer(port: number): { server: http.Server; imageAttempts: () => number } {
+  let imageAttempts = 0;
+  const server = http.createServer((req, res) => {
+    if (!(req.method === 'POST' && req.url?.includes('/chat/completions'))) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found' }));
+      return;
+    }
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      let messages: Array<{ content?: unknown }> = [];
+      try {
+        messages = (JSON.parse(body || '{}') as { messages?: Array<{ content?: unknown }> }).messages ?? [];
+      } catch {
+        /* ignore */
+      }
+      const hasImage = messages.some(
+        (m) =>
+          Array.isArray(m.content) &&
+          m.content.some((part) => (part as { type?: string } | null)?.type === 'image_url'),
+      );
+
+      if (hasImage) {
+        imageAttempts++;
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: 'This model does not support image inputs' } }));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          id: 'chatcmpl-test',
+          object: 'chat.completion',
+          choices: [
+            {
+              index: 0,
+              message: { role: 'assistant', content: JSON.stringify(buildMockAiResponse()) },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: { prompt_tokens: 100, completion_tokens: 80, total_tokens: 180 },
+        }),
+      );
+    });
+  });
+  server.listen(port, '127.0.0.1');
+  return { server, imageAttempts: () => imageAttempts };
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function submitRun(request: APIRequestContext, cases: Array<{ status: string; [key: string]: unknown }>) {
@@ -586,6 +643,100 @@ test.describe.serial('AI diagnosis — streaming success path', () => {
     expect(diagnosis.category).toBe('app-bug');
     expect(diagnosis.confidence).toBe('high');
     expect(diagnosis.details.confidenceScore).toBe(88);
+  });
+});
+
+// ── Text-only models (no vision) ─────────────────────────────────────────────
+
+test.describe.serial('AI diagnosis — a model that rejects images', () => {
+  /** A real (1×1) PNG, so the ingested attachment is classified as a screenshot. */
+  const PNG_1X1 = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  );
+
+  let mock: { server: http.Server; imageAttempts: () => number };
+  let mockPort: number;
+  let isEnvManaged = false;
+
+  test.beforeAll(async ({ request }) => {
+    const statusRes = await request.get('/api/ai/status');
+    if (statusRes.ok()) {
+      isEnvManaged = ((await statusRes.json()) as { source?: string }).source === 'env';
+    }
+    mockPort = await getFreePort();
+    mock = startTextOnlyMockAiServer(mockPort);
+  });
+
+  test.beforeEach(async () => {
+    if (isEnvManaged) test.skip();
+  });
+
+  test.afterAll(async ({ request }) => {
+    if (!isEnvManaged) await request.put('/api/settings/ai', { data: { roles: null } });
+    mock.server.close();
+  });
+
+  test('drops the screenshots and still completes the diagnosis', async ({ request }) => {
+    const put = await request.put('/api/settings/ai', {
+      data: {
+        roles: { diagnosis: { provider: 'openai', model: 'text-only', baseUrl: `http://127.0.0.1:${mockPort}/v1` } },
+        autoDiagnose: false,
+      },
+    });
+    expect(put.ok()).toBeTruthy();
+
+    // A screenshot only reaches the context through a live case-file upload, so
+    // this failure is ingested through the streaming API rather than /submit.
+    const start = await request.post('/api/test-runs/start', {
+      data: { projectName: PROJECT.AI_IMAGE_FALLBACK, startTime: new Date().toISOString() },
+    });
+    expect(start.ok()).toBeTruthy();
+    const { runId, streamToken } = (await start.json()) as { runId: number; streamToken: string };
+
+    const testCase = { title: 'checkout completes', location: 'tests/no-vision.spec.ts:7:3', retries: 0 };
+    const uniqueError = `TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByTestId('no-vision-${Date.now()}')`;
+    const events = await request.post(`/api/test-runs/${runId}/events`, {
+      data: {
+        streamToken,
+        testCases: [{ type: 'complete', ...testCase, status: 'failed', duration: 5000, error: uniqueError }],
+      },
+    });
+    expect(events.ok()).toBeTruthy();
+
+    const upload = await request.post(`/api/test-runs/${runId}/case-files`, {
+      multipart: {
+        streamToken,
+        testCase: JSON.stringify(testCase),
+        attach_meta: JSON.stringify([{ name: 'screenshot', contentType: 'image/png', originalName: 'failure.png' }]),
+        attach_file: { name: 'failure.png', mimeType: 'image/png', buffer: PNG_1X1 },
+      },
+    });
+    expect(upload.ok()).toBeTruthy();
+
+    const finish = await request.post(`/api/test-runs/${runId}/finish`, {
+      data: { streamToken, status: 'failed', duration: 5000 },
+    });
+    expect(finish.ok()).toBeTruthy();
+
+    const run = (await (await request.get(`/api/test-runs/${runId}`)).json()) as {
+      testCases: Array<{ status: string; failureClusterId?: number }>;
+    };
+    const clusterId = run.testCases.find((c) => c.status === 'failed')?.failureClusterId;
+    expect(clusterId).toBeTruthy();
+
+    // The screenshot is in the context, so the first provider call carries it.
+    const ctx = (await (await request.get(`/api/failure-clusters/${clusterId}/context?format=json`)).json()) as {
+      imageTokenEstimate: number;
+    };
+    expect(ctx.imageTokenEstimate).toBeGreaterThan(0);
+
+    const res = await request.post(`/api/failure-clusters/${clusterId}/diagnose`);
+    expect(res.ok()).toBeTruthy();
+    const diagnosis = await res.json();
+    expect(diagnosis.status).toBe('completed');
+    expect(diagnosis.category).toBe('app-bug');
+    expect(mock.imageAttempts()).toBe(1);
   });
 });
 

@@ -262,6 +262,8 @@ Every piece of evidence sent to the model costs tokens. Piwi caps each input so 
 
 The full list of `PIWI_AI_MAX_*` limit variables, their defaults and their clamping ranges lives in the [Configuration reference → AI context limits](./configuration#ai-context-limits) — generated from the same registry the server reads, so it can never drift from the code.
 
+Screenshots are the one input a provider can refuse outright: many self-hosted and gateway models are text-only and reject a request that carries images. Piwi retries that call without them, so the diagnosis still runs on the text evidence. Setting `PIWI_AI_MAX_IMAGES=0` skips the rejected first attempt.
+
 ## Try it in the demo
 
 The [live demo](https://piwitests.github.io/demo/) runs entirely in your browser with no AI provider — yet the diagnosis experience is fully wired. Several failing clusters ship with a completed diagnosis (category, confidence, evidence with citations, a validated suggested patch, per-stage pipeline stats, and auto-selected suspect commits); others are left undiagnosed so you can trigger a **simulated streaming diagnosis** yourself and watch the reasoning tokens arrive. The diagnoses are generated from each cluster's real seeded evidence (occurrences, failure rate, affected tests, browsers) and a canned SCM history, so the **Context sent to AI** modal, the data-coverage map, the commit browser, baseline pinning, and the diagnosis version history all behave as they do against a real server. Suggested-fix patches are validated against the seeded source files, so the "Applies cleanly" badge means the same thing it does in production.
