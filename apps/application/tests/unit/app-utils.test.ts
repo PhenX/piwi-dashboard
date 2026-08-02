@@ -2,6 +2,7 @@ import { describe, test, expect, vi } from 'vitest';
 import {
   formatBytes,
   formatDuration,
+  formatLongDuration,
   splitDuration,
   prettyDateFormat,
   formatRelativeTime,
@@ -40,6 +41,29 @@ describe('formatBytes', () => {
     expect(formatBytes(1024)).toBe('1.00 KB');
     expect(formatBytes(1536)).toBe('1.50 KB');
     expect(formatBytes(1048576)).toBe('1.00 MB');
+  });
+});
+
+describe('formatLongDuration', () => {
+  test('returns N/A for nullish input', () => {
+    expect(formatLongDuration(null)).toBe('N/A');
+    expect(formatLongDuration(undefined)).toBe('N/A');
+  });
+
+  test('normalizes a long span into human units instead of raw seconds', () => {
+    // formatDuration renders this as "50400 seconds" — the reason this exists.
+    expect(formatLongDuration(50_400_000)).toBe('14 hours');
+    expect(formatLongDuration(3_600_000)).toBe('1 hour');
+  });
+
+  test('keeps only the two largest units', () => {
+    // 2 days, 3 hours, 4 minutes — the minutes are dropped.
+    expect(formatLongDuration((2 * 24 * 3600 + 3 * 3600 + 4 * 60) * 1000)).toBe('2 days 3 hours');
+  });
+
+  test('floors sub-second spans and signs negatives', () => {
+    expect(formatLongDuration(10)).toBe('less than a second');
+    expect(formatLongDuration(-3_600_000)).toBe('−1 hour');
   });
 });
 
