@@ -153,7 +153,7 @@ function formatMs(ms: number | null | undefined): string {
     </EmptyState>
   </div>
 
-  <div v-else class="space-y-6 p-4">
+  <div v-else class="space-y-6 p-4" data-shot="run-insights">
     <div class="flex items-center gap-1.5 text-sm text-muted">
       <UIcon name="i-lucide-sparkles" class="size-4 shrink-0 text-primary/70" />
       <span>Automatic highlights from this run</span>
@@ -161,9 +161,9 @@ function formatMs(ms: number | null | undefined): string {
     </div>
 
     <!-- Summary card -->
-    <SectionCard icon="i-lucide-bar-chart-3" icon-class="text-blue-500" title="Run summary">
+    <SectionCard icon="i-lucide-bar-chart-3" icon-class="text-blue-500" title="Run summary" data-shot="run-summary">
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div class="space-y-1">
+        <div class="space-y-1" data-shot="pass-rate">
           <p class="text-xs text-muted">Pass rate</p>
           <p class="text-xl font-semibold">{{ data.passRate }}%</p>
           <div class="flex items-center gap-1 text-xs" :class="passRateDeltaColor">
@@ -205,6 +205,7 @@ function formatMs(ms: number | null | undefined): string {
       icon-class="text-red-500"
       title="New regressions"
       :count="data.newRegressions.length"
+      data-shot="new-regressions"
     >
       <div class="space-y-1">
         <NuxtLink

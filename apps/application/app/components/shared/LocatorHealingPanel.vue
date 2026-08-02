@@ -278,6 +278,7 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
     :is="cardComponent"
     v-if="!pending && !error && hasData"
     v-bind="cardBind"
+    data-shot="alternative-locators"
     icon="i-lucide-bandage"
     title="Alternative locators"
     :count="alternatives.length"

@@ -117,8 +117,33 @@ Every change that adds or visibly reworks user-facing UI ends with screenshots o
 the `SCENES` registry of `scripts/take-feature-screenshots.mjs`, run it (`node scripts/take-feature-screenshots.mjs
 <scene>` — it boots its own desktop-enabled dev server, or pass `--url` to reuse one), and attach the captured images
 to your final report or PR. Desktop-only UI is captured through the script's built-in mocked Tauri bridge — no shell
-build needed; shape the mock per scene (`link`, `inspection`). Output lands in `.screens/` which is **gitignored — the
-images are a report artifact, never committed**; the scene, kept current, is what's committed.
+build needed; shape the mock per scene (`link`, `inspection`). Scenes tagged `desktop` write to `.screens/`, which is
+**gitignored — those images are a report artifact, never committed**; the scene, kept current, is what's committed.
+
+Scenes tagged `docs` are the exception: they write the committed illustrations in `apps/docs/public/screenshots/`, so
+the scene name _is_ the image name and `npm run app:screens:docs` regenerates every one of them.
+
+| Command                          | Purpose                                                            |
+| -------------------------------- | ------------------------------------------------------------------ |
+| `npm run app:screens -- <scene>` | Capture one scene (add `--url` to drive a server you already have) |
+| `npm run app:screens:docs`       | Regenerate every committed docs illustration                       |
+| `npm run app:screens:check`      | Fail if a docs image has no scene, or a scene's image is missing   |
+| `npm run app:screens -- --list`  | Every scene with its tags and the files it writes                  |
+
+**Target elements, not DOM shape.** A scene points at a `data-shot="…"` attribute placed on the container the image is
+actually about (`of: '[data-shot="flaky-table"]'`), never at an XPath or nth-child path. Treat the attribute list as a
+small API the harness depends on: add one when a scene needs it, keep the name describing the content, and do not
+remove one without updating the scene. Capture waits on `settle()` (fonts, network, nothing still loading) rather than
+on a timeout, and a capture that would not fit the viewport is an **error naming the viewport to use** — never a
+silently cropped image.
+
+`--freeze-now <iso>` pins the browser clock so relative timestamps stop moving and two runs produce byte-identical
+PNGs; combine it with a freshly seeded database when a diff needs to mean a real UI change.
+
+Annotations (boxes, arrows, numbered steps, callouts, spotlights, redactions) come from `scripts/screenshot-annotations.mjs`
+— an in-repo SVG overlay, no runtime dependency. A scene with an `annotate` list writes both the plain image and a
+`-annotated` one, so a docs page can choose. The label text is baked into the PNG, so keep it short and expect a
+recapture to change it.
 
 ### Inline help (MUST follow)
 

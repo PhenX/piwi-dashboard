@@ -132,7 +132,7 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
     </template>
 
     <template #body>
-      <div class="flex flex-col gap-4 p-4">
+      <div class="flex flex-col gap-4 p-4" data-shot="test-case-detail">
         <!-- Header -->
         <div class="flex items-start gap-4 flex-wrap">
           <div class="flex-1 min-w-0">

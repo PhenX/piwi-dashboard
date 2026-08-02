@@ -67,8 +67,8 @@ The **Insights** tab on a run compares it against its last passing baseline and 
 - **New failure clusters**
 
 <figure>
-  <img src="/screenshots/run-insights.png" alt="Run Insights tab showing pass-rate delta, new regressions, and new flaky tests versus the baseline">
-  <figcaption>The Insights tab on a run — pass-rate and duration deltas versus the last passing baseline, with new regressions and newly flaky tests called out.</figcaption>
+  <img src="/screenshots/run-insights-annotated.png" alt="Run Insights tab showing pass-rate delta, new regressions, and new flaky tests versus the baseline, with the run summary boxed and the pass rate and new regressions numbered">
+  <figcaption>The Insights tab on a run — <strong>1</strong> pass-rate and duration deltas against the last passing baseline, <strong>2</strong> the tests that newly started failing.</figcaption>
 </figure>
 
 ## Quarantine, with a way out
