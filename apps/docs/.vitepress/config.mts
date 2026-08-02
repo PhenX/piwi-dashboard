@@ -77,7 +77,9 @@ export default defineConfig({
     ],
 
     // Sidebar order follows the reader's journey: understand it → get results
-    // in → read them → run the instance → wire it into other tools.
+    // in → read them → run the instance → wire it into other tools. A group
+    // answers one question the reader is holding, so a page belongs to the
+    // group matching what they are doing, never to the feature it describes.
     sidebar: [
       {
         text: 'Start here',
@@ -85,6 +87,7 @@ export default defineConfig({
           { text: 'Getting started', link: '/getting-started' },
           { text: 'Core concepts', link: '/concepts' },
           { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
+          { text: 'Privacy & data flow', link: '/privacy' },
         ],
       },
       {
@@ -109,7 +112,6 @@ export default defineConfig({
           { text: 'Timeline markers', link: '/timeline-markers' },
           { text: 'Notifications & alerts', link: '/notifications' },
           { text: 'Offline export', link: '/offline-export' },
-          { text: 'Open in IDE', link: '/ide-integration' },
         ],
       },
       {
@@ -133,16 +135,16 @@ export default defineConfig({
           { text: 'Authentication', link: '/authentication' },
           { text: 'Database', link: '/database' },
           { text: 'Storage configuration', link: '/storage' },
-          { text: 'Privacy & data flow', link: '/privacy' },
-          { text: 'Desktop app', link: '/desktop' },
-          { text: 'Browser extension', link: '/extension' },
         ],
       },
       {
-        text: 'Integrate',
+        text: 'Apps & integrations',
         items: [
-          { text: 'API docs (interactive)', link: 'https://piwitests.github.io/demo/docs' },
+          { text: 'Desktop app', link: '/desktop' },
+          { text: 'Browser extension', link: '/extension' },
+          { text: 'Open in IDE', link: '/ide-integration' },
           { text: 'MCP server', link: '/mcp' },
+          { text: 'API docs (interactive)', link: 'https://piwitests.github.io/demo/docs' },
         ],
       },
     ],
