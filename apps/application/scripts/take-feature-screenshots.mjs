@@ -29,7 +29,7 @@
 import { createRequire } from 'module';
 import { spawn, execSync } from 'child_process';
 import { existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 const require = createRequire(import.meta.url);
@@ -41,6 +41,18 @@ const OUT_DIR = join(APP_DIR, '.screens');
 const PORT = 3050;
 
 const DEFAULT_VIEWPORT = { width: 1280, height: 860 };
+/**
+ * Docs illustrations use a wider frame than the default: the cluster and flaky
+ * tables carry enough columns that 1280px clipped the right-hand ones (type,
+ * status, root cause) straight out of the published images.
+ */
+const DOCS_VIEWPORT = { width: 1600, height: 900 };
+/**
+ * The cluster and flaky tables are wider still — signature, type, status,
+ * occurrences and last-seen alongside a 240px sidebar. 1600px clipped the
+ * occurrence count; this frame fits the whole row.
+ */
+const DOCS_WIDE_VIEWPORT = { width: 1900, height: 900 };
 
 /** What the mocked `desktop_inspect_folder` reports unless a scene overrides it. */
 const READY_INSPECTION = {
@@ -177,7 +189,136 @@ const SCENES = [
       await shoot();
     },
   },
+
+  // ── Docs illustrations ───────────────────────────────────────────────────
+  // These scenes are named after the files they produce in
+  // apps/docs/public/screenshots/, so re-capturing a docs image is:
+  //   node scripts/take-feature-screenshots.mjs <name> --out ../docs/public/screenshots
+  // They run against the seeded dev database (project 1, "E2E Checkout").
+  // Wider than the default viewport: these screens carry wide tables, and the
+  // narrower default clipped their right-hand columns out of the old images.
+  {
+    name: 'flaky-detection',
+    description: 'Docs: project Flaky tests tab (scores, impact, root cause)',
+    viewport: DOCS_WIDE_VIEWPORT,
+    route: '/projects/1',
+    async run({ page, shoot }) {
+      await openTab(page, 'Flaky tests');
+      await shoot();
+    },
+  },
+  {
+    name: 'failure-clusters',
+    description: 'Docs: project Failure clusters tab',
+    viewport: DOCS_WIDE_VIEWPORT,
+    route: '/projects/1',
+    async run({ page, shoot }) {
+      await openTab(page, 'Failure clusters');
+      await shoot();
+    },
+  },
+  {
+    name: 'performance-trends',
+    description: 'Docs: project Performance tab (duration trend, slowest tests)',
+    viewport: DOCS_VIEWPORT,
+    route: '/projects/1',
+    async run({ page, shoot }) {
+      await openTab(page, 'Performance');
+      // Charts animate in; settle before capturing.
+      await page.waitForTimeout(1200);
+      await shoot();
+    },
+  },
+  {
+    // The cluster page is a two-column layout, not tabs: Triage is a card in
+    // the right rail beside the summary. Capture it whole rather than hunting
+    // for a tab that no longer exists.
+    name: 'failure-cluster-triage',
+    description: 'Docs: failure cluster page — summary, resolution and triage rail',
+    viewport: DOCS_VIEWPORT,
+    route: '/failure-clusters/1',
+    async run({ page, shoot }) {
+      await page.getByText('Triage').first().waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(800);
+      await shoot();
+    },
+  },
+  {
+    name: 'ai-diagnosis',
+    description: 'Docs: failure cluster with its stored AI diagnosis',
+    viewport: DOCS_VIEWPORT,
+    route: '/failure-clusters/3',
+    async run({ page, shoot }) {
+      await page
+        .getByText(/Diagnosis/i)
+        .first()
+        .waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(1000);
+      await shoot();
+    },
+  },
+  {
+    name: 'run-insights',
+    description: 'Docs: run Insights tab (regressions vs baseline)',
+    viewport: DOCS_VIEWPORT,
+    route: '/test-runs/1',
+    async run({ page, shoot }) {
+      await openTab(page, 'Insights');
+      await page.waitForTimeout(600);
+      await shoot();
+    },
+  },
+  {
+    name: 'test-case-detail',
+    description: 'Docs: test case history (pass rate, duration trend, status strip)',
+    viewport: DOCS_VIEWPORT,
+    route: '/test-cases/1',
+    async run({ page, shoot }) {
+      await page.waitForTimeout(1200);
+      await shoot();
+    },
+  },
+  {
+    name: 'locator-healing',
+    description: 'Docs: alternative locators panel on a failed execution',
+    // Tall enough that the expanded panel fits in one frame — a clip taller
+    // than the viewport is silently truncated at the fold.
+    viewport: { width: 1600, height: 1300 },
+    route: '/test-run-cases/1',
+    async run({ page, shoot }) {
+      // Evidence sections on an execution start collapsed; the header has to be
+      // opened before there is anything to picture.
+      const header = page.getByText(/Alternative locators/i).first();
+      await header.waitFor({ timeout: 30_000 });
+      await header.click();
+      // The ranked list is what the docs page is actually showing.
+      await page
+        .getByText(/most stable|Recommended fix/i)
+        .first()
+        .waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+      // The heading sits four divs inside the section card that wraps the
+      // whole expanded panel — that card is what the docs image shows.
+      const section = header.locator('xpath=ancestor::div[4]');
+      await section.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      await shoot(undefined, { clip: await clipFor(section) });
+    },
+  },
 ];
+
+/**
+ * Click one of a page's tabs by visible name and let its panel settle. Tabs are
+ * how most docs illustrations reach the screen they show.
+ */
+async function openTab(page, name) {
+  const tab = page.getByRole('tab', { name, exact: false }).first();
+  const fallback = page.getByRole('button', { name, exact: false }).first();
+  const target = (await tab.count()) ? tab : fallback;
+  await target.waitFor({ timeout: 30_000 });
+  await target.click();
+  await page.waitForTimeout(900);
+}
 
 /** Bounding box of a locator, padded a little, for a tight clipped capture. */
 async function clipFor(locator, pad = 8) {
@@ -311,7 +452,7 @@ async function main() {
   const urlIdx = args.indexOf('--url');
   const externalBase = urlIdx !== -1 ? args[urlIdx + 1] : null;
   const outIdx = args.indexOf('--out');
-  const outDir = outIdx !== -1 ? join(process.cwd(), args[outIdx + 1]) : OUT_DIR;
+  const outDir = outIdx !== -1 ? resolve(process.cwd(), args[outIdx + 1]) : OUT_DIR;
   const flagValues = new Set([urlIdx, outIdx].filter((i) => i !== -1).map((i) => i + 1));
   const wanted = args.filter((a, i) => !a.startsWith('--') && !flagValues.has(i));
   const scenes = wanted.length ? SCENES.filter((s) => wanted.includes(s.name)) : SCENES;
