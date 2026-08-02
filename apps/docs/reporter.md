@@ -595,5 +595,5 @@ See [Authentication](/authentication) for details on enabling auth, creating use
 ## Working on the reporter itself
 
 Building the package, its public/internal source layout, and the wire-contract conventions are covered
-in [`packages/reporter/ARCHITECTURE.md`](https://github.com/PiwiTests/platform/blob/main/reporter/ARCHITECTURE.md)
+in [`packages/reporter/ARCHITECTURE.md`](https://github.com/PiwiTests/platform/blob/main/packages/reporter/ARCHITECTURE.md)
 and [`CONTRIBUTING.md`](https://github.com/PiwiTests/platform/blob/main/CONTRIBUTING.md).

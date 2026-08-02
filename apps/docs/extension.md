@@ -228,5 +228,5 @@ its pattern actually matches whatever page you're looking at.
 ## Source
 
 `apps/extension/` in the [monorepo](https://github.com/PiwiTests/platform) — see
-[`apps/extension/AGENTS.md`](https://github.com/PiwiTests/platform/blob/main/extension/AGENTS.md)
+[`apps/extension/AGENTS.md`](https://github.com/PiwiTests/platform/blob/main/apps/extension/AGENTS.md)
 for how it's built and tested.

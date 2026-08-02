@@ -94,7 +94,7 @@ by anything else. See [Storage → Data retention](./storage#data-retention).
 
 You don't have to take the page's word for it. The source is MIT-licensed and the outbound surface is
 small enough to audit: watch the container's egress, or read
-[`server/utils/`](https://github.com/PiwiTests/platform/tree/main/application/server/utils) — the AI
+[`server/utils/`](https://github.com/PiwiTests/platform/tree/main/apps/application/server/utils) — the AI
 provider, SCM, SMTP, storage and notification clients are the only things there that open a socket.
 
 ## See also

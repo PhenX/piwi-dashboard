@@ -18,12 +18,13 @@ overall failure rate — then ranks by **impact**: wasted CI minutes (retries ×
 and pipeline-block effect.
 
 <figure>
-  <img src="/screenshots/flaky-detection.png" alt="Flaky tests tab listing tests with composite score, failure rate, retry passes, and flip counts">
-  <figcaption>The Flaky tests tab — ranked by impact, with a color-coded dot for wasted CI minutes: green under 5, amber under 30, red at 30 or more.</figcaption>
+  <img src="/screenshots/flaky-detection.png" alt="Flaky tests tab listing tests with impact, composite score, failure rate, retry passes, flip counts and root cause, above root-cause filter chips and a lookback selector">
+  <figcaption>The Flaky tests tab — sortable by impact or score, filterable by root cause, over a lookback window you choose.</figcaption>
 </figure>
 
-Start at the red dots. They are typically a small handful of tests responsible for most of the wasted
-time.
+Sort by **Impact** and work down. The column carries a color-coded dot for wasted CI minutes — green
+under 5, amber under 30, red at 30 or more — and in a suite carrying real flake debt a few red rows
+usually account for most of the total.
 
 ## 2. Filter by root cause and fix a class at once
 

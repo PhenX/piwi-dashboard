@@ -30,7 +30,7 @@ Every tool below is good at what it targets. The honest differences:
 | AI failure diagnosis | ✅ optional, grounded in your git diff, patches validated server-side | ❌ | ❌ | ➖ ML triage | ➖ | ➖ |
 | Locator healing suggestions | ✅ from prior passing runs | ❌ | ❌ | ❌ | ❌ | ➖ |
 | Web vitals & network capture | ✅ | ➖ in traces | ❌ | ❌ | ✅ | ➖ |
-| MCP server for AI agents | ✅ 39 tools | ❌ | ❌ | ❌ | ✅ | ➖ |
+| MCP server for AI agents | ✅ 40 tools | ❌ | ❌ | ❌ | ✅ | ➖ |
 | Framework support | Playwright only (by design) | Playwright | Many | Many | Playwright, Cypress, Jest… | Playwright only |
 | Price | Free, MIT | Free | Free | Free (self-host) / paid SaaS | Paid | Free, OSS |
 
