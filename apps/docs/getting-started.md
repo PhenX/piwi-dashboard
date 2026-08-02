@@ -80,7 +80,7 @@ See [Deployment](./deployment) for detailed Docker, Docker Compose, PostgreSQL, 
 ```bash
 # Clone the repository
 git clone https://github.com/PiwiTests/platform.git
-cd platform/application
+cd platform/apps/application
 
 # Install dependencies
 npm install

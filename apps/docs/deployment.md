@@ -388,7 +388,7 @@ $env:PORT='8080'; npx @piwitests/server
 ## Production build from source
 
 ```bash
-cd application
+cd apps/application
 npm install
 npm run app:build
 npm run app:preview  # preview the production build locally

@@ -73,7 +73,7 @@ committed [`ROADMAP.md`](ROADMAP.md).
 Prerequisites: **Node.js 24+**, npm, Git. Commands run from `apps/application/` unless noted.
 
 ```bash
-cd application
+cd apps/application
 npm install
 npm run app:dev      # http://localhost:3000
 ```

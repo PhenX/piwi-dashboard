@@ -250,7 +250,7 @@ Contributions are welcome — [CONTRIBUTING.md](CONTRIBUTING.md) covers dev setu
 conventions; [AGENTS.md](AGENTS.md) has the architecture tour.
 
 ```bash
-cd application && npm install && npm run app:dev   # http://localhost:3000
+cd apps/application && npm install && npm run app:dev   # http://localhost:3000
 ```
 
 ## License
