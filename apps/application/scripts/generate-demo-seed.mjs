@@ -2520,7 +2520,9 @@ const REBASE_SQL = [
   `UPDATE test_cases SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE test_runs SET start_time = start_time + ${D}, created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE files SET created_at = created_at + ${D};`,
-  `UPDATE failure_clusters SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  // fix_landed_at is nullable; NULL + delta stays NULL, so no guard is needed.
+  `UPDATE failure_clusters SET created_at = created_at + ${D}, updated_at = updated_at + ${D}, fix_landed_at = fix_landed_at + ${D};`,
+  `UPDATE quarantined_tests SET created_at = created_at + ${D}, released_at = released_at + ${D};`,
   `UPDATE failure_diagnoses SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE failure_diagnosis_versions SET created_at = created_at + ${D};`,
   '',
