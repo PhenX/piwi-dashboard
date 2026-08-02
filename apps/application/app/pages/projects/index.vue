@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { z } from 'zod';
 import type { TableColumn } from '@nuxt/ui';
 import type { ProjectWithStats, TagInfo, TagsResponse } from '~~/types/api';
+import type { DesktopFolderInspection } from '~/composables/useDesktopFolderInspect';
 
 useHead({ title: 'Projects — Piwi Dashboard' });
 
@@ -73,11 +74,33 @@ const newProject = reactive<Partial<NewProjectSchema>>({
 const newProjectTags = ref<TagInfo[]>([]);
 const creatingProject = ref(false);
 
+// Desktop shell only: a folder picked to start the project from. Its inspection
+// prefills the name; the folder is linked to the project once created.
+const newProjectFolder = ref<string | null>(null);
+
+function onFolderDetected(inspection: DesktopFolderInspection) {
+  if (inspection.suggestedName) newProject.name = inspection.suggestedName;
+}
+
+// A folder picked for a dismissed modal must not silently attach to the next
+// project created; the typed fields keep their draft behavior.
+watch(isNewProjectModalOpen, (open) => {
+  if (!open) newProjectFolder.value = null;
+});
+
+function resetNewProjectForm() {
+  newProject.name = '';
+  newProject.label = '';
+  newProject.description = '';
+  newProjectTags.value = [];
+  newProjectFolder.value = null;
+}
+
 async function handleCreateProject() {
   if (!newProject.name?.trim()) return;
   try {
     creatingProject.value = true;
-    await $fetch('/api/projects', {
+    const created = await $fetch<{ project: { id: number } }>('/api/projects', {
       method: 'POST',
       body: {
         name: newProject.name.trim(),
@@ -87,17 +110,38 @@ async function handleCreateProject() {
       },
     });
 
+    const folder = newProjectFolder.value;
+    let folderLinked = false;
+    if (folder && created?.project?.id != null) {
+      try {
+        await setDesktopProjectLink(created.project.id, folder);
+        folderLinked = true;
+      } catch (error) {
+        toast.add({
+          title: 'Project created, but the folder could not be linked',
+          description: errorMessage(error),
+          color: 'warning',
+        });
+      }
+    }
+
     toast.add({
       title: 'Project created',
-      description: `Project "${newProject.name}" has been created`,
+      description: folderLinked
+        ? `Project "${newProject.name}" has been created and linked to its folder`
+        : `Project "${newProject.name}" has been created`,
       color: 'success',
     });
 
     isNewProjectModalOpen.value = false;
-    newProject.name = '';
-    newProject.label = '';
-    newProject.description = '';
-    newProjectTags.value = [];
+    resetNewProjectForm();
+
+    // A folder-backed project continues on its own page, where the linked
+    // folder and reporter setup it just gained are shown.
+    if (folderLinked && created?.project?.id != null) {
+      await navigateTo(`/projects/${created.project.id}`);
+      return;
+    }
 
     await refresh();
   } catch (error: unknown) {
@@ -344,17 +388,22 @@ const columns: TableColumn<ProjectWithStats>[] = [
   <ClientOnly>
     <UModal :open="isNewProjectModalOpen" title="Create new project" @update:open="isNewProjectModalOpen = $event">
       <template #body>
-        <UForm :schema="newProjectSchema" :state="newProject">
-          <ProjectFormFields
-            mode="create"
-            v-model:name="newProject.name"
-            v-model:label="newProject.label"
-            v-model:description="newProject.description"
-            v-model:tags="newProjectTags"
-            :all-tags="allTags"
-            @tag-created="refreshTags()"
-          />
-        </UForm>
+        <div class="space-y-5">
+          <!-- Desktop shell only: prefill from a checkout on this machine (renders nothing without the bridge). -->
+          <DesktopNewProjectFolder v-model:folder="newProjectFolder" @detected="onFolderDetected" />
+
+          <UForm :schema="newProjectSchema" :state="newProject">
+            <ProjectFormFields
+              mode="create"
+              v-model:name="newProject.name"
+              v-model:label="newProject.label"
+              v-model:description="newProject.description"
+              v-model:tags="newProjectTags"
+              :all-tags="allTags"
+              @tag-created="refreshTags()"
+            />
+          </UForm>
+        </div>
       </template>
 
       <template #footer>

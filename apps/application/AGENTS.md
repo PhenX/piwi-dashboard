@@ -111,6 +111,15 @@ either a `md:hidden` card list + `hidden md:block` table (preferred for dense ta
 `TableScroller`. On fixed-height detail layouts the mobile view must scroll as one document — never `overflow-hidden`
 clipping a tall summary; `DetailPageLayout` handles this. **Verify new or changed screens at 375 px before committing.**
 
+### Feature screenshots (MUST follow)
+
+Every change that adds or visibly reworks user-facing UI ends with screenshots of the result: add or update a scene in
+the `SCENES` registry of `scripts/take-feature-screenshots.mjs`, run it (`node scripts/take-feature-screenshots.mjs
+<scene>` — it boots its own desktop-enabled dev server, or pass `--url` to reuse one), and attach the captured images
+to your final report or PR. Desktop-only UI is captured through the script's built-in mocked Tauri bridge — no shell
+build needed; shape the mock per scene (`link`, `inspection`). Output lands in `.screens/` which is **gitignored — the
+images are a report artifact, never committed**; the scene, kept current, is what's committed.
+
 ### Inline help (MUST follow)
 
 Any new **block-level** shared component with a header MUST accept an optional `help?: HelpTopicKey` prop (typed from

@@ -125,6 +125,10 @@ function onCancel() {
             </div>
           </UForm>
         </UCard>
+
+        <!-- Desktop shell only: the linked folder is a per-machine setting managed here,
+             with the rest of the project settings (renders nothing without the bridge). -->
+        <DesktopProjectFolderSection :project-id="projectId" />
       </div>
     </template>
   </UDashboardPanel>

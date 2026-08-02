@@ -27,6 +27,13 @@ export async function getDesktopProjectLink(
   }
 }
 
+/** Link a folder to a project outside the composable (e.g. right after creating the project). */
+export async function setDesktopProjectLink(projectId: string | number, path: string): Promise<void> {
+  const core = tauriCore();
+  if (!core) throw new Error('not running inside the desktop shell');
+  await core.invoke('desktop_set_project_link', { projectId: String(projectId), path });
+}
+
 export function useDesktopProjectLink(projectId: MaybeRefOrGetter<string | number | null | undefined>) {
   const toast = useToast();
 
@@ -57,7 +64,7 @@ export function useDesktopProjectLink(projectId: MaybeRefOrGetter<string | numbe
     if (!core || id == null || id === '') return false;
     busy.value = true;
     try {
-      const path = await core.invoke<string | null>('desktop_pick_folder');
+      const path = await pickDesktopFolder();
       if (!path) return false;
       await core.invoke('desktop_set_project_link', { projectId: String(id), path });
       await refresh();

@@ -421,10 +421,19 @@ onMounted(async () => {
       :ui="{ root: 'min-h-full', footer: 'lg:border-t lg:border-default' }"
     >
       <template #header="{ collapsed }">
-        <ProjectsMenu :collapsed="collapsed" />
+        <!-- Desktop shell only: visible back/forward for the chrome-less webview,
+             paired at the top-left corner the way native apps place them. The
+             collapsed rail has no room in the header row, so the pair moves into
+             the rail stack below instead. -->
+        <DesktopNavButtons v-if="!collapsed" />
+        <div class="flex-1 min-w-0">
+          <ProjectsMenu :collapsed="collapsed" />
+        </div>
       </template>
 
       <template #default="{ collapsed }">
+        <DesktopNavButtons v-if="collapsed" collapsed class="self-center" />
+
         <UDashboardSearchButton :collapsed="collapsed" class="bg-transparent ring-default" />
 
         <UNavigationMenu

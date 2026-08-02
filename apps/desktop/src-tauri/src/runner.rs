@@ -202,10 +202,10 @@ pub fn desktop_check_local_specs(
     })
 }
 
-/// Find the linked folder's own Playwright CLI entry, walking up so a package
-/// inside a monorepo with a hoisted root `node_modules` still resolves.
-fn resolve_playwright_cli(start: &Path) -> Option<PathBuf> {
-    let candidates = ["@playwright/test/cli.js", "playwright/cli.js"];
+/// Resolve a file inside a `node_modules` reachable from `start`, walking up so
+/// a package inside a monorepo with a hoisted root `node_modules` still
+/// resolves. `candidates` are `node_modules`-relative paths tried at each level.
+pub(crate) fn resolve_node_module(start: &Path, candidates: &[&str]) -> Option<PathBuf> {
     let mut dir = Some(start);
     for _ in 0..MAX_NODE_MODULES_WALK {
         let d = dir?;
@@ -218,6 +218,11 @@ fn resolve_playwright_cli(start: &Path) -> Option<PathBuf> {
         dir = d.parent();
     }
     None
+}
+
+/// Find the linked folder's own Playwright CLI entry.
+pub(crate) fn resolve_playwright_cli(start: &Path) -> Option<PathBuf> {
+    resolve_node_module(start, &["@playwright/test/cli.js", "playwright/cli.js"])
 }
 
 #[derive(serde::Serialize)]

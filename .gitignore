@@ -7,6 +7,9 @@
 .cache
 dist
 
+# Feature screenshots (scripts/take-feature-screenshots.mjs)
+.screens
+
 # Node dependencies
 node_modules
 

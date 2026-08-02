@@ -191,6 +191,11 @@ export const HELP_TOPICS = {
     text: 'A read-only Git host token lets diagnosis pull the actual commit diffs behind a failure for SCM-grounded analysis. Stored encrypted.',
     doc: 'ai-diagnosis#scm-grounded-context',
   },
+  'project.local-folder': {
+    title: 'Linked local folder',
+    text: 'The checkout on this machine that produces this project’s runs. Linking it enables running tests from the app and opening files in your IDE. The link is stored on this machine only — never on the server.',
+    doc: 'desktop#running-tests-from-the-app',
+  },
 
   // ── Test run detail ───────────────────────────────────────────────────
   'run.summary': {
