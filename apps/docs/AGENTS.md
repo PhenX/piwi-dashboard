@@ -61,7 +61,7 @@ to say what it is for, it is two pages (`storage` + `database` was one of these)
 
 ### `recipes/` — the one task-first group
 
-Every other group is organised by feature. `recipes/` is organised by the question a reader arrives
+Every other group is organized by feature. `recipes/` is organized by the question a reader arrives
 with ("did I break this, or is it flaky?"), and each page crosses several features to answer one. It
 exists for the long-tail searches that never contain the word "Piwi", so:
 

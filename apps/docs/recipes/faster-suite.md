@@ -82,7 +82,7 @@ Everything above shaves time off the harness. This step is the one that finds a 
 - **Slow endpoints** — on a run, network requests grouped by method and normalized route
   (`/api/users/:id`) with avg/p90/max duration and error rate. [Analytics](../analytics) lifts the same
   view across every project, so a shared endpoint regressing shows up before any single suite notices.
-- **Web Vitals** — TTFB, FCP, LCP, CLS and the rest per execution, colour-coded. LCP/CLS/INP are
+- **Web Vitals** — TTFB, FCP, LCP, CLS and the rest per execution, color-coded. LCP/CLS/INP are
   Chromium-only, and INP needs an interaction, so short tests often show `n/a`.
 
 Both require the [capture fixtures](../capture-fixtures) — the reporter alone cannot see the network.
