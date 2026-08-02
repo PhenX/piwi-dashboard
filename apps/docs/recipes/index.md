@@ -18,8 +18,8 @@ matters.
 | "CI takes forever and I don't know what's slow." | [Cut the time the suite costs](./faster-suite) |
 
 Every recipe assumes the [reporter](../reporter) is installed and has sent a few runs — that's the only
-hard requirement. Where a step needs more than that (the capture fixtures, an LLM key, an unpacked
-browser extension), it says so and gives you a route that doesn't.
+hard requirement. Where a step needs more than that (the capture fixtures, an LLM key, a browser
+extension), it says so and gives you a route that doesn't.
 
 ## The tools each recipe draws on
 
@@ -34,7 +34,7 @@ know what exists and what it costs to switch on.
 | **REST API** | Scripts, dashboards of your own, CI steps | Nothing; see the [API docs](https://piwitests.github.io/demo/docs) |
 | **[AI diagnosis](../ai-diagnosis)** | An explanation of a cluster read against your git diff | An LLM you configure. Off by default; a local model works |
 | **[Open in IDE](../ide-integration)** | Jumping from a stack frame to the file | Per-browser config, no install |
-| **[Browser extension](../extension)** | Picking a locator against the live page | An unpacked build — not in the Chrome Web Store yet |
+| **[Browser extension](../extension)** | Picking a locator against the live page | A one-click install from the [Chrome Web Store](https://chromewebstore.google.com/detail/piwi-picker/pakhnokpjboejcghgcmkjlpnogfjihhe) (Edge included) |
 | **[Desktop app](../desktop)** | Running all of this without Docker | Windows x64 or Apple-silicon macOS; installers aren't signed yet |
 | **[Notifications](../notifications)** | Being told instead of looking | An email, Slack, or webhook target |
 

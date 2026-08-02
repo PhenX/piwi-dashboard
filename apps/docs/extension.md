@@ -12,10 +12,19 @@ are fully standalone — nothing is sent anywhere by default. Connecting to a Pi
 optional and adds exactly one thing: matching a recording against your project's own
 page-object methods and helpers, ranked live as you record.
 
-> Not yet published to the Chrome Web Store or Edge Add-ons. Install it unpacked from a local
-> build until it is.
-
 ## Install
+
+**[Piwi Picker on the Chrome Web Store ↗](https://chromewebstore.google.com/detail/piwi-picker/pakhnokpjboejcghgcmkjlpnogfjihhe)**
+— click **Add to Chrome** and you're done; updates arrive from the store like any other extension.
+
+That one listing covers **Edge too**, and every other Chromium browser (Brave, Vivaldi, Opera).
+Edge blocks other stores until you say otherwise: the first Chrome Web Store page you open in it
+shows an **Allow extensions from other stores** banner — click **Allow** once, and **Get** installs
+and auto-updates exactly as it does in Chrome. There's no separate Edge Add-ons listing yet.
+
+### From source
+
+Only needed if you want an unreleased build, or you're changing the extension itself.
 
 ```bash
 git clone https://github.com/PiwiTests/platform.git
@@ -29,6 +38,10 @@ Then, in Chrome or Edge:
 1. Open `chrome://extensions` (`edge://extensions` on Edge).
 2. Turn on **Developer mode**.
 3. **Load unpacked** → select `apps/extension/dist`.
+
+A source build doesn't auto-update — rebuild and reload its card on the extensions page to pick up
+changes. If you already have the store version installed, disable one or the other so two copies of
+the picker don't both bind the keyboard shortcut.
 
 ## What it does
 

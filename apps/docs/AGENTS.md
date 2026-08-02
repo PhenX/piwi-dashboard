@@ -61,7 +61,7 @@ exists for the long-tail searches that never contain the word "Piwi", so:
 - **Feature pages stay the source of truth.** A recipe links to them; it never becomes a second place
   where the flaky score or the fingerprint algorithm is explained, because that copy will drift.
 - **Always give a route for readers who can't install the thing.** State what a step requires (capture
-  fixtures, an LLM key, an unpacked extension, a signed-installer-less desktop build) and offer the
+  fixtures, an LLM key, a browser extension, a signed-installer-less desktop build) and offer the
   alternative — dashboard, MCP, REST API, or plain trace evidence. Listing a requirement without an
   alternative is the failure mode to avoid.
 - Recipes reuse **existing committed screenshots**; add a scene to the feature-screenshot harness only
