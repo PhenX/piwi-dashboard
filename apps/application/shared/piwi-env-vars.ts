@@ -133,7 +133,7 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     order: 2,
     intro:
       'Piwi uses SQLite by default. Setting `PIWI_DATABASE_URL` switches it to PostgreSQL; migrations run automatically on startup.',
-    note: 'See [Deployment](./deployment) for PostgreSQL setup and [Storage → Data retention](./storage#data-retention) for how the nightly sweep works.',
+    note: 'See [Database](./database) for SQLite versus PostgreSQL and [Storage → Data retention](./storage#data-retention) for how the nightly sweep works.',
   },
   storage: {
     title: 'Storage',
@@ -276,7 +276,7 @@ export const PIWI_ENV_VARS = {
     category: 'database',
     secret: true,
     example: 'postgres://piwi:piwi@db:5432/piwi',
-    docs: 'deployment#docker-compose-with-postgresql',
+    docs: 'database#postgresql',
   },
   PIWI_RETENTION_DAYS: {
     description:

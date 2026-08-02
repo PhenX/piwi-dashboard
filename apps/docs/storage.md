@@ -5,16 +5,20 @@ lang: en-US
 
 # Storage configuration
 
-The dashboard supports two storage backends for test artifacts (HTML reports, trace files, etc.).
+Test artifacts — HTML reports, trace files, screenshots, videos, attachments — are written to one of
+two backends. Runs, test cases and settings live in the [database](./database) instead.
+
+Every variable below is an ordinary environment variable: pass it to the container, put it in your
+`.env`, or set it in your host's dashboard. The
+[configuration generator](./configuration/generator) will write the block for you.
 
 ## Local storage (default)
 
-Files are stored in the `.data/storage/` directory relative to the application. No configuration is required.
+Files are stored under `.data/storage/`. No configuration is required.
 
 To customize the path:
 
 ```bash
-# In apps/application/.env
 PIWI_STORAGE_TYPE=local
 PIWI_STORAGE_PATH=/custom/path/to/storage
 ```
@@ -24,7 +28,6 @@ PIWI_STORAGE_PATH=/custom/path/to/storage
 Any S3-compatible service can be used: AWS S3, MinIO, DigitalOcean Spaces, Cloudflare R2, and others.
 
 ```bash
-# In apps/application/.env
 PIWI_STORAGE_TYPE=s3
 
 PIWI_S3_BUCKET=your-bucket-name
@@ -128,107 +131,9 @@ The dashboard uses an abstraction layer that allows switching backends without a
 
 Large failure evidence captured per execution — the page's ARIA snapshot, the failing test's source snippet, and its source stack frames — is stored content-addressed: each unique payload is written once per project (keyed by SHA-256) and executions reference it by id. A test that fails the same way across many runs, or across several browsers in one run, stores that evidence a single time instead of once per execution. Unreferenced payloads are garbage-collected when runs are deleted. Deduplication happens server-side at ingest, so it applies regardless of reporter version.
 
-## Database storage
+## See also
 
-The dashboard supports two database backends: **SQLite** (default, zero-configuration) and **PostgreSQL** (for production multi-user deployments).
-
-### SQLite (default)
-
-SQLite requires no configuration. The database file is created automatically at `.data/piwi.db`.
-
-To customize the path, set the variable in `apps/application/.env` (recommended, cross-platform), or pass it inline:
-
-::: code-group
-
-```bash [Linux / macOS]
-PIWI_DATABASE_PATH=/custom/path/database.db npm run app:dev
-```
-
-```powershell [Windows (PowerShell)]
-$env:PIWI_DATABASE_PATH = '/custom/path/database.db'; npm run app:dev
-```
-
-:::
-
-### PostgreSQL
-
-Set the `PIWI_DATABASE_URL` environment variable to switch to PostgreSQL (in `apps/application/.env`, or inline):
-
-::: code-group
-
-```bash [Linux / macOS]
-PIWI_DATABASE_URL=postgresql://user:password@localhost:5432/piwi_dashboard npm run app:dev
-```
-
-```powershell [Windows (PowerShell)]
-$env:PIWI_DATABASE_URL = 'postgresql://user:password@localhost:5432/piwi_dashboard'; npm run app:dev
-```
-
-:::
-
-The dashboard creates all required tables automatically on startup via migrations.
-
-#### Local development with Docker
-
-```bash
-docker run -d -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=piwi_dashboard postgres:16-alpine
-```
-
-Then start the dashboard:
-
-::: code-group
-
-```bash [Linux / macOS]
-PIWI_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/piwi_dashboard npm run app:dev
-```
-
-```powershell [Windows (PowerShell)]
-$env:PIWI_DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/piwi_dashboard'; npm run app:dev
-```
-
-:::
-
-#### Schema changes (PostgreSQL)
-
-To generate a new PostgreSQL migration after editing `schema.pg.ts`:
-
-::: code-group
-
-```bash [Linux / macOS]
-PIWI_DATABASE_URL=postgresql://... npm run db:generate:pg
-npm run db:migrate:pg
-```
-
-```powershell [Windows (PowerShell)]
-$env:PIWI_DATABASE_URL = 'postgresql://...'
-npm run db:generate:pg
-npm run db:migrate:pg
-```
-
-:::
-
-| Script | Description |
-|--------|-------------|
-| `npm run db:generate` | Generate SQLite migration |
-| `npm run db:migrate` | Apply SQLite migrations |
-| `npm run db:generate:pg` | Generate PostgreSQL migration |
-| `npm run db:migrate:pg` | Apply PostgreSQL migrations |
-| `npm run db:studio` | Browse SQLite database |
-| `npm run db:studio:pg` | Browse PostgreSQL database |
-
-### Schema changes (SQLite)
-
-If you modify the database schema:
-
-```bash
-# 1. Edit apps/application/server/database/schema.sqlite.ts
-# 2. Generate a new migration
-npm run db:generate
-
-# 3. Restart the application — migrations apply automatically on startup
-npm run app:dev
-```
-
-::: warning
-Never delete or modify existing migration files. Always generate new migrations for schema changes.
-:::
+- [Database](./database) — SQLite versus PostgreSQL, and what lives there instead
+- [Configuration reference](./configuration#storage) — every `PIWI_STORAGE_*` and `PIWI_S3_*` variable
+- [Backups](./deployment#backups) — copying the storage directory alongside the database
+- [Offline export](./offline-export) — taking one investigation out of storage entirely

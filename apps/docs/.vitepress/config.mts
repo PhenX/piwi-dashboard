@@ -131,6 +131,7 @@ export default defineConfig({
           { text: 'Configuration reference', link: '/configuration' },
           { text: 'Configuration generator', link: '/configuration/generator' },
           { text: 'Authentication', link: '/authentication' },
+          { text: 'Database', link: '/database' },
           { text: 'Storage configuration', link: '/storage' },
           { text: 'Privacy & data flow', link: '/privacy' },
           { text: 'Desktop app', link: '/desktop' },

@@ -591,9 +591,3 @@ export default defineConfig({
 The reporter calls `/api/auth/login` automatically before each upload.
 
 See [Authentication](/authentication) for details on enabling auth, creating users, and managing API keys.
-
-## Working on the reporter itself
-
-Building the package, its public/internal source layout, and the wire-contract conventions are covered
-in [`packages/reporter/ARCHITECTURE.md`](https://github.com/PiwiTests/platform/blob/main/packages/reporter/ARCHITECTURE.md)
-and [`CONTRIBUTING.md`](https://github.com/PiwiTests/platform/blob/main/CONTRIBUTING.md).
