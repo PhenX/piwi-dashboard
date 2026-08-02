@@ -5,8 +5,8 @@
 <p align="center">
   <b>Your Playwright results, kept and explained.</b><br>
   CI throws away every report it makes. Piwi keeps them — every run, trace, and HTML report — then
-  groups the failures by root cause, scores the flaky tests, and tells you which locator to use
-  instead of the one that just broke. Self-hosted, MIT, zero telemetry.
+  groups the failures by root cause, scores the flaky tests, and finds the locator you should have
+  used. Self-hosted, MIT, zero telemetry.
 </p>
 
 <p align="center">

@@ -8,7 +8,7 @@ const siteUrl = 'https://piwitests.github.io'
 export default defineConfig({
   title: 'Piwi Dashboard',
   description:
-    'Self-hosted dashboard that keeps every Playwright run — then groups failures by root cause, scores flaky tests, and heals broken locators.',
+    'CI throws away every report it makes. Piwi keeps them — then groups the failures by root cause, scores the flaky tests, and finds the locator you should have used. Self-hosted, MIT, zero telemetry.',
   base: '/',
   // AGENTS.md is the agent guide for this directory, not a page of the site:
   // it links to sibling guides outside the docs root, so building it as a page

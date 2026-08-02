@@ -87,8 +87,9 @@ exists for the long-tail searches that never contain the word "Piwi", so:
 - **Every user-visible reporter option** must appear in `reporter.md`'s options table (and its `PIWI_*` var in the
   table below it) in the same change that adds it to `packages/reporter/src/public/options.ts`.
 - **In-app help links point here.** `apps/application/app/utils/help-content.ts` builds docs URLs from `doc:` string
-  literals that nothing validates — renaming a heading breaks them silently. Grep for the old anchor when you rename
-  one.
+  literals, as do a few components via `<DocLink to="…">`. `apps/application/tests/unit/docs-drift.test.ts` resolves
+  every one of them against the headings on this site, so renaming a heading turns that test red rather than breaking
+  a help link silently — but the fix is still yours: update the literal, or keep the anchor.
 
 ## Writing conventions
 
