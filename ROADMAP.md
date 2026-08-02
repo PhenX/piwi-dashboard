@@ -56,7 +56,7 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 
 ## Exploring
 
-- **Exporting whole runs** — offline export covers one execution and one failure cluster today; a whole run, and a
+- **Exporting whole runs** — [offline export](https://piwitests.github.io/offline-export) covers one execution and one failure cluster today; a whole run, and a
   test's history across runs, would follow the same shape.
 - **Public share links** — handing an investigation to someone without a dashboard account means sending them a file; a
   read-only link would need share tokens, which Piwi has no infrastructure for today.

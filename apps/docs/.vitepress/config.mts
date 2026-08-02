@@ -102,11 +102,13 @@ export default defineConfig({
         text: 'Reading the results',
         items: [
           { text: 'UI overview', link: '/ui-overview' },
+          { text: 'Failure evidence', link: '/evidence' },
           { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
           { text: 'Flaky tests', link: '/flaky-tests' },
           { text: 'Analytics', link: '/analytics' },
           { text: 'Timeline markers', link: '/timeline-markers' },
           { text: 'Notifications & alerts', link: '/notifications' },
+          { text: 'Offline export', link: '/offline-export' },
           { text: 'Open in IDE', link: '/ide-integration' },
         ],
       },

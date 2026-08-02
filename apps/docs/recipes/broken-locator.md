@@ -105,7 +105,7 @@ don't want mid-release. Four routes that don't need it:
 
 **Pick from the trace, after the fact.** When the failing execution has an uploaded trace, the
 alternative-locators panel offers **Pick from trace**: it opens the trace in the dashboard's bundled
-[trace viewer](../ui-overview#trace-viewer), whose *Pick locator* tool works on the recorded page
+[trace viewer](../evidence#trace-viewer), whose *Pick locator* tool works on the recorded page
 snapshots. So a CI failure nobody watched live can still be picked visually, days later, from the page
 as it actually was.
 

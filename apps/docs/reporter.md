@@ -323,7 +323,7 @@ The result is shown as an **Alternative locators** panel on the test-case and fa
   <figcaption>The Alternative locators panel — replacements ranked by stability score (data-testid ≈ 100, role + name ≈ 90), with a recommended fix and a copy button for each.</figcaption>
 </figure>
 
-When the failing execution has an uploaded trace, the panel offers **Pick from trace**: it opens the trace in the dashboard's bundled [trace viewer](./ui-overview#trace-viewer), whose *Pick locator* tool works on the recorded page snapshots — so a replacement locator can be picked visually even for a CI failure nobody watched live. A replacement confirmed with the reporter's failure-time locator picker (`pickLocatorOnFailure`) shows a **Your pick** badge and becomes the recommended fix.
+When the failing execution has an uploaded trace, the panel offers **Pick from trace**: it opens the trace in the dashboard's bundled [trace viewer](./evidence#trace-viewer), whose *Pick locator* tool works on the recorded page snapshots — so a replacement locator can be picked visually even for a CI failure nobody watched live. A replacement confirmed with the reporter's failure-time locator picker (`pickLocatorOnFailure`) shows a **Your pick** badge and becomes the recommended fix.
 
 Capture adds a small cost in the test worker: one DOM read per call site, plus an ARIA snapshot only when the element's own attributes don't already settle its accessible name. Actions and passing assertions alike probe at most **once per call site per test** — a line re-run in a loop, a `toPass()` block, or a page-object method called repeatedly never probes twice. Negated assertions (`.not.…`), absence checks (`toBeHidden`, `toBeDetached`) and multi-element checks (`toHaveCount`, array forms) are never probed. Turn it off with `captureLocators: false` or `PIWI_CAPTURE_LOCATORS=false`; it is also disabled automatically whenever `collectPerformanceMetrics` is `false`.
 
@@ -529,7 +529,7 @@ export default defineConfig({
 5. If the [capture fixtures](./capture-fixtures) are active, network requests, console entries, Web Vitals, failure-time ARIA snapshots, and locator snapshots are included per test case.
 6. The server decompresses the report and makes it available for viewing, with fully functional HTML reports.
 
-Uploaded traces open in the dashboard's **built-in, self-hosted trace viewer** — the bytes never leave your server. See [Trace viewer](./ui-overview#trace-viewer).
+Uploaded traces open in the dashboard's **built-in, self-hosted trace viewer** — the bytes never leave your server. See [Trace viewer](./evidence#trace-viewer).
 
 ## Troubleshooting
 

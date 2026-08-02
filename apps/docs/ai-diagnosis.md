@@ -157,7 +157,7 @@ A diagnosis is grounded in your actual run — it is not a generic "ask AI" butt
 
 ## Diagnosing one execution
 
-The [failure cluster](./ui-overview#failure-cluster-detail) page diagnoses a *group* of failures that share a fingerprint. When you are looking at a single failing execution, the [test case detail](./ui-overview#test-case-detail) page's **Diagnosis** tab can diagnose *just that execution* — same model, same structured result, scoped to the one run in front of you. This is handy when a failure hasn't clustered yet, or when you want a diagnosis grounded in this specific execution's evidence rather than the cluster aggregate.
+The [failure cluster](./ui-overview#failure-cluster-detail) page diagnoses a *group* of failures that share a fingerprint. When you are looking at a single failing execution, the [test case detail](./evidence#one-execution-diagnosis-first) page's **Diagnosis** tab can diagnose *just that execution* — same model, same structured result, scoped to the one run in front of you. This is handy when a failure hasn't clustered yet, or when you want a diagnosis grounded in this specific execution's evidence rather than the cluster aggregate.
 
 Two things are always available there, even with **no provider configured**:
 

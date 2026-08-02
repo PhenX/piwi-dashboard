@@ -251,7 +251,7 @@ export const HELP_TOPICS = {
   'case.diagnosis-tab': {
     title: 'Diagnosis',
     text: 'Everything you need to understand and fix this failure in one place — the error, a verdict on what kind of failure it is, the captured evidence, and an AI diagnosis.',
-    doc: 'ui-overview#test-case-detail',
+    doc: 'evidence#one-execution-diagnosis-first',
   },
   'case.verdict': {
     title: 'Failure verdict',
@@ -261,29 +261,30 @@ export const HELP_TOPICS = {
   'case.evidence': {
     title: 'Failure evidence',
     text: 'What was captured at the moment of failure — screenshots, video and traces — grouped so you can see exactly what the browser saw.',
-    doc: 'ui-overview#trace-viewer',
+    doc: 'evidence#trace-viewer',
   },
   'case.test-source': {
     title: 'Test source',
     text: 'The source around the failing line and the callers above it — captured from the failure’s call stack — so you can read where it broke, and the code that led there, without opening your editor. When the execution has a trace, this deepens into the complete call stack with the real source of every frame, read from the trace’s embedded files.',
-    doc: 'ui-overview#trace-powered-deep-views',
+    doc: 'evidence#trace-powered-deep-views',
   },
   'export.offline': {
     // Deliberately avoids the word "Export": the hint sits beside a button with
     // that label, and a substring role query would match both.
     title: 'Reading this offline',
     text: 'Takes this investigation out of the dashboard as a file that needs no network and no Piwi server. HTML is one self-contained page with screenshots and video embedded; ZIP adds the raw artifacts — trace archives, full-size video, logs — plus a machine-readable data.json; PDF is the HTML printed from your browser. Evidence past the size budget is listed in the report as omitted rather than dropped quietly.',
+    doc: 'offline-export',
     envVars: ['PIWI_EXPORT_MAX_INLINE_BYTES', 'PIWI_EXPORT_MAX_BYTES', 'PIWI_EXPORT_MAX_CASES'],
   },
   'case.artifacts': {
     title: 'Artifacts',
     text: 'Traces, attachments, console output and network requests captured for this execution — the raw material behind the result.',
-    doc: 'ui-overview#trace-viewer',
+    doc: 'evidence#trace-viewer',
   },
   'case.steps': {
     title: 'Steps',
     text: 'Each step Playwright ran, with its duration. A failed step is highlighted with its error, and slow steps are color-coded.',
-    doc: 'ui-overview#test-case-detail',
+    doc: 'evidence#one-execution-diagnosis-first',
   },
   'case.wasted-time': {
     title: 'Wasted time',
@@ -303,7 +304,7 @@ export const HELP_TOPICS = {
   'case.traces': {
     title: 'Traces',
     text: 'Playwright trace files for this execution. "View trace" opens them in the dashboard\'s own trace viewer — the trace stays on your server, it is never sent to a third party.',
-    doc: 'ui-overview#trace-viewer',
+    doc: 'evidence#trace-viewer',
   },
   'case.console': {
     title: 'Console output',
@@ -313,7 +314,7 @@ export const HELP_TOPICS = {
   'case.network': {
     title: 'Network requests',
     text: 'HTTP requests the page made during the test, with timing and status — useful for spotting failed or slow calls. When the execution has a trace, the Full trace view shows every request (all resource types) with headers, timing phases, a waterfall and capped body previews; sensitive header values are masked.',
-    doc: 'ui-overview#trace-powered-deep-views',
+    doc: 'evidence#trace-powered-deep-views',
   },
   'case.backend-logs': {
     title: 'Backend server logs',
