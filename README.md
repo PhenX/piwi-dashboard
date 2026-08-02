@@ -113,7 +113,8 @@ the *dashboard's* requirement.
 
 > **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker
 > auto-creates `.data` owned by `root` and the container can't write to it. Docker Desktop on Windows
-> and macOS handles this for you. See [Troubleshooting](./DOCKER.md#troubleshooting).
+> and macOS handles this for you. See
+> [Permission issues with volumes](https://piwitests.github.io/deployment#permission-issues-with-volumes).
 
 > **Before you expose it:** authentication is **off by default** — the command above gives you an open
 > dashboard, which is fine on localhost and not fine on a network. Set `PIWI_AUTH_ENABLED=true`

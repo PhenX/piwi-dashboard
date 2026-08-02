@@ -233,6 +233,10 @@ docker run -p 3000:3000 -v ${PWD}/.data:/app/.data piwi-dashboard:local
 
 :::
 
+Pass `--build-arg PIWI_BUILD_SHA=$(git rev-parse HEAD)` to stamp the image with a commit SHA, shown on
+Settings → About and returned by `GET /api/version`. The published images set it from CI; it's optional
+for a local build.
+
 ## Docker Compose
 
 The repository ships a ready-to-use [`docker-compose.yml`](https://github.com/PiwiTests/platform/blob/main/docker-compose.yml) with commented options (secret key, auth, PostgreSQL). Minimal version:
