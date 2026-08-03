@@ -20,22 +20,15 @@ const router = useRouter();
 const testCaseId = route.params.id;
 
 const { data: testCase, refresh } = await useFetch(`/api/test-run-cases/${testCaseId}`);
-const historyData = ref<TestCaseHistoryPoint[]>([]);
-
-watch(
-  () => testCase.value?.testCaseId,
-  async (tcId) => {
-    if (tcId) {
-      try {
-        historyData.value = await $fetch<TestCaseHistoryPoint[]>(`/api/test-cases/${tcId}/history`);
-      } catch {
-        historyData.value = [];
-      }
-    } else {
-      historyData.value = [];
-    }
+// The rows ride in the SSR payload, so the server and the client agree on the
+// History tab's count and its table at hydration.
+const { data: historyData } = await useAsyncData(
+  `test-run-case-history-${testCaseId}`,
+  () => {
+    const tcId = testCase.value?.testCaseId;
+    return tcId ? $fetch<TestCaseHistoryPoint[]>(`/api/test-cases/${tcId}/history`) : Promise.resolve([]);
   },
-  { immediate: true },
+  { default: (): TestCaseHistoryPoint[] => [], watch: [() => testCase.value?.testCaseId] },
 );
 
 const { data: traceData, refresh: refreshTraces } = await useFetch<TraceInfo[]>(
@@ -1036,7 +1029,7 @@ provide(clusterSectionLocatorKey, {
 
         <!-- ── History ──────────────────────────────────────────────────── -->
         <template #tab-history>
-          <div class="space-y-4 pt-4">
+          <div class="space-y-4 pt-4" data-shot="execution-history">
             <div v-if="historyData && historyData.length > 0" class="space-y-4">
               <ChartCard title="Duration trend" icon="i-lucide-trending-up" :legend="legendOf(CASE_STATUS_SERIES)">
                 <template #actions>

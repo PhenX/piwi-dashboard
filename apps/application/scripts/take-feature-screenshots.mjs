@@ -320,6 +320,15 @@ const SCENES = [
 
   // ── Feature states (report artifacts) ─────────────────────────────────────
   {
+    name: 'execution-history',
+    description: 'Execution page opened straight onto its History tab (duration trend + executions)',
+    route: '/test-run-cases/229?tab=history',
+    viewport: { width: 1280, height: 1000 },
+    charts: true,
+    of: '[data-shot="execution-history"]',
+    pad: 12,
+  },
+  {
     name: 'run-trend',
     description: 'Test runs tab: per-run stacked result bars with day ticks and markers',
     route: '/projects/1',

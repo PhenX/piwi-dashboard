@@ -108,4 +108,28 @@ test.describe('Test-run-case page', () => {
     await waitForHydration(page);
     await expect(page.getByRole('tab', { name: 'Performance' })).toBeVisible();
   });
+
+  test('History tab opens populated from the SSR payload, without refetching or a hydration mismatch', async ({
+    page,
+  }) => {
+    // A client-side call to the history endpoint means the rows are missing from
+    // the payload, which is what tears the server and client renders apart.
+    const historyCalls: string[] = [];
+    page.on('request', (req) => {
+      if (/\/api\/test-cases\/\d+\/history/.test(req.url())) historyCalls.push(req.url());
+    });
+    // Vue only reports mismatches in a dev build; in a production run this stays empty.
+    const hydrationErrors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.text().includes('Hydration completed but contains mismatches')) hydrationErrors.push(msg.text());
+    });
+
+    await page.goto(`/test-run-cases/${failedCaseId}?tab=history`);
+    await waitForHydration(page);
+
+    await expect(page.getByRole('heading', { name: 'Duration trend' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /History \(\d+\)/ })).toBeVisible();
+    expect(historyCalls).toEqual([]);
+    expect(hydrationErrors).toEqual([]);
+  });
 });
