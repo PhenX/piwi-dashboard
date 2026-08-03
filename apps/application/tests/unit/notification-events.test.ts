@@ -49,6 +49,12 @@ describe('renderEventSubject', () => {
     expect(renderEventSubject('flakiness.spike', runPayload)).toBe('Flakiness spike — my-project');
     expect(renderEventSubject('perf.regression', runPayload)).toBe('Performance regression — my-project');
   });
+
+  test('perf.regression includes the slowdown when the payload carries it', () => {
+    expect(renderEventSubject('perf.regression', { ...runPayload, regressionPct: 34 })).toBe(
+      'Performance regression — my-project (+34% slower)',
+    );
+  });
 });
 
 describe('truncateExcerpt', () => {

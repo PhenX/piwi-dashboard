@@ -213,6 +213,15 @@ test.describe.serial('Channels API', () => {
     expect(res.status).toBe(400);
   });
 
+  test('POST /api/channels creates a browser channel', async () => {
+    skip();
+    const res = await api('POST', '/api/channels', { name: 'My tabs', type: 'browser', config: {} }, adminCookie);
+    expect(res.ok).toBe(true);
+    const data = (await res.json()) as { success: boolean; channel: { id: number; type: string } };
+    expect(data.channel.type).toBe('browser');
+    await api('DELETE', `/api/channels/${data.channel.id}`, undefined, adminCookie);
+  });
+
   test('DELETE /api/channels/[id] removes the webhook channel', async () => {
     skip();
     const res = await api('DELETE', `/api/channels/${webhookChannelId}`, undefined, adminCookie);
@@ -329,6 +338,136 @@ test.describe.serial('Subscriptions API', () => {
   });
 });
 
+// ── Global channels & subscriptions ────────────────────────────────────────────
+
+test.describe.serial('Global channels & subscriptions', () => {
+  let globalChannelId = 0;
+  let globalSubId = 0;
+
+  test('non-admin cannot create a global channel', async () => {
+    skip();
+    const res = await api(
+      'POST',
+      '/api/channels',
+      { name: 'Rogue global', type: 'slack', config: { webhookUrl: 'https://hooks.slack.com/x' }, global: true },
+      userCookie,
+    );
+    expect(res.status).toBe(403);
+  });
+
+  test('admin creates a global channel visible to every user', async () => {
+    skip();
+    const res = await api(
+      'POST',
+      '/api/channels',
+      {
+        name: 'Team Slack',
+        type: 'slack',
+        config: { webhookUrl: 'https://hooks.slack.com/services/T/B/x' },
+        global: true,
+      },
+      adminCookie,
+    );
+    expect(res.ok).toBe(true);
+    const data = (await res.json()) as { channel: { id: number } };
+    globalChannelId = data.channel.id;
+
+    const listRes = await api('GET', '/api/channels', undefined, userCookie);
+    const listData = (await listRes.json()) as {
+      channels: Array<{ id: number; userId: number | null; config: Record<string, unknown> }>;
+    };
+    const ch = listData.channels.find((c) => c.id === globalChannelId);
+    expect(ch).toBeDefined();
+    expect(ch?.userId).toBeNull();
+    expect(ch?.config.webhookUrl).toBeUndefined();
+  });
+
+  test("channel listing excludes other users' personal channels", async () => {
+    skip();
+    const res = await api(
+      'POST',
+      '/api/channels',
+      { name: 'User personal email', type: 'email', config: { address: 'user@example.com' } },
+      userCookie,
+    );
+    const data = (await res.json()) as { channel: { id: number } };
+    const userChannelId = data.channel.id;
+
+    const listRes = await api('GET', '/api/channels', undefined, adminCookie);
+    const listData = (await listRes.json()) as { channels: Array<{ id: number }> };
+    expect(listData.channels.find((c) => c.id === userChannelId)).toBeUndefined();
+
+    const delRes = await api('DELETE', `/api/channels/${userChannelId}`, undefined, adminCookie);
+    expect(delRes.ok).toBe(true);
+  });
+
+  test('non-admin cannot fire tests at a global channel', async () => {
+    skip();
+    const res = await api('POST', `/api/channels/${globalChannelId}/test`, undefined, userCookie);
+    expect(res.status).toBe(403);
+  });
+
+  test('global subscriptions require admin and a global channel', async () => {
+    skip();
+    const nonAdmin = await api(
+      'POST',
+      '/api/subscriptions',
+      { channelId: globalChannelId, projectId, events: ['run.failed'], global: true },
+      userCookie,
+    );
+    expect(nonAdmin.status).toBe(403);
+
+    const personalRes = await api(
+      'POST',
+      '/api/channels',
+      { name: 'Admin personal', type: 'email', config: { address: 'admin@example.com' } },
+      adminCookie,
+    );
+    const personalId = ((await personalRes.json()) as { channel: { id: number } }).channel.id;
+    const onPersonal = await api(
+      'POST',
+      '/api/subscriptions',
+      { channelId: personalId, projectId, events: ['run.failed'], global: true },
+      adminCookie,
+    );
+    expect(onPersonal.status).toBe(400);
+    await api('DELETE', `/api/channels/${personalId}`, undefined, adminCookie);
+
+    const onGlobal = await api(
+      'POST',
+      '/api/subscriptions',
+      { channelId: globalChannelId, projectId, events: ['run.failed'], global: true },
+      adminCookie,
+    );
+    expect(onGlobal.ok).toBe(true);
+    const subData = (await onGlobal.json()) as { subscriptionId: number };
+    globalSubId = subData.subscriptionId;
+    expect(globalSubId).toBeGreaterThan(0);
+  });
+
+  test('global subscription is listed for every user but only admins can modify it', async () => {
+    skip();
+    const listRes = await api('GET', '/api/subscriptions', undefined, userCookie);
+    const listData = (await listRes.json()) as { subscriptions: Array<{ id: number; userId: number | null }> };
+    const sub = listData.subscriptions.find((s) => s.id === globalSubId);
+    expect(sub).toBeDefined();
+    expect(sub?.userId).toBeNull();
+
+    const patchRes = await api('PATCH', `/api/subscriptions/${globalSubId}`, { active: false }, userCookie);
+    expect(patchRes.status).toBe(404);
+    const delRes = await api('DELETE', `/api/subscriptions/${globalSubId}`, undefined, userCookie);
+    expect(delRes.status).toBe(404);
+  });
+
+  test('admin removes the global subscription and channel', async () => {
+    skip();
+    const delSub = await api('DELETE', `/api/subscriptions/${globalSubId}`, undefined, adminCookie);
+    expect(delSub.ok).toBe(true);
+    const delCh = await api('DELETE', `/api/channels/${globalChannelId}`, undefined, adminCookie);
+    expect(delCh.ok).toBe(true);
+  });
+});
+
 // ── Subscribe Bell UI ──────────────────────────────────────────────────────────
 
 test.describe.serial('Subscribe Bell UI', () => {
@@ -435,11 +574,11 @@ test.describe.serial('Subscribe Bell UI', () => {
     await expect(page.getByText('PIWI_SMTP_HOST')).toBeVisible();
   });
 
-  test('notifications settings page shows channels section when auth enabled', async ({ page }) => {
+  test('notifications settings page shows channels and subscriptions sections', async ({ page }) => {
     skip();
     await loginBrowser(page);
     await page.goto(`${BASE}/settings/notifications`);
-    await expect(page.getByText('Notification channels')).toBeVisible();
-    await expect(page.getByText('My subscriptions')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Notification channels' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Subscriptions' })).toBeVisible();
   });
 });
