@@ -37,10 +37,13 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 - **Import of existing history** — backfill runs recorded before Piwi from Playwright's own blob reports or bare trace
   files, with traces and screenshots, from a page in the dashboard. Imports are idempotent and deliberately silent (no
   notifications, AI diagnosis or regression signals).
+- **Offline export** — a failing execution or a whole failure cluster taken out of the dashboard as a self-contained
+  HTML file, a ZIP with the raw evidence, a PDF, or plain Markdown/JSON — readable with no network and no Piwi server,
+  and bounded so one download cannot exhaust the instance.
 - **Automatic data retention & storage efficiency** — opt-in nightly pruning of old runs (`PIWI_RETENTION_DAYS`), notification-outbox and diagnosis-history housekeeping, ingest size caps, and content-addressed dedup of per-failure evidence payloads.
 - **AI diagnosis, grounded** — failure-cluster analysis fed by your actual SCM diff, with suggested patches validated server-side against your source; optional two-stage (research → final) pipeline; works with Anthropic, OpenAI, or any OpenAI-compatible endpoint including local models.
 - **Locator healing** — element attributes captured on passing runs power ranked replacement locators when a selector breaks.
-- **MCP server** — 38 tools so AI agents can query runs, flaky tests, clusters, diagnoses, and traces.
+- **MCP server** — 40 tools so AI agents can query runs, flaky tests, clusters, diagnoses, and traces.
 - **Notifications** — email, Slack, webhook (HMAC-signed), and browser channels with per-project subscriptions and digests.
 - **Sharding & live streaming** — shards merge automatically via CI run detection; runs stream into the dashboard while CI executes.
 - **Ops hardening** — `/api/health` endpoint, Docker `HEALTHCHECK`, committed `docker-compose.yml`, backup & reverse-proxy guides.
@@ -53,9 +56,8 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 
 ## Exploring
 
-- **Offline export** — take a failing execution or a whole failure cluster out of the dashboard as a self-contained
-  HTML file, a ZIP with the raw evidence, or a PDF, readable with no network and no Piwi server. Whole runs and a test's
-  history across runs would follow the same shape.
+- **Exporting whole runs** — [offline export](https://piwitests.github.io/offline-export) covers one execution and one failure cluster today; a whole run, and a
+  test's history across runs, would follow the same shape.
 - **Public share links** — handing an investigation to someone without a dashboard account means sending them a file; a
   read-only link would need share tokens, which Piwi has no infrastructure for today.
 - **Self-sufficient trace archives** — an export can carry the trace files, but reading them still needs a Playwright

@@ -22,7 +22,7 @@ Administrators always see everything. **Reporter** and **User** accounts are add
 1. Copy the example environment file:
 
    ```bash
-   cd application
+   cd apps/application
    cp .env.example .env
    ```
 

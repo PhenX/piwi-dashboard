@@ -37,23 +37,31 @@ authored in the handler's `defineRouteMeta({ openAPI: … })` block — see
 
 ## Site structure (MUST follow)
 
-The sidebar in `.vitepress/config.mts` is ordered by the **reader's journey**, not by feature. A new page goes in the
-group matching what the reader is doing, and each page stays single-purpose:
+The sidebar in `.vitepress/config.mts` is ordered by the **reader's journey**, not by feature, and it is the
+**source of truth** for site structure — do not restate its page lists here, they only go stale. A new page goes in
+the group matching what the reader is *doing*, never the group matching the feature it describes:
 
-| Group | Covers | Pages |
-|---|---|---|
-| Start here | what it is, first run, vocabulary | `getting-started`, `concepts`, `comparison` |
-| Sending results | getting data in | `reporter`, `capture-fixtures`, `ci`, `backend-logs` |
-| Reading the results | using the dashboard | `ui-overview`, `ai-diagnosis`, `flaky-tests`, `analytics`, `timeline-markers`, `notifications`, `ide-integration` |
-| Running your instance | operating it | `deployment`, `configuration`, `configuration/generator`, `authentication`, `storage`, `privacy`, `desktop` |
-| Recipes | task-first walkthroughs | `recipes/` |
-| Integrate | other tools | in-app API docs (external link), `mcp` |
+| Group | The question the reader is holding |
+|---|---|
+| Start here | "What is this, should I adopt it, and what do these words mean?" |
+| Sending results | "How do I get my results in?" |
+| Reading the results | "I have results — how do I read them?" |
+| Recipes | "I have this specific problem right now." |
+| Running your instance | "I operate the server." |
+| Apps & integrations | "I want to use it from somewhere other than the dashboard." |
 
-Extend an existing page before adding a new one.
+Two consequences worth stating, because both have been got wrong:
+
+- An **install path** is not an operations page. The desktop app is a way of *getting* a dashboard (it appears in
+  `getting-started`'s "pick a path" table), so it sits in Apps & integrations, not Running your instance.
+- A page with **no server dependency at all** — the browser extension — is never an operations page either.
+
+Extend an existing page before adding a new one, and keep every page single-purpose: if a page needs two sentences
+to say what it is for, it is two pages (`storage` + `database` was one of these).
 
 ### `recipes/` — the one task-first group
 
-Every other group is organised by feature. `recipes/` is organised by the question a reader arrives
+Every other group is organized by feature. `recipes/` is organized by the question a reader arrives
 with ("did I break this, or is it flaky?"), and each page crosses several features to answer one. It
 exists for the long-tail searches that never contain the word "Piwi", so:
 
@@ -71,14 +79,17 @@ exists for the long-tail searches that never contain the word "Piwi", so:
   time) / **execution** (one attempt, one browser — the `test_runs_cases` row) / failure cluster / fingerprint /
   baseline. Use those words consistently in docs *and* UI copy; link the anchor instead of redefining a term.
 - **`ui-overview.md` is a map, not a manual** — one short paragraph per view plus a link to the page that explains the
-  concept. Feature explanations belong on the feature page.
+  concept. Feature explanations belong on the feature page. It is the page most likely to accrete a manual, because a
+  feature with no home lands here by default: if you catch yourself adding an H3, a screenshot or a table to it, the
+  feature needs its own page instead (`evidence` and `offline-export` were both extracted from it).
 - **Contributor material does not belong on this site.** Build steps, source layout, migration workflow and dev
   commands live in `CONTRIBUTING.md` / `AGENTS.md` / `packages/reporter/ARCHITECTURE.md`. The site is for people *using* Piwi.
 - **Every user-visible reporter option** must appear in `reporter.md`'s options table (and its `PIWI_*` var in the
   table below it) in the same change that adds it to `packages/reporter/src/public/options.ts`.
 - **In-app help links point here.** `apps/application/app/utils/help-content.ts` builds docs URLs from `doc:` string
-  literals that nothing validates — renaming a heading breaks them silently. Grep for the old anchor when you rename
-  one.
+  literals, as do a few components via `<DocLink to="…">`. `apps/application/tests/unit/docs-drift.test.ts` resolves
+  every one of them against the headings on this site, so renaming a heading turns that test red rather than breaking
+  a help link silently — but the fix is still yours: update the literal, or keep the anchor.
 
 ## Writing conventions
 

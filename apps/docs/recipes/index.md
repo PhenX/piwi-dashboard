@@ -5,8 +5,8 @@ lang: en-US
 
 # Recipes
 
-The rest of this site is organised by feature — what clustering is, what the flaky score means. These
-pages are organised the other way round: by the question you actually arrived with, on the morning it
+The rest of this site is organized by feature — what clustering is, what the flaky score means. These
+pages are organized the other way round: by the question you actually arrived with, on the morning it
 matters.
 
 | You're asking | Recipe |

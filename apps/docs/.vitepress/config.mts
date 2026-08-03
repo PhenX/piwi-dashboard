@@ -8,7 +8,7 @@ const siteUrl = 'https://piwitests.github.io'
 export default defineConfig({
   title: 'Piwi Dashboard',
   description:
-    'Self-hosted dashboard that keeps every Playwright run — then groups failures by root cause, scores flaky tests, and heals broken locators.',
+    'CI throws away every report it makes. Piwi keeps them — then groups the failures by root cause, scores the flaky tests, and finds the locator you should have used. Self-hosted, MIT, zero telemetry.',
   base: '/',
   // AGENTS.md is the agent guide for this directory, not a page of the site:
   // it links to sibling guides outside the docs root, so building it as a page
@@ -77,7 +77,9 @@ export default defineConfig({
     ],
 
     // Sidebar order follows the reader's journey: understand it → get results
-    // in → read them → run the instance → wire it into other tools.
+    // in → read them → run the instance → wire it into other tools. A group
+    // answers one question the reader is holding, so a page belongs to the
+    // group matching what they are doing, never to the feature it describes.
     sidebar: [
       {
         text: 'Start here',
@@ -85,6 +87,7 @@ export default defineConfig({
           { text: 'Getting started', link: '/getting-started' },
           { text: 'Core concepts', link: '/concepts' },
           { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
+          { text: 'Privacy & data flow', link: '/privacy' },
         ],
       },
       {
@@ -102,12 +105,13 @@ export default defineConfig({
         text: 'Reading the results',
         items: [
           { text: 'UI overview', link: '/ui-overview' },
+          { text: 'Failure evidence', link: '/evidence' },
           { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
           { text: 'Flaky tests', link: '/flaky-tests' },
           { text: 'Analytics', link: '/analytics' },
           { text: 'Timeline markers', link: '/timeline-markers' },
           { text: 'Notifications & alerts', link: '/notifications' },
-          { text: 'Open in IDE', link: '/ide-integration' },
+          { text: 'Offline export', link: '/offline-export' },
         ],
       },
       {
@@ -129,17 +133,18 @@ export default defineConfig({
           { text: 'Configuration reference', link: '/configuration' },
           { text: 'Configuration generator', link: '/configuration/generator' },
           { text: 'Authentication', link: '/authentication' },
+          { text: 'Database', link: '/database' },
           { text: 'Storage configuration', link: '/storage' },
-          { text: 'Privacy & data flow', link: '/privacy' },
-          { text: 'Desktop app', link: '/desktop' },
-          { text: 'Browser extension', link: '/extension' },
         ],
       },
       {
-        text: 'Integrate',
+        text: 'Apps & integrations',
         items: [
-          { text: 'API docs (interactive)', link: 'https://piwitests.github.io/demo/docs' },
+          { text: 'Desktop app', link: '/desktop' },
+          { text: 'Browser extension', link: '/extension' },
+          { text: 'Open in IDE', link: '/ide-integration' },
           { text: 'MCP server', link: '/mcp' },
+          { text: 'API docs (interactive)', link: 'https://piwitests.github.io/demo/docs' },
         ],
       },
     ],

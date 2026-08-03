@@ -427,7 +427,7 @@ When you need to see a change working — a UI tweak, a flow, a screenshot — r
 a dev DB seeded from the demo data**:
 
 ```bash
-cd application
+cd apps/application
 npm run app:seed:demo                            # 1. generate public/demo/seed.sql (skip if present)
 mkdir -p .data && npm run db:migrate             # 2. create + migrate an empty dev DB (.data/piwi.db)
 npm run app:seed:dev                             # 3. load sample data (server must be stopped — DB lock)

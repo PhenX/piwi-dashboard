@@ -73,7 +73,7 @@ committed [`ROADMAP.md`](ROADMAP.md).
 Prerequisites: **Node.js 24+**, npm, Git. Commands run from `apps/application/` unless noted.
 
 ```bash
-cd application
+cd apps/application
 npm install
 npm run app:dev      # http://localhost:3000
 ```
@@ -191,6 +191,11 @@ Seven surfaces carry it, and they drift the moment one changes alone. Update the
 | Docker Hub overview | `DOCKER_HUB.md` first paragraph |
 | npm package descriptions | `packages/server/package.json`, `packages/reporter/package.json` |
 | GitHub repo description + topics | Repository settings — not in the repo, so check it by hand |
+
+The four surfaces that live in the repository are guarded by
+`apps/application/tests/unit/docs-drift.test.ts`, clause by clause — it also checks the documented MCP
+tool count against the registry, and every `doc:` anchor the app deep-links into. The npm descriptions
+and the GitHub repo description are still on you.
 
 Voice rules for all of them, and for `apps/docs/`: see [`apps/docs/AGENTS.md`](apps/docs/AGENTS.md#voice).
 

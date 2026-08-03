@@ -100,7 +100,7 @@ defineExpose({ reveal: () => card.value?.reveal() });
       <span>
         Want to go deeper? Record traces (<code>trace: 'retain-on-failure'</code>) to see the full call stack with
         source here.
-        <DocLink to="ui-overview#trace-powered-deep-views" no-icon class="underline">Learn more</DocLink>
+        <DocLink to="evidence#trace-powered-deep-views" no-icon class="underline">Learn more</DocLink>
       </span>
     </p>
   </CollapsibleSectionCard>

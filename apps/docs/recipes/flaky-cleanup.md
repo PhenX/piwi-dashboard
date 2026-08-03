@@ -46,7 +46,7 @@ one bad wait helper.
 
 Two filters change the answer, and both are worth setting deliberately:
 
-- **Lookback window** — recent behaviour or a longer baseline. A test fixed last week still looks awful
+- **Lookback window** — recent behavior or a longer baseline. A test fixed last week still looks awful
   over 90 days.
 - **Environment** — select one environment and the analysis is scoped to its runs, so `staging` noise
   doesn't inflate a test that's stable in `production`. Set it via the reporter's `environment` option

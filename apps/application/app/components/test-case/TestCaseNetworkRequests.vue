@@ -469,7 +469,7 @@ function rowAccent(r: DecoratedRequest): string {
       <span>
         Want to go deeper? Record traces (<code>trace: 'retain-on-failure'</code>) to see every request with headers,
         timing and bodies here.
-        <DocLink to="ui-overview#trace-powered-deep-views" no-icon class="underline">Learn more</DocLink>
+        <DocLink to="evidence#trace-powered-deep-views" no-icon class="underline">Learn more</DocLink>
       </span>
     </p>
   </SectionCard>

@@ -52,9 +52,9 @@ unreleased fix; don't run it in production — it has had no release testing and
 | Tag | Description | Docker Hub | GHCR |
 |-----|-------------|:---:|:---:|
 | `latest` | Latest stable release | ✅ | ✅ |
-| `0.18.2` | Specific version (semver) | ✅ | ✅ |
-| `0.18` | Latest patch of a minor version | ✅ | ✅ |
-| `0` | Latest release of the major version | ✅ | ✅ |
+| `MAJOR.MINOR.PATCH` | One exact release (e.g. `0.25.0`) | ✅ | ✅ |
+| `MAJOR.MINOR` | Latest patch of that minor (e.g. `0.25`) | ✅ | ✅ |
+| `MAJOR` | Latest release of that major (e.g. `0`) | ✅ | ✅ |
 | `edge` | Built from `main`, unreleased | — | ✅ |
 
 Pin a specific version in production — and read [Upgrading](./upgrading) before you bump it, because
@@ -233,6 +233,10 @@ docker run -p 3000:3000 -v ${PWD}/.data:/app/.data piwi-dashboard:local
 
 :::
 
+Pass `--build-arg PIWI_BUILD_SHA=$(git rev-parse HEAD)` to stamp the image with a commit SHA, shown on
+Settings → About and returned by `GET /api/version`. The published images set it from CI; it's optional
+for a local build.
+
 ## Docker Compose
 
 The repository ships a ready-to-use [`docker-compose.yml`](https://github.com/PiwiTests/platform/blob/main/docker-compose.yml) with commented options (secret key, auth, PostgreSQL). Minimal version:
@@ -388,7 +392,7 @@ $env:PORT='8080'; npx @piwitests/server
 ## Production build from source
 
 ```bash
-cd application
+cd apps/application
 npm install
 npm run app:build
 npm run app:preview  # preview the production build locally
