@@ -127,7 +127,7 @@ export const HELP_TOPICS = {
   },
   'project.runs-trend': {
     title: 'Run trend',
-    text: 'Pass/fail counts per run over time. Hover a point for the exact run; sudden drops mark where things broke.',
+    text: 'One stacked bar per run — failed anchored at the bottom, passed on top — following the filters above. A growing red base marks where things broke; hover a bar for the counts, click it to open the run.',
     doc: 'ui-overview#project-detail',
   },
   'project.flaky-tests': {

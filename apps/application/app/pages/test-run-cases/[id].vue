@@ -8,6 +8,7 @@ import type {
   TraceInfo,
 } from '~~/types/api';
 import type { TableColumn } from '@nuxt/ui';
+import { CASE_STATUS_SERIES, legendOf } from '~/utils/chart';
 import { getPerformanceHints } from '~/utils/performance-hints';
 import { renderAnsi } from '~/utils';
 import { buildRetryCommand } from '~/utils/retry-command';
@@ -1037,19 +1038,21 @@ provide(clusterSectionLocatorKey, {
         <template #tab-history>
           <div class="space-y-4 pt-4">
             <div v-if="historyData && historyData.length > 0" class="space-y-4">
-              <div class="flex items-center justify-end">
-                <UButton
-                  v-if="testCase?.testCaseId"
-                  :to="`/test-cases/${testCase.testCaseId}`"
-                  size="xs"
-                  variant="outline"
-                  color="neutral"
-                  trailing-icon="i-lucide-arrow-right"
-                >
-                  View full test history
-                </UButton>
-              </div>
-              <TestCaseHistoryChart :data="historyData" :height="200" />
+              <ChartCard title="Duration trend" icon="i-lucide-trending-up" :legend="legendOf(CASE_STATUS_SERIES)">
+                <template #actions>
+                  <UButton
+                    v-if="testCase?.testCaseId"
+                    :to="`/test-cases/${testCase.testCaseId}`"
+                    size="xs"
+                    variant="outline"
+                    color="neutral"
+                    trailing-icon="i-lucide-arrow-right"
+                  >
+                    View full test history
+                  </UButton>
+                </template>
+                <TestCaseHistoryChart :data="historyData" :height="200" />
+              </ChartCard>
               <TableScroller min-width="44rem" :bleed="false">
                 <UTable
                   :data="historyData"

@@ -15,13 +15,16 @@
  *   node scripts/take-feature-screenshots.mjs --freeze-now 2026-08-02T09:00:00Z
  *   node scripts/take-feature-screenshots.mjs <scene> --out ../docs/public/screenshots
  *
- * Without --url the script boots its own dev server (desktop UI enabled) on
- * port 3050 and tears it down at the end; a missing dev DB is created and
- * seeded first. With --url it drives the server you point it at.
+ * Without --url the script boots its own dev server on port 3050 and tears it
+ * down at the end; a missing dev DB is created and seeded first. With --url it
+ * drives the server you point it at.
  *
- * Desktop-only UI is captured by injecting a mocked Tauri IPC bridge into the
- * page, so no shell build is needed. Scenes opt in with `desktop: true` and
- * can shape what the mock answers (linked folder, inspection result).
+ * Every scene declares a `mode`: `web` (the default) captures the dashboard as
+ * a browser serves it, `desktop` captures the Tauri shell — the server runs
+ * with `NUXT_PUBLIC_DESKTOP=true` and a mocked Tauri IPC bridge is injected
+ * into the page, so no shell build is needed. A desktop scene can shape what
+ * the mock answers (linked folder, inspection result). A run covering both
+ * modes boots one server per mode, web first.
  *
  * Output goes where the scene's `out` says: `screens` → `.screens/` (gitignored
  * report artifacts) and `docs` → `apps/docs/public/screenshots/` (committed
@@ -30,7 +33,7 @@
 
 import { createRequire } from 'module';
 import { spawn, execSync } from 'child_process';
-import { existsSync, mkdirSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -38,6 +41,7 @@ import { drawAnnotations, clearAnnotations } from './screenshot-annotations.mjs'
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
+const sharp = require('sharp');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_DIR = join(__dirname, '..');
@@ -52,14 +56,63 @@ const OUT_TARGETS = {
 
 const DEFAULT_VIEWPORT = { width: 1280, height: 860 };
 
+/** Surfaces a scene can be captured against. */
+const MODES = ['web', 'desktop'];
+
+/** localStorage key `@nuxtjs/color-mode` reads the stored theme preference from. */
+const COLOR_MODE_KEY = 'nuxt-color-mode';
+
+/** Stroke widths of the split seam, authored against a 1280px-wide capture. */
+const SEAM_REFERENCE_WIDTH = 1280;
+const SEAM_SHADOW_WIDTH = 4;
+const SEAM_HIGHLIGHT_WIDTH = 1.5;
+
+/**
+ * Lay the dark capture over the light one, clipped to the triangle below the
+ * top-right → bottom-left diagonal, and draw the seam along it. Both captures
+ * must come from the same viewport and scroll position so they align exactly.
+ */
+async function compositeSplit(lightBuffer, darkBuffer) {
+  const { width, height } = await sharp(lightBuffer).metadata();
+  const scale = width / SEAM_REFERENCE_WIDTH;
+
+  const clip = Buffer.from(
+    `<svg width="${width}" height="${height}">` +
+      `<polygon points="${width},0 ${width},${height} 0,${height}" fill="#fff"/>` +
+      `</svg>`,
+  );
+  const darkTriangle = await sharp(darkBuffer)
+    .ensureAlpha()
+    .composite([{ input: clip, blend: 'dest-in' }])
+    .png()
+    .toBuffer();
+
+  const seam = Buffer.from(
+    `<svg width="${width}" height="${height}">` +
+      `<line x1="${width}" y1="0" x2="0" y2="${height}" stroke="rgba(0,0,0,0.35)" stroke-width="${SEAM_SHADOW_WIDTH * scale}"/>` +
+      `<line x1="${width}" y1="0" x2="0" y2="${height}" stroke="rgba(255,255,255,0.85)" stroke-width="${SEAM_HIGHLIGHT_WIDTH * scale}"/>` +
+      `</svg>`,
+  );
+
+  return sharp(lightBuffer)
+    .composite([{ input: darkTriangle }, { input: seam }])
+    .png()
+    .toBuffer();
+}
+
+/** A scene's mode, defaulting to the web dashboard. */
+function sceneMode(scene) {
+  return scene.mode ?? 'web';
+}
+
 /**
  * Images in the docs screenshot directory that this harness does not produce,
  * so `--check` does not report them as orphans. Everything else in there must
  * have a scene.
  *
- *   - the hero/gallery images come from the live-demo capture described in
- *     `apps/docs/AGENTS.md` ("Marketing screenshots"), including the
- *     light/dark diagonal split this harness has no equivalent for;
+ *   - the remaining gallery images come from the live-demo capture described in
+ *     `apps/docs/AGENTS.md` ("Marketing screenshots");
+ *   - `demo-live-run-poster.png` is a frame of the demo video, not a screen;
  *   - `ai-diagnosis.png` needs a configured AI provider, which the dev seed
  *     has no answer for — it stays a live-demo capture.
  */
@@ -70,9 +123,6 @@ const EXTERNAL_DOCS_IMAGES = new Set([
   'failure-cluster.png',
   'failure-clusters-tab.png',
   'flaky-tests.png',
-  'home.png',
-  'performance.png',
-  'project-detail.png',
   'projects.png',
   'test-run.png',
 ]);
@@ -117,6 +167,8 @@ const READY_INSPECTION = {
  *
  * Scene options:
  *   description — one line, shown by --list
+ *   mode        — 'web' (default) or 'desktop'; picks the server the scene runs
+ *                 against, and whether the mocked Tauri bridge is injected
  *   tags        — ['docs'] / ['desktop']; --tag selects on these
  *   out         — 'screens' (default) or 'docs'
  *   file        — output basename, default `<name>.png`
@@ -128,14 +180,17 @@ const READY_INSPECTION = {
  *                 client, so a scene can call an endpoint the UI does not
  *   viewport    — default 1280×860
  *   colorScheme — 'light' | 'dark'
+ *   split       — capture the scene twice and composite a light/dark diagonal,
+ *                 light above the top-right → bottom-left seam, dark below
+ *   deviceScaleFactor — capture at N× (pair with `outputWidth` for crisp text)
+ *   outputWidth — resize the written PNG to this width
  *   expand      — selectors of collapsible sections to unfold before capturing
  *   of          — selector (or array of them) to capture instead of the viewport
  *   pad         — padding in CSS px around `of`
  *   annotate    — annotation shapes; the scene then writes a `-annotated` image too
  *   charts      — wait for chart geometry to render before capturing
- *   desktop     — inject the mocked Tauri bridge
- *   link        — mocked linked folder for `desktop_get_project_link` (or null)
- *   inspection  — mocked `desktop_inspect_folder` answer (default READY_INSPECTION)
+ *   link        — desktop mode: mocked linked folder for `desktop_get_project_link` (or null)
+ *   inspection  — desktop mode: mocked `desktop_inspect_folder` answer (default READY_INSPECTION)
  */
 const SCENES = [
   // ── Docs illustrations (committed) ────────────────────────────────────────
@@ -220,13 +275,66 @@ const SCENES = [
     of: '[data-shot="test-case-detail"]',
     pad: 8,
   },
+  {
+    name: 'home',
+    description: 'Home overview, light/dark diagonal split (docs gallery hero)',
+    tags: ['docs'],
+    out: 'docs',
+    route: '/',
+    viewport: { width: 1280, height: 720 },
+    // Captured at 2x and written at the width the featured tile actually gets,
+    // so the hero is never upscaled and its text stays crisp.
+    deviceScaleFactor: 2,
+    outputWidth: 1152,
+    split: true,
+    async run({ page, shoot, settle }) {
+      // The seeded data has partial runs, which the default filter hides behind
+      // a full-width notice. Show them so the hero leads with the dashboard's
+      // own numbers; the choice rides in a cookie, so the split's reloads keep it.
+      const showThem = page.getByRole('button', { name: 'Show them' });
+      if (await showThem.count()) {
+        await showThem.first().click();
+        await settle();
+      }
+      await shoot();
+    },
+  },
+  {
+    name: 'project-detail',
+    description: 'Project detail: run trend bars over the filtered run history (docs gallery)',
+    tags: ['docs'],
+    out: 'docs',
+    route: '/projects/1',
+    viewport: { width: 1280, height: 720 },
+    charts: true,
+  },
+  {
+    name: 'performance',
+    description: 'Performance tab: per-run duration trend over the slowest tests (docs gallery)',
+    tags: ['docs'],
+    out: 'docs',
+    route: '/projects/1?tab=performance',
+    viewport: { width: 1280, height: 720 },
+    charts: true,
+  },
+
+  // ── Feature states (report artifacts) ─────────────────────────────────────
+  {
+    name: 'run-trend',
+    description: 'Test runs tab: per-run stacked result bars with day ticks and markers',
+    route: '/projects/1',
+    viewport: { width: 1400, height: 900 },
+    charts: true,
+    of: '[data-shot="run-trend"]',
+    pad: 12,
+  },
 
   // ── Desktop shell (report artifacts) ──────────────────────────────────────
   {
     name: 'desktop-nav',
     description: 'Back/forward pair in the sidebar header (desktop shell)',
     tags: ['desktop'],
-    desktop: true,
+    mode: 'desktop',
     route: '/projects',
     outputs: ['desktop-nav.png', 'desktop-nav-collapsed.png'],
     async run({ page, shoot, settle }) {
@@ -248,7 +356,7 @@ const SCENES = [
     name: 'project-from-folder',
     description: 'New-project modal: start from a local folder (desktop shell)',
     tags: ['desktop'],
-    desktop: true,
+    mode: 'desktop',
     link: null,
     inspection: { ...READY_INSPECTION, reporterConfigured: false, configuredProjectName: null },
     route: '/projects',
@@ -268,7 +376,7 @@ const SCENES = [
     name: 'project-from-folder-mobile',
     description: 'The same modal at phone width',
     tags: ['desktop'],
-    desktop: true,
+    mode: 'desktop',
     link: null,
     inspection: { ...READY_INSPECTION, reporterConfigured: false, configuredProjectName: null },
     viewport: { width: 375, height: 812 },
@@ -286,7 +394,7 @@ const SCENES = [
     name: 'edit-local-folder',
     description: 'Project settings: linked folder with setup checks (desktop shell)',
     tags: ['desktop'],
-    desktop: true,
+    mode: 'desktop',
     link: { path: READY_INSPECTION.path, exists: true },
     route: '/projects/2/edit',
     of: '#local-folder',
@@ -301,7 +409,7 @@ const SCENES = [
     name: 'edit-local-folder-needs-setup',
     description: 'The same card when the folder is missing Piwi wiring',
     tags: ['desktop'],
-    desktop: true,
+    mode: 'desktop',
     link: { path: READY_INSPECTION.path, exists: true },
     inspection: {
       ...READY_INSPECTION,
@@ -321,7 +429,7 @@ const SCENES = [
     name: 'project-folder-card',
     description: 'Project page: compact linked-folder status card (desktop shell)',
     tags: ['desktop'],
-    desktop: true,
+    mode: 'desktop',
     link: { path: READY_INSPECTION.path, exists: true },
     route: '/projects/2',
     async run({ page, shoot, settle }) {
@@ -529,12 +637,35 @@ async function waitForHealth(base, timeoutMs = 120_000) {
   throw new Error(`server at ${base} did not become healthy within ${timeoutMs / 1000}s`);
 }
 
-/** Boot a dev server with the desktop UI enabled; returns { base, stop }. */
-async function startServer() {
+/**
+ * Wait for a stopped server to release the port. Without this a second mode's
+ * server fails to bind and the run silently captures against the first one,
+ * which is still answering.
+ */
+async function waitForPortFree(base, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      await fetch(`${base}/api/health`);
+    } catch {
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`server at ${base} did not shut down within ${timeoutMs / 1000}s`);
+}
+
+/**
+ * Boot a dev server in `mode`; returns { base, stop }. The desktop UI is enabled
+ * for `desktop` only — the sidebar's back/forward pair exists in the Tauri shell
+ * alone, and would misrepresent the web app in a full-viewport capture.
+ */
+async function startServer(mode) {
   ensureDevDb();
+  const desktop = mode === 'desktop';
   const child = spawn('npx', ['nuxt', 'dev', '--port', String(PORT)], {
     cwd: APP_DIR,
-    env: { ...process.env, NUXT_IGNORE_LOCK: '1', NUXT_PUBLIC_DESKTOP: 'true' },
+    env: { ...process.env, NUXT_IGNORE_LOCK: '1', ...(desktop ? { NUXT_PUBLIC_DESKTOP: 'true' } : {}) },
     stdio: 'ignore',
     // Detached puts nuxt in its own process group so stop() can kill the whole
     // tree; on Windows npx needs a shell and group-kill is unsupported anyway.
@@ -555,7 +686,7 @@ async function startServer() {
     process.exit(130);
   });
   const base = `http://localhost:${PORT}`;
-  console.log(`Starting dev server at ${base} (desktop UI enabled)…`);
+  console.log(`Starting dev server at ${base}${desktop ? ' (desktop UI enabled)' : ''}…`);
   try {
     await waitForHealth(base);
   } catch (err) {
@@ -599,7 +730,7 @@ function listScenes() {
   for (const scene of SCENES) {
     const tags = (scene.tags ?? []).join(',') || '—';
     const dir = scene.out ?? 'screens';
-    console.log(`${scene.name.padEnd(width)}  [${tags}]  ${scene.description}`);
+    console.log(`${scene.name.padEnd(width)}  ${sceneMode(scene).padEnd(7)} [${tags}]  ${scene.description}`);
     console.log(`${' '.repeat(width)}  → ${dir}/${sceneOutputs(scene).join(', ')}`);
   }
 }
@@ -661,6 +792,12 @@ function parseArgs(argv) {
 }
 
 function selectScenes(flags) {
+  const badMode = SCENES.filter((s) => s.mode != null && !MODES.includes(s.mode));
+  if (badMode.length) {
+    throw new Error(
+      `scene(s) with an unknown mode: ${badMode.map((s) => `${s.name} (${s.mode})`).join(', ')} — use ${MODES.join(' or ')}`,
+    );
+  }
   const unknown = flags.scenes.filter((w) => !SCENES.some((s) => s.name === w));
   if (unknown.length) {
     const hints = unknown
@@ -687,9 +824,10 @@ async function captureScene(browser, scene, { base, outDir, freezeNow }) {
   const context = await browser.newContext({
     viewport: scene.viewport ?? DEFAULT_VIEWPORT,
     colorScheme: scene.colorScheme,
+    deviceScaleFactor: scene.deviceScaleFactor,
   });
   if (freezeNow) await context.clock.setFixedTime(freezeNow);
-  if (scene.desktop) await context.addInitScript(bridgeScript(scene));
+  if (sceneMode(scene) === 'desktop') await context.addInitScript(bridgeScript(scene));
   const page = await context.newPage();
   // A dev server compiles routes on first hit — well past the 30s default.
   page.setDefaultNavigationTimeout(90_000);
@@ -734,20 +872,19 @@ async function captureScene(browser, scene, { base, outDir, freezeNow }) {
   const annotate = (shapes, opts = {}) => drawAnnotations(page, shapes, { container: annotationHost, ...opts });
   const clear = () => clearAnnotations(page);
 
-  let written = 0;
-  const shoot = async (label, opts = {}) => {
+  /** Take one screenshot of whatever the scene targets, as a buffer. */
+  const capture = async (opts = {}) => {
     const { of: ofOpt, pad: padOpt, ...pwOpts } = opts;
     const of = ofOpt ?? scene.of;
     const pad = padOpt ?? scene.pad ?? 0;
-    const stem = sceneFile(scene).replace(/\.png$/, '');
-    const file = join(outDir, `${stem}${label ? `-${label}` : ''}.png`);
     const common = { animations: 'disabled', caret: 'hide', ...pwOpts };
 
     if (of && !pad && !Array.isArray(of)) {
       const target = page.locator(of).first();
       await assertFitsViewport(page, target, scene.name, of);
-      await target.screenshot({ path: file, ...common });
-    } else if (of) {
+      return target.screenshot(common);
+    }
+    if (of) {
       const selectors = Array.isArray(of) ? of : [of];
       const { missing, gridParent } = await page.evaluate(markRegion, {
         selectors,
@@ -761,14 +898,49 @@ async function captureScene(browser, scene, { base, outDir, freezeNow }) {
       const region = page.locator(`[${REGION_ATTR}]`);
       try {
         await assertFitsViewport(page, region, scene.name, selectors.join(' + '));
-        await region.screenshot({ path: file, ...common });
+        return await region.screenshot(common);
       } finally {
         await styleTag.evaluate((node) => node.remove());
         await page.evaluate(unmarkRegion, { regionAttr: REGION_ATTR, keepAttr: KEEP_ATTR });
       }
-    } else {
-      await page.screenshot({ path: file, ...common });
     }
+    return page.screenshot(common);
+  };
+
+  /** Store a theme preference and reload so the app boots already in it. */
+  const setColorMode = async (mode) => {
+    await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [COLOR_MODE_KEY, mode]);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await waitForHydration(page);
+    await settle();
+  };
+
+  let written = 0;
+  const shoot = async (label, opts = {}) => {
+    const stem = sceneFile(scene).replace(/\.png$/, '');
+    const file = join(outDir, `${stem}${label ? `-${label}` : ''}.png`);
+
+    let image;
+    if (scene.split) {
+      await setColorMode('light');
+      const light = await capture(opts);
+      await setColorMode('dark');
+      const dark = await capture(opts);
+      image = await compositeSplit(light, dark);
+    } else {
+      image = await capture(opts);
+    }
+
+    // Resizing re-encodes anyway, so pay for the palette here: a dashboard
+    // screenshot is mostly flat fills and quantizes to a third of the bytes
+    // with no visible loss. Scenes that skip this keep Playwright's own bytes.
+    if (scene.outputWidth) {
+      image = await sharp(image)
+        .resize({ width: scene.outputWidth })
+        .png({ palette: true, compressionLevel: 9 })
+        .toBuffer();
+    }
+    writeFileSync(file, image);
     written++;
     console.log(`-> ${file.replace(`${APP_DIR}/`, '').replace(`${APP_DIR}`, '')}`);
   };
@@ -813,30 +985,42 @@ async function main() {
   }
 
   for (const scene of scenes) mkdirSync(outDirFor(scene, flags.out), { recursive: true });
-  const server = flags.url ? { base: flags.url, stop: () => {} } : await startServer();
   const browser = await chromium.launch({
     executablePath: resolveChromium(),
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
 
+  // Web and desktop scenes need differently-configured servers, so each mode
+  // present in the run gets its own; --url drives whatever is already there.
+  const byMode = MODES.map((mode) => [mode, scenes.filter((s) => sceneMode(s) === mode)]).filter(
+    ([, group]) => group.length > 0,
+  );
+
   const failures = [];
   let written = 0;
   try {
-    for (const scene of scenes) {
+    for (const [mode, group] of byMode) {
+      const server = flags.url ? { base: flags.url, stop: () => {} } : await startServer(mode);
       try {
-        written += await captureScene(browser, scene, {
-          base: server.base,
-          outDir: outDirFor(scene, flags.out),
-          freezeNow,
-        });
-      } catch (err) {
-        failures.push(scene.name);
-        console.error(`scene ${scene.name} failed: ${err.message}`);
+        for (const scene of group) {
+          try {
+            written += await captureScene(browser, scene, {
+              base: server.base,
+              outDir: outDirFor(scene, flags.out),
+              freezeNow,
+            });
+          } catch (err) {
+            failures.push(scene.name);
+            console.error(`scene ${scene.name} failed: ${err.message}`);
+          }
+        }
+      } finally {
+        server.stop();
+        if (!flags.url) await waitForPortFree(server.base);
       }
     }
   } finally {
     await browser.close();
-    server.stop();
   }
 
   if (failures.length) throw new Error(`scenes failed: ${failures.join(', ')}`);
