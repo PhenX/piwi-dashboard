@@ -15,6 +15,7 @@ import type {
 } from '~~/types/api';
 import { useRunComparison } from '~/composables/useRunComparison';
 import type { ComparisonRow } from '~/composables/useRunComparison';
+import { RUN_DURATION_SERIES, RUN_STATUS_SERIES, legendOf } from '~/utils/chart';
 
 const route = useRoute();
 const router = useRouter();
@@ -367,14 +368,6 @@ function handleMarkerClick(id: number) {
   focusMarkerId.value = id;
   activeTab.value = 'timeline';
 }
-
-const chartRuns = computed(() => {
-  const runs = project.value?.testRuns || [];
-  if (fullRunsOnly.value) {
-    return runs.filter((r) => r.isFullRun !== false);
-  }
-  return runs;
-});
 
 // Tooltip for the Scope icon: full runs are self-explanatory; partial runs surface
 // the grep / grep-invert filter that narrowed the run, when the reporter captured it.
@@ -753,55 +746,52 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
         >
           <!-- TEST RUNS TAB -->
           <template #test-runs>
+            <!-- Full runs toggle + Environment filter — drives the chart and the table -->
+            <div class="flex flex-wrap items-center gap-3 mb-4">
+              <div class="inline-flex items-center gap-1">
+                <USwitch v-model="fullRunsOnly" label="Full runs only" :ui="{ label: 'text-sm' }" />
+                <HelpHint topic="project.run-scope" />
+              </div>
+              <template v-if="availableEnvironments.length > 0">
+                <span class="text-sm text-muted shrink-0">Environment:</span>
+                <button
+                  v-for="env in availableEnvironments"
+                  :key="env"
+                  type="button"
+                  :class="[
+                    'text-xs font-medium px-2 py-1 rounded border cursor-pointer focus:outline-none transition-colors',
+                    isEnvironmentFilterActive(env)
+                      ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700'
+                      : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 dark:hover:bg-zinc-700',
+                  ]"
+                  @click="toggleEnvironmentFilter(env)"
+                >
+                  {{ env }}
+                </button>
+                <UButton
+                  v-if="selectedEnvironments.length > 0"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  icon="i-lucide-x"
+                  label="Clear filter"
+                  @click="selectedEnvironments = []"
+                />
+              </template>
+            </div>
+
             <ChartCard
-              v-if="project?.testRuns && project.testRuns.length > 0"
+              v-if="filteredRuns.length > 0"
               title="Run trend"
-              :subtitle="`Test run statistics over time for ${project?.label || project?.name}`"
+              subtitle="One bar per run, newest on the right"
               help="project.runs-trend"
+              :legend="legendOf(RUN_STATUS_SERIES)"
+              data-shot="run-trend"
             >
-              <TestRunsChart
-                :test-runs="chartRuns"
-                :height="200"
-                :markers="visibleMarkers"
-                @marker-click="handleMarkerClick"
-              />
+              <TestRunsChart :test-runs="filteredRuns" :markers="visibleMarkers" @marker-click="handleMarkerClick" />
             </ChartCard>
 
             <UCard class="mt-4">
-              <!-- Full runs toggle + Environment filter -->
-              <div class="flex flex-wrap items-center gap-3 mb-4">
-                <div class="inline-flex items-center gap-1">
-                  <USwitch v-model="fullRunsOnly" label="Full runs only" :ui="{ label: 'text-sm' }" />
-                  <HelpHint topic="project.run-scope" />
-                </div>
-                <template v-if="availableEnvironments.length > 0">
-                  <span class="text-sm text-muted shrink-0">Environment:</span>
-                  <button
-                    v-for="env in availableEnvironments"
-                    :key="env"
-                    type="button"
-                    :class="[
-                      'text-xs font-medium px-2 py-1 rounded border cursor-pointer focus:outline-none transition-colors',
-                      isEnvironmentFilterActive(env)
-                        ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700'
-                        : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 dark:hover:bg-zinc-700',
-                    ]"
-                    @click="toggleEnvironmentFilter(env)"
-                  >
-                    {{ env }}
-                  </button>
-                  <UButton
-                    v-if="selectedEnvironments.length > 0"
-                    size="xs"
-                    variant="ghost"
-                    color="neutral"
-                    icon="i-lucide-x"
-                    label="Clear filter"
-                    @click="selectedEnvironments = []"
-                  />
-                </template>
-              </div>
-
               <!-- Comparison action bar -->
               <div
                 v-if="selectedRunIds.length > 0"
@@ -1006,15 +996,15 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
 
             <ChartCard
               title="Performance trend"
-              subtitle="Duration metrics over time"
+              subtitle="Duration metrics per run, newest on the right"
               help="project.performance"
+              :legend="legendOf(RUN_DURATION_SERIES)"
               data-shot="performance-trend"
             >
               <LoadingState v-if="performanceInitialLoading" text="Loading chart…" />
               <PerformanceTrendChart
                 v-else
                 :data="performanceData || []"
-                :height="350"
                 :markers="visibleMarkers"
                 @marker-click="handleMarkerClick"
               />

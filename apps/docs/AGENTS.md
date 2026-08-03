@@ -157,9 +157,14 @@ npm run app:screens:check                # every image has a scene, every scene 
 ```
 
 Add a scene to the script's `SCENES` registry if none fits, tagged `docs` with `out: 'docs'`; target the screen through
-a `data-shot` attribute rather than a DOM path. Desktop-only UI is captured through the script's mocked Tauri bridge,
-no shell build needed. Images written this way are committed — keep the scene current so the illustration can be
-recaptured when the UI changes, and run `app:screens:check` after adding or deleting one.
+a `data-shot` attribute rather than a DOM path, and leave `mode` at its `web` default unless the illustration is of the
+desktop shell (`mode: 'desktop'` runs it against a desktop-enabled server with the mocked Tauri bridge, no shell build
+needed). Images written this way are committed — keep the scene current so the illustration can be recaptured when the
+UI changes, and run `app:screens:check` after adding or deleting one.
+
+A gallery image with no marketing-specific treatment (no diagonal split) belongs to a scene rather than the live-demo
+pipeline: the harness renders icons from the bundled collection and can be re-run offline, so the image stays
+reproducible as the UI moves.
 
 The hero/gallery images above are **not** produced by the harness; they are listed in its `EXTERNAL_DOCS_IMAGES` set so
 the check knows to leave them alone. `ai-diagnosis.png` stays there too — it needs a configured AI provider.

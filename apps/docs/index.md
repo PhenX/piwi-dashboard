@@ -70,8 +70,8 @@ Cypress results too, or you only ever debug locally and never look back,
     <p class="screenshot-caption">Dashboard overview — at-a-glance stats and a test results trend chart across all projects</p>
   </div>
   <div class="screenshot-item">
-    <img src="/screenshots/project-detail.png" alt="Project detail" />
-    <p class="screenshot-caption">Project detail — complete run history with status badges and test breakdown</p>
+    <img src="/screenshots/project-detail.png" alt="Project detail — per-run result bars above the run history table" />
+    <p class="screenshot-caption">Project detail — one bar per run over the complete history, filtered by environment</p>
   </div>
   <div class="screenshot-item">
     <img src="/screenshots/test-run.png" alt="Test run detail" />
@@ -87,7 +87,7 @@ Cypress results too, or you only ever debug locally and never look back,
   </div>
   <div class="screenshot-item">
     <img src="/screenshots/performance.png" alt="Performance page" />
-    <p class="screenshot-caption">Performance — avg/P90 duration trend, slowest tests ranking, and side-by-side run comparison</p>
+    <p class="screenshot-caption">Performance — per-run total, average and P90 duration, above the slowest-tests ranking</p>
   </div>
   <div class="screenshot-item">
     <img src="/screenshots/failure-cluster-triage.png" alt="Cluster triage" />

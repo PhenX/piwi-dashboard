@@ -269,8 +269,6 @@ export default defineNuxtConfig({
   vite: {
     optimizeDeps: {
       include: [
-        '@unovis/ts',
-        '@unovis/vue',
         'date-fns',
         'drizzle-orm',
         'drizzle-orm/sqlite-core',
