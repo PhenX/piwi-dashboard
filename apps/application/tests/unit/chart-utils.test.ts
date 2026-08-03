@@ -1,5 +1,15 @@
 import { describe, test, expect } from 'vitest';
-import { barGeometry, dayTickIndices, niceTicks, stackSegments, timeToOrdinalX } from '../../app/utils/chart';
+import {
+  CASE_STATUS_SERIES,
+  RUN_STATUS_SERIES,
+  barGeometry,
+  dayTickIndices,
+  formatTickDate,
+  legendOf,
+  niceTicks,
+  stackSegments,
+  timeToOrdinalX,
+} from '../../app/utils/chart';
 
 describe('niceTicks', () => {
   test('spans 0 to the first round step multiple clearing max', () => {
@@ -61,6 +71,31 @@ describe('timeToOrdinalX', () => {
   test('handles a single point', () => {
     expect(timeToOrdinalX([new Date(1000)], [25], 1000)).toBe(25);
     expect(timeToOrdinalX([new Date(1000)], [25], 1001)).toBeNull();
+  });
+
+  test('returns null when there is nothing to map onto', () => {
+    expect(timeToOrdinalX([], [], 1000)).toBeNull();
+    expect(timeToOrdinalX(dates, [10, 30], 1500)).toBeNull();
+  });
+});
+
+describe('legendOf', () => {
+  test('keeps series order and drops everything but color and label', () => {
+    expect(legendOf(CASE_STATUS_SERIES)).toEqual([
+      { color: 'rgb(34, 197, 94)', label: 'Passed' },
+      { color: 'rgb(239, 68, 68)', label: 'Failed' },
+      { color: 'rgb(156, 163, 175)', label: 'Skipped' },
+    ]);
+  });
+
+  test('run-status series stack with failed on the baseline', () => {
+    expect(RUN_STATUS_SERIES.map((s) => s.key)).toEqual(['failed', 'flaky', 'skipped', 'passed']);
+  });
+});
+
+describe('formatTickDate', () => {
+  test('renders a short month and day', () => {
+    expect(formatTickDate(new Date(2026, 6, 29))).toBe('Jul 29');
   });
 });
 
