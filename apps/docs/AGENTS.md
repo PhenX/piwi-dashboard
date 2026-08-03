@@ -116,31 +116,22 @@ and the seven surfaces that must carry it are in the [root guide](../AGENTS.md#d
 
 ## Marketing screenshots
 
-Hero images in `apps/docs/public/screenshots/*.png` are **1280×720**, with a diagonal light-top-left / dark-bottom-right
-split. Capture them against the **live demo** (it already has seed data — no local server needed) using the
-`playwright-cli` skill:
+The **light/dark diagonal split** is a scene option, not a manual procedure: `split: true` captures the scene in both
+themes at the same viewport and scroll position and composites them — light above the top-right → bottom-left seam,
+dark below — so a hero recaptures with one command like any other illustration:
 
-1. **Capture both themes at the same viewport and scroll position** so they align pixel-for-pixel. Resize to
-   `1280 720`, load `https://piwitests.github.io/demo/`, hide the demo banner by injecting
-   `.demo-banner{display:none!important}`, and screenshot. Then switch theme with the `nuxt-color-mode` localStorage
-   key, reload, re-hide the banner, and screenshot again.
-2. **Composite the split.** `playwright-cli` blocks `file://` and `run-code` has no `require`, so serve the two PNGs
-   plus a small overlay page over a throwaway local HTTP server and screenshot the stage element. The overlay stacks
-   both images at 1280×720 and clips the dark one to the bottom-right triangle, with an SVG seam line:
+```bash
+cd apps/application
+npm run app:screens -- home
+```
 
-   ```html
-   <div id="stage" style="position:relative;width:1280px;height:720px">
-     <img src="hero-light.png" style="position:absolute;inset:0;width:1280px;height:720px">
-     <img src="hero-dark.png"  style="position:absolute;inset:0;width:1280px;height:720px;clip-path:polygon(100% 0,100% 100%,0 100%)">
-     <svg width="1280" height="720" style="position:absolute;inset:0;pointer-events:none">
-       <line x1="1280" y1="0" x2="0" y2="720" stroke="rgba(0,0,0,.35)" stroke-width="4"/>
-       <line x1="1280" y1="0" x2="0" y2="720" stroke="rgba(255,255,255,.85)" stroke-width="1.5"/>
-     </svg>
-   </div>
-   ```
+Pair it with `deviceScaleFactor: 2` and `outputWidth` to write a crisp image at the width the page actually gives it:
+the docs gallery's featured tile spans the content column (~1152px), and anything wider is bytes the reader never sees.
 
-3. **Clean up** the temporary PNGs, the overlay page and the server. For a non-split refresh, skip step 2 and use a
-   single capture.
+The gallery images that are still live-demo captures (`projects.png`, `test-run.png`, the failure-cluster set) are
+**1280×720**, taken against `https://piwitests.github.io/demo/` with the `playwright-cli` skill and the demo banner
+hidden via `.demo-banner{display:none!important}`. Give them a scene when you next touch one — the harness renders
+icons offline and pins the clock, which the live demo cannot.
 
 Demo *evidence* media (the screenshots, traces and videos shown inside the product) is a different pipeline — see
 [`../application/AGENTS.md`](../application/AGENTS.md#demo-evidence-media-committed-binaries).

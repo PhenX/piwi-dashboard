@@ -33,7 +33,7 @@
 
 import { createRequire } from 'module';
 import { spawn, execSync } from 'child_process';
-import { existsSync, mkdirSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -41,6 +41,7 @@ import { drawAnnotations, clearAnnotations } from './screenshot-annotations.mjs'
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
+const sharp = require('sharp');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_DIR = join(__dirname, '..');
@@ -58,6 +59,47 @@ const DEFAULT_VIEWPORT = { width: 1280, height: 860 };
 /** Surfaces a scene can be captured against. */
 const MODES = ['web', 'desktop'];
 
+/** localStorage key `@nuxtjs/color-mode` reads the stored theme preference from. */
+const COLOR_MODE_KEY = 'nuxt-color-mode';
+
+/** Stroke widths of the split seam, authored against a 1280px-wide capture. */
+const SEAM_REFERENCE_WIDTH = 1280;
+const SEAM_SHADOW_WIDTH = 4;
+const SEAM_HIGHLIGHT_WIDTH = 1.5;
+
+/**
+ * Lay the dark capture over the light one, clipped to the triangle below the
+ * top-right → bottom-left diagonal, and draw the seam along it. Both captures
+ * must come from the same viewport and scroll position so they align exactly.
+ */
+async function compositeSplit(lightBuffer, darkBuffer) {
+  const { width, height } = await sharp(lightBuffer).metadata();
+  const scale = width / SEAM_REFERENCE_WIDTH;
+
+  const clip = Buffer.from(
+    `<svg width="${width}" height="${height}">` +
+      `<polygon points="${width},0 ${width},${height} 0,${height}" fill="#fff"/>` +
+      `</svg>`,
+  );
+  const darkTriangle = await sharp(darkBuffer)
+    .ensureAlpha()
+    .composite([{ input: clip, blend: 'dest-in' }])
+    .png()
+    .toBuffer();
+
+  const seam = Buffer.from(
+    `<svg width="${width}" height="${height}">` +
+      `<line x1="${width}" y1="0" x2="0" y2="${height}" stroke="rgba(0,0,0,0.35)" stroke-width="${SEAM_SHADOW_WIDTH * scale}"/>` +
+      `<line x1="${width}" y1="0" x2="0" y2="${height}" stroke="rgba(255,255,255,0.85)" stroke-width="${SEAM_HIGHLIGHT_WIDTH * scale}"/>` +
+      `</svg>`,
+  );
+
+  return sharp(lightBuffer)
+    .composite([{ input: darkTriangle }, { input: seam }])
+    .png()
+    .toBuffer();
+}
+
 /** A scene's mode, defaulting to the web dashboard. */
 function sceneMode(scene) {
   return scene.mode ?? 'web';
@@ -68,9 +110,9 @@ function sceneMode(scene) {
  * so `--check` does not report them as orphans. Everything else in there must
  * have a scene.
  *
- *   - the hero/gallery images come from the live-demo capture described in
- *     `apps/docs/AGENTS.md` ("Marketing screenshots"), including the
- *     light/dark diagonal split this harness has no equivalent for;
+ *   - the remaining gallery images come from the live-demo capture described in
+ *     `apps/docs/AGENTS.md` ("Marketing screenshots");
+ *   - `demo-live-run-poster.png` is a frame of the demo video, not a screen;
  *   - `ai-diagnosis.png` needs a configured AI provider, which the dev seed
  *     has no answer for — it stays a live-demo capture.
  */
@@ -81,7 +123,6 @@ const EXTERNAL_DOCS_IMAGES = new Set([
   'failure-cluster.png',
   'failure-clusters-tab.png',
   'flaky-tests.png',
-  'home.png',
   'projects.png',
   'test-run.png',
 ]);
@@ -139,6 +180,10 @@ const READY_INSPECTION = {
  *                 client, so a scene can call an endpoint the UI does not
  *   viewport    — default 1280×860
  *   colorScheme — 'light' | 'dark'
+ *   split       — capture the scene twice and composite a light/dark diagonal,
+ *                 light above the top-right → bottom-left seam, dark below
+ *   deviceScaleFactor — capture at N× (pair with `outputWidth` for crisp text)
+ *   outputWidth — resize the written PNG to this width
  *   expand      — selectors of collapsible sections to unfold before capturing
  *   of          — selector (or array of them) to capture instead of the viewport
  *   pad         — padding in CSS px around `of`
@@ -229,6 +274,30 @@ const SCENES = [
     charts: true,
     of: '[data-shot="test-case-detail"]',
     pad: 8,
+  },
+  {
+    name: 'home',
+    description: 'Home overview, light/dark diagonal split (docs gallery hero)',
+    tags: ['docs'],
+    out: 'docs',
+    route: '/',
+    viewport: { width: 1280, height: 720 },
+    // Captured at 2x and written at the width the featured tile actually gets,
+    // so the hero is never upscaled and its text stays crisp.
+    deviceScaleFactor: 2,
+    outputWidth: 1152,
+    split: true,
+    async run({ page, shoot, settle }) {
+      // The seeded data has partial runs, which the default filter hides behind
+      // a full-width notice. Show them so the hero leads with the dashboard's
+      // own numbers; the choice rides in a cookie, so the split's reloads keep it.
+      const showThem = page.getByRole('button', { name: 'Show them' });
+      if (await showThem.count()) {
+        await showThem.first().click();
+        await settle();
+      }
+      await shoot();
+    },
   },
   {
     name: 'project-detail',
@@ -755,6 +824,7 @@ async function captureScene(browser, scene, { base, outDir, freezeNow }) {
   const context = await browser.newContext({
     viewport: scene.viewport ?? DEFAULT_VIEWPORT,
     colorScheme: scene.colorScheme,
+    deviceScaleFactor: scene.deviceScaleFactor,
   });
   if (freezeNow) await context.clock.setFixedTime(freezeNow);
   if (sceneMode(scene) === 'desktop') await context.addInitScript(bridgeScript(scene));
@@ -802,20 +872,19 @@ async function captureScene(browser, scene, { base, outDir, freezeNow }) {
   const annotate = (shapes, opts = {}) => drawAnnotations(page, shapes, { container: annotationHost, ...opts });
   const clear = () => clearAnnotations(page);
 
-  let written = 0;
-  const shoot = async (label, opts = {}) => {
+  /** Take one screenshot of whatever the scene targets, as a buffer. */
+  const capture = async (opts = {}) => {
     const { of: ofOpt, pad: padOpt, ...pwOpts } = opts;
     const of = ofOpt ?? scene.of;
     const pad = padOpt ?? scene.pad ?? 0;
-    const stem = sceneFile(scene).replace(/\.png$/, '');
-    const file = join(outDir, `${stem}${label ? `-${label}` : ''}.png`);
     const common = { animations: 'disabled', caret: 'hide', ...pwOpts };
 
     if (of && !pad && !Array.isArray(of)) {
       const target = page.locator(of).first();
       await assertFitsViewport(page, target, scene.name, of);
-      await target.screenshot({ path: file, ...common });
-    } else if (of) {
+      return target.screenshot(common);
+    }
+    if (of) {
       const selectors = Array.isArray(of) ? of : [of];
       const { missing, gridParent } = await page.evaluate(markRegion, {
         selectors,
@@ -829,14 +898,49 @@ async function captureScene(browser, scene, { base, outDir, freezeNow }) {
       const region = page.locator(`[${REGION_ATTR}]`);
       try {
         await assertFitsViewport(page, region, scene.name, selectors.join(' + '));
-        await region.screenshot({ path: file, ...common });
+        return await region.screenshot(common);
       } finally {
         await styleTag.evaluate((node) => node.remove());
         await page.evaluate(unmarkRegion, { regionAttr: REGION_ATTR, keepAttr: KEEP_ATTR });
       }
-    } else {
-      await page.screenshot({ path: file, ...common });
     }
+    return page.screenshot(common);
+  };
+
+  /** Store a theme preference and reload so the app boots already in it. */
+  const setColorMode = async (mode) => {
+    await page.evaluate(([key, value]) => window.localStorage.setItem(key, value), [COLOR_MODE_KEY, mode]);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await waitForHydration(page);
+    await settle();
+  };
+
+  let written = 0;
+  const shoot = async (label, opts = {}) => {
+    const stem = sceneFile(scene).replace(/\.png$/, '');
+    const file = join(outDir, `${stem}${label ? `-${label}` : ''}.png`);
+
+    let image;
+    if (scene.split) {
+      await setColorMode('light');
+      const light = await capture(opts);
+      await setColorMode('dark');
+      const dark = await capture(opts);
+      image = await compositeSplit(light, dark);
+    } else {
+      image = await capture(opts);
+    }
+
+    // Resizing re-encodes anyway, so pay for the palette here: a dashboard
+    // screenshot is mostly flat fills and quantizes to a third of the bytes
+    // with no visible loss. Scenes that skip this keep Playwright's own bytes.
+    if (scene.outputWidth) {
+      image = await sharp(image)
+        .resize({ width: scene.outputWidth })
+        .png({ palette: true, compressionLevel: 9 })
+        .toBuffer();
+    }
+    writeFileSync(file, image);
     written++;
     console.log(`-> ${file.replace(`${APP_DIR}/`, '').replace(`${APP_DIR}`, '')}`);
   };

@@ -66,8 +66,8 @@ Cypress results too, or you only ever debug locally and never look back,
 
 <div class="screenshot-grid">
   <div class="screenshot-item screenshot-featured">
-    <img src="/screenshots/home.png" alt="Dashboard overview — stats and test results trend chart" />
-    <p class="screenshot-caption">Dashboard overview — at-a-glance stats and a test results trend chart across all projects</p>
+    <img src="/screenshots/home.png" alt="Dashboard overview — portfolio stats, per-project health and recent activity" />
+    <p class="screenshot-caption">Dashboard overview — at-a-glance stats, each project's recent runs and pass rate, and live activity across all projects</p>
   </div>
   <div class="screenshot-item">
     <img src="/screenshots/project-detail.png" alt="Project detail — per-run result bars above the run history table" />
