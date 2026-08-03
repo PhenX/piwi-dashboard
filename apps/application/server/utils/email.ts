@@ -1,6 +1,12 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
-import type { TopFailure } from '#shared/notification-events';
+import { renderEventSubject, notificationTargetPath } from '#shared/notification-events';
+import type {
+  NotificationEvent,
+  NotificationPayload,
+  RunFinishedPayload,
+  TopFailure,
+} from '#shared/notification-events';
 
 export interface SmtpConfig {
   host: string;
@@ -35,7 +41,9 @@ export function getSmtpConfig(): SmtpConfig {
   const secureDefault = port === 465;
   const secure =
     process.env.PIWI_SMTP_SECURE === 'true' || (process.env.PIWI_SMTP_SECURE === undefined && secureDefault);
-  const configured = Boolean(host && user && pass && from);
+  // Credentials are optional — a relay that accepts unauthenticated mail only
+  // needs host + from.
+  const configured = Boolean(host && from);
 
   return { host, port, user, from, fromName, hasPassword: Boolean(pass), secure, configured, envManaged: true };
 }
@@ -47,11 +55,14 @@ export function isEmailConfigured(): boolean {
 function getTransport(): Transporter {
   if (_transport) return _transport;
   const cfg = getSmtpConfig();
+  const pass = process.env.PIWI_SMTP_PASS || '';
   _transport = nodemailer.createTransport({
     host: cfg.host,
     port: cfg.port,
     secure: cfg.secure,
-    auth: { user: cfg.user, pass: process.env.PIWI_SMTP_PASS || '' },
+    // Only authenticate when credentials are set; an auth block with empty
+    // values would make nodemailer attempt AUTH against auth-less relays.
+    ...(cfg.user && pass ? { auth: { user: cfg.user, pass } } : {}),
   });
   return _transport;
 }
@@ -248,4 +259,49 @@ export function renderNewClusterEmail(opts: {
   const { html } = emailLayout(`New failure cluster — ${opts.projectName}`, body);
   const text = `New failure cluster in ${opts.projectName}${opts.affectedCases ? ` (${opts.affectedCases} affected)` : ''}\n\n${opts.signature}${opts.sampleErrorExcerpt ? `\n\n${opts.sampleErrorExcerpt}` : ''}\n\nView: ${url}`;
   return { html, text };
+}
+
+/** One event queued for a digest send. */
+export interface DigestItem {
+  event: NotificationEvent;
+  payload: NotificationPayload;
+}
+
+/**
+ * One email summarizing every notification a digest-mode subscription batched
+ * since the previous send: subject line + link per item, with run stats where
+ * the payload carries them.
+ */
+export function renderDigestEmail(items: DigestItem[]): { subject: string; html: string; text: string } {
+  const subject = `Piwi digest — ${items.length} notification${items.length === 1 ? '' : 's'}`;
+
+  const rows = items
+    .map(({ event, payload }) => {
+      const line = renderEventSubject(event, payload);
+      const path = notificationTargetPath(event, payload);
+      const url = path ? `${siteUrl()}${path}` : null;
+      const run = payload as RunFinishedPayload;
+      const stats =
+        event.startsWith('run.') && run.totalTests != null
+          ? `<div style="color:#71717a;font-size:12px;">${run.totalTests} tests${run.failedTests ? ` · <span style="color:#ef4444;">${run.failedTests} failed</span>` : ''}</div>`
+          : '';
+      const title = url
+        ? `<a href="${url}" style="color:#18181b;font-weight:600;text-decoration:none;">${escapeHtml(line)}</a>`
+        : `<span style="font-weight:600;">${escapeHtml(line)}</span>`;
+      return `<li style="margin-bottom:12px;list-style:none;">${title}${stats}</li>`;
+    })
+    .join('');
+
+  const body = `
+    <h2 style="margin:0 0 16px;font-size:20px;color:#18181b;">Your notification digest</h2>
+    <ul style="margin:0;padding:0;">${rows}</ul>`;
+  const { html } = emailLayout(subject, body);
+
+  const text = items
+    .map(({ event, payload }) => {
+      const path = notificationTargetPath(event, payload);
+      return `- ${renderEventSubject(event, payload)}${path ? `\n  ${siteUrl()}${path}` : ''}`;
+    })
+    .join('\n');
+  return { subject, html, text: `${subject}\n\n${text}` };
 }

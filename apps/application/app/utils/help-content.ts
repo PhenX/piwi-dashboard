@@ -467,12 +467,12 @@ export const HELP_TOPICS = {
   },
   'notifications.channels': {
     title: 'Channels',
-    text: 'Destinations an alert can go to — email, Slack or webhook. Create a channel, then subscribe events to it.',
+    text: 'Destinations an alert can go to — browser, email, Slack or webhook. Create a channel, then subscribe events to it. Administrators can make a channel global (usable by everyone); without authentication every channel is global.',
     doc: 'notifications#channels',
   },
   'notifications.subscriptions': {
     title: 'Subscriptions',
-    text: 'Which events (run failed, new cluster, etc.) notify which channel, optionally scoped to one project and filtered.',
+    text: 'Which events (run failed, new cluster, etc.) notify which channel, optionally scoped to one project and filtered. Global subscriptions deliver instance-wide and are managed by administrators.',
     doc: 'notifications#subscriptions',
   },
   'settings.ai-provider': {

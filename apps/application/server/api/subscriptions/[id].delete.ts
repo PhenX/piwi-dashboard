@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm';
 import { getDatabase } from '../../database';
 import { subscriptions } from '../../database/schema';
-import { requireAuth, isAuthEnabled } from '../../utils/auth';
+import { requireAuth } from '../../utils/auth';
 import { Role } from '#shared/types';
 
 defineRouteMeta({
@@ -15,7 +15,6 @@ defineRouteMeta({
 });
 
 export default eventHandler(async (event) => {
-  if (!isAuthEnabled(event)) throw createError({ statusCode: 400, message: 'Authentication not enabled' });
   const user = await requireAuth(event);
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) throw createError({ statusCode: 400, message: 'Invalid subscription ID' });

@@ -438,6 +438,40 @@ const SCENES = [
       await shoot();
     },
   },
+  {
+    name: 'notifications-settings',
+    description: 'Notifications settings (auth off): SMTP status, channels, subscriptions; plus the project bell',
+    route: '/settings/notifications',
+    viewport: { width: 1280, height: 1250 },
+    outputs: ['notifications-settings.png', 'notifications-settings-bell.png'],
+    async prepare({ base, request }) {
+      // One channel + subscription so neither section captures empty. Reruns
+      // reuse the rows from the previous run instead of duplicating them.
+      const list = await (await request.get(`${base}/api/channels`)).json();
+      if (!list.channels.some((c) => c.name === 'Team Slack')) {
+        const ch = await (
+          await request.post(`${base}/api/channels`, {
+            data: {
+              name: 'Team Slack',
+              type: 'slack',
+              config: { webhookUrl: 'https://hooks.slack.com/services/T/B/x' },
+            },
+          })
+        ).json();
+        await request.post(`${base}/api/subscriptions`, {
+          data: { channelId: ch.channel.id, projectId: 1, events: ['run.failed', 'cluster.new'] },
+        });
+      }
+    },
+    async run({ page, shoot, goto, settle }) {
+      await shoot();
+      await goto('/projects/1');
+      await page.getByTitle('Notification subscriptions for this project').click();
+      await page.getByText('Browser notifications').waitFor();
+      await settle();
+      await shoot('bell');
+    },
+  },
 ];
 
 /** Output basename for a scene, before any `shoot()` label. */

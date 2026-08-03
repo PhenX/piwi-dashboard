@@ -1,16 +1,31 @@
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, lt, desc, inArray } from 'drizzle-orm';
 
 /** Failures scanned for ownership; well past what any comment or digest lists. */
 const OWNER_LOOKUP_LIMIT = 200;
+/** Prior runs fetched per project when looking for same-branch baseline runs. */
+const BASELINE_FETCH_LIMIT = 25;
 import { projects, testRuns, failureClusters, testRunsCases, testCases } from '../../database/schema';
 import { emitNotification } from './emit';
-import { buildTopFailures, truncateExcerpt, TOP_FAILURES_LIMIT } from '#shared/notification-events';
+import {
+  buildTopFailures,
+  truncateExcerpt,
+  computePerfBaseline,
+  TOP_FAILURES_LIMIT,
+  PERF_BASELINE_RUNS,
+  PERF_REGRESSION_MIN_PCT,
+} from '#shared/notification-events';
 import { resolveOwners } from '../scm/ownership';
 import type { DbClient } from '../../database';
 
+function runBranch(metadata: Record<string, unknown> | null): string | undefined {
+  const meta = metadata ?? {};
+  return (meta.branch as string | undefined) || (meta.gitBranch as string | undefined) || undefined;
+}
+
 /**
  * Emit run.finished / run.failed / run.failed.default_branch notifications for a completed run,
- * plus cluster.new for any failure clusters first seen in this run.
+ * plus flakiness.spike / perf.regression when the run qualifies, and cluster.new
+ * for any failure clusters first seen in this run.
  * Call this after the run status is finalized.
  */
 export async function emitRunNotifications(db: DbClient, runId: number): Promise<void> {
@@ -22,7 +37,7 @@ export async function emitRunNotifications(db: DbClient, runId: number): Promise
     if (!project) return;
 
     const meta = (runRow.metadata as Record<string, unknown> | null) ?? {};
-    const branch = (meta.branch as string | undefined) || (meta.gitBranch as string | undefined) || undefined;
+    const branch = runBranch(runRow.metadata as Record<string, unknown> | null);
     const defaultBranch = (meta.defaultBranch as string | undefined) || 'main';
     const isDefaultBranch = branch ? branch === defaultBranch : false;
 
@@ -63,6 +78,8 @@ export async function emitRunNotifications(db: DbClient, runId: number): Promise
       failedTests: runRow.failedTests,
       passedTests: runRow.passedTests,
       flakyTests: runRow.flakyTests,
+      flakinessRate: runRow.totalTests > 0 ? runRow.flakyTests / runRow.totalTests : 0,
+      durationMs: runRow.duration ?? undefined,
       branch,
       isDefaultBranch,
       topFailures,
@@ -75,6 +92,45 @@ export async function emitRunNotifications(db: DbClient, runId: number): Promise
       await emitNotification(db, 'run.failed', runPayload);
       if (isDefaultBranch) {
         await emitNotification(db, 'run.failed.default_branch', runPayload);
+      }
+    }
+
+    // Flaky tests in the run: subscriptions filter on flakinessRate via their
+    // flakinessThreshold, so the event fires for any flaky run and the
+    // per-subscription threshold decides delivery.
+    if (runRow.flakyTests > 0) {
+      await emitNotification(db, 'flakiness.spike', runPayload);
+    }
+
+    // Perf regression: the run is markedly slower than the median of prior
+    // completed runs on the same branch.
+    if (runRow.duration && runRow.duration > 0) {
+      const priorRuns = await db
+        .select({ duration: testRuns.duration, metadata: testRuns.metadata })
+        .from(testRuns)
+        .where(
+          and(
+            eq(testRuns.projectId, runRow.projectId),
+            lt(testRuns.id, runId),
+            inArray(testRuns.status, ['passed', 'failed']),
+          ),
+        )
+        .orderBy(desc(testRuns.id))
+        .limit(BASELINE_FETCH_LIMIT);
+
+      const priorDurations = priorRuns
+        .filter((r) => runBranch(r.metadata as Record<string, unknown> | null) === branch)
+        .map((r) => r.duration ?? 0)
+        .filter((d) => d > 0)
+        .slice(0, PERF_BASELINE_RUNS);
+
+      const baseline = computePerfBaseline(priorDurations, runRow.duration);
+      if (baseline && baseline.regressionPct >= PERF_REGRESSION_MIN_PCT) {
+        await emitNotification(db, 'perf.regression', {
+          ...runPayload,
+          baselineDurationMs: baseline.baselineDurationMs,
+          regressionPct: Math.round(baseline.regressionPct),
+        });
       }
     }
 

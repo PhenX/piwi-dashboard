@@ -11,8 +11,35 @@ import {
   index,
   uniqueIndex,
   primaryKey,
+  customType,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+
+/**
+ * Boolean stored in an integer column (0/1). Mirrors the SQLite dialect's
+ * `integer(..., { mode: 'boolean' })` columns, so application code reads and
+ * writes plain booleans on both dialects while the column type stays integer
+ * (no data migration for existing databases).
+ *
+ * `.default()` on these columns must be the driver value (`0`/`1`, cast to
+ * boolean) — drizzle-kit serializes defaults into DDL without running
+ * `toDriver`, and a literal `true`/`false` default is invalid SQL for an
+ * integer column.
+ */
+const intBoolean = customType<{ data: boolean; driverData: number }>({
+  dataType() {
+    return 'integer';
+  },
+  toDriver(value) {
+    return value ? 1 : 0;
+  },
+  fromDriver(value) {
+    return Number(value) !== 0;
+  },
+});
+
+const INT_BOOLEAN_FALSE = 0 as unknown as boolean;
+const INT_BOOLEAN_TRUE = 1 as unknown as boolean;
 
 // Projects table
 export const projects = pgTable(
@@ -712,7 +739,7 @@ export const users = pgTable(
     role: text('role').notNull(), // Role enum: 'administrator', 'reporter', 'user'
     name: text('name'), // Display name
     email: text('email'), // Email address (nullable; OAuth callback can populate it)
-    emailVerified: integer('email_verified').notNull().default(0), // boolean (0/1)
+    emailVerified: intBoolean('email_verified').notNull().default(INT_BOOLEAN_FALSE),
     avatarUrl: text('avatar_url'), // Avatar from OAuth provider
     oauthProvider: text('oauth_provider'), // 'google', 'github', etc.
     oauthProviderId: text('oauth_provider_id'), // User ID from the OAuth provider
@@ -762,7 +789,7 @@ export const notificationChannels = pgTable(
     type: text('type').notNull(), // 'email' | 'slack' | 'webhook'
     config: jsonb('config'), // { address } | { webhookUrl } | { url, secret (encrypted) }
     userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }), // null = global (admin-managed)
-    verified: integer('verified').notNull().default(0),
+    verified: intBoolean('verified').notNull().default(INT_BOOLEAN_FALSE),
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -790,7 +817,7 @@ export const subscriptions = pgTable(
     mode: text('mode').notNull().default('realtime'), // 'realtime' | 'digest'
     digestAt: text('digest_at'), // 'HH:mm' UTC for daily digest
     mutedUntil: timestamp('muted_until', { mode: 'date' }),
-    active: integer('active').notNull().default(1),
+    active: intBoolean('active').notNull().default(INT_BOOLEAN_TRUE),
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),

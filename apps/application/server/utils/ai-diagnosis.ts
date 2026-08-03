@@ -394,6 +394,7 @@ async function persistCompletedDiagnosis(
   emitNotification(db, 'diagnosis.completed', {
     clusterId: cluster.id,
     projectId: cluster.projectId,
+    completedAt: completed.updatedAt?.getTime() ?? Date.now(),
     summary: diagnosis.summary,
     rootCause: diagnosis.rootCause,
     category: diagnosis.category,

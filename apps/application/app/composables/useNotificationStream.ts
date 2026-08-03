@@ -96,15 +96,7 @@ function handleEvent(data: NotificationEventData) {
   }
 
   if (_cookie && data.projectId != null) {
-    const subbed = _cookie.isEventSubscribed(data.projectId, data.type);
-    console.log('[notify-stream] GATE: cookie filter', {
-      projectId: data.projectId,
-      type: data.type,
-      subscribed: subbed,
-      cookieProjects: Object.keys(_cookie.stored.value.projects),
-      matchingEvents: _cookie.stored.value.projects[data.projectId]?.events ?? [],
-    });
-    if (!subbed) return;
+    if (!_cookie.isEventSubscribed(data.projectId, data.type)) return;
   }
 
   const body = renderBody(data);
@@ -119,7 +111,6 @@ function handleEvent(data: NotificationEventData) {
     tag,
     icon: '/logo.svg',
   });
-  console.log('[notify-stream] notification fired', { type: data.type, projectId: data.projectId });
 
   const link = getLink(data);
   if (link) {
@@ -187,7 +178,6 @@ function connectLive() {
 
 export function useNotificationStream() {
   if (!import.meta.client || started) return;
-  started = true;
   started = true;
 
   const { active } = useDiagnosisNotification();

@@ -15,6 +15,12 @@ export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
 export const TOP_FAILURES_LIMIT = 3;
 /** Max characters kept from an error message embedded in a notification. */
 export const ERROR_EXCERPT_MAX = 300;
+/** How many prior completed runs the perf-regression baseline is computed from. */
+export const PERF_BASELINE_RUNS = 5;
+/** Minimum prior runs required before a perf-regression baseline is trusted. */
+export const PERF_BASELINE_MIN_RUNS = 2;
+/** How much slower than baseline (percent) a run must be to emit perf.regression. */
+export const PERF_REGRESSION_MIN_PCT = 20;
 
 /** A single failing test embedded in a run notification for debugging context. */
 export interface TopFailure {
@@ -37,6 +43,12 @@ export interface RunFinishedPayload {
   branch?: string;
   isDefaultBranch?: boolean;
   flakinessRate?: number; // 0-1
+  /** Duration of the run in milliseconds. */
+  durationMs?: number;
+  /** Median duration (ms) of the prior runs a perf regression was measured against. */
+  baselineDurationMs?: number;
+  /** How much slower this run is than the baseline, in percent. */
+  regressionPct?: number;
   topFailures?: TopFailure[];
   /**
    * Distinct owners of the run's failing tests — from `piwi:owner` where a test
@@ -97,6 +109,8 @@ export function buildTopFailures(rows: TopFailureInput[], limit: number = TOP_FA
 export interface DiagnosisCompletedPayload {
   clusterId: number;
   projectId: number;
+  /** Epoch ms of this completion — distinguishes re-diagnoses of the same cluster. */
+  completedAt?: number;
   summary?: string | null;
   rootCause?: string | null;
   category?: string | null;
@@ -104,6 +118,110 @@ export interface DiagnosisCompletedPayload {
 }
 
 export type NotificationPayload = RunFinishedPayload | ClusterNewPayload | DiagnosisCompletedPayload;
+
+/** Per-subscription delivery filters, stored as JSON on the subscription row. */
+export interface SubscriptionFilters {
+  branches?: string[];
+  tags?: string[];
+  statuses?: string[];
+  defaultBranchOnly?: boolean;
+  /** Only deliver when one of these owns a failing test in the run. */
+  owners?: string[];
+  /** Minimum flakiness rate (0-1) for flakiness.spike deliveries. */
+  flakinessThreshold?: number;
+  /** Minimum slowdown percent for perf.regression deliveries. */
+  perfRegressionPct?: number;
+}
+
+/** Whether an event/payload passes a subscription's delivery filters. */
+export function passesSubscriptionFilters(
+  filters: SubscriptionFilters | null | undefined,
+  event: NotificationEvent,
+  payload: NotificationPayload,
+): boolean {
+  if (!filters) return true;
+
+  const runPayload = payload as RunFinishedPayload;
+
+  if (filters.defaultBranchOnly && event.startsWith('run.')) {
+    if (!runPayload.isDefaultBranch) return false;
+  }
+  if (filters.branches?.length && event.startsWith('run.') && runPayload.branch) {
+    if (!filters.branches.includes(runPayload.branch)) return false;
+  }
+  if (filters.statuses?.length && event.startsWith('run.') && runPayload.status) {
+    if (!filters.statuses.includes(runPayload.status)) return false;
+  }
+  if (filters.owners?.length && event.startsWith('run.')) {
+    // No owner on the payload means nothing failed, or ownership could not be
+    // resolved. Either way an owner-scoped subscription has nothing to say.
+    const runOwners = runPayload.owners ?? [];
+    if (!runOwners.some((owner) => filters.owners!.includes(owner))) return false;
+  }
+  if (filters.flakinessThreshold != null && event === 'flakiness.spike') {
+    const rate = runPayload.flakinessRate ?? 0;
+    if (rate < filters.flakinessThreshold) return false;
+  }
+  if (filters.perfRegressionPct != null && event === 'perf.regression') {
+    const pct = runPayload.regressionPct ?? 0;
+    if (pct < filters.perfRegressionPct) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Idempotency key for one logical notification to one channel. Keyed on the
+ * entity the event is about — the run for run-scoped events, the cluster for
+ * cluster.new (one run can surface several new clusters), and the cluster plus
+ * completion time for diagnosis.completed (the same cluster can be re-diagnosed).
+ */
+export function buildNotificationDedupeKey(
+  event: NotificationEvent,
+  payload: NotificationPayload,
+  channelId: number,
+): string {
+  if (event === 'cluster.new') {
+    const p = payload as ClusterNewPayload;
+    return `${event}:c${p.clusterId}:${channelId}`;
+  }
+  if (event === 'diagnosis.completed') {
+    const p = payload as DiagnosisCompletedPayload;
+    return `${event}:c${p.clusterId}:${p.completedAt ?? 'x'}:${channelId}`;
+  }
+  const runId = (payload as RunFinishedPayload).runId;
+  return `${event}:r${runId ?? 'x'}:${channelId}`;
+}
+
+/**
+ * Perf-regression baseline: the median duration of prior completed runs, and how
+ * much slower the current run is. Returns null when there are fewer than
+ * {@link PERF_BASELINE_MIN_RUNS} usable prior durations or the current duration
+ * is not positive.
+ */
+export function computePerfBaseline(
+  priorDurationsMs: number[],
+  currentDurationMs: number,
+): { baselineDurationMs: number; regressionPct: number } | null {
+  const usable = priorDurationsMs.filter((d) => d > 0);
+  if (currentDurationMs <= 0 || usable.length < PERF_BASELINE_MIN_RUNS) return null;
+  const sorted = [...usable].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const baselineDurationMs = sorted.length % 2 === 1 ? sorted[mid]! : Math.round((sorted[mid - 1]! + sorted[mid]!) / 2);
+  if (baselineDurationMs <= 0) return null;
+  const regressionPct = ((currentDurationMs - baselineDurationMs) / baselineDurationMs) * 100;
+  return { baselineDurationMs, regressionPct };
+}
+
+/** Dashboard path the notification links to, or null when it has no target. */
+export function notificationTargetPath(event: NotificationEvent, payload: NotificationPayload): string | null {
+  if (event === 'cluster.new' || event === 'diagnosis.completed') {
+    const clusterId = (payload as ClusterNewPayload).clusterId;
+    return clusterId ? `/failure-clusters/${clusterId}` : null;
+  }
+  const runId = (payload as RunFinishedPayload).runId;
+  return runId ? `/test-runs/${runId}` : null;
+}
 
 /** Subject / title line for each event type. */
 export function renderEventSubject(event: NotificationEvent, payload: NotificationPayload): string {
@@ -124,7 +242,8 @@ export function renderEventSubject(event: NotificationEvent, payload: Notificati
     }
     case 'perf.regression': {
       const p = payload as RunFinishedPayload;
-      return `Performance regression — ${p.projectName}`;
+      const pct = p.regressionPct != null ? ` (+${Math.round(p.regressionPct)}% slower)` : '';
+      return `Performance regression — ${p.projectName}${pct}`;
     }
     case 'diagnosis.completed': {
       return 'Diagnosis complete';

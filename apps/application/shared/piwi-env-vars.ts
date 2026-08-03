@@ -197,7 +197,7 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     order: 12,
     intro:
       'Required for email notifications and account flows (verification, password reset, invites). Set via environment only.',
-    note: 'Email sending activates once `PIWI_SMTP_HOST`, `PIWI_SMTP_USER`, `PIWI_SMTP_PASS` and `PIWI_SMTP_FROM` are all set. See [Notifications](./notifications) for channels and subscriptions.',
+    note: 'Email sending activates once `PIWI_SMTP_HOST` and `PIWI_SMTP_FROM` are set; add `PIWI_SMTP_USER`/`PIWI_SMTP_PASS` when the server requires authentication. See [Notifications](./notifications) for channels and subscriptions.',
   },
   clustering: {
     title: 'Failure clustering',
@@ -929,17 +929,15 @@ export const PIWI_ENV_VARS = {
     relevantWhen: { PIWI_SMTP_HOST: '*' },
   },
   PIWI_SMTP_USER: {
-    description: 'SMTP username.',
+    description: 'SMTP username. Optional — only when the server requires authentication.',
     category: 'smtp',
     relevantWhen: { PIWI_SMTP_HOST: '*' },
-    requiredWhen: { PIWI_SMTP_HOST: '*' },
   },
   PIWI_SMTP_PASS: {
-    description: 'SMTP password. Never returned by the API.',
+    description: 'SMTP password. Optional — only when the server requires authentication. Never returned by the API.',
     category: 'smtp',
     secret: true,
     relevantWhen: { PIWI_SMTP_HOST: '*' },
-    requiredWhen: { PIWI_SMTP_HOST: '*' },
   },
   PIWI_SMTP_FROM: {
     description: 'From address for outbound email (e.g. noreply@example.com).',

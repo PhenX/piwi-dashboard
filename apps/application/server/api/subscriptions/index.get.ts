@@ -1,29 +1,24 @@
 import { eq, and, or, isNull } from 'drizzle-orm';
 import { getDatabase } from '../../database';
 import { subscriptions, notificationChannels } from '../../database/schema';
-import { requireAuth, isAuthEnabled } from '../../utils/auth';
-import { Role } from '#shared/types';
+import { requireAuth } from '../../utils/auth';
 
 defineRouteMeta({
   openAPI: {
     tags: ['Notifications'],
     summary: 'List subscriptions',
-    description: "Returns the current user's subscriptions (admins can see all).",
+    description: "Returns the current user's subscriptions plus global (admin-managed) ones.",
     'x-required-roles': [],
     parameters: [{ name: 'projectId', in: 'query', schema: { type: 'integer' } }],
   },
 });
 
 export default eventHandler(async (event) => {
-  if (!isAuthEnabled(event))
-    throw createError({ statusCode: 400, message: 'Enable authentication to use notifications' });
   const user = await requireAuth(event);
   const db = await getDatabase();
 
   const projectIdParam = getQuery(event).projectId;
   const projectId = projectIdParam ? parseInt(String(projectIdParam)) : null;
-
-  const isAdmin = user.role === Role.ADMINISTRATOR;
 
   const rows = await db
     .select({ sub: subscriptions, channel: notificationChannels })
@@ -31,7 +26,7 @@ export default eventHandler(async (event) => {
     .innerJoin(notificationChannels, eq(subscriptions.channelId, notificationChannels.id))
     .where(
       and(
-        isAdmin ? undefined : or(isNull(subscriptions.userId), eq(subscriptions.userId, user.id)),
+        or(isNull(subscriptions.userId), eq(subscriptions.userId, user.id)),
         projectId ? eq(subscriptions.projectId, projectId) : undefined,
       ),
     );
