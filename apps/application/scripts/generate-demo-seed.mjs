@@ -1185,7 +1185,12 @@ for (const shot of PASSING_SCREENSHOTS) {
       const overlayPng = await sharp(Buffer.from(overlay), { raw: { width, height, channels: 4 } })
         .png()
         .toBuffer();
-      writeFileSync(new URL(`../public/${overlayRel}`, import.meta.url), overlayPng);
+      // Write beside the other seed artifacts so concurrent generators (e.g. the
+      // unit tests) stay inside their PIWI_DEMO_SEED_OUTPUT_DIR instead of
+      // rewriting the committed binary.
+      const visualDiffPath = join(OUTPUT_DIR, 'screenshots/visual-diff-checkout.png');
+      mkdirSync(dirname(visualDiffPath), { recursive: true });
+      writeFileSync(visualDiffPath, overlayPng);
 
       ATTACHMENTS.push({
         id: attachmentId++,
