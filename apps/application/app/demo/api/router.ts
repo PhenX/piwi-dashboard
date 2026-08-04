@@ -501,7 +501,8 @@ const routes: RouteEntry[] = [
   {
     method: 'POST',
     pattern: /^\/api\/failure-clusters\/(\d+)\/diagnose$/,
-    handler: (m, body) => apiDiagnoseCluster(+m[1]!, body as Record<string, unknown> | undefined),
+    handler: (m, body, q) =>
+      apiDiagnoseCluster(+m[1]!, body as Record<string, unknown> | undefined, q as URLSearchParams | undefined),
   },
   {
     method: 'POST',

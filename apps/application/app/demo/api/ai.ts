@@ -771,8 +771,31 @@ async function persistDiagnosis(
 // ── Endpoints ────────────────────────────────────────────────────────────────
 
 /** POST /api/failure-clusters/:id/diagnose (non-streaming fallback) */
-export async function apiDiagnoseCluster(clusterId: number, body?: Record<string, unknown>): Promise<FailureDiagnosis> {
+export async function apiDiagnoseCluster(
+  clusterId: number,
+  body?: Record<string, unknown>,
+  query?: URLSearchParams,
+): Promise<FailureDiagnosis> {
   const db = await getDemoDb();
+  const force = query?.get('force') === 'true';
+
+  // Execution-scoped diagnose targets one test-run-case, mirroring the server's
+  // scope branch on the cluster endpoint.
+  if (body?.scope === 'execution' && body?.testRunsCaseId != null) {
+    return apiDiagnoseExecution(Number(body.testRunsCaseId), body);
+  }
+
+  // Like the server: an existing completed diagnosis is the answer unless the
+  // caller forces a re-run (which snapshots the previous one into history).
+  if (!force) {
+    const [existing] = await db
+      .select()
+      .from(failureDiagnoses)
+      .where(and(eq(failureDiagnoses.clusterId, clusterId), eq(failureDiagnoses.scope, 'cluster')))
+      .limit(1);
+    if (existing?.status === 'completed') return existing;
+  }
+
   await snapshotAndClear(db, clusterId);
   const gen = await generateDiagnosis(clusterId, {
     additionalContext: (body?.additionalContext as string) ?? null,
@@ -880,8 +903,12 @@ export async function apiStreamDiagnoseCluster(
         }
         controller.enqueue(encoder.encode(`event: result\ndata: ${JSON.stringify(saved)}\n\n`));
         controller.close();
-      } catch {
+      } catch (err) {
+        // Mirrors the server's stream endpoint: a failure surfaces as an
+        // `error` event instead of silently closing the stream.
+        const message = err instanceof Error ? err.message : String(err);
         try {
+          controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ message })}\n\n`));
           controller.close();
         } catch {
           /* ignore */
