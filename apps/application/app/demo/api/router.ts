@@ -945,7 +945,10 @@ const routes: RouteEntry[] = [
   {
     method: 'DELETE',
     pattern: /^\/api\/admin\/cleanup$/,
-    handler: () => Promise.resolve({ success: true, itemsDeleted: 0 }),
+    // Mirror the server response keys (deletedRuns/spaceReclaim) — the storage
+    // page reads deletedRuns for its toast; there is nothing to reclaim in a
+    // browser demo.
+    handler: () => Promise.resolve({ success: true, deletedRuns: 0, spaceReclaim: null }),
   },
 ];
 
