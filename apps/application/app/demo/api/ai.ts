@@ -12,13 +12,14 @@
  * force-refresh snapshots the previous result into the version history first.
  */
 
-import { eq, and } from 'drizzle-orm';
+import { eq, and, gte, isNotNull, sql } from 'drizzle-orm';
 import {
   failureDiagnoses,
   failureDiagnosisVersions,
   testRunsCases,
   testRuns,
   failureClusters,
+  projects,
 } from '../../../server/database/schema';
 import type { FailureDiagnosis } from '../../../server/database/schema';
 import { getDemoDb } from '../db.client';
@@ -924,18 +925,21 @@ export async function apiStreamDiagnoseCluster(
 
 /** GET /api/settings/ai — presents a read-only, env-managed demo provider. */
 export async function apiGetAiSettings() {
+  const db = await getDemoDb();
+  // SCM is configured only when a seeded/project token actually exists — the
+  // canned demo SCM needs no token, so this reads false unless one was stored.
+  const scmRows = await db.select({ id: projects.id }).from(projects).where(isNotNull(projects.scmToken)).limit(1);
   const demoRole = {
     provider: 'demo',
     model: DEMO_MODEL,
     baseUrl: null,
     hasApiKey: true,
     reuse: null,
-    envManaged: true,
   };
   return {
     roles: { diagnosis: demoRole, research: null, embedding: null },
     autoDiagnose: false,
-    hasScmToken: true,
+    hasScmToken: scmRows.length > 0,
     envManaged: true,
     customInstructions: null,
   };
@@ -1014,27 +1018,47 @@ export async function apiPutAiLimits(body: unknown) {
 }
 
 /** GET /api/settings/ai/usage — synthesised from stored demo diagnoses. */
-export async function apiGetAiUsage() {
+export async function apiGetAiUsage(daysParam?: string | null) {
   const db = await getDemoDb();
+  const parsed = parseInt(daysParam ?? '30', 10);
+  const days = Math.min(365, Math.max(1, Number.isFinite(parsed) ? parsed : 30));
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  // Same aggregation as the server route: per provider+model, failed included,
+  // over the requested window.
   const rows = await db
     .select({
+      provider: failureDiagnoses.provider,
       model: failureDiagnoses.model,
-      inputTokens: failureDiagnoses.inputTokens,
-      outputTokens: failureDiagnoses.outputTokens,
+      diagnoses: sql<number>`count(${failureDiagnoses.id})`,
+      failed: sql<number>`sum(case when ${failureDiagnoses.status} = 'failed' then 1 else 0 end)`,
+      inputTokens: sql<number>`sum(${failureDiagnoses.inputTokens})`,
+      outputTokens: sql<number>`sum(${failureDiagnoses.outputTokens})`,
+      avgDurationMs: sql<number | null>`avg(${failureDiagnoses.durationMs})`,
     })
     .from(failureDiagnoses)
-    .where(eq(failureDiagnoses.status, 'completed'));
+    .where(and(isNotNull(failureDiagnoses.model), gte(failureDiagnoses.updatedAt, since)))
+    .groupBy(failureDiagnoses.provider, failureDiagnoses.model);
 
-  let inputTokens = 0;
-  let outputTokens = 0;
-  for (const r of rows) {
-    inputTokens += r.inputTokens ?? 0;
-    outputTokens += r.outputTokens ?? 0;
-  }
-  const byModel = rows.length ? [{ model: DEMO_MODEL, diagnoses: rows.length, inputTokens, outputTokens }] : [];
+  const byModel = rows
+    .map((r) => ({
+      provider: r.provider,
+      model: r.model ?? '',
+      diagnoses: Number(r.diagnoses ?? 0),
+      failed: Number(r.failed ?? 0),
+      inputTokens: Number(r.inputTokens ?? 0),
+      outputTokens: Number(r.outputTokens ?? 0),
+      avgDurationMs: r.avgDurationMs === null ? null : Math.round(Number(r.avgDurationMs)),
+    }))
+    .sort((a, b) => b.inputTokens - a.inputTokens);
+
   return {
-    days: 30,
-    totals: { diagnoses: rows.length, inputTokens, outputTokens },
+    days,
+    totals: {
+      diagnoses: byModel.reduce((acc, r) => acc + r.diagnoses, 0),
+      inputTokens: byModel.reduce((acc, r) => acc + r.inputTokens, 0),
+      outputTokens: byModel.reduce((acc, r) => acc + r.outputTokens, 0),
+    },
     byModel,
   };
 }
