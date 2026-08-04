@@ -199,6 +199,16 @@ export interface TestRunFinishPayload {
   didNotRunTests?: number;
   flakyTests: number;
   durations: number[];
+  /** Suite-level hook/fixture steps (beforeAll/afterAll) for the run timeline. */
+  setupSteps?: Array<{
+    title: string;
+    category: string;
+    startedAt: number;
+    duration: number;
+    status: string;
+    location?: string | null;
+    workerIndex?: number | null;
+  }>;
   label?: string | null;
   metadata?: Record<string, unknown>;
   playwrightVersion?: string;

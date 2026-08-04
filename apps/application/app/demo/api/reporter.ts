@@ -726,7 +726,7 @@ export async function apiPostRunEvents(
   }
 
   if (completeEvents.length === 0) {
-    return { success: true, processed: beginEvents.length };
+    return { success: true, processed: beginEvents.length + stepBeginEvents.length + stepEndEvents.length };
   }
 
   const parsedEvents = completeEvents.map((tc) => {
@@ -797,6 +797,7 @@ export async function apiPostRunEvents(
       passedTests: updatedRun.passedTests,
       failedTests: updatedRun.failedTests,
       skippedTests: updatedRun.skippedTests,
+      didNotRunTests: updatedRun.didNotRunTests,
     },
   });
 
@@ -864,6 +865,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
         shardsFinished: sql`${testRuns.shardsFinished} + 1`,
         duration: sql`MAX(coalesce(${testRuns.duration}, 0), ${duration})`,
         metadata: { ...currentMeta, shardDurations: allDurations },
+        ...(body.setupSteps && { setupSteps: body.setupSteps }),
         ...(body.isFullRun !== undefined && { isFullRun: body.isFullRun !== false ? 1 : 0 }),
         ...(body.filterDetails !== undefined && { filterDetails: body.filterDetails ?? null }),
       })
@@ -872,13 +874,15 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
     const updated = await db.select().from(testRuns).where(eq(testRuns.id, id));
     const updatedRun = updated[0];
 
+    let finalStatus: string | undefined;
+
     if (
       updatedRun &&
       updatedRun.shardsFinished != null &&
       updatedRun.shardTotal != null &&
       updatedRun.shardsFinished >= updatedRun.shardTotal
     ) {
-      const finalStatus = (updatedRun.failedTests ?? 0) > 0 ? 'failed' : 'passed';
+      finalStatus = (updatedRun.failedTests ?? 0) > 0 ? 'failed' : 'passed';
 
       let avgTestDuration: number | null = null;
       let p90TestDuration: number | null = null;
@@ -914,6 +918,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
           passedTests: updatedRun.passedTests,
           failedTests: updatedRun.failedTests,
           skippedTests: updatedRun.skippedTests,
+          didNotRunTests: updatedRun.didNotRunTests,
           flakyTests: updatedRun.flakyTests,
         },
       });
@@ -929,13 +934,14 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
           passedTests: updatedRun?.passedTests ?? testRun.passedTests,
           failedTests: updatedRun?.failedTests ?? testRun.failedTests,
           skippedTests: updatedRun?.skippedTests ?? testRun.skippedTests,
+          didNotRunTests: updatedRun?.didNotRunTests ?? testRun.didNotRunTests,
           shardsFinished: updatedRun?.shardsFinished ?? 0,
           shardTotal: updatedRun?.shardTotal,
         },
       });
     }
 
-    return { success: true, testRunId: id, status: 'running' };
+    return { success: true, testRunId: id, status: finalStatus ?? 'running' };
   }
 
   // Non-sharded
@@ -979,6 +985,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
       ...(body.label !== undefined && { label: body.label }),
       ...(body.playwrightVersion && { playwrightVersion: body.playwrightVersion }),
       ...(body.reporterVersion && { reporterVersion: body.reporterVersion }),
+      ...(body.setupSteps && { setupSteps: body.setupSteps }),
       ...(body.isFullRun !== undefined && { isFullRun: body.isFullRun !== false ? 1 : 0 }),
       ...(body.filterDetails !== undefined && { filterDetails: body.filterDetails ?? null }),
     })
@@ -993,6 +1000,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
       passedTests: body.passedTests ?? testRun.passedTests,
       failedTests: failedTestsValue,
       skippedTests: body.skippedTests ?? testRun.skippedTests,
+      didNotRunTests: body.didNotRunTests ?? testRun.didNotRunTests,
       flakyTests,
     },
   });
