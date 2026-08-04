@@ -11,9 +11,9 @@ describe('resolveOverallStatus', () => {
     expect(resolveOverallStatus({ status: 'failed' } as any, counters)).toBe('failed');
   });
 
-  it('maps timedout/interrupted to failed', () => {
-    expect(resolveOverallStatus({ status: 'timedout' } as any, counters)).toBe('failed');
-    expect(resolveOverallStatus({ status: 'interrupted' } as any, counters)).toBe('failed');
+  it('preserves timedout and interrupted as distinct run statuses', () => {
+    expect(resolveOverallStatus({ status: 'timedout' } as any, counters)).toBe('timedout');
+    expect(resolveOverallStatus({ status: 'interrupted' } as any, counters)).toBe('interrupted');
   });
 
   it('falls back to "failed" for unknown status', () => {
