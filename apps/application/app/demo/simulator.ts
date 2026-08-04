@@ -1118,8 +1118,58 @@ async function runSingleSimulation(
           },
         ]);
 
-        await sleep(attemptDuration / scenario.speed);
-        virtualNow += attemptDuration;
+        // Stream a few of the test's steps live (transient SSE events, like the
+        // real reporter) so the demo run page shows the live-activity readout.
+        // Wait steps are the least interesting to watch; the persisted stepEvents
+        // still carry them for the timeline.
+        const liveSteps = (test.steps ?? [])
+          .filter((s) => s.category !== 'wait')
+          .slice(0, 3)
+          .map((s) => ({ ...s, category: s.category === 'expect' ? 'pw:expect' : 'pw:api' }));
+
+        let attemptRemaining = attemptDuration;
+        let stepCursor = virtualNow;
+        if (liveSteps.length === 0) {
+          await sleep(attemptDuration / scenario.speed);
+          virtualNow += attemptDuration;
+        } else {
+          for (const s of liveSteps) {
+            const seg = Math.min(Math.max(s.duration, 1), attemptRemaining);
+            await postEvents([
+              {
+                type: 'step-begin',
+                title: s.title,
+                location: test.location,
+                stepCategory: s.category,
+                parentTitle: test.title,
+                workerIndex,
+                startedAt: stepCursor,
+              },
+            ]);
+            await sleep(seg / scenario.speed);
+            virtualNow += seg;
+            attemptRemaining -= seg;
+            await postEvents([
+              {
+                type: 'step-end',
+                title: s.title,
+                location: test.location,
+                status: 'passed',
+                duration: seg,
+                stepCategory: s.category,
+                parentTitle: test.title,
+                workerIndex,
+                startedAt: stepCursor,
+              },
+            ]);
+            stepCursor += seg;
+            if (attemptRemaining <= 0) break;
+          }
+          if (attemptRemaining > 0) {
+            await sleep(attemptRemaining / scenario.speed);
+            virtualNow += attemptRemaining;
+          }
+        }
 
         await postEvents([
           {

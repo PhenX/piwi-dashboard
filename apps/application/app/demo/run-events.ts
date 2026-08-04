@@ -15,7 +15,14 @@ const CHANNEL_NAME = 'piwi-demo-run-events';
 
 /** Per-run event — same shape as the server's RunEvent SSE messages. */
 export interface DemoRunEvent {
-  type: 'test-begin' | 'test-completed' | 'run-progress' | 'run-finalizing' | 'run-finished';
+  type:
+    | 'test-begin'
+    | 'test-completed'
+    | 'step-begin'
+    | 'step-end'
+    | 'run-progress'
+    | 'run-finalizing'
+    | 'run-finished';
   data: Record<string, unknown>;
 }
 

@@ -337,6 +337,92 @@ const SCENES = [
     of: '[data-shot="run-trend"]',
     pad: 12,
   },
+  {
+    name: 'run-live-activity',
+    description: 'Run page while live: the live-activity strip with each worker\u2019s current step',
+    route: '/projects',
+    viewport: { width: 1280, height: 900 },
+    async prepare({ request, base }) {
+      // Start a streaming run; the events are pushed after the page subscribes
+      // to the run stream (the in-memory bus only delivers to live subscribers).
+      const started = await (
+        await request.post(`${base}/api/test-runs/start`, {
+          data: { projectName: 'web-dashboard', startTime: new Date().toISOString() },
+        })
+      ).json();
+      this.runId = started.runId;
+      this.streamToken = started.streamToken;
+    },
+    async run({ page, base, shoot, goto }) {
+      await goto(`/test-runs/${this.runId}`);
+      // The dev server compiles an API route on its first hit, which can take a
+      // while; retry the push until it lands, then let the strip render.
+      const events = [
+        {
+          type: 'begin',
+          title: 'purchase flow submits the order',
+          location: 'tests/checkout.spec.ts:12:5',
+          workerIndex: 0,
+          startedAt: Date.now(),
+          browser: { projectName: 'chromium' },
+        },
+        {
+          type: 'step-begin',
+          title: 'expect(page).toHaveURL("**/success")',
+          location: 'tests/checkout.spec.ts:14:5',
+          stepCategory: 'pw:expect',
+          parentTitle: 'purchase flow submits the order',
+          workerIndex: 0,
+          startedAt: Date.now(),
+        },
+        {
+          type: 'begin',
+          title: 'filters apply to the product grid',
+          location: 'tests/catalog.spec.ts:8:3',
+          workerIndex: 1,
+          startedAt: Date.now(),
+          browser: { projectName: 'chromium' },
+        },
+        {
+          type: 'step-end',
+          title: 'clicking "Apply filters"',
+          location: 'tests/catalog.spec.ts:11:5',
+          stepCategory: 'pw:api',
+          status: 'passed',
+          duration: 240,
+          parentTitle: 'filters apply to the product grid',
+          workerIndex: 1,
+          startedAt: Date.now(),
+        },
+        {
+          type: 'step-begin',
+          title: 'waiting for the result count to be visible',
+          location: 'tests/catalog.spec.ts:13:5',
+          stepCategory: 'pw:expect',
+          parentTitle: 'filters apply to the product grid',
+          workerIndex: 1,
+          startedAt: Date.now(),
+        },
+      ];
+      let pushed = false;
+      for (let attempt = 0; attempt < 5 && !pushed; attempt++) {
+        if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 3000));
+        try {
+          const res = await page.request.post(`${base}/api/test-runs/${this.runId}/events`, {
+            data: { streamToken: this.streamToken, testCases: events },
+          });
+          pushed = res.ok();
+        } catch {
+          // Route still compiling — retry.
+        }
+      }
+      if (!pushed) throw new Error(`could not push step events to run ${this.runId}`);
+      await page.getByTestId('live-activity').waitFor({ timeout: 60_000 });
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(400);
+      await shoot();
+    },
+  },
 
   // ── Desktop shell (report artifacts) ──────────────────────────────────────
   {
@@ -716,10 +802,15 @@ async function startServer(mode) {
     shell: process.platform === 'win32',
   });
   const stop = () => {
-    // Negative pid kills the whole nuxt process group where supported.
+    // Negative pid kills the whole nuxt process group where supported. On
+    // Windows child.kill() only terminates the cmd wrapper — the nuxt node
+    // process survives and keeps the port bound, so kill the tree explicitly.
     try {
-      if (process.platform === 'win32') child.kill();
-      else process.kill(-child.pid, 'SIGTERM');
+      if (process.platform === 'win32') {
+        execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: 'ignore' });
+      } else {
+        process.kill(-child.pid, 'SIGTERM');
+      }
     } catch {
       // already gone
     }

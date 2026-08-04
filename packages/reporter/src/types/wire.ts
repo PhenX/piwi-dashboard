@@ -129,7 +129,8 @@ export interface StepBeginStreamEvent {
   type: 'step-begin';
   title: string;
   location: string;
-  stepCategory: 'hook' | 'fixture';
+  /** Playwright step category (`hook`, `fixture`, `pw:api`, `pw:expect`, …). */
+  stepCategory: string;
   parentTitle: string | null;
   workerIndex: number | null;
   startedAt: number | null;
@@ -141,7 +142,8 @@ export interface StepEndStreamEvent {
   location: string;
   status: string;
   duration: number;
-  stepCategory: 'hook' | 'fixture';
+  /** Playwright step category (`hook`, `fixture`, `pw:api`, `pw:expect`, …). */
+  stepCategory: string;
   parentTitle: string | null;
   workerIndex: number | null;
   startedAt: number | null;

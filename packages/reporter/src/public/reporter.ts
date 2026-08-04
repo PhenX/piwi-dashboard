@@ -201,11 +201,18 @@ export class PiwiDashboardReporter {
   /** Track suite-level setup steps (beforeAll/afterAll) not tied to any test */
   private setupSteps: SetupStep[] = [];
 
+  /**
+   * Step categories streamed live while the run executes. `pw:assert` is
+   * excluded: it is the polling noise of `expect()`, not a step a human
+   * watches; the meaningful readout is the `pw:expect` wrapper around it.
+   */
+  private static readonly LIVE_STEP_CATEGORIES = new Set(['hook', 'fixture', 'pw:api', 'pw:expect']);
+
   /** Playwright reporter hook: called when a step (including hook/fixture) begins */
   onStepBegin(test: TestCase | undefined, _result: TestResult | undefined, step: any): void {
     if (!this.enabled || !this.streamManager?.enabled) return;
     const cat = step.category;
-    if (cat !== 'hook' && cat !== 'fixture') return;
+    if (!PiwiDashboardReporter.LIVE_STEP_CATEGORIES.has(cat)) return;
 
     const event: StreamEvent = {
       type: 'step-begin',
@@ -221,10 +228,9 @@ export class PiwiDashboardReporter {
 
   /** Playwright reporter hook: called when a step (including hook/fixture) ends */
   onStepEnd(test: TestCase | undefined, _result: TestResult | undefined, step: any): void {
-    const cat = step.category;
-    if (cat === 'pw:api') return; // not surfaced as stream events; locator locations are captured in the fixture
     if (!this.enabled || !this.streamManager?.enabled) return;
-    if (cat !== 'hook' && cat !== 'fixture') return;
+    const cat = step.category;
+    if (!PiwiDashboardReporter.LIVE_STEP_CATEGORIES.has(cat)) return;
 
     const workerIndex = workerIndexOf(_result);
     const startedAt = step.startTime instanceof Date ? step.startTime.getTime() : null;
@@ -243,7 +249,7 @@ export class PiwiDashboardReporter {
     this.streamManager?.queueEvent(event);
 
     // Track suite-level hooks (beforeAll/afterAll) for the timeline
-    if (!test && startedAt) {
+    if (!test && startedAt && (cat === 'hook' || cat === 'fixture')) {
       this.setupSteps.push({
         title: step.title,
         category: cat,

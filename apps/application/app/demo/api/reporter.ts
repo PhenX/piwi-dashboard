@@ -464,7 +464,9 @@ export async function apiPostRunEvents(
   const validEvents = testCaseEvents.filter((tc): tc is StreamEventPayload => Boolean(tc && tc.title));
 
   const beginEvents = validEvents.filter((tc) => tc.type === 'begin');
-  const completeEvents = validEvents.filter((tc) => tc.type !== 'begin');
+  const stepBeginEvents = validEvents.filter((tc) => tc.type === 'step-begin');
+  const stepEndEvents = validEvents.filter((tc) => tc.type === 'step-end');
+  const completeEvents = validEvents.filter((tc) => tc.type === 'complete');
 
   for (const tc of beginEvents) {
     const loc = tc.location ? parseLocation(tc.location) : { filePath: 'unknown', line: null, column: null };
@@ -482,6 +484,71 @@ export async function apiPostRunEvents(
         browser: tc.browser ?? null,
       },
     });
+  }
+
+  // Test-attached steps stream as step-begin/step-end so the run page can show
+  // what each worker is doing; suite-level hooks keep the timeline shape. Mirrors
+  // the server's events handler (server/api/test-runs/[id]/events.post.ts).
+  for (const tc of stepBeginEvents) {
+    if (tc.parentTitle != null) {
+      publishDemoRunEvent(id, {
+        type: 'step-begin',
+        data: {
+          title: tc.title,
+          parentTitle: tc.parentTitle,
+          stepCategory: tc.stepCategory ?? null,
+          location: tc.location,
+          workerIndex: tc.workerIndex ?? null,
+          startedAt: tc.startedAt ?? null,
+        },
+      });
+    } else {
+      publishDemoRunEvent(id, {
+        type: 'test-begin',
+        data: {
+          title: tc.title,
+          filePath: 'hooks',
+          parentTitle: null,
+          stepCategory: tc.stepCategory ?? null,
+          location: tc.location,
+          workerIndex: tc.workerIndex ?? null,
+          startedAt: tc.startedAt ?? null,
+        },
+      });
+    }
+  }
+
+  for (const tc of stepEndEvents) {
+    if (tc.parentTitle != null) {
+      publishDemoRunEvent(id, {
+        type: 'step-end',
+        data: {
+          title: tc.title,
+          parentTitle: tc.parentTitle,
+          stepCategory: tc.stepCategory ?? null,
+          status: tc.status,
+          duration: tc.duration,
+          location: tc.location,
+          workerIndex: tc.workerIndex ?? null,
+          startedAt: tc.startedAt ?? null,
+        },
+      });
+    } else {
+      publishDemoRunEvent(id, {
+        type: 'test-completed',
+        data: {
+          title: tc.title,
+          filePath: 'hooks',
+          parentTitle: null,
+          stepCategory: tc.stepCategory ?? null,
+          status: tc.status,
+          duration: tc.duration,
+          location: tc.location,
+          workerIndex: tc.workerIndex ?? null,
+          startedAt: tc.startedAt ?? null,
+        },
+      });
+    }
   }
 
   if (completeEvents.length === 0) {

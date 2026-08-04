@@ -14,7 +14,7 @@ defineRouteMeta({
     tags: ['Test Runs'],
     summary: 'Submit test case events for a streaming run',
     description:
-      'Submit test case begin and complete events for an active streaming test run. Requires the stream token. Supports both single and batch event submission for real-time progress updates.',
+      'Submit test case begin, complete and step lifecycle events for an active streaming test run. Requires the stream token. Supports both single and batch event submission for real-time progress updates. Test-attached step events (step-begin/step-end) are streamed to subscribers without persistence; suite-level hook events keep the timeline shape.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
     'x-required-roles': [],
     requestBody: {
@@ -96,38 +96,71 @@ export default eventHandler(async (event) => {
     });
   }
 
-  // --- Handle step-begin events (hook/fixture started, no DB persistence) ---
+  // --- Handle step-begin events ---
+  // Test-attached steps stream as `step-begin` so the run page can show what
+  // each worker is doing; suite-level hooks (parentTitle null) keep publishing
+  // as `test-begin` so the timeline's hook shape is unchanged.
   for (const tc of stepBeginEvents) {
-    runEventBus.publish(id, {
-      type: 'test-begin',
-      data: {
-        title: tc.title,
-        filePath: 'hooks',
-        parentTitle: tc.parentTitle ?? null,
-        stepCategory: tc.stepCategory ?? null,
-        location: tc.location,
-        workerIndex: tc.workerIndex ?? null,
-        startedAt: tc.startedAt ?? null,
-      },
-    });
+    if (tc.parentTitle != null) {
+      runEventBus.publish(id, {
+        type: 'step-begin',
+        data: {
+          title: tc.title,
+          parentTitle: tc.parentTitle,
+          stepCategory: tc.stepCategory ?? null,
+          location: tc.location,
+          workerIndex: tc.workerIndex ?? null,
+          startedAt: tc.startedAt ?? null,
+        },
+      });
+    } else {
+      runEventBus.publish(id, {
+        type: 'test-begin',
+        data: {
+          title: tc.title,
+          filePath: 'hooks',
+          parentTitle: null,
+          stepCategory: tc.stepCategory ?? null,
+          location: tc.location,
+          workerIndex: tc.workerIndex ?? null,
+          startedAt: tc.startedAt ?? null,
+        },
+      });
+    }
   }
 
-  // --- Handle step-end events (hook/fixture finished, publish via SSE) ---
+  // --- Handle step-end events ---
   for (const tc of stepEndEvents) {
-    runEventBus.publish(id, {
-      type: 'test-completed',
-      data: {
-        title: tc.title,
-        filePath: 'hooks',
-        parentTitle: tc.parentTitle ?? null,
-        stepCategory: tc.stepCategory ?? null,
-        status: tc.status,
-        duration: tc.duration,
-        location: tc.location,
-        workerIndex: tc.workerIndex ?? null,
-        startedAt: tc.startedAt ?? null,
-      },
-    });
+    if (tc.parentTitle != null) {
+      runEventBus.publish(id, {
+        type: 'step-end',
+        data: {
+          title: tc.title,
+          parentTitle: tc.parentTitle,
+          stepCategory: tc.stepCategory ?? null,
+          status: tc.status,
+          duration: tc.duration,
+          location: tc.location,
+          workerIndex: tc.workerIndex ?? null,
+          startedAt: tc.startedAt ?? null,
+        },
+      });
+    } else {
+      runEventBus.publish(id, {
+        type: 'test-completed',
+        data: {
+          title: tc.title,
+          filePath: 'hooks',
+          parentTitle: null,
+          stepCategory: tc.stepCategory ?? null,
+          status: tc.status,
+          duration: tc.duration,
+          location: tc.location,
+          workerIndex: tc.workerIndex ?? null,
+          startedAt: tc.startedAt ?? null,
+        },
+      });
+    }
   }
 
   // --- Handle complete events (test finished, persist to DB) ---
