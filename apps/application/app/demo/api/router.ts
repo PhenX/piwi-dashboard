@@ -199,7 +199,16 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects$/,
-    handler: async (_, __, ___, ctx) => listProjects(await getDemoDb(), ctx?.scope),
+    handler: async (_, __, ___, ctx) => {
+      const rows = await listProjects(await getDemoDb(), ctx?.scope);
+      // The server routes strip the token before responding (the shared handler
+      // rows carry it); do the same so a demo visitor's stored token never comes
+      // back over the wire.
+      return rows.map((p) => {
+        const { scmToken: _scm, ...rest } = p as { scmToken?: string | null } & typeof p;
+        return rest;
+      });
+    },
   },
   {
     method: 'POST',
@@ -214,11 +223,25 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/projects\/menu$/,
     handler: async (_, __, ___, ctx) => getProjectMenu(await getDemoDb(), ctx?.scope),
   },
-  { method: 'GET', pattern: /^\/api\/projects\/(\d+)$/, handler: async (m) => getProject(await getDemoDb(), +m[1]!) },
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)$/,
+    handler: async (m) => {
+      const project = await getProject(await getDemoDb(), +m[1]!);
+      if (!project) return project;
+      const { scmToken: _scm, ...rest } = project as { scmToken?: string | null } & typeof project;
+      return rest;
+    },
+  },
   {
     method: 'PUT',
     pattern: /^\/api\/projects\/(\d+)$/,
-    handler: async (m, body) => updateProject(await getDemoDb(), +m[1]!, body as Parameters<typeof updateProject>[2]),
+    handler: async (m, body) => {
+      // A browser demo has no server secret to encrypt with (the server uses
+      // encryptSecret with PIWI_SECRET_KEY), so the token is stored as-is —
+      // but every GET strips it, so it never leaves the browser's own DB.
+      return updateProject(await getDemoDb(), +m[1]!, body as Parameters<typeof updateProject>[2]);
+    },
   },
   {
     method: 'DELETE',
