@@ -171,7 +171,9 @@ function attemptTitle(a: { retry: number; status: string; duration: number; star
                   </UBadge>
                 </div>
               </template>
-              <template v-else>{{ testCase?.retries ?? 0 }}</template>
+              <!-- One attempt, or a row recorded before attempts were stored:
+                   show the count, which is one more than the retry index. -->
+              <template v-else>{{ attempts?.length ?? (testCase?.retries ?? 0) + 1 }}</template>
             </StatTile>
             <StatTile label="Steps" :value="stepsCount" />
             <StatTile label="Worker" :value="testCase?.workerIndex ?? '—'" />
