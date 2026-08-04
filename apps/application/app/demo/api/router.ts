@@ -7,7 +7,17 @@
  */
 
 import { and, eq } from 'drizzle-orm';
-import { users, files, appSettings, projects } from '~~/server/database/schema.sqlite';
+import {
+  users,
+  files,
+  appSettings,
+  projects,
+  testRuns,
+  testCases,
+  testRunsCases,
+  failureClusters,
+  failureDiagnoses,
+} from '~~/server/database/schema.sqlite';
 import { Role } from '#shared/types';
 import { NOTIFICATION_EVENTS } from '#shared/notification-events';
 import { MARKER_CATEGORY_IDS } from '#shared/marker-categories';
@@ -187,6 +197,52 @@ async function resolveDemoScope(actingUserId: number | null): Promise<ProjectSco
   return new Set(projectIds);
 }
 
+/** Reject the request when the acting user's scope excludes this project. */
+function assertDemoScope(ctx: DemoCtx | undefined, projectId: number): void {
+  if (!ctx) return;
+  if (ctx.scope === 'all') return;
+  if (!ctx.scope.has(projectId)) throw demoHttpError(403, 'No access to this project');
+}
+
+/**
+ * Scope-check an entity endpoint the way the server's
+ * `requireResolvedProjectAccess` does: resolve the owning project (404 when the
+ * entity does not exist), then 403 when the acting user's scope excludes it.
+ */
+async function assertDemoEntityScope(
+  ctx: DemoCtx | undefined,
+  entity: 'project' | 'run' | 'case' | 'cluster' | 'execution',
+  id: number,
+): Promise<void> {
+  if (!ctx || ctx.scope === 'all') return;
+  const db = await getDemoDb();
+  let projectId: number | null = null;
+  if (entity === 'project') {
+    projectId = id;
+  } else if (entity === 'run') {
+    const [row] = await db.select({ projectId: testRuns.projectId }).from(testRuns).where(eq(testRuns.id, id));
+    projectId = row?.projectId ?? null;
+  } else if (entity === 'case') {
+    const [row] = await db.select({ projectId: testCases.projectId }).from(testCases).where(eq(testCases.id, id));
+    projectId = row?.projectId ?? null;
+  } else if (entity === 'cluster') {
+    const [row] = await db
+      .select({ projectId: failureClusters.projectId })
+      .from(failureClusters)
+      .where(eq(failureClusters.id, id));
+    projectId = row?.projectId ?? null;
+  } else {
+    const [row] = await db
+      .select({ projectId: testRuns.projectId })
+      .from(testRunsCases)
+      .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
+      .where(eq(testRunsCases.id, id));
+    projectId = row?.projectId ?? null;
+  }
+  if (projectId === null) throw demoHttpError(404, 'Not found');
+  assertDemoScope(ctx, projectId);
+}
+
 const routes: RouteEntry[] = [
   // Analytics — one generic entry; widgets dispatch through the shared handler map
   {
@@ -234,7 +290,8 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)$/,
-    handler: async (m, _, q) => {
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const rawLimit = Number(q?.get('limit'));
       const runLimit = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
       const project = await getProject(await getDemoDb(), +m[1]!, { runLimit });
@@ -246,7 +303,8 @@ const routes: RouteEntry[] = [
   {
     method: 'PUT',
     pattern: /^\/api\/projects\/(\d+)$/,
-    handler: async (m, body) => {
+    handler: async (m, body, _, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       // A browser demo has no server secret to encrypt with (the server uses
       // encryptSecret with PIWI_SECRET_KEY), so the token is stored as-is —
       // but every GET strips it, so it never leaves the browser's own DB.
@@ -256,7 +314,8 @@ const routes: RouteEntry[] = [
   {
     method: 'DELETE',
     pattern: /^\/api\/projects\/(\d+)$/,
-    handler: async (m) => {
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const db = await getDemoDb();
       const existing = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, +m[1]!));
       if (!existing[0]) throw demoHttpError(404, 'Project not found');
@@ -267,7 +326,8 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/performance$/,
-    handler: async (m, _, q) => {
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const rawLimit = q ? parseInt(q.get('limit') ?? '', 10) : NaN;
       const limit = Math.min(Number.isNaN(rawLimit) ? 50 : rawLimit, 200);
       const from = q?.get('from') || undefined;
@@ -279,12 +339,16 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/test-cases$/,
-    handler: async (m, _, q) => getProjectTestCases(await getDemoDb(), +m[1]!, parseTestCasesQuery(q)),
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return getProjectTestCases(await getDemoDb(), +m[1]!, parseTestCasesQuery(q));
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/slow-tests$/,
-    handler: async (m, _, q) => {
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const rawRuns = q ? parseInt(q.get('runs') ?? '', 10) : NaN;
       const runs = Math.min(Number.isNaN(rawRuns) ? 10 : rawRuns, 100);
       return getProjectSlowTests(await getDemoDb(), +m[1]!, runs);
@@ -293,7 +357,8 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/timeout-opportunities$/,
-    handler: async (m, _, q) => {
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const db = await getDemoDb();
       const rawRuns = q ? parseInt(q.get('runs') ?? '', 10) : NaN;
       const runs = Math.min(Number.isNaN(rawRuns) ? 20 : rawRuns, 100);
@@ -306,12 +371,18 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/failure-clusters$/,
-    handler: async (m) => getProjectFailureClusters(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return getProjectFailureClusters(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/cluster-merge-suggestions$/,
-    handler: async (m, _, q) => listMergeSuggestions(await getDemoDb(), +m[1]!, (q && q.get('status')) || 'pending'),
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return listMergeSuggestions(await getDemoDb(), +m[1]!, (q && q.get('status')) || 'pending');
+    },
   },
   {
     method: 'POST',
@@ -334,7 +405,8 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/flaky-tests$/,
-    handler: async (m, _, q) => {
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const rawRuns = q ? parseInt(q.get('runs') ?? '', 10) : NaN;
       const runs = Math.min(200, Math.max(1, Number.isNaN(rawRuns) ? 50 : rawRuns));
       const environment = q?.get('environment')?.trim() || undefined;
@@ -352,12 +424,16 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/latest-run$/,
-    handler: async (m) => getProjectLatestRun(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return getProjectLatestRun(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/spec-health$/,
-    handler: async (m, _, q) => {
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const days = Math.min(90, Math.max(1, parseInt(q?.get('days') || '30')));
       return getProjectSpecHealth(await getDemoDb(), +m[1]!, days);
     },
@@ -365,7 +441,8 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/ai-steps$/,
-    handler: async (m, _, q) => {
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const days = Math.min(90, Math.max(1, parseInt(q?.get('days') || '30')));
       return getProjectAiStepCoverage(await getDemoDb(), +m[1]!, days);
     },
@@ -373,7 +450,8 @@ const routes: RouteEntry[] = [
   {
     method: 'POST',
     pattern: /^\/api\/projects\/(\d+)\/flaky-classify$/,
-    handler: async (m, body) => {
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const b = body as { testCaseId?: number };
       if (!b?.testCaseId) throw demoHttpError(400, 'testCaseId is required');
       return classifyAndPersistFlakyRootCause(await getDemoDb(), +m[1]!, b.testCaseId);
@@ -433,7 +511,8 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)$/,
-    handler: async (m) => {
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'run', +m[1]!);
       const db = await getDemoDb();
       // Resolve the stored wasted-wait patterns like the server route does: a
       // custom pattern list recomputes per-case wasted time, the default leaves
@@ -446,60 +525,90 @@ const routes: RouteEntry[] = [
   {
     method: 'PATCH',
     pattern: /^\/api\/test-runs\/(\d+)$/,
-    handler: async (m, body) => {
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'run', +m[1]!);
       const b = body as { label?: string | null };
       if (b.label === undefined) throw demoHttpError(400, 'No fields to update');
       return patchTestRun(await getDemoDb(), +m[1]!, b.label);
     },
   },
-  { method: 'DELETE', pattern: /^\/api\/test-runs\/(\d+)$/, handler: (m) => apiDeleteTestRun(+m[1]!) },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/test-runs\/(\d+)$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'run', +m[1]!);
+      return apiDeleteTestRun(+m[1]!);
+    },
+  },
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/network-requests$/,
-    handler: async (m) => getNetworkRequests(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'run', +m[1]!);
+      return getNetworkRequests(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/summary$/,
-    handler: async (m) => getTestRunSummary(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'run', +m[1]!);
+      return getTestRunSummary(await getDemoDb(), +m[1]!);
+    },
   },
 
   // Failure groups
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/failure-groups$/,
-    handler: async (m) => getFailureGroups(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'run', +m[1]!);
+      return getFailureGroups(await getDemoDb(), +m[1]!);
+    },
   },
 
   // Regression context (Pillar 2)
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/regression-context$/,
-    handler: async (m) => computeRegressionContextForRun(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'run', +m[1]!);
+      return computeRegressionContextForRun(await getDemoDb(), +m[1]!);
+    },
   },
 
   // Run insights
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/insights$/,
-    handler: async (m) => computeRunInsights(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'run', +m[1]!);
+      return computeRunInsights(await getDemoDb(), +m[1]!);
+    },
   },
 
   // Failure clusters
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)$/,
-    handler: async (m) => getFailureCluster(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return getFailureCluster(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/export$/,
-    handler: (m, _, q) => apiExportFailureCluster(+m[1]!, q as URLSearchParams | undefined),
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return apiExportFailureCluster(+m[1]!, q as URLSearchParams | undefined);
+    },
   },
   {
     method: 'PATCH',
     pattern: /^\/api\/failure-clusters\/(\d+)\/status$/,
-    handler: async (m, body) => {
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
       const b = body as { status?: string; triageNote?: string | null };
       return patchClusterStatus(await getDemoDb(), +m[1]!, b.status ?? '', b.triageNote);
     },
@@ -507,7 +616,8 @@ const routes: RouteEntry[] = [
   {
     method: 'PATCH',
     pattern: /^\/api\/failure-clusters\/(\d+)\/base-commit$/,
-    handler: async (m, body) => {
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
       const b = body as { commit?: string | null };
       return patchClusterBaseCommit(await getDemoDb(), +m[1]!, b.commit);
     },
@@ -515,58 +625,76 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/branches$/,
-    handler: async (m) => getClusterBranches(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return getClusterBranches(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/commits$/,
-    handler: async (m, _, q) => getClusterCommits(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined),
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return getClusterCommits(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/commit-diff$/,
-    handler: async (m, _, q) => getClusterCommitDiff(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined),
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return getClusterCommitDiff(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/context$/,
-    handler: async (m, _, q) => {
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
       const query = q as URLSearchParams | undefined;
       const db = await getDemoDb();
       const format = query?.get('format');
       if (format === 'prompt') return getClusterContextPrompt(db, +m[1]!, query);
-      const ctx = await getClusterContext(db, +m[1]!, query);
+      const clusterCtx = await getClusterContext(db, +m[1]!, query);
       // Default format mirrors the server: a plain context/coverage/scmChanges
       // envelope; `?format=json` returns the full structured shape.
-      if (format === 'json') return ctx;
-      return { context: ctx.text, coverage: ctx.coverage, scmChanges: ctx.scmChanges };
+      if (format === 'json') return clusterCtx;
+      return { context: clusterCtx.text, coverage: clusterCtx.coverage, scmChanges: clusterCtx.scmChanges };
     },
   },
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/diagnosis$/,
-    handler: async (m) => getClusterDiagnosis(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return getClusterDiagnosis(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'POST',
     pattern: /^\/api\/failure-clusters\/(\d+)\/diagnose$/,
-    handler: (m, body, q) =>
-      apiDiagnoseCluster(+m[1]!, body as Record<string, unknown> | undefined, q as URLSearchParams | undefined),
+    handler: async (m, body, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return apiDiagnoseCluster(+m[1]!, body as Record<string, unknown> | undefined, q as URLSearchParams | undefined);
+    },
   },
   {
     method: 'POST',
     pattern: /^\/api\/failure-clusters\/(\d+)\/diagnose\/stream$/,
-    handler: (m, body, query) =>
-      apiStreamDiagnoseCluster(
+    handler: async (m, body, query, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return apiStreamDiagnoseCluster(
         +m[1]!,
         body as Record<string, unknown> | undefined,
         query as URLSearchParams | undefined,
-      ),
+      );
+    },
   },
   {
     method: 'POST',
     pattern: /^\/api\/failure-clusters\/(\d+)\/extract-cases$/,
-    handler: async (m, body) => {
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
       const b = body as { testCaseIds: number[]; triageNote?: string };
       return extractClusterCases(await getDemoDb(), +m[1]!, b.testCaseIds, b.triageNote);
     },
@@ -574,13 +702,27 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/diagnoses$/,
-    handler: async (m) => listClusterDiagnosisVersions(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return listClusterDiagnosisVersions(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'PATCH',
     pattern: /^\/api\/failure-diagnoses\/(\d+)\/feedback$/,
-    handler: async (m, body) =>
-      apiSubmitDiagnosisFeedback(await getDemoDb(), +m[1]!, body as Record<string, unknown> | undefined),
+    handler: async (m, body, _q, ctx) => {
+      if (ctx && ctx.scope !== 'all') {
+        const db = await getDemoDb();
+        const [diag] = await db
+          .select({ clusterId: failureDiagnoses.clusterId, testRunsCaseId: failureDiagnoses.testRunsCaseId })
+          .from(failureDiagnoses)
+          .where(eq(failureDiagnoses.id, +m[1]!));
+        if (!diag) throw demoHttpError(404, 'Not found');
+        if (diag.clusterId != null) await assertDemoEntityScope(ctx, 'cluster', diag.clusterId);
+        else if (diag.testRunsCaseId != null) await assertDemoEntityScope(ctx, 'execution', diag.testRunsCaseId);
+      }
+      return apiSubmitDiagnosisFeedback(await getDemoDb(), +m[1]!, body as Record<string, unknown> | undefined);
+    },
   },
 
   // AI status and settings
@@ -615,17 +757,24 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/test-cases\/(\d+)$/,
-    handler: async (m) => getTestCase(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'case', +m[1]!);
+      return getTestCase(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-cases\/(\d+)\/history$/,
-    handler: async (m) => getTestCaseHistory(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'case', +m[1]!);
+      return getTestCaseHistory(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-cases\/(\d+)\/stability-trend$/,
-    handler: async (m, _, q) => {
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'case', +m[1]!);
       const buckets = parseInt(q?.get('buckets') || '20');
       return getTestCaseStabilityTrend(await getDemoDb(), +m[1]!, buckets);
     },
@@ -635,83 +784,120 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/test-run-cases\/(\d+)$/,
-    handler: async (m) => getTestRunCase(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getTestRunCase(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-run-cases\/(\d+)\/traces$/,
-    handler: async (m) => getTestRunCaseTraces(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getTestRunCaseTraces(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-run-cases\/(\d+)\/export$/,
-    handler: (m, _, q) => apiExportTestRunCase(+m[1]!, q as URLSearchParams | undefined),
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return apiExportTestRunCase(+m[1]!, q as URLSearchParams | undefined);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-run-cases\/(\d+)\/diagnosis-context$/,
-    handler: async (m, _, q) => {
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
       const query = q as URLSearchParams | undefined;
       const db = await getDemoDb();
       const format = query?.get('format');
       if (format === 'prompt') return getExecutionContextPrompt(db, +m[1]!, query);
-      const ctx = await getExecutionContext(db, +m[1]!, query);
-      if (format === 'json') return ctx;
-      return { context: ctx.text, coverage: ctx.coverage, scmChanges: ctx.scmChanges };
+      const executionCtx = await getExecutionContext(db, +m[1]!, query);
+      if (format === 'json') return executionCtx;
+      return { context: executionCtx.text, coverage: executionCtx.coverage, scmChanges: executionCtx.scmChanges };
     },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-run-cases\/(\d+)\/diagnosis$/,
-    handler: async (m) => getExecutionDiagnosis(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getExecutionDiagnosis(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'POST',
     pattern: /^\/api\/test-run-cases\/(\d+)\/diagnose$/,
-    handler: async (m, body) => apiDiagnoseExecution(+m[1]!, body as Record<string, unknown> | undefined),
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return apiDiagnoseExecution(+m[1]!, body as Record<string, unknown> | undefined);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/locator-healing$/,
-    handler: async (m) => getLocatorHealing(await getDemoDb(), +m[2]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
+      return getLocatorHealing(await getDemoDb(), +m[2]!);
+    },
   },
   {
     method: 'POST',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/locator-pick$/,
-    handler: async (m, body) =>
-      saveLocatorPick(await getDemoDb(), +m[2]!, body as Parameters<typeof saveLocatorPick>[2]),
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
+      return saveLocatorPick(await getDemoDb(), +m[2]!, body as Parameters<typeof saveLocatorPick>[2]);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/environment-diff$/,
-    handler: async (m) => getEnvironmentDiff(await getDemoDb(), +m[2]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
+      return getEnvironmentDiff(await getDemoDb(), +m[2]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/dom-snapshot$/,
-    handler: async (m, _body, query) => apiGetDemoDomSnapshot(+m[2]!, query),
+    handler: async (m, _body, query, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
+      return apiGetDemoDomSnapshot(+m[2]!, query);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/trace-stacks$/,
-    handler: async (m) => apiGetDemoTraceStacks(+m[2]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
+      return apiGetDemoTraceStacks(+m[2]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/trace-network$/,
-    handler: async (m) => apiGetDemoTraceNetwork(+m[2]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
+      return apiGetDemoTraceNetwork(+m[2]!);
+    },
   },
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/trace-network-body$/,
-    handler: async (m, _body, query) => apiGetDemoTraceNetworkBody(+m[2]!, query),
+    handler: async (m, _body, query, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
+      return apiGetDemoTraceNetworkBody(+m[2]!, query);
+    },
   },
   // The demo cannot pixel-diff in the browser — it serves the overlay the
   // seed generated with the real diff code, straight from the files row.
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/visual-diff$/,
-    handler: async (m) => {
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
       const db = await getDemoDb();
       const rows = await db
         .select({ path: files.path, metadata: files.metadata })
@@ -751,12 +937,16 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/markers$/,
-    handler: async (m) => listProjectMarkers(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return listProjectMarkers(await getDemoDb(), +m[1]!);
+    },
   },
   {
     method: 'POST',
     pattern: /^\/api\/projects\/(\d+)\/markers$/,
-    handler: async (m, body) => {
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const b = body as {
         label?: string;
         occurredAt?: string;
@@ -809,7 +999,10 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/test-functions$/,
-    handler: async (m) => listProjectTestFunctions(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return listProjectTestFunctions(await getDemoDb(), +m[1]!);
+    },
   },
   // Validated with the same schemas the real endpoints use, not cast straight
   // through: demo mode is meant to behave like the API, and accepting an entry
@@ -818,7 +1011,10 @@ const routes: RouteEntry[] = [
   {
     method: 'POST',
     pattern: /^\/api\/projects\/(\d+)\/test-functions$/,
-    handler: async (m, body) => createTestFunction(await getDemoDb(), +m[1]!, createTestFunctionSchema.parse(body)),
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return createTestFunction(await getDemoDb(), +m[1]!, createTestFunctionSchema.parse(body));
+    },
   },
   {
     method: 'PUT',
@@ -846,7 +1042,10 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/fix-plan$/,
-    handler: async (m) => buildFixPlan(await getDemoDb(), +m[1]!),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return buildFixPlan(await getDemoDb(), +m[1]!);
+    },
   },
 
   // Quarantine. The demo has no CI to gate, so candidates are omitted — the
@@ -855,16 +1054,20 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/quarantine$/,
-    handler: async (m) => ({
-      ...(await listQuarantine(await getDemoDb(), +m[1]!)),
-      candidates: [],
-      releaseAfterConsecutivePasses: RELEASE_AFTER_CONSECUTIVE_PASSES,
-    }),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return {
+        ...(await listQuarantine(await getDemoDb(), +m[1]!)),
+        candidates: [],
+        releaseAfterConsecutivePasses: RELEASE_AFTER_CONSECUTIVE_PASSES,
+      };
+    },
   },
   {
     method: 'POST',
     pattern: /^\/api\/projects\/(\d+)\/quarantine$/,
-    handler: async (m, body, _, ctx) => {
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const b = body as { testCaseId?: number; reason?: string | null; source?: string };
       const testCaseId = Number(b.testCaseId);
       if (!Number.isFinite(testCaseId) || testCaseId <= 0) throw demoHttpError(400, 'testCaseId is required');
@@ -879,7 +1082,8 @@ const routes: RouteEntry[] = [
   {
     method: 'DELETE',
     pattern: /^\/api\/projects\/(\d+)\/quarantine\/(\d+)$/,
-    handler: async (m, _, q) => {
+    handler: async (m, _, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const reason = typeof q?.get('reason') === 'string' ? String(q.get('reason')).slice(0, 500) : null;
       const result = await releaseQuarantine(await getDemoDb(), +m[1]!, +m[2]!, reason);
       if (!result.released) throw demoHttpError(404, 'No active quarantine for this test');
@@ -983,12 +1187,16 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/members$/,
-    handler: async (m) => ({ users: await getProjectMembers(await getDemoDb(), +m[1]!) }),
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return { users: await getProjectMembers(await getDemoDb(), +m[1]!) };
+    },
   },
   {
     method: 'PUT',
     pattern: /^\/api\/projects\/(\d+)\/members$/,
-    handler: async (m, body, _, ctx) => {
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const b = body as { userIds: number[] };
       await setProjectMembers(await getDemoDb(), +m[1]!, b.userIds ?? [], ctx?.actingUserId ?? undefined);
       return { success: true };
