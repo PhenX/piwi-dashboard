@@ -40,6 +40,7 @@ import {
   buildSourceFrames,
   storyByClusterId,
 } from '../shared/demo/failure-stories.mjs';
+import { demoTestMeta, demoTags, buildAiUsage } from '../shared/demo/demo-test-meta.mjs';
 import { computeDemoFingerprint } from '../shared/demo/demo-fingerprint.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -246,39 +247,8 @@ const caseById = new Map(); // caseId → { projectId, file, title, declLine, de
 const caseIdByKey = new Map(); // `${projectId}\x00${file}\x00${title}` → caseId
 
 // Cases that are prone to flake (retry-pass) — their `flaky_root_cause` is set
-// coherently instead of at random.
-/**
- * Test tags and `piwi:` ownership for the demo, derived from the spec's path so
- * the assignment is deterministic and reads like a real suite: a team owns a
- * directory, smoke tests are the first case in each file, and the checkout flow
- * carries the priority that makes the CI gate's `--require-tag` example real.
- */
-const DEMO_OWNERS = [
-  { match: /\/checkout\//, owner: '@checkout-team', feature: 'Checkout' },
-  { match: /\/api\//, owner: '@platform-team', feature: 'API' },
-  { match: /\/ui\//, owner: '@design-systems', feature: 'Design system' },
-  { match: /\/auth\//, owner: '@identity-team', feature: 'Identity' },
-];
-
-function demoTestMeta(filePath, index) {
-  const match = DEMO_OWNERS.find((entry) => entry.match.test(`/${filePath}`));
-  if (!match) return null;
-  const meta = { owner: match.owner, feature: match.feature };
-  // Only the first case of a checkout spec is critical — a suite where
-  // everything is critical teaches nothing about filtering.
-  if (match.owner === '@checkout-team') meta.priority = index === 0 ? 'critical' : 'high';
-  else if (index === 0) meta.priority = 'medium';
-  return meta;
-}
-
-function demoTags(filePath, index) {
-  const tags = [];
-  if (index === 0) tags.push('smoke');
-  if (/\/checkout\//.test(`/${filePath}`)) tags.push('critical');
-  if (/\/api\//.test(`/${filePath}`)) tags.push('api');
-  if (index % 3 === 0) tags.push('regression');
-  return tags;
-}
+// coherently instead of at random. Tags and `piwi:` ownership come from the
+// shared demo-test-meta module (the same rules the run simulator uses).
 
 const FLAKY_CASES = {
   1: { title: 'should apply discount code', rootCause: 'timing' },
@@ -567,107 +537,6 @@ function buildPageState(proj, storyEntry) {
   };
 }
 
-const aiUsageSlug = (text) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40) || 'x';
-
-/**
- * Tests whose failing locator reads like something an AI step would have been
- * authored from — a semantic, name-based locator. Keyed by spec + test title,
- * the value pairs the natural-language prompt with the EXACT locator the story's
- * failure is about, so the failing locator and the intent actually join up: the
- * healing panel then shows "Compiled from prompt …" on those failures and the
- * diagnosis `aiSteps` section carries a genuinely relevant intent.
- *
- * The showcase is `checkout-email-renamed` (cluster 2): a renamed label is the
- * textbook case for reasoning about intent rather than the broken selector.
- * Structural locators from other stories (`.modal.is-open`, bare `getByRole`)
- * are deliberately absent — an AI step compiles to a named element, so pinning
- * an intent on those would misrepresent the feature.
- */
-const AI_STEP_STORY_INTENTS = new Map(
-  [
-    {
-      file: 'tests/checkout/checkout.spec.ts',
-      title: 'should complete checkout with Apple Pay',
-      template: 'the email address field',
-      locator: "getByLabel('Email address')",
-      kind: 'locator',
-    },
-    {
-      file: 'tests/mobile/forms.spec.ts',
-      title: 'Text input shows keyboard on focus',
-      template: 'the delivery notes field',
-      locator: "getByLabel('Delivery notes')",
-      kind: 'locator',
-    },
-    {
-      file: 'tests/admin/reports.spec.ts',
-      title: 'exports the monthly report as CSV',
-      template: 'export the report as CSV',
-      locator: "getByRole('button', { name: 'Export CSV' })",
-      kind: 'run',
-    },
-    {
-      file: 'tests/checkout/checkout.spec.ts',
-      title: 'should complete checkout with credit card',
-      template: 'pay for the order',
-      locator: "getByRole('button', { name: 'Pay' })",
-      kind: 'run',
-    },
-  ].map((e) => [`${e.file}\x00${e.title}`, e]),
-);
-
-/** The committed-artifact path an entry would live at, mirroring the reporter's key layout. */
-function aiEntryPath(caseDef, template) {
-  const dir = caseDef.file.replace(/[^/]+$/, '').replace(/\/$/, '');
-  const base = caseDef.file.split('/').pop();
-  const h = createHash('sha256').update(`${caseDef.title}::${template}`).digest('hex').slice(0, 8);
-  return `${dir}/__piwi__/${base}/${aiUsageSlug(caseDef.title)}.${aiUsageSlug(template)}.${h}.json`;
-}
-
-/**
- * The AI-step usage manifest a browser test replayed: the committed
- * `page.piwiLocator` / `page.piwiRun` artifacts (`entries`, powering the
- * project "AI steps" liveness tab) plus the `intents` mapping each compiled
- * locator back to its prompt (powering the healing panel's "Compiled from
- * prompt" line and the diagnosis `aiSteps` section).
- *
- * Two sources, both deterministic (no `rng()`, so a test yields the SAME
- * manifest in every run and liveness aggregates across runs):
- *  - tests in `AI_STEP_STORY_INTENTS` always carry an intent whose locator IS
- *    their story's failing locator — these are the ones the UI showcases;
- *  - a deterministic ~1/3 of the remaining tests carry generic intents, so the
- *    liveness tab has realistic volume beyond the handful of story cases.
- */
-function buildAiUsage(caseDef) {
-  const story = AI_STEP_STORY_INTENTS.get(`${caseDef.file}\x00${caseDef.title}`);
-  if (story) {
-    return {
-      entries: [aiEntryPath(caseDef, story.template)],
-      intents: [{ template: story.template, locator: story.locator, kind: story.kind }],
-    };
-  }
-
-  const idHash = createHash('sha256').update(`${caseDef.file}\x00${caseDef.title}`).digest('hex');
-  const pick = parseInt(idHash.slice(0, 2), 16);
-  if (pick % 3 !== 0) return null;
-
-  const prompts = [
-    { template: 'the primary action field', locator: "getByRole('textbox', { name: 'Name' })", kind: 'locator' },
-  ];
-  if (pick % 2 === 0) {
-    prompts.push({ template: 'submit the form', locator: "getByRole('button', { name: 'Continue' })", kind: 'run' });
-  }
-  return {
-    entries: prompts.map((p) => aiEntryPath(caseDef, p.template)),
-    intents: prompts.map((p) => ({ template: p.template, locator: p.locator, kind: p.kind })),
-  };
-}
-
 for (const proj of DEMO_PROJECTS) {
   const cfg = PROJECT_CONFIGS[proj.id];
   const caseIds = caseIdsByProject[proj.id];
@@ -946,7 +815,7 @@ for (const proj of DEMO_PROJECTS) {
         slowest_step_duration: slowestStep.duration,
         web_vitals: isDidNotRunCase || noPage ? null : buildWebVitals(proj, isFailedCase),
         page_state: isDidNotRunCase || noPage ? null : buildPageState(proj, storyEntry),
-        ai_usage: isDidNotRunCase || noPage ? null : buildAiUsage(caseDef),
+        ai_usage: isDidNotRunCase || noPage ? null : await buildAiUsage(caseDef),
         console_logs: consoleLogs,
         aria_snapshot: isFailedCase && !noPage ? story?.aria : null,
         test_source: isFailedCase ? buildTestSource(story, storyEntry.failingCase, caseDef.declLine) : null,

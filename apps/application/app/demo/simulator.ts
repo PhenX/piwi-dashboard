@@ -23,6 +23,7 @@ import {
   buildSourceFrames,
   buildWebAssertionError,
 } from '#shared/demo/failure-stories.mjs';
+import { demoTags, demoTestMeta, buildAiUsage } from '#shared/demo/demo-test-meta.mjs';
 
 export const DEMO_SIMULATOR_INSTANCE_ID = 'demo-simulator';
 
@@ -58,6 +59,8 @@ interface SimAttempt {
 }
 
 interface SimTest {
+  /** Spec file the test lives in (source of the deterministic tags/AI usage). */
+  file: string;
   title: string;
   location: string;
   duration: number;
@@ -72,6 +75,8 @@ interface SimTest {
   webVitals: Record<string, unknown>;
   pageState?: Record<string, unknown> | null;
   browser?: Record<string, unknown> | null;
+  tags?: string[];
+  testMeta?: { owner?: string | null; priority?: string | null; feature?: string | null } | null;
   suitePath?: string[];
   suiteConfig?: Array<{ mode: string; annotations: Array<{ type: string; description?: string }> }>;
 }
@@ -583,7 +588,7 @@ function buildWaitHeavyStepEvents(testDuration: number, file: string, line: numb
 }
 
 function baseTests(opts: BaseTestOptions = {}): SimTest[] {
-  return CHECKOUT_TESTS.map((t) => {
+  return CHECKOUT_TESTS.map((t, i) => {
     const duration = vary(Math.round(t.duration * (opts.durationFactor ?? 1)), 0.12);
     const steps = buildSteps(duration, opts.slowSteps);
     const slowest = steps.reduce((a, b) => (a.duration > b.duration ? a : b));
@@ -596,6 +601,7 @@ function baseTests(opts: BaseTestOptions = {}): SimTest[] {
       .reduce((sum, e) => sum + (e.duration as number), 0);
 
     return {
+      file: t.file,
       title: t.title,
       location: `${t.file}:${t.declLine}:${t.declColumn}`,
       duration,
@@ -608,6 +614,10 @@ function baseTests(opts: BaseTestOptions = {}): SimTest[] {
       networkRequests: buildNetworkRequests({ slow: opts.slowNetwork }),
       webVitals: buildWebVitals(opts.slowNetwork),
       pageState: buildPageState(),
+      // Same deterministic tags/ownership the seed generator assigns, so
+      // owner/priority/tag filters see simulated runs like seeded ones.
+      tags: demoTags(t.file, i),
+      testMeta: demoTestMeta(t.file, i),
       suitePath: suite?.suitePath,
       suiteConfig: suite?.suiteConfig,
     };
@@ -1202,6 +1212,9 @@ async function runSingleSimulation(
             networkRequests: test.networkRequests,
             webVitals: test.webVitals,
             pageState: test.pageState ?? null,
+            aiUsage: (await buildAiUsage({ file: test.file, title: test.title })) ?? null,
+            tags: test.tags,
+            testMeta: test.testMeta,
             consoleLogs: a.consoleLogs ?? null,
             ariaSnapshot: a.ariaSnapshot ?? null,
             testSource: a.testSource ?? null,
