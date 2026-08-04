@@ -72,6 +72,7 @@ import {
   getExecutionDiagnosis,
 } from '#shared/handlers/failure-clusters';
 import { getClusterCommits, getClusterCommitDiff, getClusterBranches } from './scm';
+import { getTimeoutThresholds } from '~~/server/utils/timeout-thresholds';
 import { parseTagFilter } from '#shared/utils/tag-filter';
 import { TEST_PRIORITIES } from '@piwitests/core/test-meta';
 import {
@@ -281,8 +282,13 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/timeout-opportunities$/,
     handler: async (m, _, q) => {
-      const runs = q ? Number(q.get('runs')) || 20 : 20;
-      return getProjectTimeoutOpportunities(await getDemoDb(), +m[1]!, runs);
+      const db = await getDemoDb();
+      const rawRuns = q ? parseInt(q.get('runs') ?? '', 10) : NaN;
+      const runs = Math.min(Number.isNaN(rawRuns) ? 20 : rawRuns, 100);
+      // Custom thresholds from the timeout-hygiene setting apply here, like the
+      // server route reads them (the demo persists the same app setting).
+      const thresholds = await getTimeoutThresholds(db);
+      return getProjectTimeoutOpportunities(db, +m[1]!, runs, thresholds);
     },
   },
   {
