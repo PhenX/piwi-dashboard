@@ -229,8 +229,10 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)$/,
-    handler: async (m) => {
-      const project = await getProject(await getDemoDb(), +m[1]!);
+    handler: async (m, _, q) => {
+      const rawLimit = Number(q?.get('limit'));
+      const runLimit = Number.isFinite(rawLimit) && rawLimit > 0 ? rawLimit : undefined;
+      const project = await getProject(await getDemoDb(), +m[1]!, { runLimit });
       if (!project) return project;
       const { scmToken: _scm, ...rest } = project as { scmToken?: string | null } & typeof project;
       return rest;
@@ -261,8 +263,12 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/performance$/,
     handler: async (m, _, q) => {
-      const limit = q ? Number(q.get('limit')) || 50 : 50;
-      return getProjectPerformance(await getDemoDb(), +m[1]!, limit);
+      const rawLimit = q ? parseInt(q.get('limit') ?? '', 10) : NaN;
+      const limit = Math.min(Number.isNaN(rawLimit) ? 50 : rawLimit, 200);
+      const from = q?.get('from') || undefined;
+      const to = q?.get('to') || undefined;
+      const fullRunsOnly = q?.get('fullRunsOnly') !== 'false';
+      return getProjectPerformance(await getDemoDb(), +m[1]!, limit, from, to, fullRunsOnly);
     },
   },
   {
@@ -274,7 +280,8 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/slow-tests$/,
     handler: async (m, _, q) => {
-      const runs = q ? Number(q.get('runs')) || 10 : 10;
+      const rawRuns = q ? parseInt(q.get('runs') ?? '', 10) : NaN;
+      const runs = Math.min(Number.isNaN(rawRuns) ? 10 : rawRuns, 100);
       return getProjectSlowTests(await getDemoDb(), +m[1]!, runs);
     },
   },
