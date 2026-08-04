@@ -67,8 +67,14 @@ export function wrapConfig<T extends PlaywrightTestConfig>(config: T, piwiOption
   }
   globalSetupModules.push(resolveSetupModule());
 
+  // Forward Piwi's CI-gate options into Playwright's own config so the run
+  // exits non-zero locally, with no server round-trip (Playwright 1.52+).
+  const forwarded: Record<string, unknown> = {};
+  if (piwiOptions?.failOnFlakyTests === true) forwarded.failOnFlakyTests = true;
+
   return {
     ...config,
+    ...forwarded,
     reporter: injectReporter(config.reporter, piwiOptions),
     globalSetup: globalSetupModules.length === 1 ? globalSetupModules[0] : globalSetupModules,
   } as T;

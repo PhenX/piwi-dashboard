@@ -12,7 +12,7 @@ defineRouteMeta({
     tags: ['Test Runs'],
     summary: 'Evaluate a CI gate policy against a finished run',
     description:
-      'Applies a pass/fail policy to a run and returns every violation, so a pipeline can block a merge on the analysis rather than on the raw exit code of `playwright test`. Rules: `requireTags` (every test carrying the tag must pass), `maxFailed`, `maxNewRegressions`, `maxNewFlaky`, and `failOnNewCluster`. A required tag that matches no test in the run is itself a violation, so a typo cannot silently pass. Evaluation is read-only — the run is not modified.',
+      'Applies a pass/fail policy to a run and returns every violation, so a pipeline can block a merge on the analysis rather than on the raw exit code of `playwright test`. Rules: `requireTags` (every test carrying the tag must pass), `maxFailed`, `maxNewRegressions`, `maxNewFlaky`, `failOnNewCluster`, and `failOnFlaky` (any flaky test in the run). A required tag that matches no test in the run is itself a violation, so a typo cannot silently pass. Evaluation is read-only — the run is not modified.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
     'x-required-roles': ['administrator', 'reporter', 'user'],
     requestBody: {
@@ -27,6 +27,7 @@ defineRouteMeta({
               maxNewFlaky: { type: 'integer', minimum: 0 },
               failOnNewCluster: { type: 'boolean' },
               maxQuarantined: { type: 'integer', minimum: 0 },
+              failOnFlaky: { type: 'boolean' },
             },
           },
         },
@@ -62,13 +63,14 @@ export default eventHandler(async (event) => {
     maxNewFlaky: optionalCount(body?.maxNewFlaky),
     maxQuarantined: optionalCount(body?.maxQuarantined),
     failOnNewCluster: body?.failOnNewCluster === true,
+    failOnFlaky: body?.failOnFlaky === true,
   };
 
   if (isEmptyPolicy(policy)) {
     throw createError({
       statusCode: 400,
       message:
-        'Gate policy is empty — pass at least one of requireTags, maxFailed, maxNewRegressions, maxNewFlaky, maxQuarantined or failOnNewCluster',
+        'Gate policy is empty — pass at least one of requireTags, maxFailed, maxNewRegressions, maxNewFlaky, maxQuarantined, failOnNewCluster or failOnFlaky',
     });
   }
 
@@ -160,6 +162,7 @@ export default eventHandler(async (event) => {
     unmatchedTags,
     quarantinedFailures,
     quarantinedTotal: quarantined.size,
+    flakyTests: run.flakyTests ?? 0,
   };
 
   return evaluateGatePolicy(facts, policy);

@@ -14,6 +14,7 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 
 ## Recently shipped
 
+- **Fail on flaky** — `failOnFlakyTests` reporter option (forwarded to Playwright 1.52+'s native option, or `PIWI_FAIL_ON_FLAKY_TESTS`) fails the run locally when any test passed only on a retry; `piwi gate --fail-on-flaky` does the same against the dashboard's recorded flaky count.
 - **Per-attempt outcomes** — the reporter records every attempt's status, duration and start time; a retried execution shows one chip per attempt on its detail page, and the history views carry the same data.
 - **Live step streaming** — while a run executes, the steps each worker is on (Playwright `pw:api`/`pw:expect` and hook/fixture steps) stream to the run page in real time; a "Live activity" strip shows each worker's current step until the run finishes.
 - **One-click deploy** — hosting templates for Railway, Render, Fly.io, Koyeb, Coolify and Dokploy, each

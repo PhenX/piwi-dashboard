@@ -15,6 +15,13 @@ describe('wrapConfig', () => {
     expect(config.fullyParallel).toBe(true);
   });
 
+  it('forwards failOnFlakyTests into the Playwright config only when set', () => {
+    const config = wrapConfig({ testDir: './tests' }, { failOnFlakyTests: true });
+    expect(config.failOnFlakyTests).toBe(true);
+    const off = wrapConfig({ testDir: './tests' });
+    expect('failOnFlakyTests' in off).toBe(false);
+  });
+
   it('adds piwi global-setup-module when no original globalSetup exists', () => {
     const config = wrapConfig({ testDir: './tests' });
     expect(typeof config.globalSetup).toBe('string');

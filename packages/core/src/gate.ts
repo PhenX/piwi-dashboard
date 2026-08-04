@@ -25,9 +25,11 @@ export interface GatePolicy {
   failOnNewCluster?: boolean;
   /**
    * Fail when more than this many tests are quarantined. Quarantine is a debt,
-   * not a solution — this is the ceiling on how much of it a suite may carry.
+   * not a solution - this is the ceiling on how much of it a suite may carry.
    */
   maxQuarantined?: number;
+  /** Fail when the run contains any flaky test (passed only after a retry). */
+  failOnFlaky?: boolean;
 }
 
 /** What the server measured about the run, independent of any policy. */
@@ -49,6 +51,8 @@ export interface GateFacts {
   quarantinedFailures: number;
   /** Tests currently quarantined in this project. */
   quarantinedTotal: number;
+  /** Tests that passed only after a retry in this run. */
+  flakyTests: number;
 }
 
 export interface GateViolation {
@@ -60,7 +64,8 @@ export interface GateViolation {
     | 'max-new-regressions'
     | 'max-new-flaky'
     | 'new-cluster'
-    | 'max-quarantined';
+    | 'max-quarantined'
+    | 'flaky';
   message: string;
   /** Observed value and the limit it exceeded, when the rule is a threshold. */
   actual?: number;
@@ -81,7 +86,8 @@ export function isEmptyPolicy(policy: GatePolicy): boolean {
     policy.maxNewRegressions == null &&
     policy.maxNewFlaky == null &&
     policy.maxQuarantined == null &&
-    !policy.failOnNewCluster
+    !policy.failOnNewCluster &&
+    !policy.failOnFlaky
   );
 }
 
@@ -155,6 +161,15 @@ export function evaluateGatePolicy(facts: GateFacts, policy: GatePolicy): GateRe
     });
   }
 
+  if (policy.failOnFlaky && facts.flakyTests > 0) {
+    violations.push({
+      rule: 'flaky',
+      message: `${facts.flakyTests} flaky ${facts.flakyTests === 1 ? 'test' : 'tests'} detected in this run`,
+      actual: facts.flakyTests,
+      limit: 0,
+    });
+  }
+
   return { passed: violations.length === 0, violations, facts };
 }
 
@@ -165,7 +180,7 @@ export function formatGateResult(result: GateResult): string {
     result.passed
       ? `✔ Piwi gate passed — ${facts.projectName} run #${facts.runId}`
       : `✖ Piwi gate failed — ${facts.projectName} run #${facts.runId}`,
-    `  ${facts.totalTests} tests, ${facts.failedTests} failed, ${facts.newRegressions} new, ${facts.newFlaky} newly flaky`,
+    `  ${facts.totalTests} tests, ${facts.failedTests} failed, ${facts.newRegressions} new, ${facts.newFlaky} newly flaky, ${facts.flakyTests} flaky`,
   ];
   if (facts.quarantinedFailures > 0) {
     lines.push(

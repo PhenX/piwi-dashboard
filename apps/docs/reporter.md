@@ -101,6 +101,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 | `streamingBatchSize`        | number   | `5`                       | Number of test results to batch before sending                                              |
 | `streamingBatchDelay`       | number   | `2000`                    | Max delay (ms) before flushing pending events                                               |
 | `liveFileUploads`           | boolean  | `true`                    | Upload each test's trace and attachments as soon as the test finishes (streaming mode only) |
+| `failOnFlakyTests`          | boolean  | `false`                   | Fail the run when any test was flaky (passed only after a retry). Forwarded to Playwright's native `failOnFlakyTests` option (Playwright 1.52+) when installed via `wrapConfig`, so a flaky-only run exits non-zero locally, with no server round-trip |
 | `projectDescription`        | string   | —                         | Description of the project                                                                  |
 | `environment`               | string   | —                         | Deployment environment for this run, e.g. `"production"`, `"staging"`, `"integration"`      |
 | `label`                     | string   | —                         | Display label for this run, e.g. `"v2.3.1 release"`                                         |
@@ -141,6 +142,7 @@ Every option above can also be set via a `PIWI_*` environment variable. Env vars
 | `PIWI_STREAMING_BATCH_SIZE`     | `streamingBatchSize`    | number          |
 | `PIWI_STREAMING_BATCH_DELAY`    | `streamingBatchDelay`   | number          |
 | `PIWI_LIVE_FILE_UPLOADS`        | `liveFileUploads`       | `true`/`false`  |
+| `PIWI_FAIL_ON_FLAKY_TESTS`      | `failOnFlakyTests`      | `true`/`false`  |
 | `PIWI_UPLOAD_TRACES`            | `uploadTraces`          | `true`/`false`  |
 | `PIWI_UPLOAD_REPORT`            | `uploadReport`          | `true`/`false`  |
 | `PIWI_CAPTURE_LOCATORS`         | `captureLocators`       | `true`/`false`  |
