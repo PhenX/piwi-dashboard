@@ -197,7 +197,7 @@ function flushPendingEvents() {
     } else if (parsed.type === 'step-begin') {
       const d = parsed.data as { title: string; stepCategory?: string | null; workerIndex?: number };
       // Suite-level hooks (no worker) keep flowing to the timeline instead.
-      if (d.workerIndex == null) return;
+      if (d.workerIndex == null) continue;
       liveSteps.value = {
         ...liveSteps.value,
         [d.workerIndex]: { title: d.title, category: d.stepCategory ?? null, status: undefined },
@@ -209,7 +209,7 @@ function flushPendingEvents() {
         status?: string;
         workerIndex?: number;
       };
-      if (d.workerIndex == null) return;
+      if (d.workerIndex == null) continue;
       // Keep the ended step visible (with its outcome) until the next step
       // begins, so the readout shows "last thing this worker did".
       liveSteps.value = {
