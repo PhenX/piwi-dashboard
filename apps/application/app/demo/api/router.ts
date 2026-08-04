@@ -1297,7 +1297,6 @@ const routes: RouteEntry[] = [
 
 // Auth – demo mode manages state via the useAuth composable; endpoints here
 // provide stubs for the non-demo code paths in case auth is enabled alongside demo.
-const UNAUTHENTICATED = Promise.resolve({ authenticated: false, user: null });
 routes.push(
   {
     method: 'GET',
