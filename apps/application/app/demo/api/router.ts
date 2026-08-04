@@ -247,7 +247,10 @@ const routes: RouteEntry[] = [
     method: 'DELETE',
     pattern: /^\/api\/projects\/(\d+)$/,
     handler: async (m) => {
-      await deleteProjectData(await getDemoDb(), +m[1]!);
+      const db = await getDemoDb();
+      const existing = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, +m[1]!));
+      if (!existing[0]) throw new Error('Project not found');
+      await deleteProjectData(db, +m[1]!);
       return { success: true };
     },
   },
