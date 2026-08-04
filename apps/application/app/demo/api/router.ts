@@ -807,13 +807,34 @@ const routes: RouteEntry[] = [
     method: 'POST',
     pattern: /^\/api\/users$/,
     handler: async (_, body) => {
-      const b = body as { username: string; password: string; role?: string; name?: string };
-      return createUserRecord(await getDemoDb(), {
-        username: b.username,
-        password: b.password,
-        role: b.role ?? 'user',
+      const b = body as {
+        username?: string;
+        password?: string;
+        role?: string;
+        name?: string;
+        email?: string | null;
+      };
+      const username = typeof b.username === 'string' ? b.username : '';
+      if (username.length < 3) throw new Error('username must be at least 3 characters');
+      const password = typeof b.password === 'string' ? b.password : '';
+      if (password.length > 0 && password.length < 6) throw new Error('password must be at least 6 characters');
+      const role = b.role ?? 'user';
+      if (!(Object.values(Role) as string[]).includes(role)) throw new Error('unknown role');
+      // Mirrors the server route: scrypt hashing is Node-only, so the demo
+      // stores the password as-is, but it is never returned (the response is a
+      // projection) and no login flow exists in demo mode.
+      const created = await createUserRecord(await getDemoDb(), {
+        username,
+        password,
+        role,
         name: b.name,
+        email: b.email || null,
       });
+      if (!created) throw new Error('Failed to create user');
+      return {
+        success: true,
+        user: { id: created.id, username: created.username, role: created.role, name: created.name },
+      };
     },
   },
   {
