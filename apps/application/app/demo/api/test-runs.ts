@@ -9,13 +9,14 @@ import { eq, sql } from 'drizzle-orm';
 import { getDemoDb } from '../db.client';
 import { testRuns, testRunsCases, files } from '~~/server/database/schema.sqlite';
 import { recomputeClusterOccurrences } from '#shared/handlers/failure-cluster-ops';
+import { demoHttpError } from './http-error';
 
 /** DELETE /api/test-runs/:id */
 export async function apiDeleteTestRun(id: number) {
   const db = await getDemoDb();
 
   const runRows = await db.select({ id: testRuns.id }).from(testRuns).where(eq(testRuns.id, id));
-  if (!runRows[0]) throw new Error('Test run not found');
+  if (!runRows[0]) throw demoHttpError(404, 'Test run not found');
 
   // Remember the clusters this run contributed to; their occurrence counters
   // must be recomputed after the cases are gone (mirrors the server route).

@@ -40,6 +40,7 @@ import { getDemoScmProject } from '../demo-scm';
 import { storyByClusterId } from '#shared/demo/failure-stories.mjs';
 import type { FailureStory } from '#shared/demo/failure-stories.mjs';
 import { publishDemoNotificationEvent } from '../run-events';
+import { demoHttpError } from './http-error';
 
 const DEMO_MODEL = 'demo-simulated';
 
@@ -627,7 +628,7 @@ async function generateDiagnosis(
 ) {
   const db = await getDemoDb();
   const ev = await collectClusterEvidence(db, clusterId);
-  if (!ev) throw new Error(`Cluster ${clusterId} not found`);
+  if (!ev) throw demoHttpError(404, `Cluster ${clusterId} not found`);
 
   const story = storyByClusterId(clusterId);
   const kind = diagnosisKind(ev.cluster.errorType, ev.cluster.sampleError, story);
@@ -815,11 +816,11 @@ export async function apiDiagnoseExecution(
     .select({ clusterId: testRunsCases.failureClusterId })
     .from(testRunsCases)
     .where(eq(testRunsCases.id, testRunsCaseId));
-  if (!trc) throw new Error('Execution not found');
+  if (!trc) throw demoHttpError(404, 'Execution not found');
   // Every failing demo case belongs to a cluster; ground the diagnosis in that cluster's
   // evidence when present (the common path). If a failure ever had no cluster the diagnose
   // action simply wouldn't fire, so a missing cluster is a hard error, not a silent no-op.
-  if (!trc.clusterId) throw new Error('Execution has no failure to diagnose');
+  if (!trc.clusterId) throw demoHttpError(400, 'Execution has no failure to diagnose');
 
   // Snapshot/replace any existing execution-scoped row for this case.
   const [existing] = await db

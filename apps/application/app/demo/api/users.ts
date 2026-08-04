@@ -7,6 +7,7 @@
 
 import { getDemoDb } from '../db.client';
 import { createUserApiKeyRecord } from '#shared/handlers/users';
+import { demoHttpError } from './http-error';
 
 function randomHex(bytes: number): string {
   const buf = new Uint8Array(bytes);
@@ -23,12 +24,12 @@ async function sha256Hex(text: string): Promise<string> {
 export async function apiCreateUserApiKey(userId: number, body: { name?: string; expiresAt?: string | null }) {
   const db = await getDemoDb();
   const name = typeof body.name === 'string' ? body.name : '';
-  if (name.length < 1 || name.length > 100) throw new Error('name must be between 1 and 100 characters');
+  if (name.length < 1 || name.length > 100) throw demoHttpError(400, 'name must be between 1 and 100 characters');
 
   let expiresAt: Date | null = null;
   if (body.expiresAt) {
     const parsed = new Date(body.expiresAt);
-    if (Number.isNaN(parsed.getTime())) throw new Error('expiresAt must be a valid ISO date');
+    if (Number.isNaN(parsed.getTime())) throw demoHttpError(400, 'expiresAt must be a valid ISO date');
     expiresAt = parsed;
   }
 

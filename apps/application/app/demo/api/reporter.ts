@@ -55,6 +55,7 @@ import {
   type PendingCluster,
 } from '#shared/handlers/failure-cluster-ops';
 import type { StreamEventPayload, TestRunFinishPayload, TestRunStartPayload } from '#shared/types';
+import { demoHttpError } from './http-error';
 
 type DemoDb = Awaited<ReturnType<typeof getDemoDb>>;
 
@@ -82,12 +83,12 @@ async function validateAndReviveDemoRun(
   const isInterrupted = testRun.status === 'interrupted' && !testRun.streamToken;
 
   if (testRun.status !== 'running' && !isInterrupted) {
-    throw new Error('Test run is not in running state');
+    throw demoHttpError(409, 'Test run is not in running state');
   }
 
   if (isInterrupted) {
     if (!bodyStreamToken) {
-      throw new Error('Missing stream token');
+      throw demoHttpError(403, 'Missing stream token');
     }
     await db
       .update(testRuns)
@@ -97,7 +98,7 @@ async function validateAndReviveDemoRun(
     testRun.streamToken = bodyStreamToken;
   } else if (testRun.streamToken !== bodyStreamToken) {
     if (isValidShardToken && bodyStreamToken) return;
-    throw new Error('Invalid stream token');
+    throw demoHttpError(403, 'Invalid stream token');
   }
 }
 
@@ -168,7 +169,7 @@ async function cancelInstanceRuns(
 /** POST /api/test-runs/setup */
 export async function apiSetupTestRun(body: TestRunStartPayload) {
   if (!body?.projectName) {
-    throw new Error('Missing required field: projectName');
+    throw demoHttpError(400, 'Missing required field: projectName');
   }
 
   const db = await getDemoDb();
@@ -307,21 +308,21 @@ export async function apiBeginTestRun(
   const testRunResults = await db.select().from(testRuns).where(eq(testRuns.id, id));
   const testRun = testRunResults[0];
 
-  if (!testRun) throw new Error('Test run not found');
+  if (!testRun) throw demoHttpError(404, 'Test run not found');
 
   const isSharded = !!(testRun.shardTotal && testRun.shardTotal > 1);
 
   // Parallel worker processes race to /begin on the same run; a running run is
   // tolerated and handed back its existing stream token (server behavior).
   if (!isSharded && testRun.status !== 'initialising' && testRun.status !== 'running') {
-    throw new Error('Test run cannot be transitioned to running state');
+    throw demoHttpError(409, 'Test run cannot be transitioned to running state');
   }
 
   // Validate token: main streamToken or shard token
   const shardTokenSet = demoShardTokens.get(id);
   const isValidShardSetupToken = isSharded && shardTokenSet?.has(body.setupToken);
   if (testRun.streamToken !== body.setupToken && !isValidShardSetupToken) {
-    throw new Error('Invalid setup token');
+    throw demoHttpError(403, 'Invalid setup token');
   }
 
   const streamToken = randomToken();
@@ -725,7 +726,7 @@ export async function apiPostRunEvents(
   const testRunResults = await db.select().from(testRuns).where(eq(testRuns.id, id));
   const testRun = testRunResults[0];
 
-  if (!testRun) throw new Error('Test run not found');
+  if (!testRun) throw demoHttpError(404, 'Test run not found');
   const shardTokenSet = demoShardTokens.get(id) ?? readShardTokensFromMeta(testRun.metadata);
   const isValidShardToken = body.streamToken ? shardTokenSet?.has(body.streamToken) : false;
   await validateAndReviveDemoRun(db, testRun, body.streamToken, !!isValidShardToken);
@@ -907,7 +908,7 @@ export async function apiHeartbeatTestRun(id: number, body: { streamToken?: stri
   const testRunResults = await db.select().from(testRuns).where(eq(testRuns.id, id));
   const testRun = testRunResults[0];
 
-  if (!testRun) throw new Error('Test run not found');
+  if (!testRun) throw demoHttpError(404, 'Test run not found');
   const shardTokenSet = demoShardTokens.get(id) ?? readShardTokensFromMeta(testRun.metadata);
   const isValidShardToken = body.streamToken ? shardTokenSet?.has(body.streamToken) : false;
   await validateAndReviveDemoRun(db, testRun, body.streamToken, !!isValidShardToken);
@@ -924,7 +925,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
   const testRunResults = await db.select().from(testRuns).where(eq(testRuns.id, id));
   const testRun = testRunResults[0];
 
-  if (!testRun) throw new Error('Test run not found');
+  if (!testRun) throw demoHttpError(404, 'Test run not found');
   const streamToken = body.streamToken;
   const shardTokenSet = demoShardTokens.get(id) ?? readShardTokensFromMeta(testRun.metadata);
   const isValidShardToken = streamToken ? shardTokenSet?.has(streamToken) : false;

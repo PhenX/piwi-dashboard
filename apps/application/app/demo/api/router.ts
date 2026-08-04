@@ -140,6 +140,7 @@ import {
   apiListAiModels,
 } from './ai';
 import { apiGetAdminStats } from './admin';
+import { demoHttpError } from './http-error';
 import { apiDeleteTestRun } from './test-runs';
 import { apiCheckDemoImport, apiDemoImport } from './import';
 import {
@@ -193,7 +194,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/analytics\/([\w-]+)$/,
     handler: async (m, _, q, ctx) => {
       const widget = m[1]!;
-      if (!isAnalyticsWidgetId(widget)) throw new Error('Unknown analytics widget');
+      if (!isAnalyticsWidgetId(widget)) throw demoHttpError(400, 'Unknown analytics widget');
       return runAnalyticsWidget(await getDemoDb(), widget, parseAnalyticsScope(q), ctx?.scope ?? 'all');
     },
   },
@@ -258,7 +259,7 @@ const routes: RouteEntry[] = [
     handler: async (m) => {
       const db = await getDemoDb();
       const existing = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, +m[1]!));
-      if (!existing[0]) throw new Error('Project not found');
+      if (!existing[0]) throw demoHttpError(404, 'Project not found');
       await deleteProjectData(db, +m[1]!);
       return { success: true };
     },
@@ -317,7 +318,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/cluster-merge-suggestions\/(\d+)\/approve$/,
     handler: async (m) => {
       const result = await approveMergeSuggestion(await getDemoDb(), +m[1]!);
-      if (!result) throw new Error('Suggestion is not pending');
+      if (!result) throw demoHttpError(409, 'Suggestion is not pending');
       return { success: true, ...result };
     },
   },
@@ -326,7 +327,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/cluster-merge-suggestions\/(\d+)\/reject$/,
     handler: async (m) => {
       const ok = await rejectMergeSuggestion(await getDemoDb(), +m[1]!);
-      if (!ok) throw new Error('Suggestion is not pending');
+      if (!ok) throw demoHttpError(409, 'Suggestion is not pending');
       return { success: true };
     },
   },
@@ -374,7 +375,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/projects\/(\d+)\/flaky-classify$/,
     handler: async (m, body) => {
       const b = body as { testCaseId?: number };
-      if (!b?.testCaseId) throw new Error('testCaseId is required');
+      if (!b?.testCaseId) throw demoHttpError(400, 'testCaseId is required');
       return classifyAndPersistFlakyRootCause(await getDemoDb(), +m[1]!, b.testCaseId);
     },
   },
@@ -447,7 +448,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/test-runs\/(\d+)$/,
     handler: async (m, body) => {
       const b = body as { label?: string | null };
-      if (b.label === undefined) throw new Error('No fields to update');
+      if (b.label === undefined) throw demoHttpError(400, 'No fields to update');
       return patchTestRun(await getDemoDb(), +m[1]!, b.label);
     },
   },
@@ -732,10 +733,10 @@ const routes: RouteEntry[] = [
       const b = body as { text?: string; color?: string };
       const text = typeof b.text === 'string' ? b.text : '';
       if (text.length < 1 || text.length > 50) {
-        throw new Error('Tag text must be between 1 and 50 characters');
+        throw demoHttpError(400, 'Tag text must be between 1 and 50 characters');
       }
       const color = typeof b.color === 'string' && b.color.trim() ? b.color : undefined;
-      if (!color) throw new Error('Color is required');
+      if (!color) throw demoHttpError(400, 'Color is required');
       return createTag(await getDemoDb(), text, color);
     },
   },
@@ -764,14 +765,15 @@ const routes: RouteEntry[] = [
         description?: string | null;
       };
       const label = typeof b.label === 'string' ? b.label : '';
-      if (label.length < 1 || label.length > 120) throw new Error('Label must be between 1 and 120 characters');
+      if (label.length < 1 || label.length > 120)
+        throw demoHttpError(400, 'Label must be between 1 and 120 characters');
       const occurredAt = new Date(b.occurredAt ?? '');
-      if (Number.isNaN(occurredAt.getTime())) throw new Error('occurredAt must be a valid date');
-      if (b.category && !MARKER_CATEGORY_IDS.includes(b.category)) throw new Error('Unknown marker category');
+      if (Number.isNaN(occurredAt.getTime())) throw demoHttpError(400, 'occurredAt must be a valid date');
+      if (b.category && !MARKER_CATEGORY_IDS.includes(b.category)) throw demoHttpError(400, 'Unknown marker category');
       if (b.environment != null && b.environment.length > 120)
-        throw new Error('environment must be at most 120 characters');
+        throw demoHttpError(400, 'environment must be at most 120 characters');
       if (b.description != null && b.description.length > 2000) {
-        throw new Error('description must be at most 2000 characters');
+        throw demoHttpError(400, 'description must be at most 2000 characters');
       }
       return createMarker(await getDemoDb(), +m[1]!, {
         label,
@@ -788,10 +790,10 @@ const routes: RouteEntry[] = [
     handler: async (m, body) => {
       const b = body as { occurredAt?: string } & Record<string, unknown>;
       if (b.label !== undefined && (typeof b.label !== 'string' || b.label.length < 1 || b.label.length > 120)) {
-        throw new Error('Label must be between 1 and 120 characters');
+        throw demoHttpError(400, 'Label must be between 1 and 120 characters');
       }
       if (b.category !== undefined && !MARKER_CATEGORY_IDS.includes(b.category as string)) {
-        throw new Error('Unknown marker category');
+        throw demoHttpError(400, 'Unknown marker category');
       }
       const patch = { ...b, ...(b.occurredAt ? { occurredAt: new Date(b.occurredAt) } : {}) };
       return updateMarker(await getDemoDb(), +m[1]!, patch as Parameters<typeof updateMarker>[2]);
@@ -865,7 +867,7 @@ const routes: RouteEntry[] = [
     handler: async (m, body, _, ctx) => {
       const b = body as { testCaseId?: number; reason?: string | null; source?: string };
       const testCaseId = Number(b.testCaseId);
-      if (!Number.isFinite(testCaseId) || testCaseId <= 0) throw new Error('testCaseId is required');
+      if (!Number.isFinite(testCaseId) || testCaseId <= 0) throw demoHttpError(400, 'testCaseId is required');
       const result = await addQuarantine(await getDemoDb(), +m[1]!, testCaseId, {
         reason: typeof b.reason === 'string' ? b.reason.slice(0, 500) : null,
         source: b.source,
@@ -880,7 +882,7 @@ const routes: RouteEntry[] = [
     handler: async (m, _, q) => {
       const reason = typeof q?.get('reason') === 'string' ? String(q.get('reason')).slice(0, 500) : null;
       const result = await releaseQuarantine(await getDemoDb(), +m[1]!, +m[2]!, reason);
-      if (!result.released) throw new Error('No active quarantine for this test');
+      if (!result.released) throw demoHttpError(404, 'No active quarantine for this test');
       return { success: true, ...result };
     },
   },
@@ -903,11 +905,12 @@ const routes: RouteEntry[] = [
         email?: string | null;
       };
       const username = typeof b.username === 'string' ? b.username : '';
-      if (username.length < 3) throw new Error('username must be at least 3 characters');
+      if (username.length < 3) throw demoHttpError(400, 'username must be at least 3 characters');
       const password = typeof b.password === 'string' ? b.password : '';
-      if (password.length > 0 && password.length < 6) throw new Error('password must be at least 6 characters');
+      if (password.length > 0 && password.length < 6)
+        throw demoHttpError(400, 'password must be at least 6 characters');
       const role = b.role ?? 'user';
-      if (!(Object.values(Role) as string[]).includes(role)) throw new Error('unknown role');
+      if (!(Object.values(Role) as string[]).includes(role)) throw demoHttpError(400, 'unknown role');
       // Mirrors the server route: scrypt hashing is Node-only, so the demo
       // stores the password as-is, but it is never returned (the response is a
       // projection) and no login flow exists in demo mode.
@@ -955,7 +958,7 @@ const routes: RouteEntry[] = [
       const id = +m[1]!;
       const rows = await db.select({ role: users.role }).from(users).where(eq(users.id, id));
       const user = rows[0];
-      if (!user) throw new Error('User not found');
+      if (!user) throw demoHttpError(404, 'User not found');
       // Administrators always have all access.
       if ((user.role as Role) === Role.ADMINISTRATOR) return { global: true, projectIds: [] };
       return getUserAssignments(db, id);
@@ -1000,7 +1003,7 @@ const routes: RouteEntry[] = [
       const entityType = q?.get('entityType') ?? '';
       const entityId = parseInt(q?.get('entityId') ?? '0', 10);
       if (!['test_run', 'test_runs_case', 'test_case'].includes(entityType) || !entityId) {
-        throw new Error('Invalid entityType or entityId');
+        throw demoHttpError(400, 'Invalid entityType or entityId');
       }
       return listLinks(await getDemoDb(), entityType, entityId);
     },
@@ -1247,7 +1250,7 @@ routes.push(
       };
       const events = b.events ?? [];
       if (events.length === 0 || events.some((e) => !(NOTIFICATION_EVENTS as readonly string[]).includes(e))) {
-        throw new Error('events must contain at least one valid event');
+        throw demoHttpError(400, 'events must contain at least one valid event');
       }
       const mode = b.mode === 'digest' ? 'digest' : 'realtime';
       const digestAt = typeof b.digestAt === 'string' && /^\d{1,2}:\d{2}$/.test(b.digestAt) ? b.digestAt : null;
@@ -1279,7 +1282,7 @@ routes.push(
         const b = body as Partial<DemoSubscription>;
         if (b.events) {
           if (b.events.length === 0 || b.events.some((e) => !(NOTIFICATION_EVENTS as readonly string[]).includes(e))) {
-            throw new Error('events must contain at least one valid event');
+            throw demoHttpError(400, 'events must contain at least one valid event');
           }
           sub.events = b.events;
         }
