@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import type { PlaywrightTestConfig } from '@playwright/test';
-import { applyOptionsToEnv } from '../internal/config/env.js';
+import { applyOptionsToEnv, readBool, PIWI_ENV_KEYS } from '../internal/config/env.js';
 import type { PiwiDashboardOptions } from './options.js';
 
 const PIWI_MODULE = '@piwitests/reporter';
@@ -69,8 +69,11 @@ export function wrapConfig<T extends PlaywrightTestConfig>(config: T, piwiOption
 
   // Forward Piwi's CI-gate options into Playwright's own config so the run
   // exits non-zero locally, with no server round-trip (Playwright 1.52+).
+  // The env var is read here rather than via `resolveOptions`: that runs when
+  // the *reporter* is constructed, long after Playwright has read this config.
   const forwarded: Record<string, unknown> = {};
-  if (piwiOptions?.failOnFlakyTests === true) forwarded.failOnFlakyTests = true;
+  const failOnFlaky = piwiOptions?.failOnFlakyTests ?? readBool(process.env[PIWI_ENV_KEYS.failOnFlakyTests]);
+  if (failOnFlaky === true) forwarded.failOnFlakyTests = true;
 
   return {
     ...config,

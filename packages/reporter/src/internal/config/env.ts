@@ -72,7 +72,7 @@ export const PIWI_ENV_KEYS = {
  */
 export const PIWI_DESKTOP_CONFIG_ENV = 'PIWI_DESKTOP_CONFIG';
 
-function readBool(val: string | undefined): boolean | undefined {
+export function readBool(val: string | undefined): boolean | undefined {
   if (val === undefined) return undefined;
   return val === 'true';
 }
