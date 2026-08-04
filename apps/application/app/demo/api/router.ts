@@ -7,7 +7,7 @@
  */
 
 import { and, eq } from 'drizzle-orm';
-import { users, files, appSettings } from '~~/server/database/schema.sqlite';
+import { users, files, appSettings, projects } from '~~/server/database/schema.sqlite';
 import { Role } from '#shared/types';
 import {
   getUserAssignments,
