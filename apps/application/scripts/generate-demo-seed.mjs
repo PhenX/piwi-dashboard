@@ -1222,11 +1222,14 @@ for (const shot of PASSING_SCREENSHOTS) {
 
 // ── Build failure_clusters rows ────────────────────────────────────────────
 
-const firstRunByProject = {};
-const lastRunByProject = {};
+// Runs are generated newest-first (index 0 is the newest, ids descend as time
+// advances), so the first row encountered holds the project's *newest* run and
+// the last row its *oldest* — despite the loop-order names below.
+const newestRunByProject = {};
+const oldestRunByProject = {};
 for (const run of TEST_RUNS) {
-  if (!(run.project_id in firstRunByProject)) firstRunByProject[run.project_id] = run.id;
-  lastRunByProject[run.project_id] = run.id;
+  if (!(run.project_id in newestRunByProject)) newestRunByProject[run.project_id] = run.id;
+  oldestRunByProject[run.project_id] = run.id;
 }
 
 const CLUSTER_TRIAGE = {
@@ -1300,9 +1303,7 @@ function buildClusterFix(story, stats) {
   const fix = CLUSTER_FIXES[story.clusterId];
   if (!fix) return {};
 
-  // `firstRunByProject` is the first row encountered, and rows are newest-first
-  // — so it holds the project's *newest* run, despite the name.
-  const landed = fixLandedRun(stats, fix.verification, firstRunByProject[story.projectId]);
+  const landed = fixLandedRun(stats, fix.verification, newestRunByProject[story.projectId]);
   if (!landed) throw new Error(`Cluster ${story.clusterId} has no run a fix could have landed in`);
 
   return {
@@ -1330,8 +1331,10 @@ for (const story of FAILURE_STORIES) {
     sample_error: story.failingCases[0].error,
     status: triage.status || 'open',
     triage_note: triage.triage_note || null,
-    first_seen_run_id: stats.firstRunId ?? firstRunByProject[story.projectId],
-    last_seen_run_id: stats.lastRunId ?? lastRunByProject[story.projectId],
+    // A cluster that never fired falls back to the project's run span: first
+    // seen = oldest run (highest id), last seen = newest run (lowest id).
+    first_seen_run_id: stats.firstRunId ?? oldestRunByProject[story.projectId],
+    last_seen_run_id: stats.lastRunId ?? newestRunByProject[story.projectId],
     occurrences: stats.occurrences || 1,
     ...buildClusterFix(story, stats),
     created_at: createdAt,
@@ -1345,6 +1348,9 @@ for (const story of FAILURE_STORIES) {
 // Without all three the exit ramp looks like a list that only grows.
 const QUARANTINED_TESTS = [];
 {
+  // Runs after the anchor count toward the streak; 4 seeded passes land the
+  // entry at "4 / 5" — part-way through the exit ramp, not yet ready.
+  const PARTIAL_QUARANTINE_STREAK_RUNS = 4;
   const quarantineSpec = [
     { projectId: 1, streakState: 'ready', reason: 'Times out on CI only — see cluster 1' },
     { projectId: 2, streakState: 'partial', reason: 'Search index warm-up races the assertion' },
@@ -1361,12 +1367,14 @@ const QUARANTINED_TESTS = [];
     const caseId = caseIdByKey.get(`${spec.projectId}\x00${caseDef.file}\x00${caseDef.title}`);
     if (!caseId) continue;
 
-    // Anchoring to an early run lets the executions already in the seed count
-    // toward the streak, which is what produces the three different states.
+    // The streak counts executions on runs after the anchor (id > anchor), and
+    // ids descend as time advances in the seed, so an anchor on the newest run
+    // makes every seeded execution count (release-ready) and an anchor on the
+    // oldest run counts none (still failing).
     const anchorRunId =
       spec.streakState === 'failing'
-        ? (lastRunByProject[spec.projectId] ?? null)
-        : (firstRunByProject[spec.projectId] ?? null);
+        ? (oldestRunByProject[spec.projectId] ?? null)
+        : (newestRunByProject[spec.projectId] ?? null);
 
     QUARANTINED_TESTS.push({
       id: qId++,
