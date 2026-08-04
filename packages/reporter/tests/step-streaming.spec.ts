@@ -67,8 +67,10 @@ describe('PiwiDashboardReporter live step streaming', () => {
     const suite = fakeSuite();
     const test = fakeTestCase({ title: 'the test', parent: suite });
     const result = fakeResult({ workerIndex: 0 });
+    // Steps are fired straight after `onBegin`, while `/start` is still in
+    // flight — the reporter must buffer them until the run id lands rather
+    // than drop them, which is what real fixtures/hooks do at run start.
     reporter.onBegin(fakeConfig(), suite);
-    await waitFor(() => server.requests.some((r) => r.url === '/api/test-runs/start'));
 
     reporter.onStepBegin(test, result, makeStep('pw:api'));
     reporter.onStepBegin(test, result, makeStep('pw:assert', 'no-assert-begin'));

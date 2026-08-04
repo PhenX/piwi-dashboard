@@ -215,7 +215,10 @@ export class PiwiDashboardReporter {
 
   /** Playwright reporter hook: called when a step (including hook/fixture) begins */
   onStepBegin(test: TestCase | undefined, _result: TestResult | undefined, step: any): void {
-    if (!this.enabled || !this.streamManager?.enabled) return;
+    // Gate on the stream manager *existing*, not on it being live yet: the
+    // first fixtures and hooks run while `/start` is still in flight, and
+    // `queueBeginEvent` buffers until the run id lands (same as `onTestBegin`).
+    if (!this.enabled || !this.streamManager) return;
     const cat = step.category;
     if (!PiwiDashboardReporter.LIVE_STEP_CATEGORIES.has(cat)) return;
 
@@ -233,7 +236,7 @@ export class PiwiDashboardReporter {
 
   /** Playwright reporter hook: called when a step (including hook/fixture) ends */
   onStepEnd(test: TestCase | undefined, _result: TestResult | undefined, step: any): void {
-    if (!this.enabled || !this.streamManager?.enabled) return;
+    if (!this.enabled || !this.streamManager) return;
     const cat = step.category;
     if (!PiwiDashboardReporter.LIVE_STEP_CATEGORIES.has(cat)) return;
 

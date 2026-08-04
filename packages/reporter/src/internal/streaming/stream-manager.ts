@@ -208,8 +208,11 @@ export class StreamManager {
         if (this.pendingBeginEvents.length > 0) {
           this.pendingEvents = [...this.pendingBeginEvents, ...this.pendingEvents];
           this.pendingBeginEvents = [];
-          this.flush();
         }
+        // Flush whatever queued while `/start` was in flight — step-end events
+        // land in `pendingEvents` directly, so keying this off begin events
+        // alone would leave them sitting until the next event or the finalize.
+        if (this.pendingEvents.length > 0) this.flush();
       }
     } catch (error) {
       if (error instanceof HttpError && (error.status === 401 || error.status === 403)) {
