@@ -99,6 +99,7 @@ export async function getTestRun(
       error: testRunsCases.error,
       failureClusterId: testRunsCases.failureClusterId,
       retries: testRunsCases.retries,
+      attempts: testRunsCases.attempts,
       line: testRunsCases.line,
       column: testRunsCases.column,
       slowestStep: testRunsCases.slowestStep,
@@ -146,6 +147,7 @@ export async function getTestRun(
     error: tc.error,
     failureClusterId: tc.failureClusterId,
     retries: tc.retries,
+    attempts: tc.attempts ?? null,
     slowestStep: tc.slowestStep,
     slowestStepDuration: tc.slowestStepDuration,
     // With custom patterns configured, wasted time is recomputed from the

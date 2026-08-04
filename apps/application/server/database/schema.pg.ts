@@ -444,6 +444,7 @@ export const testRunsCases = pgTable(
     error: text('error'),
     failureClusterId: integer('failure_cluster_id').references(() => failureClusters.id), // set for failed rows with an error — groups rows sharing a fingerprint
     retries: integer('retries').default(0),
+    attempts: jsonb('attempts'), // Array of { retry, status, duration, startedAt } — per-attempt outcomes
     line: integer('line'), // line number in file
     column: integer('column'), // column number in file
     steps: jsonb('steps'), // Array of { title, duration, category, location?, startTime? } step objects

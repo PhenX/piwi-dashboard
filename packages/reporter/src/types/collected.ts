@@ -65,6 +65,8 @@ export interface CollectedTestCase {
   timeout?: number | null;
   error?: string | null;
   retries?: number;
+  /** One entry per attempt up to and including this one: `{ retry, status, duration, startedAt }`. */
+  attempts?: Array<{ retry: number; status: string; duration: number; startedAt: number | null }> | null;
   workerIndex?: number | null;
   shardIndex?: number | null;
   startedAt?: number | null;

@@ -50,6 +50,8 @@ export interface RunCaseInput {
   timeout?: number | null;
   error?: string | null;
   retries?: number | null;
+  /** Per-attempt outcomes `{ retry, status, duration, startedAt }`, oldest first. */
+  attempts?: unknown;
   line: number | null;
   column: number | null;
   steps?: unknown;
@@ -386,6 +388,7 @@ export async function persistRunCases(
       timeout: c.timeout ?? null,
       error: capErrorText(c.error, limits.errorChars),
       retries: c.retries ?? 0,
+      attempts: capArray(c.attempts, 30),
       line: c.line,
       column: c.column,
       steps: capArray(c.steps, limits.steps),

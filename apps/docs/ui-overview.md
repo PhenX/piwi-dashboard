@@ -91,7 +91,7 @@ Project **import** (`/projects/:id/import`, admins only) backfills runs recorded
 
 ## Test run detail
 
-A deep dive into a single run. The **summary header** shows status, duration, test counts, duration metrics (avg/P90), and metadata cards (CI/environment, source control, tags). While a run is still `running`, a **live progress bar** and streaming results appear in real time. **Reports** buttons open or download the attached HTML reports (Playwright, Monocart).
+A deep dive into a single run. The **summary header** shows status, duration, test counts, duration metrics (avg/P90), and metadata cards (CI/environment, source control, tags). While a run is still `running`, a **live progress bar** and streaming results appear in real time, and a **Live activity** strip shows the step each worker is on right now. **Reports** buttons open or download the attached HTML reports (Playwright, Monocart).
 
 The right panel is tabbed:
 
@@ -115,7 +115,8 @@ on an execution; the test's title links to the test case above it.
 A failing execution opens diagnosis-first: the error, a verdict, the cluster it belongs to, and an
 evidence funnel running from the call stack down to the ARIA snapshot — deeper still when a trace is
 attached. All of it, plus the bundled trace viewer, is described in
-[Failure evidence](./evidence).
+[Failure evidence](./evidence). The summary shows one chip per **attempt** (with its outcome and
+duration) when a test retried, so "how did this execution get here" is answerable at a glance.
 
 ## Failure cluster detail
 

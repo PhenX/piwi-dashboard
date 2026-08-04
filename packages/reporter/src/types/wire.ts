@@ -48,6 +48,8 @@ export interface WireTestCase {
   timeout?: number | null;
   error?: string | null;
   retries?: number;
+  /** One entry per attempt up to and including this one: `{ retry, status, duration, startedAt }`. */
+  attempts?: Array<{ retry: number; status: string; duration: number; startedAt: number | null }> | null;
   workerIndex?: number | null;
   shardIndex?: number | null;
   startedAt?: number | null;
@@ -101,6 +103,8 @@ export interface CompleteStreamEvent {
   timeout?: number | null;
   error: string | null;
   retries: number;
+  /** One entry per attempt up to and including this one: `{ retry, status, duration, startedAt }`. */
+  attempts?: Array<{ retry: number; status: string; duration: number; startedAt: number | null }> | null;
   workerIndex: number | null;
   shardIndex: number | null;
   startedAt: number | null;
@@ -129,7 +133,8 @@ export interface StepBeginStreamEvent {
   type: 'step-begin';
   title: string;
   location: string;
-  stepCategory: 'hook' | 'fixture';
+  /** Playwright step category (`hook`, `fixture`, `pw:api`, `pw:expect`, …). */
+  stepCategory: string;
   parentTitle: string | null;
   workerIndex: number | null;
   startedAt: number | null;
@@ -141,7 +146,8 @@ export interface StepEndStreamEvent {
   location: string;
   status: string;
   duration: number;
-  stepCategory: 'hook' | 'fixture';
+  /** Playwright step category (`hook`, `fixture`, `pw:api`, `pw:expect`, …). */
+  stepCategory: string;
   parentTitle: string | null;
   workerIndex: number | null;
   startedAt: number | null;

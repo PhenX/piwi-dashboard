@@ -113,6 +113,16 @@ export interface PiwiDashboardOptions {
   /** Max delay (ms) before flushing pending events during streaming. Defaults to `2000`. */
   streamingBatchDelay?: number;
 
+  // ── CI gate ────────────────────────────────────────────────────────────────
+  /**
+   * Fail the run when any test was flaky (passed only after a retry). Forwarded
+   * to Playwright's native `failOnFlakyTests` config option (Playwright 1.52+)
+   * when the reporter is installed via `wrapConfig`, so a flaky-only run exits
+   * non-zero without any server round-trip. Defaults to `false`. Can also be
+   * set with `PIWI_FAIL_ON_FLAKY_TESTS`.
+   */
+  failOnFlakyTests?: boolean;
+
   // ── Authentication ─────────────────────────────────────────────────────────
   /** Username for dashboard login (use `apiKey` instead when possible) */
   username?: string | null;

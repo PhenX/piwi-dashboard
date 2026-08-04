@@ -65,6 +65,7 @@ export async function getTestCase(db: DrizzleDB, id: number) {
         duration: testRunsCases.duration,
         error: testRunsCases.error,
         retries: testRunsCases.retries,
+        attempts: testRunsCases.attempts,
         workerIndex: testRunsCases.workerIndex,
         browser: testRunsCases.browser,
         runId: testRuns.id,
@@ -133,6 +134,7 @@ export async function getTestCaseHistory(db: DrizzleDB, testCaseId: number) {
       duration: testRunsCases.duration,
       error: testRunsCases.error,
       retries: testRunsCases.retries,
+      attempts: testRunsCases.attempts,
       startTime: testRuns.startTime,
       runStatus: testRuns.status,
     })
@@ -272,6 +274,7 @@ export async function getTestRunCase(
     duration: trc.duration,
     error: trc.error,
     retries: trc.retries,
+    attempts: trc.attempts ?? null,
     steps: trc.steps,
     testSource: evidence.testSource,
     testSourceFrames: evidence.testSourceFrames,

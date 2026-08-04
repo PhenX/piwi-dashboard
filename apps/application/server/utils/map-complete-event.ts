@@ -68,6 +68,7 @@ export function mapCompleteEventToRunCase(tc: ParsedCompleteEvent): RunCaseInput
     timeout: tc.timeout ?? null,
     error: tc.error,
     retries: tc.retries,
+    attempts: (tc as { attempts?: unknown }).attempts ?? null,
     line: tc.line,
     column: tc.column,
     steps: tc.steps,

@@ -41,6 +41,10 @@ const liveTestCaseKeys = new Map<string, true>();
 const liveProgress = ref<{ totalTests: number; passedTests: number; failedTests: number; skippedTests: number } | null>(
   null,
 );
+// Worker index → the step the worker is currently on (from transient SSE step
+// events; nothing is persisted from them).
+const liveSteps = ref<Record<number, { title: string; category?: string | null; status?: string | null }>>({});
+const hasLiveSteps = computed(() => Object.values(liveSteps.value).some((s) => !!s));
 let eventSource: EventSource | null = null;
 
 // Combined test cases: from server data + live stream.
@@ -190,6 +194,28 @@ function flushPendingEvents() {
         ];
         displayTestCases.value = [...liveTestCases.value];
       }
+    } else if (parsed.type === 'step-begin') {
+      const d = parsed.data as { title: string; stepCategory?: string | null; workerIndex?: number };
+      // Suite-level hooks (no worker) keep flowing to the timeline instead.
+      if (d.workerIndex == null) continue;
+      liveSteps.value = {
+        ...liveSteps.value,
+        [d.workerIndex]: { title: d.title, category: d.stepCategory ?? null, status: undefined },
+      };
+    } else if (parsed.type === 'step-end') {
+      const d = parsed.data as {
+        title: string;
+        stepCategory?: string | null;
+        status?: string;
+        workerIndex?: number;
+      };
+      if (d.workerIndex == null) continue;
+      // Keep the ended step visible (with its outcome) until the next step
+      // begins, so the readout shows "last thing this worker did".
+      liveSteps.value = {
+        ...liveSteps.value,
+        [d.workerIndex]: { title: d.title, category: d.stepCategory ?? null, status: d.status ?? 'passed' },
+      };
     } else if (parsed.type === 'run-progress') {
       liveProgress.value = data as {
         totalTests: number;
@@ -208,6 +234,7 @@ function flushPendingEvents() {
       };
     } else if (parsed.type === 'run-finished') {
       isFinalizing.value = false;
+      liveSteps.value = {};
       disconnectStream();
       refresh();
       // Nudge child tabs (Failure groups, Slow endpoints, Regression context,
@@ -600,6 +627,7 @@ function handleSelectCluster(clusterId: number) {
     <template #body>
       <DetailPageLayout v-model="activeTab" :tab-items="tabItems" :tab-panel-class="tabPanelClass">
         <template #summary>
+          <RunLiveActivity v-if="isLive && hasLiveSteps" :steps="liveSteps" class="px-4 pt-4 lg:px-6" />
           <RunSummary
             v-if="testRun"
             :test-run="testRun"

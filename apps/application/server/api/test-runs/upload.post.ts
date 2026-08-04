@@ -489,6 +489,7 @@ export default eventHandler(async (event) => {
         timeout: testCase.timeout as number | null | undefined,
         error: testCase.error as string | null | undefined,
         retries: testCase.retries as number | undefined,
+        attempts: testCase.attempts,
         line,
         column,
         steps: testCase.steps,
