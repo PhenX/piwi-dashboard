@@ -1226,6 +1226,55 @@ for (const story of FAILURE_STORIES) {
   });
 }
 
+// ── Demo merge suggestions ─────────────────────────────────────────────────
+// Two pending pairs (one LLM-judged, one embedding) so the list and both
+// actions are exercisable, plus one rejected pair that demonstrates a
+// dismissed suggestion. Each pair shares a project; cluster_a_id <
+// cluster_b_id as the unique pair index requires.
+const MERGE_SUGGESTIONS = [
+  {
+    id: 1,
+    project_id: 2,
+    cluster_a_id: 3,
+    cluster_b_id: 4,
+    score: 0.87,
+    method: 'llm',
+    llm_confidence: 'high',
+    llm_reason:
+      'Both failures surface HTTP 5xx responses from the same service tier; the error signatures differ only by endpoint.',
+    status: 'pending',
+    created_at: ts('2025-04-24T10:00:00'),
+    updated_at: ts('2025-04-24T10:00:00'),
+  },
+  {
+    id: 2,
+    project_id: 3,
+    cluster_a_id: 5,
+    cluster_b_id: 6,
+    score: 0.74,
+    method: 'embedding',
+    llm_confidence: null,
+    llm_reason: null,
+    status: 'pending',
+    created_at: ts('2025-04-23T14:30:00'),
+    updated_at: ts('2025-04-23T14:30:00'),
+  },
+  {
+    id: 3,
+    project_id: 1,
+    cluster_a_id: 1,
+    cluster_b_id: 2,
+    score: 0.58,
+    method: 'llm',
+    llm_confidence: 'low',
+    llm_reason:
+      'One failure is a click timeout, the other a renamed field — different root-cause families despite sharing the checkout spec.',
+    status: 'rejected',
+    created_at: ts('2025-04-22T09:00:00'),
+    updated_at: ts('2025-04-22T09:00:00'),
+  },
+];
+
 // ── Demo quarantine ───────────────────────────────────────────────────────
 // Three entries covering the states the tab exists to distinguish: one that has
 // earned its way out, one part-way through its streak, and one still failing.
@@ -2374,6 +2423,10 @@ function collectAnchorSec() {
       bump(r.updated_at, 's');
     }
   }
+  for (const r of MERGE_SUGGESTIONS) {
+    bump(r.created_at, 's');
+    bump(r.updated_at, 's');
+  }
   for (const r of APP_SETTINGS) bump(r.updated_at, 's');
   for (const r of FAILURE_DIAGNOSIS_VERSIONS) bump(r.created_at, 's');
   for (const r of TEST_RUNS) {
@@ -2437,6 +2490,7 @@ const REBASE_SQL = [
   `UPDATE quarantined_tests SET created_at = created_at + ${D}, released_at = released_at + ${D};`,
   `UPDATE failure_diagnoses SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE failure_diagnosis_versions SET created_at = created_at + ${D};`,
+  `UPDATE cluster_merge_suggestions SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   '',
   '-- Millisecond timestamp columns',
   `UPDATE test_runs_cases SET started_at = started_at + ${D_MS}, created_at = created_at + ${D_MS};`,
@@ -2502,6 +2556,9 @@ const lines = [
   '',
   '-- Demo AI diagnoses',
   insert('failure_diagnoses', FAILURE_DIAGNOSES),
+  '',
+  '-- Demo merge suggestions (reference failure_clusters)',
+  insert('cluster_merge_suggestions', MERGE_SUGGESTIONS),
   '',
   '-- Diagnosis version history (references failure_diagnoses + failure_clusters)',
   insert('failure_diagnosis_versions', FAILURE_DIAGNOSIS_VERSIONS),
