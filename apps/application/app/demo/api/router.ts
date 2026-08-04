@@ -72,6 +72,8 @@ import {
   getExecutionDiagnosis,
 } from '#shared/handlers/failure-clusters';
 import { getClusterCommits, getClusterCommitDiff, getClusterBranches } from './scm';
+import { parseTagFilter } from '#shared/utils/tag-filter';
+import { TEST_PRIORITIES } from '@piwitests/core/test-meta';
 import {
   getClusterContext,
   getClusterContextPrompt,
@@ -315,9 +317,18 @@ const routes: RouteEntry[] = [
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/flaky-tests$/,
     handler: async (m, _, q) => {
-      const limit = q ? Number(q.get('runs')) || 50 : 50;
-      const environment = q?.get('environment') || undefined;
-      return getProjectFlakyTests(await getDemoDb(), +m[1]!, limit, environment);
+      const rawRuns = q ? parseInt(q.get('runs') ?? '', 10) : NaN;
+      const runs = Math.min(200, Math.max(1, Number.isNaN(rawRuns) ? 50 : rawRuns));
+      const environment = q?.get('environment')?.trim() || undefined;
+      const tags = parseTagFilter(q?.get('tags'));
+      const owner = q?.get('owner')?.trim() || undefined;
+      const priorityRaw = (q?.get('priority') ?? '').trim().toLowerCase();
+      const priority = (TEST_PRIORITIES as readonly string[]).includes(priorityRaw)
+        ? (priorityRaw as (typeof TEST_PRIORITIES)[number])
+        : undefined;
+      // CODEOWNERS resolution needs an SCM client the browser cannot reach —
+      // ownership stays annotation-only here (seeded cases carry `piwi:` owners).
+      return getProjectFlakyTests(await getDemoDb(), +m[1]!, runs, environment, { tags, owner, priority });
     },
   },
   {
