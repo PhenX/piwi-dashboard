@@ -15,7 +15,7 @@ import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
-const { createClient } = require('/home/user/platform/node_modules/@libsql/client');
+const { createClient } = require('@libsql/client');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const sqlPath = join(__dirname, '../public/demo/seed.sql');
