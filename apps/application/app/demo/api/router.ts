@@ -491,9 +491,13 @@ const routes: RouteEntry[] = [
     handler: async (m, _, q) => {
       const query = q as URLSearchParams | undefined;
       const db = await getDemoDb();
-      return query?.get('format') === 'prompt'
-        ? getClusterContextPrompt(db, +m[1]!, query)
-        : getClusterContext(db, +m[1]!, query);
+      const format = query?.get('format');
+      if (format === 'prompt') return getClusterContextPrompt(db, +m[1]!, query);
+      const ctx = await getClusterContext(db, +m[1]!, query);
+      // Default format mirrors the server: a plain context/coverage/scmChanges
+      // envelope; `?format=json` returns the full structured shape.
+      if (format === 'json') return ctx;
+      return { context: ctx.text, coverage: ctx.coverage, scmChanges: ctx.scmChanges };
     },
   },
   {
@@ -603,9 +607,11 @@ const routes: RouteEntry[] = [
     handler: async (m, _, q) => {
       const query = q as URLSearchParams | undefined;
       const db = await getDemoDb();
-      return query?.get('format') === 'prompt'
-        ? getExecutionContextPrompt(db, +m[1]!, query)
-        : getExecutionContext(db, +m[1]!, query);
+      const format = query?.get('format');
+      if (format === 'prompt') return getExecutionContextPrompt(db, +m[1]!, query);
+      const ctx = await getExecutionContext(db, +m[1]!, query);
+      if (format === 'json') return ctx;
+      return { context: ctx.text, coverage: ctx.coverage, scmChanges: ctx.scmChanges };
     },
   },
   {
