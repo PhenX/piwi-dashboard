@@ -93,14 +93,21 @@ let ok = 0,
   existing = 0,
   skip = 0;
 for (const stmt of statements) {
-  // Use OR IGNORE to be idempotent
-  const idempotent = stmt.replace(/^INSERT INTO/, 'INSERT OR IGNORE INTO');
+  // Plain INSERT + classify the error: only a UNIQUE/PK conflict means "already
+  // present" (idempotent re-seed). A NOT NULL or CHECK violation is silently
+  // swallowed by OR IGNORE, which would misreport a broken row as a duplicate
+  // and suppress the timestamp rebase, so those must surface as failures.
   await db
-    .execute(idempotent)
+    .execute(stmt)
     .then((res) => (res.rowsAffected > 0 ? ok++ : existing++))
     .catch((e) => {
-      skip++;
-      console.error(' skip:', e.message);
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.includes('UNIQUE constraint failed')) {
+        existing++;
+      } else {
+        skip++;
+        console.error(' skip:', message);
+      }
     });
 }
 
