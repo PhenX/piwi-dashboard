@@ -40,6 +40,7 @@ import {
   buildSourceFrames,
   storyByClusterId,
 } from '../shared/demo/failure-stories.mjs';
+import { demoTestMeta, demoTags, buildAiUsage } from '../shared/demo/demo-test-meta.mjs';
 import { computeDemoFingerprint } from '../shared/demo/demo-fingerprint.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -191,6 +192,21 @@ const PROJECT_TAGS = [
 // ── Timeline markers (dated project events overlaid on the trend charts) ────
 // Dated within project 1's run window (newest run 2025-04-25T08:30Z, ~8h apart)
 // so they land on the charts. Timestamps are rebased to load time like the runs.
+
+// App settings — the `ai` key marks the demo's simulated provider as configured,
+// so the setup page's AI probe reports active, matching the settings surface.
+const APP_SETTINGS = [
+  {
+    key: 'ai',
+    value: {
+      autoDiagnose: false,
+      roles: {
+        diagnosis: { provider: 'demo', model: 'demo-simulated', baseUrl: null, apiKey: null },
+      },
+    },
+    updated_at: ts('2025-04-20T09:00:00'),
+  },
+];
 const MARKERS = [
   {
     id: 1,
@@ -246,39 +262,8 @@ const caseById = new Map(); // caseId → { projectId, file, title, declLine, de
 const caseIdByKey = new Map(); // `${projectId}\x00${file}\x00${title}` → caseId
 
 // Cases that are prone to flake (retry-pass) — their `flaky_root_cause` is set
-// coherently instead of at random.
-/**
- * Test tags and `piwi:` ownership for the demo, derived from the spec's path so
- * the assignment is deterministic and reads like a real suite: a team owns a
- * directory, smoke tests are the first case in each file, and the checkout flow
- * carries the priority that makes the CI gate's `--require-tag` example real.
- */
-const DEMO_OWNERS = [
-  { match: /\/checkout\//, owner: '@checkout-team', feature: 'Checkout' },
-  { match: /\/api\//, owner: '@platform-team', feature: 'API' },
-  { match: /\/ui\//, owner: '@design-systems', feature: 'Design system' },
-  { match: /\/auth\//, owner: '@identity-team', feature: 'Identity' },
-];
-
-function demoTestMeta(filePath, index) {
-  const match = DEMO_OWNERS.find((entry) => entry.match.test(`/${filePath}`));
-  if (!match) return null;
-  const meta = { owner: match.owner, feature: match.feature };
-  // Only the first case of a checkout spec is critical — a suite where
-  // everything is critical teaches nothing about filtering.
-  if (match.owner === '@checkout-team') meta.priority = index === 0 ? 'critical' : 'high';
-  else if (index === 0) meta.priority = 'medium';
-  return meta;
-}
-
-function demoTags(filePath, index) {
-  const tags = [];
-  if (index === 0) tags.push('smoke');
-  if (/\/checkout\//.test(`/${filePath}`)) tags.push('critical');
-  if (/\/api\//.test(`/${filePath}`)) tags.push('api');
-  if (index % 3 === 0) tags.push('regression');
-  return tags;
-}
+// coherently instead of at random. Tags and `piwi:` ownership come from the
+// shared demo-test-meta module (the same rules the run simulator uses).
 
 const FLAKY_CASES = {
   1: { title: 'should apply discount code', rootCause: 'timing' },
@@ -567,107 +552,6 @@ function buildPageState(proj, storyEntry) {
   };
 }
 
-const aiUsageSlug = (text) =>
-  text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40) || 'x';
-
-/**
- * Tests whose failing locator reads like something an AI step would have been
- * authored from — a semantic, name-based locator. Keyed by spec + test title,
- * the value pairs the natural-language prompt with the EXACT locator the story's
- * failure is about, so the failing locator and the intent actually join up: the
- * healing panel then shows "Compiled from prompt …" on those failures and the
- * diagnosis `aiSteps` section carries a genuinely relevant intent.
- *
- * The showcase is `checkout-email-renamed` (cluster 2): a renamed label is the
- * textbook case for reasoning about intent rather than the broken selector.
- * Structural locators from other stories (`.modal.is-open`, bare `getByRole`)
- * are deliberately absent — an AI step compiles to a named element, so pinning
- * an intent on those would misrepresent the feature.
- */
-const AI_STEP_STORY_INTENTS = new Map(
-  [
-    {
-      file: 'tests/checkout/checkout.spec.ts',
-      title: 'should complete checkout with Apple Pay',
-      template: 'the email address field',
-      locator: "getByLabel('Email address')",
-      kind: 'locator',
-    },
-    {
-      file: 'tests/mobile/forms.spec.ts',
-      title: 'Text input shows keyboard on focus',
-      template: 'the delivery notes field',
-      locator: "getByLabel('Delivery notes')",
-      kind: 'locator',
-    },
-    {
-      file: 'tests/admin/reports.spec.ts',
-      title: 'exports the monthly report as CSV',
-      template: 'export the report as CSV',
-      locator: "getByRole('button', { name: 'Export CSV' })",
-      kind: 'run',
-    },
-    {
-      file: 'tests/checkout/checkout.spec.ts',
-      title: 'should complete checkout with credit card',
-      template: 'pay for the order',
-      locator: "getByRole('button', { name: 'Pay' })",
-      kind: 'run',
-    },
-  ].map((e) => [`${e.file}\x00${e.title}`, e]),
-);
-
-/** The committed-artifact path an entry would live at, mirroring the reporter's key layout. */
-function aiEntryPath(caseDef, template) {
-  const dir = caseDef.file.replace(/[^/]+$/, '').replace(/\/$/, '');
-  const base = caseDef.file.split('/').pop();
-  const h = createHash('sha256').update(`${caseDef.title}::${template}`).digest('hex').slice(0, 8);
-  return `${dir}/__piwi__/${base}/${aiUsageSlug(caseDef.title)}.${aiUsageSlug(template)}.${h}.json`;
-}
-
-/**
- * The AI-step usage manifest a browser test replayed: the committed
- * `page.piwiLocator` / `page.piwiRun` artifacts (`entries`, powering the
- * project "AI steps" liveness tab) plus the `intents` mapping each compiled
- * locator back to its prompt (powering the healing panel's "Compiled from
- * prompt" line and the diagnosis `aiSteps` section).
- *
- * Two sources, both deterministic (no `rng()`, so a test yields the SAME
- * manifest in every run and liveness aggregates across runs):
- *  - tests in `AI_STEP_STORY_INTENTS` always carry an intent whose locator IS
- *    their story's failing locator — these are the ones the UI showcases;
- *  - a deterministic ~1/3 of the remaining tests carry generic intents, so the
- *    liveness tab has realistic volume beyond the handful of story cases.
- */
-function buildAiUsage(caseDef) {
-  const story = AI_STEP_STORY_INTENTS.get(`${caseDef.file}\x00${caseDef.title}`);
-  if (story) {
-    return {
-      entries: [aiEntryPath(caseDef, story.template)],
-      intents: [{ template: story.template, locator: story.locator, kind: story.kind }],
-    };
-  }
-
-  const idHash = createHash('sha256').update(`${caseDef.file}\x00${caseDef.title}`).digest('hex');
-  const pick = parseInt(idHash.slice(0, 2), 16);
-  if (pick % 3 !== 0) return null;
-
-  const prompts = [
-    { template: 'the primary action field', locator: "getByRole('textbox', { name: 'Name' })", kind: 'locator' },
-  ];
-  if (pick % 2 === 0) {
-    prompts.push({ template: 'submit the form', locator: "getByRole('button', { name: 'Continue' })", kind: 'run' });
-  }
-  return {
-    entries: prompts.map((p) => aiEntryPath(caseDef, p.template)),
-    intents: prompts.map((p) => ({ template: p.template, locator: p.locator, kind: p.kind })),
-  };
-}
-
 for (const proj of DEMO_PROJECTS) {
   const cfg = PROJECT_CONFIGS[proj.id];
   const caseIds = caseIdsByProject[proj.id];
@@ -946,7 +830,7 @@ for (const proj of DEMO_PROJECTS) {
         slowest_step_duration: slowestStep.duration,
         web_vitals: isDidNotRunCase || noPage ? null : buildWebVitals(proj, isFailedCase),
         page_state: isDidNotRunCase || noPage ? null : buildPageState(proj, storyEntry),
-        ai_usage: isDidNotRunCase || noPage ? null : buildAiUsage(caseDef),
+        ai_usage: isDidNotRunCase || noPage ? null : await buildAiUsage(caseDef),
         console_logs: consoleLogs,
         aria_snapshot: isFailedCase && !noPage ? story?.aria : null,
         test_source: isFailedCase ? buildTestSource(story, storyEntry.failingCase, caseDef.declLine) : null,
@@ -1185,7 +1069,12 @@ for (const shot of PASSING_SCREENSHOTS) {
       const overlayPng = await sharp(Buffer.from(overlay), { raw: { width, height, channels: 4 } })
         .png()
         .toBuffer();
-      writeFileSync(new URL(`../public/${overlayRel}`, import.meta.url), overlayPng);
+      // Write beside the other seed artifacts so concurrent generators (e.g. the
+      // unit tests) stay inside their PIWI_DEMO_SEED_OUTPUT_DIR instead of
+      // rewriting the committed binary.
+      const visualDiffPath = join(OUTPUT_DIR, 'screenshots/visual-diff-checkout.png');
+      mkdirSync(dirname(visualDiffPath), { recursive: true });
+      writeFileSync(visualDiffPath, overlayPng);
 
       ATTACHMENTS.push({
         id: attachmentId++,
@@ -1217,11 +1106,14 @@ for (const shot of PASSING_SCREENSHOTS) {
 
 // ── Build failure_clusters rows ────────────────────────────────────────────
 
-const firstRunByProject = {};
-const lastRunByProject = {};
+// Runs are generated newest-first (index 0 is the newest, ids descend as time
+// advances), so the first row encountered holds the project's *newest* run and
+// the last row its *oldest* — despite the loop-order names below.
+const newestRunByProject = {};
+const oldestRunByProject = {};
 for (const run of TEST_RUNS) {
-  if (!(run.project_id in firstRunByProject)) firstRunByProject[run.project_id] = run.id;
-  lastRunByProject[run.project_id] = run.id;
+  if (!(run.project_id in newestRunByProject)) newestRunByProject[run.project_id] = run.id;
+  oldestRunByProject[run.project_id] = run.id;
 }
 
 const CLUSTER_TRIAGE = {
@@ -1295,9 +1187,7 @@ function buildClusterFix(story, stats) {
   const fix = CLUSTER_FIXES[story.clusterId];
   if (!fix) return {};
 
-  // `firstRunByProject` is the first row encountered, and rows are newest-first
-  // — so it holds the project's *newest* run, despite the name.
-  const landed = fixLandedRun(stats, fix.verification, firstRunByProject[story.projectId]);
+  const landed = fixLandedRun(stats, fix.verification, newestRunByProject[story.projectId]);
   if (!landed) throw new Error(`Cluster ${story.clusterId} has no run a fix could have landed in`);
 
   return {
@@ -1325,8 +1215,10 @@ for (const story of FAILURE_STORIES) {
     sample_error: story.failingCases[0].error,
     status: triage.status || 'open',
     triage_note: triage.triage_note || null,
-    first_seen_run_id: stats.firstRunId ?? firstRunByProject[story.projectId],
-    last_seen_run_id: stats.lastRunId ?? lastRunByProject[story.projectId],
+    // A cluster that never fired falls back to the project's run span: first
+    // seen = oldest run (highest id), last seen = newest run (lowest id).
+    first_seen_run_id: stats.firstRunId ?? oldestRunByProject[story.projectId],
+    last_seen_run_id: stats.lastRunId ?? newestRunByProject[story.projectId],
     occurrences: stats.occurrences || 1,
     ...buildClusterFix(story, stats),
     created_at: createdAt,
@@ -1334,12 +1226,64 @@ for (const story of FAILURE_STORIES) {
   });
 }
 
+// ── Demo merge suggestions ─────────────────────────────────────────────────
+// Two pending pairs (one LLM-judged, one embedding) so the list and both
+// actions are exercisable, plus one rejected pair that demonstrates a
+// dismissed suggestion. Each pair shares a project; cluster_a_id <
+// cluster_b_id as the unique pair index requires.
+const MERGE_SUGGESTIONS = [
+  {
+    id: 1,
+    project_id: 2,
+    cluster_a_id: 3,
+    cluster_b_id: 4,
+    score: 0.87,
+    method: 'llm',
+    llm_confidence: 'high',
+    llm_reason:
+      'Both failures surface HTTP 5xx responses from the same service tier; the error signatures differ only by endpoint.',
+    status: 'pending',
+    created_at: ts('2025-04-24T10:00:00'),
+    updated_at: ts('2025-04-24T10:00:00'),
+  },
+  {
+    id: 2,
+    project_id: 3,
+    cluster_a_id: 5,
+    cluster_b_id: 6,
+    score: 0.74,
+    method: 'embedding',
+    llm_confidence: null,
+    llm_reason: null,
+    status: 'pending',
+    created_at: ts('2025-04-23T14:30:00'),
+    updated_at: ts('2025-04-23T14:30:00'),
+  },
+  {
+    id: 3,
+    project_id: 1,
+    cluster_a_id: 1,
+    cluster_b_id: 2,
+    score: 0.58,
+    method: 'llm',
+    llm_confidence: 'low',
+    llm_reason:
+      'One failure is a click timeout, the other a renamed field — different root-cause families despite sharing the checkout spec.',
+    status: 'rejected',
+    created_at: ts('2025-04-22T09:00:00'),
+    updated_at: ts('2025-04-22T09:00:00'),
+  },
+];
+
 // ── Demo quarantine ───────────────────────────────────────────────────────
 // Three entries covering the states the tab exists to distinguish: one that has
 // earned its way out, one part-way through its streak, and one still failing.
 // Without all three the exit ramp looks like a list that only grows.
 const QUARANTINED_TESTS = [];
 {
+  // Runs after the anchor count toward the streak; 4 seeded passes land the
+  // entry at "4 / 5" — part-way through the exit ramp, not yet ready.
+  const PARTIAL_QUARANTINE_STREAK_RUNS = 4;
   const quarantineSpec = [
     { projectId: 1, streakState: 'ready', reason: 'Times out on CI only — see cluster 1' },
     { projectId: 2, streakState: 'partial', reason: 'Search index warm-up races the assertion' },
@@ -1356,12 +1300,17 @@ const QUARANTINED_TESTS = [];
     const caseId = caseIdByKey.get(`${spec.projectId}\x00${caseDef.file}\x00${caseDef.title}`);
     if (!caseId) continue;
 
-    // Anchoring to an early run lets the executions already in the seed count
-    // toward the streak, which is what produces the three different states.
+    // The streak counts executions on runs after the anchor (id > anchor), and
+    // ids descend as time advances in the seed, so an anchor on the newest run
+    // makes every seeded execution count (release-ready) and an anchor on the
+    // oldest run counts none (still failing). The partial entry anchors a few
+    // runs short of the oldest so only a handful of passes accumulate.
     const anchorRunId =
       spec.streakState === 'failing'
-        ? (lastRunByProject[spec.projectId] ?? null)
-        : (firstRunByProject[spec.projectId] ?? null);
+        ? (oldestRunByProject[spec.projectId] ?? null)
+        : spec.streakState === 'partial'
+          ? Number(oldestRunByProject[spec.projectId]) - PARTIAL_QUARANTINE_STREAK_RUNS || null
+          : (newestRunByProject[spec.projectId] ?? null);
 
     QUARANTINED_TESTS.push({
       id: qId++,
@@ -2474,6 +2423,11 @@ function collectAnchorSec() {
       bump(r.updated_at, 's');
     }
   }
+  for (const r of MERGE_SUGGESTIONS) {
+    bump(r.created_at, 's');
+    bump(r.updated_at, 's');
+  }
+  for (const r of APP_SETTINGS) bump(r.updated_at, 's');
   for (const r of FAILURE_DIAGNOSIS_VERSIONS) bump(r.created_at, 's');
   for (const r of TEST_RUNS) {
     bump(r.start_time, 's');
@@ -2526,6 +2480,7 @@ const REBASE_SQL = [
   `UPDATE projects SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE markers SET occurred_at = occurred_at + ${D}, created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE users SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  `UPDATE app_settings SET updated_at = updated_at + ${D};`,
   `UPDATE test_suites SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE test_cases SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE test_runs SET start_time = start_time + ${D}, created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
@@ -2535,6 +2490,7 @@ const REBASE_SQL = [
   `UPDATE quarantined_tests SET created_at = created_at + ${D}, released_at = released_at + ${D};`,
   `UPDATE failure_diagnoses SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE failure_diagnosis_versions SET created_at = created_at + ${D};`,
+  `UPDATE cluster_merge_suggestions SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   '',
   '-- Millisecond timestamp columns',
   `UPDATE test_runs_cases SET started_at = started_at + ${D_MS}, created_at = created_at + ${D_MS};`,
@@ -2574,6 +2530,9 @@ const lines = [
   '-- Project assignments (affectations)',
   insert('project_assignments', PROJECT_ASSIGNMENTS),
   '',
+  '-- App settings (the `ai` key marks the demo provider as configured)',
+  insert('app_settings', APP_SETTINGS),
+  '',
   '-- Project-tag associations',
   insert('project_tags', PROJECT_TAGS),
   '',
@@ -2597,6 +2556,9 @@ const lines = [
   '',
   '-- Demo AI diagnoses',
   insert('failure_diagnoses', FAILURE_DIAGNOSES),
+  '',
+  '-- Demo merge suggestions (reference failure_clusters)',
+  insert('cluster_merge_suggestions', MERGE_SUGGESTIONS),
   '',
   '-- Diagnosis version history (references failure_diagnoses + failure_clusters)',
   insert('failure_diagnosis_versions', FAILURE_DIAGNOSIS_VERSIONS),

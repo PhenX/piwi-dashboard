@@ -577,6 +577,7 @@ interface AssembleResult {
   coverage: DiagnosisContextCoverage;
   scmChanges: ScmChanges | null;
   tokenEstimate: number;
+  textTokenEstimate: number;
   imageTokenEstimate: number;
 }
 
@@ -809,6 +810,7 @@ async function assemble(
     coverage,
     scmChanges: scmChanges && scmChanges.files.length ? scmChanges : null,
     tokenEstimate: Math.ceil(textChars / 4) + imageTokenEstimate,
+    textTokenEstimate: Math.ceil(textChars / 4),
     imageTokenEstimate,
   };
 }
@@ -841,17 +843,32 @@ export async function getClusterContext(db: DrizzleDB, clusterId: number, query?
   const ev = await collectClusterEvidence(db, clusterId);
   if (!ev) {
     return {
+      scope: { kind: 'cluster', clusterId },
       text: '',
       sections: [],
       coverage: { scm: null },
       scmChanges: null,
       tokenEstimate: 0,
+      textTokenEstimate: 0,
       imageTokenEstimate: 0,
+      cluster: null,
     };
   }
   const { baseCommit, selectedShas } = parseScmQuery(query);
   const effectiveBase = baseCommit || ev.cluster.manualBaseCommit || null;
-  return assemble(db, ev, { baseCommit: effectiveBase, selectedShas });
+  const ctx = await assemble(db, ev, { baseCommit: effectiveBase, selectedShas });
+  // Same envelope the server's `?format=json` returns: scope descriptor and a
+  // compact cluster summary alongside the assembled context.
+  return {
+    ...ctx,
+    scope: { kind: 'cluster', clusterId },
+    cluster: {
+      id: ev.cluster.id,
+      signature: ev.cluster.signature,
+      occurrences: ev.cluster.occurrences,
+      pattern: 'unknown',
+    },
+  };
 }
 
 /** GET /api/test-run-cases/:id/diagnosis-context — execution scope. */
@@ -859,12 +876,15 @@ export async function getExecutionContext(db: DrizzleDB, testRunsCaseId: number,
   const rep = await loadExecutionRep(db, testRunsCaseId);
   if (!rep) {
     return {
+      scope: { kind: 'execution', testRunsCaseId },
       text: '',
       sections: [],
       coverage: { scm: null },
       scmChanges: null,
       tokenEstimate: 0,
+      textTokenEstimate: 0,
       imageTokenEstimate: 0,
+      cluster: null,
     };
   }
   const [trc] = await db
@@ -874,7 +894,8 @@ export async function getExecutionContext(db: DrizzleDB, testRunsCaseId: number,
   // When the execution belongs to a cluster, reuse the full cluster context so the
   // execution view is just as rich; otherwise fall back to a single-execution view.
   if (trc?.clusterId) {
-    return getClusterContext(db, trc.clusterId, query);
+    const ctx = await getClusterContext(db, trc.clusterId, query);
+    return { ...ctx, scope: { kind: 'execution', testRunsCaseId } };
   }
   // No cluster: assemble a minimal execution-only context.
   const sections: ContextSection[] = [];
@@ -890,12 +911,15 @@ export async function getExecutionContext(db: DrizzleDB, testRunsCaseId: number,
   const text = [coverageBlock, ...sections.map((s) => s.markdown)].join('\n\n');
   const textChars = sections.reduce((s, sec) => s + sec.chars, 0) + coverageBlock.length;
   return {
+    scope: { kind: 'execution', testRunsCaseId },
     text,
     sections,
     coverage: { scm: null } as DiagnosisContextCoverage,
     scmChanges: null,
     tokenEstimate: Math.ceil(textChars / 4),
+    textTokenEstimate: Math.ceil(textChars / 4),
     imageTokenEstimate: 0,
+    cluster: null,
   };
 }
 

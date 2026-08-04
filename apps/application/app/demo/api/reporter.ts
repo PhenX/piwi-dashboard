@@ -12,7 +12,14 @@
 import { eq, and, or, inArray, sql } from 'drizzle-orm';
 import { getDemoDb } from '../db.client';
 import { publishDemoGlobalEvent, publishDemoRunEvent } from '../run-events';
-import { projects, testRuns, testCases, testRunsCases, networkRequests } from '~~/server/database/schema.sqlite';
+import {
+  projects,
+  testRuns,
+  testCases,
+  testRunsCases,
+  testSuites,
+  networkRequests,
+} from '~~/server/database/schema.sqlite';
 import { parseLocation } from '~~/server/utils/parse-location';
 import { mapCompleteEventToRunCase } from '~~/server/utils/map-complete-event';
 import { buildNetworkRequestItems, buildNetworkRequestInsertValues } from '~~/server/utils/network-request-helpers';
@@ -22,7 +29,9 @@ import {
   capArray,
   capConsoleLogs,
   capErrorText,
+  capSourceFrames,
   capText,
+  sanitizeAiUsage,
   sanitizeMetadata,
   sanitizeWebVitals,
   sanitizeConsoleLogs,
@@ -33,13 +42,20 @@ import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fi
 import { durationStats } from '#shared/utils/stats';
 import { countFailedFromTally, sumFailedAndTimedOut } from '#shared/utils/test-counts';
 import { syncAutoMarkersForRun } from '#shared/handlers/markers';
-import { joinSuitePath } from '#shared/utils/suites';
+import { joinSuitePath, SUITE_PATH_SEP } from '#shared/utils/suites';
+import {
+  normalizeTestTags,
+  parseTestMetadata,
+  sanitizeTestMetadata,
+  type TestMetadata,
+} from '@piwitests/core/test-meta';
 import {
   cancelInstanceRuns as sharedCancelInstanceRuns,
   getOrCreateFailureClusters,
   type PendingCluster,
 } from '#shared/handlers/failure-cluster-ops';
 import type { StreamEventPayload, TestRunFinishPayload, TestRunStartPayload } from '#shared/types';
+import { demoHttpError } from './http-error';
 
 type DemoDb = Awaited<ReturnType<typeof getDemoDb>>;
 
@@ -50,6 +66,91 @@ function randomToken(): string {
   const bytes = new Uint8Array(32);
   globalThis.crypto.getRandomValues(bytes);
   return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Validate a run's stream token for events/heartbeat/finish, mirroring the
+ * server's `validateAndReviveRun`: an `interrupted` run (stream token cleared
+ * by stale-run cleanup) is revived to `running` by accepting the reporter's
+ * existing token; anything else must be running with a matching token.
+ */
+async function validateAndReviveDemoRun(
+  db: DemoDb,
+  testRun: { id: number; status: string; streamToken: string | null },
+  bodyStreamToken: string | null | undefined,
+  isValidShardToken: boolean,
+): Promise<void> {
+  const isInterrupted = testRun.status === 'interrupted' && !testRun.streamToken;
+
+  if (testRun.status !== 'running' && !isInterrupted) {
+    throw demoHttpError(409, 'Test run is not in running state');
+  }
+
+  if (isInterrupted) {
+    if (!bodyStreamToken) {
+      throw demoHttpError(403, 'Missing stream token');
+    }
+    await db
+      .update(testRuns)
+      .set({ status: 'running', streamToken: bodyStreamToken, updatedAt: new Date() })
+      .where(eq(testRuns.id, testRun.id));
+    testRun.status = 'running';
+    testRun.streamToken = bodyStreamToken;
+  } else if (testRun.streamToken !== bodyStreamToken) {
+    if (isValidShardToken && bodyStreamToken) return;
+    throw demoHttpError(403, 'Invalid stream token');
+  }
+}
+
+/** Read shard tokens from a run's metadata JSON (mirrors server shard-tokens.ts). */
+function readShardTokensFromMeta(metadata: unknown): Set<string> | undefined {
+  if (!metadata || typeof metadata !== 'object') return undefined;
+  const meta = metadata as Record<string, unknown>;
+  const tokens = meta.shardTokens;
+  if (!Array.isArray(tokens)) return undefined;
+  const strTokens = tokens.filter((t): t is string => typeof t === 'string');
+  return strTokens.length > 0 ? new Set(strTokens) : undefined;
+}
+
+/** Append a shard token to a run's stored metadata (mirrors server shard-tokens.ts). */
+async function persistDemoShardToken(
+  db: DemoDb,
+  runId: number,
+  token: string,
+  existingMetadata?: Record<string, unknown> | null,
+): Promise<void> {
+  let meta: Record<string, unknown>;
+  if (existingMetadata) {
+    meta = { ...existingMetadata };
+  } else {
+    const row = await db.select({ metadata: testRuns.metadata }).from(testRuns).where(eq(testRuns.id, runId));
+    meta = (row[0]?.metadata as Record<string, unknown>) ?? {};
+  }
+
+  const tokens: string[] = Array.isArray(meta.shardTokens) ? [...meta.shardTokens] : [];
+  if (tokens.includes(token)) return;
+  tokens.push(token);
+  meta.shardTokens = tokens;
+
+  await db.update(testRuns).set({ metadata: meta, updatedAt: new Date() }).where(eq(testRuns.id, runId));
+}
+
+/** Remove a shard token from a run's stored metadata (mirrors server shard-tokens.ts). */
+async function removeStoredDemoShardToken(db: DemoDb, runId: number, token: string): Promise<void> {
+  const row = await db.select({ metadata: testRuns.metadata }).from(testRuns).where(eq(testRuns.id, runId));
+
+  const meta = (row[0]?.metadata as Record<string, unknown>) ?? {};
+  const tokens: string[] = Array.isArray(meta.shardTokens) ? meta.shardTokens : [];
+  const filtered = tokens.filter((t) => t !== token);
+  if (filtered.length === tokens.length) return;
+
+  if (filtered.length > 0) {
+    meta.shardTokens = filtered;
+  } else {
+    delete meta.shardTokens;
+  }
+
+  await db.update(testRuns).set({ metadata: meta, updatedAt: new Date() }).where(eq(testRuns.id, runId));
 }
 
 async function cancelInstanceRuns(
@@ -68,7 +169,7 @@ async function cancelInstanceRuns(
 /** POST /api/test-runs/setup */
 export async function apiSetupTestRun(body: TestRunStartPayload) {
   if (!body?.projectName) {
-    throw new Error('Missing required field: projectName');
+    throw demoHttpError(400, 'Missing required field: projectName');
   }
 
   const db = await getDemoDb();
@@ -207,19 +308,21 @@ export async function apiBeginTestRun(
   const testRunResults = await db.select().from(testRuns).where(eq(testRuns.id, id));
   const testRun = testRunResults[0];
 
-  if (!testRun) throw new Error('Test run not found');
+  if (!testRun) throw demoHttpError(404, 'Test run not found');
 
   const isSharded = !!(testRun.shardTotal && testRun.shardTotal > 1);
 
-  if (!isSharded && testRun.status !== 'initialising') {
-    throw new Error('Test run cannot be transitioned to running state');
+  // Parallel worker processes race to /begin on the same run; a running run is
+  // tolerated and handed back its existing stream token (server behavior).
+  if (!isSharded && testRun.status !== 'initialising' && testRun.status !== 'running') {
+    throw demoHttpError(409, 'Test run cannot be transitioned to running state');
   }
 
   // Validate token: main streamToken or shard token
   const shardTokenSet = demoShardTokens.get(id);
   const isValidShardSetupToken = isSharded && shardTokenSet?.has(body.setupToken);
   if (testRun.streamToken !== body.setupToken && !isValidShardSetupToken) {
-    throw new Error('Invalid setup token');
+    throw demoHttpError(403, 'Invalid setup token');
   }
 
   const streamToken = randomToken();
@@ -242,11 +345,22 @@ export async function apiBeginTestRun(
       .where(eq(testRuns.id, id));
 
     publishDemoGlobalEvent({ type: 'run-started', runId: testRun.id, projectId: testRun.projectId });
-  } else {
+  } else if (isSharded) {
     // Subsequent shard in a sharded run: register the per-shard stream token
+    // in memory and in the run's stored metadata (so a service-worker restart
+    // mid-run keeps accepting the shard's events).
     const tokens = demoShardTokens.get(id) ?? new Set();
     tokens.add(streamToken);
     demoShardTokens.set(id, tokens);
+    await persistDemoShardToken(db, id, streamToken, testRun.metadata as Record<string, unknown> | null);
+  } else {
+    // Already running — the caller keeps streaming on the stored token.
+    return {
+      success: true,
+      runId: testRun.id,
+      projectId: testRun.projectId,
+      streamToken: testRun.streamToken ?? streamToken,
+    };
   }
 
   return { success: true, runId: testRun.id, projectId: testRun.projectId, streamToken };
@@ -258,15 +372,20 @@ export interface RunCaseInput {
   filePath: string;
   /** Describe blocks wrapping the test; part of a case's identity. */
   suitePath?: string[] | null;
+  suiteConfig?: Array<{ mode: string; annotations: Array<{ type: string; description?: string }> }> | null;
   title: string;
   timeout?: number | null;
   wastedTimeMs?: number | null;
   testSource?: string | null;
+  testSourceFrames?: unknown;
   testAnnotations?: unknown;
+  tags?: unknown;
+  testMeta?: unknown;
   status: string;
   duration?: number | null;
   error?: string | null;
   retries?: number | null;
+  attempts?: unknown;
   line: number | null;
   column: number | null;
   steps?: unknown;
@@ -276,6 +395,7 @@ export interface RunCaseInput {
   networkRequests?: unknown;
   webVitals?: unknown;
   pageState?: unknown;
+  aiUsage?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: string | null;
   workerIndex?: number | null;
@@ -285,14 +405,139 @@ export interface RunCaseInput {
   locatorSnapshots?: unknown;
 }
 
+/** Browser identity for the unique (run, case, retries, browser) key. */
+function resolveBrowserName(browser: unknown): string | null {
+  if (typeof browser === 'string') return browser;
+  if (browser && typeof browser === 'object') {
+    const b = browser as Record<string, unknown>;
+    if (typeof b.projectName === 'string') return b.projectName;
+  }
+  return null;
+}
+
+/**
+ * Resolve (upsert) all unique suite paths from the batch into `test_suites`,
+ * mirroring the server's `resolveSuites` (without its project cache — the demo
+ * DB is small enough to query the unique index directly).
+ */
+async function resolveSuites(db: DemoDb, projectId: number, cases: RunCaseInput[]): Promise<Map<string, number>> {
+  type SuiteSpec = { filePath: string; levelPath: string; mode: string; annotations: unknown[] };
+  const pending = new Map<string, SuiteSpec>();
+
+  for (const c of cases) {
+    const sp = c.suitePath ?? [];
+    for (let i = 0; i < sp.length; i++) {
+      const levelPath = sp.slice(0, i + 1).join(SUITE_PATH_SEP);
+      const key = `${c.filePath}\x00${levelPath}`;
+      if (!pending.has(key)) {
+        pending.set(key, {
+          filePath: c.filePath,
+          levelPath,
+          mode: c.suiteConfig?.[i]?.mode ?? 'default',
+          annotations: c.suiteConfig?.[i]?.annotations ?? [],
+        });
+      }
+    }
+  }
+
+  if (pending.size === 0) return new Map();
+
+  const suiteIdMap = new Map<string, number>();
+  for (const [key, spec] of pending) {
+    const result = await db
+      .insert(testSuites)
+      .values({
+        projectId,
+        filePath: spec.filePath,
+        suitePath: spec.levelPath,
+        mode: spec.mode,
+        annotations: spec.annotations as never,
+      })
+      .onConflictDoUpdate({
+        target: [testSuites.projectId, testSuites.filePath, testSuites.suitePath],
+        set: { mode: spec.mode, annotations: spec.annotations as never, updatedAt: new Date() },
+      })
+      .returning({ id: testSuites.id });
+    const id = result[0]?.id;
+    if (id !== undefined) suiteIdMap.set(key, id);
+  }
+  return suiteIdMap;
+}
+
+/** Latest-known tags + `piwi:` metadata for one test case, as stored. */
+interface CaseMetaSnapshot {
+  tags: string[];
+  meta: TestMetadata | null;
+}
+
+function sameSnapshot(stored: CaseMetaSnapshot, incoming: CaseMetaSnapshot): boolean {
+  if (stored.tags.length !== incoming.tags.length) return false;
+  if (stored.tags.some((tag, i) => tag !== incoming.tags[i])) return false;
+  const a = stored.meta ?? {};
+  const b = incoming.meta ?? {};
+  return a.owner === b.owner && a.priority === b.priority && a.feature === b.feature && a.link === b.link;
+}
+
+/** Mirror each reported test's tags/`piwi:` metadata onto its `test_cases` row. */
+async function syncTestCaseMetadata(db: DemoDb, incoming: Map<number, CaseMetaSnapshot>): Promise<void> {
+  if (incoming.size === 0) return;
+
+  const ids = [...incoming.keys()];
+  const stored = await db
+    .select({
+      id: testCases.id,
+      tags: testCases.tags,
+      owner: testCases.owner,
+      priority: testCases.priority,
+      feature: testCases.feature,
+      link: testCases.link,
+    })
+    .from(testCases)
+    .where(inArray(testCases.id, ids));
+
+  const storedById = new Map<number, CaseMetaSnapshot>(
+    stored.map((row) => [
+      row.id,
+      {
+        tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+        meta: sanitizeTestMetadata({
+          owner: row.owner,
+          priority: row.priority,
+          feature: row.feature,
+          link: row.link,
+        }),
+      },
+    ]),
+  );
+
+  for (const [caseId, next] of incoming) {
+    const current = storedById.get(caseId);
+    if (current && sameSnapshot(current, next)) continue;
+
+    await db
+      .update(testCases)
+      .set({
+        tags: next.tags.length ? next.tags : null,
+        owner: next.meta?.owner ?? null,
+        priority: next.meta?.priority ?? null,
+        feature: next.meta?.feature ?? null,
+        link: next.meta?.link ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(testCases.id, caseId));
+  }
+}
+
 export async function persistRunCases(
   db: DemoDb,
   projectId: number,
   testRunId: number,
   cases: RunCaseInput[],
   deduplicate?: boolean,
-): Promise<Array<{ id: number }>> {
+): Promise<Array<{ id: number; status: string }>> {
   if (cases.length === 0) return [];
+
+  const suiteIdMap = await resolveSuites(db, projectId, cases);
 
   const uniqueFilePaths = [...new Set(cases.map((c) => c.filePath))];
   const existingCaseRows = await db
@@ -308,10 +553,15 @@ export async function persistRunCases(
   let existingRunCaseSet: Set<string> | null = null;
   if (deduplicate) {
     const existingRunCases = await db
-      .select({ testCaseId: testRunsCases.testCaseId, retries: testRunsCases.retries })
+      .select({
+        testCaseId: testRunsCases.testCaseId,
+        retries: testRunsCases.retries,
+        browserName: testRunsCases.browserName,
+      })
       .from(testRunsCases)
       .where(eq(testRunsCases.testRunId, testRunId));
-    existingRunCaseSet = new Set(existingRunCases.map((r) => `${r.testCaseId}::${r.retries}`));
+    // Same composite key as the DB unique index (run, case, retries, browser).
+    existingRunCaseSet = new Set(existingRunCases.map((r) => `${r.testCaseId}::${r.retries}::${r.browserName ?? ''}`));
   }
 
   const runCasesRows: Array<typeof testRunsCases.$inferInsert> = [];
@@ -335,6 +585,7 @@ export async function persistRunCases(
     snapshots: LocatorSnapshot[] | null | undefined;
     purge?: boolean;
   }> = [];
+  const caseMetaSnapshots = new Map<number, CaseMetaSnapshot>();
 
   for (const c of cases) {
     const suitePath = joinSuitePath(c.suitePath);
@@ -348,6 +599,7 @@ export async function persistRunCases(
           projectId,
           filePath: c.filePath,
           suitePath,
+          suiteId: suitePath ? (suiteIdMap.get(`${c.filePath}\x00${suitePath}`) ?? null) : null,
           title: c.title,
         })
         .returning();
@@ -359,8 +611,14 @@ export async function persistRunCases(
 
     if (!shared) continue;
 
+    // Re-normalize on arrival, like the server — annotations win over a
+    // supplied `testMeta` because they are the declared source.
+    const tags = normalizeTestTags(c.tags);
+    const testMeta = parseTestMetadata(c.testAnnotations) ?? sanitizeTestMetadata(c.testMeta);
+    caseMetaSnapshots.set(shared.id, { tags, meta: testMeta });
+
     if (deduplicate && existingRunCaseSet) {
-      const rowKey = `${shared.id}::${c.retries ?? 0}`;
+      const rowKey = `${shared.id}::${c.retries ?? 0}::${resolveBrowserName(c.browser) ?? ''}`;
       if (existingRunCaseSet.has(rowKey)) continue;
     }
 
@@ -395,6 +653,7 @@ export async function persistRunCases(
       duration: c.duration ?? null,
       error: capErrorText(c.error, DEFAULT_INGEST_LIMITS.errorChars),
       retries: c.retries ?? 0,
+      attempts: capArray(c.attempts, 30),
       line: c.line,
       column: c.column,
       steps: capArray(c.steps, DEFAULT_INGEST_LIMITS.steps),
@@ -403,17 +662,24 @@ export async function persistRunCases(
       slowestStepDuration: c.slowestStepDuration ?? null,
       webVitals: sanitizeWebVitals(c.webVitals as Record<string, unknown> | null | undefined) ?? null,
       pageState: sanitizePageState(c.pageState),
+      aiUsage: sanitizeAiUsage(c.aiUsage),
       consoleLogs:
         capConsoleLogs(
           sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined),
           DEFAULT_INGEST_LIMITS,
         ) ?? null,
+      // Demo-mode rows keep writing inline (never case_payloads), which
+      // permanently exercises the readers' payload → inline fallback.
       ariaSnapshot: capText(c.ariaSnapshot, DEFAULT_INGEST_LIMITS.ariaSnapshotChars),
       testSource: capText(c.testSource, DEFAULT_INGEST_LIMITS.testSourceChars),
+      testSourceFrames: capSourceFrames(c.testSourceFrames, DEFAULT_INGEST_LIMITS),
+      testAnnotations: (c.testAnnotations as never) ?? null,
+      tags: tags.length ? tags : null,
+      testMeta,
       browser: c.browser ?? null,
+      browserName: resolveBrowserName(c.browser),
       timeout: c.timeout ?? null,
       wastedTimeMs: c.wastedTimeMs ?? null,
-      testAnnotations: (c.testAnnotations as never) ?? null,
       workerIndex: c.workerIndex ?? null,
       shardIndex: c.shardIndex ?? null,
       startedAt: c.startedAt ?? null,
@@ -431,7 +697,13 @@ export async function persistRunCases(
     if (fingerprint) row.failureClusterId = clusterIds.get(fingerprint.fingerprint) ?? null;
   });
 
-  const insertedCases = await db.insert(testRunsCases).values(runCasesRows).returning({ id: testRunsCases.id });
+  // ON CONFLICT DO NOTHING + the (run, case, retries, browser) unique index keep
+  // this idempotent across batch retries and same-test-different-browser rows.
+  const insertedCases = await db
+    .insert(testRunsCases)
+    .values(runCasesRows)
+    .onConflictDoNothing()
+    .returning({ id: testRunsCases.id, status: testRunsCases.status });
 
   const nrValues = buildNetworkRequestInsertValues(networkRequestBuilders, insertedCases, testRunId);
   if (nrValues.length > 0) {
@@ -439,6 +711,7 @@ export async function persistRunCases(
   }
 
   await upsertLocatorSnapshots(db, perCaseLocators, testRunId);
+  await syncTestCaseMetadata(db, caseMetaSnapshots);
 
   return insertedCases;
 }
@@ -453,12 +726,10 @@ export async function apiPostRunEvents(
   const testRunResults = await db.select().from(testRuns).where(eq(testRuns.id, id));
   const testRun = testRunResults[0];
 
-  if (!testRun) throw new Error('Test run not found');
-  const shardTokenSet = demoShardTokens.get(id);
-  const isValidShardToken = shardTokenSet?.has(body.streamToken);
-  if (!body.streamToken || (testRun.streamToken !== body.streamToken && !isValidShardToken)) {
-    throw new Error('Invalid stream token');
-  }
+  if (!testRun) throw demoHttpError(404, 'Test run not found');
+  const shardTokenSet = demoShardTokens.get(id) ?? readShardTokensFromMeta(testRun.metadata);
+  const isValidShardToken = body.streamToken ? shardTokenSet?.has(body.streamToken) : false;
+  await validateAndReviveDemoRun(db, testRun, body.streamToken, !!isValidShardToken);
 
   const testCaseEvents = Array.isArray(body.testCases) ? body.testCases : [body.testCase];
   const validEvents = testCaseEvents.filter((tc): tc is StreamEventPayload => Boolean(tc && tc.title));
@@ -552,7 +823,7 @@ export async function apiPostRunEvents(
   }
 
   if (completeEvents.length === 0) {
-    return { success: true, processed: beginEvents.length };
+    return { success: true, processed: beginEvents.length + stepBeginEvents.length + stepEndEvents.length };
   }
 
   const parsedEvents = completeEvents.map((tc) => {
@@ -570,9 +841,11 @@ export async function apiPostRunEvents(
   const insertedRunCases = await persistRunCases(db, testRun.projectId, id, cases, true);
 
   const insertedCount = insertedRunCases.length;
-  const insertedStatusCounts = cases.slice(0, insertedCount).reduce(
-    (acc: Record<string, number>, tc) => {
-      if (tc.status) acc[tc.status] = (acc[tc.status] || 0) + 1;
+  // Derive status counts from the actually inserted rows (the unique index can
+  // skip duplicates), matching the server's events handler.
+  const insertedStatusCounts = insertedRunCases.reduce(
+    (acc: Record<string, number>, row: { status: string }) => {
+      acc[row.status] = (acc[row.status] || 0) + 1;
       return acc;
     },
     {} as Record<string, number>,
@@ -621,6 +894,7 @@ export async function apiPostRunEvents(
       passedTests: updatedRun.passedTests,
       failedTests: updatedRun.failedTests,
       skippedTests: updatedRun.skippedTests,
+      didNotRunTests: updatedRun.didNotRunTests,
     },
   });
 
@@ -634,12 +908,10 @@ export async function apiHeartbeatTestRun(id: number, body: { streamToken?: stri
   const testRunResults = await db.select().from(testRuns).where(eq(testRuns.id, id));
   const testRun = testRunResults[0];
 
-  if (!testRun) throw new Error('Test run not found');
-  const shardTokenSet = demoShardTokens.get(id);
+  if (!testRun) throw demoHttpError(404, 'Test run not found');
+  const shardTokenSet = demoShardTokens.get(id) ?? readShardTokensFromMeta(testRun.metadata);
   const isValidShardToken = body.streamToken ? shardTokenSet?.has(body.streamToken) : false;
-  if (!body.streamToken || (testRun.streamToken !== body.streamToken && !isValidShardToken)) {
-    throw new Error('Invalid stream token');
-  }
+  await validateAndReviveDemoRun(db, testRun, body.streamToken, !!isValidShardToken);
 
   await db.update(testRuns).set({ updatedAt: new Date() }).where(eq(testRuns.id, id));
 
@@ -653,13 +925,11 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
   const testRunResults = await db.select().from(testRuns).where(eq(testRuns.id, id));
   const testRun = testRunResults[0];
 
-  if (!testRun) throw new Error('Test run not found');
+  if (!testRun) throw demoHttpError(404, 'Test run not found');
   const streamToken = body.streamToken;
-  const shardTokenSet = demoShardTokens.get(id);
+  const shardTokenSet = demoShardTokens.get(id) ?? readShardTokensFromMeta(testRun.metadata);
   const isValidShardToken = streamToken ? shardTokenSet?.has(streamToken) : false;
-  if (!streamToken || (testRun.streamToken !== streamToken && !isValidShardToken)) {
-    throw new Error('Invalid stream token');
-  }
+  await validateAndReviveDemoRun(db, testRun, streamToken, !!isValidShardToken);
 
   const isSharded = !!(testRun.shardTotal && testRun.shardTotal > 1);
 
@@ -688,13 +958,22 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
         shardsFinished: sql`${testRuns.shardsFinished} + 1`,
         duration: sql`MAX(coalesce(${testRuns.duration}, 0), ${duration})`,
         metadata: { ...currentMeta, shardDurations: allDurations },
+        ...(body.setupSteps && { setupSteps: body.setupSteps }),
         ...(body.isFullRun !== undefined && { isFullRun: body.isFullRun !== false ? 1 : 0 }),
         ...(body.filterDetails !== undefined && { filterDetails: body.filterDetails ?? null }),
       })
       .where(eq(testRuns.id, id));
 
+    // This shard is done — drop its token so it cannot send more events.
+    if (streamToken) {
+      demoShardTokens.get(id)?.delete(streamToken);
+      await removeStoredDemoShardToken(db, id, streamToken);
+    }
+
     const updated = await db.select().from(testRuns).where(eq(testRuns.id, id));
     const updatedRun = updated[0];
+
+    let finalStatus: string | undefined;
 
     if (
       updatedRun &&
@@ -702,7 +981,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
       updatedRun.shardTotal != null &&
       updatedRun.shardsFinished >= updatedRun.shardTotal
     ) {
-      const finalStatus = (updatedRun.failedTests ?? 0) > 0 ? 'failed' : 'passed';
+      finalStatus = (updatedRun.failedTests ?? 0) > 0 ? 'failed' : 'passed';
 
       let avgTestDuration: number | null = null;
       let p90TestDuration: number | null = null;
@@ -738,6 +1017,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
           passedTests: updatedRun.passedTests,
           failedTests: updatedRun.failedTests,
           skippedTests: updatedRun.skippedTests,
+          didNotRunTests: updatedRun.didNotRunTests,
           flakyTests: updatedRun.flakyTests,
         },
       });
@@ -753,13 +1033,14 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
           passedTests: updatedRun?.passedTests ?? testRun.passedTests,
           failedTests: updatedRun?.failedTests ?? testRun.failedTests,
           skippedTests: updatedRun?.skippedTests ?? testRun.skippedTests,
+          didNotRunTests: updatedRun?.didNotRunTests ?? testRun.didNotRunTests,
           shardsFinished: updatedRun?.shardsFinished ?? 0,
           shardTotal: updatedRun?.shardTotal,
         },
       });
     }
 
-    return { success: true, testRunId: id, status: 'running' };
+    return { success: true, testRunId: id, status: finalStatus ?? 'running' };
   }
 
   // Non-sharded
@@ -803,6 +1084,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
       ...(body.label !== undefined && { label: body.label }),
       ...(body.playwrightVersion && { playwrightVersion: body.playwrightVersion }),
       ...(body.reporterVersion && { reporterVersion: body.reporterVersion }),
+      ...(body.setupSteps && { setupSteps: body.setupSteps }),
       ...(body.isFullRun !== undefined && { isFullRun: body.isFullRun !== false ? 1 : 0 }),
       ...(body.filterDetails !== undefined && { filterDetails: body.filterDetails ?? null }),
     })
@@ -817,6 +1099,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
       passedTests: body.passedTests ?? testRun.passedTests,
       failedTests: failedTestsValue,
       skippedTests: body.skippedTests ?? testRun.skippedTests,
+      didNotRunTests: body.didNotRunTests ?? testRun.didNotRunTests,
       flakyTests,
     },
   });

@@ -137,10 +137,13 @@ self.addEventListener('fetch', (event) => {
         // generic "Internal server error") so it shows up in the app's own
         // error UI and the page console — service worker console.error calls
         // are easy to miss since they live under a separate DevTools context.
+        // Handlers throw DemoHttpError for client errors; those keep their
+        // status code (400/403/404/409) instead of collapsing into a 500.
         const message = e instanceof Error ? e.message : String(e);
+        const statusCode = (e as { statusCode?: number } | null)?.statusCode ?? 500;
         console.error('[Demo SW] handler error for', apiPath, e);
-        return new Response(JSON.stringify({ statusCode: 500, message: `Internal server error: ${message}` }), {
-          status: 500,
+        return new Response(JSON.stringify({ statusCode, message }), {
+          status: statusCode,
           headers: { 'Content-Type': 'application/json' },
         });
       }
