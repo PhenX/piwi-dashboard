@@ -192,6 +192,21 @@ const PROJECT_TAGS = [
 // ── Timeline markers (dated project events overlaid on the trend charts) ────
 // Dated within project 1's run window (newest run 2025-04-25T08:30Z, ~8h apart)
 // so they land on the charts. Timestamps are rebased to load time like the runs.
+
+// App settings — the `ai` key marks the demo's simulated provider as configured,
+// so the setup page's AI probe reports active, matching the settings surface.
+const APP_SETTINGS = [
+  {
+    key: 'ai',
+    value: {
+      autoDiagnose: false,
+      roles: {
+        diagnosis: { provider: 'demo', model: 'demo-simulated', baseUrl: null, apiKey: null },
+      },
+    },
+    updated_at: ts('2025-04-20T09:00:00'),
+  },
+];
 const MARKERS = [
   {
     id: 1,
@@ -2359,6 +2374,7 @@ function collectAnchorSec() {
       bump(r.updated_at, 's');
     }
   }
+  for (const r of APP_SETTINGS) bump(r.updated_at, 's');
   for (const r of FAILURE_DIAGNOSIS_VERSIONS) bump(r.created_at, 's');
   for (const r of TEST_RUNS) {
     bump(r.start_time, 's');
@@ -2411,6 +2427,7 @@ const REBASE_SQL = [
   `UPDATE projects SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE markers SET occurred_at = occurred_at + ${D}, created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE users SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
+  `UPDATE app_settings SET updated_at = updated_at + ${D};`,
   `UPDATE test_suites SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE test_cases SET created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
   `UPDATE test_runs SET start_time = start_time + ${D}, created_at = created_at + ${D}, updated_at = updated_at + ${D};`,
@@ -2458,6 +2475,9 @@ const lines = [
   '',
   '-- Project assignments (affectations)',
   insert('project_assignments', PROJECT_ASSIGNMENTS),
+  '',
+  '-- App settings (the `ai` key marks the demo provider as configured)',
+  insert('app_settings', APP_SETTINGS),
   '',
   '-- Project-tag associations',
   insert('project_tags', PROJECT_TAGS),
