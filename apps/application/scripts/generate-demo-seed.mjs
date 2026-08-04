@@ -1370,11 +1370,14 @@ const QUARANTINED_TESTS = [];
     // The streak counts executions on runs after the anchor (id > anchor), and
     // ids descend as time advances in the seed, so an anchor on the newest run
     // makes every seeded execution count (release-ready) and an anchor on the
-    // oldest run counts none (still failing).
+    // oldest run counts none (still failing). The partial entry anchors a few
+    // runs short of the oldest so only a handful of passes accumulate.
     const anchorRunId =
       spec.streakState === 'failing'
         ? (oldestRunByProject[spec.projectId] ?? null)
-        : (newestRunByProject[spec.projectId] ?? null);
+        : spec.streakState === 'partial'
+          ? Number(oldestRunByProject[spec.projectId]) - PARTIAL_QUARANTINE_STREAK_RUNS || null
+          : (newestRunByProject[spec.projectId] ?? null);
 
     QUARANTINED_TESTS.push({
       id: qId++,
