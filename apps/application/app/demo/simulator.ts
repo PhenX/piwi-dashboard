@@ -1253,6 +1253,34 @@ async function runSingleSimulation(
   const interrupted = ctl.stopped || completed < tests.length;
   const status = interrupted ? 'interrupted' : failedCount > 0 ? 'failed' : 'passed';
 
+  // The real reporter materializes tests that never ran (maxFailures, CI kill)
+  // as `didnotrun` complete events so the run page shows what was planned but
+  // never executed — mirror that before finishing the run.
+  if (interrupted) {
+    const unrunTests = tests.slice(queueIndex);
+    for (const t of unrunTests) {
+      await postEvents([
+        {
+          type: 'complete',
+          title: t.title,
+          location: t.location,
+          status: 'didnotrun',
+          duration: 0,
+          timeout: 30000,
+          retries: 0,
+          workerIndex: null,
+          shardIndex: shardOverride?.shardIndex ?? null,
+          startedAt: null,
+          browser: t.browser ?? null,
+          suitePath: t.suitePath ?? null,
+          suiteConfig: t.suiteConfig ?? null,
+          tags: t.tags,
+          testMeta: t.testMeta,
+        },
+      ]);
+    }
+  }
+
   await $fetch(`/api/test-runs/${runId}/finish`, {
     method: 'POST',
     body: {
