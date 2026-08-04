@@ -918,6 +918,16 @@ for (const proj of DEMO_PROJECTS) {
         error: isFailedCase ? storyEntry.failingCase.error : null,
         failure_cluster_id: story?.clusterId ?? null,
         retries: isFlakyCase ? 1 : 0,
+        // A flaky case has one failed attempt before the passing final one; a
+        // plain case has a single attempt. Mirrors what the reporter collects.
+        attempts: JSON.stringify(
+          isFlakyCase
+            ? [
+                { retry: 0, status: 'failed', duration: Math.round(caseDuration / 2), startedAt: caseStartMs },
+                { retry: 1, status: 'passed', duration: caseDuration, startedAt: caseStartMs + caseDuration },
+              ]
+            : [{ retry: 0, status: caseStatus, duration: caseDuration, startedAt: caseStartMs }],
+        ),
         // Regression/new-flaky signals are computed after generation from the
         // actual per-case history (see below), like the server does.
         is_new_regression: 0,

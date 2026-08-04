@@ -56,6 +56,16 @@ describe('toWireTestCase', () => {
     expect(out.duration).toBe(undefined);
     expect(out.error).toBe(undefined);
     expect(out.retries).toBe(undefined);
+    expect(out.attempts).toBe(null);
+  });
+
+  it('carries per-attempt outcomes through', () => {
+    const attempts = [
+      { retry: 0, status: 'failed', duration: 500, startedAt: 1700000000000 },
+      { retry: 1, status: 'passed', duration: 800, startedAt: 1700000001000 },
+    ];
+    const out = toWireTestCase({ type: 'complete', title: 't', location: 'l', attempts });
+    expect(out.attempts).toEqual(attempts);
   });
 
   it('defaults workerIndex/shardIndex/startedAt/suitePath/suiteConfig/testAnnotations to null via ??', () => {
@@ -158,6 +168,7 @@ describe('toWireTestCase', () => {
     expect(Object.keys(out).sort()).toEqual([
       'aiUsage',
       'ariaSnapshot',
+      'attempts',
       'browser',
       'consoleLogs',
       'duration',

@@ -61,6 +61,11 @@ export class PiwiDashboardReporter {
   private plannedTests: TestCase[] = [];
   /** Ids of tests that actually reported via `onTestEnd`, to find the ones that never ran. */
   private reportedTestIds = new Set<string>();
+  /** Per-test attempt history, keyed by `test.id`; snapshotted onto every attempt's payload. */
+  private attemptsByTest = new Map<
+    string,
+    Array<{ retry: number; status: string; duration: number; startedAt: number | null }>
+  >();
   private instanceId: string;
   private runLabel: string | null = null;
   private shardInfo: ShardInfo | null = null;
@@ -272,6 +277,19 @@ export class PiwiDashboardReporter {
     const annotations = mergeAnnotations(test, result);
     const status = classifyStatus(result.status, annotations);
     const tags = collectTestTags(test);
+
+    // Playwright calls onTestEnd once per attempt (result.retry increases), so
+    // accumulate the attempt list per test and snapshot it onto every attempt's
+    // payload — the final attempt then carries the complete history.
+    const attempts = this.attemptsByTest.get(test.id) ?? [];
+    attempts.push({
+      retry: result.retry,
+      status,
+      duration: result.duration,
+      startedAt: result.startTime ? result.startTime.getTime() : null,
+    });
+    this.attemptsByTest.set(test.id, attempts);
+
     const testCase: CollectedTestCase = {
       type: 'complete',
       title: test.title,
@@ -283,6 +301,7 @@ export class PiwiDashboardReporter {
       timeout: test.timeout ?? null,
       error: buildErrorText(result),
       retries: result.retry,
+      attempts: attempts.map((a) => ({ ...a })),
       workerIndex: workerIndexOf(result),
       shardIndex: this.shardInfo?.current ?? null,
       startedAt: result.startTime ? result.startTime.getTime() : null,

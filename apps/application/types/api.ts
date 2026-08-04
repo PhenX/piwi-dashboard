@@ -713,6 +713,8 @@ export interface TestCaseResult {
   testSourceFrames?: TestSourceFrame[] | null;
   failureClusterId?: number | null;
   retries?: number | null;
+  /** Per-attempt outcomes `{ retry, status, duration, startedAt }`, oldest first. */
+  attempts?: Array<{ retry: number; status: string; duration: number; startedAt: number | null }> | null;
   steps?: PerformanceStep[] | null;
   stepEvents?: TestStepEvent[] | null;
   slowestStep?: string | null;
@@ -1055,6 +1057,8 @@ export interface TestCaseHistoryPoint {
   duration: number | null;
   error: string | null;
   retries: number | null;
+  /** Per-attempt outcomes `{ retry, status, duration, startedAt }`, oldest first. */
+  attempts?: Array<{ retry: number; status: string; duration: number; startedAt: number | null }> | null;
   startTime: string | Date;
   runStatus: string;
 }

@@ -67,6 +67,10 @@ test.describe.serial('Streaming API Tests', () => {
             location: 'tests/streaming.spec.ts:12:3',
             error: 'Expected true but got false',
             retries: 1,
+            attempts: [
+              { retry: 0, status: 'failed', duration: 500, startedAt: 1700000000000 },
+              { retry: 1, status: 'failed', duration: 800, startedAt: 1700000001000 },
+            ],
           },
         ],
       },
@@ -86,6 +90,19 @@ test.describe.serial('Streaming API Tests', () => {
     expect(run.totalTests).toBe(2);
     expect(run.passedTests).toBe(1);
     expect(run.failedTests).toBe(1);
+  });
+
+  test('POST /api/test-runs/:id/events persists per-attempt outcomes', async ({ request }) => {
+    const runResponse = await request.get(`/api/test-runs/${runId}`);
+    expect(runResponse.ok()).toBeTruthy();
+    const run = await runResponse.json();
+
+    const failing = run.testCases.find((tc: { title: string }) => tc.title === 'streaming test 2');
+    expect(failing).toBeDefined();
+    expect(failing.attempts).toEqual([
+      { retry: 0, status: 'failed', duration: 500, startedAt: 1700000000000 },
+      { retry: 1, status: 'failed', duration: 800, startedAt: 1700000001000 },
+    ]);
   });
 
   test('POST /api/test-runs/:id/events rejects a wrong stream token', async ({ request }) => {

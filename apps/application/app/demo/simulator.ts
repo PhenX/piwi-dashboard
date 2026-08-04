@@ -1180,6 +1180,12 @@ async function runSingleSimulation(
             duration: attemptDuration,
             error: a.error ?? null,
             retries: attempt,
+            attempts: test.attempts.slice(0, attempt + 1).map((att, i) => ({
+              retry: i,
+              status: att.status,
+              duration: att.duration ?? test.duration,
+              startedAt: startedAt - (attempt - i) * (test.duration + WORKER_GAP_MS),
+            })),
             steps: test.steps,
             // Remap 0-based step event offsets to absolute epoch ms anchored to
             // this test's actual startedAt, so each test's segments appear in
