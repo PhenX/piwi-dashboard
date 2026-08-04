@@ -25,7 +25,7 @@ export interface GatePolicy {
   failOnNewCluster?: boolean;
   /**
    * Fail when more than this many tests are quarantined. Quarantine is a debt,
-   * not a solution - this is the ceiling on how much of it a suite may carry.
+   * not a solution — this is the ceiling on how much of it a suite may carry.
    */
   maxQuarantined?: number;
   /** Fail when the run contains any flaky test (passed only after a retry). */
