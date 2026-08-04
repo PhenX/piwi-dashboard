@@ -832,11 +832,14 @@ const routes: RouteEntry[] = [
   {
     method: 'POST',
     pattern: /^\/api\/projects\/(\d+)\/quarantine$/,
-    handler: async (m, body) => {
-      const b = body as { testCaseId: number; reason?: string | null; source?: string };
-      const result = await addQuarantine(await getDemoDb(), +m[1]!, Number(b.testCaseId), {
-        reason: b.reason ?? null,
+    handler: async (m, body, _, ctx) => {
+      const b = body as { testCaseId?: number; reason?: string | null; source?: string };
+      const testCaseId = Number(b.testCaseId);
+      if (!Number.isFinite(testCaseId) || testCaseId <= 0) throw new Error('testCaseId is required');
+      const result = await addQuarantine(await getDemoDb(), +m[1]!, testCaseId, {
+        reason: typeof b.reason === 'string' ? b.reason.slice(0, 500) : null,
         source: b.source,
+        createdBy: ctx?.actingUserId ?? undefined,
       });
       return { success: true, ...result };
     },
@@ -844,8 +847,10 @@ const routes: RouteEntry[] = [
   {
     method: 'DELETE',
     pattern: /^\/api\/projects\/(\d+)\/quarantine\/(\d+)$/,
-    handler: async (m) => {
-      const result = await releaseQuarantine(await getDemoDb(), +m[1]!, +m[2]!);
+    handler: async (m, _, q) => {
+      const reason = typeof q?.get('reason') === 'string' ? String(q.get('reason')).slice(0, 500) : null;
+      const result = await releaseQuarantine(await getDemoDb(), +m[1]!, +m[2]!, reason);
+      if (!result.released) throw new Error('No active quarantine for this test');
       return { success: true, ...result };
     },
   },
