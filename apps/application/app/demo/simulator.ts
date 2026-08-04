@@ -1178,6 +1178,9 @@ async function runSingleSimulation(
             location: test.location,
             status: a.status,
             duration: attemptDuration,
+            // The effective per-test timeout the real reporter always sends
+            // (Playwright's default unless a test overrides it).
+            timeout: 30000,
             error: a.error ?? null,
             retries: attempt,
             attempts: test.attempts.slice(0, attempt + 1).map((att, i) => ({
