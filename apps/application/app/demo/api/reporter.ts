@@ -101,6 +101,57 @@ async function validateAndReviveDemoRun(
   }
 }
 
+/** Read shard tokens from a run's metadata JSON (mirrors server shard-tokens.ts). */
+function readShardTokensFromMeta(metadata: unknown): Set<string> | undefined {
+  if (!metadata || typeof metadata !== 'object') return undefined;
+  const meta = metadata as Record<string, unknown>;
+  const tokens = meta.shardTokens;
+  if (!Array.isArray(tokens)) return undefined;
+  const strTokens = tokens.filter((t): t is string => typeof t === 'string');
+  return strTokens.length > 0 ? new Set(strTokens) : undefined;
+}
+
+/** Append a shard token to a run's stored metadata (mirrors server shard-tokens.ts). */
+async function persistDemoShardToken(
+  db: DemoDb,
+  runId: number,
+  token: string,
+  existingMetadata?: Record<string, unknown> | null,
+): Promise<void> {
+  let meta: Record<string, unknown>;
+  if (existingMetadata) {
+    meta = { ...existingMetadata };
+  } else {
+    const row = await db.select({ metadata: testRuns.metadata }).from(testRuns).where(eq(testRuns.id, runId));
+    meta = (row[0]?.metadata as Record<string, unknown>) ?? {};
+  }
+
+  const tokens: string[] = Array.isArray(meta.shardTokens) ? [...meta.shardTokens] : [];
+  if (tokens.includes(token)) return;
+  tokens.push(token);
+  meta.shardTokens = tokens;
+
+  await db.update(testRuns).set({ metadata: meta, updatedAt: new Date() }).where(eq(testRuns.id, runId));
+}
+
+/** Remove a shard token from a run's stored metadata (mirrors server shard-tokens.ts). */
+async function removeStoredDemoShardToken(db: DemoDb, runId: number, token: string): Promise<void> {
+  const row = await db.select({ metadata: testRuns.metadata }).from(testRuns).where(eq(testRuns.id, runId));
+
+  const meta = (row[0]?.metadata as Record<string, unknown>) ?? {};
+  const tokens: string[] = Array.isArray(meta.shardTokens) ? meta.shardTokens : [];
+  const filtered = tokens.filter((t) => t !== token);
+  if (filtered.length === tokens.length) return;
+
+  if (filtered.length > 0) {
+    meta.shardTokens = filtered;
+  } else {
+    delete meta.shardTokens;
+  }
+
+  await db.update(testRuns).set({ metadata: meta, updatedAt: new Date() }).where(eq(testRuns.id, runId));
+}
+
 async function cancelInstanceRuns(
   db: DemoDb,
   projectId: number,
@@ -295,9 +346,12 @@ export async function apiBeginTestRun(
     publishDemoGlobalEvent({ type: 'run-started', runId: testRun.id, projectId: testRun.projectId });
   } else if (isSharded) {
     // Subsequent shard in a sharded run: register the per-shard stream token
+    // in memory and in the run's stored metadata (so a service-worker restart
+    // mid-run keeps accepting the shard's events).
     const tokens = demoShardTokens.get(id) ?? new Set();
     tokens.add(streamToken);
     demoShardTokens.set(id, tokens);
+    await persistDemoShardToken(db, id, streamToken, testRun.metadata as Record<string, unknown> | null);
   } else {
     // Already running — the caller keeps streaming on the stored token.
     return {
@@ -672,7 +726,7 @@ export async function apiPostRunEvents(
   const testRun = testRunResults[0];
 
   if (!testRun) throw new Error('Test run not found');
-  const shardTokenSet = demoShardTokens.get(id);
+  const shardTokenSet = demoShardTokens.get(id) ?? readShardTokensFromMeta(testRun.metadata);
   const isValidShardToken = body.streamToken ? shardTokenSet?.has(body.streamToken) : false;
   await validateAndReviveDemoRun(db, testRun, body.streamToken, !!isValidShardToken);
 
@@ -854,7 +908,7 @@ export async function apiHeartbeatTestRun(id: number, body: { streamToken?: stri
   const testRun = testRunResults[0];
 
   if (!testRun) throw new Error('Test run not found');
-  const shardTokenSet = demoShardTokens.get(id);
+  const shardTokenSet = demoShardTokens.get(id) ?? readShardTokensFromMeta(testRun.metadata);
   const isValidShardToken = body.streamToken ? shardTokenSet?.has(body.streamToken) : false;
   await validateAndReviveDemoRun(db, testRun, body.streamToken, !!isValidShardToken);
 
@@ -872,7 +926,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
 
   if (!testRun) throw new Error('Test run not found');
   const streamToken = body.streamToken;
-  const shardTokenSet = demoShardTokens.get(id);
+  const shardTokenSet = demoShardTokens.get(id) ?? readShardTokensFromMeta(testRun.metadata);
   const isValidShardToken = streamToken ? shardTokenSet?.has(streamToken) : false;
   await validateAndReviveDemoRun(db, testRun, streamToken, !!isValidShardToken);
 
@@ -908,6 +962,12 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
         ...(body.filterDetails !== undefined && { filterDetails: body.filterDetails ?? null }),
       })
       .where(eq(testRuns.id, id));
+
+    // This shard is done — drop its token so it cannot send more events.
+    if (streamToken) {
+      demoShardTokens.get(id)?.delete(streamToken);
+      await removeStoredDemoShardToken(db, id, streamToken);
+    }
 
     const updated = await db.select().from(testRuns).where(eq(testRuns.id, id));
     const updatedRun = updated[0];
