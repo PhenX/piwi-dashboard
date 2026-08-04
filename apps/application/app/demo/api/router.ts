@@ -73,7 +73,9 @@ import {
 } from '#shared/handlers/failure-clusters';
 import { getClusterCommits, getClusterCommitDiff, getClusterBranches } from './scm';
 import { getTimeoutThresholds } from '~~/server/utils/timeout-thresholds';
+import { getAppSetting } from '~~/server/utils/app-settings';
 import { parseTagFilter } from '#shared/utils/tag-filter';
+import { WASTED_WAIT_PATTERNS_KEY, resolveStoredWastedPatterns } from '#shared/utils/wasted-waits';
 import { TEST_PRIORITIES } from '@piwitests/core/test-meta';
 import {
   getClusterContext,
@@ -425,13 +427,26 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/test-runs\/recent$/,
     handler: async (_, __, ___, ctx) => getRecentTestRuns(await getDemoDb(), ctx?.scope),
   },
-  { method: 'GET', pattern: /^\/api\/test-runs\/(\d+)$/, handler: async (m) => getTestRun(await getDemoDb(), +m[1]!) },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-runs\/(\d+)$/,
+    handler: async (m) => {
+      const db = await getDemoDb();
+      // Resolve the stored wasted-wait patterns like the server route does: a
+      // custom pattern list recomputes per-case wasted time, the default leaves
+      // the stored values alone.
+      const stored = await getAppSetting<{ value: string[] }>(db, WASTED_WAIT_PATTERNS_KEY);
+      const resolved = resolveStoredWastedPatterns(stored);
+      return getTestRun(db, +m[1]!, resolved.isDefault ? null : resolved.patterns);
+    },
+  },
   {
     method: 'PATCH',
     pattern: /^\/api\/test-runs\/(\d+)$/,
     handler: async (m, body) => {
       const b = body as { label?: string | null };
-      return patchTestRun(await getDemoDb(), +m[1]!, b.label ?? null);
+      if (b.label === undefined) throw new Error('No fields to update');
+      return patchTestRun(await getDemoDb(), +m[1]!, b.label);
     },
   },
   { method: 'DELETE', pattern: /^\/api\/test-runs\/(\d+)$/, handler: (m) => apiDeleteTestRun(+m[1]!) },
