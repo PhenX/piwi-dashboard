@@ -67,6 +67,40 @@ function randomToken(): string {
   return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Validate a run's stream token for events/heartbeat/finish, mirroring the
+ * server's `validateAndReviveRun`: an `interrupted` run (stream token cleared
+ * by stale-run cleanup) is revived to `running` by accepting the reporter's
+ * existing token; anything else must be running with a matching token.
+ */
+async function validateAndReviveDemoRun(
+  db: DemoDb,
+  testRun: { id: number; status: string; streamToken: string | null },
+  bodyStreamToken: string | null | undefined,
+  isValidShardToken: boolean,
+): Promise<void> {
+  const isInterrupted = testRun.status === 'interrupted' && !testRun.streamToken;
+
+  if (testRun.status !== 'running' && !isInterrupted) {
+    throw new Error('Test run is not in running state');
+  }
+
+  if (isInterrupted) {
+    if (!bodyStreamToken) {
+      throw new Error('Missing stream token');
+    }
+    await db
+      .update(testRuns)
+      .set({ status: 'running', streamToken: bodyStreamToken, updatedAt: new Date() })
+      .where(eq(testRuns.id, testRun.id));
+    testRun.status = 'running';
+    testRun.streamToken = bodyStreamToken;
+  } else if (testRun.streamToken !== bodyStreamToken) {
+    if (isValidShardToken && bodyStreamToken) return;
+    throw new Error('Invalid stream token');
+  }
+}
+
 async function cancelInstanceRuns(
   db: DemoDb,
   projectId: number,
@@ -226,7 +260,9 @@ export async function apiBeginTestRun(
 
   const isSharded = !!(testRun.shardTotal && testRun.shardTotal > 1);
 
-  if (!isSharded && testRun.status !== 'initialising') {
+  // Parallel worker processes race to /begin on the same run; a running run is
+  // tolerated and handed back its existing stream token (server behavior).
+  if (!isSharded && testRun.status !== 'initialising' && testRun.status !== 'running') {
     throw new Error('Test run cannot be transitioned to running state');
   }
 
@@ -257,11 +293,19 @@ export async function apiBeginTestRun(
       .where(eq(testRuns.id, id));
 
     publishDemoGlobalEvent({ type: 'run-started', runId: testRun.id, projectId: testRun.projectId });
-  } else {
+  } else if (isSharded) {
     // Subsequent shard in a sharded run: register the per-shard stream token
     const tokens = demoShardTokens.get(id) ?? new Set();
     tokens.add(streamToken);
     demoShardTokens.set(id, tokens);
+  } else {
+    // Already running — the caller keeps streaming on the stored token.
+    return {
+      success: true,
+      runId: testRun.id,
+      projectId: testRun.projectId,
+      streamToken: testRun.streamToken ?? streamToken,
+    };
   }
 
   return { success: true, runId: testRun.id, projectId: testRun.projectId, streamToken };
@@ -629,10 +673,8 @@ export async function apiPostRunEvents(
 
   if (!testRun) throw new Error('Test run not found');
   const shardTokenSet = demoShardTokens.get(id);
-  const isValidShardToken = shardTokenSet?.has(body.streamToken);
-  if (!body.streamToken || (testRun.streamToken !== body.streamToken && !isValidShardToken)) {
-    throw new Error('Invalid stream token');
-  }
+  const isValidShardToken = body.streamToken ? shardTokenSet?.has(body.streamToken) : false;
+  await validateAndReviveDemoRun(db, testRun, body.streamToken, !!isValidShardToken);
 
   const testCaseEvents = Array.isArray(body.testCases) ? body.testCases : [body.testCase];
   const validEvents = testCaseEvents.filter((tc): tc is StreamEventPayload => Boolean(tc && tc.title));
@@ -814,9 +856,7 @@ export async function apiHeartbeatTestRun(id: number, body: { streamToken?: stri
   if (!testRun) throw new Error('Test run not found');
   const shardTokenSet = demoShardTokens.get(id);
   const isValidShardToken = body.streamToken ? shardTokenSet?.has(body.streamToken) : false;
-  if (!body.streamToken || (testRun.streamToken !== body.streamToken && !isValidShardToken)) {
-    throw new Error('Invalid stream token');
-  }
+  await validateAndReviveDemoRun(db, testRun, body.streamToken, !!isValidShardToken);
 
   await db.update(testRuns).set({ updatedAt: new Date() }).where(eq(testRuns.id, id));
 
@@ -834,9 +874,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
   const streamToken = body.streamToken;
   const shardTokenSet = demoShardTokens.get(id);
   const isValidShardToken = streamToken ? shardTokenSet?.has(streamToken) : false;
-  if (!streamToken || (testRun.streamToken !== streamToken && !isValidShardToken)) {
-    throw new Error('Invalid stream token');
-  }
+  await validateAndReviveDemoRun(db, testRun, streamToken, !!isValidShardToken);
 
   const isSharded = !!(testRun.shardTotal && testRun.shardTotal > 1);
 
