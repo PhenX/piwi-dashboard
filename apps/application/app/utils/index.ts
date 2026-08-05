@@ -253,6 +253,26 @@ export function formatStatusLabel(status: string): string {
   return status;
 }
 
+/**
+ * Short, human-readable label for why a `didnotrun` case never executed. Mirrors
+ * the reporter's `DidNotRunReason` taxonomy; an unknown/absent reason falls back
+ * to the neutral "didn't run".
+ */
+export function formatDidNotRunReason(reason?: string | null): string {
+  switch (reason) {
+    case 'previous-failure':
+      return 'Blocked by an earlier failure';
+    case 'global-timeout':
+      return 'Global timeout reached';
+    case 'max-failures':
+      return 'Max failures reached';
+    case 'interrupted':
+      return 'Run interrupted';
+    default:
+      return "Didn't run";
+  }
+}
+
 /** Badge color for a failure-cluster triage status (open/resolved/ignored). */
 export function clusterStatusColor(status: string | null | undefined): 'success' | 'warning' | 'neutral' {
   const map: Record<string, 'success' | 'warning' | 'neutral'> = {

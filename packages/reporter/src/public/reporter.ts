@@ -20,7 +20,12 @@ import { detectCliFileFilters } from '../internal/support/cli-filters.js';
 import { createGlobalSetup } from './global-setup.js';
 import { wrapConfig } from './config-wrapper.js';
 import { toWireTestCase } from '../internal/submit/serializer.js';
-import { mergeAnnotations, classifyStatus } from '../internal/collect/skip-classify.js';
+import {
+  mergeAnnotations,
+  classifyStatus,
+  resolveUnrunReason,
+  linkBlockedTests,
+} from '../internal/collect/skip-classify.js';
 import { collectTestMetadata, collectTestTags } from '../internal/collect/test-meta.js';
 import { buildErrorText } from '../internal/collect/error-text.js';
 import { RunSubmitter } from '../internal/submit/run-submitter.js';
@@ -75,6 +80,8 @@ export class PiwiDashboardReporter {
   private viaDesktopApp: boolean;
   private isFullRun = true;
   private filterDetails: FilterDetails | null = null;
+  /** Configured `maxFailures` (0 = unlimited) — disambiguates an interrupted run's unrun reason. */
+  private maxFailures = 0;
 
   private httpClient: HttpClient;
   private uploader: Uploader;
@@ -134,6 +141,7 @@ export class PiwiDashboardReporter {
     }
     this.startTime = new Date().toISOString();
     this.playwrightVersion = config.version;
+    this.maxFailures = config.maxFailures ?? 0;
     this.logger.info(
       `Starting test run for project: ${this.options.projectName} (Playwright v${this.playwrightVersion})`,
     );
@@ -315,6 +323,9 @@ export class PiwiDashboardReporter {
       testAnnotations: annotations.length ? annotations : null,
       tags: tags.length ? tags : null,
       testMeta: collectTestMetadata(annotations),
+      // An annotation-less skip reclassified to `didnotrun` is a serial-group
+      // cascade: an earlier test failed and Playwright skipped the rest.
+      didNotRunReason: status === 'didnotrun' ? 'previous-failure' : null,
     };
 
     if (result.status === 'failed' || result.status === 'timedOut') {
@@ -374,6 +385,11 @@ export class PiwiDashboardReporter {
 
     this.testCases.push(testCase);
 
+    // A cascade's blocking failure has already reported (serial execution runs
+    // it first), so resolve `blockedBy` now — the streamed event then carries
+    // the link even though the whole run isn't collected yet.
+    if (status === 'didnotrun') linkBlockedTests(this.testCases);
+
     if (this.streamManager) {
       this.streamManager.queueEvent(toWireTestCase(testCase) as StreamEvent);
       if (this.options.liveFileUploads) this.streamManager.scheduleLiveUpload(testCase);
@@ -385,9 +401,10 @@ export class PiwiDashboardReporter {
    * (no `onTestEnd`) — typically because `maxFailures` cut the run short. These
    * carry no result, so they're emitted with zero duration and no error. In
    * streaming mode they're queued as complete events so the pre-finish drain
-   * sends them alongside the rest.
+   * sends them alongside the rest. The `reason` (global timeout / max failures /
+   * interrupted) is resolved once from the overall run status by the caller.
    */
-  private materializeUnrunTests(): void {
+  private materializeUnrunTests(reason: string): void {
     for (const test of this.plannedTests) {
       if (this.reportedTestIds.has(test.id)) continue;
 
@@ -413,6 +430,7 @@ export class PiwiDashboardReporter {
         testAnnotations: declaredAnnotations.length ? declaredAnnotations : null,
         tags: tags.length ? tags : null,
         testMeta: collectTestMetadata(declaredAnnotations),
+        didNotRunReason: reason,
       };
 
       this.testCases.push(testCase);
@@ -429,7 +447,13 @@ export class PiwiDashboardReporter {
   async onEnd(result: FullResult): Promise<void> {
     if (!this.enabled) return;
 
-    this.materializeUnrunTests();
+    // Tests Playwright never reported were cut off by a run-level condition —
+    // the global timeout, the failure budget, or an interruption.
+    const unrunReason = resolveUnrunReason(result?.status, {
+      maxFailures: this.maxFailures,
+      failures: this.failedTests + this.timedOutTests,
+    });
+    this.materializeUnrunTests(unrunReason);
 
     await this.submitter.submit(
       {

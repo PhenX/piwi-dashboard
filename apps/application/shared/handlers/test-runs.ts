@@ -118,6 +118,8 @@ export async function getTestRun(
       testMeta: testRunsCases.testMeta,
       isNewRegression: testRunsCases.isNewRegression,
       isNewFlaky: testRunsCases.isNewFlaky,
+      didNotRunReason: testRunsCases.didNotRunReason,
+      blockedBy: testRunsCases.blockedBy,
     })
     .from(testRunsCases)
     .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
@@ -169,6 +171,8 @@ export async function getTestRun(
     browser: tc.browser,
     isNewRegression: tc.isNewRegression ?? null,
     isNewFlaky: tc.isNewFlaky ?? null,
+    didNotRunReason: (tc.didNotRunReason as string | null) ?? null,
+    blockedBy: (tc.blockedBy as string | null) ?? null,
   }));
 
   const runsCaseIds = runsCases.map((tc: any) => tc.id);

@@ -263,6 +263,69 @@ export async function getTestRunCase(
     serverTraces: nr.serverTraces,
   }));
 
+  // Cause ↔ effect for did-not-run cascades, both scoped to this run:
+  //  - `blockedTests`: the downstream tests this execution stopped from running
+  //    (they carry `blocked_by = this execution's location`).
+  //  - `blockedByCase`: the failing execution that blocked THIS one (only set on
+  //    a `previous-failure` case, resolved from its `blocked_by` location).
+  const ownLocation =
+    testCase?.filePath && trc.line != null && trc.column != null
+      ? `${testCase.filePath}:${trc.line}:${trc.column}`
+      : null;
+
+  type BlockedCaseRef = { id: number; title: string; location: string; status: string };
+  const toRef = (r: {
+    id: number;
+    title: string;
+    filePath: string;
+    line: number | null;
+    column: number | null;
+    status: string;
+  }): BlockedCaseRef => ({
+    id: r.id,
+    title: r.title,
+    location: r.line != null && r.column != null ? `${r.filePath}:${r.line}:${r.column}` : r.filePath,
+    status: r.status,
+  });
+  const blockedRefColumns = {
+    id: testRunsCases.id,
+    title: testCases.title,
+    filePath: testCases.filePath,
+    line: testRunsCases.line,
+    column: testRunsCases.column,
+    status: testRunsCases.status,
+  };
+
+  let blockedTests: BlockedCaseRef[] = [];
+  if (ownLocation) {
+    const rows = await db
+      .select(blockedRefColumns)
+      .from(testRunsCases)
+      .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+      .where(and(eq(testRunsCases.testRunId, trc.testRunId), eq(testRunsCases.blockedBy, ownLocation)));
+    blockedTests = rows.map(toRef);
+  }
+
+  let blockedByCase: BlockedCaseRef | null = null;
+  if (trc.blockedBy) {
+    const m = /^(.*):(\d+):(\d+)$/.exec(trc.blockedBy);
+    if (m) {
+      const [row] = await db
+        .select(blockedRefColumns)
+        .from(testRunsCases)
+        .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+        .where(
+          and(
+            eq(testRunsCases.testRunId, trc.testRunId),
+            eq(testCases.filePath, m[1]!),
+            eq(testRunsCases.line, Number(m[2])),
+            eq(testRunsCases.column, Number(m[3])),
+          ),
+        );
+      if (row) blockedByCase = toRef(row);
+    }
+  }
+
   return {
     id: trc.id,
     testCaseId: trc.testCaseId,
@@ -301,6 +364,10 @@ export async function getTestRunCase(
     browser: trc.browser,
     isNewRegression: trc.isNewRegression ?? null,
     isNewFlaky: trc.isNewFlaky ?? null,
+    didNotRunReason: trc.didNotRunReason ?? null,
+    blockedBy: trc.blockedBy ?? null,
+    blockedByCase,
+    blockedTests,
     failureCluster,
     testRun: testRun ? { ...testRun, project, reports: reportList } : testRun,
     attachments: attachmentList,
