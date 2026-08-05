@@ -31,16 +31,24 @@ const chartData = computed(() => {
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
     .slice(-30);
 
-  return sortedRuns.map((run) => ({
-    id: run.id,
-    date: new Date(run.startTime),
-    passed: run.passedTests || 0,
-    failed: run.failedTests || 0,
-    skipped: run.skippedTests || 0,
-    flaky: run.flakyTests || 0,
-    total: run.totalTests || 0,
-    status: run.status,
-  }));
+  return sortedRuns.map((run) => {
+    const flaky = run.flakyTests || 0;
+    const passed = run.passedTests || 0;
+    return {
+      id: run.id,
+      date: new Date(run.startTime),
+      // Flaky tests are counted as a subset of passed by the reporter (they
+      // passed on retry), so carve them out of the passed segment. Stacking
+      // flaky on top of the full passed count would double-count them and
+      // inflate the bar past the run's real total.
+      passed: Math.max(0, passed - flaky),
+      failed: run.failedTests || 0,
+      skipped: run.skippedTests || 0,
+      flaky,
+      total: run.totalTests || 0,
+      status: run.status,
+    };
+  });
 });
 
 type DataPoint = (typeof chartData)['value'][number];
