@@ -552,6 +552,24 @@ function buildPageState(proj, storyEntry) {
   };
 }
 
+// Serial-group cascade: in one checkout run the first cart test fails, and the
+// serial `Cart` describe skips the rest — the tests it blocked link back to it.
+// It rides a story-free run so it neither collides with a cluster failure nor
+// perturbs the deterministic rng stream the rest of the seed depends on.
+const CASCADE_BLOCKER_LOCATION = 'tests/checkout/cart.spec.ts:4:3';
+const CASCADE_BLOCKER_ERROR =
+  'Error: expect(locator).toHaveText(expected)\n\n' +
+  "Locator: getByTestId('cart-count')\n" +
+  'Expected string: "1"\n' +
+  'Received string: "0"\n' +
+  '    at tests/checkout/cart.spec.ts:4:3';
+const CASCADE_BLOCKED_TITLES = [
+  'should remove item from cart',
+  'should update item quantity',
+  'should apply discount code',
+  'should display cart total correctly',
+];
+
 for (const proj of DEMO_PROJECTS) {
   const cfg = PROJECT_CONFIGS[proj.id];
   const caseIds = caseIdsByProject[proj.id];
@@ -613,23 +631,28 @@ for (const proj of DEMO_PROJECTS) {
       }
     }
 
-    let failedTests = failingCaseIds.size;
-    let status = failedTests > 0 ? 'failed' : 'passed';
-    let didNotRunTests = 0;
+    let status = failingCaseIds.size > 0 ? 'failed' : 'passed';
     // Occasionally a failure cuts the suite short: trailing (non-failing) tests
     // never execute and the run is interrupted.
-    let didNotRunCaseIds = new Set();
-    if (failedTests > 0 && rng() < 0.15) {
+    const didNotRunCaseIds = new Set();
+    // Why each did-not-run case never executed, keyed by case id. The serial
+    // cascade (a `previous-failure`, with a `blocked_by`) is stitched in by a
+    // post-processing pass so it can't perturb this loop's rng stream.
+    const reasonByCase = new Map();
+    const blockedByByCase = new Map();
+    if (failingCaseIds.size > 0 && rng() < 0.15) {
       status = 'interrupted';
       for (let j = caseIds.length - 1; j >= 0 && didNotRunCaseIds.size < 3; j--) {
         if (!failingCaseIds.has(caseIds[j])) didNotRunCaseIds.add(caseIds[j]);
       }
-      didNotRunTests = didNotRunCaseIds.size;
+      for (const id of didNotRunCaseIds) reasonByCase.set(id, 'max-failures');
     }
 
     const flakyThisRun =
       status !== 'interrupted' && flakyCaseId && !failingCaseIds.has(flakyCaseId) && rng() < cfg.flakyRate;
     const flakyTests = flakyThisRun ? 1 : 0;
+    const failedTests = failingCaseIds.size;
+    const didNotRunTests = didNotRunCaseIds.size;
     const passedTests = caseIds.length - failedTests - didNotRunTests;
 
     const metadata = {
@@ -837,6 +860,8 @@ for (const proj of DEMO_PROJECTS) {
         test_source_frames: isFailedCase ? buildSourceFrames(storyEntry.failingCase) : null,
         worker_index: workerIndex,
         started_at: caseStartMs,
+        did_not_run_reason: isDidNotRunCase ? (reasonByCase.get(caseId) ?? null) : null,
+        blocked_by: isDidNotRunCase ? (blockedByByCase.get(caseId) ?? null) : null,
         created_at: caseStartMs,
       });
 
@@ -864,6 +889,70 @@ for (const proj of DEMO_PROJECTS) {
     }
 
     runId++;
+  }
+}
+
+// ── Serial-group cascade (post-processing, rng-free) ────────────────────────
+// Rewrite one story-free-cart checkout run so the first `Cart` test fails and
+// the serial group skips the rest — each blocked test linking back (`blocked_by`)
+// to the failure. Applied after generation so it can't perturb the deterministic
+// rng stream the rest of the seed depends on.
+{
+  const cartKey = (title) => caseIdByKey.get(`1\x00tests/checkout/cart.spec.ts\x00${title}`);
+  const blockerCaseId = cartKey('should add item to cart');
+  const blockedCaseIds = CASCADE_BLOCKED_TITLES.map(cartKey);
+  const cartCaseIds = new Set([blockerCaseId, ...blockedCaseIds]);
+
+  // Project 1 runs, newest first — the newest run has the smallest id.
+  const proj1RunIds = TEST_RUNS.filter((r) => r.project_id === 1)
+    .map((r) => r.id)
+    .sort((a, b) => a - b);
+
+  for (const targetRunId of proj1RunIds) {
+    const cartRows = TEST_RUNS_CASES.filter(
+      (row) => row.test_run_id === targetRunId && cartCaseIds.has(row.test_case_id),
+    );
+    // Only a run where every cart test cleanly passed can host the cascade.
+    if (cartRows.length !== cartCaseIds.size) continue;
+    if (!cartRows.every((row) => row.status === 'passed' && row.retries === 0)) continue;
+
+    for (const row of cartRows) {
+      if (row.test_case_id === blockerCaseId) {
+        row.status = 'failed';
+        row.error = CASCADE_BLOCKER_ERROR;
+        row.attempts = JSON.stringify([
+          { retry: 0, status: 'failed', duration: row.duration, startedAt: row.started_at },
+        ]);
+      } else {
+        row.status = 'didnotrun';
+        row.duration = 0;
+        row.did_not_run_reason = 'previous-failure';
+        row.blocked_by = CASCADE_BLOCKER_LOCATION;
+        row.attempts = JSON.stringify([{ retry: 0, status: 'didnotrun', duration: 0, startedAt: row.started_at }]);
+        // A test that never ran produced no live evidence.
+        row.step_events = null;
+        row.wasted_time_ms = 0;
+        row.web_vitals = null;
+        row.page_state = null;
+        row.ai_usage = null;
+        row.console_logs = null;
+        row.test_source_frames = null;
+      }
+    }
+
+    // Drop the network the blocked (never-run) tests would not have produced.
+    const blockedTrcIds = new Set(cartRows.filter((row) => row.test_case_id !== blockerCaseId).map((row) => row.id));
+    for (let k = NETWORK_REQUESTS.length - 1; k >= 0; k--) {
+      if (blockedTrcIds.has(NETWORK_REQUESTS[k].test_runs_case_id)) NETWORK_REQUESTS.splice(k, 1);
+    }
+
+    // Reflect the new outcomes on the run's counters.
+    const run = TEST_RUNS.find((r) => r.id === targetRunId);
+    run.failed_tests += 1;
+    run.did_not_run_tests += blockedCaseIds.length;
+    run.passed_tests -= cartCaseIds.size;
+    if (run.status === 'passed') run.status = 'failed';
+    break;
   }
 }
 

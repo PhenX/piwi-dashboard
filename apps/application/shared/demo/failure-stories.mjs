@@ -1628,7 +1628,7 @@ export const DEMO_PROJECTS = [
     ],
     suites: {
       'tests/checkout/checkout.spec.ts': { suitePath: ['Checkout'], mode: 'parallel', annotations: [] },
-      'tests/checkout/cart.spec.ts': { suitePath: ['Cart'], mode: 'default', annotations: [] },
+      'tests/checkout/cart.spec.ts': { suitePath: ['Cart'], mode: 'serial', annotations: [] },
       'tests/checkout/address.spec.ts': { suitePath: ['Address'], mode: 'default', annotations: [] },
     },
     browsers: [
