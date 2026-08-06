@@ -3,6 +3,7 @@ import { testRuns, testRunsCases } from '../database/schema';
 import type { RunMetadata } from './run-json-types';
 import type { DbClient } from '../database';
 import { buildCompareUrl, computeMetadataDiff, type MetaDiffEntry } from '#shared/utils/run-metadata';
+import { FAILED_STATUS_KEYS } from '#shared/utils/test-counts';
 
 export interface RunForRegression {
   id: number;
@@ -53,7 +54,7 @@ export function normalizeGitUrl(remoteUrl: string | null | undefined): string | 
   }
 }
 
-const FAIL_STATUSES = new Set(['failed', 'timedOut']);
+const FAIL_STATUSES = new Set<string>(FAILED_STATUS_KEYS);
 
 export async function computeRegressionContext(db: DbClient, run: RunForRegression): Promise<RegressionContextResult> {
   const greenResults = await db

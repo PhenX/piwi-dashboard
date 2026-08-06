@@ -13,6 +13,7 @@ import {
   markers,
 } from '../../server/database/schema';
 import { fetchAndFormatSuites, splitSuitePath } from '../utils/suites';
+import { FAILED_STATUS_KEYS } from '../utils/test-counts';
 import { normalizeRoute } from '../utils/route';
 import { percentile } from '../utils/stats';
 import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-waits';
@@ -626,7 +627,7 @@ export async function getFailureGroups(db: DrizzleDB, runId: number) {
 
 // ─── computeRegressionContextForRun — regression vs last green run ────────────
 
-const FAIL_STATUSES = new Set(['failed', 'timedOut']);
+const FAIL_STATUSES = new Set<string>(FAILED_STATUS_KEYS);
 
 export async function computeRegressionContextForRun(db: DrizzleDB, runId: number) {
   const runResults = await db

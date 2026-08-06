@@ -15,6 +15,7 @@ import {
   PERF_REGRESSION_MIN_PCT,
 } from '#shared/notification-events';
 import { resolveOwners } from '../scm/ownership';
+import { FAILED_STATUS_KEYS } from '#shared/utils/test-counts';
 import type { DbClient } from '../../database';
 
 function runBranch(metadata: Record<string, unknown> | null): string | undefined {
@@ -55,7 +56,7 @@ export async function emitRunNotifications(db: DbClient, runId: number): Promise
       })
       .from(testRunsCases)
       .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
-      .where(and(eq(testRunsCases.testRunId, runId), inArray(testRunsCases.status, ['failed', 'timedout'])))
+      .where(and(eq(testRunsCases.testRunId, runId), inArray(testRunsCases.status, [...FAILED_STATUS_KEYS])))
       .limit(OWNER_LOOKUP_LIMIT);
 
     // The notification still names only the first few failures, but ownership
