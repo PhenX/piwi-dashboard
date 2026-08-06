@@ -199,6 +199,13 @@ jobs:
         # exactly; a sixth pushes four jobs into a queue that costs more than
         # the extra parallelism buys.
         shard: [1, 2, 3, 4, 5]
+        # The sqlite/local leg runs on Node 22 — the dashboard's engines floor —
+        # against the Node 24-built output, the same combination an npm user on
+        # LTS gets. The other legs run current Node (24, the default below).
+        include:
+          - storage: local
+            database: sqlite
+            node: 22
 
     env:
       # Keep in step with the shard list above.
@@ -236,7 +243,7 @@ jobs:
       - name: Install node
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: ${{ matrix.node || 24 }}
           cache: npm
           cache-dependency-path: ./package-lock.json
 
