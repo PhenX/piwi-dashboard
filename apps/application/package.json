@@ -69,6 +69,7 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@iconify-json/simple-icons": "^1.2.93",
     "@playwright/test": "^1.61.1",
     "@types/nodemailer": "^8.0.1",
     "@types/sql.js": "^1.4.11",

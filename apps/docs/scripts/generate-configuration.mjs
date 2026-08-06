@@ -38,7 +38,24 @@ for (const [category, meta] of Object.entries(PIWI_ENV_CATEGORIES)) {
   mergedInto.set(meta.mergeInto, list);
 }
 
-const cell = (text) => text.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+/**
+ * Renders bare URLs and email addresses from registry text as code spans.
+ * VitePress linkifies bare URLs/emails, which turns placeholder values like
+ * `https://piwi.example.com` into clickable dead links. Text already inside
+ * backticks or a markdown link target (`](url)`) is left untouched.
+ */
+const codeifyBareLinks = (text) =>
+  text
+    .split('`')
+    .map((segment, i) => {
+      if (i % 2 === 1) return segment; // inside an existing code span
+      return segment
+        .replace(/(?<!\]\()(https?:\/\/[^\s|)]+)/g, '`$1`')
+        .replace(/(?<![\w`.@/-])([\w.+-]+@[\w-]+(?:\.[\w-]+)+)/g, '`$1`');
+    })
+    .join('`');
+
+const cell = (text) => codeifyBareLinks(text).replace(/\|/g, '\\|').replace(/\n/g, ' ');
 const anchorId = (name) => name.toLowerCase().replace(/_/g, '-');
 
 function varRow(name) {
