@@ -330,6 +330,13 @@
       "when": 1785829954434,
       "tag": "0046_strange_micromax",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1785916459975,
+      "tag": "0047_lethal_white_tiger",
+      "breakpoints": true
     }
   ]
 }

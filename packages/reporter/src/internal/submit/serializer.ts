@@ -76,6 +76,8 @@ export function toWireTestCase(tc: CollectedTestCase): WireTestCase {
     tags: rest.tags ?? null,
     testMeta: rest.testMeta ?? null,
     locatorSnapshots: rest.locatorSnapshots || null,
+    didNotRunReason: rest.didNotRunReason ?? null,
+    blockedBy: rest.blockedBy ?? null,
   };
 }
 

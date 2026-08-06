@@ -512,6 +512,8 @@ export default eventHandler(async (event) => {
         tags: testCase.tags ?? null,
         testMeta: testCase.testMeta ?? null,
         locatorSnapshots: (testCase as any).locatorSnapshots ?? null,
+        didNotRunReason: (testCase.didNotRunReason as string | null | undefined) ?? null,
+        blockedBy: (testCase.blockedBy as string | null | undefined) ?? null,
       };
     });
 

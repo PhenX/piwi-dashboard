@@ -1257,6 +1257,9 @@ async function runSingleSimulation(
   // as `didnotrun` complete events so the run page shows what was planned but
   // never executed — mirror that before finishing the run.
   if (interrupted) {
+    // A run cut short after failures stopped on its failure budget; one stopped
+    // for any other reason (a CI kill) is a plain interruption.
+    const unrunReason = failedCount > 0 ? 'max-failures' : 'interrupted';
     const unrunTests = tests.slice(queueIndex);
     for (const t of unrunTests) {
       await postEvents([
@@ -1276,6 +1279,7 @@ async function runSingleSimulation(
           suiteConfig: t.suiteConfig ?? null,
           tags: t.tags,
           testMeta: t.testMeta,
+          didNotRunReason: unrunReason,
         },
       ]);
     }

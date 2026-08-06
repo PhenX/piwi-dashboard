@@ -173,6 +173,8 @@ export default eventHandler(async (event) => {
             startedAt: testCase.startedAt ?? null,
             browser: testCase.browser ?? null,
             locatorSnapshots: testCase.locatorSnapshots ?? null,
+            didNotRunReason: testCase.didNotRunReason ?? null,
+            blockedBy: testCase.blockedBy ?? null,
           };
         });
         await persistRunCases(db, project.id, existingRun.id, cases);
@@ -297,6 +299,8 @@ export default eventHandler(async (event) => {
         tags?: unknown;
         testMeta?: unknown;
         locatorSnapshots?: unknown;
+        didNotRunReason?: string | null;
+        blockedBy?: string | null;
       }) => {
         const { filePath, line, column } = testCase.location
           ? parseLocation(testCase.location)
@@ -336,6 +340,8 @@ export default eventHandler(async (event) => {
           startedAt: testCase.startedAt ?? null,
           browser: testCase.browser ?? null,
           locatorSnapshots: testCase.locatorSnapshots ?? null,
+          didNotRunReason: testCase.didNotRunReason ?? null,
+          blockedBy: testCase.blockedBy ?? null,
         };
       },
     );

@@ -403,6 +403,8 @@ export interface RunCaseInput {
   startedAt?: number | null;
   browser?: unknown;
   locatorSnapshots?: unknown;
+  didNotRunReason?: string | null;
+  blockedBy?: string | null;
 }
 
 /** Browser identity for the unique (run, case, retries, browser) key. */
@@ -683,6 +685,8 @@ export async function persistRunCases(
       workerIndex: c.workerIndex ?? null,
       shardIndex: c.shardIndex ?? null,
       startedAt: c.startedAt ?? null,
+      didNotRunReason: c.didNotRunReason ?? null,
+      blockedBy: c.blockedBy ?? null,
     });
 
     const nrItems = buildNetworkRequestItems(c.networkRequests as Array<Record<string, unknown>> | null | undefined);

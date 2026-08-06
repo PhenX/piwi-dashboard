@@ -534,6 +534,13 @@ provide(clusterSectionLocatorKey, {
             :project-name="testCase?.testRun?.project?.name"
             @refresh="refresh()"
           />
+          <DidNotRunCard
+            :status="testCase?.status"
+            :reason="(testCase as any)?.didNotRunReason ?? null"
+            :blocked-by-case="(testCase as any)?.blockedByCase ?? null"
+            :blocked-tests="(testCase as any)?.blockedTests ?? null"
+            class="mt-4"
+          />
         </template>
 
         <!-- ── Diagnosis (failing cases) ────────────────────────────────── -->

@@ -79,6 +79,10 @@ export interface WireTestCase {
   parentTitle?: string | null;
   /** Per-element locator snapshots with ranked alternatives (transient — not stored per-run). */
   locatorSnapshots?: unknown;
+  /** Why a `didnotrun` case never executed (`previous-failure`/`global-timeout`/`max-failures`/`interrupted`). */
+  didNotRunReason?: string | null;
+  /** For a `previous-failure` cascade, the location of the failing test that blocked it. */
+  blockedBy?: string | null;
 }
 
 // ── Stream events (discriminated union) ──────────────────────────────────────
@@ -127,6 +131,10 @@ export interface CompleteStreamEvent {
   testSource?: string | null;
   testSourceFrames?: TestSourceFrame[] | null;
   locatorSnapshots?: unknown;
+  /** Why a `didnotrun` case never executed (`previous-failure`/`global-timeout`/`max-failures`/`interrupted`). */
+  didNotRunReason?: string | null;
+  /** For a `previous-failure` cascade, the location of the failing test that blocked it. */
+  blockedBy?: string | null;
 }
 
 export interface StepBeginStreamEvent {

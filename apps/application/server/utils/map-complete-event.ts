@@ -44,6 +44,8 @@ export interface ParsedCompleteEvent {
   startedAt?: number | null;
   browser?: unknown;
   locatorSnapshots?: unknown;
+  didNotRunReason?: string | null;
+  blockedBy?: string | null;
 }
 
 /**
@@ -89,5 +91,7 @@ export function mapCompleteEventToRunCase(tc: ParsedCompleteEvent): RunCaseInput
     startedAt: tc.startedAt ?? null,
     browser: tc.browser ?? null,
     locatorSnapshots: (tc.locatorSnapshots as LocatorSnapshot[] | null | undefined) ?? null,
+    didNotRunReason: tc.didNotRunReason ?? null,
+    blockedBy: tc.blockedBy ?? null,
   };
 }

@@ -52,6 +52,8 @@ const testCasePayloadFixture = {
   testAnnotations: null,
   locatorSnapshots: null,
   testSource: null,
+  didNotRunReason: null,
+  blockedBy: null,
 } satisfies TestCasePayload;
 
 const streamEventPayloadFixture = {
@@ -86,6 +88,8 @@ const streamEventPayloadFixture = {
   testAnnotations: null,
   locatorSnapshots: null,
   testSource: null,
+  didNotRunReason: null,
+  blockedBy: null,
 } satisfies StreamEventPayload;
 
 const wireTestCaseFixture = {
@@ -119,6 +123,8 @@ const wireTestCaseFixture = {
   stepCategory: null,
   parentTitle: null,
   locatorSnapshots: null,
+  didNotRunReason: null,
+  blockedBy: null,
 } satisfies WireTestCase;
 
 // Stream-envelope metadata, not part of the per-case payload.

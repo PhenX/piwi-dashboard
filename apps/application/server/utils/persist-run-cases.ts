@@ -73,6 +73,10 @@ export interface RunCaseInput {
   browser?: unknown;
   /** Per-element locator snapshots to upsert into locator_snapshots (transient). */
   locatorSnapshots?: LocatorSnapshot[] | null;
+  /** Why a `didnotrun` case never executed; null for tests that ran. */
+  didNotRunReason?: string | null;
+  /** For a `previous-failure` cascade, the location of the failing test that blocked it. */
+  blockedBy?: string | null;
 }
 
 function resolveBrowserName(browser: unknown): string | null {
@@ -415,6 +419,8 @@ export async function persistRunCases(
       workerIndex: c.workerIndex ?? null,
       shardIndex: c.shardIndex ?? null,
       startedAt: c.startedAt ?? null,
+      didNotRunReason: c.didNotRunReason ?? null,
+      blockedBy: c.blockedBy ?? null,
     });
 
     const nrItems = buildNetworkRequestItems(c.networkRequests as Array<Record<string, unknown>> | null | undefined);

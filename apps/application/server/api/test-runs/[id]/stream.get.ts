@@ -85,6 +85,8 @@ export default eventHandler(async (event) => {
             workerIndex: testRunsCases.workerIndex,
             shardIndex: testRunsCases.shardIndex,
             browser: testRunsCases.browser,
+            didNotRunReason: testRunsCases.didNotRunReason,
+            blockedBy: testRunsCases.blockedBy,
           })
           .from(testRunsCases)
           .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
@@ -104,6 +106,8 @@ export default eventHandler(async (event) => {
               location,
               workerIndex: tc.workerIndex ?? null,
               browser: tc.browser ?? null,
+              didNotRunReason: tc.didNotRunReason ?? null,
+              blockedBy: tc.blockedBy ?? null,
             },
             seq: 0, // Catch-up events have seq 0
             timestamp: Date.now(),
