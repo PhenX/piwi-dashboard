@@ -85,14 +85,17 @@ jobs:
           max-tokens: 1200
           # token: ${{ github.token }}         # default; shown for clarity
 
-      # Surface AI failures instead of silently leaving raw notes on the release.
-      - name: Fail visibly when polish did not run
+      # The release keeps its raw changelog notes when polish is unavailable —
+      # GitHub Models inference is being retired (410 brownouts), so its
+      # absence is a warning, not a failed run. Wiring actions/ai-inference@v3
+      # to the Copilot CLI (with a COPILOT_GITHUB_TOKEN secret) restores
+      # polished prose.
+      - name: Warn when polish did not run
         if: steps.guard.outputs.skip == 'false' && steps.ai.outcome != 'success'
         env:
           TAG: ${{ steps.target.outputs.tag }}
         run: |
-          echo "::error::AI polish failed — release notes for ${TAG} were left unpolished. Re-run this workflow (workflow_dispatch with the tag) or edit the release manually."
-          exit 1
+          echo "::warning::AI polish unavailable — release notes for ${TAG} keep the raw changelog text. Re-run this workflow (workflow_dispatch with the tag) once a provider is wired up."
 
       - name: Update the release body
         if: steps.guard.outputs.skip == 'false' && steps.ai.outcome == 'success'
