@@ -70,7 +70,7 @@ Five ways in, depending on what you already have:
 | **[Live demo](https://piwitests.github.io/demo/)** | You just want to look around first | Nothing — seeded data, runs entirely in your browser |
 | **[Desktop app](https://piwitests.github.io/desktop)** | You run Playwright locally and don't want to run a server | Download an installer — no Docker, no Node |
 | **Docker** *(below)* | You have Docker, or you're setting up a shared instance | One command |
-| **`npx @piwitests/server`** | You have Node.js 24+ and would rather skip Docker | One command |
+| **`npx @piwitests/server`** | You have Node.js 22+ and would rather skip Docker | One command |
 | **[One-click deploy](https://piwitests.github.io/deployment#one-click-deploy)** | You want a shared instance and no server to run it on | A button, plus whatever your host charges |
 
 Two caveats worth knowing before you pick. The **desktop installers are not yet code-signed**, so the
@@ -100,7 +100,7 @@ docker run -p 3000:3000 -v ${PWD}/.data:/app/.data phenx/piwitests-server:latest
 ```
 
 Visit `http://localhost:3000`. A [`docker-compose.yml`](./docker-compose.yml) is included, and with
-**Node.js 24+** you can skip Docker entirely — `npx @piwitests/server` creates its `.data/` in the
+**Node.js 22+** you can skip Docker entirely — `npx @piwitests/server` creates its `.data/` in the
 current directory.
 
 > **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker
@@ -155,7 +155,7 @@ metadata and `--shard` merging are detected automatically. See
 
 It's one Node process: **~300 MB RAM idle** (1 GB comfortable), **1 vCPU**, `linux/amd64` or
 `linux/arm64`. Disk is the variable — traces and reports dominate, so budget roughly 50–200 MB per run
-and set a retention window. Your test project only needs a Node version Playwright supports; Node 24 is
+and set a retention window. Your test project only needs a Node version Playwright supports; Node 22 is
 the *dashboard's* requirement.
 
 ## Before you expose it
