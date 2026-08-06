@@ -83,6 +83,6 @@
     "@libsql/linux-x64-musl": "^0.5.29"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.0.0"
   }
 }

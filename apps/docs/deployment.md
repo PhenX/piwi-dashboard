@@ -357,7 +357,7 @@ spec:
 
 For a quick local run without Docker, the server is published to npm as
 [`@piwitests/server`](https://www.npmjs.com/package/@piwitests/server). It bundles the
-prebuilt server and needs only **Node.js 24+**:
+prebuilt server and needs only **Node.js 22+**:
 
 ```bash
 npx @piwitests/server
