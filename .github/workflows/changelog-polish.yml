@@ -73,14 +73,16 @@ jobs:
       - name: Generate polished notes
         if: steps.guard.outputs.skip == 'false'
         id: ai
-        uses: actions/ai-inference@v3
+        # v1 is the GitHub Models interface (models: read + github.token,
+        # models.github.ai endpoint). Later majors drive the Copilot CLI
+        # instead, which needs the CLI on the runner and a Copilot token.
+        uses: actions/ai-inference@v1
         continue-on-error: true
         with:
           model: openai/gpt-4o                 # swappable: any GitHub Models catalog id
           system-prompt-file: .github/prompts/changelog-system-prompt.md
           prompt-file: raw-body.md
-          max-completion-tokens: 1200
-          temperature: 0.2
+          max-tokens: 1200
           # token: ${{ github.token }}         # default; shown for clarity
 
       # Surface AI failures instead of silently leaving raw notes on the release.
