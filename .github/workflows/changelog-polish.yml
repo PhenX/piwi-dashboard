@@ -33,6 +33,31 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > raw-body.md
 
+      # A release can arrive with an empty body (release-please sometimes
+      # publishes the release before/without notes). The changelog is the
+      # source of truth, so an empty body is backfilled from the version's
+      # CHANGELOG.md section — and written to the release right away, so the
+      # release is never left blank even if the polish below fails.
+      - name: Backfill empty release body from CHANGELOG.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.target.outputs.tag }}
+        run: |
+          if [ -s raw-body.md ] && grep -q '[^[:space:]]' raw-body.md; then
+            exit 0
+          fi
+          VERSION="${TAG#v}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^##+ \\[?" ver "\\]?[ (]" { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > raw-body.md
+          if ! grep -q '[^[:space:]]' raw-body.md; then
+            echo "::error::Release body is empty and no CHANGELOG.md section found for ${VERSION}."
+            exit 1
+          fi
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file raw-body.md
+
       # Idempotency: skip if these notes were already polished (re-runs, edited releases).
       - name: Skip if already polished
         id: guard
