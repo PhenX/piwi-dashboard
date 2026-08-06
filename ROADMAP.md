@@ -63,7 +63,8 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 - **Exporting whole runs** — [offline export](https://piwitests.github.io/offline-export) covers one execution and one failure cluster today; a whole run, and a
   test's history across runs, would follow the same shape.
 - **Public share links** — handing an investigation to someone without a dashboard account means sending them a file; a
-  read-only link would need share tokens, which Piwi has no infrastructure for today.
+  read-only link would need share tokens, which Piwi has no infrastructure for today. A concrete design is proposed in
+  [proposals/public-share-links.md](proposals/public-share-links.md).
 - **Self-sufficient trace archives** — an export can carry the trace files, but reading them still needs a Playwright
   trace viewer. Bundling the viewer's assets would close that gap, at roughly 10 MB per export.
 - More backend-log instrumentation packages beyond ASP.NET Core and Nitro.
