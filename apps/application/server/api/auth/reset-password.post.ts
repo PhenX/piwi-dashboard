@@ -4,7 +4,7 @@ import { users } from '../../database/schema';
 import { validateAccountToken, consumeAccountToken } from '../../utils/account-tokens';
 import { hashPassword, revokeUserSessions } from '../../utils/auth';
 import { clearUserSession } from '../../utils/auth';
-import { checkRateLimit } from '../../utils/rate-limit';
+import { checkRateLimit, rateLimitClientIp, rateLimitedError } from '../../utils/rate-limit';
 import { z } from 'zod';
 
 defineRouteMeta({
@@ -23,9 +23,9 @@ const schema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  const ip = getRequestIP(event) ?? 'unknown';
-  if (!checkRateLimit(`reset:${ip}`, 10, 15 * 60 * 1000)) {
-    throw createError({ statusCode: 429, message: 'Too many requests. Please wait before trying again.' });
+  const rateKey = `reset:${rateLimitClientIp(event)}`;
+  if (!checkRateLimit(rateKey, 10, 15 * 60 * 1000)) {
+    throw rateLimitedError(event, [rateKey]);
   }
 
   const body = await readBody(event);
