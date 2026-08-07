@@ -5,7 +5,7 @@ import { updateTestFunctionSchema } from '#shared/test-function-schemas';
 
 defineRouteMeta({
   openAPI: {
-    tags: ['Test functions'],
+    tags: ['Test Functions'],
     summary: 'Update a test function',
     description: 'Updates a project’s catalog entry. Requires reporter or administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],

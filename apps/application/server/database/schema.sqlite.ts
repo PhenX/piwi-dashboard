@@ -404,7 +404,7 @@ export const testRunsCases = sqliteTable(
     testCaseId: integer('test_case_id')
       .notNull()
       .references(() => testCases.id, { onDelete: 'cascade' }),
-    status: text('status').notNull(), // 'passed', 'failed', 'timedout', 'skipped'
+    status: text('status').notNull(), // 'passed', 'failed', 'timedout', 'skipped', 'didnotrun' — canonical lowercase; rows from earlier releases may carry 'timedOut'
     duration: integer('duration'), // in milliseconds
     timeout: integer('timeout'), // Effective per-test timeout in ms (TestCase.timeout); 0 = unbounded, null = unknown/legacy
     error: text('error'),

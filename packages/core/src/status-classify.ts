@@ -103,7 +103,7 @@ function sharedPrefixDepth(a: readonly string[], b: readonly string[]): number {
  * sibling test) keeps `blockedBy` null. Mutates the passed cases in place.
  */
 export function linkBlockedTests(cases: BlockableCase[]): void {
-  const blockers = cases.filter((c) => c.status === 'failed' || c.status === 'timedOut');
+  const blockers = cases.filter((c) => c.status === 'failed' || c.status === 'timedOut' || c.status === 'timedout');
   if (blockers.length === 0) return;
 
   for (const c of cases) {

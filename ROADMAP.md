@@ -14,6 +14,11 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 
 ## Recently shipped
 
+- **First-admin setup from the browser** — with authentication enabled on a fresh instance, the login page walks you
+  through creating the administrator account and signs you in; `POST /api/auth/setup` stays for scripted provisioning.
+- **Auth rate limiting** — login, initial setup and password-reset endpoints are throttled per client address (failed
+  logins also per account), throttled responses carry `Retry-After`, and `PIWI_TRUST_PROXY` keys the limits on the real
+  client address behind a reverse proxy.
 - **Distinct timed-out and interrupted run statuses** — the reporter keeps Playwright's `timedout` and `interrupted` run outcomes instead of folding them into `failed`, so a run the CI killed and a run that blew its budget read differently in the run list and analytics (all non-`passed` statuses still count as failing where it matters).
 - **Fail on flaky** — `failOnFlakyTests` reporter option (forwarded to Playwright 1.52+'s native option, or `PIWI_FAIL_ON_FLAKY_TESTS`) fails the run locally when any test passed only on a retry; `piwi gate --fail-on-flaky` does the same against the dashboard's recorded flaky count.
 - **Per-attempt outcomes** — the reporter records every attempt's status, duration and start time; a retried execution shows one chip per attempt on its detail page, and the history views carry the same data.
@@ -54,8 +59,6 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 
 ## Next
 
-- **First-admin setup UI** — create the initial admin from the browser when auth is enabled (today it's one `POST /api/auth/setup` call).
-- **Login rate limiting** — extend the existing throttling (currently on password reset) to login and setup endpoints.
 - **1.0 stabilization** — settle the wire format and API surface, then commit to semver stability.
 
 ## Exploring

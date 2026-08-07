@@ -49,7 +49,7 @@ export default eventHandler(async (event) => {
   const role = config?.roles.research ?? config?.roles.diagnosis;
   if (!role) {
     throw createError({
-      statusCode: 400,
+      statusCode: 503,
       message: 'AI is not configured for this instance — set it up in Settings → AI to author AI steps.',
     });
   }

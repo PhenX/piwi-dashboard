@@ -1,6 +1,6 @@
 import { Role } from '#shared/types';
 import { createUser, isAuthEnabled, needsInitialSetup, claimInitialSetup, releaseInitialSetup } from '../../utils/auth';
-import { checkRateLimit } from '../../utils/rate-limit';
+import { checkRateLimit, rateLimitClientIp, rateLimitedError } from '../../utils/rate-limit';
 import { z } from 'zod';
 
 defineRouteMeta({
@@ -28,9 +28,9 @@ export default eventHandler(async (event) => {
     });
   }
 
-  const ip = getRequestIP(event) ?? 'unknown';
-  if (!checkRateLimit(`setup:${ip}`, 5, 15 * 60 * 1000)) {
-    throw createError({ statusCode: 429, message: 'Too many requests. Please wait before trying again.' });
+  const rateKey = `setup:${rateLimitClientIp(event)}`;
+  if (!checkRateLimit(rateKey, 5, 15 * 60 * 1000)) {
+    throw rateLimitedError(event, [rateKey]);
   }
 
   if (!(await needsInitialSetup())) {

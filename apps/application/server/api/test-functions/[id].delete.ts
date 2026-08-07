@@ -4,7 +4,7 @@ import { Role } from '#shared/types';
 
 defineRouteMeta({
   openAPI: {
-    tags: ['Test functions'],
+    tags: ['Test Functions'],
     summary: 'Delete a test function',
     description: 'Removes a catalog entry. Requires reporter or administrator role.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],

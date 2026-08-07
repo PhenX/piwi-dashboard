@@ -44,7 +44,7 @@ const isAddUserModalOpen = ref(false);
 const addUserSchema = z.object({
   username: z.string().min(3, 'Username must be at least 3 characters'),
   password: z
-    .union([z.string().min(6, 'Password must be at least 6 characters'), z.literal('').transform(() => undefined)])
+    .union([z.string().min(8, 'Password must be at least 8 characters'), z.literal('').transform(() => undefined)])
     .optional(),
   role: z.enum(['administrator', 'reporter', 'user']),
   name: z.string().optional(),

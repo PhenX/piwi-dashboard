@@ -48,7 +48,9 @@ Administrators always see everything. **Reporter** and **User** accounts are add
 
 ## Initial setup
 
-When authentication is first enabled and no users exist, create the first administrator account:
+When authentication is enabled and no users exist yet, opening the dashboard lands on the login page, which shows a **Create the first admin account** form in place of the sign-in form. Fill it in and you are signed in as the administrator — no API call needed.
+
+For provisioning an instance from a script, the same step is available as an API call:
 
 ::: code-group
 
@@ -70,7 +72,7 @@ Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/auth/setup `
 
 :::
 
-This endpoint is only available when the users table is empty.
+Both routes go through `POST /api/auth/setup`, which is only available while the users table is empty and is rate-limited per client address.
 
 ## Logging in
 
@@ -204,8 +206,7 @@ Both edit the same underlying assignments, so use whichever is more convenient.
 
 When authentication is enabled:
 
-- `POST` / `PUT` / `DELETE` endpoints require an active session with appropriate role permissions.
-- `GET` endpoints remain publicly accessible (read-only), **except** `GET /api/users`, which requires an authenticated session so the user list (usernames and roles) is not exposed to anonymous callers.
+- Every endpoint requires an authenticated caller — a session cookie or an API key — with the role the endpoint declares (listed per endpoint in the [API docs](/docs)). The exceptions are `GET /api/health`, `GET /api/version`, the auth flows themselves (login, initial setup, password reset, email verification, OAuth), and the live-run streaming endpoints, which authenticate with per-run stream tokens instead.
 - The reporter's submission endpoints (`/api/test-runs/submit` and `/api/test-runs/upload`) accept both session cookies and API keys.
 
 ## API keys
@@ -316,6 +317,7 @@ The reporter automatically calls `/api/auth/login` before each upload and uses t
 - Set `PIWI_SECRET_KEY` (generate with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`, or `openssl rand -hex 32`) to encrypt AI API keys and SCM tokens at rest in the database. This is recommended even when authentication is disabled.
 - Set `PIWI_AUTH_SECRET` (same generator) for session cookie encryption — required when `PIWI_AUTH_ENABLED=true`.
 - Passwords are hashed using scrypt with per-password salts.
+- Login, initial setup, and password-reset endpoints are rate-limited per client address — failed logins also per account — and throttled requests get a `429` with a `Retry-After` header. Behind a reverse proxy, set `PIWI_TRUST_PROXY` so those per-address limits see real client addresses; see the [configuration reference](./configuration#authentication).
 - Never use the default secrets in production.
 
 ## Disabling authentication

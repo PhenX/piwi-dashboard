@@ -8,6 +8,7 @@ import {
   getProjectSpecHealth,
 } from '#shared/handlers/projects';
 import { parseTagFilter } from '#shared/utils/tag-filter';
+import { FAILED_STATUS_KEYS } from '#shared/utils/test-counts';
 import { buildFixPlan } from '../fix-plan';
 import { enrichFixPlanOwnership } from '../scm/ownership';
 import { getNetworkRequests, getFailureGroups } from '#shared/handlers/test-runs';
@@ -393,7 +394,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     if (statusFilter === 'flaky') {
       caseConditions.push(and(eq(testRunsCases.status, 'passed'), gt(testRunsCases.retries, 0))!);
     } else if (statusFilter !== 'all') {
-      caseConditions.push(or(eq(testRunsCases.status, 'failed'), eq(testRunsCases.status, 'timedOut'))!);
+      caseConditions.push(inArray(testRunsCases.status, [...FAILED_STATUS_KEYS]));
     }
     if (cursor) caseConditions.push(lt(testRunsCases.id, cursor));
 
@@ -470,10 +471,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     const cursor = numericCursor(params.cursor);
     const runId = params.runId ? numericParam(params.runId, 'runId') : undefined;
 
-    const conditions = [
-      eq(testRuns.projectId, projectId),
-      or(eq(testRunsCases.status, 'failed'), eq(testRunsCases.status, 'timedOut'))!,
-    ];
+    const conditions = [eq(testRuns.projectId, projectId), inArray(testRunsCases.status, [...FAILED_STATUS_KEYS])];
     if (runId) conditions.push(eq(testRunsCases.testRunId, runId));
     if (cursor) conditions.push(lt(testRunsCases.id, cursor));
 

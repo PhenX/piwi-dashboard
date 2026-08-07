@@ -40,6 +40,13 @@ describe('documented counts', () => {
       expect(read(relative), `${relative} says "${stated[0]}", there are ${MCP_TOOL_DEFS.length}`).toMatch(claim);
     }
   });
+
+  test('every registered MCP tool is documented in apps/docs/mcp.md', () => {
+    const contents = read('apps/docs/mcp.md');
+    for (const { name } of MCP_TOOL_DEFS) {
+      expect(contents, `apps/docs/mcp.md has no entry for \`${name}\``).toContain(`\`${name}\``);
+    }
+  });
 });
 
 describe('docs pages the app deep-links into', () => {

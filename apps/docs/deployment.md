@@ -210,8 +210,9 @@ and TLS are wired up automatically.
   that caps request size below that will fail ingest.
 - **Check that responses aren't buffered.** Live runs and browser notifications use long-lived
   `text/event-stream` responses.
-- **Finish the auth setup.** These templates set `PIWI_AUTH_ENABLED=true`, so create the first admin via
-  `POST /api/auth/setup` — see [Authentication](/authentication) — before sharing the URL.
+- **Finish the auth setup.** These templates set `PIWI_AUTH_ENABLED=true`, so the first visit shows a
+  **Create the first admin account** form — complete it before sharing the URL (or provision the admin via
+  `POST /api/auth/setup`, see [Authentication](/authentication)).
 - **Pin a version.** The templates track `latest`. Pin a tag before you depend on the instance, and read
   [Upgrading](./upgrading) first: migrations are forward-only.
 
@@ -440,7 +441,7 @@ server {
 }
 ```
 
-When auth is enabled, set `PIWI_SITE_URL` to the public HTTPS URL so email links and OAuth callbacks point at the right origin.
+When auth is enabled, set `PIWI_SITE_URL` to the public HTTPS URL so email links and OAuth callbacks point at the right origin, and set `PIWI_TRUST_PROXY=true` so the per-address rate limits on the auth endpoints key on the client address your proxy appends to `X-Forwarded-For` instead of on the proxy's own address — see the [configuration reference](./configuration#authentication).
 
 ## Backups
 

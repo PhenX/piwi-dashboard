@@ -39,6 +39,10 @@ export type TestRunStatus =
 // skipped as a side effect of an earlier failure in a `describe.serial` group.
 // Distinct from `skipped`, which is reserved for intentional `test.skip()` /
 // `test.fixme()`.
+// `timedout` is the canonical stored spelling: ingest normalizes Playwright's
+// camelCase `timedOut` wire value (`normalizeTestCaseStatus`), while rows
+// written by earlier releases may still carry the camelCase form — readers
+// match both via `FAILED_STATUS_KEYS` (shared/utils/test-counts.ts).
 export type TestCaseStatus = 'passed' | 'failed' | 'skipped' | 'timedout' | 'didnotrun';
 
 export type ClusterStatus = 'open' | 'resolved' | 'ignored';
@@ -174,7 +178,6 @@ export interface StreamEventPayload {
   aiUsage?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
-  projectName?: string | null;
   browser?: BrowserConfig | null;
   suitePath?: string[] | null;
   suiteConfig?: SuiteConfigEntry[] | null;
@@ -207,6 +210,8 @@ export interface TestRunFinishPayload {
   didNotRunTests?: number;
   flakyTests: number;
   durations: number[];
+  /** Trace/report uploads are still in flight — the run enters `finalizing` instead of completing. */
+  hasPendingUploads?: boolean;
   /** Suite-level hook/fixture steps (beforeAll/afterAll) for the run timeline. */
   setupSteps?: Array<{
     title: string;
