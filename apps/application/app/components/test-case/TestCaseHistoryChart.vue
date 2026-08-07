@@ -35,7 +35,7 @@ const [PASSED, FAILED, SKIPPED] = CASE_STATUS_SERIES;
 
 const statusColor = (status: string): string => {
   if (status === 'passed') return PASSED.color;
-  if (status === 'failed' || status === 'timedOut') return FAILED.color;
+  if (status === 'failed' || status === 'timedOut' || status === 'timedout') return FAILED.color;
   return SKIPPED.color;
 };
 
@@ -156,7 +156,9 @@ const { data: tooltipData, pos: tooltipPos, show, move, hide } = useChartTooltip
             :class="
               tooltipData.status === 'passed'
                 ? 'text-green-600'
-                : tooltipData.status === 'failed' || tooltipData.status === 'timedOut'
+                : tooltipData.status === 'failed' ||
+                    tooltipData.status === 'timedOut' ||
+                    tooltipData.status === 'timedout'
                   ? 'text-red-600'
                   : ''
             "

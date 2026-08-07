@@ -46,7 +46,7 @@ const chips = computed<Chip[]>(() => {
       icon: 'i-lucide-shuffle',
       title: 'Newly started passing only on retry — intermittent failure',
     });
-  if (tc.status === 'timedOut')
+  if (tc.status === 'timedOut' || tc.status === 'timedout')
     out.push({
       label: 'Timed out',
       color: 'warning',

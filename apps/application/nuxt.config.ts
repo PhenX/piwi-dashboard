@@ -261,8 +261,8 @@ export default defineNuxtConfig({
         description:
           'REST API for storing and querying Playwright test results, traces, failure diagnoses, and project statistics.',
         version: pkg.version as string,
-        // Security scheme definitions for endpoint-level `security` annotations.
-        // See docs/development.md for conventions.
+        // Security scheme definitions for endpoint-level `security` annotations,
+        // rendered by the in-app reference (app/pages/docs.vue).
         components: {
           securitySchemes: {
             bearerAuth: {

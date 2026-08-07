@@ -6,7 +6,7 @@ import { createTestFunctionSchema } from '#shared/test-function-schemas';
 
 defineRouteMeta({
   openAPI: {
-    tags: ['Test functions'],
+    tags: ['Test Functions'],
     summary: 'Add a test function to a project’s catalog',
     description:
       'Registers a page-object method or helper — its name, module, parameters, and the DOM pattern it drives — so recorded browser-extension sessions can match against it. Requires reporter or administrator role.',

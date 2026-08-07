@@ -12,6 +12,7 @@ import {
 } from '../../server/database/schema';
 import { asc, desc, eq, exists, sql, and, inArray, gte, lte, isNotNull, count } from 'drizzle-orm';
 import { jsonArrayContainsAll, parseTagFilter } from '../utils/tag-filter';
+import { FAILED_STATUS_KEYS } from '../utils/test-counts';
 import { TEST_PRIORITIES } from '@piwitests/core/test-meta';
 
 import type { DrizzleDB } from './db';
@@ -347,8 +348,10 @@ export async function updateProject(
     .innerJoin(tags, eq(projectTags.tagId, tags.id))
     .where(eq(projectTags.projectId, id));
 
+  const { scmToken: _scmToken, ...updatedProjectPublic } = updatedProject[0];
+
   return {
-    ...updatedProject[0],
+    ...updatedProjectPublic,
     tags: projectTagRows.map((r: any) => r.tag),
   };
 }
@@ -1276,7 +1279,7 @@ export async function getProjectFlakyTests(
         const sorted = group.rows.slice().sort((a: any, b: any) => (a.retries ?? 0) - (b.retries ?? 0));
         const maxRetryRow = sorted[sorted.length - 1];
         group.finalStatus = maxRetryRow?.status ?? 'unknown';
-        const hasFailed = group.rows.some((r: any) => r.status === 'failed' || r.status === 'timedOut');
+        const hasFailed = group.rows.some((r: any) => FAILED_STATUS_KEYS.includes(r.status));
         const hasPassed = group.rows.some((r: any) => r.status === 'passed');
         group.retryPass = hasFailed && hasPassed;
       }

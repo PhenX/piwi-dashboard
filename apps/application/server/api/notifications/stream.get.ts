@@ -6,6 +6,16 @@ import { createSSEEndpoint } from '../../utils/sse';
 import { getDatabase } from '../../database';
 import { notificationChannels, subscriptions } from '../../database/schema';
 
+defineRouteMeta({
+  openAPI: {
+    tags: ['Notifications'],
+    summary: 'Notification event stream',
+    description:
+      "Server-sent events stream (text/event-stream) of the signed-in user's browser notifications, filtered to their subscriptions and project scope.",
+    'x-required-roles': ['administrator', 'reporter', 'user'],
+  },
+});
+
 /** How long a connection's loaded browser subscriptions stay fresh. */
 const SUBSCRIPTIONS_TTL_MS = 60_000;
 
