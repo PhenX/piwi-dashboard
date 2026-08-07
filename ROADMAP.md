@@ -63,7 +63,8 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 
 ## Next
 
-- **1.0 stabilization** — settle the wire format and API surface, then commit to semver stability.
+- **1.0 stabilization** — settle the wire format and API surface, then commit to semver stability. The outstanding
+  decisions are catalogued in [proposals/1.0-stabilization.md](proposals/1.0-stabilization.md).
 
 ## Exploring
 
