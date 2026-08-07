@@ -127,9 +127,9 @@ user" in `generateApiKey`). Afterwards the UI shows only `token_prefix`.
 
 - **`/share/<token>`** — the page. A Vue page at `app/pages/share/[token].vue`, server-rendered like the rest of the
   app, with `definePageMeta({ layout: false })` like `/login` (no sidebar, no project menu — nothing that assumes a
-  session). The global auth middleware (`apps/application/app/middleware/auth.global.ts`) today early-returns only for
-  `to.path === '/login'`; that skip becomes a small public-path check covering `/share/` too, so the page never
-  redirects an anonymous viewer to the login screen.
+  session). The global auth middleware (`apps/application/app/middleware/auth.global.ts`) early-returns for the paths
+  in its `PUBLIC_PATHS` list; share pages join it by prefix rather than exact match, so the page never redirects an
+  anonymous viewer to the login screen.
 - **`GET /api/share/<token>`** — resolves the token and returns the bundle JSON
   (`server/api/share/[token].get.ts`).
 - **`GET /api/share/<token>/assets/<...path>`** — serves one evidence asset
