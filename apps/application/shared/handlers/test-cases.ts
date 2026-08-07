@@ -200,7 +200,10 @@ export async function getTestRunCase(
   let project = null;
   if (testRun) {
     const [projectResult] = await db.select().from(projects).where(eq(projects.id, testRun.projectId));
-    project = projectResult ?? null;
+    if (projectResult) {
+      const { scmToken: _scmToken, ...projectPublic } = projectResult;
+      project = projectPublic;
+    }
   }
 
   let failureCluster = null;
@@ -326,6 +329,8 @@ export async function getTestRunCase(
     }
   }
 
+  const { streamToken: _streamToken, ...testRunPublic } = testRun ?? {};
+
   return {
     id: trc.id,
     testCaseId: trc.testCaseId,
@@ -369,7 +374,7 @@ export async function getTestRunCase(
     blockedByCase,
     blockedTests,
     failureCluster,
-    testRun: testRun ? { ...testRun, project, reports: reportList } : testRun,
+    testRun: testRun ? { ...testRunPublic, project, reports: reportList } : testRun,
     attachments: attachmentList,
     links: linksForCaseRun,
     stableLinks: linksForTestCase,

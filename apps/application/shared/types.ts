@@ -174,7 +174,6 @@ export interface StreamEventPayload {
   aiUsage?: unknown;
   consoleLogs?: unknown;
   ariaSnapshot?: unknown;
-  projectName?: string | null;
   browser?: BrowserConfig | null;
   suitePath?: string[] | null;
   suiteConfig?: SuiteConfigEntry[] | null;
@@ -207,6 +206,8 @@ export interface TestRunFinishPayload {
   didNotRunTests?: number;
   flakyTests: number;
   durations: number[];
+  /** Trace/report uploads are still in flight — the run enters `finalizing` instead of completing. */
+  hasPendingUploads?: boolean;
   /** Suite-level hook/fixture steps (beforeAll/afterAll) for the run timeline. */
   setupSteps?: Array<{
     title: string;

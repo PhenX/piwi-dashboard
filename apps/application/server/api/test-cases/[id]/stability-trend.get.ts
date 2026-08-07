@@ -7,6 +7,7 @@ defineRouteMeta({
     summary: 'Stability trend for a test case',
     description:
       'Returns time-series of flaky rate, pass rate, avg duration grouped into N buckets for a single test case',
+    'x-required-roles': ['administrator', 'reporter', 'user'],
     parameters: [
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
       { name: 'buckets', in: 'query', schema: { type: 'integer', default: 20 } },

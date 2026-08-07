@@ -7,6 +7,7 @@ defineRouteMeta({
     summary: 'Run insights',
     description:
       'Returns comparison insights for a test run: new regressions, recurrences, recovered tests, performance changes, worker imbalance, and new clusters',
+    'x-required-roles': ['administrator', 'reporter', 'user'],
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
   },
 });

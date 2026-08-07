@@ -195,6 +195,12 @@ export async function getTestRun(
 
   const { streamToken: _streamToken, ...testRunPublic } = testRun;
 
+  let projectPublic;
+  if (project) {
+    const { scmToken: _scmToken, ...projectRest } = project;
+    projectPublic = { ...projectRest, latestRunId, latestRunStatus };
+  }
+
   // Nearest timeline marker before this run's start, scoped to the run's
   // environment (or global markers with no environment) — surfaced as context.
   const precedingMarkerCandidates = await db
@@ -210,7 +216,7 @@ export async function getTestRun(
     ...testRunPublic,
     precedingMarker,
     isFullRun: testRun.isFullRun === 1,
-    project: project ? { ...project, latestRunId, latestRunStatus } : project,
+    project: projectPublic,
     reports: reportResults.map((r: any) => ({
       id: r.id,
       type: r.subtype || r.type,

@@ -17,9 +17,6 @@ import type { WireTestCase } from '../../../../packages/reporter/src/types/wire'
  * `npm run app:typecheck` on a shape mismatch, and the key-set comparison
  * fails `vitest run` when a key exists on one side but not the reporter's
  * union (or vice versa).
- *
- * `projectName` is the one intentional exception: it is stream-envelope
- * metadata added by the stream manager, not part of the per-case payload.
  */
 
 // Every field populated (including optionals) so `satisfies` catches a
@@ -40,6 +37,7 @@ const testCasePayloadFixture = {
   wastedTimeMs: null,
   networkRequests: null,
   webVitals: null,
+  pageState: { url: 'https://app.example.com/checkout', localStorage: [{ key: 'cart', length: 42 }] },
   aiUsage: null,
   consoleLogs: null,
   ariaSnapshot: null,
@@ -50,8 +48,11 @@ const testCasePayloadFixture = {
   suitePath: null,
   suiteConfig: null,
   testAnnotations: null,
+  tags: ['smoke'],
+  testMeta: { owner: 'checkout-team' },
   locatorSnapshots: null,
   testSource: null,
+  testSourceFrames: [{ file: 'a.spec.ts', line: 1, snippet: '> 1 | test' }],
   didNotRunReason: null,
   blockedBy: null,
 } satisfies TestCasePayload;
@@ -78,16 +79,19 @@ const streamEventPayloadFixture = {
   wastedTimeMs: null,
   networkRequests: null,
   webVitals: null,
+  pageState: { url: 'https://app.example.com/checkout', localStorage: [{ key: 'cart', length: 42 }] },
   aiUsage: null,
   consoleLogs: null,
   ariaSnapshot: null,
-  projectName: null,
   browser: null,
   suitePath: null,
   suiteConfig: null,
   testAnnotations: null,
+  tags: ['smoke'],
+  testMeta: { owner: 'checkout-team' },
   locatorSnapshots: null,
   testSource: null,
+  testSourceFrames: [{ file: 'a.spec.ts', line: 1, snippet: '> 1 | test' }],
   didNotRunReason: null,
   blockedBy: null,
 } satisfies StreamEventPayload;
@@ -112,14 +116,18 @@ const wireTestCaseFixture = {
   wastedTimeMs: null,
   networkRequests: null,
   webVitals: null,
+  pageState: { url: 'https://app.example.com/checkout', localStorage: [{ key: 'cart', length: 42 }] },
   aiUsage: null,
   consoleLogs: null,
   ariaSnapshot: null,
   testSource: null,
+  testSourceFrames: [{ file: 'a.spec.ts', line: 1, snippet: '> 1 | test' }],
   browser: null,
   suitePath: null,
   suiteConfig: null,
   testAnnotations: null,
+  tags: ['smoke'],
+  testMeta: { owner: 'checkout-team' },
   stepCategory: null,
   parentTitle: null,
   locatorSnapshots: null,
@@ -127,19 +135,14 @@ const wireTestCaseFixture = {
   blockedBy: null,
 } satisfies WireTestCase;
 
-// Stream-envelope metadata, not part of the per-case payload.
-const STREAM_ENVELOPE_ONLY_FIELDS = new Set(['projectName']);
-
 describe('wire ↔ shared per-case contract drift guard', () => {
   test('WireTestCase carries every TestCasePayload field', () => {
     const missing = Object.keys(testCasePayloadFixture).filter((k) => !(k in wireTestCaseFixture));
     expect(missing, 'fields present in TestCasePayload but missing from WireTestCase').toEqual([]);
   });
 
-  test('WireTestCase carries every StreamEventPayload field (except stream-envelope metadata)', () => {
-    const missing = Object.keys(streamEventPayloadFixture)
-      .filter((k) => !STREAM_ENVELOPE_ONLY_FIELDS.has(k))
-      .filter((k) => !(k in wireTestCaseFixture));
+  test('WireTestCase carries every StreamEventPayload field', () => {
+    const missing = Object.keys(streamEventPayloadFixture).filter((k) => !(k in wireTestCaseFixture));
     expect(missing, 'fields present in StreamEventPayload but missing from WireTestCase').toEqual([]);
   });
 

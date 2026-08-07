@@ -483,6 +483,9 @@ export default eventHandler(async (event) => {
 
       return {
         filePath,
+        suitePath: (testCase.suitePath as string[] | null | undefined) ?? null,
+        suiteConfig: (testCase.suiteConfig as RunCaseInput['suiteConfig']) ?? null,
+        testAnnotations: (testCase.testAnnotations as RunCaseInput['testAnnotations']) ?? null,
         title: testCase.title as string,
         status: testCase.status as string,
         duration: testCase.duration as number | null | undefined,

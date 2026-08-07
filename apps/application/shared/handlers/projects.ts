@@ -347,8 +347,10 @@ export async function updateProject(
     .innerJoin(tags, eq(projectTags.tagId, tags.id))
     .where(eq(projectTags.projectId, id));
 
+  const { scmToken: _scmToken, ...updatedProjectPublic } = updatedProject[0];
+
   return {
-    ...updatedProject[0],
+    ...updatedProjectPublic,
     tags: projectTagRows.map((r: any) => r.tag),
   };
 }
