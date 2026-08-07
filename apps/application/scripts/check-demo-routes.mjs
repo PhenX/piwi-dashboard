@@ -35,6 +35,16 @@ const INTENTIONALLY_EXCLUDED = new Set([
   'POST /api/desktop/import-local', // desktop build only; reads local files, 404 everywhere else
   'POST /api/projects/:id/test-functions/extract', // AI code-to-pattern extraction — unlike diagnosis (a fixed, curated set of seeded clusters a scripted response can convincingly cover), this takes arbitrary pasted code with no server or real LLM to analyze it against in the demo; the "Paste from code (AI)" section is hidden client-side in demo mode instead of faking an understanding of whatever the visitor pastes
   'POST /api/ai/step-resolution', // AI-step authoring — resolves an arbitrary page snapshot against a natural-language prompt; no server or real LLM in the demo, and the reporter only calls it in resolve/heal mode (never a normal run), so there is nothing to script
+  // Share links: capability tokens for anonymous viewers. The demo has no
+  // accounts and its data is already public, so there is nothing to share —
+  // and no server to resolve a token against.
+  'POST /api/test-run-cases/:id/share-links',
+  'GET /api/test-run-cases/:id/share-links',
+  'POST /api/failure-clusters/:id/share-links',
+  'GET /api/failure-clusters/:id/share-links',
+  'DELETE /api/share-links/:id',
+  'GET /api/share-links/settings',
+  'GET /api/projects/:id/share-links',
 ]);
 
 // ── Derive all server routes from the file system ────────────────────────

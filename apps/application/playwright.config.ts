@@ -17,6 +17,10 @@ const chromiumExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE?.trim() ||
 // channel flows the suite exercises can save.
 process.env.PIWI_SECRET_KEY ||= 'test-encryption-secret-key-not-for-production';
 
+// Share links are off by default; the suite exercises minting and the public
+// share route, so every test server opts in (inherited via process.env).
+process.env.PIWI_SHARE_LINKS_ENABLED = 'true';
+
 // `PIWI_AUTH_*` is resolved into `runtimeConfig` when the Nuxt config is
 // evaluated, which for a production build is build time. Nitro maps the
 // `NUXT_`-prefixed forms onto the same keys at startup, so auth-enabled servers

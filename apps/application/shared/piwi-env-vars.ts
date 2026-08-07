@@ -378,6 +378,25 @@ export const PIWI_ENV_VARS = {
     requiredWhen: { PIWI_AUTH_ENABLED: 'true' },
     notes: 'The server refuses to start when auth is enabled and this is unset.',
   },
+  PIWI_SHARE_LINKS_ENABLED: {
+    description:
+      'Set to "true" to allow minting read-only public share links for executions and failure clusters. Off by default; turning it off again immediately dead-ends every outstanding link without deleting anything.',
+    category: 'auth',
+    type: 'boolean',
+    default: 'false',
+    since: '0.26.0',
+  },
+  PIWI_SHARE_LINK_MAX_TTL_DAYS: {
+    description:
+      'Longest allowed share-link lifetime, in days. The creation dialog offers expiries up to this; 0 lifts the cap and allows links with no expiry.',
+    category: 'auth',
+    type: 'number',
+    default: '30',
+    min: 0,
+    max: 3650,
+    relevantWhen: { PIWI_SHARE_LINKS_ENABLED: 'true' },
+    since: '0.26.0',
+  },
   PIWI_TRUST_PROXY: {
     description:
       'Set to "true" when a reverse proxy sits in front of Piwi, so per-IP rate limits on the auth endpoints key on the client address your proxy appends to X-Forwarded-For instead of on the proxy\'s own address (which would pool every client into one bucket). Leave off when clients connect directly: the header is client-controlled then, and trusting it would let a caller choose its own bucket.',

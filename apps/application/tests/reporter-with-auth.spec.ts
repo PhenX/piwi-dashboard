@@ -688,6 +688,65 @@ test.describe.serial('Reporter with authentication enabled', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // Share links — the one anonymous read path on an auth-enabled server.
+  // ---------------------------------------------------------------------------
+
+  test('a share link renders anonymously while the API stays authenticated', async ({ request, playwright }) => {
+    const loginRes = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'admin', password: 'adminpassword123' },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+
+    const submit = await request.post(`${AUTH_SERVER_URL}/api/test-runs/submit`, {
+      data: {
+        projectName: PROJECT.REPORTER_AUTH,
+        status: 'failed',
+        startTime: new Date().toISOString(),
+        duration: 900,
+        totalTests: 1,
+        passedTests: 0,
+        failedTests: 1,
+        skippedTests: 0,
+        testCases: [
+          {
+            title: 'anonymously shared failure',
+            status: 'failed',
+            duration: 300,
+            location: 'tests/shared.spec.ts:3:1',
+            error: 'Error: expected banner to be visible',
+          },
+        ],
+      },
+    });
+    expect(submit.ok()).toBeTruthy();
+    const { testRunId } = await submit.json();
+    const run = (await (await request.get(`${AUTH_SERVER_URL}/api/test-runs/${testRunId}`)).json()) as {
+      testCases: Array<{ id: number; status: string }>;
+    };
+    const executionId = run.testCases.find((c) => c.status === 'failed')!.id;
+
+    const minted = await (
+      await request.post(`${AUTH_SERVER_URL}/api/test-run-cases/${executionId}/share-links`, { data: {} })
+    ).json();
+    expect(minted.token).toMatch(/^psl_/);
+
+    // A context with no session: the share URL renders, the API refuses.
+    const anon = await playwright.request.newContext();
+    try {
+      const shared = await anon.get(minted.url);
+      expect(shared.status()).toBe(200);
+      expect(await shared.text()).toContain('anonymously shared failure');
+
+      const api = await anon.get(`${AUTH_SERVER_URL}/api/test-run-cases/${executionId}`);
+      expect(api.status()).toBe(401);
+      const mint = await anon.post(`${AUTH_SERVER_URL}/api/test-run-cases/${executionId}/share-links`, { data: {} });
+      expect(mint.status()).toBe(401);
+    } finally {
+      await anon.dispose();
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // Project members API — administrator-only authorization
   //
   // These checks need a real authenticated non-admin session (a "user" role

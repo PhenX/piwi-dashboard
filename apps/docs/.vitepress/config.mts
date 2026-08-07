@@ -117,6 +117,7 @@ export default defineConfig({
           { text: 'Timeline markers', link: '/timeline-markers' },
           { text: 'Notifications & alerts', link: '/notifications' },
           { text: 'Offline export', link: '/offline-export' },
+          { text: 'Share links', link: '/share-links' },
         ],
       },
       {

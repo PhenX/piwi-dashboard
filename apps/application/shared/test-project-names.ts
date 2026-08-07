@@ -113,6 +113,7 @@ export const PROJECT = {
   RUN_LABEL: 'run-label-test',
   RUN_SUMMARY_TEST: 'run-summary-test',
   SHARDING_TEST: 'sharding-test',
+  SHARE_LINKS: 'share-links-e2e-test',
   STATS_TEST: 'stats-test-project',
   SUMMARY_FOLD: 'summary-fold-test',
   STORAGE_TEST: 'storage-test-project',

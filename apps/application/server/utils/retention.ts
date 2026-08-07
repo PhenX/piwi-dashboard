@@ -6,12 +6,14 @@ import type { DbClient } from '../database';
 import {
   casePayloads,
   entityLinks,
+  failureClusters,
   failureDiagnoses,
   failureDiagnosisVersions,
   files,
   locatorSnapshots,
   networkRequests,
   notificationDeliveries,
+  shareLinks,
   subscriptions,
   testRuns,
   testRunsCases,
@@ -168,6 +170,7 @@ export interface OrphanSweepResult {
   diagnosisVersions: number;
   notificationDeliveries: number;
   casePayloads: number;
+  shareLinks: number;
 }
 
 async function countWhere(db: DbClient, table: SQLiteTable, where: SQL): Promise<number> {
@@ -195,6 +198,10 @@ export async function sweepOrphans(db: DbClient): Promise<OrphanSweepResult> {
   // so a concurrent sweep must not reap rows from an in-flight ingest batch.
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const orphanedPayloads = and(lt(casePayloads.createdAt, oneHourAgo), payloadUnreferenced())!;
+  // `share_links.entity_id` is polymorphic over two tables and carries no FK,
+  // so a link whose entity was pruned lingers until this sweep removes it.
+  const orphanedShareLinks = sql`(${shareLinks.entityKind} = 'execution' AND NOT EXISTS (SELECT 1 FROM ${testRunsCases} WHERE ${testRunsCases.id} = ${shareLinks.entityId}))
+    OR (${shareLinks.entityKind} = 'cluster' AND NOT EXISTS (SELECT 1 FROM ${failureClusters} WHERE ${failureClusters.id} = ${shareLinks.entityId}))`;
 
   const result: OrphanSweepResult = {
     networkRequests: await countWhere(db, networkRequests, orphanedNetworkRequests),
@@ -204,6 +211,7 @@ export async function sweepOrphans(db: DbClient): Promise<OrphanSweepResult> {
     diagnosisVersions: await countWhere(db, failureDiagnosisVersions, orphanedVersions),
     notificationDeliveries: await countWhere(db, notificationDeliveries, orphanedDeliveries),
     casePayloads: await countWhere(db, casePayloads, orphanedPayloads),
+    shareLinks: await countWhere(db, shareLinks, orphanedShareLinks),
   };
 
   await db.delete(networkRequests).where(orphanedNetworkRequests);
@@ -215,6 +223,7 @@ export async function sweepOrphans(db: DbClient): Promise<OrphanSweepResult> {
   await db.delete(failureDiagnosisVersions).where(orphanedVersions);
   await db.delete(notificationDeliveries).where(orphanedDeliveries);
   await db.delete(casePayloads).where(orphanedPayloads);
+  await db.delete(shareLinks).where(orphanedShareLinks);
 
   return result;
 }
