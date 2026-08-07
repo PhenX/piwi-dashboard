@@ -337,6 +337,13 @@
       "when": 1785916459975,
       "tag": "0047_lethal_white_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1786091704395,
+      "tag": "0048_stormy_whizzer",
+      "breakpoints": true
     }
   ]
 }

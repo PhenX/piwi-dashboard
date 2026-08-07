@@ -52,6 +52,7 @@ Piwi instance. Bundling the viewer's assets into the export itself is on the
 
 ## See also
 
+- [Share links](./share-links) — the live counterpart: a revocable read-only URL instead of a file
 - [Failure evidence](./evidence) — what the export is a snapshot of
 - [AI diagnosis & clustering](./ai-diagnosis) — cluster exports carry the diagnosis too
 - [Storage configuration](./storage#data-retention) — retention, and why an export outlives it

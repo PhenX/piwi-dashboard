@@ -1,9 +1,10 @@
 # Public share links
 
-A design proposal for read-only share links: handing one investigation to someone without a dashboard account, as a
-URL instead of a file. This is the "Public share links" entry under Exploring in [ROADMAP.md](../ROADMAP.md), which
-notes that a read-only link "would need share tokens, which Piwi has no infrastructure for today". This document
-proposes that infrastructure. Nothing here is committed work — it is a concrete position to argue with.
+A design record for read-only share links: handing one investigation to someone without a dashboard account, as a
+URL instead of a file. The feature shipped behind the default-off `PIWI_SHARE_LINKS_ENABLED` flag; this document
+remains the reference for its decisions, alternatives and open questions. One deliberate simplification against the
+original proposal is called out inline: the anonymous surface is a single server-rendered route rather than a Vue
+page plus separate bundle/asset APIs.
 
 **Summary.** A share link is an unguessable capability token (`psl_` + 64 hex chars, 256-bit) stored only as a SHA-256
 hash in a new `share_links` table, scoped to exactly one entity: one execution or one failure cluster — the same two
@@ -123,20 +124,17 @@ user" in `generateApiKey`). Afterwards the UI shows only `token_prefix`.
 
 ## URL shape and routes
 
-### Public (anonymous) surface — two GET routes
+### Public (anonymous) surface — one GET route
 
-- **`/share/<token>`** — the page. A Vue page at `app/pages/share/[token].vue`, server-rendered like the rest of the
-  app, with `definePageMeta({ layout: false })` like `/login` (no sidebar, no project menu — nothing that assumes a
-  session). The global auth middleware (`apps/application/app/middleware/auth.global.ts`) early-returns for the paths
-  in its `PUBLIC_PATHS` list; share pages join it by prefix rather than exact match, so the page never redirects an
-  anonymous viewer to the login screen.
-- **`GET /api/share/<token>`** — resolves the token and returns the bundle JSON
-  (`server/api/share/[token].get.ts`).
-- **`GET /api/share/<token>/assets/<...path>`** — serves one evidence asset
-  (`server/api/share/[token]/assets/[...path].get.ts`), and only if the requested storage path is listed in the
-  resolved bundle's asset list. Response headers follow `server/api/files/[...path].get.ts`:
-  `X-Content-Type-Options: nosniff` on everything, the `sandbox allow-scripts` CSP on HTML, the no-scripts sandbox
-  CSP on SVG, and the same refusal to honor content-type overrides that name an active type.
+**As implemented**, the anonymous surface collapsed to a single route: **`GET /share/<token>`**
+(`server/routes/share/[token].get.ts`, outside `/api`) resolves the token and serves the offline export's
+self-contained HTML rendering of the live bundle, inline. Evidence is embedded as `data:` URIs under the export
+budget by the same `buildExport` pipeline the download uses, so no separate bundle or asset endpoints exist — there
+is nothing else an anonymous request can reach, the Vue app is never involved (no auth-middleware change), and the
+document ships with `X-Content-Type-Options: nosniff` plus the print export's `sandbox allow-scripts allow-modals`
+CSP: a unique opaque origin that cannot read cookies or make credentialed calls back into the dashboard. The
+original two-API shape (bundle JSON + per-asset route) remains the natural extension if a richer interactive share
+page is ever wanted.
 
 ### Management surface (authenticated)
 

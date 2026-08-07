@@ -925,6 +925,39 @@ export const testFunctions = pgTable(
   }),
 );
 
+// Share links — read-only capability tokens for handing one execution or one
+// failure cluster to someone without a dashboard account. The token itself is
+// never stored: only its SHA-256 hash (unguessable 256-bit secrets need no
+// salt, and the plain hash is what makes an indexed equality lookup possible).
+// `entity_id` is polymorphic over test_runs_cases / failure_clusters, so it
+// carries no FK; retention's orphan sweep removes rows whose entity is gone.
+export const shareLinks = pgTable(
+  'share_links',
+  {
+    id: serial('id').primaryKey(),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    entityKind: text('entity_kind').notNull(), // 'execution' | 'cluster' (ExportKind)
+    entityId: integer('entity_id').notNull(), // test_runs_cases.id or failure_clusters.id
+    tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of the full psl_ token
+    tokenPrefix: text('token_prefix').notNull(), // First 8 chars after "psl_" — shown in UI
+    createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { mode: 'date' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    expiresAt: timestamp('expires_at', { mode: 'date' }), // null = no expiry
+    revokedAt: timestamp('revoked_at', { mode: 'date' }), // set on revoke; row kept for the audit trail
+    lastViewedAt: timestamp('last_viewed_at', { mode: 'date' }),
+    viewCount: integer('view_count').notNull().default(0),
+  },
+  (table) => ({
+    projectIdIdx: index('idx_share_links_project_id').on(table.projectId),
+    entityIdx: index('idx_share_links_entity').on(table.entityKind, table.entityId),
+    createdByIdx: index('idx_share_links_created_by').on(table.createdBy),
+  }),
+);
+
 export const apiKeys = pgTable(
   'api_keys',
   {
@@ -996,4 +1029,6 @@ export type NewNetworkRequest = typeof networkRequests.$inferInsert;
 export type LocatorSnapshotRow = typeof locatorSnapshots.$inferSelect;
 export type NewLocatorSnapshotRow = typeof locatorSnapshots.$inferInsert;
 export type TestFunction = typeof testFunctions.$inferSelect;
+export type ShareLink = typeof shareLinks.$inferSelect;
+export type NewShareLink = typeof shareLinks.$inferInsert;
 export type NewTestFunction = typeof testFunctions.$inferInsert;
