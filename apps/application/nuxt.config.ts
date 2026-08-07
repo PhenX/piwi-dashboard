@@ -275,8 +275,9 @@ export default defineNuxtConfig({
             sessionCookie: {
               type: 'apiKey',
               in: 'cookie',
-              name: 'nuxt_session',
-              description: 'Session cookie authentication. Set via POST /api/auth/login.',
+              // h3's sealed-session cookie keeps its default name.
+              name: 'h3',
+              description: 'Session cookie authentication (sealed session cookie). Set via POST /api/auth/login.',
             },
           },
         },

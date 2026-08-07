@@ -2,7 +2,7 @@ import { getDatabase } from '../../database';
 import { requireAuth } from '../../utils/auth';
 import { mintAccountToken } from '../../utils/account-tokens';
 import { isEmailConfigured, sendEmail, renderVerifyEmail } from '../../utils/email';
-import { checkRateLimit } from '../../utils/rate-limit';
+import { checkRateLimit, rateLimitedError } from '../../utils/rate-limit';
 
 defineRouteMeta({
   openAPI: {
@@ -20,7 +20,7 @@ export default eventHandler(async (event) => {
 
   // Bound how often a user can trigger verification emails.
   if (!checkRateLimit(`verify-email:${user.id}`, 5, 15 * 60 * 1000)) {
-    throw createError({ statusCode: 429, message: 'Too many requests. Please wait before trying again.' });
+    throw rateLimitedError(event, [`verify-email:${user.id}`]);
   }
 
   const db = await getDatabase();
