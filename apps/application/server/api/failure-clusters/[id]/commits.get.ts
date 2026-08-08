@@ -54,10 +54,10 @@ export default eventHandler(async (event) => {
   const meta = run?.metadata as any;
   const repositoryUrl = normalizeGitUrl(meta?.scm?.remoteUrl ?? null);
 
-  if (!repositoryUrl) return { commits: [], repositoryUrl: null, aggregate: null, error: null };
+  if (!repositoryUrl) return { items: [], repositoryUrl: null, aggregate: null, error: null };
 
   const provider = await createScmProvider(repositoryUrl, db, cluster.projectId);
-  if (!provider) return { commits: [], repositoryUrl, aggregate: null, error: null };
+  if (!provider) return { items: [], repositoryUrl, aggregate: null, error: null };
 
   const query = getQuery(event);
   const baselineSha = query.baseline as string | undefined;
@@ -88,5 +88,5 @@ export default eventHandler(async (event) => {
     }
   }
 
-  return { commits, repositoryUrl, aggregate, error, hasMore: commits.length >= limit };
+  return { items: commits, repositoryUrl, aggregate, error, hasMore: commits.length >= limit };
 });

@@ -55,11 +55,11 @@ async function loadCommits() {
     if (baseline) params.baseline = baseline;
     if (selectedBranch.value) params.branch = selectedBranch.value;
     const res = await $fetch<{
-      commits: CommitListItem[];
+      items: CommitListItem[];
       aggregate: { filesChanged: number; linesAdded: number; linesRemoved: number } | null;
       error?: string | null;
     }>(`/api/failure-clusters/${props.clusterId}/commits`, { query: params });
-    commits.value = res.commits;
+    commits.value = res.items;
     aggregateStats.value = res.aggregate;
     apiError.value = res.error ?? null;
     loadedForBaseline.value = baseline;

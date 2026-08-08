@@ -638,7 +638,8 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/failure-clusters\/(\d+)\/commits$/,
     handler: async (m, _, q, ctx) => {
       await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
-      return getClusterCommits(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined);
+      const { commits, ...rest } = await getClusterCommits(await getDemoDb(), +m[1]!, q as URLSearchParams | undefined);
+      return { items: commits, ...rest };
     },
   },
   {
