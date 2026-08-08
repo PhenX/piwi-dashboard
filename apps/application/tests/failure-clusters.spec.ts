@@ -284,7 +284,7 @@ test.describe.serial('Failure clustering', () => {
       affectedTests: number;
       lastSeenRunId: number;
       lastSeenAt: string | null;
-    }> = await response.json();
+    }> = (await response.json()).items;
 
     const login = clusters.find((c) => c.id === firstRunClusterId)!;
     expect(login).toBeDefined();
@@ -302,7 +302,7 @@ test.describe.serial('Failure clustering', () => {
 
   test('cluster status defaults to open and is exposed in project endpoint', async ({ request }) => {
     const response = await request.get(`/api/projects/${projectId}/failure-clusters`);
-    const clusters: Array<{ id: number; status: string; triageNote: string | null }> = await response.json();
+    const clusters: Array<{ id: number; status: string; triageNote: string | null }> = (await response.json()).items;
 
     const login = clusters.find((c) => c.id === firstRunClusterId)!;
     expect(login).toBeDefined();
@@ -322,7 +322,7 @@ test.describe.serial('Failure clustering', () => {
 
     // Verify the update is persisted
     const getRes = await request.get(`/api/projects/${projectId}/failure-clusters`);
-    const clusters: Array<{ id: number; status: string; triageNote: string | null }> = await getRes.json();
+    const clusters: Array<{ id: number; status: string; triageNote: string | null }> = (await getRes.json()).items;
     const login = clusters.find((c) => c.id === firstRunClusterId)!;
     expect(login.status).toBe('resolved');
     expect(login.triageNote).toBe(note);
@@ -339,12 +339,12 @@ test.describe.serial('Failure clustering', () => {
     // After the previous test, the login timeout cluster is resolved
     const resolved = await request.get(`/api/projects/${projectId}/failure-clusters?status=resolved`);
     expect(resolved.ok()).toBeTruthy();
-    const resolvedClusters: Array<{ id: number }> = await resolved.json();
+    const resolvedClusters: Array<{ id: number }> = (await resolved.json()).items;
     expect(resolvedClusters.some((c) => c.id === firstRunClusterId)).toBeTruthy();
 
     const open = await request.get(`/api/projects/${projectId}/failure-clusters?status=open`);
     expect(open.ok()).toBeTruthy();
-    const openClusters: Array<{ id: number }> = await open.json();
+    const openClusters: Array<{ id: number }> = (await open.json()).items;
     expect(openClusters.some((c) => c.id === firstRunClusterId)).toBeFalsy();
   });
 

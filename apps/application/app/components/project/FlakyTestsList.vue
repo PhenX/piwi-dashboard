@@ -12,13 +12,18 @@ const props = defineProps<{
 const runsWindow = ref(50);
 const rootCauseFilter = ref<string[]>([]);
 
-const { data: tests, pending: loading } = await useFetch<FlakyTest[]>(
+const { data: tests, pending: loading } = await useFetch(
   () => {
     const params = new URLSearchParams({ runs: String(runsWindow.value) });
     if (props.environment) params.set('environment', props.environment);
     return `/api/projects/${props.projectId}/flaky-tests?${params.toString()}`;
   },
-  { lazy: true, server: false, watch: [runsWindow, () => props.environment] },
+  {
+    lazy: true,
+    server: false,
+    watch: [runsWindow, () => props.environment],
+    transform: (r: { items: FlakyTest[] }) => r.items,
+  },
 );
 
 const filteredTests = computed(() => {

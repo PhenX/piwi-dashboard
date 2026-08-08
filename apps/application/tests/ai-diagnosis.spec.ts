@@ -885,7 +885,10 @@ test.describe.serial('Cluster reconciliation, suggestions & naming', () => {
     `TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for ${selector}\nEMBVEC=${embvec}\n${extra}`;
 
   const clustersOf = (request: APIRequestContext, projectId: number) =>
-    request.get(`/api/projects/${projectId}/failure-clusters`).then((r) => r.json()) as Promise<any[]>;
+    request
+      .get(`/api/projects/${projectId}/failure-clusters`)
+      .then((r) => r.json())
+      .then((j) => j.items) as Promise<any[]>;
   const suggestionsOf = (request: APIRequestContext, projectId: number) =>
     request
       .get(`/api/projects/${projectId}/cluster-merge-suggestions`)

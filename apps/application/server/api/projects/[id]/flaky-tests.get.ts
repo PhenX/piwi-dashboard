@@ -64,7 +64,7 @@ export default eventHandler(async (event) => {
     const rows = await getProjectFlakyTests(db, projectId, runsLimit, environment, filter);
     // Fill in the owner from CODEOWNERS for tests that declare none, so the
     // leaderboard can be read per team without anyone annotating a test.
-    return await withResolvedOwners(db, projectId, rows);
+    return { items: await withResolvedOwners(db, projectId, rows) };
   } catch (e: any) {
     if (e?.message === 'Project not found') {
       throw createError({ statusCode: 404, message: 'Project not found' });

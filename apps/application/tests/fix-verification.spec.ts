@@ -70,8 +70,8 @@ async function submitRun(
 async function clusters(request: APIRequestContext, projectId: number): Promise<Cluster[]> {
   const res = await request.get(`/api/projects/${projectId}/failure-clusters`);
   expect(res.ok()).toBeTruthy();
-  const body = (await res.json()) as { clusters?: Cluster[] } | Cluster[];
-  const all = Array.isArray(body) ? body : (body.clusters ?? []);
+  const body = (await res.json()) as { items?: Cluster[] };
+  const all = body.items ?? [];
   return all.filter((c) => c.signature.includes(attemptTag));
 }
 

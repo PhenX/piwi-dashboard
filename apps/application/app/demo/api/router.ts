@@ -373,7 +373,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/projects\/(\d+)\/failure-clusters$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
-      return getProjectFailureClusters(await getDemoDb(), +m[1]!);
+      return { items: await getProjectFailureClusters(await getDemoDb(), +m[1]!) };
     },
   },
   {
@@ -418,7 +418,9 @@ const routes: RouteEntry[] = [
         : undefined;
       // CODEOWNERS resolution needs an SCM client the browser cannot reach —
       // ownership stays annotation-only here (seeded cases carry `piwi:` owners).
-      return getProjectFlakyTests(await getDemoDb(), +m[1]!, runs, environment, { tags, owner, priority });
+      return {
+        items: await getProjectFlakyTests(await getDemoDb(), +m[1]!, runs, environment, { tags, owner, priority }),
+      };
     },
   },
   {

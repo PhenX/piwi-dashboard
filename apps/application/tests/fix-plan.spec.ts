@@ -67,9 +67,11 @@ test.describe.serial('Fix plan', () => {
     const projects = (await (await request.get('/api/projects')).json()) as Array<{ id: number; name: string }>;
     projectId = projects.find((p) => p.name === PROJECT.FIX_PLAN)!.id;
 
-    const clusters = (await (await request.get(`/api/projects/${projectId}/failure-clusters`)).json()) as Array<{
-      id: number;
-    }>;
+    const clusters = (
+      (await (await request.get(`/api/projects/${projectId}/failure-clusters`)).json()) as {
+        items: Array<{ id: number }>;
+      }
+    ).items;
     expect(clusters.length).toBeGreaterThan(0);
     clusterId = clusters[0]!.id;
   });

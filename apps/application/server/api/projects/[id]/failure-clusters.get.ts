@@ -22,7 +22,7 @@ export default eventHandler(async (event) => {
   const db = await getDatabase();
 
   try {
-    return await getProjectFailureClusters(db, projectId, statusFilter);
+    return { items: await getProjectFailureClusters(db, projectId, statusFilter) };
   } catch (e: any) {
     if (e?.message === 'Project not found') {
       throw createError({ statusCode: 404, message: 'Project not found' });
