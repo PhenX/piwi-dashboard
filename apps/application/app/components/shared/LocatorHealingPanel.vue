@@ -265,6 +265,13 @@ function copyFixPrompt() {
   );
 }
 
+// The server rewrites the failing line and ships it as a git-applyable unified
+// diff; hand it over verbatim so `git apply` (or an agent) can patch the file.
+function copyGitApply() {
+  const diff = healing.value?.edit?.unifiedDiff;
+  if (diff) copyText(diff, 'git-apply', 'Patch copied');
+}
+
 // ── Collapse the long tail of alternatives ───────────────────────────────────
 const ALT_PREVIEW = 3;
 const showAllAlternatives = ref(false);
@@ -455,6 +462,17 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
           @click="copyFixPrompt"
         >
           Copy fix prompt
+        </UButton>
+        <UButton
+          v-if="healing?.edit?.unifiedDiff"
+          size="xs"
+          color="neutral"
+          variant="outline"
+          :icon="copiedKey === 'git-apply' ? 'i-lucide-check' : 'i-lucide-copy'"
+          title="Copy a git apply patch that rewrites the failing locator line"
+          @click="copyGitApply"
+        >
+          Copy patch
         </UButton>
       </div>
     </div>
