@@ -1,5 +1,6 @@
 import { failureClusters, testRuns } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
+import { optionalIntQuery } from '../../../utils/query-params';
 import { normalizeGitUrl } from '../../../utils/regression-context';
 import { createScmProvider } from '../../../utils/scm';
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../../utils/project-access';
@@ -62,7 +63,7 @@ export default eventHandler(async (event) => {
   const query = getQuery(event);
   const baselineSha = query.baseline as string | undefined;
   const branch = (query.branch as string | undefined) || undefined;
-  const limit = Math.min(Math.max(parseInt(String(query.limit || '50')), 1), 200);
+  const limit = optionalIntQuery(event, 'limit', { default: 50, min: 1, max: 200 });
 
   const commits = await provider.listCommits(limit, branch);
 

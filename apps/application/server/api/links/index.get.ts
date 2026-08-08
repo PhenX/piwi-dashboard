@@ -1,6 +1,7 @@
 import { requireProjectAccess, resolveLinkEntityProjectId } from '../../utils/project-access';
 import { getDatabase } from '../../database';
 import { listLinks } from '#shared/handlers/links';
+import { requireIntQuery } from '../../utils/query-params';
 
 defineRouteMeta({
   openAPI: {
@@ -23,11 +24,10 @@ defineRouteMeta({
 export default eventHandler(async (event) => {
   const query = getQuery(event);
   const entityType = query.entityType as string;
-  const entityId = parseInt(query.entityId as string, 10);
-
-  if (!['test_run', 'test_runs_case', 'test_case'].includes(entityType) || !entityId) {
+  if (!['test_run', 'test_runs_case', 'test_case'].includes(entityType)) {
     throw createError({ statusCode: 400, message: 'Invalid entityType or entityId' });
   }
+  const entityId = requireIntQuery(event, 'entityId', { min: 1 });
 
   const db = await getDatabase();
   const projectId = await resolveLinkEntityProjectId(db, entityType, entityId);

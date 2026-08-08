@@ -1,4 +1,5 @@
 import { testRunsCases } from '../../../database/schema';
+import { queryFlag } from '../../../utils/query-params';
 import { eq } from 'drizzle-orm';
 import { buildDiagnosisContext } from '../../../utils/ai-context';
 import { loadDiagnosisSystemPrompt } from '../../../utils/ai-diagnosis';
@@ -65,7 +66,7 @@ export default eventHandler(async (event) => {
       ? [String(selectedCommitShasRaw)]
       : undefined;
   const format = query.format as string | undefined;
-  const includeImages = query.includeImages === 'true';
+  const includeImages = queryFlag(event, 'includeImages');
 
   const ctx = await buildDiagnosisContext(db, {
     kind: 'execution',

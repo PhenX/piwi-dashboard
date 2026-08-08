@@ -1,4 +1,5 @@
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
+import { optionalIntQuery, queryFlag } from '../../../utils/query-params';
 import { getDatabase } from '../../../database';
 import { getProjectPerformance } from '#shared/handlers/projects';
 
@@ -49,10 +50,10 @@ export default eventHandler(async (event) => {
   await requireProjectAccess(event, id);
 
   const query = getQuery(event);
-  const runs = Math.min(parseInt(query.runs as string) || 50, 200);
+  const runs = optionalIntQuery(event, 'runs', { default: 50, min: 1, max: 200 });
   const from = query.from as string | undefined;
   const to = query.to as string | undefined;
-  const fullRunsOnly = query.fullRunsOnly !== 'false';
+  const fullRunsOnly = queryFlag(event, 'fullRunsOnly', { default: true });
 
   const db = await getDatabase();
 

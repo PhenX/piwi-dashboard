@@ -1,4 +1,5 @@
 import { getDatabase } from '../../../database';
+import { optionalIntQuery } from '../../../utils/query-params';
 import { getProjectSlowTests } from '#shared/handlers/projects';
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
 
@@ -27,8 +28,7 @@ export default eventHandler(async (event) => {
 
   await requireProjectAccess(event, id);
 
-  const query = getQuery(event);
-  const runsCount = Math.min(parseInt(query.runs as string) || 10, 100);
+  const runsCount = optionalIntQuery(event, 'runs', { default: 10, min: 1, max: 100 });
 
   const db = await getDatabase();
 

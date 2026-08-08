@@ -1,4 +1,5 @@
 import { failureClusters, failureDiagnoses, testRunsCases } from '../../../database/schema';
+import { queryFlag } from '../../../utils/query-params';
 import { eq, and } from 'drizzle-orm';
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../../utils/project-access';
 import { resolveAiConfig } from '../../../utils/ai-provider';
@@ -29,7 +30,7 @@ export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'cluster ID');
   const { db } = await requireResolvedProjectAccess(event, id, resolveClusterProjectId, 'Failure cluster');
 
-  const force = getQuery(event).force === 'true';
+  const force = queryFlag(event, 'force');
   const body = (await readBody(event).catch(() => null)) as {
     additionalContext?: string;
     images?: AiAttachedImage[];

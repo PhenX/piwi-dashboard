@@ -1,4 +1,5 @@
 import { getTestCaseStabilityTrend } from '#shared/handlers/test-cases';
+import { optionalIntQuery } from '../../../utils/query-params';
 import { requireResolvedProjectAccess, requireRouteId, resolveCaseProjectId } from '../../../utils/project-access';
 
 defineRouteMeta({
@@ -20,7 +21,7 @@ export default eventHandler(async (event) => {
   const testCaseId = requireRouteId(event, 'id', 'test case ID');
   const { db } = await requireResolvedProjectAccess(event, testCaseId, resolveCaseProjectId, 'Test case');
 
-  const bucketCount = parseInt((getQuery(event).buckets as string) || '20');
+  const bucketCount = optionalIntQuery(event, 'buckets', { default: 20 });
 
   try {
     return await getTestCaseStabilityTrend(db, testCaseId, bucketCount);

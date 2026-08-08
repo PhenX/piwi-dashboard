@@ -1,4 +1,5 @@
 import { testRunsCases, failureClusters, failureDiagnoses } from '../../../database/schema';
+import { queryFlag } from '../../../utils/query-params';
 import { eq, and } from 'drizzle-orm';
 import {
   requireResolvedProjectAccess,
@@ -38,7 +39,7 @@ export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'test run case ID');
   const { db, projectId } = await requireResolvedProjectAccess(event, id, resolveTestRunCaseProjectId, 'Test run case');
 
-  const force = getQuery(event).force === 'true';
+  const force = queryFlag(event, 'force');
   const body = (await readBody(event).catch(() => null)) as {
     additionalContext?: string;
     images?: AiAttachedImage[];

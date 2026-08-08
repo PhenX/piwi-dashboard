@@ -1,4 +1,5 @@
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
+import { optionalIntQuery } from '../../../utils/query-params';
 import { getDatabase } from '../../../database';
 import { getProjectFlakyTests } from '#shared/handlers/projects';
 import { parseTagFilter } from '#shared/utils/tag-filter';
@@ -46,8 +47,7 @@ export default eventHandler(async (event) => {
   await requireProjectAccess(event, projectId);
 
   const query = getQuery(event);
-  const runsParam = parseInt((query.runs as string) || '50');
-  const runsLimit = Math.min(200, Math.max(1, isNaN(runsParam) ? 50 : runsParam));
+  const runsLimit = optionalIntQuery(event, 'runs', { default: 50, min: 1, max: 200 });
   const environment = typeof query.environment === 'string' && query.environment ? query.environment : undefined;
 
   const tags = parseTagFilter(typeof query.tags === 'string' ? query.tags : undefined);

@@ -1,5 +1,6 @@
 import { eq, and, or, isNull } from 'drizzle-orm';
 import { getDatabase } from '../../database';
+import { optionalIntQuery } from '../../utils/query-params';
 import { subscriptions, notificationChannels } from '../../database/schema';
 import { requireAuth } from '../../utils/auth';
 
@@ -17,8 +18,7 @@ export default eventHandler(async (event) => {
   const user = await requireAuth(event);
   const db = await getDatabase();
 
-  const projectIdParam = getQuery(event).projectId;
-  const projectId = projectIdParam ? parseInt(String(projectIdParam)) : null;
+  const projectId = optionalIntQuery(event, 'projectId', { min: 1 }) ?? null;
 
   const rows = await db
     .select({ sub: subscriptions, channel: notificationChannels })

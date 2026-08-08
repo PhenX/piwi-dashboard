@@ -1,4 +1,5 @@
 import { getDatabase } from '../../../database';
+import { optionalIntQuery } from '../../../utils/query-params';
 import { getProjectTimeoutOpportunities } from '#shared/handlers/projects';
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
 import { getTimeoutThresholds } from '../../../utils/timeout-thresholds';
@@ -28,8 +29,7 @@ export default eventHandler(async (event) => {
 
   await requireProjectAccess(event, id);
 
-  const query = getQuery(event);
-  const runsCount = Math.min(parseInt(query.runs as string) || 20, 100);
+  const runsCount = optionalIntQuery(event, 'runs', { default: 20, min: 1, max: 100 });
 
   const db = await getDatabase();
   const thresholds = await getTimeoutThresholds(db);

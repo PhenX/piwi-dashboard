@@ -1,4 +1,5 @@
 import { requireProjectAccess, requireRouteId } from '../../../utils/project-access';
+import { optionalIntQuery } from '../../../utils/query-params';
 import { getDatabase } from '../../../database';
 import { getProjectAiStepCoverage } from '#shared/handlers/projects';
 
@@ -21,7 +22,7 @@ export default eventHandler(async (event) => {
 
   await requireProjectAccess(event, projectId);
 
-  const days = Math.min(90, Math.max(1, parseInt((getQuery(event).days as string) || '30')));
+  const days = optionalIntQuery(event, 'days', { default: 30, min: 1, max: 90 });
 
   const db = await getDatabase();
 

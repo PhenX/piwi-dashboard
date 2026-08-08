@@ -1,4 +1,5 @@
 import { failureClusters, failureDiagnoses, testRunsCases } from '../../../../database/schema';
+import { queryFlag } from '../../../../utils/query-params';
 import { eq, and } from 'drizzle-orm';
 import {
   requireResolvedProjectAccess,
@@ -66,7 +67,7 @@ export default eventHandler(async (event) => {
   // Check for existing completed diagnosis (return as a single-event stream).
   // Not using the Force header — the client controls this by calling the
   // non-streaming diagnose endpoint first then switching to streaming for re-runs.
-  const force = getQuery(event).force === 'true';
+  const force = queryFlag(event, 'force');
   if (!force) {
     const whereClause = isExecutionScope
       ? and(eq(failureDiagnoses.testRunsCaseId, body!.testRunsCaseId!), eq(failureDiagnoses.scope, 'execution'))
