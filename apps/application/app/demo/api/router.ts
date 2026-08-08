@@ -846,72 +846,72 @@ const routes: RouteEntry[] = [
   },
   {
     method: 'GET',
-    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/locator-healing$/,
+    pattern: /^\/api\/test-run-cases\/(\d+)\/locator-healing$/,
     handler: async (m, _b, _q, ctx) => {
-      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
-      return getLocatorHealing(await getDemoDb(), +m[2]!);
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getLocatorHealing(await getDemoDb(), +m[1]!);
     },
   },
   {
     method: 'POST',
-    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/locator-pick$/,
+    pattern: /^\/api\/test-run-cases\/(\d+)\/locator-pick$/,
     handler: async (m, body, _q, ctx) => {
-      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
-      return saveLocatorPick(await getDemoDb(), +m[2]!, body as Parameters<typeof saveLocatorPick>[2]);
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return saveLocatorPick(await getDemoDb(), +m[1]!, body as Parameters<typeof saveLocatorPick>[2]);
     },
   },
   {
     method: 'GET',
-    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/environment-diff$/,
+    pattern: /^\/api\/test-run-cases\/(\d+)\/environment-diff$/,
     handler: async (m, _b, _q, ctx) => {
-      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
-      return getEnvironmentDiff(await getDemoDb(), +m[2]!);
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getEnvironmentDiff(await getDemoDb(), +m[1]!);
     },
   },
   {
     method: 'GET',
-    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/dom-snapshot$/,
+    pattern: /^\/api\/test-run-cases\/(\d+)\/dom-snapshot$/,
     handler: async (m, _body, query, ctx) => {
-      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
-      return apiGetDemoDomSnapshot(+m[2]!, query);
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return apiGetDemoDomSnapshot(+m[1]!, query);
     },
   },
   {
     method: 'GET',
-    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/trace-stacks$/,
+    pattern: /^\/api\/test-run-cases\/(\d+)\/trace-stacks$/,
     handler: async (m, _b, _q, ctx) => {
-      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
-      return apiGetDemoTraceStacks(+m[2]!);
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return apiGetDemoTraceStacks(+m[1]!);
     },
   },
   {
     method: 'GET',
-    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/trace-network$/,
+    pattern: /^\/api\/test-run-cases\/(\d+)\/trace-network$/,
     handler: async (m, _b, _q, ctx) => {
-      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
-      return apiGetDemoTraceNetwork(+m[2]!);
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return apiGetDemoTraceNetwork(+m[1]!);
     },
   },
   {
     method: 'GET',
-    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/trace-network-body$/,
+    pattern: /^\/api\/test-run-cases\/(\d+)\/trace-network-body$/,
     handler: async (m, _body, query, ctx) => {
-      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
-      return apiGetDemoTraceNetworkBody(+m[2]!, query);
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return apiGetDemoTraceNetworkBody(+m[1]!, query);
     },
   },
   // The demo cannot pixel-diff in the browser — it serves the overlay the
   // seed generated with the real diff code, straight from the files row.
   {
     method: 'GET',
-    pattern: /^\/api\/test-runs\/(\d+)\/cases\/(\d+)\/visual-diff$/,
+    pattern: /^\/api\/test-run-cases\/(\d+)\/visual-diff$/,
     handler: async (m, _b, _q, ctx) => {
-      await assertDemoEntityScope(ctx, 'execution', +m[2]!);
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
       const db = await getDemoDb();
       const rows = await db
         .select({ path: files.path, metadata: files.metadata })
         .from(files)
-        .where(and(eq(files.testRunsCaseId, +m[2]!), eq(files.type, 'visual-diff')))
+        .where(and(eq(files.testRunsCaseId, +m[1]!), eq(files.type, 'visual-diff')))
         .limit(1);
       const row = rows[0];
       if (!row?.metadata) return { status: 'no-baseline' };

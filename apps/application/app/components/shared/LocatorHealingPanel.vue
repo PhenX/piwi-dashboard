@@ -39,10 +39,7 @@ const {
   data: healing,
   pending,
   error,
-} = useFetch<LocatorHealingResult>(
-  () => `/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/locator-healing`,
-  { lazy: true },
-);
+} = useFetch<LocatorHealingResult>(() => `/api/test-run-cases/${props.testRunsCaseId}/locator-healing`, { lazy: true });
 
 const hasData = computed(
   () =>
@@ -176,7 +173,7 @@ const pickTraceUrl = computed(() => {
 const pickerOpen = ref(false);
 
 async function refreshHealing() {
-  await refreshNuxtData(`/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/locator-healing`);
+  await refreshNuxtData(`/api/test-run-cases/${props.testRunsCaseId}/locator-healing`);
 }
 
 const { copy } = useCopy();

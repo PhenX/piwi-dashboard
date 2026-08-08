@@ -31,7 +31,7 @@ const {
   data: snapshot,
   pending,
   error,
-} = useFetch<DomSnapshotResponse>(() => `/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/dom-snapshot`, {
+} = useFetch<DomSnapshotResponse>(() => `/api/test-run-cases/${props.testRunsCaseId}/dom-snapshot`, {
   lazy: true,
 });
 

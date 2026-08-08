@@ -102,7 +102,7 @@ async function loadTraceStack(id: number) {
   const runId = caseDetail.value?.testRun?.id;
   if (!runId) return;
   try {
-    const res = await $fetch<TraceCallStackResponse>(`/api/test-runs/${runId}/cases/${id}/trace-stacks`);
+    const res = await $fetch<TraceCallStackResponse>(`/api/test-run-cases/${id}/trace-stacks`);
     const value = res.status === 'ok' && res.frames?.length ? res : null;
     traceStackCache.set(id, value);
     if (selectedId.value === id) traceStack.value = value;

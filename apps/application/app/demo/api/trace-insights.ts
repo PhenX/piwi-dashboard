@@ -111,7 +111,7 @@ async function resolveCaseTrace(testRunsCaseId: number): Promise<{ path: string 
   return { path: traceRows[0]?.path ?? null, filePath: caseRows[0]?.filePath ?? null };
 }
 
-/** GET /api/test-runs/:id/cases/:caseId/trace-stacks — mirrors trace-stacks.get.ts. */
+/** GET /api/test-run-cases/:id/trace-stacks — mirrors trace-stacks.get.ts. */
 export async function apiGetDemoTraceStacks(testRunsCaseId: number): Promise<unknown> {
   const { path, filePath } = await resolveCaseTrace(testRunsCaseId);
   if (!path) return { status: 'no-trace' };
@@ -120,7 +120,7 @@ export async function apiGetDemoTraceStacks(testRunsCaseId: number): Promise<unk
   return buildTraceCallStack(bundle.parsed, bundle.stacks, bundle.readResource, { knownTestFilePath: filePath });
 }
 
-/** GET /api/test-runs/:id/cases/:caseId/trace-network — mirrors trace-network.get.ts. */
+/** GET /api/test-run-cases/:id/trace-network — mirrors trace-network.get.ts. */
 export async function apiGetDemoTraceNetwork(testRunsCaseId: number): Promise<unknown> {
   const { path } = await resolveCaseTrace(testRunsCaseId);
   if (!path) return { status: 'no-trace' };
@@ -129,7 +129,7 @@ export async function apiGetDemoTraceNetwork(testRunsCaseId: number): Promise<un
   return buildTraceNetwork(bundle.parsed, bundle.network);
 }
 
-/** GET /api/test-runs/:id/cases/:caseId/trace-network-body?sha1= — mirrors trace-network-body.get.ts. */
+/** GET /api/test-run-cases/:id/trace-network-body?sha1= — mirrors trace-network-body.get.ts. */
 export async function apiGetDemoTraceNetworkBody(testRunsCaseId: number, query?: URLSearchParams): Promise<unknown> {
   const sha1 = (query?.get('sha1') ?? '').toLowerCase();
   if (!SHA1_NAME_RE.test(sha1)) return { status: 'not-found' };

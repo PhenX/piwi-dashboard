@@ -65,7 +65,7 @@ async function fetchSnapshot() {
     if (viewSource.value) params.set('source', viewSource.value);
     const query = `?${params.toString()}`;
     snapshot.value = await $fetch<DomSnapshotResponse>(
-      `/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/dom-snapshot${query}`,
+      `/api/test-run-cases/${props.testRunsCaseId}/dom-snapshot${query}`,
     );
     // Reflect what the server actually rendered so the toggle stays in sync.
     if (snapshot.value?.source) viewSource.value = snapshot.value.source;
@@ -367,17 +367,14 @@ async function confirm() {
   if (!selectedAlt.value) return;
   saving.value = true;
   try {
-    const result = await $fetch<{ status: string }>(
-      `/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/locator-pick`,
-      {
-        method: 'POST',
-        body: {
-          failingLocator: props.failingLocator,
-          pickedLocator: selectedAlt.value,
-          element: pickedAttrs.value,
-        },
+    const result = await $fetch<{ status: string }>(`/api/test-run-cases/${props.testRunsCaseId}/locator-pick`, {
+      method: 'POST',
+      body: {
+        failingLocator: props.failingLocator,
+        pickedLocator: selectedAlt.value,
+        element: pickedAttrs.value,
       },
-    );
+    });
     if (result.status === 'ok') {
       emit('confirmed', selectedAlt.value);
     } else {
