@@ -268,10 +268,11 @@ const routes: RouteEntry[] = [
       // The server routes strip the token before responding (the shared handler
       // rows carry it); do the same so a demo visitor's stored token never comes
       // back over the wire.
-      return rows.map((p) => {
+      const items = rows.map((p) => {
         const { scmToken: _scm, ...rest } = p as { scmToken?: string | null } & typeof p;
         return rest;
       });
+      return { items };
     },
   },
   {

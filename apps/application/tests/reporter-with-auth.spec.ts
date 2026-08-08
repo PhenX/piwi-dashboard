@@ -393,7 +393,7 @@ test.describe.serial('Reporter with authentication enabled', () => {
     // Verify the project was created
     const projectsRes = await request.get(`${AUTH_SERVER_URL}/api/projects`);
     expect(projectsRes.ok()).toBeTruthy();
-    const projects = (await projectsRes.json()) as Array<{ name: string }>;
+    const projects = ((await projectsRes.json()) as { items: Array<{ name: string }> }).items;
     expect(projects.find((p) => p.name === PROJECT.REPORTER_FULL_AUTH)).toBeDefined();
   });
 
@@ -633,7 +633,7 @@ test.describe.serial('Reporter with authentication enabled', () => {
     // Verify project was created
     const projectsRes = await request.get(`${AUTH_SERVER_URL}/api/projects`);
     expect(projectsRes.ok()).toBeTruthy();
-    const projects = (await projectsRes.json()) as Array<{ name: string }>;
+    const projects = ((await projectsRes.json()) as { items: Array<{ name: string }> }).items;
     expect(projects.find((p) => p.name === PROJECT.REPORTER_API_KEY_E2E)).toBeDefined();
   });
 

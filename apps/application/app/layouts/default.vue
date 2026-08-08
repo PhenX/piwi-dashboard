@@ -57,10 +57,11 @@ watch(
 );
 
 // Fetch projects for sidebar navigation
-const { data: projects, refresh: refreshProjects } = await useFetch<ProjectWithStats[]>('/api/projects', {
+const { data: projects, refresh: refreshProjects } = await useFetch('/api/projects', {
   key: 'projects',
   lazy: true,
   default: () => [] as ProjectWithStats[],
+  transform: (r: { items: ProjectWithStats[] }) => r.items,
 });
 
 useRunStream(refreshProjects);

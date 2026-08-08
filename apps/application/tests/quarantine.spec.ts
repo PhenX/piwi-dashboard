@@ -67,7 +67,9 @@ test.describe.serial('Quarantine', () => {
       { title: 'solid login', status: 'passed' },
     ]);
 
-    const projects = (await (await request.get('/api/projects')).json()) as Array<{ id: number; name: string }>;
+    const projects = (
+      (await (await request.get('/api/projects')).json()) as { items: Array<{ id: number; name: string }> }
+    ).items;
     projectId = projects.find((p) => p.name === PROJECT.QUARANTINE)!.id;
 
     const cases = (await (await request.get(`/api/projects/${projectId}/test-cases?maxAgeDays=0`)).json()) as {

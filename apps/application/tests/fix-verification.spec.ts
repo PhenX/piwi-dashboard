@@ -77,7 +77,7 @@ async function clusters(request: APIRequestContext, projectId: number): Promise<
 
 async function projectIdFor(request: APIRequestContext): Promise<number> {
   const res = await request.get('/api/projects');
-  const list = (await res.json()) as Array<{ id: number; name: string }>;
+  const list = ((await res.json()) as { items: Array<{ id: number; name: string }> }).items;
   const project = list.find((p) => p.name === PROJECT.FIX_VERIFICATION);
   expect(project, 'project should exist after the first submission').toBeTruthy();
   return project!.id;

@@ -63,7 +63,7 @@ test.describe.serial('Project Creation API Tests', () => {
 
     const listRes = await request.get('/api/projects');
     expect(listRes.ok()).toBeTruthy();
-    const projects = await listRes.json();
+    const { items: projects } = await listRes.json();
     const found = projects.find((p: { name: string }) => p.name === projectName);
     expect(found).toBeDefined();
     expect(found.label).toBe('Listed Project');

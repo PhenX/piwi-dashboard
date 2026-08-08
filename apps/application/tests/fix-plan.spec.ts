@@ -64,7 +64,9 @@ test.describe.serial('Fix plan', () => {
   test.beforeAll(async ({ request }) => {
     await submitFailingRun(request);
 
-    const projects = (await (await request.get('/api/projects')).json()) as Array<{ id: number; name: string }>;
+    const projects = (
+      (await (await request.get('/api/projects')).json()) as { items: Array<{ id: number; name: string }> }
+    ).items;
     projectId = projects.find((p) => p.name === PROJECT.FIX_PLAN)!.id;
 
     const clusters = (

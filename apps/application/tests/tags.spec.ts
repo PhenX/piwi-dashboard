@@ -164,7 +164,7 @@ test.describe.serial('Tags assigned to projects', () => {
   test('should include tags in project list', async ({ request }) => {
     const res = await request.get('/api/projects');
     expect(res.ok()).toBeTruthy();
-    const projects = await res.json();
+    const { items: projects } = await res.json();
     const project = projects.find((p: { id: number }) => p.id === projectId);
     expect(project).toBeDefined();
     expect(project.tags).toBeDefined();

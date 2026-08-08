@@ -86,7 +86,7 @@ async function seedData(request: APIRequestContext) {
     timeout: 20000,
   });
 
-  const projects = await (await request.get('/api/projects')).json();
+  const { items: projects } = await (await request.get('/api/projects')).json();
   const project = projects.find((p: { name: string }) => p.name === PROJECT.MOBILE_RESPONSIVENESS);
   expect(project).toBeTruthy();
   projectId = project.id;

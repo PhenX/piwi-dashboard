@@ -88,7 +88,7 @@ test.describe('Environment API Tests', () => {
 
     // Verify project detail includes all environments
     const projectRes = await request.get('/api/projects');
-    const projects = await projectRes.json();
+    const { items: projects } = await projectRes.json();
     const project = projects.find((p: { name: string }) => p.name === projectName);
     expect(project).toBeDefined();
 
@@ -164,7 +164,7 @@ test.describe('Environment API Tests', () => {
     expect(submitRes.ok()).toBeTruthy();
 
     const projectsRes = await request.get('/api/projects');
-    const projects = await projectsRes.json();
+    const { items: projects } = await projectsRes.json();
     const project = projects.find((p: { name: string }) => p.name === 'env-latestrun-test');
     expect(project).toBeDefined();
     expect(project.latestRun).toBeDefined();
@@ -275,7 +275,7 @@ test.describe('Environment UI Tests', () => {
 
   test('should display environment badge on test run detail page', async ({ page, request }) => {
     const projectsRes = await request.get('/api/projects');
-    const projects = await projectsRes.json();
+    const { items: projects } = await projectsRes.json();
     const project = projects.find((p: { name: string }) => p.name === PROJECT.ENV_UI);
     expect(project).toBeDefined();
 
@@ -291,7 +291,7 @@ test.describe('Environment UI Tests', () => {
 
   test('should show environment filter on project detail page', async ({ page, request }) => {
     const projectsRes = await request.get('/api/projects');
-    const projects = await projectsRes.json();
+    const { items: projects } = await projectsRes.json();
     const project = projects.find((p: { name: string }) => p.name === PROJECT.ENV_UI);
     expect(project).toBeDefined();
 
@@ -305,7 +305,7 @@ test.describe('Environment UI Tests', () => {
 
   test('should filter test runs by environment', async ({ page, request }) => {
     const projectsRes = await request.get('/api/projects');
-    const projects = await projectsRes.json();
+    const { items: projects } = await projectsRes.json();
     const project = projects.find((p: { name: string }) => p.name === PROJECT.ENV_UI);
     expect(project).toBeDefined();
 

@@ -13,10 +13,11 @@ const {
   data: projects,
   refresh,
   status: projectsStatus,
-} = useFetch<ProjectWithStats[]>('/api/projects', {
+} = useFetch('/api/projects', {
   key: 'projects',
   lazy: true,
-  default: () => [],
+  default: () => [] as ProjectWithStats[],
+  transform: (r: { items: ProjectWithStats[] }) => r.items,
 });
 const { data: tagsData, refresh: refreshTags } = useFetch<TagsResponse>('/api/tags', { lazy: true });
 const toast = useToast();

@@ -46,7 +46,7 @@ test.describe.serial('API Server Tests', () => {
     const response = await request.get('/api/projects');
 
     expect(response.ok()).toBeTruthy();
-    const projects = await response.json();
+    const { items: projects } = await response.json();
     expect(Array.isArray(projects)).toBe(true);
     expect(projects.length).toBeGreaterThan(0);
 
@@ -58,7 +58,7 @@ test.describe.serial('API Server Tests', () => {
   test('should get project details', async ({ request }) => {
     // First, get the project list to find our project
     const projectsResponse = await request.get('/api/projects');
-    const projects = await projectsResponse.json();
+    const { items: projects } = await projectsResponse.json();
     const project = projects.find((p: { name: string; id: number }) => p.name === 'test-api-project');
 
     expect(project).toBeDefined();
@@ -76,7 +76,7 @@ test.describe.serial('API Server Tests', () => {
   test('should get test run details', async ({ request }) => {
     // First, get the project list to find our test run
     const projectsResponse = await request.get('/api/projects');
-    const projects = await projectsResponse.json();
+    const { items: projects } = await projectsResponse.json();
     const project = projects.find((p: { name: string; id: number }) => p.name === 'test-api-project');
 
     const projectDetailsResponse = await request.get(`/api/projects/${project.id}`);
@@ -102,7 +102,7 @@ test.describe.serial('API Server Tests', () => {
   test('should get test case details (stable identity)', async ({ request }) => {
     // Get test run to find test cases
     const projectsResponse = await request.get('/api/projects');
-    const projects = await projectsResponse.json();
+    const { items: projects } = await projectsResponse.json();
     const project = projects.find((p: { name: string; id: number }) => p.name === 'test-api-project');
 
     const projectDetailsResponse = await request.get(`/api/projects/${project.id}`);
@@ -230,7 +230,7 @@ test.describe.serial('API Server Tests', () => {
     const projectsResponse = await request.get('/api/projects');
     expect(projectsResponse.ok()).toBeTruthy();
 
-    const projects = await projectsResponse.json();
+    const { items: projects } = await projectsResponse.json();
     const flakyProject = projects.find((p: { name: string }) => p.name === 'test-flaky-project');
 
     expect(flakyProject).toBeDefined();
