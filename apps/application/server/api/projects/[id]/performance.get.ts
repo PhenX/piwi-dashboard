@@ -8,7 +8,37 @@ defineRouteMeta({
     summary: 'Performance trend data',
     description:
       'Returns test run duration, average test duration, and p90 test duration for trend charts with optional date range filtering',
-    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+    parameters: [
+      { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+      {
+        name: 'limit',
+        in: 'query',
+        required: false,
+        schema: { type: 'integer', default: 50, maximum: 200 },
+        description: 'Number of recent runs to include (default 50, max 200).',
+      },
+      {
+        name: 'from',
+        in: 'query',
+        required: false,
+        schema: { type: 'string', format: 'date-time' },
+        description: 'Start of the date range (inclusive).',
+      },
+      {
+        name: 'to',
+        in: 'query',
+        required: false,
+        schema: { type: 'string', format: 'date-time' },
+        description: 'End of the date range (inclusive).',
+      },
+      {
+        name: 'fullRunsOnly',
+        in: 'query',
+        required: false,
+        schema: { type: 'boolean', default: true },
+        description: 'Restrict to full runs; pass "false" to include partial runs.',
+      },
+    ],
     'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });

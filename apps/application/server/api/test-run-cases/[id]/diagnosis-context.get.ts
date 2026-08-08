@@ -19,6 +19,27 @@ defineRouteMeta({
     parameters: [
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
       { name: 'format', in: 'query', required: false, schema: { type: 'string', enum: ['json', 'prompt'] } },
+      {
+        name: 'baseCommit',
+        in: 'query',
+        required: false,
+        schema: { type: 'string' },
+        description: 'Base commit SHA to diff the SCM context against.',
+      },
+      {
+        name: 'selectedCommitShas',
+        in: 'query',
+        required: false,
+        schema: { type: 'array', items: { type: 'string' } },
+        description: 'Specific commit SHAs to include in the context; repeat the parameter for multiple.',
+      },
+      {
+        name: 'includeImages',
+        in: 'query',
+        required: false,
+        schema: { type: 'boolean' },
+        description: 'Include screenshot images in the previewed context (default false).',
+      },
     ],
     'x-required-roles': ['administrator', 'reporter', 'user'],
   },

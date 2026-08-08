@@ -9,7 +9,16 @@ defineRouteMeta({
     tags: ['Failure Clusters'],
     summary: 'Get commit diff for a cluster',
     description: 'Returns the file changes and patches for a specific commit SHA in the cluster repository.',
-    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+    parameters: [
+      { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+      {
+        name: 'sha',
+        in: 'query',
+        required: true,
+        schema: { type: 'string' },
+        description: 'Commit SHA to diff.',
+      },
+    ],
     'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });

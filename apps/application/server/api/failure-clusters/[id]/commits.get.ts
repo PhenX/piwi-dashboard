@@ -10,7 +10,30 @@ defineRouteMeta({
     summary: 'List recent commits for a cluster',
     description:
       'Returns recent commits for the failure cluster repository. Supports optional baseline query parameter for aggregate diff stats.',
-    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+    parameters: [
+      { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+      {
+        name: 'baseline',
+        in: 'query',
+        required: false,
+        schema: { type: 'string' },
+        description: 'Baseline commit SHA; when set, aggregate diff stats are computed against it.',
+      },
+      {
+        name: 'branch',
+        in: 'query',
+        required: false,
+        schema: { type: 'string' },
+        description: 'Branch to list commits from.',
+      },
+      {
+        name: 'limit',
+        in: 'query',
+        required: false,
+        schema: { type: 'integer', default: 50, minimum: 1, maximum: 200 },
+        description: 'Number of commits to return (default 50, max 200).',
+      },
+    ],
     'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });

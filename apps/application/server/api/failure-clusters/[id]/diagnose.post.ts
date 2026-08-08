@@ -10,8 +10,17 @@ defineRouteMeta({
     tags: ['Failure Clusters'],
     summary: 'Run AI diagnosis for a cluster',
     description:
-      'Triggers an AI-powered diagnosis for the specified failure cluster. Accepts optional force flag, additional context, images, base commit, and selected commit SHAs in the request body.',
-    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      'Triggers an AI-powered diagnosis for the specified failure cluster. The optional `force` flag is a query parameter; additional context, images, base commit, and selected commit SHAs are read from the request body.',
+    parameters: [
+      { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+      {
+        name: 'force',
+        in: 'query',
+        required: false,
+        schema: { type: 'boolean' },
+        description: 'Re-run the diagnosis even if one already exists (default false).',
+      },
+    ],
     'x-required-roles': ['administrator', 'reporter'],
   },
 });

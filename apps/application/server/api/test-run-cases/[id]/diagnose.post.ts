@@ -20,7 +20,16 @@ defineRouteMeta({
     summary: 'Run AI diagnosis for a test run case',
     description:
       'Triggers an AI-powered diagnosis for the specified test run case (execution scope). Uses its failure cluster for context if available.',
-    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+    parameters: [
+      { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+      {
+        name: 'force',
+        in: 'query',
+        required: false,
+        schema: { type: 'boolean' },
+        description: 'Re-run the diagnosis even if one already exists (default false).',
+      },
+    ],
     'x-required-roles': ['administrator', 'reporter'],
   },
 });

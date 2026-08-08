@@ -8,7 +8,16 @@ defineRouteMeta({
     summary: 'Slow test analysis',
     description:
       'Returns the slowest test cases for a project with average, max, min duration, run count, and trend direction',
-    parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+    parameters: [
+      { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+      {
+        name: 'runs',
+        in: 'query',
+        required: false,
+        schema: { type: 'integer', default: 10, maximum: 100 },
+        description: 'Number of recent runs to analyze (default 10, max 100).',
+      },
+    ],
     'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });

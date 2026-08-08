@@ -4,9 +4,10 @@ import { requireResolvedProjectAccess, requireRouteId, resolveCaseProjectId } fr
 defineRouteMeta({
   openAPI: {
     tags: ['Test Cases'],
-    summary: 'Stability trend for a test case',
+    summary: 'Stability trend for a test case (experimental)',
     description:
-      'Returns time-series of flaky rate, pass rate, avg duration grouped into N buckets for a single test case',
+      'Returns time-series of flaky rate, pass rate, avg duration grouped into N buckets for a single test case. Experimental: consumed only by the MCP `get_test_case_stability_trend` tool with no first-party UI consumer yet, so the response shape is not frozen and may change.',
+    'x-experimental': true,
     'x-required-roles': ['administrator', 'reporter', 'user'],
     parameters: [
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
