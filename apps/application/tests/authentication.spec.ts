@@ -33,7 +33,7 @@ test.describe('Authentication Tests', () => {
     const projectId = createData.projectId;
 
     // Try to update the project (should work when auth is disabled)
-    const updateResponse = await request.put(`/api/projects/${projectId}`, {
+    const updateResponse = await request.patch(`/api/projects/${projectId}`, {
       data: {
         label: 'Updated Label',
         description: 'Updated Description',

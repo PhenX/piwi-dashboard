@@ -338,7 +338,7 @@ async function save() {
   const isEdit = editingId.value != null;
   try {
     if (isEdit) {
-      await $fetch(`/api/test-functions/${editingId.value}`, { method: 'PUT', body });
+      await $fetch(`/api/test-functions/${editingId.value}`, { method: 'PATCH', body });
     } else {
       await $fetch(`/api/projects/${projectId}/test-functions`, { method: 'POST', body });
     }

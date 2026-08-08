@@ -85,7 +85,7 @@ async function handleEditTag() {
   if (!editingTag.value) return;
   try {
     await $fetch(`/api/tags/${editingTag.value.id}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: {
         text: editTagState.text,
         color: editTagState.color,

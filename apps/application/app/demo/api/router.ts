@@ -301,7 +301,7 @@ const routes: RouteEntry[] = [
     },
   },
   {
-    method: 'PUT',
+    method: 'PATCH',
     pattern: /^\/api\/projects\/(\d+)$/,
     handler: async (m, body, _, ctx) => {
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
@@ -927,7 +927,7 @@ const routes: RouteEntry[] = [
     },
   },
   {
-    method: 'PUT',
+    method: 'PATCH',
     pattern: /^\/api\/tags\/(\d+)$/,
     handler: async (m, body) => updateTag(await getDemoDb(), +m[1]!, body as Parameters<typeof updateTag>[2]),
   },
@@ -975,7 +975,7 @@ const routes: RouteEntry[] = [
     },
   },
   {
-    method: 'PUT',
+    method: 'PATCH',
     pattern: /^\/api\/markers\/(\d+)$/,
     handler: async (m, body) => {
       const b = body as { occurredAt?: string } & Record<string, unknown>;
@@ -1017,7 +1017,7 @@ const routes: RouteEntry[] = [
     },
   },
   {
-    method: 'PUT',
+    method: 'PATCH',
     pattern: /^\/api\/test-functions\/(\d+)$/,
     handler: async (m, body) => updateTestFunction(await getDemoDb(), +m[1]!, updateTestFunctionSchema.parse(body)),
   },

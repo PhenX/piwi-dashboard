@@ -69,7 +69,7 @@ test.describe.serial('Tags API Tests', () => {
   });
 
   test('should update a tag', async ({ request }) => {
-    const res = await request.put(`/api/tags/${createdTagId}`, {
+    const res = await request.patch(`/api/tags/${createdTagId}`, {
       data: { text: 'api-test-tag-updated', color: '#10b981' },
     });
     expect(res.ok()).toBeTruthy();
@@ -79,7 +79,7 @@ test.describe.serial('Tags API Tests', () => {
   });
 
   test('should return 404 for unknown tag update', async ({ request }) => {
-    const res = await request.put('/api/tags/99999', {
+    const res = await request.patch('/api/tags/99999', {
       data: { text: 'ghost', color: '#000000' },
     });
     expect(res.status()).toBe(404);
@@ -152,7 +152,7 @@ test.describe.serial('Tags assigned to projects', () => {
   });
 
   test('should assign a tag to a project', async ({ request }) => {
-    const res = await request.put(`/api/projects/${projectId}`, {
+    const res = await request.patch(`/api/projects/${projectId}`, {
       data: { tagIds: [tagId] },
     });
     expect(res.ok()).toBeTruthy();
@@ -180,7 +180,7 @@ test.describe.serial('Tags assigned to projects', () => {
   });
 
   test('should remove all tags from a project', async ({ request }) => {
-    const res = await request.put(`/api/projects/${projectId}`, {
+    const res = await request.patch(`/api/projects/${projectId}`, {
       data: { tagIds: [] },
     });
     expect(res.ok()).toBeTruthy();
@@ -195,7 +195,7 @@ test.describe.serial('Tags assigned to projects', () => {
     });
     const { tag } = await tagRes.json();
 
-    await request.put(`/api/projects/${projectId}`, {
+    await request.patch(`/api/projects/${projectId}`, {
       data: { tagIds: [tag.id] },
     });
 

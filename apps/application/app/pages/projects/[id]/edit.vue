@@ -41,7 +41,7 @@ async function onSubmit() {
     saving.value = true;
 
     await $fetch(`/api/projects/${projectId}` as '/api/projects/:id', {
-      method: 'PUT',
+      method: 'PATCH',
       body: {
         label: state.value.label || null,
         description: state.value.description || null,
