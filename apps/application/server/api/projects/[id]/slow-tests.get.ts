@@ -33,7 +33,7 @@ export default eventHandler(async (event) => {
   const db = await getDatabase();
 
   try {
-    return await getProjectSlowTests(db, id, runsCount);
+    return { items: await getProjectSlowTests(db, id, runsCount) };
   } catch (e: any) {
     if (e?.message === 'Project not found') {
       throw createError({ statusCode: 404, message: 'Project not found' });

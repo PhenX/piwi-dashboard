@@ -124,7 +124,7 @@ test.describe.serial('Performance API Tests', () => {
     const response = await request.get(`/api/projects/${projectId}/performance`);
     expect(response.ok()).toBeTruthy();
 
-    const data = await response.json();
+    const { items: data } = await response.json();
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThanOrEqual(2);
 
@@ -139,7 +139,7 @@ test.describe.serial('Performance API Tests', () => {
     const response = await request.get(`/api/projects/${projectId}/slow-tests`);
     expect(response.ok()).toBeTruthy();
 
-    const data = await response.json();
+    const { items: data } = await response.json();
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThan(0);
 
@@ -164,7 +164,7 @@ test.describe.serial('Performance API Tests', () => {
     const response = await request.get(`/api/projects/${projectId}/slow-tests?runs=5`);
     expect(response.ok()).toBeTruthy();
 
-    const data = await response.json();
+    const { items: data } = await response.json();
     expect(Array.isArray(data)).toBe(true);
   });
 

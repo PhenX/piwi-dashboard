@@ -328,12 +328,12 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/projects\/(\d+)\/performance$/,
     handler: async (m, _, q, ctx) => {
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
-      const rawLimit = q ? parseInt(q.get('limit') ?? '', 10) : NaN;
-      const limit = Math.min(Number.isNaN(rawLimit) ? 50 : rawLimit, 200);
+      const rawRuns = q ? parseInt(q.get('runs') ?? '', 10) : NaN;
+      const runs = Math.min(Number.isNaN(rawRuns) ? 50 : rawRuns, 200);
       const from = q?.get('from') || undefined;
       const to = q?.get('to') || undefined;
       const fullRunsOnly = q?.get('fullRunsOnly') !== 'false';
-      return getProjectPerformance(await getDemoDb(), +m[1]!, limit, from, to, fullRunsOnly);
+      return { items: await getProjectPerformance(await getDemoDb(), +m[1]!, runs, from, to, fullRunsOnly) };
     },
   },
   {
@@ -351,7 +351,7 @@ const routes: RouteEntry[] = [
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
       const rawRuns = q ? parseInt(q.get('runs') ?? '', 10) : NaN;
       const runs = Math.min(Number.isNaN(rawRuns) ? 10 : rawRuns, 100);
-      return getProjectSlowTests(await getDemoDb(), +m[1]!, runs);
+      return { items: await getProjectSlowTests(await getDemoDb(), +m[1]!, runs) };
     },
   },
   {

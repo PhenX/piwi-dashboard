@@ -474,20 +474,22 @@ watch(
     const qs = new URLSearchParams(params as Record<string, string>).toString();
     const fullParam = fullRunsOnly.value ? `${qs ? '&' : ''}fullRunsOnly=true` : '';
     const queryString = qs || fullParam ? `?${qs}${fullParam}` : '';
-    performanceData.value = await $fetch<PerformanceTrendPoint[]>(
+    const perfRes = await $fetch<{ items: PerformanceTrendPoint[] }>(
       `/api/projects/${projectId}/performance${queryString}`,
     ).catch((err) => {
       console.warn('[PerformanceTab] Failed to fetch performance trend:', err);
       return null;
     });
+    performanceData.value = perfRes?.items ?? null;
     performanceLoading.value = false;
     if (slowTestsLoading.value) {
       slowTestsError.value = false;
-      slowTests.value = await $fetch<SlowTest[]>(`/api/projects/${projectId}/slow-tests`).catch((err) => {
+      const slowRes = await $fetch<{ items: SlowTest[] }>(`/api/projects/${projectId}/slow-tests`).catch((err) => {
         slowTestsError.value = true;
         console.warn('[PerformanceTab] Failed to fetch slow tests:', err);
         return null;
       });
+      slowTests.value = slowRes?.items ?? null;
       slowTestsLoading.value = false;
     }
   },

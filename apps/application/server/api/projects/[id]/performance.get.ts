@@ -11,11 +11,11 @@ defineRouteMeta({
     parameters: [
       { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
       {
-        name: 'limit',
+        name: 'runs',
         in: 'query',
         required: false,
         schema: { type: 'integer', default: 50, maximum: 200 },
-        description: 'Number of recent runs to include (default 50, max 200).',
+        description: 'Number of recent runs to include (default 50, max 200). Domain window, not row pagination.',
       },
       {
         name: 'from',
@@ -49,7 +49,7 @@ export default eventHandler(async (event) => {
   await requireProjectAccess(event, id);
 
   const query = getQuery(event);
-  const limit = Math.min(parseInt(query.limit as string) || 50, 200);
+  const runs = Math.min(parseInt(query.runs as string) || 50, 200);
   const from = query.from as string | undefined;
   const to = query.to as string | undefined;
   const fullRunsOnly = query.fullRunsOnly !== 'false';
@@ -57,7 +57,7 @@ export default eventHandler(async (event) => {
   const db = await getDatabase();
 
   try {
-    return await getProjectPerformance(db, id, limit, from, to, fullRunsOnly);
+    return { items: await getProjectPerformance(db, id, runs, from, to, fullRunsOnly) };
   } catch (e: any) {
     if (e?.message === 'Project not found') {
       throw createError({ statusCode: 404, message: 'Project not found' });
