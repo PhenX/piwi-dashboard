@@ -197,7 +197,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   // ── list_projects ──────────────────────────────────────────────────────────
   async list_projects(db, _params, ctx) {
     const projects = await listProjects(db, ctx.scope);
-    return projects.map((p: any) =>
+    const items = projects.map((p: any) =>
       dropNulls({
         id: p.id,
         name: p.name,
@@ -218,6 +218,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
           : null,
       }),
     );
+    return { items };
   },
 
   // ── get_project ────────────────────────────────────────────────────────────
@@ -765,11 +766,11 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       .select({ projectId: failureClusters.projectId })
       .from(failureClusters)
       .where(eq(failureClusters.id, clusterId));
-    if (!cluster) throw new Error('Cluster not found');
+    if (!cluster) return null;
     assertProject(ctx, cluster.projectId);
 
     const plan = await buildFixPlan(db, clusterId);
-    if (!plan) throw new Error('Cluster not found');
+    if (!plan) return null;
     return enrichFixPlanOwnership(db, cluster.projectId, plan);
   },
 
@@ -777,11 +778,11 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   async get_cluster_diagnosis(db, params, ctx) {
     const id = numericParam(params.clusterId, 'clusterId');
     if ((await checkEntityScope(db, ctx, id, resolveClusterProjectId)) === 'not-found') {
-      return { diagnosis: null };
+      return null;
     }
     const result = await getClusterDiagnosis(db, id);
     const diag = result.diagnosis as any;
-    if (!diag) return { diagnosis: null, manualBaseCommit: result.manualBaseCommit };
+    if (!diag) return null;
 
     const det = diag.details as Record<string, unknown> | null;
     return dropNulls({
@@ -867,11 +868,11 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   // ── get_case_screenshots ───────────────────────────────────────────────────
   async get_case_screenshots(db, params, ctx) {
     const id = numericParam(params.executionId, 'executionId');
-    if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return [];
+    if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
     const withContent = params.content === true || params.content === 'true';
 
     const screenshotRows = await selectCaseScreenshots(db, id, 3);
-    if (screenshotRows.length === 0) return [];
+    if (screenshotRows.length === 0) return { items: [] };
 
     const storage = getStorage();
     const results: Array<{ name: string; mediaType: string; dataLength: number; data?: string }> = [];
@@ -907,7 +908,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         // skip inaccessible files
       }
     }
-    return results;
+    return { items: results };
   },
 
   // ── get_cluster_context ────────────────────────────────────────────────────
@@ -1254,7 +1255,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     const id = numericParam(params.executionId, 'executionId');
     if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
     const h = await getLocatorHealing(db, id);
-    if (!h || h.source === 'none') return { source: 'none' };
+    if (!h || h.source === 'none') return null;
     const rankedList = (arr: any[] | null | undefined) =>
       arr && arr.length
         ? arr.slice(0, 8).map((a: any) => dropNulls({ locator: a.locator, method: a.method, score: a.score }))
@@ -1323,7 +1324,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   // ── list_case_traces ───────────────────────────────────────────────────────
   async list_case_traces(db, params, ctx) {
     const id = numericParam(params.executionId, 'executionId');
-    if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return { traces: [] };
+    if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
     const traces = (await getTestRunCaseTraces(db, id)) as any[];
     return {
       traces: traces.map((t: any) =>
@@ -1345,7 +1346,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
             ? resolveCaseProjectId
             : null;
     if (!resolver) throw new Error('entityType must be test_run, test_runs_case, or test_case');
-    if ((await checkEntityScope(db, ctx, entityId, resolver)) === 'not-found') return { links: [] };
+    if ((await checkEntityScope(db, ctx, entityId, resolver)) === 'not-found') return null;
     const { links } = await listLinks(db, entityType, entityId);
     return {
       links: links.map((l: any) =>

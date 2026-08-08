@@ -135,7 +135,7 @@ test.describe.serial('MCP server', () => {
   test('tools/call list_projects — returns project list with stats', async ({ request }) => {
     const body = await mcp(request, 'tools/call', { name: 'list_projects', arguments: {} });
     const text = body.result.content[0].text;
-    const projects = JSON.parse(text);
+    const { items: projects } = JSON.parse(text);
     expect(Array.isArray(projects)).toBe(true);
     const project = projects.find((p: any) => p.name === PROJECT.MCP_TEST);
     expect(project).toBeDefined();
