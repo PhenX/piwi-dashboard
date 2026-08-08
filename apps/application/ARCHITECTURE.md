@@ -161,7 +161,9 @@ Shared building blocks worth knowing before writing new markup (`AGENTS.md` make
   summary cards).
 - **States** — `EmptyState`, `LoadingState`, `ErrorState` (with an `action` slot).
 - **Data display** — `StatTile` + `StatTileGrid` (auto-fitting, no per-page breakpoints), `TableScroller`,
-  `FilterToolbar`, `ChartCard`, `ChartLegend`, `ChartMarkerTooltip`, `MiniRunBars`, `DurationValue` (tight `210ms` via
+  `FilterToolbar`, `ChartCard` (header + `legend`), the SVG chart primitives `ChartFrame` (self-measuring plot area,
+  y-axis) / `ChartTooltip` / `ChartMarkerLines` / `ChartLegend` / `ChartMarkerTooltip`, `MiniRunBars`,
+  `DurationValue` (tight `210ms` via
   the pure `splitDuration`), `CodeBlock`, `MarkdownPreview`, `DiffPatch` / `DiffFile`, `LocatorCode` (a locator
   expression syntax-highlighted through `@piwitests/picker-dom`'s `tokenizeLocator`).
 - **Navigation & actions** — `NavbarActions` (every `UDashboardNavbar` `#right` group; labels collapse to icons below
@@ -182,17 +184,18 @@ Shared building blocks worth knowing before writing new markup (`AGENTS.md` make
 (`useFoldedState`, `useFoldableSummary`, `useTreeViewCookie`), settings derivation (`useSettingsNav`,
 `useSettingsEnvState`), analytics scope, IDE preferences (`useOpenInIde`), desktop detection (`useIsDesktop`,
 `useTauri`), demo helpers, and small utilities (`useCopy` / `useCopyRich` — use these instead of hand-rolling
-`navigator.clipboard`, `useAiStatus`, `useChartMarkers`).
+`navigator.clipboard`, `useAiStatus`, `useChartTooltip`).
 
 `app/utils/` holds pure helpers: `index.ts` (`formatDuration`, `splitDuration`, `getStatusColor`, `getFileApiPath`,
 `formatRelativeTime`, `createSortHeader`, `formatBytes`, `errorMessage`, patch/commit helpers, cluster colour maps),
-`performance-hints.ts`, `ide-links.ts`, `help-content.ts`, `settings-metadata.ts`, `openapi.ts` / `openapi-console.ts`.
-`retry-command.ts` (`buildRetryCommand` — `file-line` / `grep` / `file` modes, shell-escaped, capped at 4096 chars) and
-`locator-edit.ts` (`buildLocatorEdit` — rewrite the failing locator call on a source line) now live in `shared/` so the
-server and demo share them (the fix plan builds the same verify command and edits); thin `app/utils/` re-export shims
-keep them auto-imported. Locator-line edits become a git-applyable unified diff via `shared/heal-edit.ts`
-(`buildHealEdit` / `buildUnifiedLineDiff`), and `shared/callsite-location.ts` (`parseCallsiteLocation`) parses a
-captured `file:line:col` (drive-letter-safe).
+`performance-hints.ts`, `ide-links.ts`, `help-content.ts`, `settings-metadata.ts`, `openapi.ts` / `openapi-console.ts`,
+`chart.ts` (chart palette, the per-chart series definitions the plots and their legends share, and the tick/stack/bar
+geometry behind the SVG charts). `retry-command.ts` (`buildRetryCommand` — `file-line` / `grep` / `file` modes,
+shell-escaped, capped at 4096 chars) and `locator-edit.ts` (`buildLocatorEdit` — rewrite the failing locator call on a
+source line) now live in `shared/` so the server and demo share them (the fix plan builds the same verify command and
+edits); thin `app/utils/` re-export shims keep them auto-imported. Locator-line edits become a git-applyable unified
+diff via `shared/heal-edit.ts` (`buildHealEdit` / `buildUnifiedLineDiff`), and `shared/callsite-location.ts`
+(`parseCallsiteLocation`) parses a captured `file:line:col` (drive-letter-safe).
 
 ## Demo SPA
 

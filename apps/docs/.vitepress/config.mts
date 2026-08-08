@@ -17,6 +17,9 @@ export default defineConfig({
   // Example values in the generated configuration reference (PIWI_SITE_URL,
   // Ollama base URLs) are intentionally unreachable localhost URLs.
   ignoreDeadLinks: [/^https?:\/\/localhost/],
+  sitemap: {
+    hostname: siteUrl,
+  },
   vite: {
     // The #shared modules imported below live outside the docs root, and their
     // nearest tsconfig (application/tsconfig.json) references Nuxt-generated
@@ -36,6 +39,8 @@ export default defineConfig({
     },
   },
   head: [
+    ['link', { rel: 'icon', href: '/favicon.ico', sizes: 'any' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:title', content: 'Piwi Dashboard — Your Playwright results, kept and explained' }],
     [
@@ -113,6 +118,7 @@ export default defineConfig({
           { text: 'Notifications & alerts', link: '/notifications' },
           { text: 'Auto-heal PRs', link: '/auto-heal' },
           { text: 'Offline export', link: '/offline-export' },
+          { text: 'Share links', link: '/share-links' },
         ],
       },
       {

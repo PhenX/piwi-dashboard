@@ -52,6 +52,7 @@ Policy (at least one is required):
   --max-new-flaky <n>      Fail when more than n tests newly became flaky
   --max-quarantined <n>    Fail when more than n tests are quarantined
   --fail-on-new-cluster    Fail when this run introduced a new failure cluster
+  --fail-on-flaky          Fail when this run contains any flaky test
 
 Other:
   --json                   Print the raw result as JSON instead of a summary
@@ -116,6 +117,7 @@ export function parseGateArgs(argv: string[], env: NodeJS.ProcessEnv): GateArgs 
     maxNewFlaky: readCount(argv, '--max-new-flaky'),
     maxQuarantined: readCount(argv, '--max-quarantined'),
     failOnNewCluster: argv.includes('--fail-on-new-cluster'),
+    failOnFlaky: argv.includes('--fail-on-flaky'),
   };
 
   return { serverUrl, apiKey: readOption(argv, '--api-key') ?? env.PIWI_API_KEY ?? null, runId, policy };

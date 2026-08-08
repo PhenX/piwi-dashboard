@@ -404,12 +404,13 @@ export const testRunsCases = sqliteTable(
     testCaseId: integer('test_case_id')
       .notNull()
       .references(() => testCases.id, { onDelete: 'cascade' }),
-    status: text('status').notNull(), // 'passed', 'failed', 'timedout', 'skipped'
+    status: text('status').notNull(), // 'passed', 'failed', 'timedout', 'skipped', 'didnotrun' — canonical lowercase; rows from earlier releases may carry 'timedOut'
     duration: integer('duration'), // in milliseconds
     timeout: integer('timeout'), // Effective per-test timeout in ms (TestCase.timeout); 0 = unbounded, null = unknown/legacy
     error: text('error'),
     failureClusterId: integer('failure_cluster_id').references(() => failureClusters.id), // set for failed rows with an error — groups rows sharing a fingerprint
     retries: integer('retries').default(0),
+    attempts: text('attempts', { mode: 'json' }), // Array of { retry, status, duration, startedAt } — per-attempt outcomes
     line: integer('line'), // line number in file
     column: integer('column'), // column number in file
     steps: text('steps', { mode: 'json' }), // Array of { title, duration, category, location?, startTime? } step objects
@@ -440,6 +441,8 @@ export const testRunsCases = sqliteTable(
     startedAt: integer('started_at'), // Unix timestamp in ms when the test started (stored/read as a plain number)
     isNewRegression: integer('is_new_regression'), // boolean: passed in baseline, failed in this run
     isNewFlaky: integer('is_new_flaky'), // boolean: no retries in baseline, retry-pass in this run
+    didNotRunReason: text('did_not_run_reason'), // Why a 'didnotrun' case never executed: 'previous-failure' | 'global-timeout' | 'max-failures' | 'interrupted'
+    blockedBy: text('blocked_by'), // For a 'previous-failure' cascade, the location (file:line:col) of the failing test that blocked it
     createdAt: integer('created_at', { mode: 'timestamp_ms' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -936,6 +939,39 @@ export const testFunctions = sqliteTable(
   }),
 );
 
+// Share links — read-only capability tokens for handing one execution or one
+// failure cluster to someone without a dashboard account. The token itself is
+// never stored: only its SHA-256 hash (unguessable 256-bit secrets need no
+// salt, and the plain hash is what makes an indexed equality lookup possible).
+// `entity_id` is polymorphic over test_runs_cases / failure_clusters, so it
+// carries no FK; retention's orphan sweep removes rows whose entity is gone.
+export const shareLinks = sqliteTable(
+  'share_links',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    entityKind: text('entity_kind').notNull(), // 'execution' | 'cluster' (ExportKind)
+    entityId: integer('entity_id').notNull(), // test_runs_cases.id or failure_clusters.id
+    tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of the full psl_ token
+    tokenPrefix: text('token_prefix').notNull(), // First 8 chars after "psl_" — shown in UI
+    createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    expiresAt: integer('expires_at', { mode: 'timestamp' }), // null = no expiry
+    revokedAt: integer('revoked_at', { mode: 'timestamp' }), // set on revoke; row kept for the audit trail
+    lastViewedAt: integer('last_viewed_at', { mode: 'timestamp' }),
+    viewCount: integer('view_count').notNull().default(0),
+  },
+  (table) => ({
+    projectIdIdx: index('idx_share_links_project_id').on(table.projectId),
+    entityIdx: index('idx_share_links_entity').on(table.entityKind, table.entityId),
+    createdByIdx: index('idx_share_links_created_by').on(table.createdBy),
+  }),
+);
+
 export const apiKeys = sqliteTable(
   'api_keys',
   {
@@ -1015,4 +1051,6 @@ export type NewNetworkRequest = typeof networkRequests.$inferInsert;
 export type LocatorSnapshotRow = typeof locatorSnapshots.$inferSelect;
 export type NewLocatorSnapshotRow = typeof locatorSnapshots.$inferInsert;
 export type TestFunction = typeof testFunctions.$inferSelect;
+export type ShareLink = typeof shareLinks.$inferSelect;
+export type NewShareLink = typeof shareLinks.$inferInsert;
 export type NewTestFunction = typeof testFunctions.$inferInsert;

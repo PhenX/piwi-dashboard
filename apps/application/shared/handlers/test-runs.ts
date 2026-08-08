@@ -13,6 +13,7 @@ import {
   markers,
 } from '../../server/database/schema';
 import { fetchAndFormatSuites, splitSuitePath } from '../utils/suites';
+import { FAILED_STATUS_KEYS } from '../utils/test-counts';
 import { normalizeRoute } from '../utils/route';
 import { percentile } from '../utils/stats';
 import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-waits';
@@ -99,6 +100,7 @@ export async function getTestRun(
       error: testRunsCases.error,
       failureClusterId: testRunsCases.failureClusterId,
       retries: testRunsCases.retries,
+      attempts: testRunsCases.attempts,
       line: testRunsCases.line,
       column: testRunsCases.column,
       slowestStep: testRunsCases.slowestStep,
@@ -117,6 +119,8 @@ export async function getTestRun(
       testMeta: testRunsCases.testMeta,
       isNewRegression: testRunsCases.isNewRegression,
       isNewFlaky: testRunsCases.isNewFlaky,
+      didNotRunReason: testRunsCases.didNotRunReason,
+      blockedBy: testRunsCases.blockedBy,
     })
     .from(testRunsCases)
     .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
@@ -146,6 +150,7 @@ export async function getTestRun(
     error: tc.error,
     failureClusterId: tc.failureClusterId,
     retries: tc.retries,
+    attempts: tc.attempts ?? null,
     slowestStep: tc.slowestStep,
     slowestStepDuration: tc.slowestStepDuration,
     // With custom patterns configured, wasted time is recomputed from the
@@ -167,6 +172,8 @@ export async function getTestRun(
     browser: tc.browser,
     isNewRegression: tc.isNewRegression ?? null,
     isNewFlaky: tc.isNewFlaky ?? null,
+    didNotRunReason: (tc.didNotRunReason as string | null) ?? null,
+    blockedBy: (tc.blockedBy as string | null) ?? null,
   }));
 
   const runsCaseIds = runsCases.map((tc: any) => tc.id);
@@ -189,6 +196,12 @@ export async function getTestRun(
 
   const { streamToken: _streamToken, ...testRunPublic } = testRun;
 
+  let projectPublic;
+  if (project) {
+    const { scmToken: _scmToken, ...projectRest } = project;
+    projectPublic = { ...projectRest, latestRunId, latestRunStatus };
+  }
+
   // Nearest timeline marker before this run's start, scoped to the run's
   // environment (or global markers with no environment) — surfaced as context.
   const precedingMarkerCandidates = await db
@@ -204,7 +217,7 @@ export async function getTestRun(
     ...testRunPublic,
     precedingMarker,
     isFullRun: testRun.isFullRun === 1,
-    project: project ? { ...project, latestRunId, latestRunStatus } : project,
+    project: projectPublic,
     reports: reportResults.map((r: any) => ({
       id: r.id,
       type: r.subtype || r.type,
@@ -614,7 +627,7 @@ export async function getFailureGroups(db: DrizzleDB, runId: number) {
 
 // ─── computeRegressionContextForRun — regression vs last green run ────────────
 
-const FAIL_STATUSES = new Set(['failed', 'timedOut']);
+const FAIL_STATUSES = new Set<string>(FAILED_STATUS_KEYS);
 
 export async function computeRegressionContextForRun(db: DrizzleDB, runId: number) {
   const runResults = await db

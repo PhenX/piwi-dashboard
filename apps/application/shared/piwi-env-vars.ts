@@ -197,7 +197,7 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     order: 12,
     intro:
       'Required for email notifications and account flows (verification, password reset, invites). Set via environment only.',
-    note: 'Email sending activates once `PIWI_SMTP_HOST`, `PIWI_SMTP_USER`, `PIWI_SMTP_PASS` and `PIWI_SMTP_FROM` are all set. See [Notifications](./notifications) for channels and subscriptions.',
+    note: 'Email sending activates once `PIWI_SMTP_HOST` and `PIWI_SMTP_FROM` are set; add `PIWI_SMTP_USER`/`PIWI_SMTP_PASS` when the server requires authentication. See [Notifications](./notifications) for channels and subscriptions.',
   },
   clustering: {
     title: 'Failure clustering',
@@ -377,6 +377,33 @@ export const PIWI_ENV_VARS = {
     relevantWhen: { PIWI_AUTH_ENABLED: 'true' },
     requiredWhen: { PIWI_AUTH_ENABLED: 'true' },
     notes: 'The server refuses to start when auth is enabled and this is unset.',
+  },
+  PIWI_SHARE_LINKS_ENABLED: {
+    description:
+      'Set to "true" to allow minting read-only public share links for executions and failure clusters. Off by default; turning it off again immediately dead-ends every outstanding link without deleting anything.',
+    category: 'auth',
+    type: 'boolean',
+    default: 'false',
+    since: '0.26.0',
+  },
+  PIWI_SHARE_LINK_MAX_TTL_DAYS: {
+    description:
+      'Longest allowed share-link lifetime, in days. The creation dialog offers expiries up to this; 0 lifts the cap and allows links with no expiry.',
+    category: 'auth',
+    type: 'number',
+    default: '30',
+    min: 0,
+    max: 3650,
+    relevantWhen: { PIWI_SHARE_LINKS_ENABLED: 'true' },
+    since: '0.26.0',
+  },
+  PIWI_TRUST_PROXY: {
+    description:
+      'Set to "true" when a reverse proxy sits in front of Piwi, so per-IP rate limits on the auth endpoints key on the client address your proxy appends to X-Forwarded-For instead of on the proxy\'s own address (which would pool every client into one bucket). Leave off when clients connect directly: the header is client-controlled then, and trusting it would let a caller choose its own bucket.',
+    category: 'auth',
+    type: 'boolean',
+    default: 'false',
+    since: '0.26.0',
   },
 
   // ── OAuth ────────────────────────────────────────────────────────────────
@@ -929,17 +956,15 @@ export const PIWI_ENV_VARS = {
     relevantWhen: { PIWI_SMTP_HOST: '*' },
   },
   PIWI_SMTP_USER: {
-    description: 'SMTP username.',
+    description: 'SMTP username. Optional — only when the server requires authentication.',
     category: 'smtp',
     relevantWhen: { PIWI_SMTP_HOST: '*' },
-    requiredWhen: { PIWI_SMTP_HOST: '*' },
   },
   PIWI_SMTP_PASS: {
-    description: 'SMTP password. Never returned by the API.',
+    description: 'SMTP password. Optional — only when the server requires authentication. Never returned by the API.',
     category: 'smtp',
     secret: true,
     relevantWhen: { PIWI_SMTP_HOST: '*' },
-    requiredWhen: { PIWI_SMTP_HOST: '*' },
   },
   PIWI_SMTP_FROM: {
     description: 'From address for outbound email (e.g. noreply@example.com).',

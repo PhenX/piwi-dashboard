@@ -298,7 +298,7 @@ addition:
 
 ## Requirements
 
-- Node.js 18 or higher (the reporter runs inside your test project — the dashboard *server* itself targets Node 24+, or use its Docker image)
+- Node.js 18 or higher (the reporter runs inside your test project — the dashboard *server* itself targets Node 22+, or use its Docker image)
 - Playwright Test 1.40 or higher
 - Running Piwi Dashboard server
 

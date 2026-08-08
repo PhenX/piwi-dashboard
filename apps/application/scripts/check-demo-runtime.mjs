@@ -73,13 +73,18 @@ function serve() {
         file = join(ROOT, 'index.html');
       }
       try {
+        const data = await readFile(file);
         res.writeHead(200, {
           'Content-Type': CONTENT_TYPES[extname(file)] ?? 'application/octet-stream',
           'Service-Worker-Allowed': BASE,
         });
-        res.end(await readFile(file));
+        res.end(data);
       } catch {
-        res.writeHead(404).end('not found');
+        // Headers are only written once the read succeeds, so a missing file
+        // can still answer 404 (on Windows a read can fail after a successful
+        // stat, e.g. a locked file — the old double writeHead crashed the server).
+        if (!res.headersSent) res.writeHead(404);
+        res.end('not found');
       }
     });
     server.listen(PORT, () => resolve(server));

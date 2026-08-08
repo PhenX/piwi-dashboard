@@ -115,20 +115,25 @@ clipping a tall summary; `DetailPageLayout` handles this. **Verify new or change
 
 Every change that adds or visibly reworks user-facing UI ends with screenshots of the result: add or update a scene in
 the `SCENES` registry of `scripts/take-feature-screenshots.mjs`, run it (`node scripts/take-feature-screenshots.mjs
-<scene>` — it boots its own desktop-enabled dev server, or pass `--url` to reuse one), and attach the captured images
-to your final report or PR. Desktop-only UI is captured through the script's built-in mocked Tauri bridge — no shell
-build needed; shape the mock per scene (`link`, `inspection`). Scenes tagged `desktop` write to `.screens/`, which is
-**gitignored — those images are a report artifact, never committed**; the scene, kept current, is what's committed.
+<scene>` — it boots its own dev server, or pass `--url` to reuse one), and attach the captured images to your final
+report or PR. Scenes tagged `desktop` write to `.screens/`, which is **gitignored — those images are a report artifact,
+never committed**; the scene, kept current, is what's committed.
 
 Scenes tagged `docs` are the exception: they write the committed illustrations in `apps/docs/public/screenshots/`, so
 the scene name _is_ the image name and `npm run app:screens:docs` regenerates every one of them.
+
+**Every scene declares the surface it captures** via `mode`: `web` (the default) is the dashboard as a browser serves
+it; `desktop` is the Tauri shell — the server runs with `NUXT_PUBLIC_DESKTOP=true` and the built-in mocked Tauri bridge
+is injected, so no shell build is needed (shape the mock per scene with `link` / `inspection`). Pick `web` for anything
+a browser user sees: desktop-only chrome such as the sidebar's back/forward pair would otherwise misrepresent the app
+in a full-viewport capture. A run covering both modes boots one server per mode, web first.
 
 | Command                          | Purpose                                                            |
 | -------------------------------- | ------------------------------------------------------------------ |
 | `npm run app:screens -- <scene>` | Capture one scene (add `--url` to drive a server you already have) |
 | `npm run app:screens:docs`       | Regenerate every committed docs illustration                       |
 | `npm run app:screens:check`      | Fail if a docs image has no scene, or a scene's image is missing   |
-| `npm run app:screens -- --list`  | Every scene with its tags and the files it writes                  |
+| `npm run app:screens -- --list`  | Every scene with its mode, tags and the files it writes            |
 
 **Target elements, not DOM shape.** A scene points at a `data-shot="…"` attribute placed on the container the image is
 actually about (`of: '[data-shot="flaky-table"]'`), never at an XPath or nth-child path. Treat the attribute list as a

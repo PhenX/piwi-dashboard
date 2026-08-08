@@ -63,6 +63,12 @@ describe('renderEventSubject', () => {
       }),
     ).toBe('Auto-heal opened PR #42 — my-project');
   });
+
+  test('perf.regression includes the slowdown when the payload carries it', () => {
+    expect(renderEventSubject('perf.regression', { ...runPayload, regressionPct: 34 })).toBe(
+      'Performance regression — my-project (+34% slower)',
+    );
+  });
 });
 
 describe('truncateExcerpt', () => {

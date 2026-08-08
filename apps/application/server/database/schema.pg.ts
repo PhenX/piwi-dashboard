@@ -11,8 +11,35 @@ import {
   index,
   uniqueIndex,
   primaryKey,
+  customType,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+
+/**
+ * Boolean stored in an integer column (0/1). Mirrors the SQLite dialect's
+ * `integer(..., { mode: 'boolean' })` columns, so application code reads and
+ * writes plain booleans on both dialects while the column type stays integer
+ * (no data migration for existing databases).
+ *
+ * `.default()` on these columns must be the driver value (`0`/`1`, cast to
+ * boolean) — drizzle-kit serializes defaults into DDL without running
+ * `toDriver`, and a literal `true`/`false` default is invalid SQL for an
+ * integer column.
+ */
+const intBoolean = customType<{ data: boolean; driverData: number }>({
+  dataType() {
+    return 'integer';
+  },
+  toDriver(value) {
+    return value ? 1 : 0;
+  },
+  fromDriver(value) {
+    return Number(value) !== 0;
+  },
+});
+
+const INT_BOOLEAN_FALSE = 0 as unknown as boolean;
+const INT_BOOLEAN_TRUE = 1 as unknown as boolean;
 
 // Projects table
 export const projects = pgTable(
@@ -411,12 +438,13 @@ export const testRunsCases = pgTable(
     testCaseId: integer('test_case_id')
       .notNull()
       .references(() => testCases.id, { onDelete: 'cascade' }),
-    status: text('status').notNull(), // 'passed', 'failed', 'timedout', 'skipped'
+    status: text('status').notNull(), // 'passed', 'failed', 'timedout', 'skipped', 'didnotrun' — canonical lowercase; rows from earlier releases may carry 'timedOut'
     duration: integer('duration'), // in milliseconds
     timeout: integer('timeout'), // Effective per-test timeout in ms (TestCase.timeout); 0 = unbounded, null = unknown/legacy
     error: text('error'),
     failureClusterId: integer('failure_cluster_id').references(() => failureClusters.id), // set for failed rows with an error — groups rows sharing a fingerprint
     retries: integer('retries').default(0),
+    attempts: jsonb('attempts'), // Array of { retry, status, duration, startedAt } — per-attempt outcomes
     line: integer('line'), // line number in file
     column: integer('column'), // column number in file
     steps: jsonb('steps'), // Array of { title, duration, category, location?, startTime? } step objects
@@ -447,6 +475,8 @@ export const testRunsCases = pgTable(
     startedAt: bigint('started_at', { mode: 'number' }), // Unix timestamp in ms when the test started (exceeds 32-bit int range)
     isNewRegression: integer('is_new_regression'), // boolean: passed in baseline, failed in this run
     isNewFlaky: integer('is_new_flaky'), // boolean: no retries in baseline, retry-pass in this run
+    didNotRunReason: text('did_not_run_reason'), // Why a 'didnotrun' case never executed: 'previous-failure' | 'global-timeout' | 'max-failures' | 'interrupted'
+    blockedBy: text('blocked_by'), // For a 'previous-failure' cascade, the location (file:line:col) of the failing test that blocked it
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -712,7 +742,7 @@ export const users = pgTable(
     role: text('role').notNull(), // Role enum: 'administrator', 'reporter', 'user'
     name: text('name'), // Display name
     email: text('email'), // Email address (nullable; OAuth callback can populate it)
-    emailVerified: integer('email_verified').notNull().default(0), // boolean (0/1)
+    emailVerified: intBoolean('email_verified').notNull().default(INT_BOOLEAN_FALSE),
     avatarUrl: text('avatar_url'), // Avatar from OAuth provider
     oauthProvider: text('oauth_provider'), // 'google', 'github', etc.
     oauthProviderId: text('oauth_provider_id'), // User ID from the OAuth provider
@@ -762,7 +792,7 @@ export const notificationChannels = pgTable(
     type: text('type').notNull(), // 'email' | 'slack' | 'webhook'
     config: jsonb('config'), // { address } | { webhookUrl } | { url, secret (encrypted) }
     userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }), // null = global (admin-managed)
-    verified: integer('verified').notNull().default(0),
+    verified: intBoolean('verified').notNull().default(INT_BOOLEAN_FALSE),
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -790,7 +820,7 @@ export const subscriptions = pgTable(
     mode: text('mode').notNull().default('realtime'), // 'realtime' | 'digest'
     digestAt: text('digest_at'), // 'HH:mm' UTC for daily digest
     mutedUntil: timestamp('muted_until', { mode: 'date' }),
-    active: integer('active').notNull().default(1),
+    active: intBoolean('active').notNull().default(INT_BOOLEAN_TRUE),
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -931,6 +961,39 @@ export const testFunctions = pgTable(
   }),
 );
 
+// Share links — read-only capability tokens for handing one execution or one
+// failure cluster to someone without a dashboard account. The token itself is
+// never stored: only its SHA-256 hash (unguessable 256-bit secrets need no
+// salt, and the plain hash is what makes an indexed equality lookup possible).
+// `entity_id` is polymorphic over test_runs_cases / failure_clusters, so it
+// carries no FK; retention's orphan sweep removes rows whose entity is gone.
+export const shareLinks = pgTable(
+  'share_links',
+  {
+    id: serial('id').primaryKey(),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    entityKind: text('entity_kind').notNull(), // 'execution' | 'cluster' (ExportKind)
+    entityId: integer('entity_id').notNull(), // test_runs_cases.id or failure_clusters.id
+    tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of the full psl_ token
+    tokenPrefix: text('token_prefix').notNull(), // First 8 chars after "psl_" — shown in UI
+    createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { mode: 'date' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    expiresAt: timestamp('expires_at', { mode: 'date' }), // null = no expiry
+    revokedAt: timestamp('revoked_at', { mode: 'date' }), // set on revoke; row kept for the audit trail
+    lastViewedAt: timestamp('last_viewed_at', { mode: 'date' }),
+    viewCount: integer('view_count').notNull().default(0),
+  },
+  (table) => ({
+    projectIdIdx: index('idx_share_links_project_id').on(table.projectId),
+    entityIdx: index('idx_share_links_entity').on(table.entityKind, table.entityId),
+    createdByIdx: index('idx_share_links_created_by').on(table.createdBy),
+  }),
+);
+
 export const apiKeys = pgTable(
   'api_keys',
   {
@@ -1002,4 +1065,6 @@ export type NewNetworkRequest = typeof networkRequests.$inferInsert;
 export type LocatorSnapshotRow = typeof locatorSnapshots.$inferSelect;
 export type NewLocatorSnapshotRow = typeof locatorSnapshots.$inferInsert;
 export type TestFunction = typeof testFunctions.$inferSelect;
+export type ShareLink = typeof shareLinks.$inferSelect;
+export type NewShareLink = typeof shareLinks.$inferInsert;
 export type NewTestFunction = typeof testFunctions.$inferInsert;

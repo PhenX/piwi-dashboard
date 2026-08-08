@@ -57,9 +57,9 @@ Only if you turn it on, and only to the provider *you* configure. The diagnosis 
 
 Start with SQLite — it's zero-config and easily handles a team's test volume. Switch to PostgreSQL (`PIWI_DATABASE_URL`) when you want concurrent write headroom, an existing backup story, or your ops standard is Postgres. Both backends are exercised by the project's CI on every commit.
 
-### Why does the dashboard require Node 24?
+### Which Node version does the dashboard need?
 
-The dashboard server targets current Node (the Docker image ships it, so this only matters when running from source). The **reporter** that runs inside your test project is much less demanding — Node 20+, the version it is built for and declares in its `engines` — so your test suite's runtime almost certainly doesn't need to change.
+**Node 22 or newer**, and only for the `npx` / from-source paths — the Docker image and the desktop app bundle their own runtime. CI runs the E2E suite on Node 22 against the published build, so the floor is tested, not aspirational. The **reporter** that runs inside your test project is much less demanding — Node 20+, the version it is built for and declares in its `engines` — so your test suite's runtime almost certainly doesn't need to change.
 
 ### Can I use it with Cypress / Jest / other frameworks?
 

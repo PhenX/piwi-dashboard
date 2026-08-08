@@ -8,6 +8,7 @@ import type {
   TraceInfo,
 } from '~~/types/api';
 import type { TableColumn } from '@nuxt/ui';
+import { CASE_STATUS_SERIES, legendOf } from '~/utils/chart';
 import { getPerformanceHints } from '~/utils/performance-hints';
 import { renderAnsi } from '~/utils';
 import { buildRetryCommand } from '~/utils/retry-command';
@@ -19,22 +20,15 @@ const router = useRouter();
 const testCaseId = route.params.id;
 
 const { data: testCase, refresh } = await useFetch(`/api/test-run-cases/${testCaseId}`);
-const historyData = ref<TestCaseHistoryPoint[]>([]);
-
-watch(
-  () => testCase.value?.testCaseId,
-  async (tcId) => {
-    if (tcId) {
-      try {
-        historyData.value = await $fetch<TestCaseHistoryPoint[]>(`/api/test-cases/${tcId}/history`);
-      } catch {
-        historyData.value = [];
-      }
-    } else {
-      historyData.value = [];
-    }
+// The rows ride in the SSR payload, so the server and the client agree on the
+// History tab's count and its table at hydration.
+const { data: historyData } = await useAsyncData(
+  `test-run-case-history-${testCaseId}`,
+  () => {
+    const tcId = testCase.value?.testCaseId;
+    return tcId ? $fetch<TestCaseHistoryPoint[]>(`/api/test-cases/${tcId}/history`) : Promise.resolve([]);
   },
-  { immediate: true },
+  { default: (): TestCaseHistoryPoint[] => [], watch: [() => testCase.value?.testCaseId] },
 );
 
 const { data: traceData, refresh: refreshTraces } = await useFetch<TraceInfo[]>(
@@ -507,6 +501,7 @@ provide(clusterSectionLocatorKey, {
             <UIcon name="i-lucide-trending-up" class="size-3.5" />
             <span class="hidden sm:inline">Evolution</span>
           </NuxtLink>
+          <ShareLinksModal v-if="testCase" :endpoint="`/api/test-run-cases/${testCase.id}/share-links`" />
           <ExportMenu
             v-if="testCase"
             :endpoint="`/api/test-run-cases/${testCase.id}/export`"
@@ -539,6 +534,13 @@ provide(clusterSectionLocatorKey, {
             :project-key="testCase?.testRun?.project?.id"
             :project-name="testCase?.testRun?.project?.name"
             @refresh="refresh()"
+          />
+          <DidNotRunCard
+            :status="testCase?.status"
+            :reason="(testCase as any)?.didNotRunReason ?? null"
+            :blocked-by-case="(testCase as any)?.blockedByCase ?? null"
+            :blocked-tests="(testCase as any)?.blockedTests ?? null"
+            class="mt-4"
           />
         </template>
 
@@ -1035,21 +1037,23 @@ provide(clusterSectionLocatorKey, {
 
         <!-- ── History ──────────────────────────────────────────────────── -->
         <template #tab-history>
-          <div class="space-y-4 pt-4">
+          <div class="space-y-4 pt-4" data-shot="execution-history">
             <div v-if="historyData && historyData.length > 0" class="space-y-4">
-              <div class="flex items-center justify-end">
-                <UButton
-                  v-if="testCase?.testCaseId"
-                  :to="`/test-cases/${testCase.testCaseId}`"
-                  size="xs"
-                  variant="outline"
-                  color="neutral"
-                  trailing-icon="i-lucide-arrow-right"
-                >
-                  View full test history
-                </UButton>
-              </div>
-              <TestCaseHistoryChart :data="historyData" :height="200" />
+              <ChartCard title="Duration trend" icon="i-lucide-trending-up" :legend="legendOf(CASE_STATUS_SERIES)">
+                <template #actions>
+                  <UButton
+                    v-if="testCase?.testCaseId"
+                    :to="`/test-cases/${testCase.testCaseId}`"
+                    size="xs"
+                    variant="outline"
+                    color="neutral"
+                    trailing-icon="i-lucide-arrow-right"
+                  >
+                    View full test history
+                  </UButton>
+                </template>
+                <TestCaseHistoryChart :data="historyData" :height="200" />
+              </ChartCard>
               <TableScroller min-width="44rem" :bleed="false">
                 <UTable
                   :data="historyData"

@@ -1,4 +1,3 @@
-import { isAuthEnabled } from '../auth';
 import { matchAndEnqueue } from './match';
 import { sweepOutbox } from './dispatch';
 import { runEventBus } from '../run-events';
@@ -11,8 +10,9 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql';
  * kick the sweeper for realtime deliveries (email/Slack/webhook).
  *
  * The SSE bus publishes regardless of auth — when auth is off, client-side
- * cookie preferences gate which events trigger browser notifications.
- * The outbox path (email/Slack/webhook) requires auth.
+ * cookie preferences gate which events trigger browser notifications. The
+ * outbox path works in both modes: with auth off every channel and
+ * subscription is global (userId null), so no per-user access check applies.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function emitNotification(
@@ -21,8 +21,6 @@ export async function emitNotification(
   payload: NotificationPayload,
 ): Promise<void> {
   runEventBus.publishNotification({ type: event, ...payload });
-
-  if (!isAuthEnabled()) return; // outbox path requires auth for user identity
 
   try {
     const enqueued = await matchAndEnqueue(db, event, payload);

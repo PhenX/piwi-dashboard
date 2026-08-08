@@ -46,13 +46,13 @@ test.describe.serial('Reporter with authentication enabled', () => {
 
   test.beforeAll(() => {
     // Clean up test database and storage before running, in case of retries from a previous run
-    safeRmSync(DB_PATH);
+    for (const path of [DB_PATH, `${DB_PATH}-wal`, `${DB_PATH}-shm`]) safeRmSync(path);
     safeRmSync(STORAGE_PATH, { recursive: true, force: true });
   });
 
   test.afterAll(() => {
     // Clean up test database and storage created by the auth server
-    safeRmSync(DB_PATH);
+    for (const path of [DB_PATH, `${DB_PATH}-wal`, `${DB_PATH}-shm`]) safeRmSync(path);
     safeRmSync(STORAGE_PATH, { recursive: true, force: true });
   });
 
@@ -70,22 +70,23 @@ test.describe.serial('Reporter with authentication enabled', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Initial setup
+  // Initial setup — the login page swaps to a first-admin form while the users
+  // table is empty, and creating the admin signs them straight in.
   // ---------------------------------------------------------------------------
 
-  test('should create admin user via setup endpoint', async ({ request }) => {
-    const res = await request.post(`${AUTH_SERVER_URL}/api/auth/setup`, {
-      data: {
-        username: 'admin',
-        password: 'adminpassword123',
-        name: 'Administrator',
-      },
-    });
-    expect(res.ok()).toBeTruthy();
-    const data = await res.json();
-    expect(data.success).toBe(true);
-    expect(data.user.username).toBe('admin');
-    expect(data.user.role).toBe('administrator');
+  test('first-admin setup form creates the admin from the browser', async ({ page }) => {
+    await page.goto(`${AUTH_SERVER_URL}/login`);
+    await expect(page.getByRole('heading', { name: 'Create the first admin account' })).toBeVisible();
+
+    await page.getByRole('textbox', { name: 'Username*' }).fill('admin');
+    await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Administrator');
+    await page.getByRole('textbox', { name: 'Password*', exact: true }).fill('adminpassword123');
+    await page.getByRole('textbox', { name: 'Confirm password*' }).fill('adminpassword123');
+    await page.getByRole('button', { name: 'Create admin account' }).click();
+
+    // Setup logs the new admin in and lands on the dashboard.
+    await expect(page.getByText('Admin account created', { exact: true })).toBeVisible();
+    await page.waitForURL(`${AUTH_SERVER_URL}/`);
   });
 
   test('setup endpoint should reject a second call once users exist', async ({ request }) => {
@@ -93,6 +94,31 @@ test.describe.serial('Reporter with authentication enabled', () => {
       data: { username: 'admin2', password: 'password123' },
     });
     expect(res.status()).toBe(400);
+  });
+
+  test('login form rejects a wrong password, then signs in with the right one', async ({ page }) => {
+    await page.goto(`${AUTH_SERVER_URL}/login`);
+    // With the admin created, the page shows the login card, not the setup card.
+    await expect(page.getByRole('heading', { name: 'Sign in to your account' })).toBeVisible();
+
+    await page.getByRole('textbox', { name: 'Username*' }).fill('admin');
+    await page.getByRole('textbox', { name: 'Password*', exact: true }).fill('wrongpassword');
+    await page.getByRole('button', { name: 'Login' }).click();
+    await expect(page.getByText('Invalid username or password').first()).toBeVisible();
+
+    await page.getByRole('textbox', { name: 'Password*', exact: true }).fill('adminpassword123');
+    await page.getByRole('button', { name: 'Login' }).click();
+    await page.waitForURL(`${AUTH_SERVER_URL}/`);
+  });
+
+  test('password-recovery pages are reachable without a session', async ({ page }) => {
+    await page.goto(`${AUTH_SERVER_URL}/forgot-password`);
+    await expect(page.getByRole('heading', { name: 'Forgot password' })).toBeVisible();
+    await expect(page).toHaveURL(`${AUTH_SERVER_URL}/forgot-password`);
+
+    await page.goto(`${AUTH_SERVER_URL}/reset-password`);
+    await expect(page.getByRole('heading', { name: 'Reset your password' })).toBeVisible();
+    await expect(page).toHaveURL(`${AUTH_SERVER_URL}/reset-password`);
   });
 
   // ---------------------------------------------------------------------------
@@ -659,6 +685,65 @@ test.describe.serial('Reporter with authentication enabled', () => {
       },
     });
     expect(res.status()).toBe(401);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Share links — the one anonymous read path on an auth-enabled server.
+  // ---------------------------------------------------------------------------
+
+  test('a share link renders anonymously while the API stays authenticated', async ({ request, playwright }) => {
+    const loginRes = await request.post(`${AUTH_SERVER_URL}/api/auth/login`, {
+      data: { username: 'admin', password: 'adminpassword123' },
+    });
+    expect(loginRes.ok()).toBeTruthy();
+
+    const submit = await request.post(`${AUTH_SERVER_URL}/api/test-runs/submit`, {
+      data: {
+        projectName: PROJECT.REPORTER_AUTH,
+        status: 'failed',
+        startTime: new Date().toISOString(),
+        duration: 900,
+        totalTests: 1,
+        passedTests: 0,
+        failedTests: 1,
+        skippedTests: 0,
+        testCases: [
+          {
+            title: 'anonymously shared failure',
+            status: 'failed',
+            duration: 300,
+            location: 'tests/shared.spec.ts:3:1',
+            error: 'Error: expected banner to be visible',
+          },
+        ],
+      },
+    });
+    expect(submit.ok()).toBeTruthy();
+    const { testRunId } = await submit.json();
+    const run = (await (await request.get(`${AUTH_SERVER_URL}/api/test-runs/${testRunId}`)).json()) as {
+      testCases: Array<{ id: number; status: string }>;
+    };
+    const executionId = run.testCases.find((c) => c.status === 'failed')!.id;
+
+    const minted = await (
+      await request.post(`${AUTH_SERVER_URL}/api/test-run-cases/${executionId}/share-links`, { data: {} })
+    ).json();
+    expect(minted.token).toMatch(/^psl_/);
+
+    // A context with no session: the share URL renders, the API refuses.
+    const anon = await playwright.request.newContext();
+    try {
+      const shared = await anon.get(minted.url);
+      expect(shared.status()).toBe(200);
+      expect(await shared.text()).toContain('anonymously shared failure');
+
+      const api = await anon.get(`${AUTH_SERVER_URL}/api/test-run-cases/${executionId}`);
+      expect(api.status()).toBe(401);
+      const mint = await anon.post(`${AUTH_SERVER_URL}/api/test-run-cases/${executionId}/share-links`, { data: {} });
+      expect(mint.status()).toBe(401);
+    } finally {
+      await anon.dispose();
+    }
   });
 
   // ---------------------------------------------------------------------------

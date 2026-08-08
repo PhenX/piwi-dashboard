@@ -274,6 +274,39 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
     expect(clusterEvent.affectedCases).toBe(2);
   });
 
+  // ── Channels & subscriptions without auth ──────────────────────────────────
+
+  test('channels and subscriptions work without auth and are global', async ({ request }) => {
+    const chRes = await request.post('/api/channels', {
+      data: { name: 'No-auth webhook', type: 'webhook', config: { url: 'https://example.com/hook' } },
+    });
+    expect(chRes.ok()).toBeTruthy();
+    const channelId = ((await chRes.json()) as { channel: { id: number } }).channel.id;
+
+    const listRes = await request.get('/api/channels');
+    const listData = (await listRes.json()) as { channels: Array<{ id: number; userId: number | null }> };
+    const created = listData.channels.find((c) => c.id === channelId);
+    expect(created).toBeDefined();
+    expect(created!.userId).toBeNull();
+
+    const subRes = await request.post('/api/subscriptions', {
+      data: { channelId, projectId, events: ['run.failed'] },
+    });
+    expect(subRes.ok()).toBeTruthy();
+    const subId = ((await subRes.json()) as { subscriptionId: number }).subscriptionId;
+
+    const subList = await request.get(`/api/subscriptions?projectId=${projectId}`);
+    const subData = (await subList.json()) as { subscriptions: Array<{ id: number; userId: number | null }> };
+    const sub = subData.subscriptions.find((s) => s.id === subId);
+    expect(sub).toBeDefined();
+    expect(sub!.userId).toBeNull();
+
+    const delSub = await request.delete(`/api/subscriptions/${subId}`);
+    expect(delSub.ok()).toBeTruthy();
+    const delCh = await request.delete(`/api/channels/${channelId}`);
+    expect(delCh.ok()).toBeTruthy();
+  });
+
   // ── Client-side cookie filter logic ────────────────────────────────────────
 
   test('handleEvent filters by cookie project+event', async ({ page }) => {

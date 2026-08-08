@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { getDatabase } from '../../../database';
 import { notificationChannels, users } from '../../../database/schema';
-import { requireAuth, isAuthEnabled } from '../../../utils/auth';
+import { requireAuth } from '../../../utils/auth';
 import { decryptSecret, getEncryptionKey } from '../../../utils/crypto';
 import { sendEmail, renderTestEmail, isEmailConfigured } from '../../../utils/email';
 import { safeFetch } from '../../../utils/safe-fetch';
@@ -11,14 +11,14 @@ defineRouteMeta({
   openAPI: {
     tags: ['Notifications'],
     summary: 'Send test notification',
-    description: 'Sends a test notification through the specified channel.',
+    description:
+      'Sends a test notification through the specified channel and marks it verified on success. Global channels can only be tested by administrators.',
     'x-required-roles': [],
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
   },
 });
 
 export default eventHandler(async (event) => {
-  if (!isAuthEnabled(event)) throw createError({ statusCode: 400, message: 'Authentication not enabled' });
   const user = await requireAuth(event);
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) throw createError({ statusCode: 400, message: 'Invalid channel ID' });
@@ -28,7 +28,9 @@ export default eventHandler(async (event) => {
   if (!channel) throw createError({ statusCode: 404, message: 'Channel not found' });
 
   const isAdmin = user.role === Role.ADMINISTRATOR;
-  if (channel.userId !== user.id && channel.userId !== null && !isAdmin) {
+  // Global channels reach every subscriber, so only admins may fire tests at them.
+  const allowed = channel.userId === null ? isAdmin : channel.userId === user.id || isAdmin;
+  if (!allowed) {
     throw createError({ statusCode: 403, message: 'Not authorized' });
   }
 
@@ -70,8 +72,15 @@ export default eventHandler(async (event) => {
       }
       const res = await safeFetch(url, { method: 'POST', headers, body });
       if (!res.ok) throw new Error(`Webhook returned ${res.status}`);
-    } else if (channel.type === 'browser') {
-      return { success: true };
+    }
+
+    // A delivered test proves the destination works. personal_email stays
+    // driven by account email verification instead.
+    if (channel.type !== 'personal_email' && !channel.verified) {
+      await db
+        .update(notificationChannels)
+        .set({ verified: true, updatedAt: new Date() })
+        .where(eq(notificationChannels.id, id));
     }
     return { success: true };
   } catch (err) {

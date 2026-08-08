@@ -241,6 +241,7 @@ evaluate the policy, prints every violation, and exits.
 | `--max-new-flaky <n>` | More than `n` tests newly started passing only on retry |
 | `--max-quarantined <n>` | More than `n` tests are [quarantined](./flaky-tests#quarantine-with-a-way-out) — a ceiling on quarantine debt |
 | `--fail-on-new-cluster` | This run introduced a failure cluster never seen before |
+| `--fail-on-flaky` | This run contains any flaky test (passed only after a retry) — stricter than `--max-new-flaky`, which only counts tests *newly* flaky |
 
 At least one rule is required — an empty policy is rejected rather than passing. Exit codes are part of the contract:
 **0** satisfied, **1** violated, **2** could not evaluate. A gate that cannot run never reports success, so a

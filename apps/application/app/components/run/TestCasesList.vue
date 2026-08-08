@@ -52,6 +52,12 @@ const testCaseBrowserOptions = computed(() => {
   return items;
 });
 
+/** Tooltip for a status cell: a did-not-run row explains *why* it never ran. */
+function statusHint(tc: TestCaseResult): string {
+  if (tc.status === 'didnotrun') return formatDidNotRunReason(tc.didNotRunReason);
+  return formatStatusLabel(tc.status);
+}
+
 function matchesStatus(tc: TestCaseResult, filter: string): boolean {
   if (filter === 'failed') return tc.status === 'failed' || tc.status === 'timedOut' || tc.status === 'timedout';
   if (filter === 'flaky') return (tc.retries ?? 0) > 0;
@@ -455,8 +461,8 @@ defineExpose({ scrollToCase });
                         class="size-4 shrink-0 mt-0.5"
                         :class="[getStatusTextClass(item.status), isStatusInFlight(item.status) ? 'animate-spin' : '']"
                         role="img"
-                        :aria-label="`Status: ${formatStatusLabel(item.status)}`"
-                        :title="formatStatusLabel(item.status)"
+                        :aria-label="`Status: ${statusHint(item)}`"
+                        :title="statusHint(item)"
                       />
                       <a
                         :href="`/test-run-cases/${item.id}`"
@@ -564,6 +570,7 @@ defineExpose({ scrollToCase });
                         "
                         variant="subtle"
                         class="capitalize"
+                        :title="statusHint(item)"
                       >
                         {{ formatStatusLabel(item.status) }}
                       </UBadge>

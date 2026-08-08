@@ -5,7 +5,7 @@ import { Role } from '#shared/types';
 
 defineRouteMeta({
   openAPI: {
-    tags: ['Test functions'],
+    tags: ['Test Functions'],
     summary: 'Validate a pasted AI response into a proposed catalog entry (no AI call)',
     description:
       'For instances with no AI provider configured: paste the JSON reply from your own AI chat (seeded with the dashboard\'s "Copy prompt for your own AI" button) and get back the same validated, reviewable proposal shape as the AI-calling extract endpoint — no AI call, no credits spent here. Requires reporter or administrator role.',

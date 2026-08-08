@@ -713,6 +713,8 @@ export interface TestCaseResult {
   testSourceFrames?: TestSourceFrame[] | null;
   failureClusterId?: number | null;
   retries?: number | null;
+  /** Per-attempt outcomes `{ retry, status, duration, startedAt }`, oldest first. */
+  attempts?: Array<{ retry: number; status: string; duration: number; startedAt: number | null }> | null;
   steps?: PerformanceStep[] | null;
   stepEvents?: TestStepEvent[] | null;
   slowestStep?: string | null;
@@ -736,6 +738,22 @@ export interface TestCaseResult {
   links?: EntityLinkInfo[];
   isNewRegression?: boolean | null;
   isNewFlaky?: boolean | null;
+  /** Why a `didnotrun` case never executed; null for tests that ran. */
+  didNotRunReason?: DidNotRunReason | null;
+  /** For a `previous-failure` cascade, the location of the failing test that blocked it. */
+  blockedBy?: string | null;
+}
+
+/** Why a `didnotrun` case never executed — mirrors the reporter's taxonomy. */
+export type DidNotRunReason = 'previous-failure' | 'global-timeout' | 'max-failures' | 'interrupted';
+
+/** A lightweight reference to another execution in the same run (cause ↔ effect linking). */
+export interface BlockedCaseRef {
+  /** `test_runs_cases.id` — deep-links to that execution. */
+  id: number;
+  title: string;
+  location: string;
+  status: string;
 }
 
 /**
@@ -1055,6 +1073,8 @@ export interface TestCaseHistoryPoint {
   duration: number | null;
   error: string | null;
   retries: number | null;
+  /** Per-attempt outcomes `{ retry, status, duration, startedAt }`, oldest first. */
+  attempts?: Array<{ retry: number; status: string; duration: number; startedAt: number | null }> | null;
   startTime: string | Date;
   runStatus: string;
 }

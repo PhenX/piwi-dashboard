@@ -15,6 +15,31 @@ describe('wrapConfig', () => {
     expect(config.fullyParallel).toBe(true);
   });
 
+  it('forwards failOnFlakyTests into the Playwright config only when set', () => {
+    const config = wrapConfig({ testDir: './tests' }, { failOnFlakyTests: true });
+    expect(config.failOnFlakyTests).toBe(true);
+    const off = wrapConfig({ testDir: './tests' });
+    expect('failOnFlakyTests' in off).toBe(false);
+  });
+
+  it('forwards failOnFlakyTests from PIWI_FAIL_ON_FLAKY_TESTS', () => {
+    const previous = process.env.PIWI_FAIL_ON_FLAKY_TESTS;
+    try {
+      process.env.PIWI_FAIL_ON_FLAKY_TESTS = 'true';
+      expect(wrapConfig({ testDir: './tests' }).failOnFlakyTests).toBe(true);
+
+      // An explicit option still wins over the env var.
+      process.env.PIWI_FAIL_ON_FLAKY_TESTS = 'true';
+      expect('failOnFlakyTests' in wrapConfig({ testDir: './tests' }, { failOnFlakyTests: false })).toBe(false);
+
+      process.env.PIWI_FAIL_ON_FLAKY_TESTS = 'false';
+      expect('failOnFlakyTests' in wrapConfig({ testDir: './tests' })).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env.PIWI_FAIL_ON_FLAKY_TESTS;
+      else process.env.PIWI_FAIL_ON_FLAKY_TESTS = previous;
+    }
+  });
+
   it('adds piwi global-setup-module when no original globalSetup exists', () => {
     const config = wrapConfig({ testDir: './tests' });
     expect(typeof config.globalSetup).toBe('string');

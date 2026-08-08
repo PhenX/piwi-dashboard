@@ -65,7 +65,7 @@ test.describe('Dashboard UI Tests', () => {
     await page.waitForURL(/\/projects\/\d+/);
 
     // Wait for main content to confirm page loaded
-    await expect(page.getByText('Test run statistics over time')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole('heading', { name: 'Run trend' })).toBeVisible({ timeout: 30000 });
 
     // Project name should be visible in the breadcrumb/pill
     await expect(page.getByRole('button', { name: PROJECT.UI_TEST })).toBeVisible({ timeout: 15000 });

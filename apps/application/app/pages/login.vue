@@ -44,6 +44,16 @@ async function handleSetup() {
     setupError.value = 'Please choose a username and password';
     return;
   }
+  // Mirror the server's validation rules so their violations read as field
+  // hints instead of a generic "Invalid request body" error.
+  if (setupState.username.length < 3) {
+    setupError.value = 'Username must be at least 3 characters';
+    return;
+  }
+  if (setupState.password.length < 8) {
+    setupError.value = 'Password must be at least 8 characters';
+    return;
+  }
   if (setupState.password !== setupState.confirmPassword) {
     setupError.value = 'Passwords do not match';
     return;
@@ -183,7 +193,7 @@ definePageMeta({
           <UInput
             v-model="setupState.password"
             type="password"
-            placeholder="Choose a password"
+            placeholder="Choose a password (min. 8 characters)"
             autocomplete="new-password"
             :disabled="setupLoading"
             class="w-full"

@@ -1,7 +1,7 @@
 import { eq, and, or, isNull } from 'drizzle-orm';
 import { getDatabase } from '../../database';
 import { subscriptions, notificationChannels } from '../../database/schema';
-import { requireAuth, isAuthEnabled } from '../../utils/auth';
+import { requireAuth } from '../../utils/auth';
 import { NOTIFICATION_EVENTS } from '#shared/notification-events';
 import { Role } from '#shared/types';
 import { z } from 'zod';
@@ -31,7 +31,6 @@ const schema = z.object({
 });
 
 export default eventHandler(async (event) => {
-  if (!isAuthEnabled(event)) throw createError({ statusCode: 400, message: 'Authentication not enabled' });
   const user = await requireAuth(event);
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) throw createError({ statusCode: 400, message: 'Invalid subscription ID' });
@@ -54,7 +53,7 @@ export default eventHandler(async (event) => {
   if (d.channelId !== undefined) {
     // Ensure the target channel is owned by this user or is global
     const [ch] = await db
-      .select({ id: notificationChannels.id })
+      .select({ id: notificationChannels.id, userId: notificationChannels.userId })
       .from(notificationChannels)
       .where(
         and(
@@ -63,6 +62,11 @@ export default eventHandler(async (event) => {
         ),
       );
     if (!ch) throw createError({ statusCode: 403, message: 'Channel not found or not accessible' });
+    // A global subscription delivers with no per-user access check, so it must
+    // stay on a global channel.
+    if (sub.userId === null && ch.userId !== null) {
+      throw createError({ statusCode: 400, message: 'Global subscriptions require a global channel' });
+    }
     update.channelId = d.channelId;
   }
 

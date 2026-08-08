@@ -29,7 +29,7 @@ The dashboard is one Node process, and there are five ways to get one running:
 | [Live demo](https://piwitests.github.io/demo/) | Looking around before installing anything | Seeded data, runs in your browser, no backend |
 | [Desktop app](./desktop) | A single developer running Playwright locally | No Docker or Node needed; Windows x64 and Apple-silicon macOS only, and the installers are not yet signed |
 | Docker *(below)* | A shared instance for a team | The recommended path for anything long-lived |
-| [`npx @piwitests/server`](./deployment#npm-npx-quick-local-run) | A quick local run with Node 24+ already installed | Same server, no container |
+| [`npx @piwitests/server`](./deployment#npm-npx-quick-local-run) | A quick local run with Node 22+ already installed | Same server, no container |
 | [One-click deploy](./deployment#one-click-deploy) | A shared instance with no server of your own | Railway, Render, Fly.io, Koyeb, Coolify or Dokploy — a button, plus whatever the host charges |
 
 If you only want your own history, flaky scores and locator healing on a laptop, the
@@ -45,11 +45,11 @@ Only the dashboard side has requirements — and only for some paths:
 |---|---|
 | Desktop app | Nothing; the runtime is bundled |
 | Docker | Docker; ~300 MB RAM, 1 vCPU, `linux/amd64` or `linux/arm64` |
-| `npx` / from source | **Node.js 24+** and npm |
+| `npx` / from source | **Node.js 22+** and npm |
 | PostgreSQL backend *(optional)* | PostgreSQL 14+ — otherwise SQLite is built in and needs no setup |
 
 Your **test project** is unaffected by all of this: it just needs a Node version Playwright supports.
-Node 24 is the dashboard's requirement, not your suite's.
+Node 22 is the dashboard's requirement, not your suite's.
 
 ## Quick start with Docker
 

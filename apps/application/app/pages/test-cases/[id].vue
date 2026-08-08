@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TestCaseHistoryPoint, MarkerInfo, MarkersResponse } from '~~/types/api';
 import type { TableColumn } from '@nuxt/ui';
+import { CASE_STATUS_SERIES, legendOf } from '~/utils/chart';
 
 const route = useRoute();
 const testCaseId = route.params.id;
@@ -192,7 +193,12 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
 
         <!-- Evolution charts -->
         <div v-if="historyData && historyData.length > 1" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <ChartCard title="Duration trend" icon="i-lucide-trending-up" help="case.history-chart">
+          <ChartCard
+            title="Duration trend"
+            icon="i-lucide-trending-up"
+            help="case.history-chart"
+            :legend="legendOf(CASE_STATUS_SERIES)"
+          >
             <TestCaseHistoryChart
               :data="historyData"
               :height="200"

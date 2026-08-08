@@ -7,7 +7,7 @@ lang: en-US
 
 Piwi can push run events to **browser**, **email**, **Slack**, or **HTTP webhooks** so your team hears about failures, new failure clusters, flakiness spikes, and performance regressions without watching the dashboard. AI diagnosis completions can also notify you when they finish.
 
-Browser notifications work even with auth disabled — the other channel types require `PIWI_AUTH_ENABLED=true` ([see authentication](./authentication)).
+Notifications do not require authentication. With auth disabled the instance is single-tenant, so every channel and subscription is **global** (instance-wide). With `PIWI_AUTH_ENABLED=true` ([see authentication](./authentication)) each user manages their own channels and subscriptions, and administrators can additionally create global ones shared by everyone.
 
 ## How it works
 
@@ -25,21 +25,20 @@ Manage both from **Settings → Notifications**, and subscribe to a single proje
 | `run.failed` | A run completes with failures |
 | `run.failed.default_branch` | A run fails on the repository's default branch |
 | `cluster.new` | A new failure cluster appears |
-| `flakiness.spike` | Flakiness rises above the configured threshold |
-| `perf.regression` | A performance regression is detected |
+| `flakiness.spike` | A completed run contains flaky tests — use the flakiness-threshold filter to only hear about rates above N% |
+| `perf.regression` | A run is at least 20% slower than the median of the previous five completed runs on the same branch — raise the bar per subscription with the regression-% filter |
 | `diagnosis.completed` | An AI diagnosis finishes (requires an AI provider) |
 
 ## Channels
 
 ### Browser
 
-Sends native OS notifications to any open Piwi tab, even when the tab is in the background. No configuration needed — create a channel of type `browser` and subscribe to events. Notifications fire via the [Notifications API](https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API); grant permission when prompted.
+Sends native OS notifications to any open Piwi tab, even when the tab is in the background. Notifications fire via the [Notifications API](https://developer.mozilla.org/en-US/docs/Web/API/Notifications_API); grant permission when prompted.
+
+- **With authentication**: create a channel of type `browser` in **Settings → Notifications** and subscribe it to events; the stream then delivers exactly the events and projects your subscriptions cover.
+- **Without authentication**: skip channels entirely — the **bell** on each project page stores per-browser preferences (a cookie) for which events raise notifications.
 
 Diagnosis completion notifications can be toggled on/off from the diagnosis panel without deleting the subscription.
-
-::: tip
-Browser notifications work without authentication. For email/Slack/webhook channels, [authentication must be enabled](./authentication).
-:::
 
 ### Email
 
@@ -81,7 +80,9 @@ The body is `{ "event": "run.failed", "payload": { … }, "timestamp": "…" }`.
 
 `cluster.new` payloads similarly carry `sampleErrorExcerpt` and `affectedCases`. These fields are **additive** — existing consumers keep working, but if you re-serialize the payload to re-check the HMAC, sign the exact bytes you received.
 
-Admins can mark a channel **global** so it is available to all users.
+### Global channels & subscriptions
+
+Admins can mark a channel **global** so it is available to all users, and mark a subscription **instance-wide** (from the project bell) so it delivers regardless of who is signed in — the way to route every failure to one team Slack channel. Global subscriptions must target a global channel. With authentication disabled, every channel and subscription is global.
 
 ## Subscriptions
 
@@ -91,20 +92,20 @@ A subscription controls *what* is delivered and *how*:
 - **Scope** — all projects, or a single project.
 - **Filters** — by branch, status, **owner** (deliver only when the run broke a test that team owns — see
   [Tags & ownership](./concepts#tags-ownership)), or a numeric threshold (e.g. only notify on flakiness above N%).
-- **Mode** — `realtime` (dispatched as events happen) or `digest` (batched, sent at a configured time). Browser channels only support `realtime`.
+- **Mode** — `realtime` (dispatched as events happen) or `digest` (held until the configured time, then sent as **one combined message** per email/Slack channel). Webhook and browser deliveries are always individual.
 - **Mute** — silence a subscription until a chosen time without deleting it.
 
 ## SMTP configuration
 
-Email channels and the account flows (verification, password reset, invites) need SMTP. These are set via environment variables only and shown read-only in **Settings → Notifications**:
+Email channels and the account flows (verification, password reset, invites) need SMTP. Slack, webhook and browser channels work without it. SMTP is set via environment variables only and shown read-only in **Settings → Notifications**; `PIWI_SMTP_HOST` and `PIWI_SMTP_FROM` are enough for a relay that accepts unauthenticated mail:
 
 ```bash
 PIWI_SMTP_HOST=smtp.example.com
 PIWI_SMTP_PORT=587            # default 587
-PIWI_SMTP_USER=apikey
-PIWI_SMTP_PASS=••••••••        # never returned by the API
 PIWI_SMTP_FROM=noreply@example.com
 PIWI_SMTP_FROM_NAME=Piwi Dashboard   # optional display name
+PIWI_SMTP_USER=apikey         # only when the server requires authentication
+PIWI_SMTP_PASS=••••••••        # only when the server requires authentication; never returned by the API
 PIWI_SMTP_SECURE=false        # true for port 465 (implicit TLS)
 PIWI_SITE_URL=https://piwi.example.com   # base URL used in email links
 ```
@@ -114,6 +115,6 @@ Send a test email from **Settings → Notifications** to confirm delivery.
 ## See also
 
 - [CI & sharding](./ci) — the alternative: pull the run URL into your pipeline instead
-- [Authentication](./authentication) — required for non-browser notifications
+- [Authentication](./authentication) — per-user channels and subscriptions
 - [Configuration reference](./configuration) — all environment variables
 - [AI diagnosis & failure clustering](./ai-diagnosis) — what triggers `cluster.new` and `diagnosis.completed`

@@ -20,7 +20,12 @@ import { detectCliFileFilters } from '../internal/support/cli-filters.js';
 import { createGlobalSetup } from './global-setup.js';
 import { wrapConfig } from './config-wrapper.js';
 import { toWireTestCase } from '../internal/submit/serializer.js';
-import { mergeAnnotations, classifyStatus } from '../internal/collect/skip-classify.js';
+import {
+  mergeAnnotations,
+  classifyStatus,
+  resolveUnrunReason,
+  linkBlockedTests,
+} from '../internal/collect/skip-classify.js';
 import { collectTestMetadata, collectTestTags } from '../internal/collect/test-meta.js';
 import { buildErrorText } from '../internal/collect/error-text.js';
 import { RunSubmitter } from '../internal/submit/run-submitter.js';
@@ -61,6 +66,11 @@ export class PiwiDashboardReporter {
   private plannedTests: TestCase[] = [];
   /** Ids of tests that actually reported via `onTestEnd`, to find the ones that never ran. */
   private reportedTestIds = new Set<string>();
+  /** Per-test attempt history, keyed by `test.id`; snapshotted onto every attempt's payload. */
+  private attemptsByTest = new Map<
+    string,
+    Array<{ retry: number; status: string; duration: number; startedAt: number | null }>
+  >();
   private instanceId: string;
   private runLabel: string | null = null;
   private shardInfo: ShardInfo | null = null;
@@ -70,6 +80,8 @@ export class PiwiDashboardReporter {
   private viaDesktopApp: boolean;
   private isFullRun = true;
   private filterDetails: FilterDetails | null = null;
+  /** Configured `maxFailures` (0 = unlimited) — disambiguates an interrupted run's unrun reason. */
+  private maxFailures = 0;
 
   private httpClient: HttpClient;
   private uploader: Uploader;
@@ -129,6 +141,7 @@ export class PiwiDashboardReporter {
     }
     this.startTime = new Date().toISOString();
     this.playwrightVersion = config.version;
+    this.maxFailures = config.maxFailures ?? 0;
     this.logger.info(
       `Starting test run for project: ${this.options.projectName} (Playwright v${this.playwrightVersion})`,
     );
@@ -201,11 +214,21 @@ export class PiwiDashboardReporter {
   /** Track suite-level setup steps (beforeAll/afterAll) not tied to any test */
   private setupSteps: SetupStep[] = [];
 
+  /**
+   * Step categories streamed live while the run executes. `pw:assert` is
+   * excluded: it is the polling noise of `expect()`, not a step a human
+   * watches; the meaningful readout is the `pw:expect` wrapper around it.
+   */
+  private static readonly LIVE_STEP_CATEGORIES = new Set(['hook', 'fixture', 'pw:api', 'pw:expect']);
+
   /** Playwright reporter hook: called when a step (including hook/fixture) begins */
   onStepBegin(test: TestCase | undefined, _result: TestResult | undefined, step: any): void {
-    if (!this.enabled || !this.streamManager?.enabled) return;
+    // Gate on the stream manager *existing*, not on it being live yet: the
+    // first fixtures and hooks run while `/start` is still in flight, and
+    // `queueBeginEvent` buffers until the run id lands (same as `onTestBegin`).
+    if (!this.enabled || !this.streamManager) return;
     const cat = step.category;
-    if (cat !== 'hook' && cat !== 'fixture') return;
+    if (!PiwiDashboardReporter.LIVE_STEP_CATEGORIES.has(cat)) return;
 
     const event: StreamEvent = {
       type: 'step-begin',
@@ -221,10 +244,9 @@ export class PiwiDashboardReporter {
 
   /** Playwright reporter hook: called when a step (including hook/fixture) ends */
   onStepEnd(test: TestCase | undefined, _result: TestResult | undefined, step: any): void {
+    if (!this.enabled || !this.streamManager) return;
     const cat = step.category;
-    if (cat === 'pw:api') return; // not surfaced as stream events; locator locations are captured in the fixture
-    if (!this.enabled || !this.streamManager?.enabled) return;
-    if (cat !== 'hook' && cat !== 'fixture') return;
+    if (!PiwiDashboardReporter.LIVE_STEP_CATEGORIES.has(cat)) return;
 
     const workerIndex = workerIndexOf(_result);
     const startedAt = step.startTime instanceof Date ? step.startTime.getTime() : null;
@@ -243,7 +265,7 @@ export class PiwiDashboardReporter {
     this.streamManager?.queueEvent(event);
 
     // Track suite-level hooks (beforeAll/afterAll) for the timeline
-    if (!test && startedAt) {
+    if (!test && startedAt && (cat === 'hook' || cat === 'fixture')) {
       this.setupSteps.push({
         title: step.title,
         category: cat,
@@ -266,6 +288,19 @@ export class PiwiDashboardReporter {
     const annotations = mergeAnnotations(test, result);
     const status = classifyStatus(result.status, annotations);
     const tags = collectTestTags(test);
+
+    // Playwright calls onTestEnd once per attempt (result.retry increases), so
+    // accumulate the attempt list per test and snapshot it onto every attempt's
+    // payload — the final attempt then carries the complete history.
+    const attempts = this.attemptsByTest.get(test.id) ?? [];
+    attempts.push({
+      retry: result.retry,
+      status,
+      duration: result.duration,
+      startedAt: result.startTime ? result.startTime.getTime() : null,
+    });
+    this.attemptsByTest.set(test.id, attempts);
+
     const testCase: CollectedTestCase = {
       type: 'complete',
       title: test.title,
@@ -277,6 +312,7 @@ export class PiwiDashboardReporter {
       timeout: test.timeout ?? null,
       error: buildErrorText(result),
       retries: result.retry,
+      attempts: attempts.map((a) => ({ ...a })),
       workerIndex: workerIndexOf(result),
       shardIndex: this.shardInfo?.current ?? null,
       startedAt: result.startTime ? result.startTime.getTime() : null,
@@ -287,6 +323,9 @@ export class PiwiDashboardReporter {
       testAnnotations: annotations.length ? annotations : null,
       tags: tags.length ? tags : null,
       testMeta: collectTestMetadata(annotations),
+      // An annotation-less skip reclassified to `didnotrun` is a serial-group
+      // cascade: an earlier test failed and Playwright skipped the rest.
+      didNotRunReason: status === 'didnotrun' ? 'previous-failure' : null,
     };
 
     if (result.status === 'failed' || result.status === 'timedOut') {
@@ -346,6 +385,11 @@ export class PiwiDashboardReporter {
 
     this.testCases.push(testCase);
 
+    // A cascade's blocking failure has already reported (serial execution runs
+    // it first), so resolve `blockedBy` now — the streamed event then carries
+    // the link even though the whole run isn't collected yet.
+    if (status === 'didnotrun') linkBlockedTests(this.testCases);
+
     if (this.streamManager) {
       this.streamManager.queueEvent(toWireTestCase(testCase) as StreamEvent);
       if (this.options.liveFileUploads) this.streamManager.scheduleLiveUpload(testCase);
@@ -357,9 +401,10 @@ export class PiwiDashboardReporter {
    * (no `onTestEnd`) — typically because `maxFailures` cut the run short. These
    * carry no result, so they're emitted with zero duration and no error. In
    * streaming mode they're queued as complete events so the pre-finish drain
-   * sends them alongside the rest.
+   * sends them alongside the rest. The `reason` (global timeout / max failures /
+   * interrupted) is resolved once from the overall run status by the caller.
    */
-  private materializeUnrunTests(): void {
+  private materializeUnrunTests(reason: string): void {
     for (const test of this.plannedTests) {
       if (this.reportedTestIds.has(test.id)) continue;
 
@@ -385,6 +430,7 @@ export class PiwiDashboardReporter {
         testAnnotations: declaredAnnotations.length ? declaredAnnotations : null,
         tags: tags.length ? tags : null,
         testMeta: collectTestMetadata(declaredAnnotations),
+        didNotRunReason: reason,
       };
 
       this.testCases.push(testCase);
@@ -401,7 +447,13 @@ export class PiwiDashboardReporter {
   async onEnd(result: FullResult): Promise<void> {
     if (!this.enabled) return;
 
-    this.materializeUnrunTests();
+    // Tests Playwright never reported were cut off by a run-level condition —
+    // the global timeout, the failure budget, or an interruption.
+    const unrunReason = resolveUnrunReason(result?.status, {
+      maxFailures: this.maxFailures,
+      failures: this.failedTests + this.timedOutTests,
+    });
+    this.materializeUnrunTests(unrunReason);
 
     await this.submitter.submit(
       {

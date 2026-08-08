@@ -194,6 +194,7 @@ const breadcrumbItems = computed(() => [
           <BreadcrumbNav :items="breadcrumbItems" />
         </template>
         <template #right>
+          <ShareLinksModal v-if="cluster" :endpoint="`/api/failure-clusters/${cluster.id}/share-links`" />
           <ExportMenu
             v-if="cluster"
             :endpoint="`/api/failure-clusters/${cluster.id}/export`"

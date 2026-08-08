@@ -32,7 +32,7 @@ export async function getTestCase(db: DrizzleDB, id: number) {
         passedRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'passed' THEN 1 ELSE 0 END)`,
         failedRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'failed' THEN 1 ELSE 0 END)`,
         skippedRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'skipped' THEN 1 ELSE 0 END)`,
-        timedOutRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'timedOut' THEN 1 ELSE 0 END)`,
+        timedOutRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} IN ('timedOut', 'timedout') THEN 1 ELSE 0 END)`,
         flakyRuns: sql<number>`SUM(CASE WHEN ${testRunsCases.status} = 'passed' AND ${testRunsCases.retries} > 0 THEN 1 ELSE 0 END)`,
         recentFlakyRuns: sql<number>`(
           SELECT COUNT(*) FROM (
@@ -65,6 +65,7 @@ export async function getTestCase(db: DrizzleDB, id: number) {
         duration: testRunsCases.duration,
         error: testRunsCases.error,
         retries: testRunsCases.retries,
+        attempts: testRunsCases.attempts,
         workerIndex: testRunsCases.workerIndex,
         browser: testRunsCases.browser,
         runId: testRuns.id,
@@ -133,6 +134,7 @@ export async function getTestCaseHistory(db: DrizzleDB, testCaseId: number) {
       duration: testRunsCases.duration,
       error: testRunsCases.error,
       retries: testRunsCases.retries,
+      attempts: testRunsCases.attempts,
       startTime: testRuns.startTime,
       runStatus: testRuns.status,
     })
@@ -198,7 +200,10 @@ export async function getTestRunCase(
   let project = null;
   if (testRun) {
     const [projectResult] = await db.select().from(projects).where(eq(projects.id, testRun.projectId));
-    project = projectResult ?? null;
+    if (projectResult) {
+      const { scmToken: _scmToken, ...projectPublic } = projectResult;
+      project = projectPublic;
+    }
   }
 
   let failureCluster = null;
@@ -261,6 +266,71 @@ export async function getTestRunCase(
     serverTraces: nr.serverTraces,
   }));
 
+  // Cause ↔ effect for did-not-run cascades, both scoped to this run:
+  //  - `blockedTests`: the downstream tests this execution stopped from running
+  //    (they carry `blocked_by = this execution's location`).
+  //  - `blockedByCase`: the failing execution that blocked THIS one (only set on
+  //    a `previous-failure` case, resolved from its `blocked_by` location).
+  const ownLocation =
+    testCase?.filePath && trc.line != null && trc.column != null
+      ? `${testCase.filePath}:${trc.line}:${trc.column}`
+      : null;
+
+  type BlockedCaseRef = { id: number; title: string; location: string; status: string };
+  const toRef = (r: {
+    id: number;
+    title: string;
+    filePath: string;
+    line: number | null;
+    column: number | null;
+    status: string;
+  }): BlockedCaseRef => ({
+    id: r.id,
+    title: r.title,
+    location: r.line != null && r.column != null ? `${r.filePath}:${r.line}:${r.column}` : r.filePath,
+    status: r.status,
+  });
+  const blockedRefColumns = {
+    id: testRunsCases.id,
+    title: testCases.title,
+    filePath: testCases.filePath,
+    line: testRunsCases.line,
+    column: testRunsCases.column,
+    status: testRunsCases.status,
+  };
+
+  let blockedTests: BlockedCaseRef[] = [];
+  if (ownLocation) {
+    const rows = await db
+      .select(blockedRefColumns)
+      .from(testRunsCases)
+      .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+      .where(and(eq(testRunsCases.testRunId, trc.testRunId), eq(testRunsCases.blockedBy, ownLocation)));
+    blockedTests = rows.map(toRef);
+  }
+
+  let blockedByCase: BlockedCaseRef | null = null;
+  if (trc.blockedBy) {
+    const m = /^(.*):(\d+):(\d+)$/.exec(trc.blockedBy);
+    if (m) {
+      const [row] = await db
+        .select(blockedRefColumns)
+        .from(testRunsCases)
+        .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+        .where(
+          and(
+            eq(testRunsCases.testRunId, trc.testRunId),
+            eq(testCases.filePath, m[1]!),
+            eq(testRunsCases.line, Number(m[2])),
+            eq(testRunsCases.column, Number(m[3])),
+          ),
+        );
+      if (row) blockedByCase = toRef(row);
+    }
+  }
+
+  const { streamToken: _streamToken, ...testRunPublic } = testRun ?? {};
+
   return {
     id: trc.id,
     testCaseId: trc.testCaseId,
@@ -272,6 +342,7 @@ export async function getTestRunCase(
     duration: trc.duration,
     error: trc.error,
     retries: trc.retries,
+    attempts: trc.attempts ?? null,
     steps: trc.steps,
     testSource: evidence.testSource,
     testSourceFrames: evidence.testSourceFrames,
@@ -298,8 +369,12 @@ export async function getTestRunCase(
     browser: trc.browser,
     isNewRegression: trc.isNewRegression ?? null,
     isNewFlaky: trc.isNewFlaky ?? null,
+    didNotRunReason: trc.didNotRunReason ?? null,
+    blockedBy: trc.blockedBy ?? null,
+    blockedByCase,
+    blockedTests,
     failureCluster,
-    testRun: testRun ? { ...testRun, project, reports: reportList } : testRun,
+    testRun: testRun ? { ...testRunPublic, project, reports: reportList } : testRun,
     attachments: attachmentList,
     links: linksForCaseRun,
     stableLinks: linksForTestCase,

@@ -56,8 +56,8 @@ export const MCP_TOOL_DEFS = [
         projectId: { type: 'number', description: 'Project ID' },
         status: {
           type: 'string',
-          enum: ['passed', 'failed', 'running', 'initialising', 'aborted'],
-          description: 'Filter by status',
+          enum: ['passed', 'failed', 'timedout', 'interrupted', 'running', 'cancelled', 'initialising', 'finalizing'],
+          description: 'Filter by run status (exact match against the stored value)',
         },
         branch: { type: 'string', description: 'Filter by branch name (exact match against SCM metadata)' },
         pageSize: { type: 'number', description: 'Results per page (default 10, max 50)' },

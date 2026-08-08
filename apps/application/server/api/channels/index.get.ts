@@ -1,26 +1,19 @@
 import { eq, or, isNull } from 'drizzle-orm';
 import { getDatabase } from '../../database';
 import { notificationChannels, users } from '../../database/schema';
-import { requireAuth, isAuthEnabled } from '../../utils/auth';
-import { Role } from '#shared/types';
+import { requireAuth } from '../../utils/auth';
 
 defineRouteMeta({
   openAPI: {
     tags: ['Notifications'],
     summary: 'List notification channels',
     description:
-      'Returns channels owned by the current user and global (admin-managed) channels. Auto-creates a personal email channel if the user has an account email set.',
+      'Returns channels owned by the current user and global (admin-managed) channels. Auto-creates a personal email channel if the user has an account email set. With authentication disabled every channel is global.',
     'x-required-roles': [],
   },
 });
 
 export default eventHandler(async (event) => {
-  if (!isAuthEnabled(event)) {
-    throw createError({
-      statusCode: 400,
-      message: 'Enable authentication to use notifications (PIWI_AUTH_ENABLED=true)',
-    });
-  }
   const user = await requireAuth(event);
   const db = await getDatabase();
 
@@ -30,11 +23,10 @@ export default eventHandler(async (event) => {
     .from(users)
     .where(eq(users.id, user.id));
 
-  const isAdmin = user.role === Role.ADMINISTRATOR;
   const rows = await db
     .select()
     .from(notificationChannels)
-    .where(isAdmin ? undefined : or(isNull(notificationChannels.userId), eq(notificationChannels.userId, user.id)));
+    .where(or(isNull(notificationChannels.userId), eq(notificationChannels.userId, user.id)));
 
   // Auto-create a personal_email channel for users who have an account email but no channel yet
   if (dbUser?.email) {

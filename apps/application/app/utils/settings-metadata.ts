@@ -116,7 +116,7 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
       { id: 'notifications.smtp', label: 'SMTP email delivery', help: 'settings.smtp', envOnly: true },
       { id: 'notifications.test-email', label: 'Send test email', help: 'notifications.test-email' },
       { id: 'notifications.channels', label: 'Notification channels', help: 'notifications.channels' },
-      { id: 'notifications.subscriptions', label: 'My subscriptions', help: 'notifications.subscriptions' },
+      { id: 'notifications.subscriptions', label: 'Subscriptions', help: 'notifications.subscriptions' },
     ],
   },
   {

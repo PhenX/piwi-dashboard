@@ -17,7 +17,7 @@ defineRouteMeta({
 
 const createUserSchema = z.object({
   username: z.string().min(3),
-  password: z.string().min(6).optional(),
+  password: z.string().min(8).optional(),
   role: z.nativeEnum(Role),
   name: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),

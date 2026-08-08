@@ -16,6 +16,7 @@ function facts(overrides: Partial<GateFacts> = {}): GateFacts {
     unmatchedTags: [],
     quarantinedFailures: 0,
     quarantinedTotal: 0,
+    flakyTests: 0,
     ...overrides,
   };
 }
@@ -110,6 +111,15 @@ describe('evaluateGatePolicy', () => {
   test('failOnNewCluster only fires when a cluster is new', () => {
     expect(evaluateGatePolicy(facts({ newClusters: 0 }), { failOnNewCluster: true }).passed).toBe(true);
     expect(evaluateGatePolicy(facts({ newClusters: 2 }), { failOnNewCluster: true }).passed).toBe(false);
+  });
+
+  test('failOnFlaky fires on any flaky test and stays quiet otherwise', () => {
+    expect(evaluateGatePolicy(facts(), { failOnFlaky: true }).passed).toBe(true);
+    const failed = evaluateGatePolicy(facts({ flakyTests: 3 }), { failOnFlaky: true });
+    expect(failed.passed).toBe(false);
+    expect(failed.violations[0]).toMatchObject({ rule: 'flaky', actual: 3, limit: 0 });
+    // A flaky test alone never trips the other rules.
+    expect(evaluateGatePolicy(facts({ flakyTests: 1 }), { maxFailed: 0 }).passed).toBe(true);
   });
 
   test('carries the facts through for the caller to render', () => {

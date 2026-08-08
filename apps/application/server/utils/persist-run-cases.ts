@@ -13,6 +13,7 @@ import {
   sanitizeAiUsage,
 } from './sanitize';
 import { resolveIngestLimits } from './ingest-limits';
+import { normalizeTestCaseStatus } from '#shared/utils/test-counts';
 import { upsertCasePayloads } from './case-payloads';
 import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fingerprint';
 import {
@@ -28,6 +29,17 @@ import { getOrCreateFailureClusters, type PendingCluster } from '#shared/handler
 import { upsertLocatorSnapshots } from './locator-healing';
 import type { LocatorSnapshot } from '#shared/locator-healing.types';
 import type { DbClient as DB } from '../database';
+
+/** Apply the canonical per-case status spelling to each attempt entry. */
+function normalizeAttemptStatuses(attempts: unknown): unknown {
+  if (!Array.isArray(attempts)) return attempts;
+  return attempts.map((attempt) => {
+    if (!attempt || typeof attempt !== 'object') return attempt;
+    const status = (attempt as { status?: unknown }).status;
+    if (typeof status !== 'string') return attempt;
+    return { ...attempt, status: normalizeTestCaseStatus(status) };
+  });
+}
 
 /**
  * Normalised test-case data ready to be persisted for a run. `filePath` + `suitePath` + `title`
@@ -50,6 +62,8 @@ export interface RunCaseInput {
   timeout?: number | null;
   error?: string | null;
   retries?: number | null;
+  /** Per-attempt outcomes `{ retry, status, duration, startedAt }`, oldest first. */
+  attempts?: unknown;
   line: number | null;
   column: number | null;
   steps?: unknown;
@@ -71,6 +85,10 @@ export interface RunCaseInput {
   browser?: unknown;
   /** Per-element locator snapshots to upsert into locator_snapshots (transient). */
   locatorSnapshots?: LocatorSnapshot[] | null;
+  /** Why a `didnotrun` case never executed; null for tests that ran. */
+  didNotRunReason?: string | null;
+  /** For a `previous-failure` cascade, the location of the failing test that blocked it. */
+  blockedBy?: string | null;
 }
 
 function resolveBrowserName(browser: unknown): string | null {
@@ -381,11 +399,12 @@ export async function persistRunCases(
     runCasesRows.push({
       testRunId,
       testCaseId: caseId,
-      status: c.status,
+      status: normalizeTestCaseStatus(c.status),
       duration: c.duration ?? null,
       timeout: c.timeout ?? null,
       error: capErrorText(c.error, limits.errorChars),
       retries: c.retries ?? 0,
+      attempts: capArray(normalizeAttemptStatuses(c.attempts), 30),
       line: c.line,
       column: c.column,
       steps: capArray(c.steps, limits.steps),
@@ -412,6 +431,8 @@ export async function persistRunCases(
       workerIndex: c.workerIndex ?? null,
       shardIndex: c.shardIndex ?? null,
       startedAt: c.startedAt ?? null,
+      didNotRunReason: c.didNotRunReason ?? null,
+      blockedBy: c.blockedBy ?? null,
     });
 
     const nrItems = buildNetworkRequestItems(c.networkRequests as Array<Record<string, unknown>> | null | undefined);

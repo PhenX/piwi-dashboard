@@ -65,6 +65,8 @@ export interface CollectedTestCase {
   timeout?: number | null;
   error?: string | null;
   retries?: number;
+  /** One entry per attempt up to and including this one: `{ retry, status, duration, startedAt }`. */
+  attempts?: Array<{ retry: number; status: string; duration: number; startedAt: number | null }> | null;
   workerIndex?: number | null;
   shardIndex?: number | null;
   startedAt?: number | null;
@@ -98,6 +100,10 @@ export interface CollectedTestCase {
   ariaSnapshot?: string;
   /** Parsed from `piwi-locators` attachment. */
   locatorSnapshots?: LocatorSnapshot[];
+  /** Why a `didnotrun` case never executed; unset for tests that ran. */
+  didNotRunReason?: string | null;
+  /** For a `previous-failure` cascade, the location of the failing test that blocked it. */
+  blockedBy?: string | null;
 }
 
 /** Hash + size of a single trace file, used for dedup against the server. */

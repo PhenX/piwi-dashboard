@@ -23,6 +23,7 @@ import {
   buildSourceFrames,
   buildWebAssertionError,
 } from '#shared/demo/failure-stories.mjs';
+import { demoTags, demoTestMeta, buildAiUsage } from '#shared/demo/demo-test-meta.mjs';
 
 export const DEMO_SIMULATOR_INSTANCE_ID = 'demo-simulator';
 
@@ -58,6 +59,8 @@ interface SimAttempt {
 }
 
 interface SimTest {
+  /** Spec file the test lives in (source of the deterministic tags/AI usage). */
+  file: string;
   title: string;
   location: string;
   duration: number;
@@ -72,6 +75,8 @@ interface SimTest {
   webVitals: Record<string, unknown>;
   pageState?: Record<string, unknown> | null;
   browser?: Record<string, unknown> | null;
+  tags?: string[];
+  testMeta?: { owner?: string | null; priority?: string | null; feature?: string | null } | null;
   suitePath?: string[];
   suiteConfig?: Array<{ mode: string; annotations: Array<{ type: string; description?: string }> }>;
 }
@@ -583,7 +588,7 @@ function buildWaitHeavyStepEvents(testDuration: number, file: string, line: numb
 }
 
 function baseTests(opts: BaseTestOptions = {}): SimTest[] {
-  return CHECKOUT_TESTS.map((t) => {
+  return CHECKOUT_TESTS.map((t, i) => {
     const duration = vary(Math.round(t.duration * (opts.durationFactor ?? 1)), 0.12);
     const steps = buildSteps(duration, opts.slowSteps);
     const slowest = steps.reduce((a, b) => (a.duration > b.duration ? a : b));
@@ -596,6 +601,7 @@ function baseTests(opts: BaseTestOptions = {}): SimTest[] {
       .reduce((sum, e) => sum + (e.duration as number), 0);
 
     return {
+      file: t.file,
       title: t.title,
       location: `${t.file}:${t.declLine}:${t.declColumn}`,
       duration,
@@ -608,6 +614,10 @@ function baseTests(opts: BaseTestOptions = {}): SimTest[] {
       networkRequests: buildNetworkRequests({ slow: opts.slowNetwork }),
       webVitals: buildWebVitals(opts.slowNetwork),
       pageState: buildPageState(),
+      // Same deterministic tags/ownership the seed generator assigns, so
+      // owner/priority/tag filters see simulated runs like seeded ones.
+      tags: demoTags(t.file, i),
+      testMeta: demoTestMeta(t.file, i),
       suitePath: suite?.suitePath,
       suiteConfig: suite?.suiteConfig,
     };
@@ -1118,8 +1128,58 @@ async function runSingleSimulation(
           },
         ]);
 
-        await sleep(attemptDuration / scenario.speed);
-        virtualNow += attemptDuration;
+        // Stream a few of the test's steps live (transient SSE events, like the
+        // real reporter) so the demo run page shows the live-activity readout.
+        // Wait steps are the least interesting to watch; the persisted stepEvents
+        // still carry them for the timeline.
+        const liveSteps = (test.steps ?? [])
+          .filter((s) => s.category !== 'wait')
+          .slice(0, 3)
+          .map((s) => ({ ...s, category: s.category === 'expect' ? 'pw:expect' : 'pw:api' }));
+
+        let attemptRemaining = attemptDuration;
+        let stepCursor = virtualNow;
+        if (liveSteps.length === 0) {
+          await sleep(attemptDuration / scenario.speed);
+          virtualNow += attemptDuration;
+        } else {
+          for (const s of liveSteps) {
+            const seg = Math.min(Math.max(s.duration, 1), attemptRemaining);
+            await postEvents([
+              {
+                type: 'step-begin',
+                title: s.title,
+                location: test.location,
+                stepCategory: s.category,
+                parentTitle: test.title,
+                workerIndex,
+                startedAt: stepCursor,
+              },
+            ]);
+            await sleep(seg / scenario.speed);
+            virtualNow += seg;
+            attemptRemaining -= seg;
+            await postEvents([
+              {
+                type: 'step-end',
+                title: s.title,
+                location: test.location,
+                status: 'passed',
+                duration: seg,
+                stepCategory: s.category,
+                parentTitle: test.title,
+                workerIndex,
+                startedAt: stepCursor,
+              },
+            ]);
+            stepCursor += seg;
+            if (attemptRemaining <= 0) break;
+          }
+          if (attemptRemaining > 0) {
+            await sleep(attemptRemaining / scenario.speed);
+            virtualNow += attemptRemaining;
+          }
+        }
 
         await postEvents([
           {
@@ -1128,8 +1188,17 @@ async function runSingleSimulation(
             location: test.location,
             status: a.status,
             duration: attemptDuration,
+            // The effective per-test timeout the real reporter always sends
+            // (Playwright's default unless a test overrides it).
+            timeout: 30000,
             error: a.error ?? null,
             retries: attempt,
+            attempts: test.attempts.slice(0, attempt + 1).map((att, i) => ({
+              retry: i,
+              status: att.status,
+              duration: att.duration ?? test.duration,
+              startedAt: startedAt - (attempt - i) * (test.duration + WORKER_GAP_MS),
+            })),
             steps: test.steps,
             // Remap 0-based step event offsets to absolute epoch ms anchored to
             // this test's actual startedAt, so each test's segments appear in
@@ -1143,6 +1212,9 @@ async function runSingleSimulation(
             networkRequests: test.networkRequests,
             webVitals: test.webVitals,
             pageState: test.pageState ?? null,
+            aiUsage: (await buildAiUsage({ file: test.file, title: test.title })) ?? null,
+            tags: test.tags,
+            testMeta: test.testMeta,
             consoleLogs: a.consoleLogs ?? null,
             ariaSnapshot: a.ariaSnapshot ?? null,
             testSource: a.testSource ?? null,
@@ -1180,6 +1252,38 @@ async function runSingleSimulation(
 
   const interrupted = ctl.stopped || completed < tests.length;
   const status = interrupted ? 'interrupted' : failedCount > 0 ? 'failed' : 'passed';
+
+  // The real reporter materializes tests that never ran (maxFailures, CI kill)
+  // as `didnotrun` complete events so the run page shows what was planned but
+  // never executed — mirror that before finishing the run.
+  if (interrupted) {
+    // A run cut short after failures stopped on its failure budget; one stopped
+    // for any other reason (a CI kill) is a plain interruption.
+    const unrunReason = failedCount > 0 ? 'max-failures' : 'interrupted';
+    const unrunTests = tests.slice(queueIndex);
+    for (const t of unrunTests) {
+      await postEvents([
+        {
+          type: 'complete',
+          title: t.title,
+          location: t.location,
+          status: 'didnotrun',
+          duration: 0,
+          timeout: 30000,
+          retries: 0,
+          workerIndex: null,
+          shardIndex: shardOverride?.shardIndex ?? null,
+          startedAt: null,
+          browser: t.browser ?? null,
+          suitePath: t.suitePath ?? null,
+          suiteConfig: t.suiteConfig ?? null,
+          tags: t.tags,
+          testMeta: t.testMeta,
+          didNotRunReason: unrunReason,
+        },
+      ]);
+    }
+  }
 
   await $fetch(`/api/test-runs/${runId}/finish`, {
     method: 'POST',

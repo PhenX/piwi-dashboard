@@ -19,6 +19,7 @@ const DEFAULTS: PiwiDashboardOptions = {
   streaming: true,
   streamingBatchSize: 5,
   streamingBatchDelay: 2000,
+  failOnFlakyTests: false,
   username: null,
   password: null,
   apiKey: null,
@@ -45,6 +46,7 @@ export const PIWI_ENV_KEYS = {
   streamingBatchSize: 'PIWI_STREAMING_BATCH_SIZE',
   streamingBatchDelay: 'PIWI_STREAMING_BATCH_DELAY',
   liveFileUploads: 'PIWI_LIVE_FILE_UPLOADS',
+  failOnFlakyTests: 'PIWI_FAIL_ON_FLAKY_TESTS',
   uploadTraces: 'PIWI_UPLOAD_TRACES',
   uploadReport: 'PIWI_UPLOAD_REPORT',
   captureLocators: 'PIWI_CAPTURE_LOCATORS',
@@ -70,7 +72,7 @@ export const PIWI_ENV_KEYS = {
  */
 export const PIWI_DESKTOP_CONFIG_ENV = 'PIWI_DESKTOP_CONFIG';
 
-function readBool(val: string | undefined): boolean | undefined {
+export function readBool(val: string | undefined): boolean | undefined {
   if (val === undefined) return undefined;
   return val === 'true';
 }
@@ -109,6 +111,7 @@ const ENV_FALLBACK_SPECS: ReadonlyArray<{
   { option: 'streamingBatchSize', env: PIWI_ENV_KEYS.streamingBatchSize, kind: 'number' },
   { option: 'streamingBatchDelay', env: PIWI_ENV_KEYS.streamingBatchDelay, kind: 'number' },
   { option: 'liveFileUploads', env: PIWI_ENV_KEYS.liveFileUploads, kind: 'bool' },
+  { option: 'failOnFlakyTests', env: PIWI_ENV_KEYS.failOnFlakyTests, kind: 'bool' },
   { option: 'uploadTraces', env: PIWI_ENV_KEYS.uploadTraces, kind: 'bool' },
   { option: 'uploadReport', env: PIWI_ENV_KEYS.uploadReport, kind: 'bool' },
   { option: 'captureLocators', env: PIWI_ENV_KEYS.captureLocators, kind: 'bool' },

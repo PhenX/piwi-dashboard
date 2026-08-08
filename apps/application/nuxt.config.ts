@@ -8,6 +8,11 @@ const __dirname = dirname(__filename);
 
 const isDemo = process.env.PIWI_DEMO_MODE === 'true';
 
+// Static head description for the demo shell — same wording as the docs
+// site's og: cards (apps/docs/.vitepress/config.mts).
+const demoDescription =
+  'CI throws away every report it makes. Piwi keeps them — then groups failures by root cause, scores flaky tests, and finds the locator you should have used. Self-hosted, MIT, zero telemetry.';
+
 // The dashboard version is authoritative in `application/package.json`
 // (kept in sync across the monorepo by release-please) — read it once at
 // config-eval time so the running app can report what it is.
@@ -72,7 +77,51 @@ export default defineNuxtConfig({
   devtools: {
     enabled: false,
   },
-  app: isDemo ? { baseURL: '/demo/' } : {},
+  // The demo is a static SPA (ssr: false), so nothing set through
+  // useHead/useSeoMeta exists until the JS bundle runs — link previews and
+  // search snippets only see what is baked into the shell here.
+  app: isDemo
+    ? {
+        baseURL: '/demo/',
+        head: {
+          title: 'Piwi Dashboard — live demo',
+          meta: [
+            { name: 'description', content: demoDescription },
+            { property: 'og:type', content: 'website' },
+            { property: 'og:title', content: 'Piwi Dashboard — live demo' },
+            { property: 'og:description', content: demoDescription },
+            { property: 'og:image', content: 'https://piwitests.github.io/og-image.png' },
+            { property: 'og:image:width', content: '1200' },
+            { property: 'og:image:height', content: '630' },
+            { property: 'og:url', content: 'https://piwitests.github.io/demo/' },
+            { name: 'twitter:card', content: 'summary_large_image' },
+            { name: 'twitter:title', content: 'Piwi Dashboard — live demo' },
+            { name: 'twitter:description', content: demoDescription },
+            { name: 'twitter:image', content: 'https://piwitests.github.io/og-image.png' },
+          ],
+          link: [
+            { rel: 'icon', href: '/demo/favicon.ico', sizes: 'any' },
+            { rel: 'icon', type: 'image/svg+xml', href: '/demo/logo.svg' },
+          ],
+        },
+      }
+    : {},
+
+  // No icon is ever fetched from the iconify CDN at runtime: the collections
+  // are installed locally for the server endpoint, and the client bundle
+  // carries every icon the source references — the static demo has no server
+  // to ask, and a self-hosted instance makes no outbound calls.
+  icon: {
+    fallbackToApi: false,
+    clientBundle: {
+      // Icon names also live in .ts maps (status/browser/SCM icons in
+      // app/utils and shared/), which the default scan globs skip.
+      scan: {
+        globInclude: ['**/*.{vue,jsx,tsx,md,mdc,mdx,yml,yaml}', '**/*.{ts,js,mjs}', '../shared/**/*.{ts,js}'],
+      },
+      sizeLimitKb: 512,
+    },
+  },
 
   css: ['~/assets/css/main.css'],
 
@@ -212,8 +261,8 @@ export default defineNuxtConfig({
         description:
           'REST API for storing and querying Playwright test results, traces, failure diagnoses, and project statistics.',
         version: pkg.version as string,
-        // Security scheme definitions for endpoint-level `security` annotations.
-        // See docs/development.md for conventions.
+        // Security scheme definitions for endpoint-level `security` annotations,
+        // rendered by the in-app reference (app/pages/docs.vue).
         components: {
           securitySchemes: {
             bearerAuth: {
@@ -226,8 +275,9 @@ export default defineNuxtConfig({
             sessionCookie: {
               type: 'apiKey',
               in: 'cookie',
-              name: 'nuxt_session',
-              description: 'Session cookie authentication. Set via POST /api/auth/login.',
+              // h3's sealed-session cookie keeps its default name.
+              name: 'h3',
+              description: 'Session cookie authentication (sealed session cookie). Set via POST /api/auth/login.',
             },
           },
         },
@@ -269,8 +319,6 @@ export default defineNuxtConfig({
   vite: {
     optimizeDeps: {
       include: [
-        '@unovis/ts',
-        '@unovis/vue',
         'date-fns',
         'drizzle-orm',
         'drizzle-orm/sqlite-core',

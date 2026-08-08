@@ -485,12 +485,16 @@ export default eventHandler(async (event) => {
 
       return {
         filePath,
+        suitePath: (testCase.suitePath as string[] | null | undefined) ?? null,
+        suiteConfig: (testCase.suiteConfig as RunCaseInput['suiteConfig']) ?? null,
+        testAnnotations: (testCase.testAnnotations as RunCaseInput['testAnnotations']) ?? null,
         title: testCase.title as string,
         status: testCase.status as string,
         duration: testCase.duration as number | null | undefined,
         timeout: testCase.timeout as number | null | undefined,
         error: testCase.error as string | null | undefined,
         retries: testCase.retries as number | undefined,
+        attempts: testCase.attempts,
         line,
         column,
         steps: testCase.steps,
@@ -513,6 +517,8 @@ export default eventHandler(async (event) => {
         tags: testCase.tags ?? null,
         testMeta: testCase.testMeta ?? null,
         locatorSnapshots: (testCase as any).locatorSnapshots ?? null,
+        didNotRunReason: (testCase.didNotRunReason as string | null | undefined) ?? null,
+        blockedBy: (testCase.blockedBy as string | null | undefined) ?? null,
       };
     });
 

@@ -127,7 +127,7 @@ export const HELP_TOPICS = {
   },
   'project.runs-trend': {
     title: 'Run trend',
-    text: 'Pass/fail counts per run over time. Hover a point for the exact run; sudden drops mark where things broke.',
+    text: 'One stacked bar per run — failed anchored at the bottom, passed on top — following the filters above. A growing red base marks where things broke; hover a bar for the counts, click it to open the run.',
     doc: 'ui-overview#project-detail',
   },
   'project.flaky-tests': {
@@ -467,12 +467,12 @@ export const HELP_TOPICS = {
   },
   'notifications.channels': {
     title: 'Channels',
-    text: 'Destinations an alert can go to — email, Slack or webhook. Create a channel, then subscribe events to it.',
+    text: 'Destinations an alert can go to — browser, email, Slack or webhook. Create a channel, then subscribe events to it. Administrators can make a channel global (usable by everyone); without authentication every channel is global.',
     doc: 'notifications#channels',
   },
   'notifications.subscriptions': {
     title: 'Subscriptions',
-    text: 'Which events (run failed, new cluster, etc.) notify which channel, optionally scoped to one project and filtered.',
+    text: 'Which events (run failed, new cluster, etc.) notify which channel, optionally scoped to one project and filtered. Global subscriptions deliver instance-wide and are managed by administrators.',
     doc: 'notifications#subscriptions',
   },
   'settings.ai-provider': {

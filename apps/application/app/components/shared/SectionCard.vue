@@ -28,8 +28,10 @@ withDefaults(
 <template>
   <UCard>
     <template #header>
-      <div class="flex items-start justify-between gap-2">
-        <div class="flex items-center gap-2 min-w-0">
+      <!-- Actions wrap under the title rather than squeezing it, so a wide
+           actions group (a chart legend) cannot crush the heading on a phone. -->
+      <div class="flex items-start justify-between flex-wrap gap-x-2 gap-y-1">
+        <div class="flex items-center gap-2 min-w-0 basis-56 grow">
           <UIcon v-if="icon" :name="icon" class="w-5 h-5 shrink-0" :class="iconClass" />
           <div class="min-w-0">
             <h3 class="text-lg font-medium inline-flex items-center gap-1">

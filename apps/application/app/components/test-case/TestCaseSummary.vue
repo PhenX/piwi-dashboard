@@ -53,6 +53,20 @@ const annotations = computed(() =>
 const startedAtMs = computed<number | null>(() => props.testCase?.startedAt ?? null);
 
 const showCiGroup = computed(() => !!(props.ciInfo || props.environment));
+
+/** Per-attempt outcomes `{ retry, status, duration, startedAt }`, oldest first. */
+const attempts = computed(() => props.testCase?.attempts ?? null);
+
+function attemptColor(status: string): 'success' | 'error' | 'neutral' {
+  if (status === 'passed') return 'success';
+  if (status === 'failed' || status === 'timedout' || status === 'timedOut') return 'error';
+  return 'neutral';
+}
+
+function attemptTitle(a: { retry: number; status: string; duration: number; startedAt: number | null }): string {
+  const when = a.startedAt ? ` at ${new Date(a.startedAt).toLocaleString()}` : '';
+  return `Attempt ${a.retry + 1}: ${a.status} (${Math.round(a.duration)} ms)${when}`;
+}
 </script>
 
 <template>
@@ -140,7 +154,27 @@ const showCiGroup = computed(() => !!(props.ciInfo || props.environment));
             <StatTile label="Duration">
               <DurationValue :ms="testCase?.duration" />
             </StatTile>
-            <StatTile label="Retries" :value="testCase?.retries ?? 0" />
+            <StatTile label="Attempts" size="sm">
+              <template v-if="attempts && attempts.length > 1">
+                <div class="flex items-center gap-1 flex-wrap">
+                  <UBadge
+                    v-for="a in attempts"
+                    :key="a.retry"
+                    :color="attemptColor(a.status)"
+                    variant="soft"
+                    size="sm"
+                    class="font-mono"
+                    :title="attemptTitle(a)"
+                  >
+                    {{ a.retry + 1 }}/{{ attempts.length }}
+                    <UIcon :name="a.status === 'passed' ? 'i-lucide-check' : 'i-lucide-x'" class="w-3 h-3" />
+                  </UBadge>
+                </div>
+              </template>
+              <!-- One attempt, or a row recorded before attempts were stored:
+                   show the count, which is one more than the retry index. -->
+              <template v-else>{{ attempts?.length ?? (testCase?.retries ?? 0) + 1 }}</template>
+            </StatTile>
             <StatTile label="Steps" :value="stepsCount" />
             <StatTile label="Worker" :value="testCase?.workerIndex ?? '—'" />
           </StatTileGrid>
