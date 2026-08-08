@@ -64,12 +64,12 @@ export default eventHandler(async (event) => {
 
   const body = await readBody<LocatorPickInput>(event);
   if (!body?.pickedLocator?.locator) {
-    throw createError({ statusCode: 400, message: 'Missing pickedLocator' });
+    throw apiError({ statusCode: 400, message: 'Missing pickedLocator' });
   }
 
   const result = await saveLocatorPick(db, caseId, body);
   if (result.status === 'not-found') {
-    throw createError({ statusCode: 404, message: 'Test run case not found' });
+    throw apiError({ statusCode: 404, message: 'Test run case not found' });
   }
   return result;
 });

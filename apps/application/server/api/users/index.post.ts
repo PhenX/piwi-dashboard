@@ -30,7 +30,7 @@ export default eventHandler(async (event) => {
   const validation = createUserSchema.safeParse(body);
 
   if (!validation.success) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Invalid request body',
       data: validation.error.issues,
@@ -51,7 +51,7 @@ export default eventHandler(async (event) => {
     });
 
     if (!user) {
-      throw createError({ statusCode: 500, message: 'Failed to create user' });
+      throw apiError({ statusCode: 500, message: 'Failed to create user' });
     }
 
     return {
@@ -65,7 +65,7 @@ export default eventHandler(async (event) => {
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create user';
-    throw createError({
+    throw apiError({
       statusCode: message === 'Username already exists' ? 409 : 400,
       message,
     });

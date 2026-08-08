@@ -61,10 +61,10 @@ export default eventHandler(async (event) => {
     return { items: await getProjectPerformance(db, id, runs, from, to, fullRunsOnly) };
   } catch (e: any) {
     if (e?.message === 'Project not found') {
-      throw createError({ statusCode: 404, message: 'Project not found' });
+      throw apiError({ statusCode: 404, message: 'Project not found' });
     }
     if (e?.message === 'Invalid from date' || e?.message === 'Invalid to date') {
-      throw createError({ statusCode: 400, message: e.message });
+      throw apiError({ statusCode: 400, message: e.message });
     }
     throw e;
   }

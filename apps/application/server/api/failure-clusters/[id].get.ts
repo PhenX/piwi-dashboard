@@ -17,7 +17,7 @@ export default eventHandler(async (event) => {
   const { db } = await requireResolvedProjectAccess(event, id, resolveClusterProjectId, 'Failure cluster');
 
   const result = await getFailureCluster(db, id);
-  if (!result) throw createError({ statusCode: 404, message: 'Failure cluster not found' });
+  if (!result) throw apiError({ statusCode: 404, message: 'Failure cluster not found' });
 
   return result;
 });

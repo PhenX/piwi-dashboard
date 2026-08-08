@@ -15,8 +15,9 @@ defineRouteMeta({
 
 export default eventHandler(async (event) => {
   const user = await requireAuth(event);
-  if (!user.email) throw createError({ statusCode: 400, message: 'No email address on this account' });
-  if (!isEmailConfigured()) throw createError({ statusCode: 503, message: 'SMTP is not configured' });
+  if (!user.email) throw apiError({ statusCode: 400, message: 'No email address on this account' });
+  if (!isEmailConfigured())
+    throw apiError({ statusCode: 503, errorCode: 'SMTP_NOT_CONFIGURED', message: 'SMTP is not configured' });
 
   // Bound how often a user can trigger verification emails.
   if (!checkRateLimit(`verify-email:${user.id}`, 5, 15 * 60 * 1000)) {
@@ -31,6 +32,6 @@ export default eventHandler(async (event) => {
     await sendEmail({ to: user.email, subject: 'Verify your email — Piwi Dashboard', html, text });
     return { success: true };
   } catch {
-    throw createError({ statusCode: 500, message: 'Failed to send verification email' });
+    throw apiError({ statusCode: 500, message: 'Failed to send verification email' });
   }
 });

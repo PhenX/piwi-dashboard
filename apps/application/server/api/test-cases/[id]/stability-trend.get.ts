@@ -27,7 +27,7 @@ export default eventHandler(async (event) => {
     return await getTestCaseStabilityTrend(db, testCaseId, bucketCount);
   } catch (err) {
     if (err instanceof Error && err.message === 'Test case not found') {
-      throw createError({ statusCode: 404, message: 'Test case not found' });
+      throw apiError({ statusCode: 404, message: 'Test case not found' });
     }
     throw err;
   }

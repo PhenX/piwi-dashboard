@@ -25,7 +25,7 @@ export default eventHandler(async (event) => {
     return { items: await getProjectFailureClusters(db, projectId, statusFilter) };
   } catch (e: any) {
     if (e?.message === 'Project not found') {
-      throw createError({ statusCode: 404, message: 'Project not found' });
+      throw apiError({ statusCode: 404, message: 'Project not found' });
     }
     throw e;
   }

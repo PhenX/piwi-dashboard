@@ -24,7 +24,7 @@ export default eventHandler(async (event) => {
 
   const runtimeConfig = useRuntimeConfig();
   if ((runtimeConfig.wastedWaitPatterns as string | undefined)?.trim()) {
-    throw createError({
+    throw apiError({
       statusCode: 409,
       message: 'Wasted-time patterns are managed by the PIWI_WASTED_WAIT_PATTERNS environment variable',
     });

@@ -41,7 +41,7 @@ export default eventHandler(async (event) => {
   const id = parseInt(getRouterParam(event, 'id') || '0');
 
   if (!id) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Invalid test run ID',
     });
@@ -50,7 +50,7 @@ export default eventHandler(async (event) => {
   const formData = await readMultipartFormData(event);
 
   if (!formData) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'No form data provided',
     });
@@ -70,7 +70,7 @@ export default eventHandler(async (event) => {
       try {
         caseInfo = JSON.parse(part.data.toString('utf-8'));
       } catch {
-        throw createError({
+        throw apiError({
           statusCode: 400,
           message: 'Invalid JSON in testCase field',
         });
@@ -105,14 +105,14 @@ export default eventHandler(async (event) => {
   }
 
   if (!streamToken) {
-    throw createError({
+    throw apiError({
       statusCode: 401,
       message: 'Missing stream token',
     });
   }
 
   if (!caseInfo?.title || !caseInfo?.location) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Missing required testCase fields: title, location',
     });
@@ -124,7 +124,7 @@ export default eventHandler(async (event) => {
   const testRun = testRunResults[0];
 
   if (!testRun) {
-    throw createError({
+    throw apiError({
       statusCode: 404,
       message: 'Test run not found',
     });
@@ -170,7 +170,7 @@ export default eventHandler(async (event) => {
     // The complete event for this case has not been persisted yet — the
     // reporter flushes events before uploading files, so this only happens
     // on out-of-order delivery. The reporter retries on 404.
-    throw createError({
+    throw apiError({
       statusCode: 404,
       message: 'Test case not found for this run',
     });
@@ -206,7 +206,7 @@ export default eventHandler(async (event) => {
         // Reporter said this blob already exists on the server — look it up
         const blob = await findTraceBlob(testRun.projectId, traceHash);
         if (!blob) {
-          throw createError({
+          throw apiError({
             statusCode: 422,
             message: 'Trace blob not found for the provided hash',
           });

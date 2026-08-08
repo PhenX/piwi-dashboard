@@ -41,6 +41,6 @@ export default eventHandler(async (event) => {
 
   const db = await getDatabase();
   const result = await releaseQuarantine(db, projectId, testCaseId, reason);
-  if (!result.released) throw createError({ statusCode: 404, message: 'No active quarantine for this test' });
+  if (!result.released) throw apiError({ statusCode: 404, message: 'No active quarantine for this test' });
   return { success: true, ...result };
 });

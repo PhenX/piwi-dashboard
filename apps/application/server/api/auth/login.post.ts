@@ -28,7 +28,7 @@ const loginSchema = z.object({
 
 export default eventHandler(async (event) => {
   if (!isAuthEnabled(event)) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Authentication is not enabled',
     });
@@ -38,7 +38,7 @@ export default eventHandler(async (event) => {
   const validation = loginSchema.safeParse(body);
 
   if (!validation.success) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Invalid request body',
       data: validation.error.issues,
@@ -60,7 +60,7 @@ export default eventHandler(async (event) => {
   if (!user) {
     recordRateLimitHit(ipKey, WINDOW_MS);
     recordRateLimitHit(accountKey, WINDOW_MS);
-    throw createError({
+    throw apiError({
       statusCode: 401,
       message: 'Invalid username or password',
     });

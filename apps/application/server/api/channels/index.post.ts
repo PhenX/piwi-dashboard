@@ -27,13 +27,13 @@ export default eventHandler(async (event) => {
   const body = await readBody(event);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    throw createError({ statusCode: 400, message: 'Invalid request body', data: parsed.error.issues });
+    throw apiError({ statusCode: 400, message: 'Invalid request body', data: parsed.error.issues });
   }
 
   const { name, type, config, global: requestedGlobal } = parsed.data;
 
   if (requestedGlobal && user.role !== Role.ADMINISTRATOR) {
-    throw createError({ statusCode: 403, message: 'Only administrators can create global channels' });
+    throw apiError({ statusCode: 403, message: 'Only administrators can create global channels' });
   }
 
   // Without auth there is no user row to own a channel — everything is global.

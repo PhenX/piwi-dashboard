@@ -47,7 +47,7 @@ export default eventHandler(async (event) => {
   const id = parseInt(getRouterParam(event, 'id') || '0');
 
   if (!id) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Invalid test run ID',
     });
@@ -57,7 +57,7 @@ export default eventHandler(async (event) => {
 
   // Validate stream token
   if (!body.streamToken) {
-    throw createError({
+    throw apiError({
       statusCode: 401,
       message: 'Missing stream token',
     });
@@ -70,7 +70,7 @@ export default eventHandler(async (event) => {
   const testRun = testRunResults[0];
 
   if (!testRun) {
-    throw createError({
+    throw apiError({
       statusCode: 404,
       message: 'Test run not found',
     });

@@ -28,7 +28,7 @@ export default eventHandler(async (event) => {
   const { db } = await requireResolvedProjectAccess(event, id, resolveClusterProjectId, 'Failure cluster');
 
   const sha = getQuery(event).sha as string | undefined;
-  if (!sha) throw createError({ statusCode: 400, message: 'Missing sha query parameter' });
+  if (!sha) throw apiError({ statusCode: 400, message: 'Missing sha query parameter' });
 
   const [cluster] = await db
     .select({
@@ -38,7 +38,7 @@ export default eventHandler(async (event) => {
     })
     .from(failureClusters)
     .where(eq(failureClusters.id, id));
-  if (!cluster) throw createError({ statusCode: 404, message: 'Failure cluster not found' });
+  if (!cluster) throw apiError({ statusCode: 404, message: 'Failure cluster not found' });
 
   const [run] = await db
     .select({ metadata: testRuns.metadata })

@@ -38,7 +38,7 @@ export default eventHandler(async (event) => {
     return { items: await getProjectTimeoutOpportunities(db, id, runsCount, thresholds) };
   } catch (e: any) {
     if (e?.message === 'Project not found') {
-      throw createError({ statusCode: 404, message: 'Project not found' });
+      throw apiError({ statusCode: 404, message: 'Project not found' });
     }
     throw e;
   }

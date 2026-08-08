@@ -30,7 +30,7 @@ export default eventHandler(async (event) => {
     return await getProjectAiStepCoverage(db, projectId, days);
   } catch (err) {
     if (err instanceof Error && err.message === 'Project not found') {
-      throw createError({ statusCode: 404, message: 'Project not found' });
+      throw apiError({ statusCode: 404, message: 'Project not found' });
     }
     throw err;
   }

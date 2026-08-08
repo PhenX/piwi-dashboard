@@ -34,7 +34,7 @@ export default eventHandler(async (event) => {
     piwiVersion: exportPiwiVersion(event),
   });
   if (!bundle) {
-    throw createError({ statusCode: 404, message: 'Failure cluster not found' });
+    throw apiError({ statusCode: 404, message: 'Failure cluster not found' });
   }
 
   return sendExport(event, bundle, format, id);

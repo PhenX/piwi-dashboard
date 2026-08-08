@@ -108,7 +108,7 @@ export default eventHandler(async (event) => {
   }
 
   if (!path) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'File path is required',
     });
@@ -116,7 +116,7 @@ export default eventHandler(async (event) => {
 
   // Security: Prevent path traversal
   if (path.includes('..') || path.startsWith('/')) {
-    throw createError({
+    throw apiError({
       statusCode: 403,
       message: 'Invalid file path',
     });
@@ -328,7 +328,7 @@ export default eventHandler(async (event) => {
     }
   }
 
-  throw createError({
+  throw apiError({
     statusCode: 404,
     message: 'File not found',
   });

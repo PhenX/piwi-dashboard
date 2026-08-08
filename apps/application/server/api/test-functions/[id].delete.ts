@@ -23,6 +23,6 @@ export default eventHandler(async (event) => {
     return await deleteTestFunction(db, id);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to delete test function';
-    throw createError({ statusCode: message === 'Test function not found' ? 404 : 400, message });
+    throw apiError({ statusCode: message === 'Test function not found' ? 404 : 400, message });
   }
 });

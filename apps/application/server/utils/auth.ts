@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3';
+import { apiError } from './api-error';
 import { useSession, updateSession, clearSession as h3ClearSession } from 'h3';
 import { getDatabase } from '../database';
 import { users, apiKeys, appSettings } from '../database/schema';
@@ -388,14 +389,14 @@ export async function requireAuth(event: H3Event, allowedRoles?: Role[]): Promis
   if (apiKeyValue) {
     const user = await getUserByApiKey(apiKeyValue);
     if (!user) {
-      throw createError({
+      throw apiError({
         statusCode: 401,
         message: 'Invalid or expired API key',
       });
     }
 
     if (roles && !hasRole(user, roles)) {
-      throw createError({
+      throw apiError({
         statusCode: 403,
         message: 'Insufficient permissions',
       });
@@ -407,14 +408,14 @@ export async function requireAuth(event: H3Event, allowedRoles?: Role[]): Promis
   // 2. Fall back to session cookie
   const user = await getCurrentUser(event);
   if (!user) {
-    throw createError({
+    throw apiError({
       statusCode: 401,
       message: 'Authentication required',
     });
   }
 
   if (roles && !hasRole(user, roles)) {
-    throw createError({
+    throw apiError({
       statusCode: 403,
       message: 'Insufficient permissions',
     });

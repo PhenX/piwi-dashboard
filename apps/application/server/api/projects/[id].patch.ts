@@ -36,7 +36,7 @@ export default eventHandler(async (event) => {
   const validation = updateProjectSchema.safeParse(body);
 
   if (!validation.success) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Invalid request body',
       data: validation.error.issues,
@@ -59,10 +59,10 @@ export default eventHandler(async (event) => {
     });
   } catch (e: any) {
     if (e?.message === 'Project not found') {
-      throw createError({ statusCode: 404, message: 'Project not found' });
+      throw apiError({ statusCode: 404, message: 'Project not found' });
     }
     if (e?.message === 'One or more tag IDs are invalid') {
-      throw createError({ statusCode: 400, message: e.message });
+      throw apiError({ statusCode: 400, message: e.message });
     }
     throw e;
   }

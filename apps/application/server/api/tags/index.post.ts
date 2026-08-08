@@ -24,7 +24,7 @@ export default eventHandler(async (event) => {
   const validation = createTagSchema.safeParse(body);
 
   if (!validation.success) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Invalid request body',
       data: validation.error.issues,
@@ -38,7 +38,7 @@ export default eventHandler(async (event) => {
     return await createTag(db, text, color);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create tag';
-    throw createError({
+    throw apiError({
       statusCode: message === 'A tag with this text already exists' ? 409 : 400,
       message,
     });

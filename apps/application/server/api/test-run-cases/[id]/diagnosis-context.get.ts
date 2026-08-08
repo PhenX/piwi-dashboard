@@ -55,7 +55,7 @@ export default eventHandler(async (event) => {
     .from(testRunsCases)
     .where(eq(testRunsCases.id, id))
     .limit(1);
-  if (!trc) throw createError({ statusCode: 404, message: 'Test run case not found' });
+  if (!trc) throw apiError({ statusCode: 404, message: 'Test run case not found' });
 
   const query = getQuery(event);
   const baseCommit = query.baseCommit as string | undefined;

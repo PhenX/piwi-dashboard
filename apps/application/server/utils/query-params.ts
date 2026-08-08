@@ -1,4 +1,5 @@
-import { getQuery, createError, type H3Event } from 'h3';
+import { getQuery, type H3Event } from 'h3';
+import { apiError } from './api-error';
 
 /**
  * Query-parameter parsing helpers with one consistent contract (D10 in
@@ -28,7 +29,7 @@ function firstValue(raw: unknown): string | undefined {
 function toInt(s: string, name: string): number {
   const n = Number(s);
   if (!Number.isInteger(n)) {
-    throw createError({ statusCode: 400, message: `Invalid query parameter "${name}": expected an integer` });
+    throw apiError({ statusCode: 400, message: `Invalid query parameter "${name}": expected an integer` });
   }
   return n;
 }
@@ -43,7 +44,7 @@ function clamp(n: number, min?: number, max?: number): number {
 export function requireIntQuery(event: H3Event, name: string, opts: { min?: number; max?: number } = {}): number {
   const s = firstValue(getQuery(event)[name]);
   if (s === undefined) {
-    throw createError({ statusCode: 400, message: `Missing required query parameter "${name}"` });
+    throw apiError({ statusCode: 400, message: `Missing required query parameter "${name}"` });
   }
   return clamp(toInt(s, name), opts.min, opts.max);
 }
@@ -81,5 +82,5 @@ export function queryFlag(event: H3Event, name: string, opts: { default?: boolea
   if (s === undefined) return opts.default ?? false;
   if (s === 'true' || s === '1') return true;
   if (s === 'false' || s === '0') return false;
-  throw createError({ statusCode: 400, message: `Invalid query parameter "${name}": expected a boolean` });
+  throw apiError({ statusCode: 400, message: `Invalid query parameter "${name}": expected a boolean` });
 }

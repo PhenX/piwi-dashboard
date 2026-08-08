@@ -46,13 +46,13 @@ export default eventHandler(async (event) => {
   await requireAuth(event);
 
   if (!isEmailConfigured()) {
-    throw createError({ statusCode: 503, message: 'SMTP is not configured' });
+    throw apiError({ statusCode: 503, errorCode: 'SMTP_NOT_CONFIGURED', message: 'SMTP is not configured' });
   }
 
   const body = await readBody(event);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    throw createError({ statusCode: 400, message: 'Invalid request: to must be a valid email address' });
+    throw apiError({ statusCode: 400, message: 'Invalid request: to must be a valid email address' });
   }
 
   const { to } = parsed.data;

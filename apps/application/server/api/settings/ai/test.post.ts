@@ -65,7 +65,8 @@ export default eventHandler(async (event) => {
     };
   }
 
-  if (!config) throw createError({ statusCode: 503, message: `The ${role} role is not configured` });
+  if (!config)
+    throw apiError({ statusCode: 503, errorCode: 'AI_NOT_CONFIGURED', message: `The ${role} role is not configured` });
 
   try {
     if (role === 'embedding') {

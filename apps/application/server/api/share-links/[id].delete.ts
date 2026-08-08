@@ -17,7 +17,7 @@ export default eventHandler(async (event) => {
   const db = await getDatabase();
   const link = await getShareLink(db, id);
   if (!link) {
-    throw createError({ statusCode: 404, message: 'Share link not found' });
+    throw apiError({ statusCode: 404, message: 'Share link not found' });
   }
   await requireProjectAccess(event, link.projectId);
   await revokeShareLink(db, id);

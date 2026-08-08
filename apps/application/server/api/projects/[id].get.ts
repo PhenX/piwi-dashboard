@@ -35,7 +35,7 @@ export default eventHandler(async (event) => {
     return rest;
   } catch (e: any) {
     if (e?.message === 'Project not found') {
-      throw createError({ statusCode: 404, message: 'Project not found' });
+      throw apiError({ statusCode: 404, message: 'Project not found' });
     }
     throw e;
   }

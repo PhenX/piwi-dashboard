@@ -39,7 +39,7 @@ export default eventHandler(async (event) => {
 
   const sha1 = String(getQuery(event).sha1 ?? '').toLowerCase();
   if (!SHA1_NAME_RE.test(sha1)) {
-    throw createError({ statusCode: 400, message: 'Invalid sha1 parameter' });
+    throw apiError({ statusCode: 400, message: 'Invalid sha1 parameter' });
   }
 
   const traceRows = await db

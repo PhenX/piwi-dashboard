@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3';
-import { createError, getRequestHeader, getRequestIP, setResponseHeader } from 'h3';
+import { apiError } from './api-error';
+import { getRequestHeader, getRequestIP, setResponseHeader } from 'h3';
 
 const store = new Map<string, { count: number; resetAt: number }>();
 
@@ -62,7 +63,7 @@ export function rateLimitedError(
 ) {
   const retryAfter = Math.max(1, ...keys.map(rateLimitResetSeconds));
   setResponseHeader(event, 'Retry-After', retryAfter);
-  return createError({ statusCode: 429, message });
+  return apiError({ statusCode: 429, message });
 }
 
 /**

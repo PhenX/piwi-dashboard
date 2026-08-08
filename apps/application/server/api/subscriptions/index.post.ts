@@ -43,22 +43,22 @@ export default eventHandler(async (event) => {
   const body = await readBody(event);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    throw createError({ statusCode: 400, message: 'Invalid request body', data: parsed.error.issues });
+    throw apiError({ statusCode: 400, message: 'Invalid request body', data: parsed.error.issues });
   }
 
   const { channelId, projectId, events, filters, mode, digestAt, global: requestedGlobal } = parsed.data;
 
   const db = await getDatabase();
   const [channel] = await db.select().from(notificationChannels).where(eq(notificationChannels.id, channelId));
-  if (!channel) throw createError({ statusCode: 404, message: 'Channel not found' });
+  if (!channel) throw apiError({ statusCode: 404, message: 'Channel not found' });
 
   const isAdmin = user.role === Role.ADMINISTRATOR;
   if (channel.userId !== null && channel.userId !== user.id && !isAdmin) {
-    throw createError({ statusCode: 403, message: "Cannot subscribe to another user's channel" });
+    throw apiError({ statusCode: 403, message: "Cannot subscribe to another user's channel" });
   }
 
   if (requestedGlobal && !isAdmin) {
-    throw createError({ statusCode: 403, message: 'Only administrators can create global subscriptions' });
+    throw apiError({ statusCode: 403, message: 'Only administrators can create global subscriptions' });
   }
 
   // Without auth there is no user row to own a subscription — everything is global.
@@ -68,7 +68,7 @@ export default eventHandler(async (event) => {
   // target a channel that is itself global — a personal channel would leak
   // other projects' failures to its owner.
   if (isGlobal && channel.userId !== null) {
-    throw createError({ statusCode: 400, message: 'Global subscriptions require a global channel' });
+    throw apiError({ statusCode: 400, message: 'Global subscriptions require a global channel' });
   }
 
   // Only let the caller subscribe to projects they can access. A null projectId
@@ -78,13 +78,13 @@ export default eventHandler(async (event) => {
   const scope = await getProjectScope(db, user);
   if (projectId == null) {
     if (scope !== 'all') {
-      throw createError({
+      throw apiError({
         statusCode: 403,
         message: 'Only users with access to all projects can subscribe to every project',
       });
     }
   } else if (!scopeAllows(scope, projectId)) {
-    throw createError({ statusCode: 403, message: 'No access to this project' });
+    throw apiError({ statusCode: 403, message: 'No access to this project' });
   }
 
   const [sub] = await db

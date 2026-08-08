@@ -41,10 +41,11 @@ export default eventHandler(async (event) => {
   } | null;
 
   const [cluster] = await db.select().from(failureClusters).where(eq(failureClusters.id, id));
-  if (!cluster) throw createError({ statusCode: 404, message: 'Failure cluster not found' });
+  if (!cluster) throw apiError({ statusCode: 404, message: 'Failure cluster not found' });
 
   const config = await resolveAiConfig(db);
-  if (!config) throw createError({ statusCode: 503, message: 'AI diagnosis is not configured' });
+  if (!config)
+    throw apiError({ statusCode: 503, errorCode: 'AI_NOT_CONFIGURED', message: 'AI diagnosis is not configured' });
 
   const isExecutionScope = body?.scope === 'execution' && Boolean(body?.testRunsCaseId);
 
@@ -55,12 +56,12 @@ export default eventHandler(async (event) => {
       .from(testRunsCases)
       .where(eq(testRunsCases.id, body!.testRunsCaseId!))
       .limit(1);
-    if (!trc) throw createError({ statusCode: 404, message: 'Test run case not found' });
+    if (!trc) throw apiError({ statusCode: 404, message: 'Test run case not found' });
   }
 
   // Check if already running
   if (isDiagnosisRunning(id)) {
-    throw createError({ statusCode: 409, message: 'Diagnosis is already running for this cluster' });
+    throw apiError({ statusCode: 409, message: 'Diagnosis is already running for this cluster' });
   }
 
   // Return existing completed diagnosis if not forcing
@@ -73,7 +74,7 @@ export default eventHandler(async (event) => {
     const existing = existingRows[0];
     if (existing) {
       if (existing.status === 'running' && !isDiagnosisStale(existing)) {
-        throw createError({ statusCode: 409, message: 'Diagnosis is already running' });
+        throw apiError({ statusCode: 409, message: 'Diagnosis is already running' });
       }
       if (existing.status === 'completed') {
         return existing;

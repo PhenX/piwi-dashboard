@@ -20,7 +20,7 @@ export default eventHandler(async (event) => {
     return await computeRunInsights(db, runId);
   } catch (e: any) {
     if (e?.message === 'Run not found') {
-      throw createError({ statusCode: 404, message: 'Run not found' });
+      throw apiError({ statusCode: 404, message: 'Run not found' });
     }
     throw e;
   }

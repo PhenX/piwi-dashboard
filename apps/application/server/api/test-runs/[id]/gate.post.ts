@@ -47,11 +47,11 @@ function optionalCount(value: unknown): number | undefined {
 
 export default eventHandler(async (event) => {
   const id = parseInt(getRouterParam(event, 'id') || '0');
-  if (!id) throw createError({ statusCode: 400, message: 'Invalid test run ID' });
+  if (!id) throw apiError({ statusCode: 400, message: 'Invalid test run ID' });
 
   const db = await getDatabase();
   const [run] = await db.select().from(testRuns).where(eq(testRuns.id, id));
-  if (!run) throw createError({ statusCode: 404, message: 'Test run not found' });
+  if (!run) throw apiError({ statusCode: 404, message: 'Test run not found' });
 
   await requireProjectAccess(event, run.projectId);
 
@@ -67,7 +67,7 @@ export default eventHandler(async (event) => {
   };
 
   if (isEmptyPolicy(policy)) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message:
         'Gate policy is empty — pass at least one of requireTags, maxFailed, maxNewRegressions, maxNewFlaky, maxQuarantined, failOnNewCluster or failOnFlaky',
@@ -75,7 +75,7 @@ export default eventHandler(async (event) => {
   }
 
   if (run.status === 'running' || run.status === 'initializing') {
-    throw createError({ statusCode: 409, message: `Run #${id} has not finished yet (status: ${run.status})` });
+    throw apiError({ statusCode: 409, message: `Run #${id} has not finished yet (status: ${run.status})` });
   }
 
   const [project] = await db.select().from(projects).where(eq(projects.id, run.projectId));

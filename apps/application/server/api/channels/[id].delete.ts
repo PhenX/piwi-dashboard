@@ -17,22 +17,22 @@ defineRouteMeta({
 export default eventHandler(async (event) => {
   const user = await requireAuth(event);
   const id = parseInt(getRouterParam(event, 'id') || '0');
-  if (!id) throw createError({ statusCode: 400, message: 'Invalid channel ID' });
+  if (!id) throw apiError({ statusCode: 400, message: 'Invalid channel ID' });
 
   const db = await getDatabase();
   const [channel] = await db.select().from(notificationChannels).where(eq(notificationChannels.id, id));
-  if (!channel) throw createError({ statusCode: 404, message: 'Channel not found' });
+  if (!channel) throw apiError({ statusCode: 404, message: 'Channel not found' });
 
   const isAdmin = user.role === Role.ADMINISTRATOR;
   if (channel.type === 'personal_email') {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Cannot delete your personal email channel. Remove your email in Account settings to disconnect it.',
     });
   }
 
   if (channel.userId !== user.id && !isAdmin) {
-    throw createError({ statusCode: 403, message: 'Not authorized to delete this channel' });
+    throw apiError({ statusCode: 403, message: 'Not authorized to delete this channel' });
   }
 
   await db

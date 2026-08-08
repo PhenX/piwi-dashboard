@@ -32,13 +32,13 @@ export default eventHandler(async (event) => {
   const body = await readBody(event);
   const validation = updateMarkerSchema.safeParse(body);
   if (!validation.success) {
-    throw createError({ statusCode: 400, message: 'Invalid request body', data: validation.error.issues });
+    throw apiError({ statusCode: 400, message: 'Invalid request body', data: validation.error.issues });
   }
 
   try {
     return await updateMarker(db, id, validation.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update marker';
-    throw createError({ statusCode: message === 'Marker not found' ? 404 : 400, message });
+    throw apiError({ statusCode: message === 'Marker not found' ? 404 : 400, message });
   }
 });

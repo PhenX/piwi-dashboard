@@ -46,7 +46,7 @@ export default eventHandler(async (event) => {
 
   // Validate required fields
   if (!body.projectName) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Missing required field: projectName',
     });
@@ -61,11 +61,11 @@ export default eventHandler(async (event) => {
 
   if (project) {
     if (!scopeAllows(scope, project.id)) {
-      throw createError({ statusCode: 403, message: 'No access to this project' });
+      throw apiError({ statusCode: 403, message: 'No access to this project' });
     }
   } else {
     if (scope !== 'all') {
-      throw createError({ statusCode: 403, message: 'Cannot create a new project — no global access' });
+      throw apiError({ statusCode: 403, message: 'Cannot create a new project — no global access' });
     }
     const result = await db
       .insert(projects)
@@ -78,7 +78,7 @@ export default eventHandler(async (event) => {
   }
 
   if (!project) {
-    throw createError({
+    throw apiError({
       statusCode: 500,
       message: 'Failed to create or retrieve project',
     });
@@ -160,7 +160,7 @@ export default eventHandler(async (event) => {
     const testRun = testRunResult[0];
 
     if (!testRun) {
-      throw createError({
+      throw apiError({
         statusCode: 500,
         message: 'Failed to create test run',
       });
@@ -209,7 +209,7 @@ export default eventHandler(async (event) => {
   const testRun = testRunResult[0];
 
   if (!testRun) {
-    throw createError({
+    throw apiError({
       statusCode: 500,
       message: 'Failed to create test run',
     });

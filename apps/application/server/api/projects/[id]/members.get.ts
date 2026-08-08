@@ -22,7 +22,7 @@ export default eventHandler(async (event) => {
 
   const db = await getDatabase();
   const projectResults = await db.select().from(projects).where(eq(projects.id, id));
-  if (!projectResults[0]) throw createError({ statusCode: 404, message: 'Project not found' });
+  if (!projectResults[0]) throw apiError({ statusCode: 404, message: 'Project not found' });
 
   const result = await getProjectMembers(db, id);
   return { items: result };

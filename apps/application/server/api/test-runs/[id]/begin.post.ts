@@ -40,7 +40,7 @@ export default eventHandler(async (event) => {
   const id = parseInt(getRouterParam(event, 'id') || '0');
 
   if (!id) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Invalid test run ID',
     });
@@ -50,7 +50,7 @@ export default eventHandler(async (event) => {
 
   // Validate setup token
   if (!body.setupToken) {
-    throw createError({
+    throw apiError({
       statusCode: 401,
       message: 'Missing setup token',
     });
@@ -63,7 +63,7 @@ export default eventHandler(async (event) => {
   const testRun = testRunResults[0];
 
   if (!testRun) {
-    throw createError({
+    throw apiError({
       statusCode: 404,
       message: 'Test run not found',
     });
@@ -72,7 +72,7 @@ export default eventHandler(async (event) => {
   const isSharded = !!(testRun.shardTotal && testRun.shardTotal > 1);
 
   if (!isSharded && testRun.status !== 'initializing' && testRun.status !== 'running') {
-    throw createError({
+    throw apiError({
       statusCode: 409,
       message: 'Test run cannot be transitioned to running state',
     });
@@ -82,7 +82,7 @@ export default eventHandler(async (event) => {
   const isValidShardSetupToken = isSharded && runEventBus.isValidShardToken(id, body.setupToken);
 
   if (!timingSafeEqualStr(testRun.streamToken ?? '', body.setupToken) && !isValidShardSetupToken) {
-    throw createError({
+    throw apiError({
       statusCode: 403,
       message: 'Invalid setup token',
     });
