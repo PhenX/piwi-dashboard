@@ -1102,7 +1102,7 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/users$/,
-    handler: async () => ({ ...(await listUsers(await getDemoDb())), authEnabled: true }),
+    handler: async () => ({ items: (await listUsers(await getDemoDb())).users, authEnabled: true }),
   },
   {
     method: 'POST',
@@ -1147,7 +1147,7 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/users\/(\d+)\/api-keys$/,
-    handler: async (m) => listUserApiKeys(await getDemoDb(), +m[1]!),
+    handler: async (m) => ({ items: (await listUserApiKeys(await getDemoDb(), +m[1]!)).apiKeys }),
   },
   {
     method: 'POST',
@@ -1196,7 +1196,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/projects\/(\d+)\/members$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
-      return { users: await getProjectMembers(await getDemoDb(), +m[1]!) };
+      return { items: await getProjectMembers(await getDemoDb(), +m[1]!) };
     },
   },
   {
@@ -1424,7 +1424,7 @@ routes.push(
   {
     method: 'GET',
     pattern: /^\/api\/channels$/,
-    handler: () => Promise.resolve({ channels: [DEMO_CHANNEL] }),
+    handler: () => Promise.resolve({ items: [DEMO_CHANNEL] }),
   },
   {
     method: 'POST',
@@ -1446,7 +1446,7 @@ routes.push(
       const projectIdParam = q?.get('projectId');
       const filtered =
         projectIdParam != null ? _demoSubs.filter((s) => s.projectId === parseInt(projectIdParam)) : _demoSubs;
-      return Promise.resolve({ subscriptions: filtered });
+      return Promise.resolve({ items: filtered });
     },
   },
   {

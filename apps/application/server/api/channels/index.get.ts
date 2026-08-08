@@ -47,7 +47,7 @@ export default eventHandler(async (event) => {
   }
 
   return {
-    channels: rows.map((c) => {
+    items: rows.map((c) => {
       // For the user's own personal_email channel: always reflect live account state
       const isOwnPersonal = c.type === 'personal_email' && c.userId === user.id;
       const config = isOwnPersonal

@@ -444,7 +444,7 @@ test.describe.serial('Reporter with authentication enabled', () => {
     const usersRes = await request.get(`${AUTH_SERVER_URL}/api/users`);
     expect(usersRes.ok()).toBeTruthy();
     const usersData = await usersRes.json();
-    const reporterUser = usersData.users.find((u: { username: string }) => u.username === 'ci-reporter');
+    const reporterUser = usersData.items.find((u: { username: string }) => u.username === 'ci-reporter');
     expect(reporterUser).toBeDefined();
 
     // Create API key
@@ -470,13 +470,13 @@ test.describe.serial('Reporter with authentication enabled', () => {
 
     const usersRes = await request.get(`${AUTH_SERVER_URL}/api/users`);
     const usersData = await usersRes.json();
-    const reporterUser = usersData.users.find((u: { username: string }) => u.username === 'ci-reporter');
+    const reporterUser = usersData.items.find((u: { username: string }) => u.username === 'ci-reporter');
 
     const keysRes = await request.get(`${AUTH_SERVER_URL}/api/users/${reporterUser.id}/api-keys`);
     expect(keysRes.ok()).toBeTruthy();
     const keysData = await keysRes.json();
-    expect(keysData.apiKeys).toHaveLength(1);
-    const listedKey = keysData.apiKeys[0];
+    expect(keysData.items).toHaveLength(1);
+    const listedKey = keysData.items[0];
     expect(listedKey.name).toBe('CI Pipeline Key');
     // Only the prefix is returned – not the full key
     expect(listedKey.keyPrefix).toHaveLength(8);
@@ -647,13 +647,13 @@ test.describe.serial('Reporter with authentication enabled', () => {
     // Get reporter user id
     const usersRes = await request.get(`${AUTH_SERVER_URL}/api/users`);
     const usersData = await usersRes.json();
-    const reporterUser = usersData.users.find((u: { username: string }) => u.username === 'ci-reporter');
+    const reporterUser = usersData.items.find((u: { username: string }) => u.username === 'ci-reporter');
 
     // Get the key id
     const keysRes = await request.get(`${AUTH_SERVER_URL}/api/users/${reporterUser.id}/api-keys`);
     const keysData = await keysRes.json();
-    expect(keysData.apiKeys).toHaveLength(1);
-    const keyId = keysData.apiKeys[0].id;
+    expect(keysData.items).toHaveLength(1);
+    const keyId = keysData.items[0].id;
 
     // Revoke the key
     const revokeRes = await request.delete(`${AUTH_SERVER_URL}/api/users/${reporterUser.id}/api-keys/${keyId}`);
@@ -664,7 +664,7 @@ test.describe.serial('Reporter with authentication enabled', () => {
     // Key list should now be empty
     const keysResAfter = await request.get(`${AUTH_SERVER_URL}/api/users/${reporterUser.id}/api-keys`);
     const keysDataAfter = await keysResAfter.json();
-    expect(keysDataAfter.apiKeys).toHaveLength(0);
+    expect(keysDataAfter.items).toHaveLength(0);
   });
 
   test('revoked API key is rejected', async ({ request }) => {
@@ -777,7 +777,7 @@ test.describe.serial('Reporter with authentication enabled', () => {
 
     const usersRes = await request.get(`${AUTH_SERVER_URL}/api/users`);
     const usersData = await usersRes.json();
-    ciReporterId = usersData.users.find((u: { username: string }) => u.username === 'ci-reporter').id;
+    ciReporterId = usersData.items.find((u: { username: string }) => u.username === 'ci-reporter').id;
   });
 
   test('admin creates a project for the members checks', async ({ request }) => {
@@ -855,10 +855,10 @@ test.describe.serial('Reporter with authentication enabled', () => {
 
     const before = await request.get(`${AUTH_SERVER_URL}/api/projects/${membersProjectId}/members`);
     expect(before.ok()).toBeTruthy();
-    const beforeBody = (await before.json()) as { users: Array<{ username: string }> };
+    const beforeBody = (await before.json()) as { items: Array<{ username: string }> };
     // Only the implicit admin has access before any explicit assignment.
-    expect(beforeBody.users.some((u) => u.username === 'ci-user')).toBe(false);
-    expect(beforeBody.users.some((u) => u.username === 'ci-reporter')).toBe(false);
+    expect(beforeBody.items.some((u) => u.username === 'ci-user')).toBe(false);
+    expect(beforeBody.items.some((u) => u.username === 'ci-reporter')).toBe(false);
 
     const put = await request.put(`${AUTH_SERVER_URL}/api/projects/${membersProjectId}/members`, {
       data: { userIds: [ciUserId, ciReporterId] },
@@ -867,9 +867,9 @@ test.describe.serial('Reporter with authentication enabled', () => {
     expect(await put.json()).toEqual({ success: true });
 
     const after = await request.get(`${AUTH_SERVER_URL}/api/projects/${membersProjectId}/members`);
-    const afterBody = (await after.json()) as { users: Array<{ username: string; global: boolean }> };
-    const ciUserEntry = afterBody.users.find((u) => u.username === 'ci-user');
-    const ciReporterEntry = afterBody.users.find((u) => u.username === 'ci-reporter');
+    const afterBody = (await after.json()) as { items: Array<{ username: string; global: boolean }> };
+    const ciUserEntry = afterBody.items.find((u) => u.username === 'ci-user');
+    const ciReporterEntry = afterBody.items.find((u) => u.username === 'ci-reporter');
     expect(ciUserEntry).toMatchObject({ username: 'ci-user', global: false });
     expect(ciReporterEntry).toMatchObject({ username: 'ci-reporter', global: false });
   });

@@ -122,9 +122,9 @@ watch(
         $fetch<ProjectMembersResponse>(`/api/projects/${projectId}/members`),
         $fetch<UsersResponse>('/api/users'),
       ]);
-      members.value = membersData.users;
-      allUsers.value = usersData.users;
-      selectedMemberIds.value = membersData.users
+      members.value = membersData.items;
+      allUsers.value = usersData.items;
+      selectedMemberIds.value = membersData.items
         .filter((m) => m.role !== 'administrator' && !m.global)
         .map((m) => m.id);
     } catch {
@@ -153,7 +153,7 @@ async function handleSaveMembers() {
     });
     toast.add({ title: 'Members updated', color: 'success' });
     const data = await $fetch<ProjectMembersResponse>(`/api/projects/${projectId}/members`);
-    members.value = data.users;
+    members.value = data.items;
   } catch (error: unknown) {
     const errorMessage =
       error && typeof error === 'object' && 'data' in error ? (error.data as { message?: string })?.message : undefined;

@@ -17,7 +17,7 @@ const { copy } = useCopy();
 const { authState } = useAuth();
 const config = useRuntimeConfig();
 
-const users = computed(() => usersData.value?.users || []);
+const users = computed(() => usersData.value?.items || []);
 const authEnabled = computed(() => usersData.value?.authEnabled || false);
 
 // Check if current user is admin (only matters when auth is enabled)
@@ -170,7 +170,7 @@ async function openApiKeysModal(user: UserDetails) {
 async function loadApiKeys(userId: number) {
   try {
     const data = await $fetch<ApiKeysResponse>(`/api/users/${userId}/api-keys`);
-    apiKeysList.value = data.apiKeys;
+    apiKeysList.value = data.items;
   } catch {
     apiKeysList.value = [];
   }

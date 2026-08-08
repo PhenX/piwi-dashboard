@@ -58,12 +58,12 @@ interface Subscription {
 const shouldFetch = isDemoMode || !authEnabled.value || isAuthenticated.value;
 const fetchOpts = isDemoMode ? ({ server: false } as const) : {};
 
-const { data: subsData, refresh: refreshSubs } = await useFetch<{ subscriptions: Subscription[] }>(
+const { data: subsData, refresh: refreshSubs } = await useFetch<{ items: Subscription[] }>(
   `/api/subscriptions?projectId=${props.projectId}`,
   { immediate: shouldFetch, ...fetchOpts },
 );
 
-const subs = computed(() => subsData.value?.subscriptions ?? []);
+const subs = computed(() => subsData.value?.items ?? []);
 const isSubscribed = computed(() => subs.value.length > 0);
 
 // ── Channels ─────────────────────────────────────────────────────────────────
@@ -75,12 +75,12 @@ interface Channel {
   config?: Record<string, unknown>;
 }
 
-const { data: channelsData } = await useFetch<{ channels: Channel[] }>('/api/channels', {
+const { data: channelsData } = await useFetch<{ items: Channel[] }>('/api/channels', {
   immediate: shouldFetch,
   ...fetchOpts,
 });
 
-const channels = computed(() => channelsData.value?.channels ?? []);
+const channels = computed(() => channelsData.value?.items ?? []);
 
 // ── New subscription form ─────────────────────────────────────────────────────
 const showForm = ref(false);

@@ -25,5 +25,5 @@ export default eventHandler(async (event) => {
   if (!projectResults[0]) throw createError({ statusCode: 404, message: 'Project not found' });
 
   const result = await getProjectMembers(db, id);
-  return { users: result };
+  return { items: result };
 });

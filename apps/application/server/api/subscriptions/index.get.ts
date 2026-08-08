@@ -32,7 +32,7 @@ export default eventHandler(async (event) => {
     );
 
   return {
-    subscriptions: rows.map(({ sub, channel }) => ({
+    items: rows.map(({ sub, channel }) => ({
       id: sub.id,
       userId: sub.userId,
       projectId: sub.projectId,

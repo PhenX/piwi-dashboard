@@ -64,9 +64,9 @@ interface Channel {
   config: Record<string, unknown>;
 }
 
-const { data: channelsData, refresh: refreshChannels } = await useFetch<{ channels: Channel[] }>('/api/channels');
+const { data: channelsData, refresh: refreshChannels } = await useFetch<{ items: Channel[] }>('/api/channels');
 
-const channels = computed(() => channelsData.value?.channels ?? []);
+const channels = computed(() => channelsData.value?.items ?? []);
 
 // New channel form
 const showNewChannel = ref(false);
@@ -168,11 +168,9 @@ interface Subscription {
   channel: { id: number; name: string; type: string };
 }
 
-const { data: subsData, refresh: refreshSubs } = await useFetch<{ subscriptions: Subscription[] }>(
-  '/api/subscriptions',
-);
+const { data: subsData, refresh: refreshSubs } = await useFetch<{ items: Subscription[] }>('/api/subscriptions');
 
-const subs = computed(() => subsData.value?.subscriptions ?? []);
+const subs = computed(() => subsData.value?.items ?? []);
 
 /** Whether the viewer can edit/delete this subscription (mirrors the API rules). */
 function canManageSub(sub: Subscription) {

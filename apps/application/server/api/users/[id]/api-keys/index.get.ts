@@ -26,5 +26,5 @@ export default eventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Insufficient permissions' });
   }
 
-  return listUserApiKeys(await getDatabase(), targetId);
+  return { items: (await listUserApiKeys(await getDatabase(), targetId)).apiKeys };
 });

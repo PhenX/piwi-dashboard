@@ -956,7 +956,7 @@ export interface UserDetails {
  * Users response from API
  */
 export interface UsersResponse {
-  users: UserDetails[];
+  items: UserDetails[];
   authEnabled: boolean;
 }
 
@@ -980,7 +980,7 @@ export interface ApiKeySummary {
  * Response from GET /api/users/[id]/api-keys
  */
 export interface ApiKeysResponse {
-  apiKeys: ApiKeySummary[];
+  items: ApiKeySummary[];
 }
 
 /**
@@ -1019,7 +1019,7 @@ export interface ProjectMemberEntry {
  * Project members response
  */
 export interface ProjectMembersResponse {
-  users: ProjectMemberEntry[];
+  items: ProjectMemberEntry[];
 }
 
 // ============================================================================

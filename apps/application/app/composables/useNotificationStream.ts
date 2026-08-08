@@ -132,8 +132,8 @@ async function checkBrowserSubscriptions(): Promise<boolean> {
   if (!('Notification' in window) || Notification.permission !== 'granted') return false;
 
   try {
-    const res = await $fetch<{ channels: Array<{ type: string }> }>('/api/channels');
-    return res.channels.some((c) => c.type === 'browser');
+    const res = await $fetch<{ items: Array<{ type: string }> }>('/api/channels');
+    return res.items.some((c) => c.type === 'browser');
   } catch {
     return false;
   }
