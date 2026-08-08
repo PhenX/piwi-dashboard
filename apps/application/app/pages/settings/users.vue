@@ -304,7 +304,7 @@ async function openProjectAccessModal(user: UserDetails) {
 
   // Load all projects for the multi-select
   try {
-    const projects = await $fetch<ProjectMenuItem[]>('/api/projects/menu');
+    const projects = (await $fetch<{ items: ProjectMenuItem[] }>('/api/projects/menu')).items;
     allProjectsList.value = projects.map((p) => ({ ...p, label: p.label || p.name }));
   } catch {
     allProjectsList.value = [];

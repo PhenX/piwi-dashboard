@@ -258,7 +258,7 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/overview$/,
-    handler: async (_, __, ___, ctx) => getProjectsOverview(await getDemoDb(), ctx?.scope),
+    handler: async (_, __, ___, ctx) => ({ items: await getProjectsOverview(await getDemoDb(), ctx?.scope) }),
   },
   {
     method: 'GET',
@@ -285,7 +285,7 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/projects\/menu$/,
-    handler: async (_, __, ___, ctx) => getProjectMenu(await getDemoDb(), ctx?.scope),
+    handler: async (_, __, ___, ctx) => ({ items: await getProjectMenu(await getDemoDb(), ctx?.scope) }),
   },
   {
     method: 'GET',
@@ -508,7 +508,7 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/recent$/,
-    handler: async (_, __, ___, ctx) => getRecentTestRuns(await getDemoDb(), ctx?.scope),
+    handler: async (_, __, ___, ctx) => ({ items: await getRecentTestRuns(await getDemoDb(), ctx?.scope) }),
   },
   {
     method: 'GET',

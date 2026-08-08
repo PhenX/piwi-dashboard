@@ -434,7 +434,7 @@ test.describe.serial('Reporter live upload end-to-end', () => {
         const deadline = Date.now() + 30000;
         while (Date.now() < deadline) {
           try {
-            const runs = await getJSON('/api/test-runs/recent');
+            const { items: runs } = await getJSON('/api/test-runs/recent');
             const run = runs.find(r => r.projectName === PROJECT_NAME);
             if (run) {
               const detail = await getJSON('/api/test-runs/' + run.id);

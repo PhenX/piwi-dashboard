@@ -21,17 +21,19 @@ useHead({ title: 'Analytics - Piwi Dashboard' });
 const { state, scopeQuery } = useAnalyticsScope();
 
 // Project options for the scope bar (slim list, same source as the sidebar menu).
-const { data: availableProjects } = await useFetch<ProjectMenuItem[]>('/api/projects/menu', {
+const { data: availableProjects } = await useFetch('/api/projects/menu', {
   lazy: true,
   server: false,
   default: () => [] as ProjectMenuItem[],
+  transform: (r: { items: ProjectMenuItem[] }) => r.items,
 });
 
 // Environment options for the scope bar (same source as the home filters).
-const { data: recentTestRuns } = await useFetch<TestRunForChart[]>('/api/test-runs/recent', {
+const { data: recentTestRuns } = await useFetch('/api/test-runs/recent', {
   lazy: true,
   server: false,
   default: () => [] as TestRunForChart[],
+  transform: (r: { items: TestRunForChart[] }) => r.items,
 });
 
 const availableEnvironments = computed(() => {

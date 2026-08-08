@@ -463,7 +463,7 @@ test.describe.serial('Extract cases from failure cluster', () => {
 
   test('extracted case no longer references the cluster on the run detail page', async ({ request }) => {
     const projectsRes = await request.get('/api/projects/menu');
-    const projects = (await projectsRes.json()) as Array<{ id: number; name: string }>;
+    const projects = ((await projectsRes.json()) as { items: Array<{ id: number; name: string }> }).items;
     const project = projects.find((p) => p.name === PROJECT.EXTRACT_CASES)!;
     const projectDetail = (await (await request.get(`/api/projects/${project.id}`)).json()) as {
       testRuns: Array<{ id: number }>;

@@ -13,15 +13,19 @@ const {
   error: overviewError,
   refresh: refreshOverview,
   status: overviewStatus,
-} = useFetch<ProjectOverview[]>('/api/projects/overview', {
+} = useFetch('/api/projects/overview', {
   lazy: true,
   default: () => [] as ProjectOverview[],
+  transform: (r: { items: ProjectOverview[] }) => r.items,
 });
 const {
   data: recentTestRuns,
   error: recentRunsError,
   refresh: refreshRecentRuns,
-} = useFetch<TestRunForChart[]>('/api/test-runs/recent', { lazy: true });
+} = useFetch('/api/test-runs/recent', {
+  lazy: true,
+  transform: (r: { items: TestRunForChart[] }) => r.items,
+});
 
 useRunStream(() => Promise.all([refreshOverview(), refreshRecentRuns()]));
 

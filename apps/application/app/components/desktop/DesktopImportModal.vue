@@ -23,7 +23,11 @@ const {
   data: projects,
   execute: loadProjects,
   status: projectsStatus,
-} = useFetch<ProjectMenuItem[]>('/api/projects/menu', { immediate: false, default: () => [] });
+} = useFetch('/api/projects/menu', {
+  immediate: false,
+  default: () => [] as ProjectMenuItem[],
+  transform: (r: { items: ProjectMenuItem[] }) => r.items,
+});
 
 watch(open, (value) => {
   if (value && projects.value.length === 0) void loadProjects();

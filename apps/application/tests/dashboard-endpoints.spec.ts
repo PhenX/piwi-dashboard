@@ -128,7 +128,7 @@ test.describe.serial('Projects Overview API Tests', () => {
       latestFullRun: { id: number; status: string; passedTests: number; failedTests: number } | null;
       recentRuns: Array<{ id: number; status: string; startTime: string }>;
       tendency: string;
-    }> = await response.json();
+    }> = (await response.json()).items;
 
     const project = projects.find((p) => p.id === projectId);
     expect(project).toBeDefined();
@@ -140,10 +140,14 @@ test.describe.serial('Projects Overview API Tests', () => {
 
   test('GET /api/projects/overview reports the latest full run', async ({ request }) => {
     const response = await request.get('/api/projects/overview');
-    const projects = (await response.json()) as Array<{
-      id: number;
-      latestFullRun: { status: string; passedTests: number; failedTests: number } | null;
-    }>;
+    const projects = (
+      (await response.json()) as {
+        items: Array<{
+          id: number;
+          latestFullRun: { status: string; passedTests: number; failedTests: number } | null;
+        }>;
+      }
+    ).items;
     const project = projects.find((p) => p.id === projectId)!;
 
     expect(project.latestFullRun).not.toBeNull();
@@ -156,11 +160,15 @@ test.describe.serial('Projects Overview API Tests', () => {
     request,
   }) => {
     const response = await request.get('/api/projects/overview');
-    const projects = (await response.json()) as Array<{
-      id: number;
-      recentRuns: Array<{ status: string }>;
-      tendency: string;
-    }>;
+    const projects = (
+      (await response.json()) as {
+        items: Array<{
+          id: number;
+          recentRuns: Array<{ status: string }>;
+          tendency: string;
+        }>;
+      }
+    ).items;
     const project = projects.find((p) => p.id === projectId)!;
 
     expect(project.recentRuns).toHaveLength(2);

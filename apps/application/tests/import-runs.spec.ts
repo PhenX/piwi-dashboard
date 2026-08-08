@@ -18,7 +18,7 @@ async function resetImportProjects(playwright: typeof import('@playwright/test')
   try {
     const response = await api.get('/api/projects/menu');
     if (!response.ok()) return;
-    const projects = (await response.json()) as { id: number; name: string }[];
+    const projects = ((await response.json()) as { items: { id: number; name: string }[] }).items;
     for (const project of projects) {
       if (names.includes(project.name)) await api.delete(`/api/projects/${project.id}`);
     }
