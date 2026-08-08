@@ -49,7 +49,7 @@ test.describe.serial('Tags API Tests', () => {
       data: { text: 'api-test-tag', color: '#ef4444' },
     });
     expect(res.ok()).toBeFalsy();
-    expect(res.status()).toBe(400);
+    expect(res.status()).toBe(409);
   });
 
   test('should reject missing tag text', async ({ request }) => {

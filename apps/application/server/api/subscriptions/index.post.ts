@@ -50,7 +50,7 @@ export default eventHandler(async (event) => {
 
   const db = await getDatabase();
   const [channel] = await db.select().from(notificationChannels).where(eq(notificationChannels.id, channelId));
-  if (!channel) throw createError({ statusCode: 400, message: 'Channel not found' });
+  if (!channel) throw createError({ statusCode: 404, message: 'Channel not found' });
 
   const isAdmin = user.role === Role.ADMINISTRATOR;
   if (channel.userId !== null && channel.userId !== user.id && !isAdmin) {

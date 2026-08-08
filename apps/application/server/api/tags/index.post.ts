@@ -37,9 +37,10 @@ export default eventHandler(async (event) => {
     const db = await getDatabase();
     return await createTag(db, text, color);
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create tag';
     throw createError({
-      statusCode: 400,
-      message: err instanceof Error ? err.message : 'Failed to create tag',
+      statusCode: message === 'A tag with this text already exists' ? 409 : 400,
+      message,
     });
   }
 });

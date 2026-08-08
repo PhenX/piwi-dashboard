@@ -10,7 +10,7 @@ defineRouteMeta({
     tags: ['Settings'],
     summary: 'Save AI settings',
     description:
-      'Updates the per-role AI configuration (diagnosis, research, embedding), auto-diagnose toggle, custom instructions, and SCM token. Each role has its own provider/model/baseUrl/apiKey, or `reuse` to inherit another role. Requires administrator role. Not available when AI is managed via environment variables.',
+      'Updates the per-role AI configuration (diagnosis, research, embedding), auto-diagnose toggle, custom instructions, and SCM token. Each role has its own provider/model/baseUrl/apiKey, or `reuse` to inherit another role. Requires administrator role. Env-managed conflict: when AI is configured via environment variables the environment is authoritative for provider, key, and base URL — those fields are ignored and only per-role model overrides (or clearing them with `roles: null`) are applied. The response always reflects the effective configuration.',
     'x-required-roles': ['administrator'],
   },
 });

@@ -13,7 +13,7 @@ test.describe.serial('Project Creation API Tests', () => {
       },
     });
     // A concurrent browser run may have already created this project — that satisfies the test intent
-    if (res.status() === 400) return;
+    if (res.status() === 409) return;
     expect(res.ok()).toBeTruthy();
     const data = await res.json();
     expect(data.project).toBeDefined();
@@ -44,7 +44,7 @@ test.describe.serial('Project Creation API Tests', () => {
     await request.post('/api/projects', { data: { name: projectName } });
     const res = await request.post('/api/projects', { data: { name: projectName } });
     expect(res.ok()).toBeFalsy();
-    expect(res.status()).toBe(400);
+    expect(res.status()).toBe(409);
   });
 
   test('should create a project with only name (optional fields omitted)', async ({ request }) => {

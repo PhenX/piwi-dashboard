@@ -61,7 +61,7 @@ export default eventHandler(async (event) => {
           isAdmin ? undefined : or(isNull(notificationChannels.userId), eq(notificationChannels.userId, user.id)),
         ),
       );
-    if (!ch) throw createError({ statusCode: 403, message: 'Channel not found or not accessible' });
+    if (!ch) throw createError({ statusCode: 404, message: 'Channel not found' });
     // A global subscription delivers with no per-user access check, so it must
     // stay on a global channel.
     if (sub.userId === null && ch.userId !== null) {

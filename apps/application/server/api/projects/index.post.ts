@@ -41,7 +41,7 @@ export default eventHandler(async (event) => {
     return await createProject(db, name, label, description, tagIds);
   } catch (e: any) {
     if (e?.message === 'A project with this name already exists') {
-      throw createError({ statusCode: 400, message: e.message });
+      throw createError({ statusCode: 409, message: e.message });
     }
     if (e?.message === 'One or more tag IDs are invalid') {
       throw createError({ statusCode: 400, message: e.message });

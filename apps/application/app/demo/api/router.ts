@@ -280,7 +280,12 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/projects$/,
     handler: async (_, body) => {
       const b = body as { name: string; label?: string; description?: string };
-      return createProject(await getDemoDb(), b.name, b.label, b.description);
+      try {
+        return await createProject(await getDemoDb(), b.name, b.label, b.description);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Failed to create project';
+        throw demoHttpError(message === 'A project with this name already exists' ? 409 : 400, message);
+      }
     },
   },
   {
@@ -931,7 +936,12 @@ const routes: RouteEntry[] = [
       }
       const color = typeof b.color === 'string' && b.color.trim() ? b.color : undefined;
       if (!color) throw demoHttpError(400, 'Color is required');
-      return createTag(await getDemoDb(), text, color);
+      try {
+        return await createTag(await getDemoDb(), text, color);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Failed to create tag';
+        throw demoHttpError(message === 'A tag with this text already exists' ? 409 : 400, message);
+      }
     },
   },
   {

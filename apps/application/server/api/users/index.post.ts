@@ -64,9 +64,10 @@ export default eventHandler(async (event) => {
       },
     };
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create user';
     throw createError({
-      statusCode: 400,
-      message: err instanceof Error ? err.message : 'Failed to create user',
+      statusCode: message === 'Username already exists' ? 409 : 400,
+      message,
     });
   }
 });
