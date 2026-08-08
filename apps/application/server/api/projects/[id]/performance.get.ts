@@ -4,7 +4,7 @@ import { getProjectPerformance } from '#shared/handlers/projects';
 
 defineRouteMeta({
   openAPI: {
-    tags: ['Test Runs'],
+    tags: ['Analytics'],
     summary: 'Performance trend data',
     description:
       'Returns test run duration, average test duration, and p90 test duration for trend charts with optional date range filtering',

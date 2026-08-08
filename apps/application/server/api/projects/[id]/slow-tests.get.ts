@@ -4,7 +4,7 @@ import { requireProjectAccess, requireRouteId } from '../../../utils/project-acc
 
 defineRouteMeta({
   openAPI: {
-    tags: ['Test Cases'],
+    tags: ['Analytics'],
     summary: 'Slow test analysis',
     description:
       'Returns the slowest test cases for a project with average, max, min duration, run count, and trend direction',

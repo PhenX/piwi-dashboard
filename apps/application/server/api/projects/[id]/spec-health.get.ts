@@ -4,7 +4,7 @@ import { getProjectSpecHealth } from '#shared/handlers/projects';
 
 defineRouteMeta({
   openAPI: {
-    tags: ['Projects'],
+    tags: ['Analytics'],
     summary: 'Spec health overview',
     description:
       'Groups test cases by spec file prefix and computes pass rate, flaky rate, failure count, test count, and average duration over the last N days',

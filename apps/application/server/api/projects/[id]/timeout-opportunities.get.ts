@@ -5,7 +5,7 @@ import { getTimeoutThresholds } from '../../../utils/timeout-thresholds';
 
 defineRouteMeta({
   openAPI: {
-    tags: ['Test Cases'],
+    tags: ['Analytics'],
     summary: 'Timeout-reduction opportunities',
     description:
       'Ranks a project’s tests whose configured per-test timeout far exceeds their real p95 duration (so failures waste time waiting), plus tests still carrying a stale test.slow() mark. Each row includes p50/p95/max duration, the effective timeout, a recommended new timeout, and an impact score. Thresholds are configurable in Settings.',

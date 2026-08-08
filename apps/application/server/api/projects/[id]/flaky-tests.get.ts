@@ -7,7 +7,7 @@ import { TEST_PRIORITIES } from '@piwitests/core/test-meta';
 
 defineRouteMeta({
   openAPI: {
-    tags: ['Test Cases'],
+    tags: ['Analytics'],
     summary: 'Flaky test analysis',
     description:
       'Analyzes test flakiness across recent runs using retry-pass detection and pass/fail alternation scoring. Pass an environment to scope the analysis to runs from that deployment environment.',
