@@ -1082,9 +1082,12 @@ const routes: RouteEntry[] = [
   {
     method: 'DELETE',
     pattern: /^\/api\/projects\/(\d+)\/quarantine\/(\d+)$/,
-    handler: async (m, _, q, ctx) => {
+    handler: async (m, body, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
-      const reason = typeof q?.get('reason') === 'string' ? String(q.get('reason')).slice(0, 500) : null;
+      const reason =
+        body && typeof (body as { reason?: unknown }).reason === 'string'
+          ? String((body as { reason: string }).reason).slice(0, 500)
+          : null;
       const result = await releaseQuarantine(await getDemoDb(), +m[1]!, +m[2]!, reason);
       if (!result.released) throw demoHttpError(404, 'No active quarantine for this test');
       return { success: true, ...result };

@@ -180,7 +180,11 @@ test.describe.serial('Quarantine', () => {
   });
 
   test('releasing lets the test block the gate again', async ({ request }) => {
-    const res = await request.delete(`/api/projects/${projectId}/quarantine/${flakyCaseId}`);
+    // The optional release reason rides in the request body (not the query
+    // string), like every other mutation.
+    const res = await request.delete(`/api/projects/${projectId}/quarantine/${flakyCaseId}`, {
+      data: { reason: 'stable for two weeks' },
+    });
     expect(res.ok()).toBeTruthy();
 
     const body = await getQuarantine(request, projectId);
