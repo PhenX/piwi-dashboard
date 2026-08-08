@@ -115,7 +115,8 @@ function flushPendingEvents() {
         liveTestCases.value = [
           ...liveTestCases.value,
           {
-            id: liveTestCases.value.length + 1,
+            executionId: liveTestCases.value.length + 1,
+            testCaseId: 0,
             title: d.title,
             filePath: d.filePath,
             suitePath: d.suitePath ?? undefined,
@@ -177,7 +178,8 @@ function flushPendingEvents() {
         liveTestCases.value = [
           ...liveTestCases.value,
           {
-            id: liveTestCases.value.length + 1,
+            executionId: liveTestCases.value.length + 1,
+            testCaseId: 0,
             title: d.title,
             filePath: d.filePath,
             suitePath: d.suitePath ?? undefined,

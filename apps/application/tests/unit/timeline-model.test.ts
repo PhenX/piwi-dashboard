@@ -4,7 +4,7 @@ import type { TestCaseResult, TestStepEvent } from '../../types/api';
 
 type StepLike = Partial<TestStepEvent> & { title: string; category: string };
 type CaseLike = {
-  id: number;
+  executionId: number;
   title: string;
   status: string;
   workerIndex: number | null;
@@ -22,7 +22,7 @@ describe('useTimelineModel', () => {
   test('positions bars by startedAt, renders hooks and only wasted waits', () => {
     const { timelineData, workerRows, maxTime } = model([
       {
-        id: 1,
+        executionId: 1,
         title: 'A',
         status: 'passed',
         workerIndex: 0,
@@ -34,7 +34,15 @@ describe('useTimelineModel', () => {
           { title: 'Wait for timeout', category: 'wait', startedAt: 1200, duration: 200, status: 'wasted' },
         ],
       },
-      { id: 2, title: 'B', status: 'passed', workerIndex: 1, startedAt: 1000, duration: 400, stepEvents: null },
+      {
+        executionId: 2,
+        title: 'B',
+        status: 'passed',
+        workerIndex: 1,
+        startedAt: 1000,
+        duration: 400,
+        stepEvents: null,
+      },
     ]);
 
     const items = timelineData.value;
@@ -59,7 +67,7 @@ describe('useTimelineModel', () => {
   test('sequential fallback packs cases and waits when startedAt is absent', () => {
     const { timelineData, maxTime } = model([
       {
-        id: 1,
+        executionId: 1,
         title: 'A',
         status: 'passed',
         workerIndex: 0,
@@ -78,8 +86,8 @@ describe('useTimelineModel', () => {
 
   test('groups rows into shards', () => {
     const { workerRows, shardGroups } = model([
-      { id: 1, title: 'A', status: 'passed', workerIndex: 0, shardIndex: 0, startedAt: 1000, duration: 100 },
-      { id: 2, title: 'B', status: 'passed', workerIndex: 0, shardIndex: 1, startedAt: 1000, duration: 100 },
+      { executionId: 1, title: 'A', status: 'passed', workerIndex: 0, shardIndex: 0, startedAt: 1000, duration: 100 },
+      { executionId: 2, title: 'B', status: 'passed', workerIndex: 0, shardIndex: 1, startedAt: 1000, duration: 100 },
     ]);
 
     expect(workerRows.value).toHaveLength(2);
@@ -91,7 +99,7 @@ describe('useTimelineModel', () => {
 
   test('skips cases without a worker index', () => {
     const { timelineData, workerRows } = model([
-      { id: 1, title: 'A', status: 'passed', workerIndex: null, startedAt: 1000, duration: 100 },
+      { executionId: 1, title: 'A', status: 'passed', workerIndex: null, startedAt: 1000, duration: 100 },
     ]);
     expect(timelineData.value).toHaveLength(0);
     expect(workerRows.value).toHaveLength(0);
@@ -101,7 +109,7 @@ describe('useTimelineModel', () => {
     const { timelineData } = model(
       [
         {
-          id: 1,
+          executionId: 1,
           title: 'A',
           status: 'passed',
           workerIndex: 0,
@@ -134,7 +142,7 @@ describe('useTimelineModel', () => {
     const { timelineData } = model(
       [
         {
-          id: 1,
+          executionId: 1,
           title: 'A',
           status: 'passed',
           workerIndex: 0,
@@ -161,9 +169,33 @@ describe('useTimelineModel', () => {
       { title: 'After Hooks', category: 'hook', startedAt: 1300, duration: 30, status: 'passed' },
     ];
     const { timelineData } = model([
-      { id: 101, title: 'A', status: 'passed', workerIndex: 0, startedAt: 1000, duration: 500, stepEvents: steps },
-      { id: 102, title: 'B', status: 'passed', workerIndex: 0, startedAt: 1600, duration: 500, stepEvents: steps },
-      { id: 103, title: 'C', status: 'passed', workerIndex: 1, startedAt: 1000, duration: 500, stepEvents: steps },
+      {
+        executionId: 101,
+        title: 'A',
+        status: 'passed',
+        workerIndex: 0,
+        startedAt: 1000,
+        duration: 500,
+        stepEvents: steps,
+      },
+      {
+        executionId: 102,
+        title: 'B',
+        status: 'passed',
+        workerIndex: 0,
+        startedAt: 1600,
+        duration: 500,
+        stepEvents: steps,
+      },
+      {
+        executionId: 103,
+        title: 'C',
+        status: 'passed',
+        workerIndex: 1,
+        startedAt: 1000,
+        duration: 500,
+        stepEvents: steps,
+      },
     ]);
 
     const items = timelineData.value;
@@ -175,7 +207,7 @@ describe('useTimelineModel', () => {
   test('hook and wait segments carry their owning test case id', () => {
     const { timelineData } = model([
       {
-        id: 7,
+        executionId: 7,
         title: 'A',
         status: 'passed',
         workerIndex: 0,
@@ -200,8 +232,8 @@ describe('useTimelineModel', () => {
   test('sharded runs with setup steps do not grow phantom rows', () => {
     const { timelineData, workerRows, shardGroups } = model(
       [
-        { id: 1, title: 'A', status: 'passed', workerIndex: 0, shardIndex: 1, startedAt: 1000, duration: 100 },
-        { id: 2, title: 'B', status: 'passed', workerIndex: 0, shardIndex: 2, startedAt: 1000, duration: 100 },
+        { executionId: 1, title: 'A', status: 'passed', workerIndex: 0, shardIndex: 1, startedAt: 1000, duration: 100 },
+        { executionId: 2, title: 'B', status: 'passed', workerIndex: 0, shardIndex: 2, startedAt: 1000, duration: 100 },
       ],
       {
         setupSteps: [
@@ -219,7 +251,7 @@ describe('useTimelineModel', () => {
   test('ignores step categories that are not hooks, fixtures or waits', () => {
     const { timelineData } = model([
       {
-        id: 1,
+        executionId: 1,
         title: 'A',
         status: 'passed',
         workerIndex: 0,

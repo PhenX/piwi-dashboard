@@ -696,7 +696,10 @@ export interface AiStepIntent {
  * Test case result (for a specific test run)
  */
 export interface TestCaseResult {
-  id: number;
+  /** The execution id (a test_runs_cases row): this test case run within this run. */
+  executionId: number;
+  /** The stable test-case identity, shared across every run of this test. */
+  testCaseId: number;
   title: string;
   filePath?: string;
   suitePath?: string[];

@@ -137,7 +137,8 @@ export async function getTestRun(
   );
 
   const formattedTestCases = runsCases.map((tc: any) => ({
-    id: tc.id,
+    executionId: tc.id,
+    testCaseId: tc.testCaseId,
     title: tc.title,
     filePath: tc.filePath,
     suitePath: splitSuitePath(tc.suitePath),
@@ -228,7 +229,7 @@ export async function getTestRun(
     links: linksForRun,
     testCases: formattedTestCases.map((tc: any) => ({
       ...tc,
-      links: caseLinksMap.get(tc.id) ?? [],
+      links: caseLinksMap.get(tc.executionId) ?? [],
     })),
     suites,
     storageStats,

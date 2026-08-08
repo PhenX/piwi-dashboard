@@ -140,7 +140,7 @@ async function uploadRun(request: APIRequestContext, traceZip: Buffer | null) {
   expect(res.ok()).toBe(true);
   const { testRunId } = await res.json();
   const runData = await (await request.get(`/api/test-runs/${testRunId}`)).json();
-  const caseId = runData.testCases?.[0]?.id;
+  const caseId = runData.testCases?.[0]?.executionId;
   expect(caseId).toBeDefined();
   return { testRunId, caseId };
 }

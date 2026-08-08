@@ -721,9 +721,9 @@ test.describe.serial('Reporter with authentication enabled', () => {
     expect(submit.ok()).toBeTruthy();
     const { testRunId } = await submit.json();
     const run = (await (await request.get(`${AUTH_SERVER_URL}/api/test-runs/${testRunId}`)).json()) as {
-      testCases: Array<{ id: number; status: string }>;
+      testCases: Array<{ executionId: number; status: string }>;
     };
-    const executionId = run.testCases.find((c) => c.status === 'failed')!.id;
+    const executionId = run.testCases.find((c) => c.status === 'failed')!.executionId;
 
     const minted = await (
       await request.post(`${AUTH_SERVER_URL}/api/test-run-cases/${executionId}/share-links`, { data: {} })

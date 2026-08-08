@@ -395,7 +395,7 @@ test.describe('Foldable Summary', () => {
   test('should start expanded on test case detail page', async ({ page, request }) => {
     const runRes = await request.get(`/api/test-runs/${testRunId}`);
     const runData = await runRes.json();
-    const testCaseId = runData.testCases[0].id;
+    const testCaseId = runData.testCases[0].executionId;
 
     await page.goto(`/test-run-cases/${testCaseId}`);
     await page.waitForURL(/\/test-run-cases\/\d+/);
@@ -407,7 +407,7 @@ test.describe('Foldable Summary', () => {
   test('should collapse and expand test case summary', async ({ page, request }) => {
     const runRes = await request.get(`/api/test-runs/${testRunId}`);
     const runData = await runRes.json();
-    const testCaseId = runData.testCases[0].id;
+    const testCaseId = runData.testCases[0].executionId;
 
     await page.goto(`/test-run-cases/${testCaseId}`);
     await page.waitForURL(/\/test-run-cases\/\d+/);
