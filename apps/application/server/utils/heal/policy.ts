@@ -12,6 +12,7 @@ import { and, count, eq } from 'drizzle-orm';
 import { healActions, testCases, testRuns, testRunsCases } from '../../database/schema';
 import { getLocatorHealingBatch } from '../locator-healing';
 import { createScmProvider } from '../scm';
+import { resolveOwners } from '../scm/ownership';
 import { normalizeGitUrl } from '../regression-context';
 import { getAutoHealSettings, resolveHealSiteUrl } from './settings';
 import { buildRetryCommand } from '#shared/retry-command';
@@ -168,12 +169,17 @@ export async function maybeEnqueueHealAction(db: DbClient, runId: number): Promi
     }));
   if (rows.length === 0) return skip('run has no failing tests');
 
+  // Fill each row's owner from CODEOWNERS when the test carries no annotation,
+  // so the PR body can name a responsible team even on an un-annotated suite.
+  const owners = await resolveOwners(db, run.projectId, rows).catch(() => new Map());
+  const ownedRows = rows.map((r) => ({ ...r, owner: owners.get(r)?.owner ?? r.owner }));
+
   const healing = await getLocatorHealingBatch(
     db,
-    rows.map((r) => r.executionId),
+    ownedRows.map((r) => r.executionId),
   ).catch(() => new Map<number, LocatorHealingResult>());
 
-  const edits = selectHealEdits(rows, healing, { minScore: settings.minScore });
+  const edits = selectHealEdits(ownedRows, healing, { minScore: settings.minScore });
   if (edits.length === 0) return skip('no qualifying locator edits');
 
   const [{ value: openCount } = { value: 0 }] = await db

@@ -35,11 +35,19 @@ const props = defineProps<{
 const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
 const cardBind = computed(() => (props.storageKey ? { storageKey: props.storageKey } : {}));
 
+interface HealActionChip {
+  id: number;
+  status: 'pending' | 'opened' | 'failed' | 'skipped';
+  prNumber: number | null;
+  prUrl: string | null;
+  branch: string;
+}
+
 const {
   data: healing,
   pending,
   error,
-} = useFetch<LocatorHealingResult>(
+} = useFetch<LocatorHealingResult & { healAction?: HealActionChip | null }>(
   () => `/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/locator-healing`,
   { lazy: true },
 );
@@ -342,6 +350,30 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
         <NuxtLink :to="`/test-runs/${healing.healedInRunId}`" class="underline font-medium">
           see run #{{ healing.healedInRunId }}</NuxtLink
         >.
+      </template>
+    </UAlert>
+
+    <!-- Auto-heal opened (or queued) a PR covering this call site -->
+    <UAlert
+      v-if="healing?.healAction"
+      class="mb-3"
+      :color="healing.healAction.status === 'opened' ? 'primary' : 'neutral'"
+      icon="i-lucide-bandage"
+      variant="subtle"
+      :title="healing.healAction.status === 'opened' ? 'Piwi opened a heal PR' : 'Heal PR queued'"
+    >
+      <template #description>
+        <template v-if="healing.healAction.status === 'opened' && healing.healAction.prUrl">
+          Auto-heal opened
+          <a :href="healing.healAction.prUrl" target="_blank" rel="noopener" class="underline font-medium">
+            PR #{{ healing.healAction.prNumber }}</a
+          >
+          to rewrite this locator.
+        </template>
+        <template v-else>
+          Auto-heal has queued a fix for this locator on branch <code>{{ healing.healAction.branch }}</code
+          >.
+        </template>
       </template>
     </UAlert>
 

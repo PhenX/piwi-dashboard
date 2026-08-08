@@ -26,6 +26,7 @@ export type SettingsPageId =
   | 'storage'
   | 'performance'
   | 'pr-feedback'
+  | 'auto-heal'
   | 'ai'
   | 'about';
 
@@ -162,6 +163,16 @@ export const SETTINGS_PAGES: SettingsPageMeta[] = [
     roles: [Role.ADMINISTRATOR],
     introHelp: 'settings.pr-feedback',
     fields: [{ id: 'pr-feedback.settings', label: 'Pull-request feedback', help: 'settings.pr-feedback' }],
+  },
+  {
+    id: 'auto-heal',
+    label: 'Auto-heal',
+    icon: 'i-lucide-bandage',
+    to: '/settings/auto-heal',
+    group: 'analysis',
+    roles: [Role.ADMINISTRATOR],
+    introHelp: 'settings.auto-heal',
+    fields: [{ id: 'auto-heal.settings', label: 'Auto-heal pull requests', help: 'settings.auto-heal' }],
   },
   {
     id: 'ai',

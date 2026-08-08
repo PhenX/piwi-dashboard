@@ -9,6 +9,7 @@ import {
   failureDiagnoses,
   failureDiagnosisVersions,
   files,
+  healActions,
   locatorSnapshots,
   networkRequests,
   notificationDeliveries,
@@ -234,6 +235,23 @@ export async function pruneNotificationDeliveries(db: DbClient, olderThanDays: n
   )!;
   const pruned = await countWhere(db, notificationDeliveries, settled);
   if (pruned > 0) await db.delete(notificationDeliveries).where(settled);
+  return pruned;
+}
+
+/**
+ * Delete auto-heal actions that finished (opened/failed/skipped) before the
+ * cutoff. Pending actions are never touched — they still have work to do. The
+ * DB row is only a record of what Piwi did; deleting it never affects the PR
+ * itself, which lives in the user's repository.
+ */
+export async function pruneHealActions(db: DbClient, olderThanDays: number): Promise<number> {
+  const cutoffDate = new Date(Date.now() - olderThanDays * MS_PER_DAY);
+  const settled = and(
+    inArray(healActions.status, ['opened', 'failed', 'skipped']),
+    lt(healActions.updatedAt, cutoffDate),
+  )!;
+  const pruned = await countWhere(db, healActions, settled);
+  if (pruned > 0) await db.delete(healActions).where(settled);
   return pruned;
 }
 

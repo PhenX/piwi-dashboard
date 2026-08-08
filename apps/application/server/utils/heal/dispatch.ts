@@ -13,8 +13,9 @@
  * makes re-running an action a no-op once its commit has landed.
  */
 import { and, eq, lt, lte } from 'drizzle-orm';
-import { healActions } from '../../database/schema';
+import { healActions, projects } from '../../database/schema';
 import { createScmProvider } from '../scm';
+import { emitNotification } from '../notifications/emit';
 import { getAutoHealSettings, resolveHealSiteUrl } from './settings';
 import { applyLineEdit } from '#shared/heal-edit';
 import { buildHealPrBody, buildHealPrTitle } from '#shared/heal-pr';
@@ -45,9 +46,11 @@ export async function applyHealAction(
   const existing = await provider.findPullRequestForBranch(p.branch);
 
   // Head-content guard: rebuild each file from what the repo has right now, so a
-  // drifted line is dropped rather than mis-patched. Read from the heal branch
-  // once it exists (a prior attempt may have committed there), else the base.
-  const ref = branchHead ? p.branch : p.baseBranch;
+  // drifted line is dropped rather than mis-patched. Read at the resolved commit
+  // SHA (the heal branch's once it exists — a prior attempt may have committed
+  // there — else the base's). A SHA is immutable, so the file cache can never
+  // serve pre-write content on a retry.
+  const ref = branchHead ?? baseHead;
   const byFile = new Map<string, HealActionPayload['edits']>();
   for (const e of p.edits) {
     const list = byFile.get(e.filePath);
@@ -163,6 +166,19 @@ export async function sweepHealActions(db: DbClient): Promise<{ opened: number; 
           .set({ status: 'opened', result: outcome.result, error: null, attempts, updatedAt: now })
           .where(eq(healActions.id, action.id));
         opened++;
+        const [proj] = await db
+          .select({ label: projects.label, name: projects.name })
+          .from(projects)
+          .where(eq(projects.id, action.projectId));
+        await emitNotification(db, 'auto_heal.pr_opened', {
+          projectId: action.projectId,
+          projectName: proj?.label || proj?.name || `project ${action.projectId}`,
+          runId: action.runId ?? 0,
+          prNumber: outcome.result.prNumber,
+          prUrl: outcome.result.prUrl,
+          branch: outcome.result.branch,
+          editCount: payload.edits.length,
+        }).catch((e) => console.error('[auto-heal] emitNotification failed', e));
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

@@ -67,6 +67,9 @@ export interface PrFailureEntry {
   clusterSignature?: string | null;
   /** Ranked replacement suggested for the locator that broke, when there is one. */
   suggestedLocator?: string | null;
+  /** An auto-heal PR already open for this locator, so the reader isn't sent to fix it twice. */
+  healPrNumber?: number | null;
+  healPrUrl?: string | null;
   /** Tags declared on the test, for routing the reader to an owning team. */
   tags?: string[] | null;
   owner?: string | null;
@@ -149,7 +152,12 @@ function renderFailureList(entries: PrFailureEntry[], runUrl: string): string {
     if (entry.tags?.length) parts.push(entry.tags.map((tag) => `\`@${escapeCell(tag)}\``).join(' '));
     let line = parts.join(' · ');
     if (entry.errorExcerpt) line += `\n  \`\`\`\n  ${escapeCell(entry.errorExcerpt)}\n  \`\`\``;
-    if (entry.suggestedLocator) line += `\n  💡 Try \`${escapeCell(entry.suggestedLocator)}\` instead.`;
+    if (entry.healPrNumber) {
+      const pr = entry.healPrUrl ? `[#${entry.healPrNumber}](${entry.healPrUrl})` : `#${entry.healPrNumber}`;
+      line += `\n  🩹 Piwi opened ${pr} to heal this locator.`;
+    } else if (entry.suggestedLocator) {
+      line += `\n  💡 Try \`${escapeCell(entry.suggestedLocator)}\` instead.`;
+    }
     return line;
   });
 
