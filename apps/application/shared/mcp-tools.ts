@@ -74,7 +74,7 @@ export const MCP_TOOL_DEFS = [
       type: 'object',
       properties: {
         id: { type: 'number', description: 'Test run ID' },
-        status_filter: {
+        statusFilter: {
           type: 'string',
           enum: ['failed', 'flaky', 'all'],
           description:
@@ -441,7 +441,7 @@ export const MCP_TOOL_DEFS = [
   },
   {
     name: 'list_tags',
-    description: 'List the project tag catalog (id, text, color).',
+    description: 'List every tag defined on this instance (id, text, color). Tags are instance-wide, not per-project.',
     inputSchema: { type: 'object', properties: {} },
   },
   {

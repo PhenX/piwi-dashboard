@@ -356,7 +356,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   // ── get_run ────────────────────────────────────────────────────────────────
   async get_run(db, params, ctx) {
     const runId = numericParam(params.id, 'id');
-    const statusFilter = (params.status_filter as string) || 'failed';
+    const statusFilter = (params.statusFilter as string) || 'failed';
     const pageSize = clampPageSize(params.pageSize);
     const cursor = numericCursor(params.cursor);
 

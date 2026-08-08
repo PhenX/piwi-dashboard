@@ -175,10 +175,10 @@ test.describe.serial('MCP server', () => {
     expect(run.cases[0].error).not.toBeNull();
   });
 
-  test('tools/call get_run with status_filter=all — returns all cases', async ({ request }) => {
+  test('tools/call get_run with statusFilter=all — returns all cases', async ({ request }) => {
     const body = await mcp(request, 'tools/call', {
       name: 'get_run',
-      arguments: { id: runId, status_filter: 'all' },
+      arguments: { id: runId, statusFilter: 'all' },
     });
     const run = JSON.parse(body.result.content[0].text);
     expect(run.total).toBe(3);
@@ -188,14 +188,14 @@ test.describe.serial('MCP server', () => {
   test('tools/call get_run — paginates cases with pageSize', async ({ request }) => {
     const body = await mcp(request, 'tools/call', {
       name: 'get_run',
-      arguments: { id: runId, status_filter: 'all', pageSize: 2 },
+      arguments: { id: runId, statusFilter: 'all', pageSize: 2 },
     });
     const run = JSON.parse(body.result.content[0].text);
     expect(run.cases.length).toBe(2);
     expect(run.nextCursor).toBeTruthy();
     const page2 = await mcp(request, 'tools/call', {
       name: 'get_run',
-      arguments: { id: runId, status_filter: 'all', pageSize: 2, cursor: run.nextCursor },
+      arguments: { id: runId, statusFilter: 'all', pageSize: 2, cursor: run.nextCursor },
     });
     const run2 = JSON.parse(page2.result.content[0].text);
     expect(run2.cases.length).toBe(1);
@@ -260,7 +260,7 @@ test.describe.serial('MCP server', () => {
 
   test('tools/call get_test_case_context — returns evidence sections (regression)', async ({ request }) => {
     const run = JSON.parse(
-      (await mcp(request, 'tools/call', { name: 'get_run', arguments: { id: runId, status_filter: 'failed' } })).result
+      (await mcp(request, 'tools/call', { name: 'get_run', arguments: { id: runId, statusFilter: 'failed' } })).result
         .content[0].text,
     );
     const execId = run.cases[0].executionId;
@@ -344,7 +344,11 @@ test.describe.serial('MCP server', () => {
         steps: [{ action: 'click', target: { testId: 'x' } }],
       },
     });
-    expect(body.error).toBeDefined();
+    // A tool that throws surfaces as an isError tool result the model can read,
+    // not a JSON-RPC protocol error clients render as a transport failure.
+    expect(body.error).toBeUndefined();
+    expect(body.result.isError).toBe(true);
+    expect(body.result.content[0].text).toContain('Error');
   });
 
   test('tools/call with unknown tool — returns method error', async ({ request }) => {

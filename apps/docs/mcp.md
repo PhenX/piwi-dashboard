@@ -26,7 +26,7 @@ The server exposes 40 tools — mostly read-only, plus a few write/triage tools 
 | `get_project_test_catalog` | Whole test-case catalog for a project with aggregated pass/fail/flaky counts |
 | `list_recent_activity` | Most recent runs across *all* projects — a cross-project CI feed (no project ID needed) |
 | `search` | Global search across projects, runs (by label or id), and test cases |
-| `list_tags` | The project tag catalog |
+| `list_tags` | Every tag defined on the instance (instance-wide, not per-project) |
 | `get_instance_stats` | Instance-wide counts and storage size (admin only) |
 
 **Runs & test cases**
@@ -82,6 +82,8 @@ The server exposes 40 tools — mostly read-only, plus a few write/triage tools 
 | `get_repo_diff` | Changed files with patches for a single commit — inspect what a suspect commit changed |
 
 All tools return **token-optimized** compact JSON: null fields are omitted, errors are truncated, and large blobs (browser configs, metadata) are flattened to short strings. List tools return `{ items, nextCursor }` — pass `nextCursor` back (when non-null) to page.
+
+A tool that fails (bad argument, missing entity, out-of-scope access) returns a normal tool result with `isError: true` and a human-readable message in its text content — not a JSON-RPC protocol error. Protocol errors are reserved for transport-level problems (unknown method, unknown tool, malformed request).
 
 ### Access scope
 
@@ -240,7 +242,7 @@ Once connected, an agent can investigate a failed CI run in natural language:
 
 ```
 User: What failed in the last run of the checkout project?
-Agent: [calls list_projects → finds checkout → calls list_runs → calls get_run with status_filter=failed]
+Agent: [calls list_projects → finds checkout → calls list_runs → calls get_run with statusFilter=failed]
        3 tests failed in run #47. Two are grouped under cluster #12 (selector timeout on
        #checkout-button). get_cluster_context shows the button was renamed in the last commit.
 ```

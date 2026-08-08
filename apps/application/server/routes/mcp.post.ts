@@ -133,8 +133,17 @@ async function dispatch(ctx: McpContext, req: JsonRpcRequest, event: H3Event) {
 
       const db = await getDatabase();
       const args = p?.arguments ?? {};
-      const data = await tool.handler(db, args, ctx);
-      return ok(id, toContent(data));
+      try {
+        const data = await tool.handler(db, args, ctx);
+        return ok(id, toContent(data));
+      } catch (err) {
+        // A tool that throws surfaces as a tool result with `isError: true`, not
+        // a JSON-RPC protocol error: the latter is a transport-level failure that
+        // clients render as a broken connection, while the former is a message the
+        // model reads and recovers from (bad argument, missing entity, no access).
+        const message = err instanceof Error ? err.message : String(err);
+        return ok(id, { content: [{ type: 'text', text: `Error: ${message}` }], isError: true });
+      }
     }
 
     // ── Prompts ──────────────────────────────────────────────────────────────
