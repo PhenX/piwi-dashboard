@@ -876,7 +876,7 @@ export async function getExecutionContext(db: DrizzleDB, testRunsCaseId: number,
   const rep = await loadExecutionRep(db, testRunsCaseId);
   if (!rep) {
     return {
-      scope: { kind: 'execution', testRunsCaseId },
+      scope: { kind: 'execution', executionId: testRunsCaseId },
       text: '',
       sections: [],
       coverage: { scm: null },
@@ -895,7 +895,7 @@ export async function getExecutionContext(db: DrizzleDB, testRunsCaseId: number,
   // execution view is just as rich; otherwise fall back to a single-execution view.
   if (trc?.clusterId) {
     const ctx = await getClusterContext(db, trc.clusterId, query);
-    return { ...ctx, scope: { kind: 'execution', testRunsCaseId } };
+    return { ...ctx, scope: { kind: 'execution', executionId: testRunsCaseId } };
   }
   // No cluster: assemble a minimal execution-only context.
   const sections: ContextSection[] = [];
@@ -911,7 +911,7 @@ export async function getExecutionContext(db: DrizzleDB, testRunsCaseId: number,
   const text = [coverageBlock, ...sections.map((s) => s.markdown)].join('\n\n');
   const textChars = sections.reduce((s, sec) => s + sec.chars, 0) + coverageBlock.length;
   return {
-    scope: { kind: 'execution', testRunsCaseId },
+    scope: { kind: 'execution', executionId: testRunsCaseId },
     text,
     sections,
     coverage: { scm: null } as DiagnosisContextCoverage,

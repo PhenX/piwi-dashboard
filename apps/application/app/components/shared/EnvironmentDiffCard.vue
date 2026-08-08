@@ -19,7 +19,7 @@ const props = defineProps<{
 
 interface EnvironmentDiffResponse {
   status: 'ok' | 'no-baseline' | 'not-found';
-  baseline?: { runId: number; testRunsCaseId: number; startTime: number | null };
+  baseline?: { runId: number; executionId: number; startTime: number | null };
   entries?: EnvironmentDiffEntry[];
 }
 

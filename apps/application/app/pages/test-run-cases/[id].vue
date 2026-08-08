@@ -336,7 +336,7 @@ function connectToRunStream() {
   eventSource.onmessage = (event) => {
     try {
       const parsed = JSON.parse(event.data);
-      if (parsed.type === 'case-files' && parsed.data?.testRunsCaseId === Number(testCaseId)) {
+      if (parsed.type === 'case-files' && parsed.data?.executionId === Number(testCaseId)) {
         refresh();
         refreshTraces();
       } else if (parsed.type === 'run-finished') {

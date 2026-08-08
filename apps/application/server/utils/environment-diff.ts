@@ -16,7 +16,7 @@ export interface EnvironmentDiffResult {
   /** The passing execution the failing one was compared against. */
   baseline?: {
     runId: number;
-    testRunsCaseId: number;
+    executionId: number;
     /** Run start time (epoch ms) — null when the run has no start time. */
     startTime: number | null;
   };
@@ -88,7 +88,7 @@ export async function getEnvironmentDiff(db: DrizzleDB, testRunsCaseId: number):
     status: 'ok',
     baseline: {
       runId: baseline.runId,
-      testRunsCaseId: baseline.id,
+      executionId: baseline.id,
       startTime: baseline.startTime instanceof Date ? baseline.startTime.getTime() : (baseline.startTime ?? null),
     },
     entries: computeEnvironmentDiff(toSnapshot(failing), toSnapshot(baseline)),

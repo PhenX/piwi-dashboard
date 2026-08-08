@@ -4,7 +4,7 @@ import type { ScmChanges } from './scm/ScmProvider';
 
 export type DiagnosisScope =
   | { kind: 'cluster'; clusterId: number }
-  | { kind: 'execution'; testRunsCaseId: number; clusterId?: number };
+  | { kind: 'execution'; executionId: number; clusterId?: number };
 
 export interface BuildContextOptions {
   baseCommit?: string;

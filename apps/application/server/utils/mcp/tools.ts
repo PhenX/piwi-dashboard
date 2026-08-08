@@ -691,7 +691,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         return {
           testCaseId: t.testCaseId,
           title: t.title,
-          testRunsCaseId: caseId,
+          executionId: caseId,
           source: h.source,
           failingLocator: h.failingLocator,
           recommendation: h.recommendation
@@ -752,7 +752,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
             title: t.title,
             filePath: t.filePath,
             runCount: t.runCount,
-            testRunsCaseId: t.recentTestRunsCaseId,
+            executionId: t.recentTestRunsCaseId,
           }),
       ),
       locatorHealing: healingResults.length > 0 ? healingResults : null,
@@ -823,12 +823,12 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
     const built = await buildDiagnosisContext(db, {
       kind: 'execution',
-      testRunsCaseId: id,
+      executionId: id,
       clusterId: trc.failureClusterId ?? undefined,
     });
 
     const base = dropNulls({
-      testRunsCaseId: id,
+      executionId: id,
       text: built.text,
       sections: built.sections.map((s) => ({
         id: s.id,
@@ -932,7 +932,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     if (images?.length) {
       context +=
         '\n\n## Screenshots\nDecisive for "what rendered" at time of failure. ' +
-        'Call get_case_screenshots with the testRunsCaseId to view each:\n' +
+        'Call get_case_screenshots with the executionId to view each:\n' +
         images.map((img) => `- ${img.name} (${img.mediaType}, ~${(img.data.length / 1024).toFixed(0)} KB)`).join('\n');
     }
 
@@ -1238,7 +1238,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
           cases: Array.isArray(g.cases)
             ? g.cases.slice(0, 10).map((c: any) =>
                 dropNulls({
-                  testRunsCaseId: c.testRunsCaseId ?? c.id,
+                  executionId: c.executionId ?? c.id,
                   testCaseId: c.testCaseId,
                   title: c.title,
                   filePath: c.filePath,
@@ -1261,7 +1261,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         ? arr.slice(0, 8).map((a: any) => dropNulls({ locator: a.locator, method: a.method, score: a.score }))
         : null;
     return dropNulls({
-      testRunsCaseId: id,
+      executionId: id,
       source: h.source,
       capturedAt: h.capturedAt,
       failingLocator: h.failingLocator,
@@ -1479,7 +1479,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       row.failureClusterId
         ? buildDiagnosisContext(db, {
             kind: 'execution',
-            testRunsCaseId: id,
+            executionId: id,
             clusterId: row.failureClusterId,
             skipScm: true,
           }).catch(() => null)
@@ -1489,7 +1489,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     const rec = healing && healing.source !== 'none' ? healing.recommendation?.recommended : null;
 
     return dropNulls({
-      testRunsCaseId: id,
+      executionId: id,
       testCaseId: row.testCaseId,
       title: tc?.title || null,
       filePath: tc?.filePath || null,

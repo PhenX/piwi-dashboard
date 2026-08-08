@@ -2576,7 +2576,7 @@ export async function buildDiagnosisContext(
       ? cluster
         ? await loadRepresentativeExecution(db, cluster)
         : null
-      : await loadExecutionById(db, opts.testRunsCaseId);
+      : await loadExecutionById(db, opts.executionId);
 
   if (rep) {
     // When Playwright attaches an error-context.md (ref-annotated page snapshot
@@ -2850,7 +2850,7 @@ export async function buildDiagnosisContext(
     scope:
       opts.kind === 'cluster'
         ? { kind: 'cluster', clusterId: opts.clusterId }
-        : { kind: 'execution', testRunsCaseId: opts.testRunsCaseId },
+        : { kind: 'execution', executionId: opts.executionId },
     text,
     sections: contextSections,
     coverage,

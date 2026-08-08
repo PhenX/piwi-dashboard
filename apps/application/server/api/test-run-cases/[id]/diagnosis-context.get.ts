@@ -70,7 +70,7 @@ export default eventHandler(async (event) => {
 
   const ctx = await buildDiagnosisContext(db, {
     kind: 'execution',
-    testRunsCaseId: id,
+    executionId: id,
     clusterId: trc.failureClusterId ?? undefined,
     baseCommit,
     selectedCommitShas,

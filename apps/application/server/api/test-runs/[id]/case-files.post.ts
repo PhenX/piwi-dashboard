@@ -282,7 +282,7 @@ export default eventHandler(async (event) => {
     runEventBus.publish(id, {
       type: 'case-files',
       data: {
-        testRunsCaseId: runCase.id,
+        executionId: runCase.id,
         title: caseInfo.title,
         location: caseInfo.location,
         traces: storedTraces,
@@ -293,7 +293,7 @@ export default eventHandler(async (event) => {
 
   return {
     success: true,
-    testRunsCaseId: runCase.id,
+    executionId: runCase.id,
     traces: storedTraces,
     attachments: storedAttachments,
   };

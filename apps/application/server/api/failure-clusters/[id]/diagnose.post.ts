@@ -37,7 +37,7 @@ export default eventHandler(async (event) => {
     baseCommit?: string;
     selectedCommitShas?: string[];
     scope?: string;
-    testRunsCaseId?: number;
+    executionId?: number;
   } | null;
 
   const [cluster] = await db.select().from(failureClusters).where(eq(failureClusters.id, id));
@@ -47,14 +47,14 @@ export default eventHandler(async (event) => {
   if (!config)
     throw apiError({ statusCode: 503, errorCode: 'AI_NOT_CONFIGURED', message: 'AI diagnosis is not configured' });
 
-  const isExecutionScope = body?.scope === 'execution' && Boolean(body?.testRunsCaseId);
+  const isExecutionScope = body?.scope === 'execution' && Boolean(body?.executionId);
 
-  // Validate testRunsCaseId if execution scope
+  // Validate executionId if execution scope
   if (isExecutionScope) {
     const [trc] = await db
       .select({ id: testRunsCases.id })
       .from(testRunsCases)
-      .where(eq(testRunsCases.id, body!.testRunsCaseId!))
+      .where(eq(testRunsCases.id, body!.executionId!))
       .limit(1);
     if (!trc) throw apiError({ statusCode: 404, message: 'Test run case not found' });
   }
@@ -67,7 +67,7 @@ export default eventHandler(async (event) => {
   // Return existing completed diagnosis if not forcing
   if (!force) {
     const whereClause = isExecutionScope
-      ? and(eq(failureDiagnoses.testRunsCaseId, body!.testRunsCaseId!), eq(failureDiagnoses.scope, 'execution'))
+      ? and(eq(failureDiagnoses.testRunsCaseId, body!.executionId!), eq(failureDiagnoses.scope, 'execution'))
       : and(eq(failureDiagnoses.clusterId, id), eq(failureDiagnoses.scope, 'cluster'));
 
     const existingRows = await db.select().from(failureDiagnoses).where(whereClause).limit(1);
@@ -87,6 +87,6 @@ export default eventHandler(async (event) => {
     images: body?.images,
     baseCommit: body?.baseCommit,
     selectedCommitShas: body?.selectedCommitShas,
-    testRunsCaseId: isExecutionScope ? body!.testRunsCaseId : undefined,
+    testRunsCaseId: isExecutionScope ? body!.executionId : undefined,
   });
 });

@@ -79,10 +79,10 @@ test.describe.serial('Live case file uploads', () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.success).toBe(true);
-    expect(typeof data.testRunsCaseId).toBe('number');
+    expect(typeof data.executionId).toBe('number');
     expect(data.traces).toBe(1);
     expect(data.attachments).toBe(1);
-    caseWithFilesId = data.testRunsCaseId;
+    caseWithFilesId = data.executionId;
   });
 
   test('trace and attachment are immediately listed for the case', async ({ request }) => {
@@ -146,7 +146,7 @@ test.describe.serial('Live case file uploads', () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.traces).toBe(1);
-    dedupCaseId = data.testRunsCaseId;
+    dedupCaseId = data.executionId;
 
     const { items: traces } = await (await request.get(`/api/test-run-cases/${dedupCaseId}/traces`)).json();
     expect(traces.length).toBe(1);
