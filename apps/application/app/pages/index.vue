@@ -121,7 +121,7 @@ const overviewStats = computed(() => {
 
 // ── Recent activity ───────────────────────────────────────────────────────────
 
-const RUNNING_STATUSES = new Set(['running', 'initialising', 'finalizing']);
+const RUNNING_STATUSES = new Set(['running', 'initializing', 'finalizing']);
 const ACTIVITY_PREVIEW_LIMIT = 6;
 
 const activityExpanded = ref(false);

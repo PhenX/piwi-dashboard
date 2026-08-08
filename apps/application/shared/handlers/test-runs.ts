@@ -238,7 +238,7 @@ export async function getTestRun(
 
 // ─── getRecentTestRuns — active + 30 most recent completed ───────────────────
 
-const ACTIVE_STATUSES = ['running', 'initialising', 'finalizing'] as const;
+const ACTIVE_STATUSES = ['running', 'initializing', 'finalizing'] as const;
 
 const RECENT_FIELDS = {
   id: testRuns.id,

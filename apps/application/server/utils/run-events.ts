@@ -29,7 +29,7 @@ export interface RunEvent {
 }
 
 export interface GlobalRunEvent {
-  type: 'run-started' | 'run-initialising' | 'run-finalizing' | 'run-finished' | 'run-submitted' | 'run-cancelled';
+  type: 'run-started' | 'run-initializing' | 'run-finalizing' | 'run-finished' | 'run-submitted' | 'run-cancelled';
   runId: number;
   projectId: number;
   status?: string;

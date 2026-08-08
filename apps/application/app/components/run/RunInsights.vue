@@ -68,7 +68,7 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 
 const isRunActive = computed(
-  () => props.runStatus === 'running' || props.runStatus === 'initialising' || props.runStatus === 'finalizing',
+  () => props.runStatus === 'running' || props.runStatus === 'initializing' || props.runStatus === 'finalizing',
 );
 
 async function load() {

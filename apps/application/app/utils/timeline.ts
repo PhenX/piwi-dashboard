@@ -22,7 +22,7 @@ const STATUS_HEX: Record<string, string> = {
   failed: '#dc2626',
   timedOut: '#ea580c',
   running: '#2563eb',
-  initialising: '#2563eb',
+  initializing: '#2563eb',
   skipped: '#9ca3af',
   cancelled: '#a1a1aa',
   interrupted: '#ea580c',

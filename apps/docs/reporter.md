@@ -223,7 +223,7 @@ Control how frequently results are sent during streaming:
 
 ## Global setup phase
 
-By default a run appears on the dashboard as soon as the first test starts. If your Playwright config has a `globalSetup` step (seeding a database, authenticating, building the app under test, etc.), you can register the run *before* `globalSetup` runs so the dashboard shows an animated **initialising** state during setup.
+By default a run appears on the dashboard as soon as the first test starts. If your Playwright config has a `globalSetup` step (seeding a database, authenticating, building the app under test, etc.), you can register the run *before* `globalSetup` runs so the dashboard shows an animated **initializing** state during setup.
 
 Wrap your config's `globalSetup` with `createGlobalSetup`, passing the same options you give the reporter:
 
@@ -257,7 +257,7 @@ globalSetup: createGlobalSetup(dashboard, async (config) => {
 
 Registration is best-effort: if the server is unreachable the error is non-fatal and the reporter simply creates the run normally once tests begin.
 
-In Playwright's **UI mode** (`playwright test --ui`) registration is skipped entirely. UI mode keeps one long-lived process and re-runs `globalSetup` every time you press play, but swaps the reporter out for its own internal one — so a run registered from `globalSetup` would never be finished, leaving orphaned "initialising" runs (one at launch, one per manual run). A chained `userSetup` still runs, so your own setup logic is unaffected.
+In Playwright's **UI mode** (`playwright test --ui`) registration is skipped entirely. UI mode keeps one long-lived process and re-runs `globalSetup` every time you press play, but swaps the reporter out for its own internal one — so a run registered from `globalSetup` would never be finished, leaving orphaned "initializing" runs (one at launch, one per manual run). A chained `userSetup` still runs, so your own setup logic is unaffected.
 
 ## Multiple reports
 

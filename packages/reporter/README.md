@@ -25,7 +25,7 @@ Every step is idempotent (safe to re-run); a config shape it will not rewrite is
 ## Quick start
 
 `wrapConfig` is the recommended setup. It injects the reporter **and** a global
-setup step (so the run shows up as "initialising" while your `globalSetup` runs),
+setup step (so the run shows up as "initializing" while your `globalSetup` runs),
 and forwards your options to that setup:
 
 ```typescript

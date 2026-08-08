@@ -100,7 +100,7 @@ export default eventHandler(async (event) => {
         and(
           eq(testRuns.projectId, project.id),
           eq(testRuns.instanceId, instanceId),
-          or(eq(testRuns.status, 'running'), eq(testRuns.status, 'initialising')),
+          or(eq(testRuns.status, 'running'), eq(testRuns.status, 'initializing')),
         ),
       );
 

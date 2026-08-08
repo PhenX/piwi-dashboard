@@ -71,7 +71,7 @@ export const testRuns = pgTable(
     projectId: integer('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    status: text('status').notNull(), // 'passed', 'failed', 'timedout', 'interrupted', 'running', 'cancelled', 'initialising', 'finalizing'
+    status: text('status').notNull(), // 'passed', 'failed', 'timedout', 'interrupted', 'running', 'cancelled', 'initializing', 'finalizing'
     startTime: timestamp('start_time', { mode: 'date' }).notNull(),
     duration: integer('duration'), // in milliseconds
     totalTests: integer('total_tests').notNull().default(0),

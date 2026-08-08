@@ -6,7 +6,7 @@
  * re-runs `globalSetup` every time you press play, while swapping the user's
  * reporters out for Playwright's internal UI reporter. So a run registered from
  * `globalSetup` would never be finished by the Piwi reporter — leaving orphaned
- * "initialising" runs on the dashboard: one when the UI launches and another
+ * "initializing" runs on the dashboard: one when the UI launches and another
  * each time a run is started from it. Skipping registration in UI mode avoids
  * those stray runs.
  *

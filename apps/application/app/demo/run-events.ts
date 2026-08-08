@@ -28,7 +28,7 @@ export interface DemoRunEvent {
 
 /** Global lifecycle event — same shape as the server's GlobalRunEvent. */
 export interface DemoGlobalEvent {
-  type: 'run-started' | 'run-initialising' | 'run-finalizing' | 'run-finished' | 'run-submitted' | 'run-cancelled';
+  type: 'run-started' | 'run-initializing' | 'run-finalizing' | 'run-finished' | 'run-submitted' | 'run-cancelled';
   runId: number;
   projectId: number;
   status?: string;

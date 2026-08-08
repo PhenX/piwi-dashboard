@@ -13,7 +13,7 @@ defineRouteMeta({
     tags: ['Test Runs'],
     summary: 'Initialize a streaming test run in setup phase',
     description:
-      'Initialize a new streaming test run in "initialising" status. Returns a setup token to be used by the begin endpoint to transition the run to "running" status. Cancels any previous runs from the same instance. Supports sharded runs.',
+      'Initialize a new streaming test run in "initializing" status. Returns a setup token to be used by the begin endpoint to transition the run to "running" status. Cancels any previous runs from the same instance. Supports sharded runs.',
     'x-required-roles': ['administrator', 'reporter'],
     requestBody: {
       content: {
@@ -87,7 +87,7 @@ export default eventHandler(async (event) => {
   const isSharded = !!(shardTotal && shardTotal > 1);
 
   if (isSharded && instanceId) {
-    // Sharded setup: look for existing initialising run with same instanceId
+    // Sharded setup: look for existing initializing run with same instanceId
     const existingRuns = await db
       .select()
       .from(testRuns)
@@ -95,7 +95,7 @@ export default eventHandler(async (event) => {
         and(
           eq(testRuns.projectId, project.id),
           eq(testRuns.instanceId, instanceId),
-          eq(testRuns.status, 'initialising'),
+          eq(testRuns.status, 'initializing'),
         ),
       );
 
@@ -129,7 +129,7 @@ export default eventHandler(async (event) => {
       .insert(testRuns)
       .values({
         projectId: project.id,
-        status: 'initialising',
+        status: 'initializing',
         startTime: new Date(body.startTime || new Date().toISOString()),
         duration: null,
         totalTests: 0,
@@ -160,7 +160,7 @@ export default eventHandler(async (event) => {
       });
     }
 
-    runEventBus.publishGlobal({ type: 'run-initialising', runId: testRun.id, projectId: project.id });
+    runEventBus.publishGlobal({ type: 'run-initializing', runId: testRun.id, projectId: project.id });
     runEventBus.cacheRunState(testRun.id, { streamToken: setupToken, projectId: project.id, shardTokens: new Set() });
 
     return {
@@ -180,7 +180,7 @@ export default eventHandler(async (event) => {
     .insert(testRuns)
     .values({
       projectId: project.id,
-      status: 'initialising',
+      status: 'initializing',
       startTime: new Date(body.startTime || new Date().toISOString()),
       duration: null,
       totalTests: 0,
@@ -209,7 +209,7 @@ export default eventHandler(async (event) => {
     });
   }
 
-  runEventBus.publishGlobal({ type: 'run-initialising', runId: testRun.id, projectId: project.id });
+  runEventBus.publishGlobal({ type: 'run-initializing', runId: testRun.id, projectId: project.id });
 
   return {
     success: true,

@@ -74,7 +74,7 @@ export default eventHandler(async (event) => {
     });
   }
 
-  if (run.status === 'running' || run.status === 'initialising') {
+  if (run.status === 'running' || run.status === 'initializing') {
     throw createError({ statusCode: 409, message: `Run #${id} has not finished yet (status: ${run.status})` });
   }
 

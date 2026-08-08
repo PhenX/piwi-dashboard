@@ -257,7 +257,7 @@ export async function cancelInstanceRuns(
   const conditions = [
     eq(testRuns.projectId, projectId),
     eq(testRuns.instanceId, instanceId),
-    or(eq(testRuns.status, 'running'), eq(testRuns.status, 'initialising'), eq(testRuns.status, 'finalizing')),
+    or(eq(testRuns.status, 'running'), eq(testRuns.status, 'initializing'), eq(testRuns.status, 'finalizing')),
   ];
 
   if (excludeRunId !== undefined) {

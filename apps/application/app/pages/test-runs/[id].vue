@@ -291,7 +291,7 @@ function connectToDemoStream() {
       message.event.runId === Number(runId) &&
       message.event.type === 'run-started'
     ) {
-      // Run transitioned from 'initialising' to 'running' — refetch so
+      // Run transitioned from 'initializing' to 'running' — refetch so
       // isLive flips and progress counters appear.
       refresh();
     }
@@ -341,9 +341,9 @@ function disconnectStream() {
   }
 }
 
-// In demo mode also stream while 'initialising' so the page picks up the
+// In demo mode also stream while 'initializing' so the page picks up the
 // transition to 'running' pushed by the simulator.
-const shouldStream = computed(() => isLive.value || (isDemoMode && testRun.value?.status === 'initialising'));
+const shouldStream = computed(() => isLive.value || (isDemoMode && testRun.value?.status === 'initializing'));
 
 watch(
   shouldStream,

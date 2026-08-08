@@ -11,9 +11,9 @@ import { timingSafeEqualStr } from '../../../utils/timing-safe';
 defineRouteMeta({
   openAPI: {
     tags: ['Test Runs'],
-    summary: 'Transition test run from initialising to running',
+    summary: 'Transition test run from initializing to running',
     description:
-      'Begins a streaming test run by transitioning it from "initialising" to "running" status. Requires the setup token returned by the setup endpoint. Supports sharded runs: already-running sharded runs accept additional setup tokens.',
+      'Begins a streaming test run by transitioning it from "initializing" to "running" status. Requires the setup token returned by the setup endpoint. Supports sharded runs: already-running sharded runs accept additional setup tokens.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
     'x-required-roles': [],
     requestBody: {
@@ -71,7 +71,7 @@ export default eventHandler(async (event) => {
 
   const isSharded = !!(testRun.shardTotal && testRun.shardTotal > 1);
 
-  if (!isSharded && testRun.status !== 'initialising' && testRun.status !== 'running') {
+  if (!isSharded && testRun.status !== 'initializing' && testRun.status !== 'running') {
     throw createError({
       statusCode: 409,
       message: 'Test run cannot be transitioned to running state',
@@ -91,7 +91,7 @@ export default eventHandler(async (event) => {
   // Generate a new stream token for the running phase
   const streamToken = randomBytes(32).toString('hex');
 
-  if (testRun.status === 'initialising') {
+  if (testRun.status === 'initializing') {
     // First shard to begin: cancel other runs, transition to running
     await cancelInstanceRuns(db, testRun.projectId, testRun.instanceId, id, isSharded);
 
