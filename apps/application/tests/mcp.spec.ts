@@ -144,7 +144,7 @@ test.describe.serial('MCP server', () => {
   });
 
   test('tools/call get_project — returns project with runs', async ({ request }) => {
-    const body = await mcp(request, 'tools/call', { name: 'get_project', arguments: { id: projectId } });
+    const body = await mcp(request, 'tools/call', { name: 'get_project', arguments: { projectId } });
     const data = JSON.parse(body.result.content[0].text);
     expect(data.id).toBe(projectId);
     expect(data.name).toBe(PROJECT.MCP_TEST);
@@ -161,7 +161,7 @@ test.describe.serial('MCP server', () => {
   });
 
   test('tools/call get_run — returns summary and failed cases', async ({ request }) => {
-    const body = await mcp(request, 'tools/call', { name: 'get_run', arguments: { id: runId } });
+    const body = await mcp(request, 'tools/call', { name: 'get_run', arguments: { runId } });
     const run = JSON.parse(body.result.content[0].text);
     expect(run.id).toBe(runId);
     expect(run.status).toBe('failed');
@@ -178,7 +178,7 @@ test.describe.serial('MCP server', () => {
   test('tools/call get_run with statusFilter=all — returns all cases', async ({ request }) => {
     const body = await mcp(request, 'tools/call', {
       name: 'get_run',
-      arguments: { id: runId, statusFilter: 'all' },
+      arguments: { runId, statusFilter: 'all' },
     });
     const run = JSON.parse(body.result.content[0].text);
     expect(run.total).toBe(3);
@@ -188,14 +188,14 @@ test.describe.serial('MCP server', () => {
   test('tools/call get_run — paginates cases with pageSize', async ({ request }) => {
     const body = await mcp(request, 'tools/call', {
       name: 'get_run',
-      arguments: { id: runId, statusFilter: 'all', pageSize: 2 },
+      arguments: { runId, statusFilter: 'all', pageSize: 2 },
     });
     const run = JSON.parse(body.result.content[0].text);
     expect(run.cases.length).toBe(2);
     expect(run.nextCursor).toBeTruthy();
     const page2 = await mcp(request, 'tools/call', {
       name: 'get_run',
-      arguments: { id: runId, statusFilter: 'all', pageSize: 2, cursor: run.nextCursor },
+      arguments: { runId, statusFilter: 'all', pageSize: 2, cursor: run.nextCursor },
     });
     const run2 = JSON.parse(page2.result.content[0].text);
     expect(run2.cases.length).toBe(1);
@@ -260,13 +260,13 @@ test.describe.serial('MCP server', () => {
 
   test('tools/call get_test_case_context — returns evidence sections (regression)', async ({ request }) => {
     const run = JSON.parse(
-      (await mcp(request, 'tools/call', { name: 'get_run', arguments: { id: runId, statusFilter: 'failed' } })).result
+      (await mcp(request, 'tools/call', { name: 'get_run', arguments: { runId, statusFilter: 'failed' } })).result
         .content[0].text,
     );
     const execId = run.cases[0].executionId;
     const ctx = JSON.parse(
-      (await mcp(request, 'tools/call', { name: 'get_test_case_context', arguments: { id: execId } })).result.content[0]
-        .text,
+      (await mcp(request, 'tools/call', { name: 'get_test_case_context', arguments: { executionId: execId } })).result
+        .content[0].text,
     );
     // Previously execution scope produced an empty coverage stub with 0 sections.
     const hasEvidence = (ctx.sections?.length ?? 0) > 0 || !!ctx.rawExecution;
@@ -275,7 +275,7 @@ test.describe.serial('MCP server', () => {
 
   test('tools/call get_run_insights — returns baseline comparison shape', async ({ request }) => {
     const insights = JSON.parse(
-      (await mcp(request, 'tools/call', { name: 'get_run_insights', arguments: { id: runId } })).result.content[0].text,
+      (await mcp(request, 'tools/call', { name: 'get_run_insights', arguments: { runId } })).result.content[0].text,
     );
     expect(insights.runId).toBe(runId);
     expect(typeof insights.passRate).toBe('number');
@@ -302,7 +302,7 @@ test.describe.serial('MCP server', () => {
       (
         await mcp(request, 'tools/call', {
           name: 'set_cluster_status',
-          arguments: { id: clusterId, status: 'resolved', triageNote: 'fixed by test' },
+          arguments: { clusterId, status: 'resolved', triageNote: 'fixed by test' },
         })
       ).result.content[0].text,
     );

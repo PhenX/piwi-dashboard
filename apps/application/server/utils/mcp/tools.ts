@@ -222,7 +222,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_project ────────────────────────────────────────────────────────────
   async get_project(db, params, ctx) {
-    const id = numericParam(params.id, 'id');
+    const id = numericParam(params.projectId, 'projectId');
     assertProject(ctx, id);
     const pageSize = clampPageSize(params.pageSize);
     const cursor = params.cursor as string | undefined;
@@ -355,7 +355,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_run ────────────────────────────────────────────────────────────────
   async get_run(db, params, ctx) {
-    const runId = numericParam(params.id, 'id');
+    const runId = numericParam(params.runId, 'runId');
     const statusFilter = (params.statusFilter as string) || 'failed';
     const pageSize = clampPageSize(params.pageSize);
     const cursor = numericCursor(params.cursor);
@@ -562,7 +562,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_test_case ──────────────────────────────────────────────────────────
   async get_test_case(db, params, ctx) {
-    const id = numericParam(params.id, 'id');
+    const id = numericParam(params.testCaseId, 'testCaseId');
     const pageSize = clampPageSize(params.pageSize);
     const cursor = numericCursor(params.cursor);
 
@@ -669,7 +669,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_cluster ────────────────────────────────────────────────────────────
   async get_cluster(db, params, ctx) {
-    const id = numericParam(params.id, 'id');
+    const id = numericParam(params.clusterId, 'clusterId');
     const cluster = await getFailureCluster(db, id);
     if (!cluster) return null;
     if (cluster.project?.id != null) assertProject(ctx, cluster.project.id);
@@ -775,7 +775,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_cluster_diagnosis ──────────────────────────────────────────────────
   async get_cluster_diagnosis(db, params, ctx) {
-    const id = numericParam(params.id, 'id');
+    const id = numericParam(params.clusterId, 'clusterId');
     if ((await checkEntityScope(db, ctx, id, resolveClusterProjectId)) === 'not-found') {
       return { diagnosis: null };
     }
@@ -810,7 +810,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_test_case_context ─────────────────────────────────────────────────
   async get_test_case_context(db, params, ctx) {
-    const id = numericParam(params.id, 'id');
+    const id = numericParam(params.executionId, 'executionId');
     if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
 
     const [trc] = await db
@@ -866,7 +866,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_case_screenshots ───────────────────────────────────────────────────
   async get_case_screenshots(db, params, ctx) {
-    const id = numericParam(params.testRunsCaseId, 'testRunsCaseId');
+    const id = numericParam(params.executionId, 'executionId');
     if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return [];
     const withContent = params.content === true || params.content === 'true';
 
@@ -912,7 +912,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_cluster_context ────────────────────────────────────────────────────
   async get_cluster_context(db, params, ctx) {
-    const id = numericParam(params.id, 'id');
+    const id = numericParam(params.clusterId, 'clusterId');
     const [clusterRow] = await db.select().from(failureClusters).where(eq(failureClusters.id, id));
     if (!clusterRow) return null;
     assertProject(ctx, clusterRow.projectId);
@@ -986,7 +986,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_test_run_case ──────────────────────────────────────────────────────
   async get_test_run_case(db, params, ctx) {
-    const id = numericParam(params.id, 'id');
+    const id = numericParam(params.executionId, 'executionId');
     const [row] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
     if (!row) return null;
     if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
@@ -1149,7 +1149,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_run_insights ───────────────────────────────────────────────────────
   async get_run_insights(db, params, ctx) {
-    const runId = numericParam(params.id, 'id');
+    const runId = numericParam(params.runId, 'runId');
     if ((await checkEntityScope(db, ctx, runId, resolveRunProjectId)) === 'not-found') return null;
 
     const r = await computeRunInsights(db, runId);
@@ -1205,7 +1205,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_test_stability_trend ───────────────────────────────────────────────
   async get_test_stability_trend(db, params, ctx) {
-    const testCaseId = numericParam(params.id, 'id');
+    const testCaseId = numericParam(params.testCaseId, 'testCaseId');
     if ((await checkEntityScope(db, ctx, testCaseId, resolveCaseProjectId)) === 'not-found') return null;
     const buckets = params.buckets != null ? numericParam(params.buckets, 'buckets') : 20;
     return getTestCaseStabilityTrend(db, testCaseId, buckets);
@@ -1213,7 +1213,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_network_requests ───────────────────────────────────────────────────
   async get_network_requests(db, params, ctx) {
-    const runId = numericParam(params.id, 'id');
+    const runId = numericParam(params.runId, 'runId');
     if ((await checkEntityScope(db, ctx, runId, resolveRunProjectId)) === 'not-found') return null;
     const summaries = (await getNetworkRequests(db, runId)) as any[] | null;
     if (!summaries) return null;
@@ -1222,7 +1222,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_failure_groups ─────────────────────────────────────────────────────
   async get_failure_groups(db, params, ctx) {
-    const runId = numericParam(params.id, 'id');
+    const runId = numericParam(params.runId, 'runId');
     if ((await checkEntityScope(db, ctx, runId, resolveRunProjectId)) === 'not-found') return null;
     const groups = (await getFailureGroups(db, runId)) as any[];
     return {
@@ -1251,7 +1251,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── get_locator_healing ────────────────────────────────────────────────────
   async get_locator_healing(db, params, ctx) {
-    const id = numericParam(params.testRunsCaseId, 'testRunsCaseId');
+    const id = numericParam(params.executionId, 'executionId');
     if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
     const h = await getLocatorHealing(db, id);
     if (!h || h.source === 'none') return { source: 'none' };
@@ -1322,7 +1322,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── list_case_traces ───────────────────────────────────────────────────────
   async list_case_traces(db, params, ctx) {
-    const id = numericParam(params.testRunsCaseId, 'testRunsCaseId');
+    const id = numericParam(params.executionId, 'executionId');
     if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return { traces: [] };
     const traces = (await getTestRunCaseTraces(db, id)) as any[];
     return {
@@ -1335,7 +1335,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   // ── list_links ─────────────────────────────────────────────────────────────
   async list_links(db, params, ctx) {
     const entityType = String(params.entityType ?? '');
-    const entityId = numericParam(params.id, 'id');
+    const entityId = numericParam(params.entityId, 'entityId');
     const resolver =
       entityType === 'test_run'
         ? resolveRunProjectId
@@ -1461,7 +1461,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
   // ── explain_failure ────────────────────────────────────────────────────────
   async explain_failure(db, params, ctx) {
-    const id = numericParam(params.testRunsCaseId, 'testRunsCaseId');
+    const id = numericParam(params.executionId, 'executionId');
     if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
 
     const [row] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
@@ -1510,7 +1510,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   // ── set_cluster_status ─────────────────────────────────────────────────────
   async set_cluster_status(db, params, ctx) {
     assertWriteRole(ctx);
-    const id = numericParam(params.id, 'id');
+    const id = numericParam(params.clusterId, 'clusterId');
     if ((await checkEntityScope(db, ctx, id, resolveClusterProjectId)) === 'not-found') return null;
     const status = String(params.status ?? '');
     if (!['open', 'resolved', 'ignored'].includes(status)) {
@@ -1525,7 +1525,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   // ── set_cluster_base_commit ────────────────────────────────────────────────
   async set_cluster_base_commit(db, params, ctx) {
     assertWriteRole(ctx);
-    const id = numericParam(params.id, 'id');
+    const id = numericParam(params.clusterId, 'clusterId');
     if ((await checkEntityScope(db, ctx, id, resolveClusterProjectId)) === 'not-found') return null;
     const commit = typeof params.commit === 'string' ? params.commit.trim() : null;
     const result = await patchClusterBaseCommit(db, id, commit);
@@ -1536,7 +1536,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   // ── submit_diagnosis_feedback ──────────────────────────────────────────────
   async submit_diagnosis_feedback(db, params, ctx) {
     assertWriteRole(ctx);
-    const id = numericParam(params.id, 'id');
+    const id = numericParam(params.diagnosisId, 'diagnosisId');
     const feedback = params.feedback == null ? null : String(params.feedback);
     if (feedback !== null && feedback !== 'up' && feedback !== 'down') {
       throw new Error('feedback must be "up", "down", or null');
@@ -1561,7 +1561,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
   // ── run_cluster_diagnosis ──────────────────────────────────────────────────
   async run_cluster_diagnosis(db, params, ctx) {
     assertWriteRole(ctx);
-    const id = numericParam(params.id, 'id');
+    const id = numericParam(params.clusterId, 'clusterId');
     if ((await checkEntityScope(db, ctx, id, resolveClusterProjectId)) === 'not-found') return null;
     if (isDiagnosisRunning(id)) throw new Error('Diagnosis is already running for this cluster');
 

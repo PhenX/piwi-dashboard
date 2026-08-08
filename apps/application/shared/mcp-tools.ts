@@ -40,11 +40,11 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Project ID from list_projects' },
+        projectId: { type: 'number', description: 'Project ID from list_projects' },
         pageSize: { type: 'number', description: 'Runs per page (default 10, max 50)' },
         cursor: { type: 'string', description: 'Opaque cursor from a previous response to get the next page of runs' },
       },
-      required: ['id'],
+      required: ['projectId'],
     },
   },
   {
@@ -73,7 +73,7 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Test run ID' },
+        runId: { type: 'number', description: 'Test run ID' },
         statusFilter: {
           type: 'string',
           enum: ['failed', 'flaky', 'all'],
@@ -83,7 +83,7 @@ export const MCP_TOOL_DEFS = [
         pageSize: { type: 'number', description: 'Cases per page (default 10, max 50)' },
         cursor: { type: 'string', description: 'Opaque cursor from a previous response for the next page of cases' },
       },
-      required: ['id'],
+      required: ['runId'],
     },
   },
   {
@@ -124,14 +124,17 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Test case ID (testCaseId from list_failed_cases or list_flaky_tests)' },
+        testCaseId: {
+          type: 'number',
+          description: 'Test case ID (testCaseId from list_failed_cases or list_flaky_tests)',
+        },
         pageSize: { type: 'number', description: 'Executions per page (default 10, max 50)' },
         cursor: {
           type: 'string',
           description: 'Opaque cursor from a previous response to get the next page of executions',
         },
       },
-      required: ['id'],
+      required: ['testCaseId'],
     },
   },
   {
@@ -159,9 +162,9 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Cluster ID from list_clusters' },
+        clusterId: { type: 'number', description: 'Cluster ID from list_clusters' },
       },
-      required: ['id'],
+      required: ['clusterId'],
     },
   },
   {
@@ -183,9 +186,9 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Cluster ID' },
+        clusterId: { type: 'number', description: 'Cluster ID' },
       },
-      required: ['id'],
+      required: ['clusterId'],
     },
   },
   {
@@ -195,9 +198,9 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Test run case ID' },
+        executionId: { type: 'number', description: 'Test run case ID' },
       },
-      required: ['id'],
+      required: ['executionId'],
     },
   },
   {
@@ -207,10 +210,10 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        testRunsCaseId: { type: 'number', description: 'Test run case ID' },
+        executionId: { type: 'number', description: 'Test run case ID' },
         content: { type: 'boolean', description: 'Include base64 image data (default false — metadata only)' },
       },
-      required: ['testRunsCaseId'],
+      required: ['executionId'],
     },
   },
   {
@@ -220,7 +223,7 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Cluster ID' },
+        clusterId: { type: 'number', description: 'Cluster ID' },
         baseCommit: {
           type: 'string',
           description: 'Optional: override the baseline commit SHA for SCM diff comparison',
@@ -231,7 +234,7 @@ export const MCP_TOOL_DEFS = [
           description: 'Optional: specific commit SHAs to include in the diff context (max 10)',
         },
       },
-      required: ['id'],
+      required: ['clusterId'],
     },
   },
   {
@@ -256,7 +259,7 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: {
+        executionId: {
           type: 'number',
           description:
             'Test run case ID (executionId from get_run.cases or testRunsCaseId from get_cluster.affectedTestCases)',
@@ -268,7 +271,7 @@ export const MCP_TOOL_DEFS = [
             'Optional: which heavy blobs to include (default: all). The error, status, and summary are always returned.',
         },
       },
-      required: ['id'],
+      required: ['executionId'],
     },
   },
   {
@@ -316,8 +319,8 @@ export const MCP_TOOL_DEFS = [
       'Compare a run to its last green baseline: pass-rate delta, new regressions, recurrences, recovered tests, new flaky tests, biggest perf improvements/regressions, worker imbalance, and newly opened clusters. Use this to answer "what changed?" and "did my fix work?".',
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'number', description: 'Test run ID' } },
-      required: ['id'],
+      properties: { runId: { type: 'number', description: 'Test run ID' } },
+      required: ['runId'],
     },
   },
   {
@@ -366,10 +369,10 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Test case ID (stable testCaseId)' },
+        testCaseId: { type: 'number', description: 'Test case ID (stable testCaseId)' },
         buckets: { type: 'number', description: 'Number of time buckets (default 20, 5–50)' },
       },
-      required: ['id'],
+      required: ['testCaseId'],
     },
   },
   {
@@ -378,8 +381,8 @@ export const MCP_TOOL_DEFS = [
       "A run's network requests aggregated by method + normalized route, sorted by average duration, with status codes and captured backend server logs. Use to pin a UI failure on a slow or failing endpoint.",
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'number', description: 'Test run ID' } },
-      required: ['id'],
+      properties: { runId: { type: 'number', description: 'Test run ID' } },
+      required: ['runId'],
     },
   },
   {
@@ -388,8 +391,8 @@ export const MCP_TOOL_DEFS = [
       "One run's failures grouped by failure cluster, with per-group affected cases and worker correlation. Run-scoped counterpart to list_clusters.",
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'number', description: 'Test run ID' } },
-      required: ['id'],
+      properties: { runId: { type: 'number', description: 'Test run ID' } },
+      required: ['runId'],
     },
   },
   {
@@ -398,8 +401,8 @@ export const MCP_TOOL_DEFS = [
       'Ranked alternative locators for a failing test-run-case: the failing locator, the recommended durable fix, and the full alternative lists (from prior success, element match, and ARIA snapshot). Use when fixing a broken selector.',
     inputSchema: {
       type: 'object',
-      properties: { testRunsCaseId: { type: 'number', description: 'Test run case ID (executionId)' } },
-      required: ['testRunsCaseId'],
+      properties: { executionId: { type: 'number', description: 'Test run case ID (executionId)' } },
+      required: ['executionId'],
     },
   },
   {
@@ -418,8 +421,8 @@ export const MCP_TOOL_DEFS = [
       'List Playwright trace files for a test-run-case, with a download path for each. Fetch the bytes via GET /api/files/<path>.',
     inputSchema: {
       type: 'object',
-      properties: { testRunsCaseId: { type: 'number', description: 'Test run case ID (executionId)' } },
-      required: ['testRunsCaseId'],
+      properties: { executionId: { type: 'number', description: 'Test run case ID (executionId)' } },
+      required: ['executionId'],
     },
   },
   {
@@ -434,9 +437,9 @@ export const MCP_TOOL_DEFS = [
           enum: ['test_run', 'test_runs_case', 'test_case'],
           description: 'Which entity the links are attached to',
         },
-        id: { type: 'number', description: 'The entity ID matching entityType' },
+        entityId: { type: 'number', description: 'The entity ID matching entityType' },
       },
-      required: ['entityType', 'id'],
+      required: ['entityType', 'entityId'],
     },
   },
   {
@@ -494,8 +497,8 @@ export const MCP_TOOL_DEFS = [
       'One-call evidence bundle for a single failing execution: error, steps, console, ARIA snapshot, the recommended locator fix, a screenshot count, and the AI diagnosis context. Prefer this over chaining get_test_run_case + get_locator_healing + get_test_case_context.',
     inputSchema: {
       type: 'object',
-      properties: { testRunsCaseId: { type: 'number', description: 'Test run case ID (executionId)' } },
-      required: ['testRunsCaseId'],
+      properties: { executionId: { type: 'number', description: 'Test run case ID (executionId)' } },
+      required: ['executionId'],
     },
   },
   {
@@ -505,11 +508,11 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Cluster ID' },
+        clusterId: { type: 'number', description: 'Cluster ID' },
         status: { type: 'string', enum: ['open', 'resolved', 'ignored'], description: 'New triage status' },
         triageNote: { type: 'string', description: 'Optional note explaining the status change' },
       },
-      required: ['id', 'status'],
+      required: ['clusterId', 'status'],
     },
   },
   {
@@ -519,10 +522,10 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Cluster ID' },
+        clusterId: { type: 'number', description: 'Cluster ID' },
         commit: { type: 'string', description: 'Baseline commit SHA (empty to clear)' },
       },
-      required: ['id', 'commit'],
+      required: ['clusterId', 'commit'],
     },
   },
   {
@@ -532,11 +535,11 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Diagnosis ID' },
+        diagnosisId: { type: 'number', description: 'Diagnosis ID' },
         feedback: { type: 'string', enum: ['up', 'down'], description: 'Rating (omit to clear)' },
         feedbackNote: { type: 'string', description: 'Optional note' },
       },
-      required: ['id'],
+      required: ['diagnosisId'],
     },
   },
   {
@@ -546,11 +549,11 @@ export const MCP_TOOL_DEFS = [
     inputSchema: {
       type: 'object',
       properties: {
-        id: { type: 'number', description: 'Cluster ID' },
+        clusterId: { type: 'number', description: 'Cluster ID' },
         force: { type: 'boolean', description: 'Re-run even if a completed diagnosis exists (default false)' },
         baseCommit: { type: 'string', description: 'Optional baseline commit SHA for SCM-diff context' },
       },
-      required: ['id'],
+      required: ['clusterId'],
     },
   },
   {
