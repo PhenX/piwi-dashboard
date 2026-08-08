@@ -8,7 +8,7 @@ test.describe.serial('Tags API Tests', () => {
   test.beforeAll(async ({ request }) => {
     const res = await request.get('/api/tags');
     const data = await res.json();
-    for (const tag of data.tags || []) {
+    for (const tag of data.items || []) {
       if (['api-test-tag', 'api-test-tag-updated', 'duplicate-tag', 'delete-me-tag'].includes(tag.text)) {
         await request.delete(`/api/tags/${tag.id}`);
       }
@@ -19,7 +19,7 @@ test.describe.serial('Tags API Tests', () => {
     const res = await request.get('/api/tags');
     expect(res.ok()).toBeTruthy();
     const data = await res.json();
-    expect(Array.isArray(data.tags)).toBe(true);
+    expect(Array.isArray(data.items)).toBe(true);
   });
 
   test('should create a new tag', async ({ request }) => {
@@ -39,7 +39,7 @@ test.describe.serial('Tags API Tests', () => {
     const res = await request.get('/api/tags');
     expect(res.ok()).toBeTruthy();
     const data = await res.json();
-    const tag = data.tags.find((t: { text: string }) => t.text === 'api-test-tag');
+    const tag = data.items.find((t: { text: string }) => t.text === 'api-test-tag');
     expect(tag).toBeDefined();
     expect(tag.color).toBe('#3b82f6');
   });
@@ -102,7 +102,7 @@ test.describe.serial('Tags API Tests', () => {
     const listRes = await request.get('/api/tags');
     expect(listRes.ok()).toBeTruthy();
     const listData = await listRes.json();
-    const found = listData.tags.find((t: { text: string }) => t.text === deleteTagName);
+    const found = listData.items.find((t: { text: string }) => t.text === deleteTagName);
     expect(found).toBeUndefined();
   });
 
@@ -137,7 +137,7 @@ test.describe.serial('Tags assigned to projects', () => {
     // Clean up existing tags with these names
     const tagsRes = await request.get('/api/tags');
     const tagsData = await tagsRes.json();
-    for (const tag of tagsData.tags || []) {
+    for (const tag of tagsData.items || []) {
       if (['assign-tag-a', 'assign-tag-b'].includes(tag.text)) {
         await request.delete(`/api/tags/${tag.id}`);
       }

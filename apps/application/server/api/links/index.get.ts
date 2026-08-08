@@ -34,5 +34,5 @@ export default eventHandler(async (event) => {
   if (!projectId) throw createError({ statusCode: 404, message: 'Entity not found' });
   await requireProjectAccess(event, projectId);
 
-  return listLinks(db, entityType, entityId);
+  return { items: (await listLinks(db, entityType, entityId)).links };
 });

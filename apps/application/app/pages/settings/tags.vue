@@ -8,7 +8,7 @@ const toast = useToast();
 const { authState } = useAuth();
 const config = useRuntimeConfig();
 
-const allTags = computed(() => tagsData.value?.tags || []);
+const allTags = computed(() => tagsData.value?.items || []);
 
 const isAdmin = computed(() => {
   if (!config.public.authEnabled) return true;

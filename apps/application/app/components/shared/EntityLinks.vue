@@ -32,10 +32,10 @@ const previewIcon = computed(() => {
 });
 
 async function loadLinks() {
-  const data = await $fetch<{ links: EntityLinkInfo[] }>('/api/links', {
+  const data = await $fetch<{ items: EntityLinkInfo[] }>('/api/links', {
     params: { entityType: props.entityType, entityId: props.entityId },
   });
-  localLinks.value = data.links;
+  localLinks.value = data.items;
 }
 
 async function addLink() {

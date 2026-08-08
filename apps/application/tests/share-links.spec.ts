@@ -82,7 +82,7 @@ test.describe.serial('Share links', () => {
   test('the listing shows the view without ever returning the token', async ({ request }) => {
     const res = await request.get(`/api/test-run-cases/${executionId}/share-links`);
     expect(res.ok()).toBeTruthy();
-    const { shareLinks } = await res.json();
+    const { items: shareLinks } = await res.json();
     expect(shareLinks).toHaveLength(1);
     expect(shareLinks[0].viewCount).toBe(1);
     expect(shareLinks[0].tokenPrefix).toHaveLength(8);

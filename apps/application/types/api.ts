@@ -78,7 +78,7 @@ export interface TagInfo {
  * Tags response from API
  */
 export interface TagsResponse {
-  tags: TagInfo[];
+  items: TagInfo[];
 }
 
 // ============================================================================
@@ -106,7 +106,7 @@ export interface MarkerInfo {
  * Markers response from API
  */
 export interface MarkersResponse {
-  markers: MarkerInfo[];
+  items: MarkerInfo[];
 }
 
 // ============================================================================
@@ -182,7 +182,7 @@ export interface TestFunctionInfo {
 }
 
 export interface TestFunctionsResponse {
-  testFunctions: TestFunctionInfo[];
+  items: TestFunctionInfo[];
 }
 
 // ============================================================================

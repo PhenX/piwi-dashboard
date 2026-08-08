@@ -18,5 +18,5 @@ export default eventHandler(async (event) => {
   await requireProjectAccess(event, id);
 
   const db = await getDatabase();
-  return await listProjectTestFunctions(db, id);
+  return { items: (await listProjectTestFunctions(db, id)).testFunctions };
 });

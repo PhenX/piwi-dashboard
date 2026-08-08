@@ -627,7 +627,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/failure-clusters\/(\d+)\/branches$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
-      return getClusterBranches(await getDemoDb(), +m[1]!);
+      return { items: (await getClusterBranches(await getDemoDb(), +m[1]!)).branches };
     },
   },
   {
@@ -911,7 +911,11 @@ const routes: RouteEntry[] = [
   },
 
   // Tags
-  { method: 'GET', pattern: /^\/api\/tags$/, handler: async () => listTags(await getDemoDb()) },
+  {
+    method: 'GET',
+    pattern: /^\/api\/tags$/,
+    handler: async () => ({ items: (await listTags(await getDemoDb())).tags }),
+  },
   {
     method: 'POST',
     pattern: /^\/api\/tags$/,
@@ -939,7 +943,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/projects\/(\d+)\/markers$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
-      return listProjectMarkers(await getDemoDb(), +m[1]!);
+      return { items: (await listProjectMarkers(await getDemoDb(), +m[1]!)).markers };
     },
   },
   {
@@ -1001,7 +1005,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/projects\/(\d+)\/test-functions$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
-      return listProjectTestFunctions(await getDemoDb(), +m[1]!);
+      return { items: (await listProjectTestFunctions(await getDemoDb(), +m[1]!)).testFunctions };
     },
   },
   // Validated with the same schemas the real endpoints use, not cast straight
@@ -1216,7 +1220,7 @@ const routes: RouteEntry[] = [
       if (!['test_run', 'test_runs_case', 'test_case'].includes(entityType) || !entityId) {
         throw demoHttpError(400, 'Invalid entityType or entityId');
       }
-      return listLinks(await getDemoDb(), entityType, entityId);
+      return { items: (await listLinks(await getDemoDb(), entityType, entityId)).links };
     },
   },
   {

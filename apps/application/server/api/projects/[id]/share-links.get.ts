@@ -17,5 +17,5 @@ export default eventHandler(async (event) => {
   const projectId = requireRouteId(event, 'id', 'project ID');
   await requireProjectAccess(event, projectId);
   const db = await getDatabase();
-  return { shareLinks: await listProjectShareLinks(db, projectId) };
+  return { items: await listProjectShareLinks(db, projectId) };
 });

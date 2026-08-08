@@ -151,7 +151,7 @@ test.describe.serial('Tag Management UI Tests', () => {
   test.beforeAll(async ({ request }) => {
     const res = await request.get('/api/tags');
     const data = await res.json();
-    for (const tag of data.tags || []) {
+    for (const tag of data.items || []) {
       if (tag.text.startsWith('ui-test-tag')) {
         await request.delete(`/api/tags/${tag.id}`);
       }

@@ -29,11 +29,11 @@ export default eventHandler(async (event) => {
   const meta = run?.metadata as any;
   const repositoryUrl = normalizeGitUrl(meta?.scm?.remoteUrl ?? null);
 
-  if (!repositoryUrl) return { branches: [] };
+  if (!repositoryUrl) return { items: [] };
 
   const provider = await createScmProvider(repositoryUrl, db, cluster.projectId);
-  if (!provider) return { branches: [] };
+  if (!provider) return { items: [] };
 
   const branches = await provider.listBranches();
-  return { branches };
+  return { items: branches };
 });

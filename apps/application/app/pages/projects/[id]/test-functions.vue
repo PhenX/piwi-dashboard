@@ -27,7 +27,7 @@ useHead(
   })),
 );
 
-const entries = computed(() => catalog.value?.testFunctions ?? []);
+const entries = computed(() => catalog.value?.items ?? []);
 
 const KIND_ITEMS = [
   { label: 'Page-object method', value: 'page-object-method' },

@@ -348,9 +348,9 @@ const flakyEnvironment = computed(() =>
 // === TIMELINE MARKERS ===
 const { data: markersData, refresh: refreshMarkers } = await useFetch<MarkersResponse>(
   `/api/projects/${projectId}/markers`,
-  { default: () => ({ markers: [] }) },
+  { default: () => ({ items: [] }) },
 );
-const markers = computed(() => markersData.value?.markers ?? []);
+const markers = computed(() => markersData.value?.items ?? []);
 
 const canEditMarkers = computed(() => !runtimeConfig.public.authEnabled || isAdmin.value || isReporter.value);
 

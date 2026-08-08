@@ -18,7 +18,7 @@ watch(
   async (pid) => {
     if (!pid) return;
     try {
-      historyMarkers.value = (await $fetch<MarkersResponse>(`/api/projects/${pid}/markers`)).markers ?? [];
+      historyMarkers.value = (await $fetch<MarkersResponse>(`/api/projects/${pid}/markers`)).items ?? [];
     } catch {
       // markers are optional context
     }

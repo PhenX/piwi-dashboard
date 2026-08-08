@@ -14,7 +14,7 @@ useHead(
   computed(() => ({ title: `Edit ${project.value?.label || project.value?.name || 'Project'} — Piwi Dashboard` })),
 );
 
-const allTags = computed(() => tagsData.value?.tags || []);
+const allTags = computed(() => tagsData.value?.items || []);
 
 const hasToken = computed(() => Boolean(project.value?.hasScmToken));
 

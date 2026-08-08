@@ -36,8 +36,8 @@ async function loadBranches() {
   if (branches.value.length) return;
   branchesLoading.value = true;
   try {
-    const res = await $fetch<{ branches: string[] }>(`/api/failure-clusters/${props.clusterId}/branches`);
-    branches.value = res.branches;
+    const res = await $fetch<{ items: string[] }>(`/api/failure-clusters/${props.clusterId}/branches`);
+    branches.value = res.items;
   } catch {
     // ignore branch load failures
   } finally {
