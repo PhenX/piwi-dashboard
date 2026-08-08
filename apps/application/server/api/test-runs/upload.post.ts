@@ -14,6 +14,7 @@ import { rm, mkdir, readdir } from 'fs/promises';
 import { parseLocation } from '../../utils/parse-location';
 import { persistRunCases, type RunCaseInput } from '../../utils/persist-run-cases';
 import { postRunPrFeedbackInBackground } from '../../utils/scm/pr-feedback';
+import { maybeEnqueueHealActionInBackground } from '../../utils/heal/policy';
 import { sanitizeMetadata } from '../../utils/sanitize';
 import { runEventBus } from '../../utils/run-events';
 import { autoDiagnoseRun } from '../../utils/ai-diagnosis';
@@ -444,6 +445,7 @@ export default eventHandler(async (event) => {
         console.error('[ai-diagnosis] autoDiagnoseRun failed', e),
       );
       postRunPrFeedbackInBackground(db, existingTestRunId!);
+      maybeEnqueueHealActionInBackground(db, existingTestRunId!);
 
       // Cleanup event bus for this run
       runEventBus.cleanup(existingTestRunId!);

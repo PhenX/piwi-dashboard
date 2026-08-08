@@ -1268,6 +1268,17 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       // agent can apply the recommended fix without re-deriving either.
       location: h.location ?? null,
       sourceLine: h.sourceLine ? dropNulls({ line: h.sourceLine.line, text: h.sourceLine.text }) : null,
+      // The recommended fix as a ready-to-apply edit: the rewritten line plus a
+      // git-applyable unified diff, so an agent can patch the file directly.
+      edit: h.edit
+        ? dropNulls({
+            filePath: h.edit.filePath,
+            line: h.edit.line,
+            oldLine: h.edit.oldLine,
+            newLine: h.edit.newLine,
+            unifiedDiff: h.edit.unifiedDiff,
+          })
+        : null,
       healedInRunId: h.healedInRunId ?? null,
       recommendation: h.recommendation
         ? dropNulls({

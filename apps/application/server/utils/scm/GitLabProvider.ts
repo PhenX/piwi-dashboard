@@ -1,6 +1,22 @@
 import { ScmProvider, truncatePatch, MAX_SCM_FILES, MAX_FILE_BYTES, FETCH_TIMEOUT_MS } from './ScmProvider';
-import type { ScmCommitDetail, ScmChanges, ScmFileContent, ScmPullRequest, ScmCommitStatus } from './ScmProvider';
+import type {
+  ScmCommitDetail,
+  ScmChanges,
+  ScmFileContent,
+  ScmPullRequest,
+  ScmCommitStatus,
+  ScmFileEdit,
+  CreatePullRequestInput,
+} from './ScmProvider';
 import { TtlCache } from './cache';
+
+/** Turn a non-2xx GitLab response into an Error carrying the API's own message. */
+async function gitlabError(res: Response, action: string): Promise<Error> {
+  const body = (await res.json().catch(() => ({}))) as { message?: unknown; error?: unknown };
+  const detail =
+    typeof body.message === 'string' ? body.message : typeof body.error === 'string' ? body.error : res.statusText;
+  return new Error(`GitLab ${action} failed (${res.status}): ${detail}`);
+}
 
 const listBranchesCache = new TtlCache<string[]>(3 * 60 * 1000);
 const listCommitsCache = new TtlCache<ScmCommitDetail[]>(3 * 60 * 1000);
@@ -305,5 +321,70 @@ export class GitLabProvider extends ScmProvider {
     } catch {
       return false;
     }
+  }
+
+  // ── Write capability (auto-heal) ───────────────────────────────────────────
+
+  override async getBranchHead(branch: string): Promise<string | null> {
+    const res = await fetch(
+      `https://${this.hostname}/api/v4/projects/${this.projectPath()}/repository/branches/${encodeURIComponent(branch)}`,
+      { headers: this.makeHeaders(), signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
+    );
+    if (res.status === 404) return null;
+    if (!res.ok) throw await gitlabError(res, 'read branch');
+    const data = (await res.json()) as { commit?: { id?: string } };
+    return data.commit?.id ?? null;
+  }
+
+  override async createBranch(name: string, fromSha: string): Promise<void> {
+    const url = new URL(`https://${this.hostname}/api/v4/projects/${this.projectPath()}/repository/branches`);
+    url.searchParams.set('branch', name);
+    url.searchParams.set('ref', fromSha);
+    const res = await fetch(url.toString(), {
+      method: 'POST',
+      headers: this.makeHeaders(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) throw await gitlabError(res, 'create branch');
+  }
+
+  override async commitFiles(branch: string, message: string, files: ScmFileEdit[]): Promise<string> {
+    const res = await fetch(`https://${this.hostname}/api/v4/projects/${this.projectPath()}/repository/commits`, {
+      method: 'POST',
+      headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        branch,
+        commit_message: message,
+        actions: files.map((f) => ({ action: 'update', file_path: f.path, content: f.content })),
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) throw await gitlabError(res, 'commit files');
+    const id = ((await res.json()) as { id?: string }).id;
+    if (!id) throw new Error('GitLab commit response had no id');
+    return id;
+  }
+
+  override async createPullRequest(input: CreatePullRequestInput): Promise<ScmPullRequest> {
+    // GitLab marks a draft MR by a `Draft:` title prefix.
+    const title = input.draft ? `Draft: ${input.title}` : input.title;
+    const res = await fetch(`https://${this.hostname}/api/v4/projects/${this.projectPath()}/merge_requests`, {
+      method: 'POST',
+      headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        source_branch: input.head,
+        target_branch: input.base,
+        title,
+        description: input.body,
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) throw await gitlabError(res, 'open merge request');
+    const mr = (await res.json()) as { iid?: number; web_url?: string };
+    if (!mr.iid) throw new Error('GitLab merge request response had no iid');
+    return {
+      number: mr.iid,
+      url: mr.web_url ?? `https://${this.hostname}/${this.repoPath}/-/merge_requests/${mr.iid}`,
+    };
   }
 }

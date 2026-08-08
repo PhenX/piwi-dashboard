@@ -8,6 +8,7 @@ import { autoDiagnoseRun } from '../../../utils/ai-diagnosis';
 import { readShardTokensFromMeta, removeStoredShardToken } from '../../../utils/shard-tokens';
 import { emitRunNotifications } from '../../../utils/notifications/run-notifications';
 import { postRunPrFeedbackInBackground } from '../../../utils/scm/pr-feedback';
+import { maybeEnqueueHealActionInBackground } from '../../../utils/heal/policy';
 import { computeRegressionSignals } from '../../../utils/compute-regression-signals';
 import { syncAutoMarkersForRun } from '#shared/handlers/markers';
 import { sumFailedAndTimedOut } from '#shared/utils/test-counts';
@@ -210,6 +211,7 @@ export default eventHandler(async (event) => {
       );
       emitRunNotifications(db, id).catch((e) => console.error('[notifications] emitRunNotifications failed', e));
       postRunPrFeedbackInBackground(db, id);
+      maybeEnqueueHealActionInBackground(db, id);
 
       runEventBus.cleanup(id);
     } else {
@@ -335,6 +337,7 @@ export default eventHandler(async (event) => {
     autoDiagnoseRun(db, testRun.projectId, id).catch((e) => console.error('[ai-diagnosis] autoDiagnoseRun failed', e));
     emitRunNotifications(db, id).catch((e) => console.error('[notifications] emitRunNotifications failed', e));
     postRunPrFeedbackInBackground(db, id);
+    maybeEnqueueHealActionInBackground(db, id);
 
     runEventBus.cleanup(id);
   }

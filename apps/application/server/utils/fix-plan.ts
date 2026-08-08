@@ -20,6 +20,9 @@ import { and, desc, eq } from 'drizzle-orm';
 import { failureClusters, failureDiagnoses, testCases, testRunsCases } from '../database/schema';
 import { getLocatorHealingBatch } from './locator-healing';
 import { validatePatch, type PatchValidation } from '#shared/patch';
+import { parseCallsiteLocation } from '#shared/callsite-location';
+import { buildRetryCommand } from '#shared/retry-command';
+import type { LocatorEdit } from '#shared/locator-healing.types';
 import type { DrizzleDB } from '#shared/handlers/db';
 
 /** Executions inspected for locator suggestions — enough to cover a cluster. */
@@ -37,6 +40,12 @@ export interface FixPlanEdit {
   suggestedLocator: string | null;
   /** Stability score of the suggestion, 0-100. */
   score: number | null;
+  /**
+   * The ranked replacement as a ready-to-apply edit: the failing line rewritten,
+   * plus a git-applyable unified diff. Null when there is no captured source line
+   * to rewrite. Deterministic locator-line rewrite only — never model output.
+   */
+  edit: LocatorEdit | null;
   executionId: number;
 }
 
@@ -148,16 +157,19 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
     const recommended = result?.recommendation?.recommended ?? null;
     if (!result || !recommended) continue;
 
-    const [locationFile, locationLine] = (result.location ?? '').split(':');
+    const loc = parseCallsiteLocation(result.location);
     edits.push({
-      filePath: locationFile || test.filePath,
-      line: result.sourceLine?.line ?? (locationLine ? Number(locationLine) : null),
+      filePath: loc?.file || test.filePath,
+      line: result.sourceLine?.line ?? loc?.line ?? null,
       currentLine: result.sourceLine?.text ?? null,
       failingLocator: result.failingLocator
         ? `${result.failingLocator.method}(${JSON.stringify(result.failingLocator.args)})`
         : null,
       suggestedLocator: recommended.locator,
       score: recommended.score ?? null,
+      // The ready-to-apply edit is computed once by the healing lookup (with the
+      // captured source snippet, so its diff carries context).
+      edit: result.edit ?? null,
       executionId: test.executionId,
     });
   }
@@ -168,7 +180,13 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
   // the in-browser demo.
   const declaredOwner = failingTests.find((test) => test.owner)?.owner ?? null;
 
-  const specs = [...new Set(failingTests.map((test) => test.filePath))];
+  // Files portion — POSIX-normalized, quoted and deduped by the same builder the
+  // UI's retry command uses (so a Windows-captured path can't silently fail to
+  // match), then scoped to exactly this cluster's tests by title.
+  const fileCmd = buildRetryCommand(
+    failingTests.map((test) => ({ filePath: test.filePath, title: test.title })),
+    { mode: 'file' },
+  );
   const titles = failingTests.slice(0, 5).map((test) => test.title);
   const grep = titles.length ? ` -g ${quote(titles.join('|'))}` : '';
 
@@ -187,7 +205,7 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
     failingTests: failingTests.map(({ owner: _owner, ...rest }) => rest),
     ownership: { owner: declaredOwner, source: declaredOwner ? 'annotation' : null },
     verify: {
-      command: `npx playwright test ${specs.join(' ')}${grep}`,
+      command: `${fileCmd || 'npx playwright test'}${grep}`,
       expectation:
         'Run the full suite afterwards. When every test in this cluster passes in one full run, Piwi records the fix — with the commit and how long the cluster was open — and the cluster stops being reported as open.',
     },

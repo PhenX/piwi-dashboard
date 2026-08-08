@@ -78,6 +78,24 @@ export interface ScmCommitStatus {
   context: string;
 }
 
+/** One file to create/update in a commit. */
+export interface ScmFileEdit {
+  path: string;
+  content: string;
+}
+
+/** Inputs for opening a pull/merge request. */
+export interface CreatePullRequestInput {
+  title: string;
+  body: string;
+  /** Source branch (already pushed). */
+  head: string;
+  /** Target branch. */
+  base: string;
+  /** Open as a draft where the host supports it (Bitbucket has no drafts). */
+  draft: boolean;
+}
+
 export abstract class ScmProvider {
   abstract readonly provider: 'github' | 'gitlab' | 'bitbucket';
   protected readonly token: string | null;
@@ -143,6 +161,35 @@ export abstract class ScmProvider {
   /** Attach a status to a commit. Returns true when it was accepted. */
   async postCommitStatus(_sha: string, _status: ScmCommitStatus): Promise<boolean> {
     return false;
+  }
+
+  // ── Write capability (auto-heal) ───────────────────────────────────────────
+  //
+  // Unlike the read/feedback methods above — which swallow errors and report
+  // failure by return value — the write methods THROW on failure with the
+  // provider's own message. Auto-heal records that message on a durable action
+  // row and retries; a swallowed error would erase exactly what the operator
+  // needs to see, and a half-completed branch/commit/PR sequence must never look
+  // like a success. A provider with no write support inherits these throws.
+
+  /** The head commit SHA of a branch, or null when the branch does not exist. */
+  async getBranchHead(_branch: string): Promise<string | null> {
+    throw new Error(`${this.provider} does not support reading a branch head`);
+  }
+
+  /** Create a branch at `fromSha`. Throws on failure. */
+  async createBranch(_name: string, _fromSha: string): Promise<void> {
+    throw new Error(`${this.provider} does not support creating branches`);
+  }
+
+  /** Commit `files` onto `branch` as one commit; returns the new commit SHA. Throws on failure. */
+  async commitFiles(_branch: string, _message: string, _files: ScmFileEdit[]): Promise<string> {
+    throw new Error(`${this.provider} does not support committing files`);
+  }
+
+  /** Open a pull/merge request; returns its number + URL. Throws on failure. */
+  async createPullRequest(_input: CreatePullRequestInput): Promise<ScmPullRequest> {
+    throw new Error(`${this.provider} does not support opening pull requests`);
   }
 
   /**

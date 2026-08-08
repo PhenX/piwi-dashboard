@@ -224,6 +224,7 @@ function channelTypeIcon(type: string) {
 }
 
 function eventLabel(e: string) {
+  if (e === 'auto_heal.pr_opened') return 'Auto-heal › PR opened';
   return e.replace(/\./g, ' › ');
 }
 </script>

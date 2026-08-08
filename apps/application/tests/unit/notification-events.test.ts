@@ -50,6 +50,20 @@ describe('renderEventSubject', () => {
     expect(renderEventSubject('perf.regression', runPayload)).toBe('Performance regression — my-project');
   });
 
+  test('auto_heal.pr_opened names the PR number and project', () => {
+    expect(
+      renderEventSubject('auto_heal.pr_opened', {
+        projectId: 2,
+        projectName: 'my-project',
+        runId: 1,
+        prNumber: 42,
+        prUrl: 'https://github.com/acme/app/pull/42',
+        branch: 'piwi/heal/1-abc',
+        editCount: 1,
+      }),
+    ).toBe('Auto-heal opened PR #42 — my-project');
+  });
+
   test('perf.regression includes the slowdown when the payload carries it', () => {
     expect(renderEventSubject('perf.regression', { ...runPayload, regressionPct: 34 })).toBe(
       'Performance regression — my-project (+34% slower)',

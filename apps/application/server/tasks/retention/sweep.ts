@@ -2,6 +2,7 @@ import { getDatabase } from '../../database';
 import {
   capDiagnosisVersions,
   deleteRunsOlderThan,
+  pruneHealActions,
   pruneNotificationDeliveries,
   reclaimSpace,
   sweepOrphans,
@@ -46,6 +47,12 @@ export default defineTask({
     if (keepVersions > 0) {
       const pruned = await capDiagnosisVersions(db, keepVersions);
       if (pruned > 0) result.diagnosisVersionsPruned = pruned;
+    }
+
+    // Reuse the notification-outbox horizon for settled heal actions.
+    if (notificationDays > 0) {
+      const pruned = await pruneHealActions(db, notificationDays);
+      if (pruned > 0) result.healActionsPruned = pruned;
     }
 
     const space = await reclaimSpace(db);

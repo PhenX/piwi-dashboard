@@ -141,7 +141,7 @@ const channelItems = computed(() =>
 );
 
 const eventItems = NOTIFICATION_EVENTS.map((e) => ({
-  label: e.replace(/\./g, ' › '),
+  label: e === 'auto_heal.pr_opened' ? 'Auto-heal › PR opened' : e.replace(/\./g, ' › '),
   value: e,
 }));
 

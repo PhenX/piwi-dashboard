@@ -167,7 +167,7 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'get_fix_plan',
     description:
-      'Everything needed to fix one failure cluster, in a single answer: the diagnosis and its validated patch, ranked locator replacements with the exact file and line to edit, the failing tests, the owning team, and the command that verifies the work. `verify.expectation` states what the dashboard records once those tests pass, so you can confirm the fix landed rather than guessing. Prefer this over assembling get_cluster + get_cluster_diagnosis + get_locator_healing yourself.',
+      'Everything needed to fix one failure cluster, in a single answer: the diagnosis and its validated patch, ranked locator replacements each with the exact file and line and a ready-to-apply `edit` (the rewritten line plus a unified diff `git apply` accepts), the failing tests, the owning team, and the command that verifies the work. `verify.expectation` states what the dashboard records once those tests pass, so you can confirm the fix landed rather than guessing. Prefer this over assembling get_cluster + get_cluster_diagnosis + get_locator_healing yourself.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -395,7 +395,7 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'get_locator_healing',
     description:
-      'Ranked alternative locators for a failing test-run-case: the failing locator, the recommended durable fix, and the full alternative lists (from prior success, element match, and ARIA snapshot). Use when fixing a broken selector.',
+      'Ranked alternative locators for a failing test-run-case: the failing locator, the recommended durable fix, and the full alternative lists (from prior success, element match, and ARIA snapshot). Includes `location` (file:line:col), the failing `sourceLine`, and a ready-to-apply `edit` — the rewritten line plus a unified diff `git apply` accepts. Use when fixing a broken selector.',
     inputSchema: {
       type: 'object',
       properties: { testRunsCaseId: { type: 'number', description: 'Test run case ID (executionId)' } },

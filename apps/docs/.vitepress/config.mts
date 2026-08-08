@@ -116,6 +116,7 @@ export default defineConfig({
           { text: 'Analytics', link: '/analytics' },
           { text: 'Timeline markers', link: '/timeline-markers' },
           { text: 'Notifications & alerts', link: '/notifications' },
+          { text: 'Auto-heal PRs', link: '/auto-heal' },
           { text: 'Offline export', link: '/offline-export' },
           { text: 'Share links', link: '/share-links' },
         ],

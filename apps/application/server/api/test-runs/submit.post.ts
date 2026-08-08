@@ -11,6 +11,7 @@ import { autoDiagnoseRun } from '../../utils/ai-diagnosis';
 import { cancelInstanceRuns } from '../../utils/cancel-instance-runs';
 import { emitRunNotifications } from '../../utils/notifications/run-notifications';
 import { postRunPrFeedbackInBackground } from '../../utils/scm/pr-feedback';
+import { maybeEnqueueHealActionInBackground } from '../../utils/heal/policy';
 import { getProjectScope, scopeAllows } from '../../utils/project-access';
 import { sumFailedAndTimedOut } from '#shared/utils/test-counts';
 
@@ -370,6 +371,7 @@ export default eventHandler(async (event) => {
   autoDiagnoseRun(db, project.id, testRun.id).catch((e) => console.error('[ai-diagnosis] autoDiagnoseRun failed', e));
   emitRunNotifications(db, testRun.id).catch((e) => console.error('[notifications] emitRunNotifications failed', e));
   postRunPrFeedbackInBackground(db, testRun.id);
+  maybeEnqueueHealActionInBackground(db, testRun.id);
 
   return {
     success: true,

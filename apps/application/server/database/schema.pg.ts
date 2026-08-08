@@ -864,6 +864,42 @@ export const notificationDeliveries = pgTable(
   }),
 );
 
+// Auto-heal outbox — one durable row per intended fix PR. Mirrors the
+// notifications outbox: a unique dedupe key is the only idempotency mechanism,
+// attempts + scheduledFor drive progressive backoff, and the payload is
+// snapshotted at enqueue so a retry is deterministic even if the run's SCM
+// metadata later changes.
+export const healActions = pgTable(
+  'heal_actions',
+  {
+    id: serial('id').primaryKey(),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    runId: integer('run_id').references(() => testRuns.id, { onDelete: 'set null' }),
+    dedupeKey: text('dedupe_key').notNull(),
+    kind: text('kind').notNull().default('open-pr'),
+    status: text('status').notNull().default('pending'), // 'pending' | 'opened' | 'failed' | 'skipped'
+    attempts: integer('attempts').notNull().default(0),
+    payload: jsonb('payload').notNull(),
+    result: jsonb('result'),
+    error: text('error'),
+    scheduledFor: timestamp('scheduled_for', { mode: 'date' }),
+    createdAt: timestamp('created_at', { mode: 'date' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp('updated_at', { mode: 'date' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (t) => ({
+    dedupeKeyIdx: uniqueIndex('idx_heal_actions_dedupe').on(t.dedupeKey),
+    projectStatusIdx: index('idx_heal_actions_project_status').on(t.projectId, t.status),
+    statusScheduledIdx: index('idx_heal_actions_status').on(t.status, t.scheduledFor),
+    runIdx: index('idx_heal_actions_run').on(t.runId),
+  }),
+);
+
 // Project assignments table — user-to-project access (null projectId = global access)
 export const projectAssignments = pgTable(
   'project_assignments',

@@ -188,10 +188,14 @@ Shared building blocks worth knowing before writing new markup (`AGENTS.md` make
 
 `app/utils/` holds pure helpers: `index.ts` (`formatDuration`, `splitDuration`, `getStatusColor`, `getFileApiPath`,
 `formatRelativeTime`, `createSortHeader`, `formatBytes`, `errorMessage`, patch/commit helpers, cluster colour maps),
-`performance-hints.ts`, `retry-command.ts` (`buildRetryCommand` — `file-line` / `grep` / `file` modes, shell-escaped,
-capped at 4096 chars), `ide-links.ts`, `help-content.ts`, `settings-metadata.ts`, `openapi.ts` / `openapi-console.ts`,
+`performance-hints.ts`, `ide-links.ts`, `help-content.ts`, `settings-metadata.ts`, `openapi.ts` / `openapi-console.ts`,
 `chart.ts` (chart palette, the per-chart series definitions the plots and their legends share, and the tick/stack/bar
-geometry behind the SVG charts).
+geometry behind the SVG charts). `retry-command.ts` (`buildRetryCommand` — `file-line` / `grep` / `file` modes,
+shell-escaped, capped at 4096 chars) and `locator-edit.ts` (`buildLocatorEdit` — rewrite the failing locator call on a
+source line) now live in `shared/` so the server and demo share them (the fix plan builds the same verify command and
+edits); thin `app/utils/` re-export shims keep them auto-imported. Locator-line edits become a git-applyable unified
+diff via `shared/heal-edit.ts` (`buildHealEdit` / `buildUnifiedLineDiff`), and `shared/callsite-location.ts`
+(`parseCallsiteLocation`) parses a captured `file:line:col` (drive-letter-safe).
 
 ## Demo SPA
 
