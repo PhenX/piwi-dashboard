@@ -251,7 +251,7 @@ test.describe.serial('Failure clustering', () => {
       firstSeenRunId: number;
       flaky: boolean;
       cases: Array<{ title: string; passedOnRetry: boolean }>;
-    }> = await response.json();
+    }> = (await response.json()).items;
 
     expect(groups).toHaveLength(2);
 
@@ -361,7 +361,7 @@ test.describe.serial('Failure clustering', () => {
     ]);
 
     const groupsRes = await request.get(`/api/test-runs/${runId}/failure-groups`);
-    const groups: Array<{ status: string; triageNote: string | null }> = await groupsRes.json();
+    const groups: Array<{ status: string; triageNote: string | null }> = (await groupsRes.json()).items;
     expect(groups[0]).toBeDefined();
     expect(groups[0].status).toBe('resolved');
     expect(groups[0].triageNote).toBe('Investigated — flaky test infrastructure');

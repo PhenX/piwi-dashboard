@@ -159,8 +159,9 @@ const failingIntent = computed<AiStepIntent | null>(() => {
 // snapshots power the trace viewer's own "Pick locator" tool, so a locator
 // can be picked visually even for CI failures nobody watched live.
 const config = useRuntimeConfig();
-const { data: traces } = useFetch<TraceInfo[]>(() => `/api/test-run-cases/${props.testRunsCaseId}/traces`, {
+const { data: traces } = useFetch(() => `/api/test-run-cases/${props.testRunsCaseId}/traces`, {
   lazy: true,
+  transform: (r: { items: TraceInfo[] }) => r.items,
 });
 const pickTraceUrl = computed(() => {
   const trace = traces.value?.[0];

@@ -365,7 +365,7 @@ const routes: RouteEntry[] = [
       // Custom thresholds from the timeout-hygiene setting apply here, like the
       // server route reads them (the demo persists the same app setting).
       const thresholds = await getTimeoutThresholds(db);
-      return getProjectTimeoutOpportunities(db, +m[1]!, runs, thresholds);
+      return { items: await getProjectTimeoutOpportunities(db, +m[1]!, runs, thresholds) };
     },
   },
   {
@@ -381,7 +381,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/projects\/(\d+)\/cluster-merge-suggestions$/,
     handler: async (m, _, q, ctx) => {
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
-      return listMergeSuggestions(await getDemoDb(), +m[1]!, (q && q.get('status')) || 'pending');
+      return { items: await listMergeSuggestions(await getDemoDb(), +m[1]!, (q && q.get('status')) || 'pending') };
     },
   },
   {
@@ -545,7 +545,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/test-runs\/(\d+)\/network-requests$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'run', +m[1]!);
-      return getNetworkRequests(await getDemoDb(), +m[1]!);
+      return { items: await getNetworkRequests(await getDemoDb(), +m[1]!) };
     },
   },
   {
@@ -563,7 +563,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/test-runs\/(\d+)\/failure-groups$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'run', +m[1]!);
-      return getFailureGroups(await getDemoDb(), +m[1]!);
+      return { items: await getFailureGroups(await getDemoDb(), +m[1]!) };
     },
   },
 
@@ -704,7 +704,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/failure-clusters\/(\d+)\/diagnoses$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
-      return listClusterDiagnosisVersions(await getDemoDb(), +m[1]!);
+      return { items: await listClusterDiagnosisVersions(await getDemoDb(), +m[1]!) };
     },
   },
   {
@@ -767,7 +767,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/test-cases\/(\d+)\/history$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'case', +m[1]!);
-      return getTestCaseHistory(await getDemoDb(), +m[1]!);
+      return { items: await getTestCaseHistory(await getDemoDb(), +m[1]!) };
     },
   },
   {
@@ -794,7 +794,7 @@ const routes: RouteEntry[] = [
     pattern: /^\/api\/test-run-cases\/(\d+)\/traces$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'execution', +m[1]!);
-      return getTestRunCaseTraces(await getDemoDb(), +m[1]!);
+      return { items: await getTestRunCaseTraces(await getDemoDb(), +m[1]!) };
     },
   },
   {

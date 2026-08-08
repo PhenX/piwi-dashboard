@@ -35,7 +35,7 @@ export default eventHandler(async (event) => {
   const thresholds = await getTimeoutThresholds(db);
 
   try {
-    return await getProjectTimeoutOpportunities(db, id, runsCount, thresholds);
+    return { items: await getProjectTimeoutOpportunities(db, id, runsCount, thresholds) };
   } catch (e: any) {
     if (e?.message === 'Project not found') {
       throw createError({ statusCode: 404, message: 'Project not found' });

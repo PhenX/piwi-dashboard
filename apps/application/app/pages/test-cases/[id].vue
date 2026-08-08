@@ -7,7 +7,9 @@ const route = useRoute();
 const testCaseId = route.params.id;
 
 const { data: testCase, refresh } = await useFetch(`/api/test-cases/${testCaseId}`);
-const { data: historyData } = await useFetch<TestCaseHistoryPoint[]>(`/api/test-cases/${testCaseId}/history`);
+const { data: historyData } = await useFetch(`/api/test-cases/${testCaseId}/history`, {
+  transform: (r: { items: TestCaseHistoryPoint[] }) => r.items,
+});
 
 // Project timeline markers, overlaid on the history chart for context.
 const historyMarkers = ref<MarkerInfo[]>([]);

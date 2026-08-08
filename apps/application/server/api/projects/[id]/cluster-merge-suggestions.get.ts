@@ -29,5 +29,5 @@ export default eventHandler(async (event) => {
   await requireProjectAccess(event, projectId);
 
   const db = await getDatabase();
-  return listMergeSuggestions(db, projectId, status);
+  return { items: await listMergeSuggestions(db, projectId, status) };
 });

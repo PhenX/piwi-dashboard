@@ -397,7 +397,7 @@ test.describe.serial('AI diagnosis endpoints', () => {
 
     const res = await request.get(`/api/test-runs/${testRunId}/failure-groups`);
     expect(res.ok()).toBeTruthy();
-    const groups = await res.json();
+    const { items: groups } = await res.json();
     expect(Array.isArray(groups)).toBe(true);
 
     const group = (groups as Array<{ clusterId: number; diagnosis: { status: string; category: string } | null }>).find(
@@ -887,7 +887,10 @@ test.describe.serial('Cluster reconciliation, suggestions & naming', () => {
   const clustersOf = (request: APIRequestContext, projectId: number) =>
     request.get(`/api/projects/${projectId}/failure-clusters`).then((r) => r.json()) as Promise<any[]>;
   const suggestionsOf = (request: APIRequestContext, projectId: number) =>
-    request.get(`/api/projects/${projectId}/cluster-merge-suggestions`).then((r) => r.json()) as Promise<any[]>;
+    request
+      .get(`/api/projects/${projectId}/cluster-merge-suggestions`)
+      .then((r) => r.json())
+      .then((j) => j.items) as Promise<any[]>;
 
   test('auto-merges embedding near-duplicates', async ({ request }) => {
     await configureAi(request, { embedding: true, autoDiagnose: false });

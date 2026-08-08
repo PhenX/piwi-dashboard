@@ -264,7 +264,7 @@ test.describe.serial('Performance API Tests', () => {
     const response = await request.get(`/api/test-runs/${networkTestRunId}/network-requests`);
     expect(response.ok()).toBeTruthy();
 
-    const data = await response.json();
+    const { items: data } = await response.json();
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBeGreaterThan(0);
 

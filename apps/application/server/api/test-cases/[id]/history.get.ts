@@ -22,5 +22,5 @@ export default eventHandler(async (event) => {
   if (!testCase) {
     throw createError({ statusCode: 404, message: 'Test case not found' });
   }
-  return getTestCaseHistory(db, id);
+  return { items: await getTestCaseHistory(db, id) };
 });

@@ -88,7 +88,7 @@ test.describe.serial('Live case file uploads', () => {
   test('trace and attachment are immediately listed for the case', async ({ request }) => {
     const tracesResponse = await request.get(`/api/test-run-cases/${caseWithFilesId}/traces`);
     expect(tracesResponse.ok()).toBeTruthy();
-    const traces = await tracesResponse.json();
+    const { items: traces } = await tracesResponse.json();
     expect(traces.length).toBe(1);
     expect(traces[0].filePath).toBeDefined();
 
@@ -130,7 +130,7 @@ test.describe.serial('Live case file uploads', () => {
     expect(data.traces).toBe(0);
     expect(data.attachments).toBe(0);
 
-    const traces = await (await request.get(`/api/test-run-cases/${caseWithFilesId}/traces`)).json();
+    const { items: traces } = await (await request.get(`/api/test-run-cases/${caseWithFilesId}/traces`)).json();
     expect(traces.length).toBe(1);
   });
 
@@ -148,7 +148,7 @@ test.describe.serial('Live case file uploads', () => {
     expect(data.traces).toBe(1);
     dedupCaseId = data.testRunsCaseId;
 
-    const traces = await (await request.get(`/api/test-run-cases/${dedupCaseId}/traces`)).json();
+    const { items: traces } = await (await request.get(`/api/test-run-cases/${dedupCaseId}/traces`)).json();
     expect(traces.length).toBe(1);
   });
 
@@ -234,7 +234,7 @@ test.describe.serial('Live case file uploads', () => {
     });
     expect(finishResponse.ok()).toBeTruthy();
 
-    const traces = await (await request.get(`/api/test-run-cases/${caseWithFilesId}/traces`)).json();
+    const { items: traces } = await (await request.get(`/api/test-run-cases/${caseWithFilesId}/traces`)).json();
     expect(traces.length).toBe(1);
 
     // Live uploads require a running run
@@ -249,7 +249,7 @@ test.describe.serial('Live case file uploads', () => {
   });
 
   test('uploaded trace is downloadable with CORS headers for the trace viewer', async ({ request }) => {
-    const traces = await (await request.get(`/api/test-run-cases/${caseWithFilesId}/traces`)).json();
+    const { items: traces } = await (await request.get(`/api/test-run-cases/${caseWithFilesId}/traces`)).json();
     const response = await request.get(`/api/files/${traces[0].filePath}`);
     expect(response.ok()).toBeTruthy();
     expect(response.headers()['access-control-allow-origin']).toBe('*');
@@ -293,7 +293,7 @@ test.describe.serial('Live upload trace resource deduplication', () => {
     const runData = await (await request.get(`/api/test-runs/${runId}`)).json();
     const runCase = runData.testCases.find((tc: { title: string }) => tc.title === testCase.title);
     expect(runCase).toBeDefined();
-    const traces = await (await request.get(`/api/test-run-cases/${runCase.id}/traces`)).json();
+    const { items: traces } = await (await request.get(`/api/test-run-cases/${runCase.id}/traces`)).json();
     expect(traces.length).toBe(1);
     const response = await request.get(`/api/files/${traces[0].filePath}`);
     expect(response.ok()).toBeTruthy();
@@ -440,7 +440,7 @@ test.describe.serial('Reporter live upload end-to-end', () => {
               const detail = await getJSON('/api/test-runs/' + run.id);
               const runCase = (detail.testCases || []).find(tc => tc.title === 'live e2e test');
               if (runCase) {
-                const traces = await getJSON('/api/test-run-cases/' + runCase.id + '/traces');
+                const { items: traces } = await getJSON('/api/test-run-cases/' + runCase.id + '/traces');
                 const caseData = await getJSON('/api/test-run-cases/' + runCase.id);
                 const attachments = caseData.attachments || [];
                 if (traces.length > 0 && attachments.length > 0) {
@@ -507,7 +507,7 @@ test.describe.serial('Reporter live upload end-to-end', () => {
     const runData = await (await request.get(`/api/test-runs/${result.runId}`)).json();
     expect(runData.status).toBe('passed');
 
-    const traces = await (await request.get(`/api/test-run-cases/${result.caseId}/traces`)).json();
+    const { items: traces } = await (await request.get(`/api/test-run-cases/${result.caseId}/traces`)).json();
     expect(traces.length).toBe(1);
     const caseData = await (await request.get(`/api/test-run-cases/${result.caseId}`)).json();
     expect(caseData.attachments.length).toBe(1);

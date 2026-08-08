@@ -26,7 +26,9 @@ const { data: historyData } = await useAsyncData(
   `test-run-case-history-${testCaseId}`,
   () => {
     const tcId = testCase.value?.testCaseId;
-    return tcId ? $fetch<TestCaseHistoryPoint[]>(`/api/test-cases/${tcId}/history`) : Promise.resolve([]);
+    return tcId
+      ? $fetch<{ items: TestCaseHistoryPoint[] }>(`/api/test-cases/${tcId}/history`).then((r) => r.items)
+      : Promise.resolve([]);
   },
   { default: (): TestCaseHistoryPoint[] => [], watch: [() => testCase.value?.testCaseId] },
 );

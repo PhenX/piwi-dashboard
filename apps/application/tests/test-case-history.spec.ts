@@ -122,7 +122,7 @@ test.describe.serial('Test Case History API', () => {
     // Fetch history via the stable test case ID
     const historyRes = await request.get(`/api/test-cases/${stableTestCaseId}/history`);
     expect(historyRes.ok()).toBeTruthy();
-    const history = await historyRes.json();
+    const { items: history } = await historyRes.json();
 
     // Should have at least 3 entries (concurrent browser runs create additional history entries)
     expect(Array.isArray(history)).toBe(true);
@@ -143,7 +143,7 @@ test.describe.serial('Test Case History API', () => {
 
   test('should include duration, error, and retries in history entries', async ({ request }) => {
     const historyRes = await request.get(`/api/test-cases/${stableTestCaseId}/history`);
-    const history = await historyRes.json();
+    const { items: history } = await historyRes.json();
 
     // "history test alpha" was in all 3 runs
     // Run 1: alpha passed 1000ms, 0 retries, run status passed
@@ -225,7 +225,7 @@ test.describe.serial('Test Case History API', () => {
     // Fetch history — should have at least 1 entry (concurrent browser runs may add more)
     const historyRes = await request.get(`/api/test-cases/${stableId}/history`);
     expect(historyRes.ok()).toBeTruthy();
-    const history = await historyRes.json();
+    const { items: history } = await historyRes.json();
     expect(Array.isArray(history)).toBe(true);
     expect(history.length).toBeGreaterThanOrEqual(1);
     // Verify the entry from our specific run

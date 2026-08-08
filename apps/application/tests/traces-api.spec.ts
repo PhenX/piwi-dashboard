@@ -63,7 +63,7 @@ test.describe('Traces API', () => {
     // Fetch traces for the test case that had a trace file
     const tracesResponse = await request.get(`/api/test-run-cases/${testRunsCaseId}/traces`);
     expect(tracesResponse.ok()).toBeTruthy();
-    const traces = await tracesResponse.json();
+    const { items: traces } = await tracesResponse.json();
 
     expect(Array.isArray(traces)).toBe(true);
     expect(traces.length).toBe(1);
@@ -78,7 +78,7 @@ test.describe('Traces API', () => {
 
     const tracesResponse = await request.get(`/api/test-run-cases/${noTraceCaseId}/traces`);
     expect(tracesResponse.ok()).toBeTruthy();
-    const traces = await tracesResponse.json();
+    const { items: traces } = await tracesResponse.json();
 
     expect(Array.isArray(traces)).toBe(true);
     expect(traces.length).toBe(0);

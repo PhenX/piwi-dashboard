@@ -25,5 +25,5 @@ export default eventHandler(async (event) => {
   if (!exists) {
     throw createError({ statusCode: 404, message: 'Test run case not found' });
   }
-  return getTestRunCaseTraces(db, id);
+  return { items: await getTestRunCaseTraces(db, id) };
 });

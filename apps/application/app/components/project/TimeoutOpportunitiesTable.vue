@@ -7,10 +7,11 @@ const props = defineProps<{
   projectName?: string | null;
 }>();
 
-const { data, pending } = await useFetch<TimeoutOpportunity[]>(
-  () => `/api/projects/${props.projectId}/timeout-opportunities`,
-  { lazy: true, server: false },
-);
+const { data, pending } = await useFetch(() => `/api/projects/${props.projectId}/timeout-opportunities`, {
+  lazy: true,
+  server: false,
+  transform: (r: { items: TimeoutOpportunity[] }) => r.items,
+});
 
 const opportunities = computed(() => data.value ?? []);
 
