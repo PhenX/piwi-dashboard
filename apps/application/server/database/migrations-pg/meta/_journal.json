@@ -330,6 +330,13 @@
       "when": 1785584930327,
       "tag": "0046_gorgeous_hercules",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1786175133629,
+      "tag": "0047_tricky_legion",
+      "breakpoints": true
     }
   ]
 }

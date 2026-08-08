@@ -73,6 +73,56 @@ function buildContextPatch(filePath: string, rows: SourceRow[], targetLine: numb
   return [`--- a/${filePath}`, `+++ b/${filePath}`, `@@ -${start},${count} +${start},${count} @@`, ...body].join('\n');
 }
 
+/**
+ * Apply one locator-line rewrite to a file's full content, used as the
+ * dispatcher's head-content guard: it proves the edit still fits the current
+ * file before anything is committed.
+ *
+ * - `applied` — the old line was found (at the recorded line, or a unique match
+ *   elsewhere) and replaced; `content` is the rewritten file.
+ * - `already-applied` — the new line is already present (a prior attempt landed,
+ *   or the file was fixed by hand); nothing to do, and not an error.
+ * - `stale` — the old line is gone and not already healed, or matches
+ *   ambiguously; the caller must not write a guess.
+ *
+ * EOL style (LF/CRLF) and trailing-newline presence are preserved, so a CRLF
+ * file never turns a one-line change into a whole-file diff.
+ */
+export type ApplyLineResult = { kind: 'applied'; content: string } | { kind: 'already-applied' } | { kind: 'stale' };
+
+export function applyLineEdit(
+  content: string,
+  edit: { line: number; oldLine: string; newLine: string },
+): ApplyLineResult {
+  const eol = content.includes('\r\n') ? '\r\n' : '\n';
+  const hadTrailingNewline = /\r?\n$/.test(content);
+  const lines = content.split(/\r?\n/);
+  if (hadTrailingNewline) lines.pop(); // the empty element after the final newline
+
+  const idx = edit.line - 1;
+  const at = idx >= 0 && idx < lines.length ? lines[idx] : undefined;
+
+  let target = -1;
+  if (at === edit.oldLine) {
+    target = idx;
+  } else if (at === edit.newLine) {
+    return { kind: 'already-applied' };
+  } else {
+    const oldMatches: number[] = [];
+    let hasNewLine = false;
+    lines.forEach((t, i) => {
+      if (t === edit.oldLine) oldMatches.push(i);
+      if (t === edit.newLine) hasNewLine = true;
+    });
+    if (oldMatches.length === 1) target = oldMatches[0]!;
+    else if (oldMatches.length === 0 && hasNewLine) return { kind: 'already-applied' };
+    else return { kind: 'stale' }; // gone, or ambiguous — never write a guess
+  }
+
+  lines[target] = edit.newLine;
+  return { kind: 'applied', content: lines.join(eol) + (hadTrailingNewline ? eol : '') };
+}
+
 export interface HealEditInput {
   /** The failing call site (`file:line:col`), when identified. */
   location: string | null | undefined;

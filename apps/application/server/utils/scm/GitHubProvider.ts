@@ -1,6 +1,20 @@
 import { ScmProvider, truncatePatch, MAX_SCM_FILES, MAX_FILE_BYTES, FETCH_TIMEOUT_MS } from './ScmProvider';
-import type { ScmCommitDetail, ScmChanges, ScmFileContent, ScmPullRequest, ScmCommitStatus } from './ScmProvider';
+import type {
+  ScmCommitDetail,
+  ScmChanges,
+  ScmFileContent,
+  ScmPullRequest,
+  ScmCommitStatus,
+  ScmFileEdit,
+  CreatePullRequestInput,
+} from './ScmProvider';
 import { TtlCache } from './cache';
+
+/** Turn a non-2xx GitHub response into an Error carrying the API's own message. */
+async function githubError(res: Response, action: string): Promise<Error> {
+  const body = (await res.json().catch(() => ({}))) as { message?: string };
+  return new Error(`GitHub ${action} failed (${res.status}): ${body.message ?? res.statusText}`);
+}
 
 const listBranchesCache = new TtlCache<string[]>(3 * 60 * 1000);
 const listCommitsCache = new TtlCache<ScmCommitDetail[]>(3 * 60 * 1000);
@@ -293,5 +307,93 @@ export class GitHubProvider extends ScmProvider {
     } catch {
       return false;
     }
+  }
+
+  // ── Write capability (auto-heal) ───────────────────────────────────────────
+
+  override async getBranchHead(branch: string): Promise<string | null> {
+    const res = await fetch(`https://api.github.com/repos/${this.repoPath}/git/ref/heads/${branch}`, {
+      headers: this.makeHeaders(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw await githubError(res, 'read branch');
+    const data = (await res.json()) as { object?: { sha?: string } };
+    return data.object?.sha ?? null;
+  }
+
+  override async createBranch(name: string, fromSha: string): Promise<void> {
+    const res = await fetch(`https://api.github.com/repos/${this.repoPath}/git/refs`, {
+      method: 'POST',
+      headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref: `refs/heads/${name}`, sha: fromSha }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) throw await githubError(res, 'create branch');
+  }
+
+  override async commitFiles(branch: string, message: string, files: ScmFileEdit[]): Promise<string> {
+    const headSha = await this.getBranchHead(branch);
+    if (!headSha) throw new Error(`GitHub commit failed: branch ${branch} not found`);
+
+    const commitRes = await fetch(`https://api.github.com/repos/${this.repoPath}/git/commits/${headSha}`, {
+      headers: this.makeHeaders(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!commitRes.ok) throw await githubError(commitRes, 'read base commit');
+    const baseTree = ((await commitRes.json()) as { tree?: { sha?: string } }).tree?.sha;
+    if (!baseTree) throw new Error('GitHub commit failed: could not resolve the base tree');
+
+    // A tree entry with `content` lets GitHub create the blob inline — one call.
+    const treeRes = await fetch(`https://api.github.com/repos/${this.repoPath}/git/trees`, {
+      method: 'POST',
+      headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        base_tree: baseTree,
+        tree: files.map((f) => ({ path: f.path, mode: '100644', type: 'blob', content: f.content })),
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!treeRes.ok) throw await githubError(treeRes, 'create tree');
+    const treeSha = ((await treeRes.json()) as { sha?: string }).sha;
+    if (!treeSha) throw new Error('GitHub commit failed: tree response had no sha');
+
+    const newCommitRes = await fetch(`https://api.github.com/repos/${this.repoPath}/git/commits`, {
+      method: 'POST',
+      headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, tree: treeSha, parents: [headSha] }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!newCommitRes.ok) throw await githubError(newCommitRes, 'create commit');
+    const newSha = ((await newCommitRes.json()) as { sha?: string }).sha;
+    if (!newSha) throw new Error('GitHub commit failed: commit response had no sha');
+
+    const refRes = await fetch(`https://api.github.com/repos/${this.repoPath}/git/refs/heads/${branch}`, {
+      method: 'PATCH',
+      headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sha: newSha, force: false }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!refRes.ok) throw await githubError(refRes, 'update branch');
+    return newSha;
+  }
+
+  override async createPullRequest(input: CreatePullRequestInput): Promise<ScmPullRequest> {
+    const res = await fetch(`https://api.github.com/repos/${this.repoPath}/pulls`, {
+      method: 'POST',
+      headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: input.title,
+        body: input.body,
+        head: input.head,
+        base: input.base,
+        draft: input.draft,
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) throw await githubError(res, 'open pull request');
+    const pr = (await res.json()) as { number?: number; html_url?: string };
+    if (!pr.number) throw new Error('GitHub pull request response had no number');
+    return { number: pr.number, url: pr.html_url ?? `https://github.com/${this.repoPath}/pull/${pr.number}` };
   }
 }

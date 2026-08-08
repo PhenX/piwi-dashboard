@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { buildHealEdit, buildUnifiedLineDiff } from '#shared/heal-edit';
+import { buildHealEdit, buildUnifiedLineDiff, applyLineEdit } from '#shared/heal-edit';
 
 describe('buildUnifiedLineDiff', () => {
   test('emits a git-applyable single-line hunk', () => {
@@ -97,5 +97,81 @@ describe('buildHealEdit', () => {
       testSource: ">  42 |   await page.getByRole('button', { name: 'Pay' }).click();",
     });
     expect(edit!.unifiedDiff).toContain('@@ -42,1 +42,1 @@');
+  });
+});
+
+describe('applyLineEdit', () => {
+  const file =
+    "import { test } from '@playwright/test';\n\ntest('x', async ({ page }) => {\n  await page.getByRole('button').click();\n});\n";
+
+  test('rewrites the target line and preserves the trailing newline', () => {
+    const r = applyLineEdit(file, {
+      line: 4,
+      oldLine: "  await page.getByRole('button').click();",
+      newLine: "  await page.getByTestId('b').click();",
+    });
+    expect(r.kind).toBe('applied');
+    if (r.kind === 'applied') {
+      expect(r.content).toContain("  await page.getByTestId('b').click();");
+      expect(r.content.endsWith('\n')).toBe(true);
+      expect(r.content).not.toContain("getByRole('button')");
+    }
+  });
+
+  test('preserves CRLF line endings', () => {
+    const crlf = file.replace(/\n/g, '\r\n');
+    const r = applyLineEdit(crlf, {
+      line: 4,
+      oldLine: "  await page.getByRole('button').click();",
+      newLine: "  await page.getByTestId('b').click();",
+    });
+    expect(r.kind).toBe('applied');
+    if (r.kind === 'applied') {
+      expect(r.content.includes('\r\n')).toBe(true);
+      expect(r.content).not.toMatch(/[^\r]\n/); // every LF is preceded by CR
+    }
+  });
+
+  test('finds the line even when the recorded number drifted', () => {
+    const r = applyLineEdit(file, {
+      line: 1, // wrong line — the code moved
+      oldLine: "  await page.getByRole('button').click();",
+      newLine: "  await page.getByTestId('b').click();",
+    });
+    expect(r.kind).toBe('applied');
+  });
+
+  test('is a no-op (already-applied) when the new line is already present', () => {
+    const healed = file.replace("getByRole('button')", "getByTestId('b')");
+    const r = applyLineEdit(healed, {
+      line: 4,
+      oldLine: "  await page.getByRole('button').click();",
+      newLine: "  await page.getByTestId('b').click();",
+    });
+    expect(r.kind).toBe('already-applied');
+  });
+
+  test('is stale when the old line is gone and not already healed', () => {
+    const r = applyLineEdit(file, {
+      line: 4,
+      oldLine: "  await page.getByRole('link').click();",
+      newLine: "  await page.getByTestId('b').click();",
+    });
+    expect(r.kind).toBe('stale');
+  });
+
+  test('applies at the recorded line even when the same text repeats elsewhere', () => {
+    // The recorded line number is authoritative — a duplicate elsewhere is not
+    // ambiguity when we know the exact line.
+    const dup = '  a();\n  a();\n';
+    const r = applyLineEdit(dup, { line: 1, oldLine: '  a();', newLine: '  b();' });
+    expect(r.kind).toBe('applied');
+    if (r.kind === 'applied') expect(r.content).toBe('  b();\n  a();\n');
+  });
+
+  test('is stale when the recorded line drifted and the old text matches ambiguously', () => {
+    const dup = '  a();\n  a();\n';
+    const r = applyLineEdit(dup, { line: 9, oldLine: '  a();', newLine: '  b();' });
+    expect(r.kind).toBe('stale');
   });
 });

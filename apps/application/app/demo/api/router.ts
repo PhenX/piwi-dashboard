@@ -141,6 +141,9 @@ import {
   apiGetTimeoutHygiene,
   apiPutTimeoutHygiene,
   apiGetPrFeedback,
+  apiGetAutoHeal,
+  apiPutAutoHeal,
+  apiGetHealActions,
   apiPutPrFeedback,
 } from './settings';
 
@@ -1034,6 +1037,13 @@ routes.push(
     pattern: /^\/api\/settings\/pr-feedback$/,
     handler: (_, body) => apiPutPrFeedback(body as Parameters<typeof apiPutPrFeedback>[0]),
   },
+  { method: 'GET', pattern: /^\/api\/settings\/auto-heal$/, handler: () => apiGetAutoHeal() },
+  {
+    method: 'PUT',
+    pattern: /^\/api\/settings\/auto-heal$/,
+    handler: (_, body) => apiPutAutoHeal(body as Parameters<typeof apiPutAutoHeal>[0]),
+  },
+  { method: 'GET', pattern: /^\/api\/heal-actions(?:\?.*)?$/, handler: () => apiGetHealActions() },
 );
 
 // ── Demo notification channels & subscriptions (stateful in-memory) ───────────
