@@ -239,6 +239,7 @@ export async function apiSetupTestRun(body: TestRunStartPayload) {
         reporterVersion: body.reporterVersion || null,
         streamToken: setupToken,
         shardTotal,
+        shardIndex: body.shardIndex ?? null,
         shardsFinished: 0,
         isFullRun: body.isFullRun !== false ? 1 : 0,
         filterDetails: body.filterDetails ?? null,

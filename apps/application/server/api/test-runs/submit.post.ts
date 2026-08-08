@@ -245,6 +245,7 @@ export default eventHandler(async (event) => {
       playwrightVersion: body.playwrightVersion || null,
       reporterVersion: body.reporterVersion || null,
       shardTotal: isSharded ? shardTotal : null,
+      shardIndex: isSharded ? ((body.shardIndex as number | undefined) ?? null) : null,
       shardsFinished: isSharded ? 0 : undefined,
       isFullRun: body.isFullRun !== false ? 1 : 0,
       filterDetails: body.filterDetails ?? null,

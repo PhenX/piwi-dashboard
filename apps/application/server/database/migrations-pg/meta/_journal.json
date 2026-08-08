@@ -351,6 +351,13 @@
       "when": 1786091705372,
       "tag": "0049_plain_preak",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1786192296009,
+      "tag": "0050_minor_star_brand",
+      "breakpoints": true
     }
   ]
 }
