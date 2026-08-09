@@ -293,7 +293,7 @@ test.describe.serial('Live upload trace resource deduplication', () => {
     const runData = await (await request.get(`/api/test-runs/${runId}`)).json();
     const runCase = runData.testCases.find((tc: { title: string }) => tc.title === testCase.title);
     expect(runCase).toBeDefined();
-    const { items: traces } = await (await request.get(`/api/test-run-cases/${runCase.id}/traces`)).json();
+    const { items: traces } = await (await request.get(`/api/test-run-cases/${runCase.executionId}/traces`)).json();
     expect(traces.length).toBe(1);
     const response = await request.get(`/api/files/${traces[0].filePath}`);
     expect(response.ok()).toBeTruthy();
@@ -440,13 +440,13 @@ test.describe.serial('Reporter live upload end-to-end', () => {
               const detail = await getJSON('/api/test-runs/' + run.id);
               const runCase = (detail.testCases || []).find(tc => tc.title === 'live e2e test');
               if (runCase) {
-                const { items: traces } = await getJSON('/api/test-run-cases/' + runCase.id + '/traces');
-                const caseData = await getJSON('/api/test-run-cases/' + runCase.id);
+                const { items: traces } = await getJSON('/api/test-run-cases/' + runCase.executionId + '/traces');
+                const caseData = await getJSON('/api/test-run-cases/' + runCase.executionId);
                 const attachments = caseData.attachments || [];
                 if (traces.length > 0 && attachments.length > 0) {
                   return {
                     runId: run.id,
-                    caseId: runCase.id,
+                    caseId: runCase.executionId,
                     traces: traces.length,
                     attachments: attachments.length,
                     attachmentName: attachments[0].name,

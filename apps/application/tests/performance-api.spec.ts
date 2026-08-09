@@ -249,7 +249,7 @@ test.describe.serial('Performance API Tests', () => {
     expect(tcSummary.webVitals).toBeUndefined();
 
     // Fetch test-run-case detail for full data including network and web vitals
-    const tcResponse = await request.get(`/api/test-run-cases/${tcSummary.id}`);
+    const tcResponse = await request.get(`/api/test-run-cases/${tcSummary.executionId}`);
     expect(tcResponse.ok()).toBeTruthy();
     const tc = await tcResponse.json();
 
@@ -336,7 +336,7 @@ test.describe.serial('Performance API Tests', () => {
     const tcSummary = run.testCases.find((t: { title: string }) => t.title === 'search page');
     expect(tcSummary).toBeDefined();
 
-    const tcResponse = await request.get(`/api/test-run-cases/${tcSummary.id}`);
+    const tcResponse = await request.get(`/api/test-run-cases/${tcSummary.executionId}`);
     expect(tcResponse.ok()).toBeTruthy();
     const tc = await tcResponse.json();
     expect(tc.networkRequests[0].url).not.toContain('secret');

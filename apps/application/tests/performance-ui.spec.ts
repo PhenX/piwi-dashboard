@@ -124,7 +124,7 @@ test.describe('Performance UI Tests', () => {
     const testCaseWithSteps = runData.testCases.find((tc: { slowestStep: string | null }) => tc.slowestStep !== null);
 
     if (testCaseWithSteps) {
-      await page.goto(`/test-run-cases/${testCaseWithSteps.id}`);
+      await page.goto(`/test-run-cases/${testCaseWithSteps.executionId}`);
       await expect(page.getByText('Slowest step')).toBeVisible();
 
       // Should show steps section

@@ -79,8 +79,11 @@ async function firstExecutionAndCluster(request: APIRequestContext) {
   const execution = detail.testCases?.[0];
   expect(execution, 'the submitted run should have an execution').toBeTruthy();
 
-  const caseDetail = await (await request.get(`/api/test-run-cases/${execution.id}`)).json();
-  return { executionId: execution.id as number, clusterId: caseDetail.failureCluster?.id as number | undefined };
+  const caseDetail = await (await request.get(`/api/test-run-cases/${execution.executionId}`)).json();
+  return {
+    executionId: execution.executionId as number,
+    clusterId: caseDetail.failureCluster?.id as number | undefined,
+  };
 }
 
 test.describe('offline export', () => {

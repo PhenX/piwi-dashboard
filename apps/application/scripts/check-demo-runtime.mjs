@@ -148,15 +148,15 @@ async function main() {
     // The in-browser API must answer under the demo's own base path.
     const menu = await page.evaluate(async () => {
       const r = await fetch('/demo/api/projects/menu');
-      return { status: r.status, count: r.ok ? ((await r.json())?.length ?? 0) : 0 };
+      return { status: r.status, count: r.ok ? ((await r.json())?.items?.length ?? 0) : 0 };
     });
     check(menu.status === 200, 'the in-browser API answers', `status ${menu.status}`);
     check(menu.count > 0, 'the seeded database has projects', `${menu.count} projects`);
 
     // Find a cluster to export, rather than hard-coding an id the seed may move.
     const clusterId = await page.evaluate(async () => {
-      const projects = await (await fetch('/demo/api/projects/menu')).json();
-      for (const p of projects ?? []) {
+      const menu = await (await fetch('/demo/api/projects/menu')).json();
+      for (const p of menu.items ?? []) {
         const clusters = await (await fetch(`/demo/api/projects/${p.id}/failure-clusters`)).json();
         const first = (Array.isArray(clusters) ? clusters : (clusters?.items ?? []))[0];
         if (first?.id) return first.id;

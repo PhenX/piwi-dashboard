@@ -54,11 +54,11 @@ test.describe('Traces API', () => {
 
     const testCaseWithTrace = runData.testCases.find((tc: { title: string }) => tc.title === 'test with trace');
     expect(testCaseWithTrace).toBeDefined();
-    testRunsCaseId = testCaseWithTrace.id;
+    testRunsCaseId = testCaseWithTrace.executionId;
 
     const testCaseWithoutTrace = runData.testCases.find((tc: { title: string }) => tc.title === 'test without trace');
     expect(testCaseWithoutTrace).toBeDefined();
-    noTraceCaseId = testCaseWithoutTrace.id;
+    noTraceCaseId = testCaseWithoutTrace.executionId;
 
     // Fetch traces for the test case that had a trace file
     const tracesResponse = await request.get(`/api/test-run-cases/${testRunsCaseId}/traces`);

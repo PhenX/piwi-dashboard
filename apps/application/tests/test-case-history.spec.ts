@@ -218,7 +218,7 @@ test.describe.serial('Test Case History API', () => {
     const tc = runData.testCases.find((t: { title: string }) => t.title === 'history test single');
 
     // Resolve stable test_case.id
-    const execRes = await request.get(`/api/test-run-cases/${tc.id}`);
+    const execRes = await request.get(`/api/test-run-cases/${tc.executionId}`);
     const execData = await execRes.json();
     const stableId = execData.testCaseId;
 
