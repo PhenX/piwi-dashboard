@@ -36,11 +36,11 @@ test.describe.serial('Share links', () => {
     const { runId } = await submit.json();
 
     const run = (await (await request.get(`/api/test-runs/${runId}`)).json()) as {
-      testCases: Array<{ id: number; status: string; failureClusterId?: number }>;
+      testCases: Array<{ executionId: number; status: string; failureClusterId?: number }>;
     };
     const failed = run.testCases.find((c) => c.status === 'failed');
     expect(failed).toBeDefined();
-    executionId = failed!.id;
+    executionId = failed!.executionId;
     clusterId = failed!.failureClusterId;
   });
 

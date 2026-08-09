@@ -1019,7 +1019,7 @@ test.describe('Execution-scope diagnosis context', () => {
     ]);
 
     const runData = (await (await request.get(`/api/test-runs/${runId}`)).json()) as {
-      testCases: Array<{ id: number; status: string }>;
+      testCases: Array<{ executionId: number; status: string }>;
     };
     const failed = runData.testCases.find((c) => c.status === 'failed');
     expect(failed?.executionId).toBeTruthy();
@@ -1036,7 +1036,7 @@ test.describe('Execution-scope diagnosis context', () => {
     // Before 0.1 the execution branch returned only a Data Coverage block with
     // every section "absent" — assert we now get real evidence.
     expect(body.scope.kind).toBe('execution');
-    expect(body.scope.executionId).toBe(failed!.id);
+    expect(body.scope.executionId).toBe(failed!.executionId);
     expect(body.sections.length).toBeGreaterThanOrEqual(3);
     expect(body.sections.map((s) => s.id)).toContain('representativeExecution');
     // The failing error must reach the context (somewhere), not be dropped.
