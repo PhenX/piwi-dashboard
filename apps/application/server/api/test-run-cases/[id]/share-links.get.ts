@@ -18,5 +18,5 @@ defineRouteMeta({
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'test run case ID');
   const { db } = await requireResolvedProjectAccess(event, id, resolveTestRunCaseProjectId, 'Test run case');
-  return { shareLinks: await listEntityShareLinks(db, 'execution', id) };
+  return { items: await listEntityShareLinks(db, 'execution', id) };
 });

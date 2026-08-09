@@ -12,26 +12,43 @@ defineRouteMeta({
     tags: ['Notifications'],
     summary: 'Send test notification',
     description:
-      'Sends a test notification through the specified channel and marks it verified on success. Global channels can only be tested by administrators.',
+      'Sends a test notification through the specified channel and marks it verified on success. Global channels can only be tested by administrators. Soft-fail: a reachable endpoint that rejects the delivery (bad webhook URL, SMTP failure, non-2xx response) returns HTTP 200 with `{ success: false, error }` — the request was processed, only the delivery attempt failed. HTTP error statuses are reserved for request-level problems (bad id, missing channel, not authorized).',
     'x-required-roles': [],
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+    responses: {
+      '200': {
+        description: 'Delivery attempt result. `success` reports the outcome; a failed delivery still returns 200.',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['success'],
+              properties: {
+                success: { type: 'boolean' },
+                error: { type: 'string', description: 'Present only when success is false.' },
+              },
+            },
+          },
+        },
+      },
+    },
   },
 });
 
 export default eventHandler(async (event) => {
   const user = await requireAuth(event);
   const id = parseInt(getRouterParam(event, 'id') || '0');
-  if (!id) throw createError({ statusCode: 400, message: 'Invalid channel ID' });
+  if (!id) throw apiError({ statusCode: 400, message: 'Invalid channel ID' });
 
   const db = await getDatabase();
   const [channel] = await db.select().from(notificationChannels).where(eq(notificationChannels.id, id));
-  if (!channel) throw createError({ statusCode: 404, message: 'Channel not found' });
+  if (!channel) throw apiError({ statusCode: 404, message: 'Channel not found' });
 
   const isAdmin = user.role === Role.ADMINISTRATOR;
   // Global channels reach every subscriber, so only admins may fire tests at them.
   const allowed = channel.userId === null ? isAdmin : channel.userId === user.id || isAdmin;
   if (!allowed) {
-    throw createError({ statusCode: 403, message: 'Not authorized' });
+    throw apiError({ statusCode: 403, message: 'Not authorized' });
   }
 
   const config = (channel.config ?? {}) as Record<string, unknown>;

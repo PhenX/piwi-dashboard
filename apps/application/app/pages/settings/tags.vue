@@ -8,7 +8,7 @@ const toast = useToast();
 const { authState } = useAuth();
 const config = useRuntimeConfig();
 
-const allTags = computed(() => tagsData.value?.tags || []);
+const allTags = computed(() => tagsData.value?.items || []);
 
 const isAdmin = computed(() => {
   if (!config.public.authEnabled) return true;
@@ -85,7 +85,7 @@ async function handleEditTag() {
   if (!editingTag.value) return;
   try {
     await $fetch(`/api/tags/${editingTag.value.id}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: {
         text: editTagState.text,
         color: editTagState.color,

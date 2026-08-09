@@ -23,7 +23,7 @@ export default eventHandler(async (event) => {
     .orderBy(desc(failureDiagnosisVersions.createdAt))
     .limit(50);
 
-  return versions.map((v) => ({
+  const items = versions.map((v) => ({
     id: v.id,
     status: v.status,
     category: v.category,
@@ -36,4 +36,5 @@ export default eventHandler(async (event) => {
     durationMs: v.durationMs,
     createdAt: v.createdAt,
   }));
+  return { items };
 });

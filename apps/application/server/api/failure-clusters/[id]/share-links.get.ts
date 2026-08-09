@@ -14,5 +14,5 @@ defineRouteMeta({
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'failure cluster ID');
   const { db } = await requireResolvedProjectAccess(event, id, resolveClusterProjectId, 'Failure cluster');
-  return { shareLinks: await listEntityShareLinks(db, 'cluster', id) };
+  return { items: await listEntityShareLinks(db, 'cluster', id) };
 });

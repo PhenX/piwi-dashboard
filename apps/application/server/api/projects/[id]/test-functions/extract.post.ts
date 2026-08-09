@@ -27,15 +27,16 @@ export default eventHandler(async (event) => {
   const body = await readBody(event);
   const validation = extractSchema.safeParse(body);
   if (!validation.success) {
-    throw createError({ statusCode: 400, message: 'Invalid request body', data: validation.error.issues });
+    throw apiError({ statusCode: 400, message: 'Invalid request body', data: validation.error.issues });
   }
 
   const db = await getDatabase();
   const config = await resolveAiConfig(db);
   const role = config?.roles.research ?? config?.roles.diagnosis;
   if (!role) {
-    throw createError({
+    throw apiError({
       statusCode: 503,
+      errorCode: 'AI_NOT_CONFIGURED',
       message: 'AI is not configured for this instance — set it up in Settings → AI, or fill in the pattern by hand.',
     });
   }
@@ -45,6 +46,6 @@ export default eventHandler(async (event) => {
     return { proposal };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to extract a pattern from that code';
-    throw createError({ statusCode: 422, message });
+    throw apiError({ statusCode: 422, message });
   }
 });

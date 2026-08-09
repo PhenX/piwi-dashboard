@@ -47,7 +47,7 @@ test.describe.serial('Run Comparison', () => {
     });
     expect(res1.ok()).toBeTruthy();
     const data1 = await res1.json();
-    run1Id = data1.testRunId;
+    run1Id = data1.runId;
     projectId = data1.projectId;
 
     // Run 2 — same 3 tests, different durations, one failure
@@ -89,7 +89,7 @@ test.describe.serial('Run Comparison', () => {
     });
     expect(res2.ok()).toBeTruthy();
     const data2 = await res2.json();
-    run2Id = data2.testRunId;
+    run2Id = data2.runId;
 
     // Run 3 — 2 tests (subset), new test added, one removed
     const res3 = await request.post('/api/test-runs/submit', {
@@ -122,7 +122,7 @@ test.describe.serial('Run Comparison', () => {
     });
     expect(res3.ok()).toBeTruthy();
     const data3 = await res3.json();
-    run3Id = data3.testRunId;
+    run3Id = data3.runId;
   });
 
   test('project should list all three runs', async ({ request }) => {
@@ -349,12 +349,12 @@ test.describe.serial('Run Comparison', () => {
     await page.locator('button').filter({ hasText: 'Select run A...' }).click();
     await page
       .getByRole('option')
-      .filter({ hasText: `Run #${r1Data.testRunId}` })
+      .filter({ hasText: `Run #${r1Data.runId}` })
       .click({ force: true });
     await page.locator('button').filter({ hasText: 'Select run B...' }).click();
     await page
       .getByRole('option')
-      .filter({ hasText: `Run #${r2Data.testRunId}` })
+      .filter({ hasText: `Run #${r2Data.runId}` })
       .last()
       .click({ force: true });
 

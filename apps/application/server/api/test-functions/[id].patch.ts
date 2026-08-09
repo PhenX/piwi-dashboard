@@ -23,19 +23,19 @@ export default eventHandler(async (event) => {
   const body = await readBody(event);
   const validation = updateTestFunctionSchema.safeParse(body);
   if (!validation.success) {
-    throw createError({ statusCode: 400, message: 'Invalid request body', data: validation.error.issues });
+    throw apiError({ statusCode: 400, message: 'Invalid request body', data: validation.error.issues });
   }
 
   try {
     return await updateTestFunction(db, id, validation.data);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update test function';
-    if (message === 'Test function not found') throw createError({ statusCode: 404, message });
+    if (message === 'Test function not found') throw apiError({ statusCode: 404, message });
     // Same collision, same status as the create endpoint reports for it — the
     // unique index is on (project, module, name), which a rename can trip.
     if (message.toLowerCase().includes('unique')) {
-      throw createError({ statusCode: 409, message: 'A function with this name already exists in this module' });
+      throw apiError({ statusCode: 409, message: 'A function with this name already exists in this module' });
     }
-    throw createError({ statusCode: 400, message });
+    throw apiError({ statusCode: 400, message });
   }
 });

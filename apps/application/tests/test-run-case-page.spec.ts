@@ -64,8 +64,8 @@ test.describe('Test-run-case page', () => {
     const proj = await (await request.get(`/api/projects/${data.projectId}`)).json();
     const runId = proj.testRuns[0].id;
     const run = await (await request.get(`/api/test-runs/${runId}`)).json();
-    failedCaseId = run.testCases.find((c: { status: string }) => c.status === 'failed').id;
-    passedCaseId = run.testCases.find((c: { status: string }) => c.status === 'passed').id;
+    failedCaseId = run.testCases.find((c: { status: string }) => c.status === 'failed').executionId;
+    passedCaseId = run.testCases.find((c: { status: string }) => c.status === 'passed').executionId;
   });
 
   test('failing execution opens on the Diagnosis tab', async ({ page }) => {

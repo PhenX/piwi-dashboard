@@ -230,7 +230,7 @@ async function submitRun(request: APIRequestContext, cases: Array<{ status: stri
     },
   });
   expect(res.ok()).toBeTruthy();
-  return res.json() as Promise<{ testRunId: number; projectId: number }>;
+  return res.json() as Promise<{ runId: number; projectId: number }>;
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -304,7 +304,7 @@ test.describe.serial('AI diagnosis endpoints', () => {
     // Use a unique error per invocation so retries don't collide with previously-diagnosed clusters
     freshClusterError = `TimeoutError: locator.click: Timeout 30000ms exceeded.\n    at tests/auth.spec.ts:5:3 (${Date.now()})`;
     // Create a test run with a failure cluster
-    const { testRunId } = await submitRun(request, [
+    const { runId } = await submitRun(request, [
       {
         title: 'login test',
         status: 'failed',
@@ -314,7 +314,7 @@ test.describe.serial('AI diagnosis endpoints', () => {
       },
     ]);
 
-    const run = (await (await request.get(`/api/test-runs/${testRunId}`)).json()) as {
+    const run = (await (await request.get(`/api/test-runs/${runId}`)).json()) as {
       testCases: Array<{ status: string; failureClusterId?: number }>;
     };
     const failedCase = run.testCases.find((c) => c.status === 'failed');
@@ -385,7 +385,7 @@ test.describe.serial('AI diagnosis endpoints', () => {
     expect(clusterId).toBeTruthy();
 
     // Submit another run with the same error to trigger the known cluster
-    const { testRunId } = await submitRun(request, [
+    const { runId } = await submitRun(request, [
       {
         title: 'login test',
         status: 'failed',
@@ -395,9 +395,9 @@ test.describe.serial('AI diagnosis endpoints', () => {
       },
     ]);
 
-    const res = await request.get(`/api/test-runs/${testRunId}/failure-groups`);
+    const res = await request.get(`/api/test-runs/${runId}/failure-groups`);
     expect(res.ok()).toBeTruthy();
-    const groups = await res.json();
+    const { items: groups } = await res.json();
     expect(Array.isArray(groups)).toBe(true);
 
     const group = (groups as Array<{ clusterId: number; diagnosis: { status: string; category: string } | null }>).find(
@@ -481,9 +481,9 @@ test.describe.serial('AI diagnosis — unconfigured error cases', () => {
       },
     });
     expect(res.ok()).toBeTruthy();
-    const { testRunId } = await res.json();
+    const { runId } = await res.json();
 
-    const run = (await (await request.get(`/api/test-runs/${testRunId}`)).json()) as {
+    const run = (await (await request.get(`/api/test-runs/${runId}`)).json()) as {
       testCases: Array<{ status: string; failureClusterId?: number }>;
     };
     const failedCase = run.testCases.find((c) => c.status === 'failed');
@@ -530,9 +530,9 @@ test.describe.serial('AI diagnosis — unconfigured error cases', () => {
       },
     });
     expect(res.ok()).toBeTruthy();
-    const { testRunId } = await res.json();
+    const { runId } = await res.json();
 
-    const run = (await (await request.get(`/api/test-runs/${testRunId}`)).json()) as {
+    const run = (await (await request.get(`/api/test-runs/${runId}`)).json()) as {
       testCases: Array<{ status: string; failureClusterId?: number }>;
     };
     const failedCase = run.testCases.find((c) => c.status === 'failed');
@@ -590,7 +590,7 @@ test.describe.serial('AI diagnosis — streaming success path', () => {
     // no selector would otherwise collide with the plain-timeout clusters created
     // earlier in this same file (e.g. `freshClusterError` above).
     const uniqueError = `TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByTestId('stream-success-${Date.now()}')`;
-    const { testRunId } = await submitRun(request, [
+    const { runId } = await submitRun(request, [
       {
         title: 'streaming diagnosis test',
         status: 'failed',
@@ -600,7 +600,7 @@ test.describe.serial('AI diagnosis — streaming success path', () => {
       },
     ]);
 
-    const run = (await (await request.get(`/api/test-runs/${testRunId}`)).json()) as {
+    const run = (await (await request.get(`/api/test-runs/${runId}`)).json()) as {
       testCases: Array<{ status: string; failureClusterId?: number }>;
     };
     const failedCase = run.testCases.find((c) => c.status === 'failed');
@@ -878,16 +878,22 @@ test.describe.serial('Cluster reconciliation, suggestions & naming', () => {
       },
     });
     expect(r.ok()).toBeTruthy();
-    return r.json() as Promise<{ testRunId: number; projectId: number }>;
+    return r.json() as Promise<{ runId: number; projectId: number }>;
   }
 
   const err = (selector: string, embvec: string, extra = '') =>
     `TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for ${selector}\nEMBVEC=${embvec}\n${extra}`;
 
   const clustersOf = (request: APIRequestContext, projectId: number) =>
-    request.get(`/api/projects/${projectId}/failure-clusters`).then((r) => r.json()) as Promise<any[]>;
+    request
+      .get(`/api/projects/${projectId}/failure-clusters`)
+      .then((r) => r.json())
+      .then((j) => j.items) as Promise<any[]>;
   const suggestionsOf = (request: APIRequestContext, projectId: number) =>
-    request.get(`/api/projects/${projectId}/cluster-merge-suggestions`).then((r) => r.json()) as Promise<any[]>;
+    request
+      .get(`/api/projects/${projectId}/cluster-merge-suggestions`)
+      .then((r) => r.json())
+      .then((j) => j.items) as Promise<any[]>;
 
   test('auto-merges embedding near-duplicates', async ({ request }) => {
     await configureAi(request, { embedding: true, autoDiagnose: false });
@@ -1002,7 +1008,7 @@ test.describe.serial('Cluster reconciliation, suggestions & naming', () => {
 test.describe('Execution-scope diagnosis context', () => {
   test('GET /api/test-run-cases/:id/diagnosis-context builds a non-trivial context', async ({ request }) => {
     const uniqueError = `Error: expect(locator).toBeVisible() failed\n  locator: getByRole('button', { name: 'Pay' }) (${Date.now()})`;
-    const { testRunId } = await submitRun(request, [
+    const { runId } = await submitRun(request, [
       {
         title: 'checkout flow',
         status: 'failed',
@@ -1012,16 +1018,16 @@ test.describe('Execution-scope diagnosis context', () => {
       },
     ]);
 
-    const runData = (await (await request.get(`/api/test-runs/${testRunId}`)).json()) as {
-      testCases: Array<{ id: number; status: string }>;
+    const runData = (await (await request.get(`/api/test-runs/${runId}`)).json()) as {
+      testCases: Array<{ executionId: number; status: string }>;
     };
     const failed = runData.testCases.find((c) => c.status === 'failed');
-    expect(failed?.id).toBeTruthy();
+    expect(failed?.executionId).toBeTruthy();
 
-    const res = await request.get(`/api/test-run-cases/${failed!.id}/diagnosis-context?format=json`);
+    const res = await request.get(`/api/test-run-cases/${failed!.executionId}/diagnosis-context?format=json`);
     expect(res.ok()).toBeTruthy();
     const body = (await res.json()) as {
-      scope: { kind: string; testRunsCaseId: number };
+      scope: { kind: string; executionId: number };
       sections: Array<{ id: string; markdown: string }>;
       text: string;
       tokenEstimate: number;
@@ -1030,7 +1036,7 @@ test.describe('Execution-scope diagnosis context', () => {
     // Before 0.1 the execution branch returned only a Data Coverage block with
     // every section "absent" — assert we now get real evidence.
     expect(body.scope.kind).toBe('execution');
-    expect(body.scope.testRunsCaseId).toBe(failed!.id);
+    expect(body.scope.executionId).toBe(failed!.executionId);
     expect(body.sections.length).toBeGreaterThanOrEqual(3);
     expect(body.sections.map((s) => s.id)).toContain('representativeExecution');
     // The failing error must reach the context (somewhere), not be dropped.

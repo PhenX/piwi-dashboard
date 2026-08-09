@@ -24,11 +24,11 @@ export default eventHandler(async (event) => {
     .select({ projectId: failureClusters.projectId })
     .from(failureClusters)
     .where(eq(failureClusters.id, clusterId));
-  if (!cluster) throw createError({ statusCode: 404, message: 'Failure cluster not found' });
+  if (!cluster) throw apiError({ statusCode: 404, message: 'Failure cluster not found' });
 
   await requireProjectAccess(event, cluster.projectId);
 
   const plan = await buildFixPlan(db, clusterId);
-  if (!plan) throw createError({ statusCode: 404, message: 'Failure cluster not found' });
+  if (!plan) throw apiError({ statusCode: 404, message: 'Failure cluster not found' });
   return enrichFixPlanOwnership(db, cluster.projectId, plan);
 });

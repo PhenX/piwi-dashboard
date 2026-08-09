@@ -15,13 +15,13 @@ interface RunInsightsData {
   baselinePassRate: number;
   passRateDelta: number;
   avgDurationDelta: number | null;
-  newRegressions: Array<{ testRunsCaseId: number; title: string; filePath: string; duration: number | null }>;
-  recurrences: Array<{ testRunsCaseId: number; title: string; filePath: string; duration: number | null }>;
-  recovered: Array<{ testRunsCaseId: number; title: string; filePath: string; duration: number | null }>;
-  newFlaky: Array<{ testRunsCaseId: number; title: string; filePath: string; duration: number | null }>;
-  slowestTests: Array<{ testRunsCaseId: number; title: string; filePath: string; duration: number }>;
+  newRegressions: Array<{ executionId: number; title: string; filePath: string; duration: number | null }>;
+  recurrences: Array<{ executionId: number; title: string; filePath: string; duration: number | null }>;
+  recovered: Array<{ executionId: number; title: string; filePath: string; duration: number | null }>;
+  newFlaky: Array<{ executionId: number; title: string; filePath: string; duration: number | null }>;
+  slowestTests: Array<{ executionId: number; title: string; filePath: string; duration: number }>;
   mostImproved: Array<{
-    testRunsCaseId: number;
+    executionId: number;
     title: string;
     filePath: string;
     durationBefore: number;
@@ -29,7 +29,7 @@ interface RunInsightsData {
     pctChange: number;
   }>;
   mostRegressed: Array<{
-    testRunsCaseId: number;
+    executionId: number;
     title: string;
     filePath: string;
     durationBefore: number;
@@ -38,7 +38,7 @@ interface RunInsightsData {
   }>;
   workerImbalance: Array<{ workerIndex: number; count: number }>;
   workerImbalanceWarning: string | null;
-  flakyOnRetry: Array<{ testRunsCaseId: number; title: string; filePath: string; retries: number }>;
+  flakyOnRetry: Array<{ executionId: number; title: string; filePath: string; retries: number }>;
   clusterNew: Array<{ clusterId: number; signature: string }>;
 }
 
@@ -68,7 +68,7 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 
 const isRunActive = computed(
-  () => props.runStatus === 'running' || props.runStatus === 'initialising' || props.runStatus === 'finalizing',
+  () => props.runStatus === 'running' || props.runStatus === 'initializing' || props.runStatus === 'finalizing',
 );
 
 async function load() {
@@ -210,8 +210,8 @@ function formatMs(ms: number | null | undefined): string {
       <div class="space-y-1">
         <NuxtLink
           v-for="nr in data.newRegressions"
-          :key="nr.testRunsCaseId"
-          :to="`/test-run-cases/${nr.testRunsCaseId}`"
+          :key="nr.executionId"
+          :to="`/test-run-cases/${nr.executionId}`"
           class="flex items-center gap-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/10 rounded px-1 -mx-1 transition-colors"
         >
           <UBadge color="error" variant="solid" size="xs">NEW</UBadge>
@@ -232,8 +232,8 @@ function formatMs(ms: number | null | undefined): string {
       <div class="space-y-1">
         <NuxtLink
           v-for="r in data.recurrences"
-          :key="r.testRunsCaseId"
-          :to="`/test-run-cases/${r.testRunsCaseId}`"
+          :key="r.executionId"
+          :to="`/test-run-cases/${r.executionId}`"
           class="flex items-center gap-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/10 rounded px-1 -mx-1 transition-colors"
         >
           <UBadge color="warning" variant="solid" size="xs">RECURRING</UBadge>
@@ -253,8 +253,8 @@ function formatMs(ms: number | null | undefined): string {
       <div class="space-y-1">
         <NuxtLink
           v-for="r in data.recovered"
-          :key="r.testRunsCaseId"
-          :to="`/test-run-cases/${r.testRunsCaseId}`"
+          :key="r.executionId"
+          :to="`/test-run-cases/${r.executionId}`"
           class="flex items-center gap-2 text-sm hover:bg-green-50 dark:hover:bg-green-900/10 rounded px-1 -mx-1 transition-colors"
         >
           <UBadge color="success" variant="solid" size="xs">FIXED</UBadge>
@@ -274,8 +274,8 @@ function formatMs(ms: number | null | undefined): string {
       <div class="space-y-1">
         <NuxtLink
           v-for="f in data.newFlaky"
-          :key="f.testRunsCaseId"
-          :to="`/test-run-cases/${f.testRunsCaseId}?tab=history`"
+          :key="f.executionId"
+          :to="`/test-run-cases/${f.executionId}?tab=history`"
           class="flex items-center gap-2 text-sm hover:bg-purple-50 dark:hover:bg-purple-900/10 rounded px-1 -mx-1 transition-colors"
         >
           <UBadge color="info" variant="solid" size="xs">FLAKY</UBadge>
@@ -297,8 +297,8 @@ function formatMs(ms: number | null | undefined): string {
       <div class="space-y-1">
         <NuxtLink
           v-for="f in data.flakyOnRetry"
-          :key="f.testRunsCaseId"
-          :to="`/test-run-cases/${f.testRunsCaseId}?tab=history`"
+          :key="f.executionId"
+          :to="`/test-run-cases/${f.executionId}?tab=history`"
           class="flex items-center gap-2 text-sm hover:bg-orange-50 dark:hover:bg-orange-900/10 rounded px-1 -mx-1 transition-colors"
         >
           <UBadge color="warning" variant="subtle" size="xs">×{{ f.retries }}</UBadge>
@@ -320,8 +320,8 @@ function formatMs(ms: number | null | undefined): string {
           <div class="space-y-1">
             <NuxtLink
               v-for="r in data.mostRegressed"
-              :key="r.testRunsCaseId"
-              :to="`/test-run-cases/${r.testRunsCaseId}?tab=performance`"
+              :key="r.executionId"
+              :to="`/test-run-cases/${r.executionId}?tab=performance`"
               class="flex items-center gap-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/10 rounded px-1 -mx-1 transition-colors"
             >
               <span class="text-red-500 font-mono shrink-0">+{{ r.pctChange }}%</span>
@@ -334,8 +334,8 @@ function formatMs(ms: number | null | undefined): string {
           <div class="space-y-1">
             <NuxtLink
               v-for="i in data.mostImproved"
-              :key="i.testRunsCaseId"
-              :to="`/test-run-cases/${i.testRunsCaseId}?tab=performance`"
+              :key="i.executionId"
+              :to="`/test-run-cases/${i.executionId}?tab=performance`"
               class="flex items-center gap-2 text-sm hover:bg-green-50 dark:hover:bg-green-900/10 rounded px-1 -mx-1 transition-colors"
             >
               <span class="text-green-500 font-mono shrink-0">{{ i.pctChange }}%</span>
@@ -356,8 +356,8 @@ function formatMs(ms: number | null | undefined): string {
       <div class="space-y-1">
         <NuxtLink
           v-for="st in data.slowestTests"
-          :key="st.testRunsCaseId"
-          :to="`/test-run-cases/${st.testRunsCaseId}?tab=performance`"
+          :key="st.executionId"
+          :to="`/test-run-cases/${st.executionId}?tab=performance`"
           class="flex items-center gap-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/10 rounded px-1 -mx-1 transition-colors"
         >
           <div class="flex-1 truncate text-primary hover:underline">{{ st.title }}</div>

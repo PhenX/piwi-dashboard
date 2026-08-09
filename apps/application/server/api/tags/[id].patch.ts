@@ -23,13 +23,13 @@ export default eventHandler(async (event) => {
 
   const id = parseInt(getRouterParam(event, 'id') || '0');
   if (!id) {
-    throw createError({ statusCode: 400, message: 'Invalid tag ID' });
+    throw apiError({ statusCode: 400, message: 'Invalid tag ID' });
   }
 
   const body = await readBody(event);
   const validation = updateTagSchema.safeParse(body);
   if (!validation.success) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Invalid request body',
       data: validation.error.issues,
@@ -42,6 +42,6 @@ export default eventHandler(async (event) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to update tag';
     const statusCode = message === 'Tag not found' ? 404 : 400;
-    throw createError({ statusCode, message });
+    throw apiError({ statusCode, message });
   }
 });

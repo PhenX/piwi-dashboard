@@ -41,7 +41,7 @@ export default eventHandler(async (event) => {
   const id = parseInt(getRouterParam(event, 'id') || '0');
 
   if (!id) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Invalid test run ID',
     });
@@ -49,14 +49,14 @@ export default eventHandler(async (event) => {
 
   const contentLength = parseInt(getRequestHeader(event, 'content-length') ?? '0', 10);
   if (contentLength > MAX_EVENT_BATCH_BYTES) {
-    throw createError({ statusCode: 413, message: 'Event batch too large (max 10 MB)' });
+    throw apiError({ statusCode: 413, message: 'Event batch too large (max 10 MB)' });
   }
 
   const body = await readBody(event);
 
   // Validate stream token
   if (!body.streamToken) {
-    throw createError({
+    throw apiError({
       statusCode: 401,
       message: 'Missing stream token',
     });

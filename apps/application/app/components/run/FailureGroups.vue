@@ -19,7 +19,11 @@ const {
   data: groups,
   pending: loading,
   refresh: refreshGroups,
-} = await useFetch<FailureGroup[]>(`/api/test-runs/${runId}/failure-groups`, { lazy: true, server: false });
+} = await useFetch(`/api/test-runs/${runId}/failure-groups`, {
+  lazy: true,
+  server: false,
+  transform: (r: { items: FailureGroup[] }) => r.items,
+});
 
 // Refetch when the run finishes (the tab stays mounted if it's active).
 watch(

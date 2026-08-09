@@ -62,22 +62,22 @@ async function submitRun(
     },
   });
   expect(res.ok()).toBeTruthy();
-  const body = (await res.json()) as { testRunId: number };
-  return body.testRunId;
+  const body = (await res.json()) as { runId: number };
+  return body.runId;
 }
 
 /** This attempt's clusters only — see `attemptTag`. */
 async function clusters(request: APIRequestContext, projectId: number): Promise<Cluster[]> {
   const res = await request.get(`/api/projects/${projectId}/failure-clusters`);
   expect(res.ok()).toBeTruthy();
-  const body = (await res.json()) as { clusters?: Cluster[] } | Cluster[];
-  const all = Array.isArray(body) ? body : (body.clusters ?? []);
+  const body = (await res.json()) as { items?: Cluster[] };
+  const all = body.items ?? [];
   return all.filter((c) => c.signature.includes(attemptTag));
 }
 
 async function projectIdFor(request: APIRequestContext): Promise<number> {
   const res = await request.get('/api/projects');
-  const list = (await res.json()) as Array<{ id: number; name: string }>;
+  const list = ((await res.json()) as { items: Array<{ id: number; name: string }> }).items;
   const project = list.find((p) => p.name === PROJECT.FIX_VERIFICATION);
   expect(project, 'project should exist after the first submission').toBeTruthy();
   return project!.id;

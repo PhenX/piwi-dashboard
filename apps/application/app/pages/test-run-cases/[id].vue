@@ -26,7 +26,9 @@ const { data: historyData } = await useAsyncData(
   `test-run-case-history-${testCaseId}`,
   () => {
     const tcId = testCase.value?.testCaseId;
-    return tcId ? $fetch<TestCaseHistoryPoint[]>(`/api/test-cases/${tcId}/history`) : Promise.resolve([]);
+    return tcId
+      ? $fetch<{ items: TestCaseHistoryPoint[] }>(`/api/test-cases/${tcId}/history`).then((r) => r.items)
+      : Promise.resolve([]);
   },
   { default: (): TestCaseHistoryPoint[] => [], watch: [() => testCase.value?.testCaseId] },
 );
@@ -334,7 +336,7 @@ function connectToRunStream() {
   eventSource.onmessage = (event) => {
     try {
       const parsed = JSON.parse(event.data);
-      if (parsed.type === 'case-files' && parsed.data?.testRunsCaseId === Number(testCaseId)) {
+      if (parsed.type === 'case-files' && parsed.data?.executionId === Number(testCaseId)) {
         refresh();
         refreshTraces();
       } else if (parsed.type === 'run-finished') {

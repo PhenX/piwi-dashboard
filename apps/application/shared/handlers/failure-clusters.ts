@@ -121,7 +121,8 @@ export async function patchClusterStatus(db: DrizzleDB, clusterId: number, statu
     .set({ status, triageNote: note, updatedAt: new Date() })
     .where(eq(failureClusters.id, clusterId));
 
-  return { success: true, id: clusterId, status, triageNote: note };
+  const [updated] = await db.select().from(failureClusters).where(eq(failureClusters.id, clusterId));
+  return { success: true, cluster: updated };
 }
 
 export async function patchClusterBaseCommit(db: DrizzleDB, clusterId: number, commit?: string | null) {
@@ -137,7 +138,8 @@ export async function patchClusterBaseCommit(db: DrizzleDB, clusterId: number, c
     .set({ manualBaseCommit, updatedAt: new Date() })
     .where(eq(failureClusters.id, clusterId));
 
-  return { success: true, manualBaseCommit };
+  const [updated] = await db.select().from(failureClusters).where(eq(failureClusters.id, clusterId));
+  return { success: true, cluster: updated };
 }
 
 // NOTE: The demo SCM (commits/branches/commit-diff) and AI-context endpoints used

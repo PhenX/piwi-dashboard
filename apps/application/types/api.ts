@@ -78,7 +78,7 @@ export interface TagInfo {
  * Tags response from API
  */
 export interface TagsResponse {
-  tags: TagInfo[];
+  items: TagInfo[];
 }
 
 // ============================================================================
@@ -106,7 +106,7 @@ export interface MarkerInfo {
  * Markers response from API
  */
 export interface MarkersResponse {
-  markers: MarkerInfo[];
+  items: MarkerInfo[];
 }
 
 // ============================================================================
@@ -182,7 +182,7 @@ export interface TestFunctionInfo {
 }
 
 export interface TestFunctionsResponse {
-  testFunctions: TestFunctionInfo[];
+  items: TestFunctionInfo[];
 }
 
 // ============================================================================
@@ -696,7 +696,10 @@ export interface AiStepIntent {
  * Test case result (for a specific test run)
  */
 export interface TestCaseResult {
-  id: number;
+  /** The execution id (a test_runs_cases row): this test case run within this run. */
+  executionId: number;
+  /** The stable test-case identity, shared across every run of this test. */
+  testCaseId: number;
   title: string;
   filePath?: string;
   suitePath?: string[];
@@ -956,7 +959,7 @@ export interface UserDetails {
  * Users response from API
  */
 export interface UsersResponse {
-  users: UserDetails[];
+  items: UserDetails[];
   authEnabled: boolean;
 }
 
@@ -980,7 +983,7 @@ export interface ApiKeySummary {
  * Response from GET /api/users/[id]/api-keys
  */
 export interface ApiKeysResponse {
-  apiKeys: ApiKeySummary[];
+  items: ApiKeySummary[];
 }
 
 /**
@@ -1019,7 +1022,7 @@ export interface ProjectMemberEntry {
  * Project members response
  */
 export interface ProjectMembersResponse {
-  users: ProjectMemberEntry[];
+  items: ProjectMemberEntry[];
 }
 
 // ============================================================================

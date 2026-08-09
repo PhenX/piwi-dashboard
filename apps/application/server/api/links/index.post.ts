@@ -28,7 +28,7 @@ export default eventHandler(async (event) => {
   const validation = createLinkSchema.safeParse(body);
 
   if (!validation.success) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Invalid request body',
       data: validation.error.issues,
@@ -39,14 +39,14 @@ export default eventHandler(async (event) => {
   const db = await getDatabase();
 
   const projectId = await resolveLinkEntityProjectId(db, entityType, entityId);
-  if (!projectId) throw createError({ statusCode: 404, message: 'Entity not found' });
+  if (!projectId) throw apiError({ statusCode: 404, message: 'Entity not found' });
   await requireProjectAccess(event, projectId);
 
   let result: { link: any };
   try {
     result = await createLink(db, { entityType, entityId, url, title });
   } catch (err) {
-    throw createError({
+    throw apiError({
       statusCode: 404,
       message: err instanceof Error ? err.message : 'Failed to create link',
     });
@@ -54,7 +54,7 @@ export default eventHandler(async (event) => {
 
   const inserted = result.link;
   if (!inserted) {
-    throw createError({ statusCode: 500, message: 'Failed to create link' });
+    throw apiError({ statusCode: 500, message: 'Failed to create link' });
   }
 
   // Best-effort unfurl (server-only enrichment) — tries rich provider first, falls back to OpenGraph
@@ -70,8 +70,8 @@ export default eventHandler(async (event) => {
       })
       .where(eq(entityLinks.id, inserted.id));
     const updated = await db.select().from(entityLinks).where(eq(entityLinks.id, inserted.id));
-    return { link: updated[0] };
+    return { success: true, link: updated[0] };
   }
 
-  return { link: inserted };
+  return { success: true, link: inserted };
 });

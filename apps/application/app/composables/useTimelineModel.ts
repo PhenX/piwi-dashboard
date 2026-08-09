@@ -152,9 +152,9 @@ export function useTimelineModel(props: TimelineModelInput): {
         const duration = tc.duration ?? 1000;
         const start = hasStartedAt ? absoluteStart(tc.startedAt) : cursor;
         rowItems.push({
-          key: `t${tc.id}`,
+          key: `t${tc.executionId}`,
           kind: 'test',
-          testCaseId: tc.id,
+          testCaseId: tc.executionId,
           title: tc.title,
           status: tc.status,
           workerIndex: worker.workerIndex,
@@ -171,9 +171,9 @@ export function useTimelineModel(props: TimelineModelInput): {
           const stepDuration = step.duration || 0;
           const stepStart = hasStartedAt ? absoluteStart(step.startedAt) : cursor;
           rowItems.push({
-            key: `s${tc.id}:${stepIndex}`,
+            key: `s${tc.executionId}:${stepIndex}`,
             kind,
-            testCaseId: tc.id,
+            testCaseId: tc.executionId,
             title: step.title,
             status: step.status || 'passed',
             workerIndex: worker.workerIndex,

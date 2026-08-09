@@ -69,13 +69,13 @@ export default eventHandler(async (event) => {
   const maxUploadBytes = resolveMaxUploadBytes();
   const contentLength = parseInt(getRequestHeader(event, 'content-length') ?? '0', 10);
   if (contentLength > maxUploadBytes) {
-    throw createError({ statusCode: 413, message: `Upload too large (max ${formatBytes(maxUploadBytes)})` });
+    throw apiError({ statusCode: 413, message: `Upload too large (max ${formatBytes(maxUploadBytes)})` });
   }
 
   const formData = await readMultipartFormData(event);
 
   if (!formData) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'No form data provided',
     });
@@ -98,7 +98,7 @@ export default eventHandler(async (event) => {
   const attachmentFiles: Map<number, { originalName: string; data: Buffer }[]> = new Map();
 
   for (const part of formData) {
-    if (part.name === 'testRunId') {
+    if (part.name === 'runId') {
       const parsed = parseInt(part.data.toString('utf-8'), 10);
       if (!isNaN(parsed) && parsed > 0) existingTestRunId = parsed;
     } else if (part.name === 'projectName') {
@@ -107,7 +107,7 @@ export default eventHandler(async (event) => {
       try {
         testRunData = JSON.parse(part.data.toString('utf-8'));
       } catch {
-        throw createError({
+        throw apiError({
           statusCode: 400,
           message: 'Invalid JSON in testRun field',
         });
@@ -116,7 +116,7 @@ export default eventHandler(async (event) => {
       try {
         testCasesData = JSON.parse(part.data.toString('utf-8'));
       } catch {
-        throw createError({
+        throw apiError({
           statusCode: 400,
           message: 'Invalid JSON in testCases field',
         });
@@ -196,7 +196,7 @@ export default eventHandler(async (event) => {
 
   // Validate required fields
   if (!projectName || !testRunData) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'Missing required fields: projectName, testRun',
     });
@@ -215,12 +215,12 @@ export default eventHandler(async (event) => {
     const existingRunRows = await db.select().from(testRuns).where(eq(testRuns.id, existingTestRunId));
     const existingRun = existingRunRows[0];
     if (!existingRun) {
-      throw createError({ statusCode: 404, message: 'Existing test run not found' });
+      throw apiError({ statusCode: 404, message: 'Existing test run not found' });
     }
     const projectRows = await db.select().from(projects).where(eq(projects.id, existingRun.projectId));
     project = projectRows[0];
     if (!project || !scopeAllows(scope, project.id)) {
-      throw createError({ statusCode: 403, message: 'No access to this project' });
+      throw apiError({ statusCode: 403, message: 'No access to this project' });
     }
     attachingToExistingRun = true;
     existingRunStatus = existingRun.status;
@@ -233,11 +233,11 @@ export default eventHandler(async (event) => {
 
     if (project) {
       if (!scopeAllows(scope, project.id)) {
-        throw createError({ statusCode: 403, message: 'No access to this project' });
+        throw apiError({ statusCode: 403, message: 'No access to this project' });
       }
     } else {
       if (scope !== 'all') {
-        throw createError({ statusCode: 403, message: 'Cannot create a new project — no global access' });
+        throw apiError({ statusCode: 403, message: 'Cannot create a new project — no global access' });
       }
       const result = await db
         .insert(projects)
@@ -251,7 +251,7 @@ export default eventHandler(async (event) => {
   }
 
   if (!project) {
-    throw createError({
+    throw apiError({
       statusCode: 500,
       message: 'Failed to create or retrieve project',
     });
@@ -381,7 +381,7 @@ export default eventHandler(async (event) => {
     const resultTestRun = testRunResult[0];
 
     if (!resultTestRun) {
-      throw createError({
+      throw apiError({
         statusCode: 500,
         message: 'Failed to create test run',
       });
@@ -650,7 +650,7 @@ export default eventHandler(async (event) => {
 
   return {
     success: true,
-    testRunId: testRun.id,
+    runId: testRun.id,
     projectId: project.id,
     reports: storedReports.map((r) => ({ type: r.type, label: r.label, path: r.path })),
   };

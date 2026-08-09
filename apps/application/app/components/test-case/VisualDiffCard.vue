@@ -41,7 +41,7 @@ const {
   data: result,
   pending,
   error,
-} = useFetch<VisualDiffResponse>(() => `/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/visual-diff`, {
+} = useFetch<VisualDiffResponse>(() => `/api/test-run-cases/${props.testRunsCaseId}/visual-diff`, {
   lazy: true,
 });
 

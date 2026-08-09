@@ -22,7 +22,7 @@ export default eventHandler(async (event) => {
   setResponseHeader(event, 'X-Robots-Tag', 'noindex, nofollow');
 
   if (!shareLinksEnabled()) {
-    throw createError({ statusCode: 404, message: 'Not found' });
+    throw apiError({ statusCode: 404, message: 'Not found' });
   }
 
   const rateKey = `share:${rateLimitClientIp(event)}`;
@@ -35,7 +35,7 @@ export default eventHandler(async (event) => {
   const resolved = await resolveShareToken(db, token);
 
   if (resolved.state === 'missing') {
-    throw createError({ statusCode: 404, message: 'Not found' });
+    throw apiError({ statusCode: 404, message: 'Not found' });
   }
   if (resolved.state === 'gone') {
     // The hash matched, so the holder once had the real link — telling them it
@@ -63,7 +63,7 @@ export default eventHandler(async (event) => {
   // The entity was pruned (retention) or deleted — indistinguishable from an
   // unknown token by design.
   if (!bundle) {
-    throw createError({ statusCode: 404, message: 'Not found' });
+    throw apiError({ statusCode: 404, message: 'Not found' });
   }
 
   const built = await buildExport(bundle, 'html', link.entityId, {

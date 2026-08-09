@@ -14,7 +14,7 @@ useHead(
   computed(() => ({ title: `Edit ${project.value?.label || project.value?.name || 'Project'} — Piwi Dashboard` })),
 );
 
-const allTags = computed(() => tagsData.value?.tags || []);
+const allTags = computed(() => tagsData.value?.items || []);
 
 const hasToken = computed(() => Boolean(project.value?.hasScmToken));
 
@@ -41,7 +41,7 @@ async function onSubmit() {
     saving.value = true;
 
     await $fetch(`/api/projects/${projectId}` as '/api/projects/:id', {
-      method: 'PUT',
+      method: 'PATCH',
       body: {
         label: state.value.label || null,
         description: state.value.description || null,

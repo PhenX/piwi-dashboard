@@ -246,7 +246,7 @@ function scrollToCase(id: number) {
   setTreeView(false);
   highlightedCaseId.value = id;
   const doScroll = () => {
-    const index = sortedTestCases.value.findIndex((tc) => tc.id === id);
+    const index = sortedTestCases.value.findIndex((tc) => tc.executionId === id);
     if (index >= 0) scrollerRef.value?.scrollToItem(index, { behavior: 'smooth' });
   };
   nextTick(() => {
@@ -425,7 +425,7 @@ defineExpose({ scrollToCase });
               ref="scrollerRef"
               :items="sortedTestCases"
               :min-item-size="44"
-              key-field="id"
+              key-field="executionId"
               role="rowgroup"
               class="flex-1 min-h-0"
               @scroll.passive="onScrollerScroll"
@@ -452,7 +452,9 @@ defineExpose({ scrollToCase });
                   -->
                   <div
                     class="md:hidden border-b border-default px-3 py-2.5 space-y-1.5 text-sm transition-colors"
-                    :class="highlightedCaseId === item.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
+                    :class="
+                      highlightedCaseId === item.executionId ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''
+                    "
                     role="row"
                   >
                     <div class="flex items-start gap-2">
@@ -465,9 +467,9 @@ defineExpose({ scrollToCase });
                         :title="statusHint(item)"
                       />
                       <a
-                        :href="`/test-run-cases/${item.id}`"
+                        :href="`/test-run-cases/${item.executionId}`"
                         class="text-highlighted hover:text-primary hover:underline font-medium flex-1 min-w-0"
-                        @click.prevent="navigateTo(`/test-run-cases/${item.id}`)"
+                        @click.prevent="navigateTo(`/test-run-cases/${item.executionId}`)"
                         >{{ item.title }}</a
                       >
                       <BrowserBadge :browser="item.browser" size="sm" class="mt-0.5" />
@@ -520,7 +522,9 @@ defineExpose({ scrollToCase });
 
                   <div
                     class="hidden md:grid items-center border-b border-default text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
-                    :class="highlightedCaseId === item.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
+                    :class="
+                      highlightedCaseId === item.executionId ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''
+                    "
                     role="row"
                     :style="{ gridTemplateColumns: gridTemplate }"
                   >
@@ -534,10 +538,10 @@ defineExpose({ scrollToCase });
                       <div class="flex items-center gap-1.5 min-w-0">
                         <!-- Neutral title: green titles read as "passed" even on failed rows. -->
                         <a
-                          :href="`/test-run-cases/${item.id}`"
+                          :href="`/test-run-cases/${item.executionId}`"
                           class="text-highlighted hover:text-primary hover:underline font-medium truncate"
                           :title="item.title"
-                          @click.prevent="navigateTo(`/test-run-cases/${item.id}`)"
+                          @click.prevent="navigateTo(`/test-run-cases/${item.executionId}`)"
                           >{{ item.title }}</a
                         >
                         <!-- Same badge cluster, in the same place, as the tree's rows. -->

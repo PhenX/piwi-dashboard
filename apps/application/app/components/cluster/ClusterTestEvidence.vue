@@ -76,17 +76,17 @@ async function loadCase(id: number) {
 
   const [detail, traceList] = await Promise.allSettled([
     $fetch<TestCaseDetail>(`/api/test-run-cases/${id}`),
-    $fetch<TraceInfo[]>(`/api/test-run-cases/${id}/traces`),
+    $fetch<{ items: TraceInfo[] }>(`/api/test-run-cases/${id}/traces`),
   ]);
 
   if (detail.status === 'fulfilled') caseDetail.value = detail.value;
   loading.value = false;
 
-  if (traceList.status === 'fulfilled') traces.value = traceList.value;
+  if (traceList.status === 'fulfilled') traces.value = traceList.value.items;
   tracesLoading.value = false;
 
   if (detail.status === 'fulfilled' && traceList.status === 'fulfilled') {
-    caseCache.set(id, { detail: detail.value, traces: traceList.value });
+    caseCache.set(id, { detail: detail.value, traces: traceList.value.items });
   }
 }
 
@@ -102,7 +102,7 @@ async function loadTraceStack(id: number) {
   const runId = caseDetail.value?.testRun?.id;
   if (!runId) return;
   try {
-    const res = await $fetch<TraceCallStackResponse>(`/api/test-runs/${runId}/cases/${id}/trace-stacks`);
+    const res = await $fetch<TraceCallStackResponse>(`/api/test-run-cases/${id}/trace-stacks`);
     const value = res.status === 'ok' && res.frames?.length ? res : null;
     traceStackCache.set(id, value);
     if (selectedId.value === id) traceStack.value = value;

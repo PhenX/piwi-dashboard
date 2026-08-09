@@ -25,7 +25,7 @@ export default eventHandler(async (event) => {
   const { db } = await requireResolvedProjectAccess(event, id, resolveClusterProjectId, 'Failure cluster');
 
   const [cluster] = await db.select().from(failureClusters).where(eq(failureClusters.id, id));
-  if (!cluster) throw createError({ statusCode: 404, message: 'Failure cluster not found' });
+  if (!cluster) throw apiError({ statusCode: 404, message: 'Failure cluster not found' });
 
   const query = getQuery(event);
   const baseCommit = query.baseCommit as string | undefined;

@@ -32,7 +32,7 @@ export default eventHandler(async (event) => {
     piwiVersion: exportPiwiVersion(event),
   });
   if (!bundle) {
-    throw createError({ statusCode: 404, message: 'Test run case not found' });
+    throw apiError({ statusCode: 404, message: 'Test run case not found' });
   }
 
   return sendExport(event, bundle, format, id);

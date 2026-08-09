@@ -13,7 +13,23 @@ defineRouteMeta({
     summary: 'Download a stored file',
     description:
       'Serves stored files including test reports, trace archives, and attachments. Supports trace ZIP reconstruction from slim blobs and gzip decompression for report archives.',
-    parameters: [{ name: 'path', in: 'path', required: true, schema: { type: 'string' } }],
+    parameters: [
+      { name: 'path', in: 'path', required: true, schema: { type: 'string' } },
+      {
+        name: 'contentType',
+        in: 'query',
+        required: false,
+        schema: { type: 'string' },
+        description: 'Override the response Content-Type for the served file.',
+      },
+      {
+        name: 'compress',
+        in: 'query',
+        required: false,
+        schema: { type: 'string', enum: ['1'] },
+        description: 'Set to "1" to serve the stored archive gzip-compressed rather than decompressed.',
+      },
+    ],
     'x-required-roles': ['administrator', 'reporter', 'user'],
   },
 });
@@ -92,7 +108,7 @@ export default eventHandler(async (event) => {
   }
 
   if (!path) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: 'File path is required',
     });
@@ -100,7 +116,7 @@ export default eventHandler(async (event) => {
 
   // Security: Prevent path traversal
   if (path.includes('..') || path.startsWith('/')) {
-    throw createError({
+    throw apiError({
       statusCode: 403,
       message: 'Invalid file path',
     });
@@ -312,7 +328,7 @@ export default eventHandler(async (event) => {
     }
   }
 
-  throw createError({
+  throw apiError({
     statusCode: 404,
     message: 'File not found',
   });

@@ -32,7 +32,7 @@ export type TestRunStatus =
   | 'interrupted'
   | 'running'
   | 'cancelled'
-  | 'initialising'
+  | 'initializing'
   | 'finalizing';
 
 // `didnotrun` = a test that never executed: cut short by `maxFailures` or

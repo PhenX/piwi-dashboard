@@ -17,7 +17,7 @@ defineRouteMeta({
 export default eventHandler(async (event) => {
   const user = await requireAuth(event);
   const id = parseInt(getRouterParam(event, 'id') || '0');
-  if (!id) throw createError({ statusCode: 400, message: 'Invalid subscription ID' });
+  if (!id) throw apiError({ statusCode: 400, message: 'Invalid subscription ID' });
 
   const db = await getDatabase();
   const isAdmin = user.role === Role.ADMINISTRATOR;
@@ -25,7 +25,7 @@ export default eventHandler(async (event) => {
     .select()
     .from(subscriptions)
     .where(isAdmin ? eq(subscriptions.id, id) : and(eq(subscriptions.id, id), eq(subscriptions.userId, user.id)));
-  if (!sub) throw createError({ statusCode: 404, message: 'Subscription not found' });
+  if (!sub) throw apiError({ statusCode: 404, message: 'Subscription not found' });
 
   await db.delete(subscriptions).where(eq(subscriptions.id, id));
   return { success: true };

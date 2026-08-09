@@ -13,15 +13,16 @@ const {
   data: projects,
   refresh,
   status: projectsStatus,
-} = useFetch<ProjectWithStats[]>('/api/projects', {
+} = useFetch('/api/projects', {
   key: 'projects',
   lazy: true,
-  default: () => [],
+  default: () => [] as ProjectWithStats[],
+  transform: (r: { items: ProjectWithStats[] }) => r.items,
 });
 const { data: tagsData, refresh: refreshTags } = useFetch<TagsResponse>('/api/tags', { lazy: true });
 const toast = useToast();
 
-const allTags = computed(() => tagsData.value?.tags || []);
+const allTags = computed(() => tagsData.value?.items || []);
 
 // Show a skeleton (not the "No projects yet" empty state) while the first load resolves.
 const isInitialLoad = computed(() => projectsStatus.value === 'pending' && !projects.value?.length);

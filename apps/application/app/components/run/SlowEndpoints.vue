@@ -16,7 +16,11 @@ const {
   data: endpoints,
   pending: loading,
   refresh: refreshEndpoints,
-} = await useFetch<EndpointSummary[]>(`/api/test-runs/${runId}/network-requests`, { lazy: true, server: false });
+} = await useFetch(`/api/test-runs/${runId}/network-requests`, {
+  lazy: true,
+  server: false,
+  transform: (r: { items: EndpointSummary[] }) => r.items,
+});
 
 watch(endpoints, (val) => {
   emitSlow('endpointsCount', val?.length ?? 0);

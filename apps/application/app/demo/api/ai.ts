@@ -783,8 +783,8 @@ export async function apiDiagnoseCluster(
 
   // Execution-scoped diagnose targets one test-run-case, mirroring the server's
   // scope branch on the cluster endpoint.
-  if (body?.scope === 'execution' && body?.testRunsCaseId != null) {
-    return apiDiagnoseExecution(Number(body.testRunsCaseId), body);
+  if (body?.scope === 'execution' && body?.executionId != null) {
+    return apiDiagnoseExecution(Number(body.executionId), body);
   }
 
   // Like the server: an existing completed diagnosis is the answer unless the

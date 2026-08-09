@@ -22,7 +22,7 @@ export default eventHandler(async (event) => {
   const wasted = await resolveWastedSettings(db);
   const result = (await getTestRunCase(db, id, wasted.isDefault ? null : wasted.patterns)) as any;
   if (!result) {
-    throw createError({
+    throw apiError({
       statusCode: 404,
       message: 'Test run case not found',
     });

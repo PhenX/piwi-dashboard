@@ -27,7 +27,7 @@ async function submit(request: APIRequestContext, body: Record<string, unknown>)
     data: { projectName: PROJECT.INSIGHTS_SPEC_HEALTH, ...body },
   });
   expect(res.ok()).toBeTruthy();
-  return res.json() as Promise<{ testRunId: number; projectId: number }>;
+  return res.json() as Promise<{ runId: number; projectId: number }>;
 }
 
 test.describe.serial('Insights, spec health & flaky classification', () => {
@@ -72,7 +72,7 @@ test.describe.serial('Insights, spec health & flaky classification', () => {
         },
       ],
     });
-    regressionRunId = current.testRunId;
+    regressionRunId = current.runId;
     expect(projectId).toBeGreaterThan(0);
     expect(regressionRunId).toBeGreaterThan(0);
   });

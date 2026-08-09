@@ -62,7 +62,7 @@ test.describe.serial('Setup', () => {
 
     // Delete any channels left from a previous run (cascades to subscriptions)
     const listRes = await api('GET', '/api/channels', undefined, adminCookie);
-    const { channels } = (await listRes.json()) as { channels: Array<{ id: number }> };
+    const { items: channels } = (await listRes.json()) as { items: Array<{ id: number }> };
     for (const ch of channels) {
       await api('DELETE', `/api/channels/${ch.id}`, undefined, adminCookie);
     }
@@ -124,8 +124,8 @@ test.describe.serial('Channels API', () => {
     skip();
     const res = await api('GET', '/api/channels', undefined, adminCookie);
     expect(res.ok).toBe(true);
-    const data = (await res.json()) as { channels: unknown[] };
-    expect(data.channels).toHaveLength(0);
+    const data = (await res.json()) as { items: unknown[] };
+    expect(data.items).toHaveLength(0);
   });
 
   test('POST /api/channels creates an email channel', async () => {
@@ -152,9 +152,9 @@ test.describe.serial('Channels API', () => {
     skip();
     const res = await api('GET', '/api/channels', undefined, adminCookie);
     const data = (await res.json()) as {
-      channels: Array<{ id: number; name: string; type: string; config: Record<string, unknown> }>;
+      items: Array<{ id: number; name: string; type: string; config: Record<string, unknown> }>;
     };
-    const ch = data.channels.find((c) => c.id === channelId);
+    const ch = data.items.find((c) => c.id === channelId);
     expect(ch).toBeDefined();
     expect(ch?.name).toBe('Test email channel');
     expect(ch?.config.address).toBe('notify@example.com');
@@ -177,8 +177,8 @@ test.describe.serial('Channels API', () => {
     webhookChannelId = data.channel.id;
 
     const listRes = await api('GET', '/api/channels', undefined, adminCookie);
-    const listData = (await listRes.json()) as { channels: Array<{ id: number; config: Record<string, unknown> }> };
-    const wh = listData.channels.find((c) => c.id === webhookChannelId);
+    const listData = (await listRes.json()) as { items: Array<{ id: number; config: Record<string, unknown> }> };
+    const wh = listData.items.find((c) => c.id === webhookChannelId);
     expect(wh?.config.url).toBe('https://example.com/hook');
     expect(wh?.config.secret).toBeUndefined();
   });
@@ -227,8 +227,8 @@ test.describe.serial('Channels API', () => {
     const res = await api('DELETE', `/api/channels/${webhookChannelId}`, undefined, adminCookie);
     expect(res.ok).toBe(true);
     const listRes = await api('GET', '/api/channels', undefined, adminCookie);
-    const data = (await listRes.json()) as { channels: Array<{ id: number }> };
-    expect(data.channels.find((c) => c.id === webhookChannelId)).toBeUndefined();
+    const data = (await listRes.json()) as { items: Array<{ id: number }> };
+    expect(data.items.find((c) => c.id === webhookChannelId)).toBeUndefined();
   });
 });
 
@@ -249,9 +249,9 @@ test.describe.serial('Subscriptions API', () => {
       adminCookie,
     );
     expect(res.ok).toBe(true);
-    const data = (await res.json()) as { success: boolean; subscriptionId: number };
+    const data = (await res.json()) as { success: boolean; subscription: { id: number } };
     expect(data.success).toBe(true);
-    subscriptionId = data.subscriptionId;
+    subscriptionId = data.subscription.id;
     expect(subscriptionId).toBeGreaterThan(0);
   });
 
@@ -275,9 +275,9 @@ test.describe.serial('Subscriptions API', () => {
     const res = await api('GET', '/api/subscriptions', undefined, adminCookie);
     expect(res.ok).toBe(true);
     const data = (await res.json()) as {
-      subscriptions: Array<{ id: number; events: string[]; channel: { id: number; type: string } }>;
+      items: Array<{ id: number; events: string[]; channel: { id: number; type: string } }>;
     };
-    const sub = data.subscriptions.find((s) => s.id === subscriptionId);
+    const sub = data.items.find((s) => s.id === subscriptionId);
     expect(sub).toBeDefined();
     expect(sub?.events).toContain('run.failed');
     expect(sub?.events).toContain('run.finished');
@@ -288,12 +288,12 @@ test.describe.serial('Subscriptions API', () => {
   test('GET /api/subscriptions?projectId= filters correctly', async () => {
     skip();
     const res = await api('GET', `/api/subscriptions?projectId=${projectId}`, undefined, adminCookie);
-    const data = (await res.json()) as { subscriptions: Array<{ id: number }> };
-    expect(data.subscriptions.some((s) => s.id === subscriptionId)).toBe(true);
+    const data = (await res.json()) as { items: Array<{ id: number }> };
+    expect(data.items.some((s) => s.id === subscriptionId)).toBe(true);
 
     const res2 = await api('GET', '/api/subscriptions?projectId=999999', undefined, adminCookie);
-    const data2 = (await res2.json()) as { subscriptions: unknown[] };
-    expect(data2.subscriptions).toHaveLength(0);
+    const data2 = (await res2.json()) as { items: unknown[] };
+    expect(data2.items).toHaveLength(0);
   });
 
   test('PATCH /api/subscriptions/[id] mutes subscription for 7 days', async () => {
@@ -303,8 +303,8 @@ test.describe.serial('Subscriptions API', () => {
     expect(res.ok).toBe(true);
 
     const listRes = await api('GET', '/api/subscriptions', undefined, adminCookie);
-    const data = (await listRes.json()) as { subscriptions: Array<{ id: number; mutedUntil: string | null }> };
-    const sub = data.subscriptions.find((s) => s.id === subscriptionId);
+    const data = (await listRes.json()) as { items: Array<{ id: number; mutedUntil: string | null }> };
+    const sub = data.items.find((s) => s.id === subscriptionId);
     expect(sub?.mutedUntil).toBeTruthy();
     expect(new Date(sub!.mutedUntil!).getTime()).toBeGreaterThan(Date.now());
   });
@@ -315,8 +315,8 @@ test.describe.serial('Subscriptions API', () => {
     expect(res.ok).toBe(true);
 
     const listRes = await api('GET', '/api/subscriptions', undefined, adminCookie);
-    const data = (await listRes.json()) as { subscriptions: Array<{ id: number; mutedUntil: string | null }> };
-    const sub = data.subscriptions.find((s) => s.id === subscriptionId);
+    const data = (await listRes.json()) as { items: Array<{ id: number; mutedUntil: string | null }> };
+    const sub = data.items.find((s) => s.id === subscriptionId);
     expect(sub?.mutedUntil).toBeNull();
   });
 
@@ -333,8 +333,8 @@ test.describe.serial('Subscriptions API', () => {
     expect(res.ok).toBe(true);
 
     const listRes = await api('GET', '/api/subscriptions', undefined, adminCookie);
-    const data = (await listRes.json()) as { subscriptions: Array<{ id: number }> };
-    expect(data.subscriptions.find((s) => s.id === subscriptionId)).toBeUndefined();
+    const data = (await listRes.json()) as { items: Array<{ id: number }> };
+    expect(data.items.find((s) => s.id === subscriptionId)).toBeUndefined();
   });
 });
 
@@ -374,9 +374,9 @@ test.describe.serial('Global channels & subscriptions', () => {
 
     const listRes = await api('GET', '/api/channels', undefined, userCookie);
     const listData = (await listRes.json()) as {
-      channels: Array<{ id: number; userId: number | null; config: Record<string, unknown> }>;
+      items: Array<{ id: number; userId: number | null; config: Record<string, unknown> }>;
     };
-    const ch = listData.channels.find((c) => c.id === globalChannelId);
+    const ch = listData.items.find((c) => c.id === globalChannelId);
     expect(ch).toBeDefined();
     expect(ch?.userId).toBeNull();
     expect(ch?.config.webhookUrl).toBeUndefined();
@@ -394,8 +394,8 @@ test.describe.serial('Global channels & subscriptions', () => {
     const userChannelId = data.channel.id;
 
     const listRes = await api('GET', '/api/channels', undefined, adminCookie);
-    const listData = (await listRes.json()) as { channels: Array<{ id: number }> };
-    expect(listData.channels.find((c) => c.id === userChannelId)).toBeUndefined();
+    const listData = (await listRes.json()) as { items: Array<{ id: number }> };
+    expect(listData.items.find((c) => c.id === userChannelId)).toBeUndefined();
 
     const delRes = await api('DELETE', `/api/channels/${userChannelId}`, undefined, adminCookie);
     expect(delRes.ok).toBe(true);
@@ -440,16 +440,16 @@ test.describe.serial('Global channels & subscriptions', () => {
       adminCookie,
     );
     expect(onGlobal.ok).toBe(true);
-    const subData = (await onGlobal.json()) as { subscriptionId: number };
-    globalSubId = subData.subscriptionId;
+    const subData = (await onGlobal.json()) as { subscription: { id: number } };
+    globalSubId = subData.subscription.id;
     expect(globalSubId).toBeGreaterThan(0);
   });
 
   test('global subscription is listed for every user but only admins can modify it', async () => {
     skip();
     const listRes = await api('GET', '/api/subscriptions', undefined, userCookie);
-    const listData = (await listRes.json()) as { subscriptions: Array<{ id: number; userId: number | null }> };
-    const sub = listData.subscriptions.find((s) => s.id === globalSubId);
+    const listData = (await listRes.json()) as { items: Array<{ id: number; userId: number | null }> };
+    const sub = listData.items.find((s) => s.id === globalSubId);
     expect(sub).toBeDefined();
     expect(sub?.userId).toBeNull();
 
@@ -532,9 +532,9 @@ test.describe.serial('Subscribe Bell UI', () => {
 
     // Verify via API that subscription was created
     const res = await api('GET', `/api/subscriptions?projectId=${projectId}`, undefined, adminCookie);
-    const data = (await res.json()) as { subscriptions: Array<{ id: number }> };
-    expect(data.subscriptions.length).toBeGreaterThan(0);
-    subscriptionId = data.subscriptions[0]!.id;
+    const data = (await res.json()) as { items: Array<{ id: number }> };
+    expect(data.items.length).toBeGreaterThan(0);
+    subscriptionId = data.items[0]!.id;
   });
 
   test('bell shows subscription and unsubscribe button after subscribing', async ({ page }) => {
@@ -562,8 +562,8 @@ test.describe.serial('Subscribe Bell UI', () => {
 
     // Verify via API that subscription was removed
     const res = await api('GET', `/api/subscriptions?projectId=${projectId}`, undefined, adminCookie);
-    const data = (await res.json()) as { subscriptions: unknown[] };
-    expect(data.subscriptions).toHaveLength(0);
+    const data = (await res.json()) as { items: unknown[] };
+    expect(data.items).toHaveLength(0);
   });
 
   test('notifications settings page shows SMTP unconfigured state', async ({ page }) => {

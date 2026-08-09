@@ -33,7 +33,7 @@ test.describe.serial('Project Edit Tests', () => {
   });
 
   test('should update project label, an description via API', async ({ request }) => {
-    const response = await request.put(`/api/projects/${projectId}`, {
+    const response = await request.patch(`/api/projects/${projectId}`, {
       data: {
         label: 'My Custom Label',
         description: 'This is a custom description',
@@ -41,7 +41,7 @@ test.describe.serial('Project Edit Tests', () => {
     });
 
     expect(response.ok()).toBeTruthy();
-    const updatedProject = await response.json();
+    const { project: updatedProject } = await response.json();
 
     expect(updatedProject.label).toBe('My Custom Label');
     expect(updatedProject.description).toBe('This is a custom description');
@@ -49,7 +49,7 @@ test.describe.serial('Project Edit Tests', () => {
   });
 
   test('should allow nullable fields', async ({ request }) => {
-    const response = await request.put(`/api/projects/${projectId}`, {
+    const response = await request.patch(`/api/projects/${projectId}`, {
       data: {
         label: null,
         description: null,
@@ -57,7 +57,7 @@ test.describe.serial('Project Edit Tests', () => {
     });
 
     expect(response.ok()).toBeTruthy();
-    const updatedProject = await response.json();
+    const { project: updatedProject } = await response.json();
 
     expect(updatedProject.label).toBeNull();
     expect(updatedProject.description).toBeNull();
@@ -98,7 +98,7 @@ test.describe.serial('Project Edit Tests', () => {
 
   test('should display custom label in project list', async ({ page, request }) => {
     // Update the project via API
-    await request.put(`/api/projects/${projectId}`, {
+    await request.patch(`/api/projects/${projectId}`, {
       data: {
         label: 'Custom Display Label',
       },
@@ -117,14 +117,14 @@ test.describe.serial('Project Edit Tests', () => {
 
   test('should use custom label when set', async ({ request }) => {
     // Set a custom label via API
-    const response = await request.put(`/api/projects/${projectId}`, {
+    const response = await request.patch(`/api/projects/${projectId}`, {
       data: {
         label: 'API Test Label',
       },
     });
 
     expect(response.ok()).toBeTruthy();
-    const updated = await response.json();
+    const { project: updated } = await response.json();
     expect(updated.label).toBe('API Test Label');
 
     // Verify by fetching the project

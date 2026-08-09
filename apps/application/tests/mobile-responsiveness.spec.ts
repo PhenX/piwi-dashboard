@@ -86,7 +86,7 @@ async function seedData(request: APIRequestContext) {
     timeout: 20000,
   });
 
-  const projects = await (await request.get('/api/projects')).json();
+  const { items: projects } = await (await request.get('/api/projects')).json();
   const project = projects.find((p: { name: string }) => p.name === PROJECT.MOBILE_RESPONSIVENESS);
   expect(project).toBeTruthy();
   projectId = project.id;
@@ -95,11 +95,11 @@ async function seedData(request: APIRequestContext) {
   runId = detail.testRuns[0].id;
 
   const run = await (await request.get(`/api/test-runs/${runId}`)).json();
-  const cases = run.testCases as Array<{ id: number; status: string; failureClusterId?: number }>;
+  const cases = run.testCases as Array<{ executionId: number; status: string; failureClusterId?: number }>;
   const failed = cases.find((c) => c.status === 'failed' && c.failureClusterId);
   expect(failed?.failureClusterId).toBeTruthy();
   clusterId = failed!.failureClusterId!;
-  testRunCaseId = failed!.id;
+  testRunCaseId = failed!.executionId;
 
   const execDetails = await (await request.get(`/api/test-run-cases/${testRunCaseId}`)).json();
   testCaseId = execDetails.testCaseId;

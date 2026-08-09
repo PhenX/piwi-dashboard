@@ -35,7 +35,7 @@ watch(
     }
     try {
       const res = await $fetch<MarkersResponse>(`/api/projects/${projectId}/markers`);
-      markers.value = res.markers ?? [];
+      markers.value = res.items ?? [];
     } catch {
       // markers are optional context; ignore fetch errors
     }

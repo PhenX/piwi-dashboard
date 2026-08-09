@@ -50,10 +50,10 @@ watch(open, async (isOpen) => {
   try {
     const [settingsData, listData] = await Promise.all([
       $fetch<{ enabled: boolean; maxTtlDays: number }>('/api/share-links/settings'),
-      $fetch<{ shareLinks: ShareLinkSummary[] }>(props.endpoint),
+      $fetch<{ items: ShareLinkSummary[] }>(props.endpoint),
     ]);
     settings.value = settingsData;
-    links.value = listData.shareLinks;
+    links.value = listData.items;
     ttlDays.value ??= settingsData.maxTtlDays === 0 ? 0 : Math.min(30, settingsData.maxTtlDays);
   } catch (error) {
     toast.add({ title: 'Could not load share links', description: errorMessage(error), color: 'error' });
@@ -70,8 +70,8 @@ async function mint() {
       body: { ttlDays: ttlDays.value === 0 ? null : ttlDays.value },
     });
     mintedUrl.value = result.url;
-    const listData = await $fetch<{ shareLinks: ShareLinkSummary[] }>(props.endpoint);
-    links.value = listData.shareLinks;
+    const listData = await $fetch<{ items: ShareLinkSummary[] }>(props.endpoint);
+    links.value = listData.items;
   } catch (error) {
     toast.add({ title: 'Could not create the share link', description: errorMessage(error), color: 'error' });
   } finally {
@@ -87,8 +87,8 @@ async function revoke(link: ShareLinkSummary) {
       description: `psl_${link.tokenPrefix}… no longer resolves.`,
       color: 'success',
     });
-    const listData = await $fetch<{ shareLinks: ShareLinkSummary[] }>(props.endpoint);
-    links.value = listData.shareLinks;
+    const listData = await $fetch<{ items: ShareLinkSummary[] }>(props.endpoint);
+    links.value = listData.items;
   } catch (error) {
     toast.add({ title: 'Could not revoke the link', description: errorMessage(error), color: 'error' });
   }

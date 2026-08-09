@@ -22,7 +22,7 @@ export default eventHandler(async (event) => {
   const body = await readBody(event);
   const validation = createTestFunctionSchema.safeParse(body);
   if (!validation.success) {
-    throw createError({ statusCode: 400, message: 'Invalid request body', data: validation.error.issues });
+    throw apiError({ statusCode: 400, message: 'Invalid request body', data: validation.error.issues });
   }
 
   const db = await getDatabase();
@@ -31,7 +31,7 @@ export default eventHandler(async (event) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create test function';
     const isUniqueViolation = message.toLowerCase().includes('unique');
-    throw createError({
+    throw apiError({
       statusCode: isUniqueViolation ? 409 : 400,
       message: isUniqueViolation ? 'A function with this name already exists in this module' : message,
     });

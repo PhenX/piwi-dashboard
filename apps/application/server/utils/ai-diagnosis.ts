@@ -266,7 +266,7 @@ async function prepareDiagnosisInputs(
       ? buildDiagnosisContext(db, {
           kind: 'execution',
           clusterId: cluster.id,
-          testRunsCaseId: opts.testRunsCaseId!,
+          executionId: opts.testRunsCaseId!,
           baseCommit: effectiveBaseCommit,
           selectedCommitShas: opts.selectedCommitShas,
           skipScm,

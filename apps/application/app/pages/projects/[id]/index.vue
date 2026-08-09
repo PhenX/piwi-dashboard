@@ -122,9 +122,9 @@ watch(
         $fetch<ProjectMembersResponse>(`/api/projects/${projectId}/members`),
         $fetch<UsersResponse>('/api/users'),
       ]);
-      members.value = membersData.users;
-      allUsers.value = usersData.users;
-      selectedMemberIds.value = membersData.users
+      members.value = membersData.items;
+      allUsers.value = usersData.items;
+      selectedMemberIds.value = membersData.items
         .filter((m) => m.role !== 'administrator' && !m.global)
         .map((m) => m.id);
     } catch {
@@ -153,7 +153,7 @@ async function handleSaveMembers() {
     });
     toast.add({ title: 'Members updated', color: 'success' });
     const data = await $fetch<ProjectMembersResponse>(`/api/projects/${projectId}/members`);
-    members.value = data.users;
+    members.value = data.items;
   } catch (error: unknown) {
     const errorMessage =
       error && typeof error === 'object' && 'data' in error ? (error.data as { message?: string })?.message : undefined;
@@ -348,9 +348,9 @@ const flakyEnvironment = computed(() =>
 // === TIMELINE MARKERS ===
 const { data: markersData, refresh: refreshMarkers } = await useFetch<MarkersResponse>(
   `/api/projects/${projectId}/markers`,
-  { default: () => ({ markers: [] }) },
+  { default: () => ({ items: [] }) },
 );
-const markers = computed(() => markersData.value?.markers ?? []);
+const markers = computed(() => markersData.value?.items ?? []);
 
 const canEditMarkers = computed(() => !runtimeConfig.public.authEnabled || isAdmin.value || isReporter.value);
 
@@ -474,20 +474,22 @@ watch(
     const qs = new URLSearchParams(params as Record<string, string>).toString();
     const fullParam = fullRunsOnly.value ? `${qs ? '&' : ''}fullRunsOnly=true` : '';
     const queryString = qs || fullParam ? `?${qs}${fullParam}` : '';
-    performanceData.value = await $fetch<PerformanceTrendPoint[]>(
+    const perfRes = await $fetch<{ items: PerformanceTrendPoint[] }>(
       `/api/projects/${projectId}/performance${queryString}`,
     ).catch((err) => {
       console.warn('[PerformanceTab] Failed to fetch performance trend:', err);
       return null;
     });
+    performanceData.value = perfRes?.items ?? null;
     performanceLoading.value = false;
     if (slowTestsLoading.value) {
       slowTestsError.value = false;
-      slowTests.value = await $fetch<SlowTest[]>(`/api/projects/${projectId}/slow-tests`).catch((err) => {
+      const slowRes = await $fetch<{ items: SlowTest[] }>(`/api/projects/${projectId}/slow-tests`).catch((err) => {
         slowTestsError.value = true;
         console.warn('[PerformanceTab] Failed to fetch slow tests:', err);
         return null;
       });
+      slowTests.value = slowRes?.items ?? null;
       slowTestsLoading.value = false;
     }
   },

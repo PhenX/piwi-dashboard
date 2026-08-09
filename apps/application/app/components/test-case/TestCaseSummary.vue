@@ -253,9 +253,9 @@ function attemptTitle(a: { retry: number; status: string; duration: number; star
 
             <MetaStripGroup label="Links" icon="i-lucide-link">
               <EntityLinks
-                v-if="testCase?.id"
+                v-if="testCase?.executionId"
                 entity-type="test_case"
-                :entity-id="testCase.id"
+                :entity-id="testCase.executionId"
                 :links="stableLinks ?? null"
                 @updated="$emit('refresh')"
               />

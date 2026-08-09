@@ -182,14 +182,14 @@ describe('status icon helpers', () => {
     expect(getStatusTextClass('failed')).toContain('rose');
     expect(getStatusTextClass('didnotrun')).toContain('amber');
     expect(getStatusTextClass('running')).toContain('blue');
-    expect(getStatusTextClass('initialising')).toBe(getStatusTextClass('running'));
+    expect(getStatusTextClass('initializing')).toBe(getStatusTextClass('running'));
     expect(getStatusTextClass('finalizing')).toBe(getStatusTextClass('running'));
     expect(getStatusTextClass('skipped')).toContain('zinc');
   });
 
   test('only the in-flight statuses spin', () => {
     expect(isStatusInFlight('running')).toBe(true);
-    expect(isStatusInFlight('initialising')).toBe(true);
+    expect(isStatusInFlight('initializing')).toBe(true);
     expect(isStatusInFlight('finalizing')).toBe(true);
     expect(isStatusInFlight('passed')).toBe(false);
     expect(isStatusInFlight('timedOut')).toBe(false);

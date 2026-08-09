@@ -163,7 +163,7 @@ function addLevel(
   }
 
   for (const test of direct) {
-    rows.push({ kind: 'test', depth, key: `test:${test.id}`, test });
+    rows.push({ kind: 'test', depth, key: `test:${test.executionId}`, test });
   }
 }
 
@@ -266,7 +266,7 @@ const flatRows = computed<FlatRow[]>(() => {
         <div
           v-else
           class="flex flex-wrap items-center gap-x-2 gap-y-1 pr-3 py-2 sm:py-1.5 border-b border-default last:border-b-0 hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-colors"
-          :class="highlightedCaseId === row.test.id ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
+          :class="highlightedCaseId === row.test.executionId ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
           :style="{ paddingLeft: `${row.depth * 20 + 12}px` }"
         >
           <!--
@@ -303,10 +303,10 @@ const flatRows = computed<FlatRow[]>(() => {
             by name, and a `@tag` in front of every name is noise to read past.
           -->
           <a
-            :href="`/test-run-cases/${row.test.id}`"
+            :href="`/test-run-cases/${row.test.executionId}`"
             class="text-highlighted hover:text-primary hover:underline min-w-32 self-stretch flex items-center"
             :title="row.test.title"
-            @click.prevent="navigateTo(`/test-run-cases/${row.test.id}`)"
+            @click.prevent="navigateTo(`/test-run-cases/${row.test.executionId}`)"
           >
             <span class="truncate">{{ row.test.title }}</span>
           </a>

@@ -48,7 +48,7 @@ async function submitRun(
     },
   });
   expect(res.ok(), `submit failed: ${res.status()} ${await res.text()}`).toBeTruthy();
-  return ((await res.json()) as { testRunId: number }).testRunId;
+  return ((await res.json()) as { runId: number }).runId;
 }
 
 async function getQuarantine(request: APIRequestContext, projectId: number): Promise<QuarantineResponse> {
@@ -67,7 +67,9 @@ test.describe.serial('Quarantine', () => {
       { title: 'solid login', status: 'passed' },
     ]);
 
-    const projects = (await (await request.get('/api/projects')).json()) as Array<{ id: number; name: string }>;
+    const projects = (
+      (await (await request.get('/api/projects')).json()) as { items: Array<{ id: number; name: string }> }
+    ).items;
     projectId = projects.find((p) => p.name === PROJECT.QUARANTINE)!.id;
 
     const cases = (await (await request.get(`/api/projects/${projectId}/test-cases?maxAgeDays=0`)).json()) as {
@@ -180,7 +182,11 @@ test.describe.serial('Quarantine', () => {
   });
 
   test('releasing lets the test block the gate again', async ({ request }) => {
-    const res = await request.delete(`/api/projects/${projectId}/quarantine/${flakyCaseId}`);
+    // The optional release reason rides in the request body (not the query
+    // string), like every other mutation.
+    const res = await request.delete(`/api/projects/${projectId}/quarantine/${flakyCaseId}`, {
+      data: { reason: 'stable for two weeks' },
+    });
     expect(res.ok()).toBeTruthy();
 
     const body = await getQuarantine(request, projectId);

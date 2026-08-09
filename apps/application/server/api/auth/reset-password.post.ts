@@ -31,7 +31,7 @@ export default eventHandler(async (event) => {
   const body = await readBody(event);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
-    throw createError({ statusCode: 400, message: 'Token and password (min 8 chars) are required' });
+    throw apiError({ statusCode: 400, message: 'Token and password (min 8 chars) are required' });
   }
 
   const { token, password } = parsed.data;
@@ -41,12 +41,12 @@ export default eventHandler(async (event) => {
   let validated = await validateAccountToken(db, token, 'reset');
   if (!validated) validated = await validateAccountToken(db, token, 'invite');
   if (!validated) {
-    throw createError({ statusCode: 400, message: 'Invalid or expired token' });
+    throw apiError({ statusCode: 400, message: 'Invalid or expired token' });
   }
 
   const userRows = await db.select().from(users).where(eq(users.id, validated.userId));
   const user = userRows[0];
-  if (!user) throw createError({ statusCode: 400, message: 'Invalid or expired token' });
+  if (!user) throw apiError({ statusCode: 400, message: 'Invalid or expired token' });
 
   const hashedPassword = await hashPassword(password);
   const extraFields = validated.purpose === 'invite' ? { emailVerified: true } : {};

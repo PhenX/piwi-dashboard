@@ -262,7 +262,7 @@ export class RunSubmitter {
         auth,
       );
       this.recovery.clear();
-      return { done: true, output: this.buildOutput(response?.testRunId, response?.projectId, run, overallStatus) };
+      return { done: true, output: this.buildOutput(response?.runId, response?.projectId, run, overallStatus) };
     } catch (error) {
       if (error instanceof HttpError && error.status === 401 && !auth) {
         this.logAuthRequired(run.options.serverUrl);
@@ -284,7 +284,7 @@ export class RunSubmitter {
     try {
       const response = await this.uploader.uploadJSON(payload, auth);
       this.recovery.clear();
-      return { done: true, output: this.buildOutput(response?.testRunId, response?.projectId, run, overallStatus) };
+      return { done: true, output: this.buildOutput(response?.runId, response?.projectId, run, overallStatus) };
     } catch (error) {
       // If the server returned 401 and no auth was configured, this is a
       // configuration error — throw so the caller knows it's fatal.

@@ -34,7 +34,7 @@ test.describe('Keyboard navigation & tab URL sync', () => {
   });
 
   async function findProjectId(request: APIRequestContext) {
-    const projects = await (await request.get('/api/projects')).json();
+    const { items: projects } = await (await request.get('/api/projects')).json();
     const project = projects.find((p: { name: string }) => p.name === PROJECT.KEYBOARD_NAV);
     return project.id as number;
   }

@@ -19,6 +19,7 @@
 
 import { handleDemoRequest } from '../demo/api/router';
 import { configureDemoDb, resetDemoDb } from '../demo/db.client';
+import { type ErrorCode, errorCodeForStatus } from '#shared/utils/error-codes';
 
 declare const self: ServiceWorkerGlobalScope & typeof globalThis;
 
@@ -141,18 +142,22 @@ self.addEventListener('fetch', (event) => {
         // status code (400/403/404/409) instead of collapsing into a 500.
         const message = e instanceof Error ? e.message : String(e);
         const statusCode = (e as { statusCode?: number } | null)?.statusCode ?? 500;
+        const errorCode = (e as { errorCode?: ErrorCode } | null)?.errorCode ?? errorCodeForStatus(statusCode);
         console.error('[Demo SW] handler error for', apiPath, e);
-        return new Response(JSON.stringify({ statusCode, message }), {
+        return new Response(JSON.stringify({ statusCode, message, data: { errorCode } }), {
           status: statusCode,
           headers: { 'Content-Type': 'application/json' },
         });
       }
 
       if (result === undefined) {
-        return new Response(JSON.stringify({ statusCode: 404, message: 'Not found' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return new Response(
+          JSON.stringify({ statusCode: 404, message: 'Not found', data: { errorCode: 'NOT_FOUND' } }),
+          {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
       }
 
       // Support binary responses from file handlers

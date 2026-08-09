@@ -26,7 +26,7 @@ export default eventHandler(async (event) => {
   );
 
   if (!shareLinksEnabled()) {
-    throw createError({
+    throw apiError({
       statusCode: 403,
       message: 'Share links are disabled. Set PIWI_SHARE_LINKS_ENABLED=true to allow them.',
     });
@@ -34,7 +34,7 @@ export default eventHandler(async (event) => {
 
   const validation = bodySchema.safeParse((await readBody(event).catch(() => null)) ?? {});
   if (!validation.success) {
-    throw createError({ statusCode: 400, message: 'Invalid request body', data: validation.error.issues });
+    throw apiError({ statusCode: 400, message: 'Invalid request body', data: validation.error.issues });
   }
 
   const minted = await mintShareLink(db, {

@@ -210,9 +210,9 @@ test.describe('Dashboard UI Tests', () => {
         testCases: [{ title: 'delete-ui-test', status: 'passed', duration: 500, location: 'tests/x.spec.ts:1:1' }],
       },
     });
-    const { testRunId } = await submitRes.json();
+    const { runId } = await submitRes.json();
 
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await waitForHydration(page);
 
     // Delete button should be visible in the navbar
@@ -259,9 +259,9 @@ test.describe('Dashboard UI Tests', () => {
         },
       },
     });
-    const { testRunId } = await submitRes.json();
+    const { runId } = await submitRes.json();
 
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await waitForHydration(page);
 
     // Each MetaStripGroup carries its label as a title attribute
@@ -303,9 +303,9 @@ test.describe('Dashboard UI Tests', () => {
         },
       },
     });
-    const { testRunId } = await submitRes.json();
+    const { runId } = await submitRes.json();
 
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await waitForHydration(page);
 
     const versionsGroup = page.locator('[title="Tooling versions"]');
@@ -323,7 +323,7 @@ test.describe('Foldable Summary', () => {
   // workers, each seeding the same project, so "the newest run of
   // PROJECT.SUMMARY_FOLD" can belong to another worker's test — take the id the
   // submit returned instead.
-  let testRunId = 0;
+  let runId = 0;
 
   test.beforeEach(async ({ page, request }) => {
     const submitRes = await retryPost(request, '/api/test-runs/submit', {
@@ -352,12 +352,12 @@ test.describe('Foldable Summary', () => {
       },
       timeout: 20000,
     });
-    testRunId = (await submitRes.json()).testRunId;
+    runId = (await submitRes.json()).runId;
     await page.context().clearCookies();
   });
 
   test('should start expanded on test run detail page', async ({ page }) => {
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
 
     await expect(page.getByTitle('Collapse summary')).toBeVisible();
@@ -365,7 +365,7 @@ test.describe('Foldable Summary', () => {
   });
 
   test('should collapse and expand test run summary', async ({ page }) => {
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
@@ -380,7 +380,7 @@ test.describe('Foldable Summary', () => {
   });
 
   test('should show key info in folded state', async ({ page }) => {
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
@@ -393,9 +393,9 @@ test.describe('Foldable Summary', () => {
   });
 
   test('should start expanded on test case detail page', async ({ page, request }) => {
-    const runRes = await request.get(`/api/test-runs/${testRunId}`);
+    const runRes = await request.get(`/api/test-runs/${runId}`);
     const runData = await runRes.json();
-    const testCaseId = runData.testCases[0].id;
+    const testCaseId = runData.testCases[0].executionId;
 
     await page.goto(`/test-run-cases/${testCaseId}`);
     await page.waitForURL(/\/test-run-cases\/\d+/);
@@ -405,9 +405,9 @@ test.describe('Foldable Summary', () => {
   });
 
   test('should collapse and expand test case summary', async ({ page, request }) => {
-    const runRes = await request.get(`/api/test-runs/${testRunId}`);
+    const runRes = await request.get(`/api/test-runs/${runId}`);
     const runData = await runRes.json();
-    const testCaseId = runData.testCases[0].id;
+    const testCaseId = runData.testCases[0].executionId;
 
     await page.goto(`/test-run-cases/${testCaseId}`);
     await page.waitForURL(/\/test-run-cases\/\d+/);
@@ -424,7 +424,7 @@ test.describe('Foldable Summary', () => {
   });
 
   test('should persist fold state across navigation', async ({ page }) => {
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
@@ -443,7 +443,7 @@ test.describe('Run Label', () => {
   // them over several workers, so "the newest run of PROJECT.RUN_LABEL" can be
   // another worker's run and two tests then fight over one label — take the id
   // the submit returned instead.
-  let testRunId = 0;
+  let runId = 0;
 
   test.beforeEach(async ({ page, request }) => {
     const submitRes = await retryPost(request, '/api/test-runs/submit', {
@@ -468,12 +468,12 @@ test.describe('Run Label', () => {
       },
       timeout: 20000,
     });
-    testRunId = (await submitRes.json()).testRunId;
+    runId = (await submitRes.json()).runId;
     await page.context().clearCookies();
   });
 
   test('shows + label button when no label exists', async ({ page }) => {
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
@@ -484,7 +484,7 @@ test.describe('Run Label', () => {
   });
 
   test('clicking + label shows an inline input', async ({ page }) => {
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
@@ -495,7 +495,7 @@ test.describe('Run Label', () => {
   });
 
   test('pressing Enter saves the label and displays it', async ({ page }) => {
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
@@ -509,7 +509,7 @@ test.describe('Run Label', () => {
   });
 
   test('label persists after page reload', async ({ page }) => {
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
@@ -525,11 +525,11 @@ test.describe('Run Label', () => {
 
   test('clicking label text re-enters edit mode', async ({ page, request }) => {
     // Submit a run with a label via API
-    await request.patch(`/api/test-runs/${testRunId}`, {
+    await request.patch(`/api/test-runs/${runId}`, {
       data: { label: 'edit-me' },
     });
 
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
@@ -543,7 +543,7 @@ test.describe('Run Label', () => {
   });
 
   test('pressing Escape cancels label edit', async ({ page }) => {
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
@@ -558,11 +558,11 @@ test.describe('Run Label', () => {
 
   test('saving an empty label clears it', async ({ page, request }) => {
     // Set a label first via API
-    await request.patch(`/api/test-runs/${testRunId}`, {
+    await request.patch(`/api/test-runs/${runId}`, {
       data: { label: 'will-be-cleared' },
     });
 
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
@@ -581,11 +581,11 @@ test.describe('Run Label', () => {
   });
 
   test('label appears in breadcrumb on test run page', async ({ page, request }) => {
-    await request.patch(`/api/test-runs/${testRunId}`, {
+    await request.patch(`/api/test-runs/${runId}`, {
       data: { label: 'breadcrumb-label' },
     });
 
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 

@@ -10,7 +10,7 @@ defineRouteMeta({
     tags: ['Settings'],
     summary: 'Save AI settings',
     description:
-      'Updates the per-role AI configuration (diagnosis, research, embedding), auto-diagnose toggle, custom instructions, and SCM token. Each role has its own provider/model/baseUrl/apiKey, or `reuse` to inherit another role. Requires administrator role. Not available when AI is managed via environment variables.',
+      'Updates the per-role AI configuration (diagnosis, research, embedding), auto-diagnose toggle, custom instructions, and SCM token. Each role has its own provider/model/baseUrl/apiKey, or `reuse` to inherit another role. Requires administrator role. Env-managed conflict: when AI is configured via environment variables the environment is authoritative for provider, key, and base URL — those fields are ignored and only per-role model overrides (or clearing them with `roles: null`) are applied. The response always reflects the effective configuration.',
     'x-required-roles': ['administrator'],
   },
 });
@@ -97,19 +97,19 @@ export default eventHandler(async (event) => {
       if (cfg == null) continue; // explicit removal
 
       if (cfg.reuse) {
-        if (cfg.reuse === role) throw createError({ statusCode: 400, message: `Role "${role}" cannot reuse itself` });
+        if (cfg.reuse === role) throw apiError({ statusCode: 400, message: `Role "${role}" cannot reuse itself` });
         out[role] = { reuse: cfg.reuse, model: cfg.model?.trim() || '' };
         continue;
       }
 
       const provider = (cfg.provider || '') as AiProvider;
       if (!VALID_PROVIDERS.includes(provider)) {
-        throw createError({ statusCode: 400, message: `Role "${role}" has an invalid provider` });
+        throw apiError({ statusCode: 400, message: `Role "${role}" has an invalid provider` });
       }
       const model = cfg.model?.trim() || '';
       const baseUrl = cfg.baseUrl?.trim() || '';
       if (provider === 'openai' && (!baseUrl || !model)) {
-        throw createError({
+        throw apiError({
           statusCode: 400,
           message: `Role "${role}": OpenAI-compatible provider requires baseUrl and model`,
         });
@@ -120,7 +120,7 @@ export default eventHandler(async (event) => {
 
     // The diagnosis role is the required root and cannot reuse another role.
     if (!out.diagnosis || out.diagnosis.reuse) {
-      throw createError({ statusCode: 400, message: 'A diagnosis role with its own provider is required' });
+      throw apiError({ statusCode: 400, message: 'A diagnosis role with its own provider is required' });
     }
 
     // Embeddings need an OpenAI-compatible endpoint — Anthropic has no
@@ -129,7 +129,7 @@ export default eventHandler(async (event) => {
       let cfg: RawStoredRole | undefined = out.embedding;
       for (let hops = 0; cfg?.reuse && hops < AI_ROLES.length; hops++) cfg = out[cfg.reuse];
       if (cfg?.provider !== 'openai') {
-        throw createError({
+        throw apiError({
           statusCode: 400,
           message: 'The embedding role requires an OpenAI-compatible provider (Anthropic has no embeddings API)',
         });

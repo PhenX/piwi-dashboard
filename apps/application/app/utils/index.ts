@@ -178,7 +178,7 @@ export function getStatusColor(status: string) {
       return 'warning';
     case 'cancelled':
       return 'neutral';
-    case 'initialising':
+    case 'initializing':
       return 'info';
     case 'running':
       return 'info';
@@ -208,7 +208,7 @@ export function getStatusIcon(status: string): string {
     case 'didnotrun':
       return 'i-lucide-circle-slash';
     case 'running':
-    case 'initialising':
+    case 'initializing':
     case 'finalizing':
       return 'i-lucide-loader-circle';
     default:
@@ -227,7 +227,7 @@ export function getStatusTextClass(status: string): string {
     case 'didnotrun':
       return 'text-amber-600 dark:text-amber-400';
     case 'running':
-    case 'initialising':
+    case 'initializing':
     case 'finalizing':
       return 'text-blue-600 dark:text-blue-400';
     default:
@@ -238,7 +238,7 @@ export function getStatusTextClass(status: string): string {
 /** Whether a status icon should spin (the run is still in flight). */
 export function isStatusInFlight(status: string): boolean {
   const s = normalizeStatusKey(status);
-  return s === 'running' || s === 'initialising' || s === 'finalizing';
+  return s === 'running' || s === 'initializing' || s === 'finalizing';
 }
 
 /**

@@ -27,7 +27,7 @@ useHead(
   })),
 );
 
-const entries = computed(() => catalog.value?.testFunctions ?? []);
+const entries = computed(() => catalog.value?.items ?? []);
 
 const KIND_ITEMS = [
   { label: 'Page-object method', value: 'page-object-method' },
@@ -338,7 +338,7 @@ async function save() {
   const isEdit = editingId.value != null;
   try {
     if (isEdit) {
-      await $fetch(`/api/test-functions/${editingId.value}`, { method: 'PUT', body });
+      await $fetch(`/api/test-functions/${editingId.value}`, { method: 'PATCH', body });
     } else {
       await $fetch(`/api/projects/${projectId}/test-functions`, { method: 'POST', body });
     }

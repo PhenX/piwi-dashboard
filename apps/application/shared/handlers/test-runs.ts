@@ -137,7 +137,8 @@ export async function getTestRun(
   );
 
   const formattedTestCases = runsCases.map((tc: any) => ({
-    id: tc.id,
+    executionId: tc.id,
+    testCaseId: tc.testCaseId,
     title: tc.title,
     filePath: tc.filePath,
     suitePath: splitSuitePath(tc.suitePath),
@@ -228,7 +229,7 @@ export async function getTestRun(
     links: linksForRun,
     testCases: formattedTestCases.map((tc: any) => ({
       ...tc,
-      links: caseLinksMap.get(tc.id) ?? [],
+      links: caseLinksMap.get(tc.executionId) ?? [],
     })),
     suites,
     storageStats,
@@ -238,7 +239,7 @@ export async function getTestRun(
 
 // ─── getRecentTestRuns — active + 30 most recent completed ───────────────────
 
-const ACTIVE_STATUSES = ['running', 'initialising', 'finalizing'] as const;
+const ACTIVE_STATUSES = ['running', 'initializing', 'finalizing'] as const;
 
 const RECENT_FIELDS = {
   id: testRuns.id,
@@ -338,11 +339,8 @@ export async function patchTestRun(db: DrizzleDB, id: number, label: string | nu
     })
     .where(eq(testRuns.id, id));
 
-  return {
-    success: true,
-    testRunId: id,
-    label: label ?? null,
-  };
+  const [testRun] = await db.select().from(testRuns).where(eq(testRuns.id, id));
+  return { success: true, testRun };
 }
 
 // ─── getNetworkRequests — aggregated network endpoint stats ──────────────────
@@ -433,7 +431,7 @@ function buildEndpointSummaries(
 // ─── getFailureGroups — clustered failures for a run ─────────────────────────
 
 interface GroupCase {
-  testRunsCaseId: number;
+  executionId: number;
   testCaseId: number;
   title: string;
   filePath: string;
@@ -480,7 +478,7 @@ export async function getFailureGroups(db: DrizzleDB, runId: number) {
 
   const clusteredRows = await db
     .select({
-      testRunsCaseId: testRunsCases.id,
+      executionId: testRunsCases.id,
       testCaseId: testRunsCases.testCaseId,
       retries: testRunsCases.retries,
       workerIndex: testRunsCases.workerIndex,
@@ -542,12 +540,12 @@ export async function getFailureGroups(db: DrizzleDB, runId: number) {
     if (existing) {
       if ((row.retries ?? 0) > existing.retries) {
         existing.retries = row.retries ?? 0;
-        existing.testRunsCaseId = row.testRunsCaseId;
+        existing.executionId = row.executionId;
         existing.workerIndex = row.workerIndex;
       }
     } else {
       g.caseById.set(row.testCaseId, {
-        testRunsCaseId: row.testRunsCaseId,
+        executionId: row.executionId,
         testCaseId: row.testCaseId,
         title: row.title,
         filePath: row.filePath,
@@ -597,7 +595,7 @@ export async function getFailureGroups(db: DrizzleDB, runId: number) {
   const HEALING_GROUP_CAP = 10;
   const reps = result
     .slice(0, HEALING_GROUP_CAP)
-    .map((g) => ({ clusterId: g.clusterId, repId: g.cases[0]?.testRunsCaseId }))
+    .map((g) => ({ clusterId: g.clusterId, repId: g.cases[0]?.executionId }))
     .filter((r): r is { clusterId: number; repId: number } => r.repId != null);
   const healingByCluster = new Map<number, { recommended: string; source: string; healed: boolean }>();
   if (reps.length > 0) {

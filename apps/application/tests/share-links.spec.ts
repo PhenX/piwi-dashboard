@@ -33,14 +33,14 @@ test.describe.serial('Share links', () => {
       },
     });
     expect(submit.ok()).toBeTruthy();
-    const { testRunId } = await submit.json();
+    const { runId } = await submit.json();
 
-    const run = (await (await request.get(`/api/test-runs/${testRunId}`)).json()) as {
-      testCases: Array<{ id: number; status: string; failureClusterId?: number }>;
+    const run = (await (await request.get(`/api/test-runs/${runId}`)).json()) as {
+      testCases: Array<{ executionId: number; status: string; failureClusterId?: number }>;
     };
     const failed = run.testCases.find((c) => c.status === 'failed');
     expect(failed).toBeDefined();
-    executionId = failed!.id;
+    executionId = failed!.executionId;
     clusterId = failed!.failureClusterId;
   });
 
@@ -82,7 +82,7 @@ test.describe.serial('Share links', () => {
   test('the listing shows the view without ever returning the token', async ({ request }) => {
     const res = await request.get(`/api/test-run-cases/${executionId}/share-links`);
     expect(res.ok()).toBeTruthy();
-    const { shareLinks } = await res.json();
+    const { items: shareLinks } = await res.json();
     expect(shareLinks).toHaveLength(1);
     expect(shareLinks[0].viewCount).toBe(1);
     expect(shareLinks[0].tokenPrefix).toHaveLength(8);

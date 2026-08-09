@@ -57,10 +57,11 @@ watch(
 );
 
 // Fetch projects for sidebar navigation
-const { data: projects, refresh: refreshProjects } = await useFetch<ProjectWithStats[]>('/api/projects', {
+const { data: projects, refresh: refreshProjects } = await useFetch('/api/projects', {
   key: 'projects',
   lazy: true,
   default: () => [] as ProjectWithStats[],
+  transform: (r: { items: ProjectWithStats[] }) => r.items,
 });
 
 useRunStream(refreshProjects);
@@ -102,7 +103,7 @@ const projectItems = computed<NavigationMenuItem[]>(() => {
 
   function buildProjectItem(project: ProjectWithStats): NavigationMenuItem {
     const isActive = currentProjectId.value !== null && currentProjectId.value === project.id;
-    const isRunning = project.latestRun?.status === 'running' || project.latestRun?.status === 'initialising';
+    const isRunning = project.latestRun?.status === 'running' || project.latestRun?.status === 'initializing';
     const status = project.latestRun?.status || 'unknown';
     const statusIcon =
       status === 'passed' ? 'i-lucide-circle-check-big' : status === 'failed' ? 'i-lucide-circle-x' : 'i-lucide-circle';
@@ -244,7 +245,7 @@ const pageSourceUrl = computed(() => {
 function runStatusIcon(status: string) {
   if (status === 'passed') return 'i-lucide-circle-check-big';
   if (status === 'failed') return 'i-lucide-circle-x';
-  if (status === 'running' || status === 'initialising') return 'i-lucide-loader-circle';
+  if (status === 'running' || status === 'initializing') return 'i-lucide-loader-circle';
   return 'i-lucide-circle';
 }
 

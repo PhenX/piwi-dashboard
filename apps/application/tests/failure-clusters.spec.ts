@@ -148,11 +148,11 @@ test.describe.serial('Failure clustering', () => {
       },
     });
     expect(response.ok()).toBeTruthy();
-    return (await response.json()) as { testRunId: number; projectId: number };
+    return (await response.json()) as { runId: number; projectId: number };
   }
 
   test('groups failures sharing a root cause on submission', async ({ request }) => {
-    const { testRunId: runId, projectId: pid } = await submitRun(request, [
+    const { runId, projectId: pid } = await submitRun(request, [
       {
         title: 'login via header',
         status: 'failed',
@@ -199,7 +199,7 @@ test.describe.serial('Failure clustering', () => {
   });
 
   test('reuses the cluster across runs of the same project', async ({ request }) => {
-    const { testRunId: runId } = await submitRun(request, [
+    const { runId } = await submitRun(request, [
       {
         title: 'login via header',
         status: 'failed',
@@ -219,7 +219,7 @@ test.describe.serial('Failure clustering', () => {
   test('failure-groups endpoint classifies known, new and flaky groups', async ({ request }) => {
     const checkoutError = 'Error: page.goto: net::ERR_CONNECTION_REFUSED at https://checkout.example.com/';
 
-    const { testRunId: runId } = await submitRun(request, [
+    const { runId } = await submitRun(request, [
       {
         title: 'login via header',
         status: 'failed',
@@ -251,7 +251,7 @@ test.describe.serial('Failure clustering', () => {
       firstSeenRunId: number;
       flaky: boolean;
       cases: Array<{ title: string; passedOnRetry: boolean }>;
-    }> = await response.json();
+    }> = (await response.json()).items;
 
     expect(groups).toHaveLength(2);
 
@@ -284,7 +284,7 @@ test.describe.serial('Failure clustering', () => {
       affectedTests: number;
       lastSeenRunId: number;
       lastSeenAt: string | null;
-    }> = await response.json();
+    }> = (await response.json()).items;
 
     const login = clusters.find((c) => c.id === firstRunClusterId)!;
     expect(login).toBeDefined();
@@ -302,7 +302,7 @@ test.describe.serial('Failure clustering', () => {
 
   test('cluster status defaults to open and is exposed in project endpoint', async ({ request }) => {
     const response = await request.get(`/api/projects/${projectId}/failure-clusters`);
-    const clusters: Array<{ id: number; status: string; triageNote: string | null }> = await response.json();
+    const clusters: Array<{ id: number; status: string; triageNote: string | null }> = (await response.json()).items;
 
     const login = clusters.find((c) => c.id === firstRunClusterId)!;
     expect(login).toBeDefined();
@@ -316,13 +316,13 @@ test.describe.serial('Failure clustering', () => {
       data: { status: 'resolved', triageNote: note },
     });
     expect(patchRes.ok()).toBeTruthy();
-    const patch = await patchRes.json();
-    expect(patch.status).toBe('resolved');
-    expect(patch.triageNote).toBe(note);
+    const { cluster } = await patchRes.json();
+    expect(cluster.status).toBe('resolved');
+    expect(cluster.triageNote).toBe(note);
 
     // Verify the update is persisted
     const getRes = await request.get(`/api/projects/${projectId}/failure-clusters`);
-    const clusters: Array<{ id: number; status: string; triageNote: string | null }> = await getRes.json();
+    const clusters: Array<{ id: number; status: string; triageNote: string | null }> = (await getRes.json()).items;
     const login = clusters.find((c) => c.id === firstRunClusterId)!;
     expect(login.status).toBe('resolved');
     expect(login.triageNote).toBe(note);
@@ -339,17 +339,17 @@ test.describe.serial('Failure clustering', () => {
     // After the previous test, the login timeout cluster is resolved
     const resolved = await request.get(`/api/projects/${projectId}/failure-clusters?status=resolved`);
     expect(resolved.ok()).toBeTruthy();
-    const resolvedClusters: Array<{ id: number }> = await resolved.json();
+    const resolvedClusters: Array<{ id: number }> = (await resolved.json()).items;
     expect(resolvedClusters.some((c) => c.id === firstRunClusterId)).toBeTruthy();
 
     const open = await request.get(`/api/projects/${projectId}/failure-clusters?status=open`);
     expect(open.ok()).toBeTruthy();
-    const openClusters: Array<{ id: number }> = await open.json();
+    const openClusters: Array<{ id: number }> = (await open.json()).items;
     expect(openClusters.some((c) => c.id === firstRunClusterId)).toBeFalsy();
   });
 
   test('failure-groups endpoint exposes cluster status', async ({ request }) => {
-    const { testRunId: runId } = await submitRun(request, [
+    const { runId } = await submitRun(request, [
       {
         title: 'login via header',
         status: 'failed',
@@ -361,7 +361,7 @@ test.describe.serial('Failure clustering', () => {
     ]);
 
     const groupsRes = await request.get(`/api/test-runs/${runId}/failure-groups`);
-    const groups: Array<{ status: string; triageNote: string | null }> = await groupsRes.json();
+    const groups: Array<{ status: string; triageNote: string | null }> = (await groupsRes.json()).items;
     expect(groups[0]).toBeDefined();
     expect(groups[0].status).toBe('resolved');
     expect(groups[0].triageNote).toBe('Investigated — flaky test infrastructure');
@@ -396,9 +396,9 @@ test.describe.serial('Extract cases from failure cluster', () => {
       },
     });
     expect(response.ok()).toBeTruthy();
-    const { testRunId } = await response.json();
+    const { runId } = await response.json();
 
-    const clusterRes = await request.get(`/api/test-runs/${testRunId}`);
+    const clusterRes = await request.get(`/api/test-runs/${runId}`);
     const run = (await clusterRes.json()) as { testCases: Array<{ status: string; failureClusterId: number }> };
     const failed = run.testCases.filter((c) => c.status === 'failed');
     expect(failed).toHaveLength(2);
@@ -463,7 +463,7 @@ test.describe.serial('Extract cases from failure cluster', () => {
 
   test('extracted case no longer references the cluster on the run detail page', async ({ request }) => {
     const projectsRes = await request.get('/api/projects/menu');
-    const projects = (await projectsRes.json()) as Array<{ id: number; name: string }>;
+    const projects = ((await projectsRes.json()) as { items: Array<{ id: number; name: string }> }).items;
     const project = projects.find((p) => p.name === PROJECT.EXTRACT_CASES)!;
     const projectDetail = (await (await request.get(`/api/projects/${project.id}`)).json()) as {
       testRuns: Array<{ id: number }>;

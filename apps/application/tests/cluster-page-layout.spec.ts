@@ -48,7 +48,7 @@ async function seedCluster(request: APIRequestContext) {
     timeout: 20000,
   });
 
-  const projects = await (await request.get('/api/projects')).json();
+  const { items: projects } = await (await request.get('/api/projects')).json();
   const project = projects.find((p: { name: string }) => p.name === PROJECT.CLUSTER_PAGE_LAYOUT);
   expect(project).toBeTruthy();
   const detail = await (await request.get(`/api/projects/${project.id}`)).json();

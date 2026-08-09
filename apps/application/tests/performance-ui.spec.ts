@@ -104,9 +104,9 @@ test.describe('Performance UI Tests', () => {
     // Get the test run ID first
     const response = await page.request.get(`/api/projects/${projectId}`);
     const projectData = await response.json();
-    const testRunId = projectData.testRuns[0].id;
+    const runId = projectData.testRuns[0].id;
 
-    await page.goto(`/test-runs/${testRunId}`);
+    await page.goto(`/test-runs/${runId}`);
 
     // Should show avg and p90 test duration
     await expect(page.getByText('Avg', { exact: true })).toBeVisible();
@@ -117,14 +117,14 @@ test.describe('Performance UI Tests', () => {
     // Get a test case ID with performance data
     const response = await page.request.get(`/api/projects/${projectId}`);
     const projectData = await response.json();
-    const testRunId = projectData.testRuns[0].id;
+    const runId = projectData.testRuns[0].id;
 
-    const runResponse = await page.request.get(`/api/test-runs/${testRunId}`);
+    const runResponse = await page.request.get(`/api/test-runs/${runId}`);
     const runData = await runResponse.json();
     const testCaseWithSteps = runData.testCases.find((tc: { slowestStep: string | null }) => tc.slowestStep !== null);
 
     if (testCaseWithSteps) {
-      await page.goto(`/test-run-cases/${testCaseWithSteps.id}`);
+      await page.goto(`/test-run-cases/${testCaseWithSteps.executionId}`);
       await expect(page.getByText('Slowest step')).toBeVisible();
 
       // Should show steps section

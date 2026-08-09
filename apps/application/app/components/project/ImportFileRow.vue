@@ -72,9 +72,9 @@ function plural(count: number, noun: string): string {
       {{ entry.message }}
     </p>
 
-    <div v-if="result?.testRunId" class="text-xs">
-      <ULink :to="`/test-runs/${result.testRunId}`" class="text-primary hover:underline">
-        View run #{{ result.testRunId }}
+    <div v-if="result?.runId" class="text-xs">
+      <ULink :to="`/test-runs/${result.runId}`" class="text-primary hover:underline">
+        View run #{{ result.runId }}
       </ULink>
     </div>
 

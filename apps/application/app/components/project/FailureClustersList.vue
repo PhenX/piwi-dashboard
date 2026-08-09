@@ -7,14 +7,19 @@ const props = defineProps<{
 }>();
 
 const statusFilter = ref<string | undefined>(undefined);
-const { data: clusters, pending: loading } = await useFetch<ProjectFailureCluster[]>(
+const { data: clusters, pending: loading } = await useFetch(
   () => {
     const params = new URLSearchParams();
     if (statusFilter.value) params.set('status', statusFilter.value);
     const qs = params.toString();
     return `/api/projects/${props.projectId}/failure-clusters${qs ? `?${qs}` : ''}`;
   },
-  { lazy: true, server: false, watch: [statusFilter] },
+  {
+    lazy: true,
+    server: false,
+    watch: [statusFilter],
+    transform: (r: { items: ProjectFailureCluster[] }) => r.items,
+  },
 );
 
 const resolutionOf = (cluster: ProjectFailureCluster) => fixVerificationBadge(cluster.fixVerification);

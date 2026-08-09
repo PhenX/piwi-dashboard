@@ -932,7 +932,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
 // ── Simulation engine ──────────────────────────────────────────────────────
 
 export interface SimulationHooks {
-  /** Run row created (status 'initialising') — good time to navigate to it */
+  /** Run row created (status 'initializing') — good time to navigate to it */
   onRunCreated?: (runId: number, projectId: number) => void;
   onProgress?: (completed: number, failed: number, total: number) => void;
   onFinished?: (runId: number, status: string) => void;
@@ -1057,7 +1057,7 @@ async function runSingleSimulation(
   const runId = setup.runId;
   hooks.onRunCreated?.(runId, setup.projectId);
 
-  // Let the 'initialising' state be visible for a moment, like a real global setup
+  // Let the 'initializing' state be visible for a moment, like a real global setup
   await sleep(INIT_DELAY_MS / scenario.speed);
 
   const metadata = scenario.metadata();

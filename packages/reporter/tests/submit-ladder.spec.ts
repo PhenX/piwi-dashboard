@@ -112,7 +112,7 @@ describe('PiwiDashboardReporter submit/fallback ladder', () => {
     server = await startServer((req, res) => {
       if (req.url === '/api/test-runs/submit') {
         submitBody = JSON.parse(req.body);
-        jsonRes(res, 200, { testRunId: 10, projectId: 20 });
+        jsonRes(res, 200, { runId: 10, projectId: 20 });
       } else {
         textRes(res, 404, 'nope');
       }
@@ -143,7 +143,7 @@ describe('PiwiDashboardReporter submit/fallback ladder', () => {
   it('writes the CI output file with the submitted run identity', async () => {
     server = await startServer((req, res) => {
       if (req.url === '/api/test-runs/submit') {
-        jsonRes(res, 200, { testRunId: 99, projectId: 5 });
+        jsonRes(res, 200, { runId: 99, projectId: 5 });
       } else {
         textRes(res, 404, 'nope');
       }
@@ -175,7 +175,7 @@ describe('PiwiDashboardReporter submit/fallback ladder', () => {
   it('streaming disabled, uploadReport=true: multipart /upload only (no /submit)', async () => {
     server = await startServer((req, res) => {
       if (req.url === '/api/test-runs/upload') {
-        jsonRes(res, 200, { testRunId: 11, projectId: 21 });
+        jsonRes(res, 200, { runId: 11, projectId: 21 });
       } else {
         textRes(res, 404, 'nope');
       }
@@ -204,7 +204,7 @@ describe('PiwiDashboardReporter submit/fallback ladder', () => {
       if (req.url === '/api/test-runs/upload') {
         textRes(res, 500, 'boom');
       } else if (req.url === '/api/test-runs/submit') {
-        jsonRes(res, 200, { testRunId: 12, projectId: 22 });
+        jsonRes(res, 200, { runId: 12, projectId: 22 });
       } else {
         textRes(res, 404, 'nope');
       }

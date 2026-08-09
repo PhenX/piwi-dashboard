@@ -19,7 +19,7 @@ const props = defineProps<{
 
 interface EnvironmentDiffResponse {
   status: 'ok' | 'no-baseline' | 'not-found';
-  baseline?: { runId: number; testRunsCaseId: number; startTime: number | null };
+  baseline?: { runId: number; executionId: number; startTime: number | null };
   entries?: EnvironmentDiffEntry[];
 }
 
@@ -30,10 +30,9 @@ const {
   data: diff,
   pending,
   error,
-} = useFetch<EnvironmentDiffResponse>(
-  () => `/api/test-runs/${props.runId}/cases/${props.testRunsCaseId}/environment-diff`,
-  { lazy: true },
-);
+} = useFetch<EnvironmentDiffResponse>(() => `/api/test-run-cases/${props.testRunsCaseId}/environment-diff`, {
+  lazy: true,
+});
 
 const entries = computed<EnvironmentDiffEntry[]>(() => diff.value?.entries ?? []);
 const meaningful = computed(() => entries.value.filter((e) => !e.informational));

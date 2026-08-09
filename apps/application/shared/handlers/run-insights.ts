@@ -3,14 +3,14 @@ import { testRuns, testRunsCases, testCases, failureClusters } from '../../serve
 import type { DrizzleDB } from './db';
 
 interface TestCaseEntry {
-  testRunsCaseId: number;
+  executionId: number;
   title: string;
   filePath: string;
   duration: number | null;
 }
 
 interface PerfChangeEntry {
-  testRunsCaseId: number;
+  executionId: number;
   title: string;
   filePath: string;
   durationBefore: number;
@@ -31,12 +31,12 @@ interface RunInsightsResult {
   recurrences: TestCaseEntry[];
   recovered: TestCaseEntry[];
   newFlaky: TestCaseEntry[];
-  slowestTests: Array<{ testRunsCaseId: number; title: string; filePath: string; duration: number }>;
+  slowestTests: Array<{ executionId: number; title: string; filePath: string; duration: number }>;
   mostImproved: PerfChangeEntry[];
   mostRegressed: PerfChangeEntry[];
   workerImbalance: Array<{ workerIndex: number; count: number }>;
   workerImbalanceWarning: string | null;
-  flakyOnRetry: Array<{ testRunsCaseId: number; title: string; filePath: string; retries: number }>;
+  flakyOnRetry: Array<{ executionId: number; title: string; filePath: string; retries: number }>;
   clusterNew: Array<{ clusterId: number; signature: string }>;
 }
 
@@ -133,7 +133,7 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
   const recurrences: TestCaseEntry[] = [];
   const recovered: TestCaseEntry[] = [];
   const newFlaky: TestCaseEntry[] = [];
-  const flakyOnRetry: Array<{ testRunsCaseId: number; title: string; filePath: string; retries: number }> = [];
+  const flakyOnRetry: Array<{ executionId: number; title: string; filePath: string; retries: number }> = [];
   const perfChanges: PerfChangeEntry[] = [];
 
   for (const cc of currentCases) {
@@ -145,11 +145,11 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
       const isFail = FAIL_STATUSES.has(cc.status);
 
       if (!wasFail && isFail) {
-        newRegressions.push({ testRunsCaseId: cc.id, title: cc.title, filePath: cc.filePath, duration: cc.duration });
+        newRegressions.push({ executionId: cc.id, title: cc.title, filePath: cc.filePath, duration: cc.duration });
       } else if (wasFail && !isFail) {
-        recovered.push({ testRunsCaseId: cc.id, title: cc.title, filePath: cc.filePath, duration: cc.duration });
+        recovered.push({ executionId: cc.id, title: cc.title, filePath: cc.filePath, duration: cc.duration });
       } else if (wasFail && isFail) {
-        recurrences.push({ testRunsCaseId: cc.id, title: cc.title, filePath: cc.filePath, duration: cc.duration });
+        recurrences.push({ executionId: cc.id, title: cc.title, filePath: cc.filePath, duration: cc.duration });
       }
     }
 
@@ -158,13 +158,13 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
       const wasStable = (bc.retries ?? 0) === 0 && bc.status === 'passed';
       const isNowFlaky = (cc.retries ?? 0) > 0 && cc.status === 'passed';
       if (wasStable && isNowFlaky) {
-        newFlaky.push({ testRunsCaseId: cc.id, title: cc.title, filePath: cc.filePath, duration: cc.duration });
+        newFlaky.push({ executionId: cc.id, title: cc.title, filePath: cc.filePath, duration: cc.duration });
       }
     }
 
     // Flaky on retry (passed but had retries)
     if (cc.status === 'passed' && (cc.retries ?? 0) > 0) {
-      flakyOnRetry.push({ testRunsCaseId: cc.id, title: cc.title, filePath: cc.filePath, retries: cc.retries ?? 0 });
+      flakyOnRetry.push({ executionId: cc.id, title: cc.title, filePath: cc.filePath, retries: cc.retries ?? 0 });
     }
 
     // Duration changes
@@ -174,7 +174,7 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
       if (before > 0) {
         const pctChange = Math.round(((after - before) / before) * 100);
         perfChanges.push({
-          testRunsCaseId: cc.id,
+          executionId: cc.id,
           title: cc.title,
           filePath: cc.filePath,
           durationBefore: before,
@@ -207,7 +207,7 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
     .filter((c) => c.duration != null)
     .sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0))
     .slice(0, 5)
-    .map((c) => ({ testRunsCaseId: c.id, title: c.title, filePath: c.filePath, duration: c.duration }));
+    .map((c) => ({ executionId: c.id, title: c.title, filePath: c.filePath, duration: c.duration }));
 
   // Filter out zero-change entries so no test appears in both lists with 0%
   const nonZeroChanges = perfChanges.filter((c) => c.pctChange !== 0);

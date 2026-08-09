@@ -47,7 +47,7 @@ async function submitFailingRun(request: APIRequestContext): Promise<number> {
     },
   });
   expect(res.ok()).toBeTruthy();
-  return (await res.json()).testRunId ?? (await res.json()).id;
+  return (await res.json()).runId ?? (await res.json()).id;
 }
 
 async function firstExecutionAndCluster(request: APIRequestContext) {
@@ -73,14 +73,17 @@ async function firstExecutionAndCluster(request: APIRequestContext) {
     },
   });
   expect(runRes.ok()).toBeTruthy();
-  const runId = (await runRes.json()).testRunId;
+  const runId = (await runRes.json()).runId;
 
   const detail = await (await request.get(`/api/test-runs/${runId}`)).json();
   const execution = detail.testCases?.[0];
   expect(execution, 'the submitted run should have an execution').toBeTruthy();
 
-  const caseDetail = await (await request.get(`/api/test-run-cases/${execution.id}`)).json();
-  return { executionId: execution.id as number, clusterId: caseDetail.failureCluster?.id as number | undefined };
+  const caseDetail = await (await request.get(`/api/test-run-cases/${execution.executionId}`)).json();
+  return {
+    executionId: execution.executionId as number,
+    clusterId: caseDetail.failureCluster?.id as number | undefined,
+  };
 }
 
 test.describe('offline export', () => {

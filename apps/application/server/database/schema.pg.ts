@@ -71,7 +71,7 @@ export const testRuns = pgTable(
     projectId: integer('project_id')
       .notNull()
       .references(() => projects.id, { onDelete: 'cascade' }),
-    status: text('status').notNull(), // 'passed', 'failed', 'timedout', 'interrupted', 'running', 'cancelled', 'initialising', 'finalizing'
+    status: text('status').notNull(), // 'passed', 'failed', 'timedout', 'interrupted', 'running', 'cancelled', 'initializing', 'finalizing'
     startTime: timestamp('start_time', { mode: 'date' }).notNull(),
     duration: integer('duration'), // in milliseconds
     totalTests: integer('total_tests').notNull().default(0),
@@ -83,6 +83,7 @@ export const testRuns = pgTable(
     avgTestDuration: integer('avg_test_duration'), // average test case duration in ms
     p90TestDuration: integer('p90_test_duration'), // 90th percentile test duration in ms
     shardTotal: integer('shard_total'), // Total number of shards for sharded runs; null = not sharded
+    shardIndex: integer('shard_index'), // Reporting shard index (1-based) of the shard that created this run; null = not sharded
     shardsFinished: integer('shards_finished').notNull().default(0), // How many shards have finished
     isFullRun: integer('is_full_run').notNull().default(1), // 1 = full suite, 0 = partial/filtered (--grep, file filter, etc.)
     filterDetails: jsonb('filter_details'), // JSON: { grep?, grepInvert? }

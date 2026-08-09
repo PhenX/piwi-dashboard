@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3';
+import { apiError } from './api-error';
 import { buildExport } from '#shared/export/build';
 import { EXPORT_FORMATS, type ExportBundle, type ExportFormat } from '#shared/export/types';
 import { sanitizeFilename } from './sanitize-filename';
@@ -11,7 +12,7 @@ export function requireExportFormat(event: H3Event): ExportFormat {
   if (raw == null || raw === '') return 'html';
   const value = String(raw).toLowerCase();
   if (!(EXPORT_FORMATS as readonly string[]).includes(value)) {
-    throw createError({
+    throw apiError({
       statusCode: 400,
       message: `Unsupported export format '${value}'. Use one of: ${EXPORT_FORMATS.join(', ')}.`,
     });

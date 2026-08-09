@@ -57,7 +57,7 @@ export function createGlobalSetup(
     const logger = new Logger(opts.verbose ?? false);
 
     // In Playwright's UI mode the reporter never runs to finish a registered
-    // run, so registering here would leave orphaned "initialising" runs (one at
+    // run, so registering here would leave orphaned "initializing" runs (one at
     // UI launch, one per manual run). Skip registration but still chain
     // userSetup so the user's own setup keeps working under the UI.
     if (isUiMode()) {
@@ -126,7 +126,7 @@ export function createGlobalSetup(
             projectName: opts.projectName,
           }),
         );
-        logger.debug(`Global setup: initialising run #${response.runId}`);
+        logger.debug(`Global setup: initializing run #${response.runId}`);
       }
     } catch (error) {
       logger.warn(`Could not register global setup: ${errorMessage(error)}`);

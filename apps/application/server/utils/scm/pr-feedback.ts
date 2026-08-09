@@ -176,7 +176,7 @@ export async function buildRunPrSummary(
   // `computeRunInsights` owns the baseline comparison; reuse it rather than
   // re-deriving "new versus pre-existing" with a second, divergent rule.
   const insights = await computeRunInsights(db, runId).catch(() => null);
-  const newRegressionIds = new Set<number>((insights?.newRegressions ?? []).map((entry) => entry.testRunsCaseId));
+  const newRegressionIds = new Set<number>((insights?.newRegressions ?? []).map((entry) => entry.executionId));
 
   const { newRegressions, preExisting } = await buildFailureEntries(db, run.projectId, failingRows, newRegressionIds);
 

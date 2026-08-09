@@ -204,7 +204,7 @@ export async function apiSetupTestRun(body: TestRunStartPayload) {
         and(
           eq(testRuns.projectId, project.id),
           eq(testRuns.instanceId, instanceId),
-          eq(testRuns.status, 'initialising'),
+          eq(testRuns.status, 'initializing'),
         ),
       );
 
@@ -224,7 +224,7 @@ export async function apiSetupTestRun(body: TestRunStartPayload) {
       .insert(testRuns)
       .values({
         projectId: project.id,
-        status: 'initialising',
+        status: 'initializing',
         startTime: new Date(body.startTime || new Date().toISOString()),
         duration: null,
         totalTests: 0,
@@ -239,6 +239,7 @@ export async function apiSetupTestRun(body: TestRunStartPayload) {
         reporterVersion: body.reporterVersion || null,
         streamToken: setupToken,
         shardTotal,
+        shardIndex: body.shardIndex ?? null,
         shardsFinished: 0,
         isFullRun: body.isFullRun !== false ? 1 : 0,
         filterDetails: body.filterDetails ?? null,
@@ -247,7 +248,7 @@ export async function apiSetupTestRun(body: TestRunStartPayload) {
 
     const testRun = testRunResult[0];
     if (!testRun) throw new Error('Failed to create test run');
-    publishDemoGlobalEvent({ type: 'run-initialising', runId: testRun.id, projectId: project.id });
+    publishDemoGlobalEvent({ type: 'run-initializing', runId: testRun.id, projectId: project.id });
     return { success: true, runId: testRun.id, projectId: project.id, setupToken };
   }
 
@@ -259,7 +260,7 @@ export async function apiSetupTestRun(body: TestRunStartPayload) {
     .insert(testRuns)
     .values({
       projectId: project.id,
-      status: 'initialising',
+      status: 'initializing',
       startTime: new Date(body.startTime || new Date().toISOString()),
       duration: null,
       totalTests: 0,
@@ -283,7 +284,7 @@ export async function apiSetupTestRun(body: TestRunStartPayload) {
     throw new Error('Failed to create test run');
   }
 
-  publishDemoGlobalEvent({ type: 'run-initialising', runId: testRun.id, projectId: project.id });
+  publishDemoGlobalEvent({ type: 'run-initializing', runId: testRun.id, projectId: project.id });
 
   return { success: true, runId: testRun.id, projectId: project.id, setupToken };
 }
@@ -314,7 +315,7 @@ export async function apiBeginTestRun(
 
   // Parallel worker processes race to /begin on the same run; a running run is
   // tolerated and handed back its existing stream token (server behavior).
-  if (!isSharded && testRun.status !== 'initialising' && testRun.status !== 'running') {
+  if (!isSharded && testRun.status !== 'initializing' && testRun.status !== 'running') {
     throw demoHttpError(409, 'Test run cannot be transitioned to running state');
   }
 
@@ -327,7 +328,7 @@ export async function apiBeginTestRun(
 
   const streamToken = randomToken();
 
-  if (testRun.status === 'initialising') {
+  if (testRun.status === 'initializing') {
     await cancelInstanceRuns(db, testRun.projectId, testRun.instanceId, id, isSharded);
 
     await db
@@ -1044,7 +1045,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
       });
     }
 
-    return { success: true, testRunId: id, status: finalStatus ?? 'running' };
+    return { success: true, runId: id, status: finalStatus ?? 'running' };
   }
 
   // Non-sharded
@@ -1112,7 +1113,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
 
   await syncAutoMarkersForRun(db, id).catch(() => {});
 
-  return { success: true, testRunId: id, status };
+  return { success: true, runId: id, status };
 }
 
 /**
@@ -1133,7 +1134,7 @@ export async function apiCancelStaleSimulatorRuns(body: { instanceId?: string })
     .where(
       and(
         eq(testRuns.instanceId, body.instanceId),
-        or(eq(testRuns.status, 'running'), eq(testRuns.status, 'initialising'), eq(testRuns.status, 'finalizing')),
+        or(eq(testRuns.status, 'running'), eq(testRuns.status, 'initializing'), eq(testRuns.status, 'finalizing')),
       ),
     )
     .returning({ id: testRuns.id, projectId: testRuns.projectId });
