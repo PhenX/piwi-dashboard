@@ -70,8 +70,8 @@ export default eventHandler(async (event) => {
       })
       .where(eq(entityLinks.id, inserted.id));
     const updated = await db.select().from(entityLinks).where(eq(entityLinks.id, inserted.id));
-    return { link: updated[0] };
+    return { success: true, link: updated[0] };
   }
 
-  return { link: inserted };
+  return { success: true, link: inserted };
 });

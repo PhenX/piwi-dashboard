@@ -41,7 +41,7 @@ test.describe('Authentication Tests', () => {
     });
     expect(updateResponse.ok()).toBeTruthy();
 
-    const updateData = await updateResponse.json();
+    const { project: updateData } = await updateResponse.json();
     expect(updateData.label).toBe('Updated Label');
     expect(updateData.description).toBe('Updated Description');
   });

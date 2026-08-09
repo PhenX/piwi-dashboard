@@ -157,8 +157,8 @@ test.describe.serial('Tags assigned to projects', () => {
     });
     expect(res.ok()).toBeTruthy();
     const data = await res.json();
-    expect(data.tags).toBeDefined();
-    expect(data.tags.some((t: { id: number }) => t.id === tagId)).toBe(true);
+    expect(data.project.tags).toBeDefined();
+    expect(data.project.tags.some((t: { id: number }) => t.id === tagId)).toBe(true);
   });
 
   test('should include tags in project list', async ({ request }) => {
@@ -185,7 +185,7 @@ test.describe.serial('Tags assigned to projects', () => {
     });
     expect(res.ok()).toBeTruthy();
     const data = await res.json();
-    expect(data.tags).toHaveLength(0);
+    expect(data.project.tags).toHaveLength(0);
   });
 
   test('should cascade delete tag from project when tag is deleted', async ({ request }) => {

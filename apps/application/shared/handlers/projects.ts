@@ -290,7 +290,7 @@ export async function createProject(
     await db.insert(projectTags).values(tagIds.map((tagId: number) => ({ projectId: project.id, tagId })));
   }
 
-  return { project };
+  return { success: true, project };
 }
 
 // ─── updateProject ───────────────────────────────────────────────
@@ -351,8 +351,11 @@ export async function updateProject(
   const { scmToken: _scmToken, ...updatedProjectPublic } = updatedProject[0];
 
   return {
-    ...updatedProjectPublic,
-    tags: projectTagRows.map((r: any) => r.tag),
+    success: true,
+    project: {
+      ...updatedProjectPublic,
+      tags: projectTagRows.map((r: any) => r.tag),
+    },
   };
 }
 

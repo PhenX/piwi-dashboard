@@ -52,7 +52,7 @@ export async function createLink(
     .insert(entityLinks)
     .values({ ...fkColumn, url, provider, key, title: title ?? null })
     .returning();
-  return { link: result[0] ?? null };
+  return { success: true, link: result[0] ?? null };
 }
 
 export async function patchLink(db: DrizzleDB, id: number, data: { url?: string; title?: string | null }) {
@@ -68,7 +68,7 @@ export async function patchLink(db: DrizzleDB, id: number, data: { url?: string;
   if (data.title !== undefined) updates.title = data.title;
   await db.update(entityLinks).set(updates).where(eq(entityLinks.id, id));
   const updated = await db.select().from(entityLinks).where(eq(entityLinks.id, id));
-  return { link: updated[0] ?? null };
+  return { success: true, link: updated[0] ?? null };
 }
 
 export async function deleteLink(db: DrizzleDB, id: number) {
@@ -86,5 +86,5 @@ export async function refreshLinkMeta(db: DrizzleDB, id: number) {
   const key = extractKey(link.url, provider);
   await db.update(entityLinks).set({ provider, key, updatedAt: new Date() }).where(eq(entityLinks.id, id));
   const updated = await db.select().from(entityLinks).where(eq(entityLinks.id, id));
-  return { link: updated[0] ?? null };
+  return { success: true, link: updated[0] ?? null };
 }
