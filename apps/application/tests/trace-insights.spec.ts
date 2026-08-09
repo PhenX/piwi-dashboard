@@ -138,11 +138,11 @@ async function uploadRun(request: APIRequestContext, traceZip: Buffer | null) {
   }
   const res = await request.post('/api/test-runs/upload', { multipart });
   expect(res.ok()).toBe(true);
-  const { testRunId } = await res.json();
-  const runData = await (await request.get(`/api/test-runs/${testRunId}`)).json();
+  const { runId } = await res.json();
+  const runData = await (await request.get(`/api/test-runs/${runId}`)).json();
   const caseId = runData.testCases?.[0]?.executionId;
   expect(caseId).toBeDefined();
-  return { testRunId, caseId };
+  return { runId, caseId };
 }
 
 test.describe('Trace insights — call stack with source', () => {

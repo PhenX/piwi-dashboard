@@ -230,7 +230,7 @@ export default eventHandler(async (event) => {
 
     return {
       success: true,
-      testRunId: id,
+      runId: id,
       status: finalStatus ?? 'running',
     };
   }
@@ -341,7 +341,7 @@ export default eventHandler(async (event) => {
 
   return {
     success: true,
-    testRunId: id,
+    runId: id,
     status: hasPendingUploads ? 'finalizing' : status,
   };
 });

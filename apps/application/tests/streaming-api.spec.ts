@@ -482,7 +482,7 @@ test.describe.serial('Test Run Summary API Tests', () => {
     });
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
-    runId = data.testRunId;
+    runId = data.runId;
   });
 
   test('GET /api/test-runs/:id/summary returns run metadata without the stream token', async ({ request }) => {

@@ -38,7 +38,7 @@ test.describe.serial('API Server Tests', () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.success).toBe(true);
-    expect(data.testRunId).toBeDefined();
+    expect(data.runId).toBeDefined();
     expect(data.projectId).toBeDefined();
   });
 
@@ -116,11 +116,11 @@ test.describe.serial('API Server Tests', () => {
     expect(testCase).toBeDefined();
 
     // Get the test-run-case execution detail
-    const execResponse = await request.get(`/api/test-run-cases/${testCase.id}`);
+    const execResponse = await request.get(`/api/test-run-cases/${testCase.executionId}`);
     expect(execResponse.ok()).toBeTruthy();
 
     const execDetails = await execResponse.json();
-    expect(execDetails.id).toBe(testCase.id);
+    expect(execDetails.id).toBe(testCase.executionId);
     expect(execDetails.title).toBeDefined();
     expect(execDetails.status).toBeDefined();
 
@@ -215,10 +215,10 @@ test.describe.serial('API Server Tests', () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.success).toBe(true);
-    expect(data.testRunId).toBeDefined();
+    expect(data.runId).toBeDefined();
 
     // Verify the test run has the correct flaky test count
-    const testRunResponse = await request.get(`/api/test-runs/${data.testRunId}`);
+    const testRunResponse = await request.get(`/api/test-runs/${data.runId}`);
     expect(testRunResponse.ok()).toBeTruthy();
     const testRunDetails = await testRunResponse.json();
 

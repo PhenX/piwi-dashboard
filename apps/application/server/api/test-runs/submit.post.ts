@@ -217,7 +217,7 @@ export default eventHandler(async (event) => {
 
       return {
         success: true,
-        testRunId: existingRun.id,
+        runId: existingRun.id,
         projectId: project.id,
       };
     }
@@ -374,7 +374,7 @@ export default eventHandler(async (event) => {
 
   return {
     success: true,
-    testRunId: testRun.id,
+    runId: testRun.id,
     projectId: project.id,
   };
 });

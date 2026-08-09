@@ -108,7 +108,7 @@ test.describe('File Upload API Tests', () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.success).toBe(true);
-    expect(data.testRunId).toBeDefined();
+    expect(data.runId).toBeDefined();
     expect(data.projectId).toBeDefined();
   });
 
@@ -145,7 +145,7 @@ test.describe('File Upload API Tests', () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.success).toBe(true);
-    expect(data.testRunId).toBeDefined();
+    expect(data.runId).toBeDefined();
     // New API returns a reports array
     expect(Array.isArray(data.reports)).toBe(true);
     expect(data.reports.length).toBe(1);
@@ -190,7 +190,7 @@ test.describe('File Upload API Tests', () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.success).toBe(true);
-    expect(data.testRunId).toBeDefined();
+    expect(data.runId).toBeDefined();
     expect(Array.isArray(data.reports)).toBe(true);
     expect(data.reports.length).toBe(2);
 
@@ -227,10 +227,10 @@ test.describe('File Upload API Tests', () => {
     });
 
     const uploadData = await uploadResponse.json();
-    expect(uploadData.testRunId).toBeDefined();
+    expect(uploadData.runId).toBeDefined();
 
     // Fetch the test run and verify reports are returned
-    const runResponse = await request.get(`/api/test-runs/${uploadData.testRunId}`);
+    const runResponse = await request.get(`/api/test-runs/${uploadData.runId}`);
     expect(runResponse.ok()).toBeTruthy();
     const runData = await runResponse.json();
 

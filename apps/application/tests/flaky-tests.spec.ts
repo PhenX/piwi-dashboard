@@ -47,7 +47,7 @@ async function submitRun(
     },
   });
   expect(res.ok()).toBeTruthy();
-  return res.json() as Promise<{ testRunId: number; projectId: number }>;
+  return res.json() as Promise<{ runId: number; projectId: number }>;
 }
 
 test.describe.serial('Flaky tests endpoint', () => {

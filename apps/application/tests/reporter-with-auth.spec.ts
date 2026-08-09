@@ -240,7 +240,7 @@ test.describe.serial('Reporter with authentication enabled', () => {
     expect(submitRes.ok()).toBeTruthy();
     const data = await submitRes.json();
     expect(data.success).toBe(true);
-    expect(data.testRunId).toBeDefined();
+    expect(data.runId).toBeDefined();
     expect(data.projectId).toBeDefined();
   });
 
@@ -321,7 +321,7 @@ test.describe.serial('Reporter with authentication enabled', () => {
     expect(submitRes.ok()).toBeTruthy();
     const data = await submitRes.json();
     expect(data.success).toBe(true);
-    expect(data.testRunId).toBeDefined();
+    expect(data.runId).toBeDefined();
   });
 
   test('reporter lib: submit without session cookie returns 401', async ({ request }) => {
@@ -584,7 +584,7 @@ test.describe.serial('Reporter with authentication enabled', () => {
     expect(submitRes.ok()).toBeTruthy();
     const result = await submitRes.json();
     expect(result.success).toBe(true);
-    expect(result.testRunId).toBeDefined();
+    expect(result.runId).toBeDefined();
   });
 
   test('PiwiDashboardReporter submits results with apiKey option', async ({ request }) => {
@@ -719,8 +719,8 @@ test.describe.serial('Reporter with authentication enabled', () => {
       },
     });
     expect(submit.ok()).toBeTruthy();
-    const { testRunId } = await submit.json();
-    const run = (await (await request.get(`${AUTH_SERVER_URL}/api/test-runs/${testRunId}`)).json()) as {
+    const { runId } = await submit.json();
+    const run = (await (await request.get(`${AUTH_SERVER_URL}/api/test-runs/${runId}`)).json()) as {
       testCases: Array<{ executionId: number; status: string }>;
     };
     const executionId = run.testCases.find((c) => c.status === 'failed')!.executionId;
@@ -926,9 +926,9 @@ test.describe.serial('Reporter with authentication enabled', () => {
       },
     });
     expect(submitRes.ok()).toBeTruthy();
-    const { testRunId } = await submitRes.json();
+    const { runId } = await submitRes.json();
 
-    const run = (await (await request.get(`${AUTH_SERVER_URL}/api/test-runs/${testRunId}`)).json()) as {
+    const run = (await (await request.get(`${AUTH_SERVER_URL}/api/test-runs/${runId}`)).json()) as {
       testCases: Array<{ status: string; failureClusterId?: number }>;
     };
     const clusterId = run.testCases.find((c) => c.status === 'failed')?.failureClusterId;

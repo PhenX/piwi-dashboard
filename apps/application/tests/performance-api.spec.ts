@@ -3,7 +3,7 @@ import { PROJECT } from '#shared/test-project-names';
 
 test.describe.serial('Performance API Tests', () => {
   let projectId: number;
-  let testRunId: number;
+  let runId: number;
   let networkTestRunId: number;
 
   test('should submit test results with performance data', async ({ request }) => {
@@ -66,14 +66,14 @@ test.describe.serial('Performance API Tests', () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.success).toBe(true);
-    expect(data.testRunId).toBeDefined();
+    expect(data.runId).toBeDefined();
     expect(data.projectId).toBeDefined();
     projectId = data.projectId;
-    testRunId = data.testRunId;
+    runId = data.runId;
   });
 
   test('should return test run with performance data', async ({ request }) => {
-    const response = await request.get(`/api/test-runs/${testRunId}`);
+    const response = await request.get(`/api/test-runs/${runId}`);
     expect(response.ok()).toBeTruthy();
 
     const data = await response.json();
@@ -233,7 +233,7 @@ test.describe.serial('Performance API Tests', () => {
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
-    networkTestRunId = data.testRunId;
+    networkTestRunId = data.runId;
   });
 
   test('should return test case with network and web vitals data', async ({ request }) => {
@@ -330,7 +330,7 @@ test.describe.serial('Performance API Tests', () => {
 
     // Fetch back the stored test case detail to verify URL sanitization
     // (networkRequests is omitted from the test-run list endpoint for performance)
-    const runResponse = await request.get(`/api/test-runs/${data.testRunId}`);
+    const runResponse = await request.get(`/api/test-runs/${data.runId}`);
     expect(runResponse.ok()).toBeTruthy();
     const run = await runResponse.json();
     const tcSummary = run.testCases.find((t: { title: string }) => t.title === 'search page');

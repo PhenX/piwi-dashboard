@@ -118,7 +118,7 @@ export async function importArchive(input: ImportArchiveInput): Promise<ImportRu
         environment,
         label,
       });
-      console.log(`[Import] Trace "${parsed.case.title}" imported into run #${result.testRunId}`);
+      console.log(`[Import] Trace "${parsed.case.title}" imported into run #${result.runId}`);
       return result;
     }
 
@@ -137,7 +137,7 @@ export async function importArchive(input: ImportArchiveInput): Promise<ImportRu
       label,
     });
     console.log(
-      `[Import] Run #${result.testRunId} imported from ${archive.filename}: ` +
+      `[Import] Run #${result.runId} imported from ${archive.filename}: ` +
         `${result.totalTests} executions, ${result.traceCount} traces, ${result.attachmentCount} attachments`,
     );
     return result;

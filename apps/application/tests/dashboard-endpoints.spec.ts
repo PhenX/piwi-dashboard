@@ -28,7 +28,7 @@ test.describe.serial('Latest Run API Tests', () => {
     expect(first.ok()).toBeTruthy();
     const firstData = await first.json();
     projectId = firstData.projectId;
-    firstRunId = firstData.testRunId;
+    firstRunId = firstData.runId;
 
     const second = await request.post('/api/test-runs/submit', {
       data: {
@@ -45,7 +45,7 @@ test.describe.serial('Latest Run API Tests', () => {
     });
     expect(second.ok()).toBeTruthy();
     const secondData = await second.json();
-    secondRunId = secondData.testRunId;
+    secondRunId = secondData.runId;
   });
 
   test('GET /api/projects/:id/latest-run returns the most recently submitted run, not the passed one', async ({

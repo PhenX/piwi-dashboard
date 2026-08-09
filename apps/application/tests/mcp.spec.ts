@@ -50,7 +50,7 @@ test.describe.serial('MCP server', () => {
     expect(res.ok()).toBeTruthy();
     const data = await res.json();
     projectId = data.projectId;
-    runId = data.testRunId;
+    runId = data.runId;
   });
 
   test('initialize — returns server info and capabilities', async ({ request }) => {

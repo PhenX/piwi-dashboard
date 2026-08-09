@@ -1045,7 +1045,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
       });
     }
 
-    return { success: true, testRunId: id, status: finalStatus ?? 'running' };
+    return { success: true, runId: id, status: finalStatus ?? 'running' };
   }
 
   // Non-sharded
@@ -1113,7 +1113,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
 
   await syncAutoMarkersForRun(db, id).catch(() => {});
 
-  return { success: true, testRunId: id, status };
+  return { success: true, runId: id, status };
 }
 
 /**

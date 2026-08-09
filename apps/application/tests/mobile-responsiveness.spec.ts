@@ -99,7 +99,7 @@ async function seedData(request: APIRequestContext) {
   const failed = cases.find((c) => c.status === 'failed' && c.failureClusterId);
   expect(failed?.failureClusterId).toBeTruthy();
   clusterId = failed!.failureClusterId!;
-  testRunCaseId = failed!.id;
+  testRunCaseId = failed!.executionId;
 
   const execDetails = await (await request.get(`/api/test-run-cases/${testRunCaseId}`)).json();
   testCaseId = execDetails.testCaseId;

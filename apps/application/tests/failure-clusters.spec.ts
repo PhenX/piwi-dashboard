@@ -148,11 +148,11 @@ test.describe.serial('Failure clustering', () => {
       },
     });
     expect(response.ok()).toBeTruthy();
-    return (await response.json()) as { testRunId: number; projectId: number };
+    return (await response.json()) as { runId: number; projectId: number };
   }
 
   test('groups failures sharing a root cause on submission', async ({ request }) => {
-    const { testRunId: runId, projectId: pid } = await submitRun(request, [
+    const { runId, projectId: pid } = await submitRun(request, [
       {
         title: 'login via header',
         status: 'failed',
@@ -199,7 +199,7 @@ test.describe.serial('Failure clustering', () => {
   });
 
   test('reuses the cluster across runs of the same project', async ({ request }) => {
-    const { testRunId: runId } = await submitRun(request, [
+    const { runId } = await submitRun(request, [
       {
         title: 'login via header',
         status: 'failed',
@@ -219,7 +219,7 @@ test.describe.serial('Failure clustering', () => {
   test('failure-groups endpoint classifies known, new and flaky groups', async ({ request }) => {
     const checkoutError = 'Error: page.goto: net::ERR_CONNECTION_REFUSED at https://checkout.example.com/';
 
-    const { testRunId: runId } = await submitRun(request, [
+    const { runId } = await submitRun(request, [
       {
         title: 'login via header',
         status: 'failed',
@@ -349,7 +349,7 @@ test.describe.serial('Failure clustering', () => {
   });
 
   test('failure-groups endpoint exposes cluster status', async ({ request }) => {
-    const { testRunId: runId } = await submitRun(request, [
+    const { runId } = await submitRun(request, [
       {
         title: 'login via header',
         status: 'failed',
@@ -396,9 +396,9 @@ test.describe.serial('Extract cases from failure cluster', () => {
       },
     });
     expect(response.ok()).toBeTruthy();
-    const { testRunId } = await response.json();
+    const { runId } = await response.json();
 
-    const clusterRes = await request.get(`/api/test-runs/${testRunId}`);
+    const clusterRes = await request.get(`/api/test-runs/${runId}`);
     const run = (await clusterRes.json()) as { testCases: Array<{ status: string; failureClusterId: number }> };
     const failed = run.testCases.filter((c) => c.status === 'failed');
     expect(failed).toHaveLength(2);

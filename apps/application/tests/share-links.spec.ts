@@ -33,9 +33,9 @@ test.describe.serial('Share links', () => {
       },
     });
     expect(submit.ok()).toBeTruthy();
-    const { testRunId } = await submit.json();
+    const { runId } = await submit.json();
 
-    const run = (await (await request.get(`/api/test-runs/${testRunId}`)).json()) as {
+    const run = (await (await request.get(`/api/test-runs/${runId}`)).json()) as {
       testCases: Array<{ id: number; status: string; failureClusterId?: number }>;
     };
     const failed = run.testCases.find((c) => c.status === 'failed');

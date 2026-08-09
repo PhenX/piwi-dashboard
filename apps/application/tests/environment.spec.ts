@@ -28,7 +28,7 @@ test.describe('Environment API Tests', () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.success).toBe(true);
-    expect(data.testRunId).toBeDefined();
+    expect(data.runId).toBeDefined();
   });
 
   test('should retrieve environment from test run details', async ({ request }) => {
@@ -49,7 +49,7 @@ test.describe('Environment API Tests', () => {
 
     const submitData = await submitResponse.json();
 
-    const getResponse = await request.get(`/api/test-runs/${submitData.testRunId}`);
+    const getResponse = await request.get(`/api/test-runs/${submitData.runId}`);
     expect(getResponse.ok()).toBeTruthy();
 
     const testRun = await getResponse.json();
@@ -76,7 +76,7 @@ test.describe('Environment API Tests', () => {
         },
       });
       expect(res.ok()).toBeTruthy();
-      runIds.push((await res.json()).testRunId);
+      runIds.push((await res.json()).runId);
     }
 
     // Verify each run retains its environment
@@ -118,7 +118,7 @@ test.describe('Environment API Tests', () => {
 
     const data = await response.json();
 
-    const getResponse = await request.get(`/api/test-runs/${data.testRunId}`);
+    const getResponse = await request.get(`/api/test-runs/${data.runId}`);
     const testRun = await getResponse.json();
     expect(testRun.environment).toBeNull();
   });
@@ -141,7 +141,7 @@ test.describe('Environment API Tests', () => {
 
     const data = await response.json();
 
-    const getResponse = await request.get(`/api/test-runs/${data.testRunId}`);
+    const getResponse = await request.get(`/api/test-runs/${data.runId}`);
     const testRun = await getResponse.json();
     expect(testRun.environment).toBeNull();
   });
@@ -191,9 +191,9 @@ test.describe('Environment API Tests', () => {
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
-    expect(data.testRunId).toBeDefined();
+    expect(data.runId).toBeDefined();
 
-    const getResponse = await request.get(`/api/test-runs/${data.testRunId}`);
+    const getResponse = await request.get(`/api/test-runs/${data.runId}`);
     const testRun = await getResponse.json();
     expect(testRun.environment).toBe('production');
   });

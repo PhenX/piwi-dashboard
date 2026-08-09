@@ -48,7 +48,7 @@ async function submitRun(
     },
   });
   expect(res.ok(), `submit failed: ${res.status()} ${await res.text()}`).toBeTruthy();
-  return ((await res.json()) as { testRunId: number }).testRunId;
+  return ((await res.json()) as { runId: number }).runId;
 }
 
 async function getQuarantine(request: APIRequestContext, projectId: number): Promise<QuarantineResponse> {

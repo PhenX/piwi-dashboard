@@ -45,10 +45,10 @@ test.describe('Traces API', () => {
 
     expect(uploadResponse.ok()).toBeTruthy();
     const uploadData = await uploadResponse.json();
-    expect(uploadData.testRunId).toBeDefined();
+    expect(uploadData.runId).toBeDefined();
 
     // Get the test run to find the testRunsCase IDs
-    const runResponse = await request.get(`/api/test-runs/${uploadData.testRunId}`);
+    const runResponse = await request.get(`/api/test-runs/${uploadData.runId}`);
     expect(runResponse.ok()).toBeTruthy();
     const runData = await runResponse.json();
 

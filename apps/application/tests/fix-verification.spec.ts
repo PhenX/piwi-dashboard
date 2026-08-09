@@ -62,8 +62,8 @@ async function submitRun(
     },
   });
   expect(res.ok()).toBeTruthy();
-  const body = (await res.json()) as { testRunId: number };
-  return body.testRunId;
+  const body = (await res.json()) as { runId: number };
+  return body.runId;
 }
 
 /** This attempt's clusters only — see `attemptTag`. */

@@ -198,7 +198,7 @@ export function useBlobReportImport(projectName: Ref<string | undefined>) {
         if (!entry) return;
         entry.state = STATE_BY_VERDICT[result.status] ?? 'ready';
         entry.message = result.message;
-        if (result.testRunId) entry.result = { testRunId: result.testRunId } as ImportRunResponse;
+        if (result.runId) entry.result = { runId: result.runId } as ImportRunResponse;
       });
     } catch (error) {
       // A pre-flight failure must not block the import — the server re-checks

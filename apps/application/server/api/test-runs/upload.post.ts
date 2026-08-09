@@ -97,7 +97,7 @@ export default eventHandler(async (event) => {
   const attachmentFiles: Map<number, { originalName: string; data: Buffer }[]> = new Map();
 
   for (const part of formData) {
-    if (part.name === 'testRunId') {
+    if (part.name === 'runId') {
       const parsed = parseInt(part.data.toString('utf-8'), 10);
       if (!isNaN(parsed) && parsed > 0) existingTestRunId = parsed;
     } else if (part.name === 'projectName') {
@@ -648,7 +648,7 @@ export default eventHandler(async (event) => {
 
   return {
     success: true,
-    testRunId: testRun.id,
+    runId: testRun.id,
     projectId: project.id,
     reports: storedReports.map((r) => ({ type: r.type, label: r.label, path: r.path })),
   };

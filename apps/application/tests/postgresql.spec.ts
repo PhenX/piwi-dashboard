@@ -68,7 +68,7 @@ test.describe('PostgreSQL integration', () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data.success).toBe(true);
-    expect(data.testRunId).toBeDefined();
+    expect(data.runId).toBeDefined();
     expect(data.projectId).toBeDefined();
   });
 
@@ -155,7 +155,7 @@ test.describe('PostgreSQL integration', () => {
     expect(data.success).toBe(true);
 
     // Verify metadata is stored and returned
-    const runResponse = await request.get(`${baseURL}/api/test-runs/${data.testRunId}`);
+    const runResponse = await request.get(`${baseURL}/api/test-runs/${data.runId}`);
     expect(runResponse.ok()).toBeTruthy();
     const runData = await runResponse.json();
     expect(runData.metadata).toBeDefined();
