@@ -2,6 +2,7 @@ import { getDatabase } from '../../database';
 import { subscriptions, notificationChannels } from '../../database/schema';
 import { requireAuth, isAuthEnabled } from '../../utils/auth';
 import { getProjectScope, scopeAllows } from '../../utils/project-access';
+import { formatSubscription } from '../../utils/subscriptions';
 import { NOTIFICATION_EVENTS } from '#shared/notification-events';
 import { Role } from '#shared/types';
 import { z } from 'zod';
@@ -99,7 +100,7 @@ export default eventHandler(async (event) => {
       digestAt: digestAt || null,
       active: true,
     })
-    .returning({ id: subscriptions.id });
+    .returning();
 
-  return { success: true, subscriptionId: sub?.id };
+  return { success: true, subscription: formatSubscription(sub!, channel) };
 });

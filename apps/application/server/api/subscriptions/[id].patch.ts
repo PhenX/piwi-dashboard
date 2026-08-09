@@ -2,6 +2,7 @@ import { eq, and, or, isNull } from 'drizzle-orm';
 import { getDatabase } from '../../database';
 import { subscriptions, notificationChannels } from '../../database/schema';
 import { requireAuth } from '../../utils/auth';
+import { formatSubscription } from '../../utils/subscriptions';
 import { NOTIFICATION_EVENTS } from '#shared/notification-events';
 import { Role } from '#shared/types';
 import { z } from 'zod';
@@ -78,5 +79,12 @@ export default eventHandler(async (event) => {
   if (d.active !== undefined) update.active = d.active;
 
   await db.update(subscriptions).set(update).where(eq(subscriptions.id, id));
-  return { success: true };
+
+  const [updated] = await db
+    .select({ sub: subscriptions, channel: notificationChannels })
+    .from(subscriptions)
+    .innerJoin(notificationChannels, eq(subscriptions.channelId, notificationChannels.id))
+    .where(eq(subscriptions.id, id));
+
+  return { success: true, subscription: formatSubscription(updated!.sub, updated!.channel) };
 });

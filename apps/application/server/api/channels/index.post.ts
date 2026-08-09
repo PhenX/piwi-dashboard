@@ -2,6 +2,7 @@ import { getDatabase } from '../../database';
 import { notificationChannels } from '../../database/schema';
 import { requireAuth, isAuthEnabled } from '../../utils/auth';
 import { encryptSecret, getEncryptionKey } from '../../utils/crypto';
+import { sanitizeChannelConfig } from '../../utils/channels';
 import { Role } from '#shared/types';
 import { z } from 'zod';
 
@@ -57,5 +58,17 @@ export default eventHandler(async (event) => {
     })
     .returning();
 
-  return { success: true, channel: { id: channel?.id, name: channel?.name, type: channel?.type } };
+  return {
+    success: true,
+    channel: {
+      id: channel?.id,
+      name: channel?.name,
+      type: channel?.type,
+      userId: channel?.userId ?? null,
+      verified: Boolean(channel?.verified),
+      createdAt: channel?.createdAt,
+      updatedAt: channel?.updatedAt,
+      config: sanitizeChannelConfig((channel?.config ?? {}) as Record<string, unknown>),
+    },
+  };
 });

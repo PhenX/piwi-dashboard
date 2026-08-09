@@ -1,5 +1,5 @@
 import { getDatabase } from '../../database';
-import { updateUserRecord } from '#shared/handlers/users';
+import { updateUserRecord, toPublicUser } from '#shared/handlers/users';
 import { requireAuth, revokeUserSessions } from '../../utils/auth';
 import { Role } from '#shared/types';
 import { z } from 'zod';
@@ -52,10 +52,7 @@ export default eventHandler(async (event) => {
     if (parsed.data.role !== undefined) {
       await revokeUserSessions(id);
     }
-    return {
-      success: true,
-      user: { id: user.id, username: user.username, role: user.role as Role, name: user.name, email: user.email },
-    };
+    return { success: true, user: toPublicUser(user) };
   } catch (err) {
     throw apiError({ statusCode: 400, message: err instanceof Error ? err.message : 'Failed to update user' });
   }

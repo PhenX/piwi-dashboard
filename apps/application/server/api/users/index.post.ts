@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { getDatabase } from '../../database';
-import { createUserRecord } from '#shared/handlers/users';
+import { createUserRecord, toPublicUser } from '#shared/handlers/users';
 import { Role } from '#shared/types';
 import { hashPassword, requireAuth } from '../../utils/auth';
 import { z } from 'zod';
@@ -54,15 +54,7 @@ export default eventHandler(async (event) => {
       throw apiError({ statusCode: 500, message: 'Failed to create user' });
     }
 
-    return {
-      success: true,
-      user: {
-        id: user.id,
-        username: user.username,
-        role: user.role as Role,
-        name: user.name,
-      },
-    };
+    return { success: true, user: toPublicUser(user) };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to create user';
     throw apiError({

@@ -249,9 +249,9 @@ test.describe.serial('Subscriptions API', () => {
       adminCookie,
     );
     expect(res.ok).toBe(true);
-    const data = (await res.json()) as { success: boolean; subscriptionId: number };
+    const data = (await res.json()) as { success: boolean; subscription: { id: number } };
     expect(data.success).toBe(true);
-    subscriptionId = data.subscriptionId;
+    subscriptionId = data.subscription.id;
     expect(subscriptionId).toBeGreaterThan(0);
   });
 
@@ -440,8 +440,8 @@ test.describe.serial('Global channels & subscriptions', () => {
       adminCookie,
     );
     expect(onGlobal.ok).toBe(true);
-    const subData = (await onGlobal.json()) as { subscriptionId: number };
-    globalSubId = subData.subscriptionId;
+    const subData = (await onGlobal.json()) as { subscription: { id: number } };
+    globalSubId = subData.subscription.id;
     expect(globalSubId).toBeGreaterThan(0);
   });
 

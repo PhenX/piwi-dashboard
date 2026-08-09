@@ -123,6 +123,7 @@ import {
   listUserApiKeys,
   deleteUserApiKeyRecord,
   updateUserRecord,
+  toPublicUser,
 } from '#shared/handlers/users';
 import { searchProjectsTestRunsCases } from '#shared/handlers/search';
 import { getSetupStatus } from '#shared/handlers/setup-status';
@@ -1147,10 +1148,7 @@ const routes: RouteEntry[] = [
         email: b.email || null,
       });
       if (!created) throw new Error('Failed to create user');
-      return {
-        success: true,
-        user: { id: created.id, username: created.username, role: created.role, name: created.name },
-      };
+      return { success: true, user: toPublicUser(created) };
     },
   },
   {
@@ -1353,7 +1351,9 @@ routes.push(
     pattern: /^\/api\/users\/(\d+)$/,
     handler: async (m, body) => {
       const b = (body ?? {}) as { name?: string | null; email?: string | null; role?: string };
-      return updateUserRecord(await getDemoDb(), +m[1]!, b);
+      const updated = await updateUserRecord(await getDemoDb(), +m[1]!, b);
+      if (!updated) throw demoHttpError(404, 'User not found');
+      return { success: true, user: toPublicUser(updated) };
     },
   },
 );
@@ -1497,7 +1497,7 @@ routes.push(
         updatedAt: new Date().toISOString(),
       };
       _demoSubs.push(sub);
-      return Promise.resolve({ success: true, subscriptionId: sub.id });
+      return Promise.resolve({ success: true, subscription: sub });
     },
   },
   {
@@ -1505,22 +1505,21 @@ routes.push(
     pattern: /^\/api\/subscriptions\/(\d+)$/,
     handler: (m, body) => {
       const sub = _demoSubs.find((s) => s.id === parseInt(m[1]!));
-      if (sub) {
-        const b = body as Partial<DemoSubscription>;
-        if (b.events) {
-          if (b.events.length === 0 || b.events.some((e) => !(NOTIFICATION_EVENTS as readonly string[]).includes(e))) {
-            throw demoHttpError(400, 'events must contain at least one valid event');
-          }
-          sub.events = b.events;
+      if (!sub) throw demoHttpError(404, 'Subscription not found');
+      const b = body as Partial<DemoSubscription>;
+      if (b.events) {
+        if (b.events.length === 0 || b.events.some((e) => !(NOTIFICATION_EVENTS as readonly string[]).includes(e))) {
+          throw demoHttpError(400, 'events must contain at least one valid event');
         }
-        if (b.mode !== undefined) sub.mode = b.mode === 'digest' ? 'digest' : 'realtime';
-        if (b.filters !== undefined) sub.filters = b.filters;
-        if (b.digestAt !== undefined) sub.digestAt = b.digestAt;
-        if (b.mutedUntil !== undefined) sub.mutedUntil = b.mutedUntil;
-        if (b.active !== undefined) sub.active = b.active;
-        sub.updatedAt = new Date().toISOString();
+        sub.events = b.events;
       }
-      return Promise.resolve({ success: true });
+      if (b.mode !== undefined) sub.mode = b.mode === 'digest' ? 'digest' : 'realtime';
+      if (b.filters !== undefined) sub.filters = b.filters;
+      if (b.digestAt !== undefined) sub.digestAt = b.digestAt;
+      if (b.mutedUntil !== undefined) sub.mutedUntil = b.mutedUntil;
+      if (b.active !== undefined) sub.active = b.active;
+      sub.updatedAt = new Date().toISOString();
+      return Promise.resolve({ success: true, subscription: sub });
     },
   },
   {

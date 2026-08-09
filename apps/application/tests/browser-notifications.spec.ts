@@ -293,7 +293,7 @@ test.describe.serial('Browser Notifications (Cookie Mode)', () => {
       data: { channelId, projectId, events: ['run.failed'] },
     });
     expect(subRes.ok()).toBeTruthy();
-    const subId = ((await subRes.json()) as { subscriptionId: number }).subscriptionId;
+    const subId = ((await subRes.json()) as { subscription: { id: number } }).subscription.id;
 
     const subList = await request.get(`/api/subscriptions?projectId=${projectId}`);
     const subData = (await subList.json()) as { subscriptions: Array<{ id: number; userId: number | null }> };
