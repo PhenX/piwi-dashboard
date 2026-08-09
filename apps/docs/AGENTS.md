@@ -30,8 +30,11 @@ There is **no `apps/docs/api.md`, and you must not create one.** The auto-genera
 self-contained in-app reference at `/docs` in the running app are the single source of truth for API documentation —
 the in-app page renders the spec with no third-party CDN, so it works offline and air-gapped.
 
-When documenting a feature here, link to `[API docs](/docs)` (self-hosted) or the live demo
-(`https://piwitests.github.io/demo/docs`) rather than inlining endpoint descriptions. Endpoint documentation is
+When documenting a feature here, link to the live demo reference
+(`[API docs](https://piwitests.github.io/demo/docs)`) and refer to the self-hosted reference as inline code
+`/docs` rather than inlining endpoint descriptions. Do **not** write a bare `[API docs](/docs)` markdown link:
+`/docs` is a route on the running app, not a page on this docs site, so VitePress's dead-link check fails the
+build. Endpoint documentation is
 authored in the handler's `defineRouteMeta({ openAPI: … })` block — see
 [`../application/AGENTS.md`](../application/AGENTS.md#openapi-annotations).
 

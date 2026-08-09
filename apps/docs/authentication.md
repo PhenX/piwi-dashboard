@@ -206,7 +206,7 @@ Both edit the same underlying assignments, so use whichever is more convenient.
 
 When authentication is enabled:
 
-- Every endpoint requires an authenticated caller — a session cookie or an API key — with the role the endpoint declares (listed per endpoint in the [API docs](/docs)). The exceptions are `GET /api/health`, `GET /api/version`, the auth flows themselves (login, initial setup, password reset, email verification, OAuth), and the live-run streaming endpoints, which authenticate with per-run stream tokens instead.
+- Every endpoint requires an authenticated caller — a session cookie or an API key — with the role the endpoint declares (listed per endpoint in the [API docs](https://piwitests.github.io/demo/docs)). The exceptions are `GET /api/health`, `GET /api/version`, the auth flows themselves (login, initial setup, password reset, email verification, OAuth), and the live-run streaming endpoints, which authenticate with per-run stream tokens instead.
 - The reporter's submission endpoints (`/api/test-runs/submit` and `/api/test-runs/upload`) accept both session cookies and API keys.
 
 ## API keys
