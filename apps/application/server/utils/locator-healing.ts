@@ -18,6 +18,7 @@ import {
   alternativeUsesName,
 } from '#shared/locator-healing';
 import { elementMatchOutcome, generateFromAriaSnapshot, type ElementFingerprint } from '#shared/locator-fingerprint';
+import { buildHealEdit } from '#shared/heal-edit';
 import { inlineCasePayloads, resolveCasePayloadContents } from './case-payloads';
 import type {
   RankedLocator,
@@ -414,8 +415,10 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
       testSource: testRunsCases.testSource,
       ariaSnapshotPayloadId: testRunsCases.ariaSnapshotPayloadId,
       testSourcePayloadId: testRunsCases.testSourcePayloadId,
+      filePath: testCases.filePath,
     })
     .from(testRunsCases)
+    .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
     .where(eq(testRunsCases.id, testRunsCaseId));
 
   const row = rows[0] ? await inlineCasePayloads(db, rows[0]) : undefined;
@@ -431,7 +434,13 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
     : [];
 
   return resolveHealingForCase(
-    { error: row.error, ariaSnapshot: row.ariaSnapshot, testSource: row.testSource, failingRunId: row.testRunId },
+    {
+      error: row.error,
+      ariaSnapshot: row.ariaSnapshot,
+      testSource: row.testSource,
+      failingRunId: row.testRunId,
+      filePath: row.filePath,
+    },
     snaps,
     testCaseId ? (sig, method) => findCrossTestSnapshot(db, testCaseId, sig, method) : null,
   );
@@ -444,6 +453,12 @@ export interface HealingCaseInput {
   testSource?: string | null;
   /** The failing execution's run id — enables healed-run detection. */
   failingRunId?: number | null;
+  /**
+   * The failing test's own source file, used as the edit's file path when the
+   * error carries no stack frame (Piwi-submitted errors often don't). The call
+   * site's line still comes from the source snippet.
+   */
+  filePath?: string | null;
 }
 
 /**
@@ -486,6 +501,14 @@ export async function resolveHealingForCase(
   const finish = async (r: LocatorHealingResult): Promise<LocatorHealingResult> => {
     r.location = location;
     r.sourceLine = sourceLine;
+    r.edit = buildHealEdit({
+      location,
+      sourceLine,
+      failingMethod: r.failingLocator?.method ?? null,
+      recommendedLocator: r.recommendation?.recommended?.locator ?? null,
+      testSource: input.testSource ?? null,
+      fallbackFilePath: input.filePath ?? null,
+    });
     await stampHealedRun(r, snaps, failingSig, input.failingRunId ?? null);
     return r;
   };
@@ -593,8 +616,10 @@ export async function getLocatorHealingBatch(
       testSource: testRunsCases.testSource,
       ariaSnapshotPayloadId: testRunsCases.ariaSnapshotPayloadId,
       testSourcePayloadId: testRunsCases.testSourcePayloadId,
+      filePath: testCases.filePath,
     })
     .from(testRunsCases)
+    .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
     .where(inArray(testRunsCases.id, testRunsCaseIds));
 
   const payloadContents = await resolveCasePayloadContents(
@@ -629,7 +654,13 @@ export async function getLocatorHealingBatch(
     results.set(
       row.id,
       await resolveHealingForCase(
-        { error: row.error, ariaSnapshot: row.ariaSnapshot, testSource: row.testSource, failingRunId: row.testRunId },
+        {
+          error: row.error,
+          ariaSnapshot: row.ariaSnapshot,
+          testSource: row.testSource,
+          failingRunId: row.testRunId,
+          filePath: row.filePath,
+        },
         snaps,
         row.testCaseId ? (sig, method) => findCrossTestSnapshot(db, row.testCaseId, sig, method) : null,
       ),

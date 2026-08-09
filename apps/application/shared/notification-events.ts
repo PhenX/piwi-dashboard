@@ -7,6 +7,7 @@ export const NOTIFICATION_EVENTS = [
   'flakiness.spike',
   'perf.regression',
   'diagnosis.completed',
+  'auto_heal.pr_opened',
 ] as const;
 
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
@@ -117,7 +118,23 @@ export interface DiagnosisCompletedPayload {
   confidence?: string | null;
 }
 
-export type NotificationPayload = RunFinishedPayload | ClusterNewPayload | DiagnosisCompletedPayload;
+export interface AutoHealPrOpenedPayload {
+  projectId: number;
+  projectName: string;
+  /** The run whose failures triggered the heal. */
+  runId: number;
+  prNumber: number;
+  prUrl: string;
+  branch: string;
+  /** How many locator edits the PR carries. */
+  editCount: number;
+}
+
+export type NotificationPayload =
+  | RunFinishedPayload
+  | ClusterNewPayload
+  | DiagnosisCompletedPayload
+  | AutoHealPrOpenedPayload;
 
 /** Per-subscription delivery filters, stored as JSON on the subscription row. */
 export interface SubscriptionFilters {
@@ -247,6 +264,10 @@ export function renderEventSubject(event: NotificationEvent, payload: Notificati
     }
     case 'diagnosis.completed': {
       return 'Diagnosis complete';
+    }
+    case 'auto_heal.pr_opened': {
+      const p = payload as AutoHealPrOpenedPayload;
+      return `Auto-heal opened PR #${p.prNumber} — ${p.projectName}`;
     }
   }
 }

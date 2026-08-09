@@ -36,6 +36,7 @@ export function useSettingsEnvState() {
     storage: false,
     performance: false,
     'pr-feedback': false,
+    'auto-heal': false,
     ai: false,
     about: false,
   });

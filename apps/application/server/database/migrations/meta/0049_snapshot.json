@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9783db6e-35ce-4433-9b33-53326e51ad33",
+  "id": "69819a2b-79e5-4ede-b9e5-0fa76774d80f",
   "prevId": "8472f5e3-fd1e-4c7d-b2c7-b7c7dd75c7a5",
   "tables": {
     "account_tokens": {
@@ -1352,6 +1352,150 @@
           "columnsFrom": ["blob_id"],
           "columnsTo": ["id"],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "heal_actions": {
+      "name": "heal_actions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dedupe_key": {
+          "name": "dedupe_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'open-pr'"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "result": {
+          "name": "result",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "scheduled_for": {
+          "name": "scheduled_for",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "idx_heal_actions_dedupe": {
+          "name": "idx_heal_actions_dedupe",
+          "columns": ["dedupe_key"],
+          "isUnique": true
+        },
+        "idx_heal_actions_project_status": {
+          "name": "idx_heal_actions_project_status",
+          "columns": ["project_id", "status"],
+          "isUnique": false
+        },
+        "idx_heal_actions_status": {
+          "name": "idx_heal_actions_status",
+          "columns": ["status", "scheduled_for"],
+          "isUnique": false
+        },
+        "idx_heal_actions_run": {
+          "name": "idx_heal_actions_run",
+          "columns": ["run_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "heal_actions_project_id_projects_id_fk": {
+          "name": "heal_actions_project_id_projects_id_fk",
+          "tableFrom": "heal_actions",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "heal_actions_run_id_test_runs_id_fk": {
+          "name": "heal_actions_run_id_test_runs_id_fk",
+          "tableFrom": "heal_actions",
+          "tableTo": "test_runs",
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -3050,13 +3194,6 @@
         },
         "shard_total": {
           "name": "shard_total",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "shard_index": {
-          "name": "shard_index",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,

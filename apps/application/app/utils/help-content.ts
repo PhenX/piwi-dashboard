@@ -551,6 +551,12 @@ export const HELP_TOPICS = {
     doc: 'ci#pull-request-feedback',
     envVars: ['PIWI_SITE_URL'],
   },
+  'settings.auto-heal': {
+    title: 'Auto-heal pull requests',
+    text: 'When a locator breaks on the default branch and healing has high-confidence evidence, Piwi opens the fix pull request itself — a deterministic one-line locator edit per broken call site. Off by default, with an explicit per-project allowlist. Needs PIWI_SITE_URL and an SCM token with write access.',
+    doc: 'auto-heal',
+    envVars: ['PIWI_SITE_URL'],
+  },
   'settings.auto-diagnose': {
     title: 'Auto-diagnose',
     text: 'When a run finishes, up to 3 new failure clusters are diagnosed automatically — each diagnosis is one research call (when a research model is configured) plus one diagnosis call — and new clusters get human-readable titles in one batched call. Requires the diagnosis model to be configured.',

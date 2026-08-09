@@ -1,4 +1,5 @@
 import { getLocatorHealing } from '../../../utils/locator-healing';
+import { findHealActionForCallSite } from '../../../utils/heal/lookup';
 import {
   requireResolvedProjectAccess,
   requireRouteId,
@@ -23,10 +24,17 @@ export default eventHandler(async (event) => {
 
   // Authorize by the execution's own project: this id may be opened from the
   // cluster page, where it can belong to a run in another project.
-  const { db } = await requireResolvedProjectAccess(event, id, resolveTestRunCaseProjectId, 'Test run case');
+  const { db, projectId } = await requireResolvedProjectAccess(event, id, resolveTestRunCaseProjectId, 'Test run case');
 
   const result = await getLocatorHealing(db, id);
 
+  // Attach a heal-action chip when auto-heal has a PR covering this call site.
+  // Matched by call site so it shows on any run's execution of the same locator.
+  const healAction =
+    result.edit?.filePath != null
+      ? await findHealActionForCallSite(db, projectId, result.edit.filePath, result.edit.line).catch(() => null)
+      : null;
+
   // Don't 404 — even "none" is a valid answer (no alternatives available)
-  return result;
+  return { ...result, healAction };
 });

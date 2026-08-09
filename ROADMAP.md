@@ -14,6 +14,11 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 
 ## Recently shipped
 
+- **Auto-heal pull requests** — when a locator breaks on the default branch and healing has high-confidence
+  evidence, Piwi opens the fix PR itself: a branch, a deterministic one-line locator edit per broken call site, and
+  an evidence-rich body, with the CI gate and fix verification closing the loop. GitHub, GitLab and Bitbucket; off by
+  default, per-project allowlist, draft PRs, and a head-content guard so a drifted line is dropped rather than
+  mis-patched. See [auto-heal PRs](https://piwitests.github.io/auto-heal).
 - **Public share links (opt-in)** — a read-only URL for one execution or one failure cluster that anyone can open
   without an account: the offline-export report rendered live at view time, bounded by the same size budgets,
   revocable, and off unless `PIWI_SHARE_LINKS_ENABLED` is set. Design record in

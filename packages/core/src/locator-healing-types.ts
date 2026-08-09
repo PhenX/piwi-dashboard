@@ -189,6 +189,29 @@ export type LocatorHealingSource =
   | 'none';
 
 /**
+ * A ready-to-apply rewrite of the failing call site's source line, using the
+ * recommended locator. Deterministic string rewrite of a single line — never
+ * model output.
+ */
+export interface LocatorEdit {
+  /** Call-site file path as captured (cwd-relative), when identified. */
+  filePath: string | null;
+  /** 1-based line the rewrite applies to. */
+  line: number;
+  /** The failing source line, unchanged (the `-` side). */
+  oldLine: string;
+  /** The rewritten source line (the `+` side). */
+  newLine: string;
+  /**
+   * A unified diff for the change, or null when no file path was resolved.
+   * Context-bearing (applies with a plain `git apply`) when the captured source
+   * snippet supplied neighboring lines; otherwise context-free, which needs
+   * `git apply --unidiff-zero`.
+   */
+  unifiedDiff: string | null;
+}
+
+/**
  * Result of a healing lookup for one failing test-run case. Single source of
  * truth for the API payload shape — the server handler, MCP tools, AI context
  * and the dashboard panel all import this.
@@ -242,4 +265,11 @@ export interface LocatorHealingResult {
    * signature can't be reconstructed to match).
    */
   healedInRunId?: number | null;
+  /**
+   * The recommended fix as a concrete, ready-to-apply edit to the failing source
+   * line — old line, rewritten line, and a git-applyable unified diff. Null when
+   * there is no captured source line, no recommendation, or the rewrite would be
+   * a no-op. Populated only by the server (it needs the parsed call site).
+   */
+  edit?: LocatorEdit | null;
 }

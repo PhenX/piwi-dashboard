@@ -17,6 +17,7 @@ import { getAppSetting } from '../app-settings';
 import { createScmProvider } from './index';
 import { normalizeGitUrl } from '../regression-context';
 import { getLocatorHealingBatch } from '../locator-healing';
+import { mapHealActionsByCluster } from '../heal/lookup';
 import { resolveOwners } from './ownership';
 import { verifyClusterFixes } from '../fix-verification';
 import { computeRunInsights } from '#shared/handlers/run-insights';
@@ -104,17 +105,27 @@ async function buildFailureEntries(
   // can name the owning team on a suite nobody has annotated.
   const owners = await resolveOwners(db, projectId, rows).catch(() => new Map());
 
-  const toEntry = (row: CaseRow): PrFailureEntry => ({
-    title: row.title,
-    filePath: row.filePath,
-    errorExcerpt: excerpt(row.error),
-    executionId: row.id,
-    clusterId: row.failureClusterId,
-    clusterSignature: row.failureClusterId ? (clusterSignatures.get(row.failureClusterId) ?? null) : null,
-    suggestedLocator: healing.get(row.id)?.recommendation?.recommended?.locator ?? null,
-    tags: Array.isArray(row.tags) ? (row.tags as string[]) : null,
-    owner: owners.get(row)?.owner ?? row.owner,
-  });
+  // A locator that broke here may already have an auto-heal PR open (it broke on
+  // the default branch too); cross-link it rather than sending someone to fix it
+  // twice. Keyed by cluster — stable across the two runs, where execution ids differ.
+  const healByCluster = await mapHealActionsByCluster(db, projectId).catch(() => new Map());
+
+  const toEntry = (row: CaseRow): PrFailureEntry => {
+    const heal = row.failureClusterId != null ? healByCluster.get(row.failureClusterId) : undefined;
+    return {
+      title: row.title,
+      filePath: row.filePath,
+      errorExcerpt: excerpt(row.error),
+      executionId: row.id,
+      clusterId: row.failureClusterId,
+      clusterSignature: row.failureClusterId ? (clusterSignatures.get(row.failureClusterId) ?? null) : null,
+      suggestedLocator: healing.get(row.id)?.recommendation?.recommended?.locator ?? null,
+      healPrNumber: heal?.prNumber ?? null,
+      healPrUrl: heal?.prUrl ?? null,
+      tags: Array.isArray(row.tags) ? (row.tags as string[]) : null,
+      owner: owners.get(row)?.owner ?? row.owner,
+    };
+  };
 
   const newRegressions: PrFailureEntry[] = [];
   const preExisting: PrFailureEntry[] = [];

@@ -35,11 +35,22 @@ const props = defineProps<{
 const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
 const cardBind = computed(() => (props.storageKey ? { storageKey: props.storageKey } : {}));
 
+interface HealActionChip {
+  id: number;
+  status: 'pending' | 'opened' | 'failed' | 'skipped';
+  prNumber: number | null;
+  prUrl: string | null;
+  branch: string;
+}
+
 const {
   data: healing,
   pending,
   error,
-} = useFetch<LocatorHealingResult>(() => `/api/test-run-cases/${props.testRunsCaseId}/locator-healing`, { lazy: true });
+} = useFetch<LocatorHealingResult & { healAction?: HealActionChip | null }>(
+  () => `/api/test-run-cases/${props.testRunsCaseId}/locator-healing`,
+  { lazy: true },
+);
 
 const hasData = computed(
   () =>
@@ -263,6 +274,13 @@ function copyFixPrompt() {
   );
 }
 
+// The server rewrites the failing line and ships it as a git-applyable unified
+// diff; hand it over verbatim so `git apply` (or an agent) can patch the file.
+function copyGitApply() {
+  const diff = healing.value?.edit?.unifiedDiff;
+  if (diff) copyText(diff, 'git-apply', 'Patch copied');
+}
+
 // ── Collapse the long tail of alternatives ───────────────────────────────────
 const ALT_PREVIEW = 3;
 const showAllAlternatives = ref(false);
@@ -333,6 +351,30 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
         <NuxtLink :to="`/test-runs/${healing.healedInRunId}`" class="underline font-medium">
           see run #{{ healing.healedInRunId }}</NuxtLink
         >.
+      </template>
+    </UAlert>
+
+    <!-- Auto-heal opened (or queued) a PR covering this call site -->
+    <UAlert
+      v-if="healing?.healAction"
+      class="mb-3"
+      :color="healing.healAction.status === 'opened' ? 'primary' : 'neutral'"
+      icon="i-lucide-bandage"
+      variant="subtle"
+      :title="healing.healAction.status === 'opened' ? 'Piwi opened a heal PR' : 'Heal PR queued'"
+    >
+      <template #description>
+        <template v-if="healing.healAction.status === 'opened' && healing.healAction.prUrl">
+          Auto-heal opened
+          <a :href="healing.healAction.prUrl" target="_blank" rel="noopener" class="underline font-medium">
+            PR #{{ healing.healAction.prNumber }}</a
+          >
+          to rewrite this locator.
+        </template>
+        <template v-else>
+          Auto-heal has queued a fix for this locator on branch <code>{{ healing.healAction.branch }}</code
+          >.
+        </template>
       </template>
     </UAlert>
 
@@ -453,6 +495,17 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
           @click="copyFixPrompt"
         >
           Copy fix prompt
+        </UButton>
+        <UButton
+          v-if="healing?.edit?.unifiedDiff"
+          size="xs"
+          color="neutral"
+          variant="outline"
+          :icon="copiedKey === 'git-apply' ? 'i-lucide-check' : 'i-lucide-copy'"
+          title="Copy a git apply patch that rewrites the failing locator line"
+          @click="copyGitApply"
+        >
+          Copy patch
         </UButton>
       </div>
     </div>
