@@ -316,9 +316,9 @@ test.describe.serial('Failure clustering', () => {
       data: { status: 'resolved', triageNote: note },
     });
     expect(patchRes.ok()).toBeTruthy();
-    const patch = await patchRes.json();
-    expect(patch.status).toBe('resolved');
-    expect(patch.triageNote).toBe(note);
+    const { cluster } = await patchRes.json();
+    expect(cluster.status).toBe('resolved');
+    expect(cluster.triageNote).toBe(note);
 
     // Verify the update is persisted
     const getRes = await request.get(`/api/projects/${projectId}/failure-clusters`);

@@ -41,5 +41,6 @@ export default eventHandler(async (event) => {
     .set({ feedback, feedbackNote, updatedAt: new Date() })
     .where(eq(failureDiagnoses.id, id));
 
-  return { success: true, feedback, feedbackNote };
+  const [diagnosis] = await db.select().from(failureDiagnoses).where(eq(failureDiagnoses.id, id));
+  return { success: true, diagnosis };
 });

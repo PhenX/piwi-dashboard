@@ -339,11 +339,8 @@ export async function patchTestRun(db: DrizzleDB, id: number, label: string | nu
     })
     .where(eq(testRuns.id, id));
 
-  return {
-    success: true,
-    testRunId: id,
-    label: label ?? null,
-  };
+  const [testRun] = await db.select().from(testRuns).where(eq(testRuns.id, id));
+  return { success: true, testRun };
 }
 
 // ─── getNetworkRequests — aggregated network endpoint stats ──────────────────
