@@ -102,6 +102,11 @@ export class Retriever {
   }
 }
 
+/** Extractive snippet for a chunk against a raw query string. */
+export function snippetFor(text: string, query: string): string {
+  return bestSnippet(text, new Set(tokenize(query)))
+}
+
 /**
  * Pick the two or three consecutive sentences of a chunk that carry the most
  * query terms — the extractive answer shown when no model is loaded.

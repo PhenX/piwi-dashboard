@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
-import { Retriever, buildContext, type ChatIndex, type RankedChunk } from '../chat/retrieval'
+import { Retriever, buildContext, type ChatIndex, type Chunk, type RankedChunk } from '../chat/retrieval'
 import {
   DEFAULT_MODEL,
   loadEngine,
@@ -9,6 +9,13 @@ import {
   type ChatTurn,
   type LoadProgress,
 } from '../chat/webllm'
+import {
+  EMBED_MODEL,
+  SemanticIndex,
+  indexSignature,
+  prepareSemanticIndex,
+  type PrepareProgress,
+} from '../chat/embeddings'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -18,8 +25,8 @@ interface Message {
   streaming?: boolean
 }
 
-type Mode = 'instant' | 'local'
-type EngineState = 'idle' | 'loading' | 'ready' | 'error'
+type Mode = 'instant' | 'smart' | 'local'
+type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
 const base = import.meta.env.BASE_URL
 
@@ -34,11 +41,18 @@ const inputEl = ref<HTMLTextAreaElement | null>(null)
 // Retrieval index — fetched once, on first open, so an unopened widget costs
 // nothing beyond the button.
 const retriever = shallowRef<Retriever | null>(null)
+const chunks = shallowRef<Chunk[]>([])
 const indexError = ref('')
 
-// Local-AI tier state.
+// Semantic tier state (Transformers.js embeddings).
+const embedState = ref<LoadState>('idle')
+const embedProgress = ref<PrepareProgress>({ phase: 'download', progress: 0, text: '' })
+const embedError = ref('')
+const semanticIndex = shallowRef<SemanticIndex | null>(null)
+
+// Local-AI tier state (WebLLM).
 const hasWebgpu = ref(true)
-const engineState = ref<EngineState>('idle')
+const engineState = ref<LoadState>('idle')
 const loadProgress = ref<LoadProgress>({ progress: 0, text: '' })
 const engineError = ref('')
 
@@ -50,6 +64,7 @@ async function ensureIndex() {
     const res = await fetch(withBase('/chat-index.json'))
     if (!res.ok) throw new Error(`status ${res.status}`)
     const index = (await res.json()) as ChatIndex
+    chunks.value = index.chunks
     retriever.value = new Retriever(index)
   } catch (err) {
     indexError.value = `Could not load the docs index (${(err as Error).message}).`
@@ -70,6 +85,25 @@ async function scrollToBottom() {
   if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
 }
 
+async function enableSmart() {
+  if (embedState.value === 'loading') return
+  await ensureIndex()
+  if (!chunks.value.length) return
+  embedState.value = 'loading'
+  embedError.value = ''
+  try {
+    semanticIndex.value = await prepareSemanticIndex(
+      chunks.value,
+      indexSignature(chunks.value),
+      (p) => (embedProgress.value = p),
+    )
+    embedState.value = 'ready'
+  } catch (err) {
+    embedState.value = 'error'
+    embedError.value = (err as Error).message || 'Failed to load the embedding model.'
+  }
+}
+
 async function enableLocalAi() {
   if (!hasWebgpu.value || engineState.value === 'loading') return
   engineState.value = 'loading'
@@ -83,6 +117,18 @@ async function enableLocalAi() {
   }
 }
 
+/**
+ * Retrieve the passages that answer a question. Semantic retrieval is used
+ * whenever it is ready (in Smart mode, and as the grounding for Local AI);
+ * otherwise the zero-download lexical index answers.
+ */
+async function retrieve(question: string): Promise<RankedChunk[]> {
+  if (semanticIndex.value && mode.value !== 'instant') {
+    return semanticIndex.value.search(question, 4)
+  }
+  return retriever.value ? retriever.value.search(question, 4) : []
+}
+
 async function send() {
   const question = input.value.trim()
   if (!question || busy.value) return
@@ -92,10 +138,10 @@ async function send() {
   input.value = ''
   busy.value = true
   messages.value.push({ role: 'user', content: question })
-  const sources = retriever.value.search(question, 4)
   await scrollToBottom()
 
   try {
+    const sources = await retrieve(question)
     if (mode.value === 'local' && engineState.value === 'ready') {
       await answerWithModel(question, sources)
     } else {
@@ -164,7 +210,9 @@ function ask(suggestion: string) {
 }
 
 const modelName = DEFAULT_MODEL.replace(/-MLC$/, '').replace(/-q4f16_1$/, '')
+const embedModelName = EMBED_MODEL.replace(/^Xenova\//, '')
 const progressPct = computed(() => Math.round(loadProgress.value.progress * 100))
+const embedPct = computed(() => Math.round(embedProgress.value.progress * 100))
 
 // Escape everything, then re-introduce a little safe formatting: **bold**,
 // citation links [1], line breaks. Answer text is from our own docs and the
@@ -221,6 +269,7 @@ watch(mode, (next) => {
             role="tab"
             :aria-selected="mode === 'instant'"
             :class="{ active: mode === 'instant' }"
+            title="Keyword search — 0 MB, works offline"
             @click="mode = 'instant'"
           >
             Instant
@@ -228,8 +277,19 @@ watch(mode, (next) => {
           <button
             type="button"
             role="tab"
+            :aria-selected="mode === 'smart'"
+            :class="{ active: mode === 'smart' }"
+            title="Semantic search — ~23 MB model, no WebGPU"
+            @click="mode = 'smart'"
+          >
+            Smart
+          </button>
+          <button
+            type="button"
+            role="tab"
             :aria-selected="mode === 'local'"
             :class="{ active: mode === 'local' }"
+            title="Written answer — ~350 MB model, WebGPU"
             @click="mode = 'local'"
           >
             Local AI
@@ -244,6 +304,10 @@ watch(mode, (next) => {
           <p v-if="mode === 'instant'">
             Ask a question and I'll pull the most relevant sections straight from the docs — no download, no
             server, works offline.
+          </p>
+          <p v-else-if="mode === 'smart'">
+            <strong>Smart search</strong> matches by meaning, not just keywords, using a ~23&nbsp;MB model that
+            runs in your browser — no WebGPU needed. Enable it below; it downloads and indexes once, then caches.
           </p>
           <p v-else>
             <strong>Local AI</strong> writes a conversational, cited answer using a small model that runs entirely
@@ -270,6 +334,25 @@ watch(mode, (next) => {
             </ul>
           </div>
         </div>
+      </div>
+
+      <!-- Smart-search enablement panel, shown until the embedder is ready. -->
+      <div v-if="mode === 'smart' && embedState !== 'ready'" class="local-panel">
+        <template v-if="embedState === 'loading'">
+          <p class="load-text">{{ embedProgress.text || 'Preparing…' }}</p>
+          <div class="progress"><div class="bar" :style="{ width: embedPct + '%' }"></div></div>
+          <p class="load-hint">
+            {{ embedProgress.phase === 'index' ? 'Indexing runs once, then is cached for next time.' : 'Downloads once, then cached by your browser.' }}
+          </p>
+        </template>
+        <template v-else>
+          <p class="notice">
+            Runs <code>{{ embedModelName }}</code> in your browser (WASM — no GPU needed). First use downloads
+            ~23&nbsp;MB and indexes the docs once; nothing you type leaves the page.
+          </p>
+          <button type="button" class="enable-btn" @click="enableSmart">Enable smart search</button>
+          <p v-if="embedState === 'error'" class="notice error">{{ embedError }}</p>
+        </template>
       </div>
 
       <!-- Local-AI enablement panel, shown until the model is ready. -->
