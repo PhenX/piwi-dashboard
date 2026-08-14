@@ -24,6 +24,7 @@ const fetchChangesCache = new TtlCache<ScmChanges>(10 * 60 * 1000);
 const fetchCommitDiffCache = new TtlCache<ScmChanges>(10 * 60 * 1000);
 const fetchFileCache = new TtlCache<ScmFileContent | null>(30 * 60 * 1000);
 const fetchTreeCache = new TtlCache<string[]>(10 * 60 * 1000);
+const defaultBranchCache = new TtlCache<string | null>(30 * 60 * 1000);
 
 /** Count added/removed lines in a unified-diff hunk body (ignores +++/--- headers). */
 function countDiffLines(diff: string): { additions: number; deletions: number } {
@@ -236,6 +237,25 @@ export class GitLabProvider extends ScmProvider {
       return `No commits found on ${branch ? `branch '${branch}'` : 'the default branch'}.`;
     } catch {
       return 'Could not reach the GitLab API. Check your network connection.';
+    }
+  }
+
+  override async getDefaultBranch(): Promise<string | null> {
+    const key = `${this.keyPrefix}:default-branch:${this.hostname}:${this.repoPath}`;
+    const cached = defaultBranchCache.get(key);
+    if (cached !== undefined) return cached;
+    try {
+      const projectPath = encodeURIComponent(this.repoPath);
+      const res = await fetch(`https://${this.hostname}/api/v4/projects/${projectPath}`, {
+        headers: this.makeHeaders(),
+      });
+      if (!res.ok) return null;
+      const body = (await res.json().catch(() => ({}))) as { default_branch?: string };
+      const branch = body.default_branch?.trim() || null;
+      defaultBranchCache.set(key, branch);
+      return branch;
+    } catch {
+      return null;
     }
   }
 

@@ -163,6 +163,17 @@ export abstract class ScmProvider {
     return false;
   }
 
+  /**
+   * The repository's default branch as the host reports it (`default_branch` on
+   * GitHub/GitLab, `mainbranch.name` on Bitbucket), or `null` when it cannot be
+   * read. Best-effort, like the other read capabilities: a token-less or failing
+   * fetch returns null so the caller falls back to its next default-branch
+   * source rather than surfacing an error.
+   */
+  async getDefaultBranch(): Promise<string | null> {
+    return null;
+  }
+
   // ── Write capability (auto-heal) ───────────────────────────────────────────
   //
   // Unlike the read/feedback methods above — which swallow errors and report

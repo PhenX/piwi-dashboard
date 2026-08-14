@@ -44,6 +44,14 @@ const availableEnvironments = computed(() => {
   return [...envSet].sort();
 });
 
+const availableBranches = computed(() => {
+  const branchSet = new Set<string>();
+  for (const run of recentTestRuns.value ?? []) {
+    if (run.branch) branchSet.add(run.branch);
+  }
+  return [...branchSet].sort();
+});
+
 // "Looks empty when it isn't": if the newest run predates the selected window,
 // every widget shows zeroes even though there IS history. Detect it and offer to
 // widen, rather than leaving the user staring at an empty scorecard.
@@ -108,6 +116,7 @@ const bands = computed(() =>
             v-model="state"
             :available-projects="availableProjects"
             :available-environments="availableEnvironments"
+            :available-branches="availableBranches"
           />
         </FilterToolbar>
 

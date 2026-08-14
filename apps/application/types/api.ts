@@ -16,6 +16,7 @@ export type { TestMetadata, TestSourceFrame };
 export interface TestRunScmMetadata {
   commit?: string | null;
   branch?: string | null;
+  prNumber?: string | number | null;
   author?: string | null;
   commitMessage?: string | null;
 }
@@ -303,6 +304,7 @@ export interface ProjectDetails {
   description?: string | null;
   diagnosisInstructions?: string | null;
   hasScmToken: boolean;
+  defaultBranch?: string | null;
   color?: string | null;
   tags?: TagInfo[];
 }
@@ -331,6 +333,7 @@ export interface TestRunSummary {
   reports?: ReportInfo[];
   browsers?: string[];
   environment?: string | null;
+  branch?: string | null;
   label?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadata?: any | null;
@@ -429,6 +432,7 @@ export interface TestRunForChart {
   p90TestDuration?: number | null;
   isFullRun?: boolean;
   environment?: string | null;
+  branch?: string | null;
 }
 
 // ============================================================================

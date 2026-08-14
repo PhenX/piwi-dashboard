@@ -26,6 +26,7 @@ const listBranchesCache = new TtlCache<string[]>(3 * 60 * 1000);
 const listCommitsCache = new TtlCache<ScmCommitDetail[]>(3 * 60 * 1000);
 const fetchChangesCache = new TtlCache<ScmChanges>(10 * 60 * 1000);
 const fetchFileCache = new TtlCache<ScmFileContent | null>(30 * 60 * 1000);
+const defaultBranchCache = new TtlCache<string | null>(30 * 60 * 1000);
 
 function parsePatchesByFile(rawDiff: string): Map<string, string> {
   const result = new Map<string, string>();
@@ -214,6 +215,25 @@ export class BitbucketProvider extends ScmProvider {
       return `No commits found on ${branch ? `branch '${branch}'` : 'the default branch'}.`;
     } catch {
       return 'Could not reach the Bitbucket API. Check your network connection.';
+    }
+  }
+
+  override async getDefaultBranch(): Promise<string | null> {
+    const key = `${this.keyPrefix}:default-branch:${this.workspace}/${this.repoSlug}`;
+    const cached = defaultBranchCache.get(key);
+    if (cached !== undefined) return cached;
+    try {
+      const res = await fetch(this.base, {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      const body = (await res.json().catch(() => ({}))) as { mainbranch?: { name?: string } };
+      const branch = body.mainbranch?.name?.trim() || null;
+      defaultBranchCache.set(key, branch);
+      return branch;
+    } catch {
+      return null;
     }
   }
 

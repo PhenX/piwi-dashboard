@@ -3,6 +3,7 @@ import { getDatabase } from '../../../database';
 import { testRuns } from '../../../database/schema';
 import { runEventBus } from '../../../utils/run-events';
 import { sanitizeMetadata } from '../../../utils/sanitize';
+import { resolveRunBranch } from '../../../utils/run-branch';
 import { validateAndReviveRun } from '../../../utils/revive-run';
 import { autoDiagnoseRun } from '../../../utils/ai-diagnosis';
 import { readShardTokensFromMeta, removeStoredShardToken } from '../../../utils/shard-tokens';
@@ -262,7 +263,7 @@ export default eventHandler(async (event) => {
       ...(body.flakyTests !== undefined && { flakyTests }),
       ...(avgTestDuration !== null && { avgTestDuration }),
       ...(p90TestDuration !== null && { p90TestDuration }),
-      ...(body.metadata && { metadata: sanitizeMetadata(body.metadata) }),
+      ...(body.metadata && { metadata: sanitizeMetadata(body.metadata), branch: resolveRunBranch(body.metadata) }),
       ...(body.label !== undefined && { label: body.label }),
       ...(body.playwrightVersion && { playwrightVersion: body.playwrightVersion }),
       ...(body.reporterVersion && { reporterVersion: body.reporterVersion }),
@@ -303,7 +304,7 @@ export default eventHandler(async (event) => {
       ...(body.flakyTests !== undefined && { flakyTests }),
       ...(avgTestDuration !== null && { avgTestDuration }),
       ...(p90TestDuration !== null && { p90TestDuration }),
-      ...(body.metadata && { metadata: sanitizeMetadata(body.metadata) }),
+      ...(body.metadata && { metadata: sanitizeMetadata(body.metadata), branch: resolveRunBranch(body.metadata) }),
       ...(body.label !== undefined && { label: body.label }),
       ...(body.playwrightVersion && { playwrightVersion: body.playwrightVersion }),
       ...(body.reporterVersion && { reporterVersion: body.reporterVersion }),

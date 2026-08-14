@@ -1,9 +1,16 @@
-import { eq, and, lt, desc } from 'drizzle-orm';
-import { testRuns, testRunsCases } from '../database/schema';
+import { eq } from 'drizzle-orm';
+import { projects, testRunsCases } from '../database/schema';
 import type { RunMetadata } from './run-json-types';
 import type { DbClient } from '../database';
 import { buildCompareUrl, computeMetadataDiff, type MetaDiffEntry } from '#shared/utils/run-metadata';
 import { FAILED_STATUS_KEYS } from '#shared/utils/test-counts';
+import { normalizeGitUrl } from './scm/git-url';
+import { resolveRunBranch } from './run-branch';
+import { resolveDefaultBranch, FALLBACK_DEFAULT_BRANCH } from './scm/default-branch';
+import { selectBaselineRun } from './branch-baseline';
+
+// Re-exported so the many callers importing it from here keep working.
+export { normalizeGitUrl };
 
 export interface RunForRegression {
   id: number;
@@ -37,41 +44,25 @@ export type RegressionContextResult =
       newFailures: number;
     };
 
-export function normalizeGitUrl(remoteUrl: string | null | undefined): string | null {
-  if (!remoteUrl) return null;
-  let url = remoteUrl.trim();
-  if (url.startsWith('git@')) {
-    url = url.replace(/^git@([^:]+):/, 'https://$1/');
-  }
-  url = url.replace(/\.git$/, '');
-  try {
-    const parsed = new URL(url);
-    parsed.username = '';
-    parsed.password = '';
-    return parsed.toString().replace(/\/$/, '');
-  } catch {
-    return url;
-  }
-}
-
 const FAIL_STATUSES = new Set<string>(FAILED_STATUS_KEYS);
 
 export async function computeRegressionContext(db: DbClient, run: RunForRegression): Promise<RegressionContextResult> {
-  const greenResults = await db
-    .select({
-      id: testRuns.id,
-      startTime: testRuns.startTime,
-      environment: testRuns.environment,
-      metadata: testRuns.metadata,
-    })
-    .from(testRuns)
-    .where(
-      and(eq(testRuns.projectId, run.projectId), eq(testRuns.status, 'passed'), lt(testRuns.startTime, run.startTime)),
-    )
-    .orderBy(desc(testRuns.startTime))
-    .limit(1);
+  // Prefer the last green run on this run's own branch, falling back to the
+  // default branch (what a fresh branch forked from), so "what changed since
+  // last green" is a diff within one line of history, not across unrelated ones.
+  const branch = resolveRunBranch(run.metadata);
+  const [project] = await db
+    .select({ id: projects.id, defaultBranch: projects.defaultBranch })
+    .from(projects)
+    .where(eq(projects.id, run.projectId));
+  const defaultBranch = project ? await resolveDefaultBranch(db, project, run.metadata) : FALLBACK_DEFAULT_BRANCH;
 
-  const lastGreen = greenResults[0];
+  const lastGreen = await selectBaselineRun(db, {
+    projectId: run.projectId,
+    before: run.startTime,
+    branch,
+    defaultBranch,
+  });
   if (!lastGreen) return { hasGreen: false };
 
   const currMeta = run.metadata as RunMetadata | null;

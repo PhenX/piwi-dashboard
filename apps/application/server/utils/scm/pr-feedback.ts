@@ -19,8 +19,11 @@ import { normalizeGitUrl } from '../regression-context';
 import { getLocatorHealingBatch } from '../locator-healing';
 import { mapHealActionsByCluster } from '../heal/lookup';
 import { resolveOwners } from './ownership';
+import { resolveDefaultBranch } from './default-branch';
+import { resolveRunBranch } from '../run-branch';
 import { verifyClusterFixes } from '../fix-verification';
 import { computeRunInsights } from '#shared/handlers/run-insights';
+import { getProjectFlakyTests } from '#shared/handlers/projects';
 import {
   buildCommitStatus,
   buildPrComment,
@@ -43,6 +46,9 @@ export async function getPrFeedbackSettings(db: DbClient): Promise<PrFeedbackSet
 }
 
 const FAIL_STATUSES = ['failed', 'timedOut', 'timedout'];
+
+/** Recent default-branch runs scanned to decide whether a failure is already flaky there. */
+const DEFAULT_BRANCH_FLAKY_RUNS = 50;
 
 /** First line of an error, capped so a comment stays readable. */
 function excerpt(error: string | null): string | null {
@@ -85,6 +91,7 @@ async function buildFailureEntries(
   projectId: number,
   rows: CaseRow[],
   newRegressionIds: Set<number>,
+  defaultBranchFlaky: Map<number, { branch: string; flakinessRate: number }>,
 ): Promise<{ newRegressions: PrFailureEntry[]; preExisting: PrFailureEntry[] }> {
   const clusterIds = [...new Set(rows.map((r) => r.failureClusterId).filter((id): id is number => id != null))];
   const clusterSignatures = new Map<number, string>();
@@ -124,6 +131,7 @@ async function buildFailureEntries(
       healPrUrl: heal?.prUrl ?? null,
       tags: Array.isArray(row.tags) ? (row.tags as string[]) : null,
       owner: owners.get(row)?.owner ?? row.owner,
+      flakyOnDefaultBranch: defaultBranchFlaky.get(row.testCaseId) ?? null,
     };
   };
 
@@ -178,7 +186,33 @@ export async function buildRunPrSummary(
   const insights = await computeRunInsights(db, runId).catch(() => null);
   const newRegressionIds = new Set<number>((insights?.newRegressions ?? []).map((entry) => entry.executionId));
 
-  const { newRegressions, preExisting } = await buildFailureEntries(db, run.projectId, failingRows, newRegressionIds);
+  // Flake exoneration: on a feature branch, mark a failure that is already flaky
+  // on the default branch so the reviewer knows it is likely not this change's
+  // doing. Skipped for runs already on the default branch (nothing to compare).
+  const runBranch = run.branch ?? resolveRunBranch(run.metadata);
+  const defaultBranch = await resolveDefaultBranch(db, project, run.metadata);
+  const defaultBranchFlaky = new Map<number, { branch: string; flakinessRate: number }>();
+  if (runBranch && runBranch !== defaultBranch) {
+    const flaky = await getProjectFlakyTests(
+      db,
+      run.projectId,
+      DEFAULT_BRANCH_FLAKY_RUNS,
+      undefined,
+      undefined,
+      defaultBranch,
+    ).catch(() => []);
+    for (const test of flaky) {
+      defaultBranchFlaky.set(test.testCaseId, { branch: defaultBranch, flakinessRate: Math.min(1, test.score / 100) });
+    }
+  }
+
+  const { newRegressions, preExisting } = await buildFailureEntries(
+    db,
+    run.projectId,
+    failingRows,
+    newRegressionIds,
+    defaultBranchFlaky,
+  );
 
   const newClusters = await db
     .select({ id: failureClusters.id, signature: failureClusters.signature })

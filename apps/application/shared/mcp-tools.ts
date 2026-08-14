@@ -59,7 +59,7 @@ export const MCP_TOOL_DEFS = [
           enum: ['passed', 'failed', 'timedout', 'interrupted', 'running', 'cancelled', 'initializing', 'finalizing'],
           description: 'Filter by run status (exact match against the stored value)',
         },
-        branch: { type: 'string', description: 'Filter by branch name (exact match against SCM metadata)' },
+        branch: { type: 'string', description: 'Filter by branch name (exact match against the run branch)' },
         pageSize: { type: 'number', description: 'Results per page (default 10, max 50)' },
         cursor: { type: 'string', description: 'Opaque cursor from a previous response to get the next page' },
       },

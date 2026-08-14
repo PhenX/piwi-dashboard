@@ -6,6 +6,7 @@ import { requireAuth } from '../../utils/auth';
 import { parseLocation } from '../../utils/parse-location';
 import { persistRunCases, type RunCaseInput } from '../../utils/persist-run-cases';
 import { sanitizeMetadata } from '../../utils/sanitize';
+import { resolveRunBranch } from '../../utils/run-branch';
 import { runEventBus } from '../../utils/run-events';
 import { autoDiagnoseRun } from '../../utils/ai-diagnosis';
 import { cancelInstanceRuns } from '../../utils/cancel-instance-runs';
@@ -240,6 +241,7 @@ export default eventHandler(async (event) => {
       skippedTests: body.skippedTests || 0,
       didNotRunTests: body.didNotRunTests || 0,
       environment: body.environment || null,
+      branch: resolveRunBranch(body.metadata),
       label: body.label || null,
       metadata: sanitizeMetadata(body.metadata || null),
       instanceId,

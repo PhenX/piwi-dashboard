@@ -295,14 +295,10 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
     const conditions = [eq(testRuns.projectId, projectId)];
     if (statusFilter) conditions.push(eq(testRuns.status, statusFilter));
-
-    // Branch lives inside JSON metadata — can't index it efficiently, so the
-    // branch-filter path fetches a larger batch and filters in-memory. The
-    // cursor is applied on the same startTime axis for both paths (in SQL when
-    // possible, else in-memory) so paging always advances.
-    const fetchSize = branchFilter ? (pageSize + 1) * 3 : pageSize + 1;
-
-    if (cursor && !branchFilter) conditions.push(lt(testRuns.startTime, new Date(cursor)));
+    // Branch is a scalar column indexed on (project_id, branch, start_time), so
+    // the filter is a plain equality served by the database — no over-fetch.
+    if (branchFilter) conditions.push(eq(testRuns.branch, branchFilter));
+    if (cursor) conditions.push(lt(testRuns.startTime, new Date(cursor)));
 
     const signRows = await db
       .select({
@@ -323,17 +319,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       .from(testRuns)
       .where(and(...conditions))
       .orderBy(desc(testRuns.startTime))
-      .limit(fetchSize);
+      .limit(pageSize + 1);
 
-    const scopeRows = branchFilter
-      ? signRows.filter((r) => {
-          if (cursor && r.startTime && !(new Date(r.startTime) < new Date(cursor))) return false;
-          const meta = r.metadata as RunMetadata | null;
-          return meta?.scm?.branch === branchFilter;
-        })
-      : signRows;
-
-    const mapped = scopeRows.slice(0, pageSize + 1).map((r) =>
+    const mapped = signRows.map((r) =>
       dropNulls({
         id: r.id,
         status: r.status,

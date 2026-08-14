@@ -16,6 +16,7 @@ import { persistRunCases, type RunCaseInput } from '../../utils/persist-run-case
 import { postRunPrFeedbackInBackground } from '../../utils/scm/pr-feedback';
 import { maybeEnqueueHealActionInBackground } from '../../utils/heal/policy';
 import { sanitizeMetadata } from '../../utils/sanitize';
+import { resolveRunBranch } from '../../utils/run-branch';
 import { runEventBus } from '../../utils/run-events';
 import { autoDiagnoseRun } from '../../utils/ai-diagnosis';
 import { computeRegressionSignals } from '../../utils/compute-regression-signals';
@@ -368,6 +369,7 @@ export default eventHandler(async (event) => {
         skippedTests: (testRunData.skippedTests as number | undefined) || 0,
         didNotRunTests: (testRunData.didNotRunTests as number | undefined) || 0,
         environment: (testRunData.environment as string | null | undefined) || null,
+        branch: resolveRunBranch(testRunData.metadata),
         label: (testRunData.label as string | null | undefined) || null,
         metadata: sanitizeMetadata((testRunData.metadata || null) as Record<string, unknown> | null),
         instanceId: (testRunData.instanceId as string | null | undefined) || null,
