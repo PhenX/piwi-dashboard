@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { FullConfig } from '@playwright/test/reporter';
-import { MetadataCollector } from '../src/internal/collect/metadata-collector.js';
+import {
+  MetadataCollector,
+  resolveScmBranch,
+  resolveScmPrNumber,
+} from '../src/internal/collect/metadata-collector.js';
 
 const CI_ENV_KEYS = [
   'JENKINS_URL',
@@ -204,6 +208,112 @@ describe('MetadataCollector.collect — CI provider detection', () => {
     const mc = new MetadataCollector();
     const metadata = mc.collect(fakeConfig(), undefined as any, { collectCiInfo: false });
     expect(metadata.ci).toBeUndefined();
+  });
+});
+
+describe('resolveScmBranch — branch fallback chain', () => {
+  it('returns undefined when nothing points at a branch', () => {
+    expect(resolveScmBranch({})).toBeUndefined();
+  });
+
+  it('treats git\'s literal HEAD (detached checkout) as unknown', () => {
+    expect(resolveScmBranch({}, 'HEAD')).toBeUndefined();
+  });
+
+  it('uses the git branch when it is a real name', () => {
+    expect(resolveScmBranch({}, 'feature/login')).toBe('feature/login');
+  });
+
+  it('PIWI_BRANCH overrides everything, including a real git branch and CI vars', () => {
+    const env = { PIWI_BRANCH: 'override', GITHUB_ACTIONS: 'true', GITHUB_REF_NAME: 'main' };
+    expect(resolveScmBranch(env, 'local-branch')).toBe('override');
+  });
+
+  it('GitHub Actions: prefers GITHUB_HEAD_REF (PR events) over GITHUB_REF_NAME', () => {
+    const env = { GITHUB_ACTIONS: 'true', GITHUB_HEAD_REF: 'feature/x', GITHUB_REF_NAME: '5/merge' };
+    expect(resolveScmBranch(env, 'HEAD')).toBe('feature/x');
+  });
+
+  it('GitHub Actions: falls back to GITHUB_REF_NAME on push events', () => {
+    const env = { GITHUB_ACTIONS: 'true', GITHUB_REF_NAME: 'main' };
+    expect(resolveScmBranch(env, 'HEAD')).toBe('main');
+  });
+
+  it('GitLab: prefers the merge-request source branch over CI_COMMIT_REF_NAME', () => {
+    const env = {
+      GITLAB_CI: 'true',
+      CI_MERGE_REQUEST_SOURCE_BRANCH_NAME: 'feature/y',
+      CI_COMMIT_REF_NAME: 'detached',
+    };
+    expect(resolveScmBranch(env, 'HEAD')).toBe('feature/y');
+  });
+
+  it('GitLab: falls back to CI_COMMIT_REF_NAME', () => {
+    expect(resolveScmBranch({ GITLAB_CI: 'true', CI_COMMIT_REF_NAME: 'develop' }, 'HEAD')).toBe('develop');
+  });
+
+  it('CircleCI reads CIRCLE_BRANCH', () => {
+    expect(resolveScmBranch({ CIRCLECI: 'true', CIRCLE_BRANCH: 'topic' }, 'HEAD')).toBe('topic');
+  });
+
+  it('Travis prefers the PR branch over TRAVIS_BRANCH', () => {
+    const env = { TRAVIS: 'true', TRAVIS_PULL_REQUEST_BRANCH: 'pr-branch', TRAVIS_BRANCH: 'main' };
+    expect(resolveScmBranch(env, 'HEAD')).toBe('pr-branch');
+    expect(resolveScmBranch({ TRAVIS: 'true', TRAVIS_BRANCH: 'main' }, 'HEAD')).toBe('main');
+  });
+
+  it('Azure Pipelines prefers the PR source branch, stripping refs/heads/', () => {
+    const env = { TF_BUILD: 'true', SYSTEM_PULLREQUEST_SOURCEBRANCH: 'refs/heads/feature/z' };
+    expect(resolveScmBranch(env, 'HEAD')).toBe('feature/z');
+    expect(resolveScmBranch({ TF_BUILD: 'true', BUILD_SOURCEBRANCHNAME: 'main' }, 'HEAD')).toBe('main');
+  });
+
+  it('Jenkins prefers CHANGE_BRANCH over BRANCH_NAME', () => {
+    const env = { JENKINS_URL: 'x', CHANGE_BRANCH: 'pr-src', BRANCH_NAME: 'PR-42' };
+    expect(resolveScmBranch(env, 'HEAD')).toBe('pr-src');
+  });
+
+  it('Bitbucket reads BITBUCKET_BRANCH', () => {
+    const env = { BITBUCKET_BUILD_NUMBER: '9', BITBUCKET_BRANCH: 'bb-branch' };
+    expect(resolveScmBranch(env, 'HEAD')).toBe('bb-branch');
+  });
+
+  it('follows the same provider precedence as CI detection (Jenkins wins over GitHub)', () => {
+    const env = { JENKINS_URL: 'x', BRANCH_NAME: 'jenkins-branch', GITHUB_ACTIONS: 'true', GITHUB_REF_NAME: 'gh' };
+    expect(resolveScmBranch(env, 'HEAD')).toBe('jenkins-branch');
+  });
+
+  it('falls back to git when the detected provider exposes no branch var', () => {
+    expect(resolveScmBranch({ GITHUB_ACTIONS: 'true' }, 'local-work')).toBe('local-work');
+  });
+});
+
+describe('resolveScmPrNumber — pull-request number capture', () => {
+  it('returns undefined when no provider exposes a PR number', () => {
+    expect(resolveScmPrNumber({})).toBeUndefined();
+  });
+
+  it('parses the PR number out of GitHub\'s refs/pull/N/merge ref', () => {
+    expect(resolveScmPrNumber({ GITHUB_ACTIONS: 'true', GITHUB_REF: 'refs/pull/42/merge' })).toBe('42');
+    expect(resolveScmPrNumber({ GITHUB_ACTIONS: 'true', GITHUB_REF: 'refs/pull/7/head' })).toBe('7');
+  });
+
+  it('ignores GitHub branch refs that are not pull requests', () => {
+    expect(resolveScmPrNumber({ GITHUB_ACTIONS: 'true', GITHUB_REF: 'refs/heads/main' })).toBeUndefined();
+  });
+
+  it('reads GitLab CI_MERGE_REQUEST_IID', () => {
+    expect(resolveScmPrNumber({ CI_MERGE_REQUEST_IID: '13' })).toBe('13');
+  });
+
+  it('reads Bitbucket BITBUCKET_PR_ID, Azure, and Jenkins CHANGE_ID', () => {
+    expect(resolveScmPrNumber({ BITBUCKET_PR_ID: '21' })).toBe('21');
+    expect(resolveScmPrNumber({ SYSTEM_PULLREQUEST_PULLREQUESTNUMBER: '34' })).toBe('34');
+    expect(resolveScmPrNumber({ CHANGE_ID: '55' })).toBe('55');
+  });
+
+  it('rejects non-numeric PR values', () => {
+    expect(resolveScmPrNumber({ CHANGE_ID: 'not-a-number' })).toBeUndefined();
   });
 });
 
