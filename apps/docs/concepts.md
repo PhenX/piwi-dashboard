@@ -91,8 +91,14 @@ different spec files stays one cluster. Full detail:
 ## Baseline (last green run)
 
 Several views answer "what changed?" — run insights, the regression signals on a test, the environment
-and visual diffs, and the git diff behind an AI diagnosis. They all compare against a **baseline**: the
-most recent passing run of the same project (and branch, where relevant).
+and visual diffs, and the git diff behind an AI diagnosis. They all compare against a **baseline**,
+chosen to be branch-aware: the most recent passing run **on the same branch**, falling back to the
+**default branch** (what a fresh pull-request branch forked from) when the branch has no history yet,
+and to any branch only when neither exists. A run whose branch is unknown compares against the most
+recent passing run in the project, as before.
+
+The **default branch** is resolved per project: an explicit setting in **project settings**, else the
+repository's default branch read from the SCM provider, else `main`.
 
 Two derived flags are stored per execution:
 

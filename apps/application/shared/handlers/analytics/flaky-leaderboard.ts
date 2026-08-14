@@ -22,7 +22,14 @@ export async function getAnalyticsFlakyLeaderboard(
 
   const perProject = await Promise.all(
     scopedProjects.map(async (project) => {
-      const flaky = await getProjectFlakyTests(db, project.id, RUNS_PER_PROJECT, scope.environment ?? undefined);
+      const flaky = await getProjectFlakyTests(
+        db,
+        project.id,
+        RUNS_PER_PROJECT,
+        scope.environment ?? undefined,
+        undefined,
+        scope.branch ?? undefined,
+      );
       return flaky.map(
         (test): AnalyticsFlakyRow => ({
           projectId: project.id,

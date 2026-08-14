@@ -15,13 +15,10 @@ import {
   PERF_REGRESSION_MIN_PCT,
 } from '#shared/notification-events';
 import { resolveOwners } from '../scm/ownership';
+import { resolveDefaultBranch } from '../scm/default-branch';
+import { resolveRunBranch } from '../run-branch';
 import { FAILED_STATUS_KEYS } from '#shared/utils/test-counts';
 import type { DbClient } from '../../database';
-
-function runBranch(metadata: Record<string, unknown> | null): string | undefined {
-  const meta = metadata ?? {};
-  return (meta.branch as string | undefined) || (meta.gitBranch as string | undefined) || undefined;
-}
 
 /**
  * Emit run.finished / run.failed / run.failed.default_branch notifications for a completed run,
@@ -37,9 +34,8 @@ export async function emitRunNotifications(db: DbClient, runId: number): Promise
     const [project] = await db.select().from(projects).where(eq(projects.id, runRow.projectId));
     if (!project) return;
 
-    const meta = (runRow.metadata as Record<string, unknown> | null) ?? {};
-    const branch = runBranch(runRow.metadata as Record<string, unknown> | null);
-    const defaultBranch = (meta.defaultBranch as string | undefined) || 'main';
+    const branch = runRow.branch ?? resolveRunBranch(runRow.metadata) ?? undefined;
+    const defaultBranch = await resolveDefaultBranch(db, project, runRow.metadata);
     const isDefaultBranch = branch ? branch === defaultBranch : false;
 
     // A few failing tests (title + error excerpt + deep-link ids) so a
@@ -107,7 +103,7 @@ export async function emitRunNotifications(db: DbClient, runId: number): Promise
     // completed runs on the same branch.
     if (runRow.duration && runRow.duration > 0) {
       const priorRuns = await db
-        .select({ duration: testRuns.duration, metadata: testRuns.metadata })
+        .select({ duration: testRuns.duration, branch: testRuns.branch, metadata: testRuns.metadata })
         .from(testRuns)
         .where(
           and(
@@ -120,7 +116,7 @@ export async function emitRunNotifications(db: DbClient, runId: number): Promise
         .limit(BASELINE_FETCH_LIMIT);
 
       const priorDurations = priorRuns
-        .filter((r) => runBranch(r.metadata as Record<string, unknown> | null) === branch)
+        .filter((r) => (r.branch ?? resolveRunBranch(r.metadata)) === branch)
         .map((r) => r.duration ?? 0)
         .filter((d) => d > 0)
         .slice(0, PERF_BASELINE_RUNS);

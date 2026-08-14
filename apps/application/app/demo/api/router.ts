@@ -420,6 +420,7 @@ const routes: RouteEntry[] = [
       const rawRuns = q ? parseInt(q.get('runs') ?? '', 10) : NaN;
       const runs = Math.min(200, Math.max(1, Number.isNaN(rawRuns) ? 50 : rawRuns));
       const environment = q?.get('environment')?.trim() || undefined;
+      const branch = q?.get('branch')?.trim() || undefined;
       const tags = parseTagFilter(q?.get('tags'));
       const owner = q?.get('owner')?.trim() || undefined;
       const priorityRaw = (q?.get('priority') ?? '').trim().toLowerCase();
@@ -429,7 +430,14 @@ const routes: RouteEntry[] = [
       // CODEOWNERS resolution needs an SCM client the browser cannot reach —
       // ownership stays annotation-only here (seeded cases carry `piwi:` owners).
       return {
-        items: await getProjectFlakyTests(await getDemoDb(), +m[1]!, runs, environment, { tags, owner, priority }),
+        items: await getProjectFlakyTests(
+          await getDemoDb(),
+          +m[1]!,
+          runs,
+          environment,
+          { tags, owner, priority },
+          branch,
+        ),
       };
     },
   },

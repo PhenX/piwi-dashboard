@@ -6,6 +6,7 @@ export interface AnalyticsScopeState {
   /** Selected project ids; empty = every project the caller can see. */
   projectIds: number[];
   environment: string | null;
+  branch: string | null;
   fullRunsOnly: boolean;
 }
 
@@ -13,6 +14,7 @@ export const DEFAULT_ANALYTICS_SCOPE_STATE: AnalyticsScopeState = {
   days: DEFAULT_ANALYTICS_DAYS,
   projectIds: [],
   environment: null,
+  branch: null,
   fullRunsOnly: true,
 };
 
@@ -39,6 +41,7 @@ export function useAnalyticsScope() {
     days: state.value.days,
     projectIds: state.value.projectIds.length > 0 ? state.value.projectIds : undefined,
     environment: state.value.environment,
+    branch: state.value.branch,
     fullRunsOnly: state.value.fullRunsOnly,
   }));
 

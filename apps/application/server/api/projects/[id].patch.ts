@@ -20,6 +20,7 @@ const updateProjectSchema = z.object({
   description: z.string().optional().nullable(),
   diagnosisInstructions: z.string().optional().nullable(),
   scmToken: z.string().optional().nullable(),
+  defaultBranch: z.string().optional().nullable(),
   tagIds: z.array(z.number()).optional(),
 });
 
@@ -43,7 +44,7 @@ export default eventHandler(async (event) => {
     });
   }
 
-  const { label, description, diagnosisInstructions, scmToken, tagIds } = validation.data;
+  const { label, description, diagnosisInstructions, scmToken, defaultBranch, tagIds } = validation.data;
 
   // Encrypt SCM token before persisting; null/empty clears the stored value
   const encryptedScmToken =
@@ -55,6 +56,7 @@ export default eventHandler(async (event) => {
       description,
       diagnosisInstructions,
       scmToken: encryptedScmToken,
+      defaultBranch: defaultBranch != null ? defaultBranch.trim() || null : defaultBranch,
       tagIds,
     });
   } catch (e: any) {

@@ -7,6 +7,7 @@ import { cancelInstanceRuns } from '../../utils/cancel-instance-runs';
 import { runEventBus } from '../../utils/run-events';
 import { persistShardToken } from '../../utils/shard-tokens';
 import { getProjectScope, scopeAllows } from '../../utils/project-access';
+import { resolveRunBranch } from '../../utils/run-branch';
 
 defineRouteMeta({
   openAPI: {
@@ -138,6 +139,7 @@ export default eventHandler(async (event) => {
         skippedTests: 0,
         didNotRunTests: 0,
         environment: body.environment || null,
+        branch: resolveRunBranch(body.metadata),
         label: body.label || null,
         metadata: { shardTokens: [setupToken] } as Record<string, unknown>,
         instanceId,
@@ -190,6 +192,7 @@ export default eventHandler(async (event) => {
       skippedTests: 0,
       didNotRunTests: 0,
       environment: body.environment || null,
+      branch: resolveRunBranch(body.metadata),
       label: body.label || null,
       metadata: null,
       instanceId,

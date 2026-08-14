@@ -330,13 +330,51 @@ function isEnvironmentFilterActive(env: string) {
   return selectedEnvironments.value.includes(env);
 }
 
+// Branch filter — reads the scalar run branch, falling back to the SCM metadata
+// for runs reported before the branch column existed.
+function runBranch(run: { branch?: string | null; metadata?: { scm?: { branch?: string | null } } | null }) {
+  return run.branch ?? run.metadata?.scm?.branch ?? null;
+}
+
+const selectedBranches = ref<string[]>([]);
+
+const availableBranches = computed(() => {
+  const branches = new Set<string>();
+  for (const run of project.value?.testRuns || []) {
+    const b = runBranch(run);
+    if (b) branches.add(b);
+  }
+  return [...branches].sort();
+});
+
+function toggleBranchFilter(branch: string) {
+  const idx = selectedBranches.value.indexOf(branch);
+  if (idx === -1) {
+    selectedBranches.value.push(branch);
+  } else {
+    selectedBranches.value.splice(idx, 1);
+  }
+}
+
+function isBranchFilterActive(branch: string) {
+  return selectedBranches.value.includes(branch);
+}
+
 const filteredRuns = computed(() => {
   let runs = project.value?.testRuns || [];
   if (fullRunsOnly.value) {
     runs = runs.filter((r) => r.isFullRun !== false);
   }
-  if (selectedEnvironments.value.length === 0) return runs;
-  return runs.filter((r) => r.environment && selectedEnvironments.value.includes(r.environment));
+  if (selectedEnvironments.value.length > 0) {
+    runs = runs.filter((r) => r.environment && selectedEnvironments.value.includes(r.environment));
+  }
+  if (selectedBranches.value.length > 0) {
+    runs = runs.filter((r) => {
+      const b = runBranch(r);
+      return b !== null && selectedBranches.value.includes(b);
+    });
+  }
+  return runs;
 });
 
 // When exactly one environment is selected, scope the (server-side) flaky
@@ -344,6 +382,10 @@ const filteredRuns = computed(() => {
 const flakyEnvironment = computed(() =>
   selectedEnvironments.value.length === 1 ? selectedEnvironments.value[0] : undefined,
 );
+
+// When exactly one branch is selected, scope the (server-side) flaky analysis
+// to it so a feature branch's stability can be compared to the default branch.
+const flakyBranch = computed(() => (selectedBranches.value.length === 1 ? selectedBranches.value[0] : undefined));
 
 // === TIMELINE MARKERS ===
 const { data: markersData, refresh: refreshMarkers } = await useFetch<MarkersResponse>(
@@ -780,6 +822,33 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                   @click="selectedEnvironments = []"
                 />
               </template>
+              <template v-if="availableBranches.length > 0">
+                <span class="text-sm text-muted shrink-0">Branch:</span>
+                <button
+                  v-for="branch in availableBranches"
+                  :key="branch"
+                  type="button"
+                  :title="branch"
+                  :class="[
+                    'text-xs font-medium px-2 py-1 rounded border cursor-pointer focus:outline-none transition-colors max-w-[12rem] truncate',
+                    isBranchFilterActive(branch)
+                      ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700'
+                      : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 dark:hover:bg-zinc-700',
+                  ]"
+                  @click="toggleBranchFilter(branch)"
+                >
+                  {{ branch }}
+                </button>
+                <UButton
+                  v-if="selectedBranches.length > 0"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  icon="i-lucide-x"
+                  label="Clear filter"
+                  @click="selectedBranches = []"
+                />
+              </template>
             </div>
 
             <ChartCard
@@ -889,14 +958,25 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                   </UBadge>
                 </template>
                 <template #metadata-cell="{ row }">
-                  <div v-if="row.original.metadata?.scm" class="flex items-center gap-1 flex-wrap">
-                    <span
-                      v-if="row.original.metadata.scm.branch"
-                      class="text-xs font-medium bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded"
+                  <div
+                    v-if="runBranch(row.original) || row.original.metadata?.scm?.commit"
+                    class="flex items-center gap-1 flex-wrap"
+                  >
+                    <button
+                      v-if="runBranch(row.original)"
+                      type="button"
+                      :title="`Filter runs on ${runBranch(row.original)}`"
+                      :class="[
+                        'text-xs font-medium px-1.5 py-0.5 rounded cursor-pointer transition-colors max-w-[12rem] truncate',
+                        isBranchFilterActive(runBranch(row.original)!)
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                          : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700',
+                      ]"
+                      @click="toggleBranchFilter(runBranch(row.original)!)"
                     >
-                      {{ row.original.metadata.scm.branch }}
-                    </span>
-                    <code v-if="row.original.metadata.scm.commit" class="text-xs text-gray-500">
+                      {{ runBranch(row.original) }}
+                    </button>
+                    <code v-if="row.original.metadata?.scm?.commit" class="text-xs text-gray-500">
                       {{ row.original.metadata.scm.commit.substring(0, 7) }}
                     </code>
                   </div>
@@ -971,6 +1051,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
               v-if="activeTab === 'flaky-tests'"
               :project-id="String(projectId)"
               :environment="flakyEnvironment"
+              :branch="flakyBranch"
               :project-name="project?.name"
             />
           </template>

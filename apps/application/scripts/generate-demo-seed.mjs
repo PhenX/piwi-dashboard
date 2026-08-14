@@ -177,6 +177,12 @@ const PROJECTS = [
   },
 ];
 
+// Record each project's default branch from its SCM repo, so branch-aware
+// baselines, flakiness scoping and the default-branch resolver have real data.
+for (const project of PROJECTS) {
+  project.default_branch = SCM_REPOS[project.id]?.defaultBranch ?? 'main';
+}
+
 // Project-tag associations
 const PROJECT_TAGS = [
   { project_id: 1, tag_id: 1 }, // e2e-checkout → smoke
@@ -686,6 +692,7 @@ for (const proj of DEMO_PROJECTS) {
       avg_test_duration: avgTestDuration,
       p90_test_duration: p90TestDuration,
       environment: ENVIRONMENTS[i % ENVIRONMENTS.length],
+      branch: commit.branch && commit.branch !== 'HEAD' ? commit.branch : null,
       label: proj.id === 1 && i === 0 ? 'v2.4.0 release' : null,
       metadata,
       stream_token: null,
