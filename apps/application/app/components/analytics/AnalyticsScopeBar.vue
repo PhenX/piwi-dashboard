@@ -7,6 +7,7 @@ const props = defineProps<{
   modelValue: AnalyticsScopeState;
   availableProjects: ProjectMenuItem[];
   availableEnvironments: string[];
+  availableBranches?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -46,6 +47,15 @@ const environment = computed({
 
 const environmentItems = computed(() => [ENV_ALL, ...props.availableEnvironments]);
 
+const BRANCH_ALL = 'All branches';
+
+const branch = computed({
+  get: () => props.modelValue.branch ?? BRANCH_ALL,
+  set: (val: string) => emit('update:modelValue', { ...props.modelValue, branch: val === BRANCH_ALL ? null : val }),
+});
+
+const branchItems = computed(() => [BRANCH_ALL, ...(props.availableBranches ?? [])]);
+
 const fullRunsOnly = computed({
   get: () => props.modelValue.fullRunsOnly,
   set: (val: boolean) => emit('update:modelValue', { ...props.modelValue, fullRunsOnly: val }),
@@ -56,6 +66,7 @@ const isDefault = computed(
     props.modelValue.days === DEFAULT_ANALYTICS_SCOPE_STATE.days &&
     props.modelValue.projectIds.length === 0 &&
     props.modelValue.environment === null &&
+    props.modelValue.branch === null &&
     props.modelValue.fullRunsOnly === DEFAULT_ANALYTICS_SCOPE_STATE.fullRunsOnly,
 );
 
@@ -102,6 +113,15 @@ function reset() {
       size="sm"
       class="min-w-[160px]"
       icon="i-lucide-server"
+    />
+
+    <USelect
+      v-if="(availableBranches?.length ?? 0) > 0"
+      v-model="branch"
+      :items="branchItems"
+      size="sm"
+      class="min-w-[160px]"
+      icon="i-lucide-git-branch"
     />
 
     <label

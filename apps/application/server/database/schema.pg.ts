@@ -51,6 +51,7 @@ export const projects = pgTable(
     description: text('description'),
     diagnosisInstructions: text('diagnosis_instructions'),
     scmToken: text('scm_token'), // Per-project SCM token for GitHub/GitLab/Bitbucket API access
+    defaultBranch: text('default_branch'), // Repository default branch; null = resolve from SCM provider, else 'main'
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -89,6 +90,7 @@ export const testRuns = pgTable(
     filterDetails: jsonb('filter_details'), // JSON: { grep?, grepInvert? }
 
     environment: text('environment'), // Deployment environment (e.g. 'production', 'staging', 'development')
+    branch: text('branch'), // Scalar SCM branch (logical branch, never 'HEAD') for index efficiency; projects metadata.scm.branch
     metadata: jsonb('metadata'), // Additional metadata as JSON
     setupSteps: jsonb('setup_steps'), // Array of suite-level hook/fixture steps (beforeAll/afterAll) for the timeline
     label: text('label'), // Optional human-readable label (e.g. "v2.3.1 release")
@@ -105,6 +107,11 @@ export const testRuns = pgTable(
   (table) => ({
     projectIdIdx: index('idx_test_runs_project_id').on(table.projectId),
     projectStartTimeIdx: index('idx_test_runs_project_start').on(table.projectId, table.startTime),
+    projectBranchStartIdx: index('idx_test_runs_project_branch_start').on(
+      table.projectId,
+      table.branch,
+      table.startTime,
+    ),
     startTimeIdx: index('idx_test_runs_start_time').on(table.startTime),
     statusIdx: index('idx_test_runs_status').on(table.status),
     importHashIdx: uniqueIndex('idx_test_runs_import_hash').on(table.projectId, table.importHash),

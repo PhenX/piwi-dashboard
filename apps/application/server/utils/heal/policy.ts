@@ -9,10 +9,12 @@
  * snapshotted into a durable `heal_actions` row; the dispatcher does the writes.
  */
 import { and, count, eq } from 'drizzle-orm';
-import { healActions, testCases, testRuns, testRunsCases } from '../../database/schema';
+import { healActions, projects, testCases, testRuns, testRunsCases } from '../../database/schema';
 import { getLocatorHealingBatch } from '../locator-healing';
 import { createScmProvider } from '../scm';
 import { resolveOwners } from '../scm/ownership';
+import { resolveDefaultBranch } from '../scm/default-branch';
+import { resolveRunBranch } from '../run-branch';
 import { normalizeGitUrl } from '../regression-context';
 import { getAutoHealSettings, resolveHealSiteUrl } from './settings';
 import { buildRetryCommand } from '#shared/retry-command';
@@ -129,15 +131,24 @@ export async function maybeEnqueueHealAction(db: DbClient, runId: number): Promi
   if (run.isFullRun === 0) return skip('not a full run');
 
   const meta = (run.metadata as RunMetadata | null) ?? null;
-  const branch = meta?.scm?.branch?.trim() || null;
-  const defaultBranch = meta?.defaultBranch?.trim() || null;
+  const branch = run.branch ?? resolveRunBranch(run.metadata);
   const commit = meta?.scm?.commit?.trim() || null;
   const repositoryUrl = normalizeGitUrl(meta?.scm?.remoteUrl ?? null);
   if (!repositoryUrl) return skip('run has no repository URL in its SCM metadata');
 
+  // Resolve the default branch through the shared chain (project setting → SCM
+  // provider → reporter hint → 'main') so the "not the default branch" guard
+  // fires even when the reporter recorded no `defaultBranch` in its metadata.
+  const [project] = await db
+    .select({ id: projects.id, defaultBranch: projects.defaultBranch })
+    .from(projects)
+    .where(eq(projects.id, run.projectId));
+  if (!project) return skip('project not found');
+  const defaultBranch = await resolveDefaultBranch(db, project, run.metadata);
+
   const baseBranch = defaultBranch || branch;
   if (!baseBranch) return skip('run has no branch to target');
-  if (defaultBranch && branch && branch !== defaultBranch) return skip('run is not on the default branch');
+  if (branch && branch !== defaultBranch) return skip('run is not on the default branch');
   if (isHealBranch(branch, settings.branchPrefix)) return skip('run is on a heal branch');
 
   const provider = await createScmProvider(repositoryUrl, db, run.projectId);

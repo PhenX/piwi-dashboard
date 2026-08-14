@@ -11,6 +11,8 @@ export interface AnalyticsScope {
   projectIds?: number[];
   /** Restrict to runs reported for one deployment environment. */
   environment?: string | null;
+  /** Restrict to runs reported on one SCM branch. */
+  branch?: string | null;
   /** Only count full-suite runs (default) — partial/--grep runs skew every rate. */
   fullRunsOnly: boolean;
 }
@@ -48,12 +50,14 @@ export function parseAnalyticsScope(query: QueryLike): AnalyticsScope {
     : undefined;
 
   const environment = pick(query, 'environment') || null;
+  const branch = pick(query, 'branch') || null;
   const fullRunsOnly = pick(query, 'fullRunsOnly') !== 'false';
 
   return {
     days,
     projectIds: projectIds && projectIds.length > 0 ? projectIds : undefined,
     environment,
+    branch,
     fullRunsOnly,
   };
 }
@@ -63,6 +67,7 @@ export function analyticsScopeToQuery(scope: AnalyticsScope): Record<string, str
   const query: Record<string, string> = { days: String(scope.days) };
   if (scope.projectIds && scope.projectIds.length > 0) query.projects = scope.projectIds.join(',');
   if (scope.environment) query.environment = scope.environment;
+  if (scope.branch) query.branch = scope.branch;
   if (!scope.fullRunsOnly) query.fullRunsOnly = 'false';
   return query;
 }

@@ -10,7 +10,7 @@ import {
   failureDiagnoses,
   casePayloads,
 } from '../../server/database/schema';
-import { asc, desc, eq, exists, sql, and, inArray, gte, lte, isNotNull, count } from 'drizzle-orm';
+import { asc, desc, eq, exists, sql, and, or, inArray, gte, lte, isNull, isNotNull, count } from 'drizzle-orm';
 import { jsonArrayContainsAll, parseTagFilter } from '../utils/tag-filter';
 import { FAILED_STATUS_KEYS } from '../utils/test-counts';
 import { TEST_PRIORITIES } from '@piwitests/core/test-meta';
@@ -186,6 +186,7 @@ export async function getProject(db: DrizzleDB, id: number, options?: { runLimit
       shardTotal: testRuns.shardTotal,
       shardsFinished: testRuns.shardsFinished,
       environment: testRuns.environment,
+      branch: testRuns.branch,
       label: testRuns.label,
       instanceId: testRuns.instanceId,
       playwrightVersion: testRuns.playwrightVersion,
@@ -303,13 +304,14 @@ export async function updateProject(
     description?: string | null;
     diagnosisInstructions?: string | null;
     scmToken?: string | null;
+    defaultBranch?: string | null;
     tagIds?: number[];
   },
 ) {
   const projectResults: any[] = await db.select().from(projects).where(eq(projects.id, id));
   if (!projectResults[0]) throw new Error('Project not found');
 
-  const { label, description, diagnosisInstructions, scmToken, tagIds: dataTagIds } = data;
+  const { label, description, diagnosisInstructions, scmToken, defaultBranch, tagIds: dataTagIds } = data;
 
   // Update project
   await db
@@ -319,6 +321,7 @@ export async function updateProject(
       description,
       diagnosisInstructions: diagnosisInstructions ?? undefined,
       scmToken: scmToken !== undefined ? scmToken : undefined,
+      defaultBranch: defaultBranch !== undefined ? defaultBranch : undefined,
       updatedAt: new Date(),
     })
     .where(eq(projects.id, id));
@@ -1200,22 +1203,33 @@ export async function getProjectFlakyTests(
   runsLimit: number,
   environment?: string | null,
   filter?: FlakyTestsFilter,
+  branch?: string | null,
 ) {
-  const projectResults: any[] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId));
+  const projectResults: any[] = await db
+    .select({ id: projects.id, defaultBranch: projects.defaultBranch })
+    .from(projects)
+    .where(eq(projects.id, projectId));
   const project = projectResults[0];
   if (!project) throw new Error('Project not found');
 
   const effectiveLimit = Math.min(200, Math.max(1, runsLimit));
 
-  // Step 1: Last N terminal runs (optionally scoped to one environment so
-  // stability can be compared per environment, e.g. staging vs production)
-  const runsWhere = environment
-    ? and(eq(testRuns.projectId, projectId), eq(testRuns.environment, environment))
-    : eq(testRuns.projectId, projectId);
+  // Step 1: Last N terminal runs. An explicit branch filter scopes to exactly
+  // that branch. Otherwise, when the project's default branch is known, the
+  // leaderboard reads default-branch runs (plus runs with no branch, e.g. local
+  // or pre-migration) so a work-in-progress branch stops contaminating the
+  // project's health signal. Environment scopes independently.
+  const runsConditions = [eq(testRuns.projectId, projectId)];
+  if (environment) runsConditions.push(eq(testRuns.environment, environment));
+  if (branch) {
+    runsConditions.push(eq(testRuns.branch, branch));
+  } else if (project.defaultBranch) {
+    runsConditions.push(or(eq(testRuns.branch, project.defaultBranch), isNull(testRuns.branch))!);
+  }
   const recentRuns: any[] = await db
     .select({ id: testRuns.id, startTime: testRuns.startTime })
     .from(testRuns)
-    .where(runsWhere)
+    .where(and(...runsConditions))
     .orderBy(desc(testRuns.startTime))
     .limit(effectiveLimit);
 

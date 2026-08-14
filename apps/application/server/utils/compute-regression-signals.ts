@@ -1,31 +1,43 @@
-import { eq, and, desc, lt } from 'drizzle-orm';
-import { testRuns, testRunsCases } from '../database/schema';
+import { eq } from 'drizzle-orm';
+import { projects, testRuns, testRunsCases } from '../database/schema';
 import type { DbClient as DB } from '../database';
+import { resolveRunBranch } from './run-branch';
+import { resolveDefaultBranch, FALLBACK_DEFAULT_BRANCH } from './scm/default-branch';
+import { selectBaselineRun } from './branch-baseline';
 
 /**
  * Compute isNewRegression and isNewFlaky signals for all test_runs_cases
- * in a finished run by comparing against the most recent passing baseline.
+ * in a finished run by comparing against the branch-aware passing baseline
+ * (same branch, else the default branch, else any branch).
  */
 export async function computeRegressionSignals(db: DB, runId: number): Promise<void> {
   const runResults: any[] = await db
-    .select({ id: testRuns.id, projectId: testRuns.projectId, startTime: testRuns.startTime })
+    .select({
+      id: testRuns.id,
+      projectId: testRuns.projectId,
+      startTime: testRuns.startTime,
+      branch: testRuns.branch,
+      metadata: testRuns.metadata,
+    })
     .from(testRuns)
     .where(eq(testRuns.id, runId));
 
   const run = runResults[0];
   if (!run) return;
 
-  // Find most recent passing baseline run (same project, before this run)
-  const baselineResults: any[] = await db
-    .select({ id: testRuns.id })
-    .from(testRuns)
-    .where(
-      and(eq(testRuns.projectId, run.projectId), eq(testRuns.status, 'passed'), lt(testRuns.startTime, run.startTime)),
-    )
-    .orderBy(desc(testRuns.startTime))
-    .limit(1);
+  const [project] = await db
+    .select({ id: projects.id, defaultBranch: projects.defaultBranch })
+    .from(projects)
+    .where(eq(projects.id, run.projectId));
+  const branch = run.branch ?? resolveRunBranch(run.metadata);
+  const defaultBranch = project ? await resolveDefaultBranch(db, project, run.metadata) : FALLBACK_DEFAULT_BRANCH;
 
-  const baselineRun = baselineResults[0];
+  const baselineRun = await selectBaselineRun(db, {
+    projectId: run.projectId,
+    before: run.startTime,
+    branch,
+    defaultBranch,
+  });
   if (!baselineRun) return;
 
   // Fetch baseline case statuses and retries

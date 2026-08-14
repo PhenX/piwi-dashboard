@@ -23,6 +23,7 @@ const state = ref({
   description: project.value?.description || '',
   diagnosisInstructions: project.value?.diagnosisInstructions || '',
   scmToken: '',
+  defaultBranch: project.value?.defaultBranch || '',
 });
 
 const selectedTags = ref<TagInfo[]>(project.value?.tags || []);
@@ -32,6 +33,7 @@ const schema = z.object({
   description: z.string().optional(),
   diagnosisInstructions: z.string().optional(),
   scmToken: z.string().optional(),
+  defaultBranch: z.string().optional(),
 });
 
 const saving = ref(false);
@@ -47,6 +49,7 @@ async function onSubmit() {
         description: state.value.description || null,
         diagnosisInstructions: state.value.diagnosisInstructions || null,
         scmToken: state.value.scmToken || null,
+        defaultBranch: state.value.defaultBranch || null,
         tagIds: selectedTags.value.map((t) => t.id),
       },
     });
@@ -114,6 +117,7 @@ function onCancel() {
               v-model:description="state.description"
               v-model:diagnosisInstructions="state.diagnosisInstructions"
               v-model:scmToken="state.scmToken"
+              v-model:defaultBranch="state.defaultBranch"
               v-model:tags="selectedTags"
               :all-tags="allTags"
               @tag-created="refreshTags()"

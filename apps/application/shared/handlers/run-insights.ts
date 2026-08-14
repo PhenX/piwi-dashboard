@@ -1,6 +1,9 @@
-import { eq, and, desc, lt } from 'drizzle-orm';
-import { testRuns, testRunsCases, testCases, failureClusters } from '../../server/database/schema';
+import { eq, and } from 'drizzle-orm';
+import { projects, testRuns, testRunsCases, testCases, failureClusters } from '../../server/database/schema';
 import type { DrizzleDB } from './db';
+import { resolveRunBranch } from '../../server/utils/run-branch';
+import { selectBaselineRun } from '../../server/utils/branch-baseline';
+import { FALLBACK_DEFAULT_BRANCH } from '../../server/utils/scm/git-url';
 
 interface TestCaseEntry {
   executionId: number;
@@ -49,6 +52,7 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
       projectId: testRuns.projectId,
       status: testRuns.status,
       startTime: testRuns.startTime,
+      branch: testRuns.branch,
       metadata: testRuns.metadata,
     })
     .from(testRuns)
@@ -73,22 +77,29 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
     .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
     .where(eq(testRunsCases.testRunId, runId));
 
-  // Find baseline: passing full run before this one
-  const baselineConditions = [
-    eq(testRuns.projectId, run.projectId),
-    eq(testRuns.status, 'passed'),
-    eq(testRuns.isFullRun, 1),
-    lt(testRuns.startTime, run.startTime),
-  ];
+  // Find the baseline branch-aware: a passing full run on this branch, else on
+  // the default branch (what a fresh PR branch forked from), else any branch.
+  // The SCM-backed default-branch resolution runs in the server-only ingest
+  // paths and caches onto projects.default_branch; here (a shared handler that
+  // also runs in the demo) we read that cached column, then the reporter hint,
+  // then 'main'.
+  const [project] = await db
+    .select({ defaultBranch: projects.defaultBranch })
+    .from(projects)
+    .where(eq(projects.id, run.projectId));
+  const branch = run.branch ?? resolveRunBranch(run.metadata);
+  const defaultBranch =
+    project?.defaultBranch?.trim() ||
+    (run.metadata as { defaultBranch?: string | null } | null)?.defaultBranch?.trim() ||
+    FALLBACK_DEFAULT_BRANCH;
 
-  const baselineResults: any[] = await db
-    .select({ id: testRuns.id, startTime: testRuns.startTime })
-    .from(testRuns)
-    .where(and(...baselineConditions))
-    .orderBy(desc(testRuns.startTime))
-    .limit(1);
-
-  const baselineRun = baselineResults[0];
+  const baselineRun = await selectBaselineRun(db, {
+    projectId: run.projectId,
+    before: run.startTime,
+    branch,
+    defaultBranch,
+    fullRunOnly: true,
+  });
   const empty = {
     hasBaseline: false,
     totalTests: 0,

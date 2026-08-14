@@ -5,6 +5,7 @@ import type { FlakyTest } from '~~/types/api';
 const props = defineProps<{
   projectId: string | number;
   environment?: string | null;
+  branch?: string | null;
   /** Piwi project name, threaded so the IDE opener can default the JetBrains project. */
   projectName?: string | null;
 }>();
@@ -16,12 +17,13 @@ const { data: tests, pending: loading } = await useFetch(
   () => {
     const params = new URLSearchParams({ runs: String(runsWindow.value) });
     if (props.environment) params.set('environment', props.environment);
+    if (props.branch) params.set('branch', props.branch);
     return `/api/projects/${props.projectId}/flaky-tests?${params.toString()}`;
   },
   {
     lazy: true,
     server: false,
-    watch: [runsWindow, () => props.environment],
+    watch: [runsWindow, () => props.environment, () => props.branch],
     transform: (r: { items: FlakyTest[] }) => r.items,
   },
 );

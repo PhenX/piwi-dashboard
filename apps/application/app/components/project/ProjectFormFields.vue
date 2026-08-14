@@ -29,6 +29,7 @@ const label = defineModel<string>('label', { default: '' });
 const description = defineModel<string>('description', { default: '' });
 const diagnosisInstructions = defineModel<string>('diagnosisInstructions', { default: '' });
 const scmToken = defineModel<string>('scmToken', { default: '' });
+const defaultBranch = defineModel<string>('defaultBranch', { default: '' });
 const tags = defineModel<TagInfo[]>('tags', { default: () => [] });
 </script>
 
@@ -88,6 +89,14 @@ const tags = defineModel<TagInfo[]>('tags', { default: () => [] });
           :placeholder="hasToken ? '•••••••• (unchanged)' : 'ghp_..., glpat-..., or bitbucket token'"
           class="w-full font-mono"
         />
+      </UFormField>
+
+      <UFormField
+        label="Default branch"
+        name="defaultBranch"
+        description="Baselines, flakiness and trends fall back to this branch. Leave empty to resolve it from the SCM provider (else 'main')."
+      >
+        <UInput v-model="defaultBranch" placeholder="e.g. main" class="w-full font-mono" />
       </UFormField>
     </template>
 

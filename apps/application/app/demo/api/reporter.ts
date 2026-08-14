@@ -24,6 +24,7 @@ import { parseLocation } from '~~/server/utils/parse-location';
 import { mapCompleteEventToRunCase } from '~~/server/utils/map-complete-event';
 import { buildNetworkRequestItems, buildNetworkRequestInsertValues } from '~~/server/utils/network-request-helpers';
 import { upsertLocatorSnapshots } from '~~/server/utils/locator-healing';
+import { resolveRunBranch } from '~~/server/utils/run-branch';
 import type { LocatorSnapshot } from '#shared/locator-healing.types';
 import {
   capArray,
@@ -232,6 +233,7 @@ export async function apiSetupTestRun(body: TestRunStartPayload) {
         failedTests: 0,
         skippedTests: 0,
         environment: body.environment || null,
+        branch: resolveRunBranch(body.metadata),
         label: body.label || null,
         metadata: { shardTokens: [setupToken] } as Record<string, unknown>,
         instanceId,
@@ -268,6 +270,7 @@ export async function apiSetupTestRun(body: TestRunStartPayload) {
       failedTests: 0,
       skippedTests: 0,
       environment: body.environment || null,
+      branch: resolveRunBranch(body.metadata),
       label: body.label || null,
       metadata: null,
       instanceId,
@@ -337,6 +340,7 @@ export async function apiBeginTestRun(
         status: 'running',
         streamToken,
         totalTests: body.totalTests || 0,
+        branch: resolveRunBranch(body.metadata || testRun.metadata),
         metadata: sanitizeMetadata(body.metadata || (testRun.metadata as Record<string, unknown> | null)),
         playwrightVersion: body.playwrightVersion || (testRun.playwrightVersion as string | null),
         reporterVersion: body.reporterVersion || (testRun.reporterVersion as string | null),
@@ -1085,7 +1089,7 @@ export async function apiFinishTestRun(id: number, body: TestRunFinishPayload) {
       ...(body.flakyTests !== undefined && { flakyTests }),
       ...(avgTestDuration !== null && { avgTestDuration }),
       ...(p90TestDuration !== null && { p90TestDuration }),
-      ...(body.metadata && { metadata: sanitizeMetadata(body.metadata) }),
+      ...(body.metadata && { metadata: sanitizeMetadata(body.metadata), branch: resolveRunBranch(body.metadata) }),
       ...(body.label !== undefined && { label: body.label }),
       ...(body.playwrightVersion && { playwrightVersion: body.playwrightVersion }),
       ...(body.reporterVersion && { reporterVersion: body.reporterVersion }),

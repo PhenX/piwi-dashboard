@@ -23,6 +23,7 @@ const fetchCommitDiffCache = new TtlCache<ScmChanges>(10 * 60 * 1000);
 // Content is immutable per SHA, so cache it (incl. negative lookups) for longer.
 const fetchFileCache = new TtlCache<ScmFileContent | null>(30 * 60 * 1000);
 const fetchTreeCache = new TtlCache<string[]>(10 * 60 * 1000);
+const defaultBranchCache = new TtlCache<string | null>(30 * 60 * 1000);
 
 export class GitHubProvider extends ScmProvider {
   readonly provider = 'github' as const;
@@ -225,6 +226,22 @@ export class GitHubProvider extends ScmProvider {
       return `No commits found on ${branch ? `branch '${branch}'` : 'the default branch'}.`;
     } catch {
       return 'Could not reach the GitHub API. Check your network connection.';
+    }
+  }
+
+  override async getDefaultBranch(): Promise<string | null> {
+    const key = `${this.keyPrefix}:default-branch:${this.repoPath}`;
+    const cached = defaultBranchCache.get(key);
+    if (cached !== undefined) return cached;
+    try {
+      const res = await fetch(`https://api.github.com/repos/${this.repoPath}`, { headers: this.makeHeaders() });
+      if (!res.ok) return null;
+      const body = (await res.json().catch(() => ({}))) as { default_branch?: string };
+      const branch = body.default_branch?.trim() || null;
+      defaultBranchCache.set(key, branch);
+      return branch;
+    } catch {
+      return null;
     }
   }
 

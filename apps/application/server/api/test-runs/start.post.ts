@@ -5,6 +5,7 @@ import { eq, and, or } from 'drizzle-orm';
 import { requireAuth } from '../../utils/auth';
 import { cancelInstanceRuns } from '../../utils/cancel-instance-runs';
 import { sanitizeMetadata } from '../../utils/sanitize';
+import { resolveRunBranch } from '../../utils/run-branch';
 import { runEventBus } from '../../utils/run-events';
 import { persistShardToken } from '../../utils/shard-tokens';
 import { getProjectScope, scopeAllows } from '../../utils/project-access';
@@ -140,6 +141,7 @@ export default eventHandler(async (event) => {
         skippedTests: 0,
         didNotRunTests: 0,
         environment: body.environment || null,
+        branch: resolveRunBranch(body.metadata),
         label: body.label || null,
         metadata: { ...(sanitizeMetadata(body.metadata ?? {}) ?? {}), shardTokens: [streamToken] } as Record<
           string,
@@ -195,6 +197,7 @@ export default eventHandler(async (event) => {
       skippedTests: 0,
       didNotRunTests: 0,
       environment: body.environment || null,
+      branch: resolveRunBranch(body.metadata),
       label: body.label || null,
       metadata: sanitizeMetadata(body.metadata || null),
       instanceId,

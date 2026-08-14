@@ -73,6 +73,12 @@ export interface PrFailureEntry {
   /** Tags declared on the test, for routing the reader to an owning team. */
   tags?: string[] | null;
   owner?: string | null;
+  /**
+   * Set when this test is also flaky on the default branch, so the comment can
+   * exonerate a failure the change probably did not cause. `flakinessRate` is
+   * the test's flaky rate over recent default-branch runs (0–1).
+   */
+  flakyOnDefaultBranch?: { branch: string; flakinessRate: number } | null;
 }
 
 export interface PrSummaryInput {
@@ -157,6 +163,10 @@ function renderFailureList(entries: PrFailureEntry[], runUrl: string): string {
       line += `\n  🩹 Piwi opened ${pr} to heal this locator.`;
     } else if (entry.suggestedLocator) {
       line += `\n  💡 Try \`${escapeCell(entry.suggestedLocator)}\` instead.`;
+    }
+    if (entry.flakyOnDefaultBranch) {
+      const pct = Math.round(entry.flakyOnDefaultBranch.flakinessRate * 100);
+      line += `\n  🎲 Also flaky on \`${escapeCell(entry.flakyOnDefaultBranch.branch)}\` (~${pct}% of recent runs) — likely not yours.`;
     }
     return line;
   });

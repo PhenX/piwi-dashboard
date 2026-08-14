@@ -131,6 +131,7 @@ export async function getOrComputeVisualDiff(db: DrizzleDB, testRunsCaseId: numb
       testCaseId: testRunsCases.testCaseId,
       browserName: testRunsCases.browserName,
       projectId: testRuns.projectId,
+      branch: testRuns.branch,
     })
     .from(testRunsCases)
     .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
@@ -144,15 +145,26 @@ export async function getOrComputeVisualDiff(db: DrizzleDB, testRunsCaseId: numb
   const failingShot = failingShots[0]!;
 
   // Last passing execution (same browser) that has at least one screenshot.
+  // Prefer executions on the failing run's own branch before older ones from
+  // other branches, so a branch that intentionally redesigns a page is diffed
+  // against its own last-good state, not the pre-redesign baseline.
   const conds = [eq(testRunsCases.testCaseId, failing.testCaseId), eq(testRunsCases.status, 'passed')];
   if (failing.browserName) conds.push(eq(testRunsCases.browserName, failing.browserName));
-  const passings = await db
-    .select({ id: testRunsCases.id, runId: testRunsCases.testRunId })
+  const passingRows = await db
+    .select({ id: testRunsCases.id, runId: testRunsCases.testRunId, branch: testRuns.branch })
     .from(testRunsCases)
     .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
     .where(and(...conds))
     .orderBy(desc(testRuns.startTime), desc(testRunsCases.id))
-    .limit(10);
+    .limit(20);
+
+  // Same-branch executions first (recency preserved), then the rest.
+  const passings = failing.branch
+    ? [
+        ...passingRows.filter((p) => p.branch === failing.branch),
+        ...passingRows.filter((p) => p.branch !== failing.branch),
+      ]
+    : passingRows;
 
   let baseline: { id: number; runId: number } | null = null;
   let baselineShot: ScreenshotFileRow | null = null;

@@ -49,14 +49,22 @@ export interface WebVitals {
 /** SCM block of `test_runs.metadata`. */
 export interface RunScmMetadata {
   commit?: string | null;
+  /** The logical branch resolved by the reporter's fallback chain — never `HEAD`. */
   branch?: string | null;
+  /** Pull-request number captured from the CI provider, when it exposes one. */
+  prNumber?: string | number | null;
   remoteUrl?: string | null;
 }
 
 /** `test_runs.metadata` JSON — the fields the server reads. */
 export interface RunMetadata {
   scm?: RunScmMetadata | null;
-  /** The repository's default branch, recorded at the top level by the reporter. */
+  /**
+   * The repository's default branch, when the reporter's `defaultBranch` option
+   * recorded one. Optional and often absent — the server resolves the effective
+   * default branch through `resolveDefaultBranch` (project setting → SCM
+   * provider → this hint → `'main'`).
+   */
   defaultBranch?: string | null;
   ci?: { provider?: string | null } | null;
   htmlReport?: { projects?: Array<{ use?: { browserName?: string | null } | null }> } | null;

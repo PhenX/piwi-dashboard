@@ -261,6 +261,7 @@ const RECENT_FIELDS = {
   reporterVersion: testRuns.reporterVersion,
   isFullRun: testRuns.isFullRun,
   environment: testRuns.environment,
+  branch: testRuns.branch,
 };
 
 export async function getRecentTestRuns(db: DrizzleDB, scope: ProjectScope = 'all') {

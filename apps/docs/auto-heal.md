@@ -49,7 +49,8 @@ You can review what Piwi has opened per project through `GET /api/heal-actions?p
 ## Limits
 
 - **GitHub and GitLab and Bitbucket** are supported; GitHub Enterprise is not.
-- Distinguishing the default branch needs the run's `defaultBranch` metadata; without it Piwi targets the run's own
-  branch.
+- The default branch is resolved per project — an explicit setting in project settings, else the repository's default
+  branch from the SCM provider, else `main` — so the "default branch only" guard applies even when the reporter
+  recorded no `defaultBranch` in its metadata.
 - Retries use progressive backoff and record the provider's own error on the action, so a failure is visible rather
   than silent.
