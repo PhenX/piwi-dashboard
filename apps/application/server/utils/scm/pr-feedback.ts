@@ -38,6 +38,7 @@ import {
 import type { VerifiedFix } from '../fix-verification';
 import type { RunMetadata } from '../run-json-types';
 import type { DbClient } from '../../database';
+import type { FilterDetails } from '#shared/types';
 
 /** Read the resolved settings, falling back to the (disabled) defaults. */
 export async function getPrFeedbackSettings(db: DbClient): Promise<PrFeedbackSettings> {
@@ -266,6 +267,10 @@ export async function buildRunPrSummary(
       timeToResolutionMs: fix.timeToResolutionMs,
     })),
     wastedMinutes: wastedTotalMs > 0 ? wastedTotalMs / 60000 : null,
+    selection: (() => {
+      const stamp = (run.filterDetails as FilterDetails | null)?.selection;
+      return stamp ? { key: stamp.key, testCount: stamp.resolvedCount } : null;
+    })(),
     hasBaseline: insights?.hasBaseline ?? false,
   };
 }

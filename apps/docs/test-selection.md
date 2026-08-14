@@ -118,6 +118,27 @@ export default wrapConfig(defineConfig({ grep: selection?.grep }));
 It stamps the run the same way `piwi run` does, and returns `undefined` (so the config runs everything) when no
 selection is named or the dashboard cannot be reached.
 
+## Guard it in CI
+
+A tag convention can't tell you a smoke job silently shrank — a renamed file or an over-narrow grep quietly drops a
+test, and the job stays green. `piwi gate --require-selection <key>` closes that gap: the dashboard re-resolves the
+selection's current definition and fails the build if any test it now matches did not run, or ran and failed.
+
+```bash
+npx @piwitests/reporter run smoke                 # run the subset, stamping the run
+npx @piwitests/reporter gate --require-selection smoke   # then assert it held
+```
+
+It composes with the other [gate](/ci) rules (`--max-new-regressions`, `--fail-on-flaky`, …). A quarantined test is
+exempt — quarantine already means "don't gate on this test".
+
+## In the dashboard, and for agents
+
+The project's **Selections** tab lists the built-ins and your saved selections, with a builder that previews live what
+a definition resolves to — the matching tests, the estimated duration, any warnings, and the exact command — before you
+save it. For AI agents, the [MCP server](/mcp) exposes `list_selections`, `resolve_selection` (key → tests + verify
+command) and `preview_selection` (an ad-hoc definition, dry-run); the `run-the-right-tests` skill ties them together.
+
 ## What selections are not
 
 - **Not instrumented test-impact analysis.** Predicates read _observed_ history — durations, pass rates, statuses — not

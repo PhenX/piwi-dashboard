@@ -129,7 +129,8 @@ deflates and exists for trace-blob reconstruction.
 
 `/` dashboard home · `/projects` + `/projects/[id]` · `/projects/[id]/test-functions` (the browser extension's
 function catalog — add by hand, via AI extraction from pasted code, or — with no AI configured — copy a prompt for
-your own AI chat and paste its reply back in) · `/test-runs/[id]` · `/test-cases/[id]` (stable
+your own AI chat and paste its reply back in) · `/projects/[id]/selections` (test selections — builder with live
+preview and the runnable command) · `/test-runs/[id]` · `/test-cases/[id]` (stable
 case across runs) · `/test-run-cases/[id]` (one execution) · `/failure-clusters/[id]` · `/analytics` · `/settings/*` ·
 `/docs` (in-app API reference) · `/mcp` · `/login`, `/forgot-password`, `/reset-password` (public, layout-free).
 

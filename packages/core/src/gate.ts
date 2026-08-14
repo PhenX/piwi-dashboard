@@ -30,6 +30,13 @@ export interface GatePolicy {
   maxQuarantined?: number;
   /** Fail when the run contains any flaky test (passed only after a retry). */
   failOnFlaky?: boolean;
+  /**
+   * Key of a selection every test of which must have run and passed in this run.
+   * The server re-resolves the selection's current definition, so this catches
+   * the failure mode tags cannot: a smoke job that silently shrank — a renamed
+   * file or over-narrow filter dropping a test the selection still expects.
+   */
+  requireSelection?: string;
 }
 
 /** What the server measured about the run, independent of any policy. */
@@ -53,6 +60,16 @@ export interface GateFacts {
   quarantinedTotal: number;
   /** Tests that passed only after a retry in this run. */
   flakyTests: number;
+  /** Set when `requireSelection` was asked: how the named selection fared in this run. */
+  selection?: {
+    key: string;
+    /** How many tests the selection currently resolves to. */
+    matched: number;
+    /** Matched tests that did not run in this run at all. */
+    notRun: Array<{ title: string; filePath: string }>;
+    /** Matched tests that ran but failed (and are not quarantined). */
+    failed: Array<{ title: string; filePath: string; executionId: number }>;
+  };
 }
 
 export interface GateViolation {
@@ -65,7 +82,10 @@ export interface GateViolation {
     | 'max-new-flaky'
     | 'new-cluster'
     | 'max-quarantined'
-    | 'flaky';
+    | 'flaky'
+    | 'selection-empty'
+    | 'selection-not-run'
+    | 'selection-failed';
   message: string;
   /** Observed value and the limit it exceeded, when the rule is a threshold. */
   actual?: number;
@@ -87,7 +107,8 @@ export function isEmptyPolicy(policy: GatePolicy): boolean {
     policy.maxNewFlaky == null &&
     policy.maxQuarantined == null &&
     !policy.failOnNewCluster &&
-    !policy.failOnFlaky
+    !policy.failOnFlaky &&
+    !policy.requireSelection
   );
 }
 
@@ -168,6 +189,42 @@ export function evaluateGatePolicy(facts: GateFacts, policy: GatePolicy): GateRe
       actual: facts.flakyTests,
       limit: 0,
     });
+  }
+
+  if (policy.requireSelection && facts.selection) {
+    const { key, matched, notRun, failed } = facts.selection;
+    if (matched === 0) {
+      violations.push({
+        rule: 'selection-empty',
+        message: `selection "${key}" matches no tests — the definition is too narrow, or nothing in the project qualifies`,
+      });
+    }
+    if (notRun.length > 0) {
+      const names = notRun
+        .slice(0, 3)
+        .map((entry) => entry.title)
+        .join(', ');
+      const more = notRun.length > 3 ? `, +${notRun.length - 3} more` : '';
+      violations.push({
+        rule: 'selection-not-run',
+        message: `${notRun.length} test${notRun.length === 1 ? '' : 's'} in selection "${key}" did not run: ${names}${more}`,
+        actual: notRun.length,
+        limit: 0,
+      });
+    }
+    if (failed.length > 0) {
+      const names = failed
+        .slice(0, 3)
+        .map((entry) => entry.title)
+        .join(', ');
+      const more = failed.length > 3 ? `, +${failed.length - 3} more` : '';
+      violations.push({
+        rule: 'selection-failed',
+        message: `${failed.length} test${failed.length === 1 ? '' : 's'} in selection "${key}" failed: ${names}${more}`,
+        actual: failed.length,
+        limit: 0,
+      });
+    }
   }
 
   return { passed: violations.length === 0, violations, facts };
