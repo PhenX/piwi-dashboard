@@ -42,6 +42,7 @@ export const {
   locatorSnapshots,
   casePayloads,
   testFunctions,
+  testSelections,
   shareLinks,
 } = schema;
 
@@ -105,6 +106,8 @@ export type {
   NewCasePayload,
   TestFunction,
   NewTestFunction,
+  TestSelection,
+  NewTestSelection,
   ShareLink,
   NewShareLink,
 } from './schema.sqlite';

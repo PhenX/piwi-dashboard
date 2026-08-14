@@ -69,6 +69,21 @@ import {
   RELEASE_AFTER_CONSECUTIVE_PASSES,
 } from '#shared/handlers/quarantine';
 import {
+  listSelections,
+  getSelection,
+  createSelection,
+  updateSelection,
+  deleteSelection,
+  resolveSelectionDefinition,
+  SelectionError,
+} from '#shared/handlers/selections';
+import {
+  isBuiltinKey,
+  validateSelectionDefinition,
+  type SelectionDefinition,
+  type SelectionFormat,
+} from '#shared/selection';
+import {
   getTestCase,
   getTestRunCase,
   getTestCaseHistory,
@@ -1121,6 +1136,115 @@ const routes: RouteEntry[] = [
       const result = await releaseQuarantine(await getDemoDb(), +m[1]!, +m[2]!, reason);
       if (!result.released) throw demoHttpError(404, 'No active quarantine for this test');
       return { success: true, ...result };
+    },
+  },
+
+  // Test selections. Resolution is pure SQL over the catalog, so the whole
+  // feature runs in the browser exactly as it does on a server.
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/selections$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return { items: await listSelections(await getDemoDb(), +m[1]!) };
+    },
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/projects\/(\d+)\/selections$/,
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      const b = body as { key?: unknown; name?: unknown; description?: unknown; definition?: unknown };
+      try {
+        return await createSelection(await getDemoDb(), +m[1]!, {
+          key: String(b.key ?? ''),
+          name: String(b.name ?? ''),
+          description: typeof b.description === 'string' ? b.description : null,
+          definition: (b.definition ?? {}) as SelectionDefinition,
+          createdBy: ctx?.actingUserId ?? undefined,
+        });
+      } catch (e) {
+        if (e instanceof SelectionError) throw demoHttpError(e.statusCode, e.message);
+        throw e;
+      }
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/selections\/([^/]+)$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      const selection = await getSelection(await getDemoDb(), +m[1]!, decodeURIComponent(m[2]!));
+      if (!selection) throw demoHttpError(404, `No selection "${decodeURIComponent(m[2]!)}" in this project`);
+      return selection;
+    },
+  },
+  {
+    method: 'PATCH',
+    pattern: /^\/api\/projects\/(\d+)\/selections\/([^/]+)$/,
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      const b = body as { name?: unknown; description?: unknown; definition?: unknown };
+      try {
+        return await updateSelection(await getDemoDb(), +m[1]!, decodeURIComponent(m[2]!), {
+          name: typeof b.name === 'string' ? b.name : undefined,
+          description: b.description === undefined ? undefined : b.description === null ? null : String(b.description),
+          definition: b.definition === undefined ? undefined : (b.definition as SelectionDefinition),
+        });
+      } catch (e) {
+        if (e instanceof SelectionError) throw demoHttpError(e.statusCode, e.message);
+        throw e;
+      }
+    },
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/projects\/(\d+)\/selections\/([^/]+)$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      const key = decodeURIComponent(m[2]!);
+      if (isBuiltinKey(key)) throw demoHttpError(409, `"${key}" is a built-in selection and cannot be deleted`);
+      const result = await deleteSelection(await getDemoDb(), +m[1]!, key);
+      if (!result.deleted) throw demoHttpError(404, `No selection "${key}" in this project`);
+      return { success: true };
+    },
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/projects\/(\d+)\/selections\/preview$/,
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      const b = body as { definition?: unknown; format?: unknown };
+      const check = validateSelectionDefinition(b.definition);
+      if (!check.valid) throw demoHttpError(400, `Invalid definition: ${check.errors.join('; ')}`);
+      const format = (['args', 'grep', 'files', 'json'] as SelectionFormat[]).includes(b.format as SelectionFormat)
+        ? (b.format as SelectionFormat)
+        : 'args';
+      return resolveSelectionDefinition(await getDemoDb(), +m[1]!, b.definition as SelectionDefinition, { format });
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/selections\/([^/]+)\/resolve$/,
+    handler: async (m, _b, query, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      const key = decodeURIComponent(m[2]!);
+      const selection = await getSelection(await getDemoDb(), +m[1]!, key);
+      if (!selection) throw demoHttpError(404, `No selection "${key}" in this project`);
+      const formatParam = query?.get('format');
+      const format = (['args', 'grep', 'files', 'json'] as SelectionFormat[]).includes(formatParam as SelectionFormat)
+        ? (formatParam as SelectionFormat)
+        : 'args';
+      const budgetMs = Number(query?.get('budgetMs'));
+      let definition: SelectionDefinition = selection.definition;
+      if (Number.isFinite(budgetMs) && budgetMs > 0) {
+        definition = { ...definition, budget: { ...definition.budget, maxTotalDurationMs: budgetMs } };
+      }
+      return resolveSelectionDefinition(await getDemoDb(), +m[1]!, definition, {
+        key: selection.key,
+        version: selection.version,
+        format,
+      });
     },
   },
 
