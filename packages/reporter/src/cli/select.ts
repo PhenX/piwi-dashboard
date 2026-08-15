@@ -39,6 +39,7 @@ Connection:
 Selection:
   --format <fmt>        args (file:line, default) | grep | files | json
   --budget <duration>   Cap total time, e.g. 5m, 90s, 300000 (ms)
+  --shard <i/n>         Keep only shard i of n, balanced by test duration
 
 Behavior:
   --strict              Fail (exit 2) instead of falling back when unreachable
@@ -56,6 +57,7 @@ interface SelectArgs {
   key: string;
   format: string;
   budgetMs: number | null;
+  shard: string | null;
   strict: boolean;
   pkgRunner: string;
   json: boolean;
@@ -63,7 +65,15 @@ interface SelectArgs {
 }
 
 /** Flags that consume the following token as their value. */
-const VALUE_FLAGS = new Set(['--server-url', '--api-key', '--project', '--format', '--budget', '--pkg-runner']);
+const VALUE_FLAGS = new Set([
+  '--server-url',
+  '--api-key',
+  '--project',
+  '--format',
+  '--budget',
+  '--shard',
+  '--pkg-runner',
+]);
 
 /** Read `--flag value` / `--flag=value`, or undefined when absent. */
 function readOption(argv: string[], name: string): string | undefined {
@@ -117,6 +127,11 @@ export function parseSelectArgs(argv: string[], env: NodeJS.ProcessEnv): SelectA
     if (budgetMs === null) throw new Error(`--budget expects a duration like 5m or 90s, got "${budgetRaw}"`);
   }
 
+  const shard = readOption(own, '--shard') ?? null;
+  if (shard !== null && !/^\d+\s*\/\s*\d+$/.test(shard)) {
+    throw new Error(`--shard expects an "i/n" spec like 2/4, got "${shard}"`);
+  }
+
   return {
     serverUrl,
     apiKey: readOption(own, '--api-key') ?? env.PIWI_API_KEY ?? null,
@@ -124,6 +139,7 @@ export function parseSelectArgs(argv: string[], env: NodeJS.ProcessEnv): SelectA
     key,
     format: readOption(own, '--format') ?? 'args',
     budgetMs,
+    shard,
     strict: own.includes('--strict'),
     pkgRunner: readOption(own, '--pkg-runner') ?? 'npx',
     json: own.includes('--json'),
@@ -136,7 +152,7 @@ export function parseSelectArgs(argv: string[], env: NodeJS.ProcessEnv): SelectA
 const CACHE_FILE = path.join('.piwi', 'selection-cache.json');
 
 function cacheKey(projectId: number, args: SelectArgs): string {
-  return `${projectId}:${args.key}:${args.format}:${args.budgetMs ?? 0}`;
+  return `${projectId}:${args.key}:${args.format}:${args.budgetMs ?? 0}:${args.shard ?? ''}`;
 }
 
 function readCache(projectId: number, args: SelectArgs): Resolution | null {

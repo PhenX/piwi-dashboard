@@ -46,6 +46,12 @@ describe('parseSelectArgs', () => {
   it('rejects an unparseable budget', () => {
     expect(() => parseSelectArgs(['smoke', '--budget', 'soon'], env)).toThrow(/--budget/);
   });
+
+  it('accepts a well-formed shard and rejects a malformed one', () => {
+    expect(parseSelectArgs(['smoke', '--shard', '2/4'], env).shard).toBe('2/4');
+    expect(parseSelectArgs(['smoke'], env).shard).toBeNull();
+    expect(() => parseSelectArgs(['smoke', '--shard', '2of4'], env)).toThrow(/--shard/);
+  });
 });
 
 describe('readSelectionStamp', () => {
