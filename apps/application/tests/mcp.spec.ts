@@ -73,7 +73,7 @@ test.describe.serial('MCP server', () => {
   test('tools/list — returns all tools', async ({ request }) => {
     const body = await mcp(request, 'tools/list');
     const tools: { name: string }[] = body.result.tools;
-    expect(tools.length).toBe(43);
+    expect(tools.length).toBe(44);
     const names = tools.map((t) => t.name);
     expect(names).toContain('list_projects');
     expect(names).toContain('get_run');
@@ -374,6 +374,6 @@ test.describe.serial('MCP server', () => {
     const ping = body.find((r: any) => r.id === 1);
     const list = body.find((r: any) => r.id === 2);
     expect(ping.result).toEqual({});
-    expect(list.result.tools.length).toBe(43);
+    expect(list.result.tools.length).toBe(44);
   });
 });

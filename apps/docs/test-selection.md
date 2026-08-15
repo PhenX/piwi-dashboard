@@ -49,6 +49,16 @@ npx playwright test $(cat .piwi-selected)
 `--format` picks the shape: `args` (`file:line` tokens, the default), `grep`, `files`, or `json` (the full resolution,
 including the matched tests, the estimate and any warnings). `--budget 5m` caps the total time for this resolution.
 
+### Balanced shards
+
+`--shard i/n` keeps only shard _i_ of _n_, split so each shard's summed test duration is even — historically informed
+balancing that Playwright's file-count sharding can't do. Because Piwi merges a run's shards into one, the merged run
+still covers the whole selection (so a `--require-selection` gate sees all of it):
+
+```bash
+npx @piwitests/reporter run smoke --shard 2/4 -- --shard=2/4
+```
+
 ## Built-in selections
 
 Two selections exist for every project with no setup:
@@ -138,6 +148,22 @@ The project's **Selections** tab lists the built-ins and your saved selections, 
 a definition resolves to — the matching tests, the estimated duration, any warnings, and the exact command — before you
 save it. For AI agents, the [MCP server](/mcp) exposes `list_selections`, `resolve_selection` (key → tests + verify
 command) and `preview_selection` (an ad-hoc definition, dry-run); the `run-the-right-tests` skill ties them together.
+
+## Suggestions
+
+Piwi can _propose_ selections and tags from the history it keeps — suggest-only, with the evidence attached, never
+applied. The **Suggestions** panel on the Selections tab (and the `suggest_selections` MCP tool) surface three kinds:
+
+- **`@slow` tags** — tests whose average duration sits well past the suite's 95th percentile.
+- **`@feature` tags** — the dominant route family a test hits (say `checkout`) when it carries no `feature` annotation,
+  inferred from the routes it actually called.
+- **A mined smoke suite** — a greedy weighted set cover over _observed_ route coverage under a time budget: it keeps
+  picking the test that buys the most new routes per second until the budget is spent, producing the classic
+  diminishing-returns curve. "Save as selection" turns the picks into a selection pinned to exactly those tests.
+
+Honest about what it is: coverage here means the routes a test was _seen_ to hit on recent runs, not instrumented code
+coverage — an approximation, and a good one for smoke's job, which is breadth over entry points. A test must be stable
+(high pass rate, not flaky, not quarantined) to be mined into a smoke suite.
 
 ## What selections are not
 

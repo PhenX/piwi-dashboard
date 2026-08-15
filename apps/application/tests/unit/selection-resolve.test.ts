@@ -214,6 +214,41 @@ describe('budget, limit and pins', () => {
   });
 });
 
+describe('duration-balanced sharding', () => {
+  test('splits the resolved set into balanced, disjoint, complete shards', async () => {
+    // Durations chosen so a file-count split would be lopsided but a
+    // duration-balanced one is even: 8,7,6,5,4,3,2,1 → two shards of 18 each.
+    const durations = [8000, 7000, 6000, 5000, 4000, 3000, 2000, 1000];
+    for (let i = 0; i < durations.length; i++) {
+      const id = await seedCase(`t${i}`, { filePath: `tests/f${i}.spec.ts` });
+      await seedExecution(id, 'passed', { duration: durations[i] });
+    }
+
+    const shard1 = await resolveSelectionDefinition(db, 1, {}, { shard: { index: 1, total: 2 } });
+    const shard2 = await resolveSelectionDefinition(db, 1, {}, { shard: { index: 2, total: 2 } });
+
+    // Disjoint and together cover the whole set.
+    const ids1 = shard1.tests.map((t) => t.testCaseId);
+    const ids2 = shard2.tests.map((t) => t.testCaseId);
+    expect([...ids1, ...ids2].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(ids1.some((id) => ids2.includes(id))).toBe(false);
+
+    // Balanced by duration, not by count.
+    expect(shard1.estimate.totalDurationMs).toBe(18000);
+    expect(shard2.estimate.totalDurationMs).toBe(18000);
+  });
+
+  test('is deterministic — the same shard resolves the same tests', async () => {
+    for (let i = 0; i < 6; i++) {
+      const id = await seedCase(`t${i}`, { filePath: `tests/f${i}.spec.ts` });
+      await seedExecution(id, 'passed', { duration: (i + 1) * 1000 });
+    }
+    const a = await resolveSelectionDefinition(db, 1, {}, { shard: { index: 2, total: 3 } });
+    const b = await resolveSelectionDefinition(db, 1, {}, { shard: { index: 2, total: 3 } });
+    expect(a.tests.map((t) => t.testCaseId)).toEqual(b.tests.map((t) => t.testCaseId));
+  });
+});
+
 describe('hash and materialization', () => {
   test('the resolved hash is stable and order-independent', async () => {
     await seedCase('a', { filePath: 'tests/a.spec.ts' });

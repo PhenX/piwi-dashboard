@@ -524,6 +524,19 @@ export const MCP_TOOL_DEFS = [
     },
   },
   {
+    name: 'suggest_selections',
+    description:
+      'Suggest tags and a smoke suite for a project from observed history (suggest-only, with evidence). Returns `slow` tags for duration outliers, `feature` tags from the route families tests hit, and a mined smoke suite — a budgeted set cover over observed routes, each pick buying fewer new routes than the last. `budgetMs` caps the smoke suite (default 5 min).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'number', description: 'Project ID' },
+        budgetMs: { type: 'number', description: 'Time budget in ms for the mined smoke suite (default 300000)' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
     name: 'list_open_clusters',
     description:
       'Open failure clusters across all in-scope projects, ranked by occurrences — a cross-project triage queue. Filter by status; paginate with pageSize/cursor.',

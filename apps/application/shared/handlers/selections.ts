@@ -32,7 +32,7 @@ import {
 } from '../selection';
 
 /** One catalog row: a test plus the aggregates a predicate can test against. */
-interface CatalogRow {
+export interface CatalogRow {
   id: number;
   filePath: string;
   suitePath: string;
@@ -56,7 +56,7 @@ interface CatalogRow {
 // ── Catalog loading ──────────────────────────────────────────────────────────
 
 /** Load every test in a project with the per-case aggregates a selection reads. */
-async function loadSelectionCatalog(
+export async function loadSelectionCatalog(
   db: DrizzleDB,
   projectId: number,
   opts: { withFailRanks: boolean } = { withFailRanks: false },
@@ -200,6 +200,7 @@ function globToRegExp(glob: string): RegExp {
 }
 
 function matchesGroup(row: CatalogRow, group: SelectionPredicateGroup): boolean {
+  if (group.ids && !group.ids.includes(row.id)) return false;
   if (group.tags) {
     const have = new Set(row.tags.map((t) => t.toLowerCase()));
     if (!group.tags.every((t) => have.has(t.toLowerCase().replace(/^@+/, '')))) return false;
@@ -324,6 +325,27 @@ export interface ResolveOptions {
   version?: number | null;
   format?: SelectionFormat;
   pkgRunner?: string;
+  /** Keep only this shard of the resolved list, balanced by summed average duration (1-based index). */
+  shard?: { index: number; total: number };
+}
+
+/**
+ * Split rows into `total` shards balanced by summed average duration
+ * (longest-processing-time first: assign the heaviest test to the lightest
+ * shard). Historically informed balancing that Playwright's file-count sharding
+ * cannot do.
+ */
+function partitionByDuration(rows: CatalogRow[], total: number): CatalogRow[][] {
+  const buckets: CatalogRow[][] = Array.from({ length: total }, () => []);
+  const loads = new Array<number>(total).fill(0);
+  const sorted = [...rows].sort((a, b) => (b.avgDurationMs ?? 0) - (a.avgDurationMs ?? 0) || stableCompare(a, b));
+  for (const row of sorted) {
+    let lightest = 0;
+    for (let i = 1; i < total; i++) if (loads[i]! < loads[lightest]!) lightest = i;
+    buckets[lightest]!.push(row);
+    loads[lightest] = loads[lightest]! + (row.avgDurationMs ?? 0);
+  }
+  return buckets.map((bucket) => bucket.sort(stableCompare));
 }
 
 /**
@@ -387,6 +409,13 @@ export async function resolveSelectionDefinition(
       warnings.push({ code: 'budget-evicted-pin', message: `Pinned test id ${id} was cut by the budget or limit` });
     }
   }
+
+  // shard: keep only this shard's duration-balanced bucket of the final set.
+  const shard = options.shard;
+  if (shard && shard.total >= 1 && shard.index >= 1 && shard.index <= shard.total) {
+    ordered = partitionByDuration(ordered, shard.total)[shard.index - 1] ?? [];
+  }
+
   if (ordered.some((r) => r.quarantined)) {
     warnings.push({
       code: 'quarantined-included',

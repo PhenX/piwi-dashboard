@@ -206,6 +206,62 @@ async function openResolve(selection: Selection) {
 function runCommand(key: string): string {
   return `npx @piwitests/reporter run ${key}`;
 }
+
+// ── Suggestions ───────────────────────────────────────────────────────────────
+interface TagSuggestion {
+  testCaseId: number;
+  title: string;
+  filePath: string;
+  kind: 'slow' | 'feature';
+  tag: string;
+  confidence: number;
+  evidence: string[];
+}
+interface Suggestions {
+  tags: TagSuggestion[];
+  smoke: {
+    budgetMs: number;
+    totalRoutes: number;
+    coveredRoutes: number;
+    testCaseIds: number[];
+    picks: Array<{
+      testCaseId: number;
+      title: string;
+      newRoutes: number;
+      cumulativeRoutes: number;
+      cumulativeDurationMs: number;
+    }>;
+  } | null;
+}
+
+const suggestions = ref<Suggestions | null>(null);
+const analyzing = ref(false);
+
+async function analyze() {
+  analyzing.value = true;
+  try {
+    suggestions.value = await $fetch<Suggestions>(`/api/projects/${projectId}/selections/suggestions`);
+  } catch (e) {
+    toast.add({
+      title: 'Could not analyze',
+      description: (e as { data?: { message?: string } })?.data?.message,
+      color: 'error',
+    });
+  } finally {
+    analyzing.value = false;
+  }
+}
+
+/** Seed the create form with a mined smoke suite as an exact-id selection. */
+function saveSmoke(testCaseIds: number[]) {
+  editingKey.value = null;
+  form.key = 'smoke';
+  form.name = 'Smoke suite';
+  form.description = 'Mined for route coverage under a time budget.';
+  form.definitionText = JSON.stringify({ include: [{ ids: testCaseIds }] }, null, 2);
+  showForm.value = true;
+  runPreview();
+}
 </script>
 
 <template>
@@ -289,6 +345,88 @@ function runCommand(key: string): string {
                 />
               </div>
             </div>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Suggestions"
+          icon="i-lucide-sparkles"
+          subtitle="Proposed from observed history — slow outliers, feature tags from route families, and a mined smoke suite. Suggest-only; nothing is applied."
+        >
+          <template #actions>
+            <UButton label="Analyze" icon="i-lucide-wand-2" size="sm" :loading="analyzing" @click="analyze" />
+          </template>
+
+          <EmptyState
+            v-if="!suggestions && !analyzing"
+            icon="i-lucide-sparkles"
+            text="Analyze the project's history to propose tags and a smoke suite."
+          />
+          <LoadingState v-else-if="analyzing && !suggestions" />
+          <div v-else-if="suggestions" class="space-y-4">
+            <!-- Mined smoke suite -->
+            <div
+              v-if="suggestions.smoke && suggestions.smoke.picks.length"
+              class="rounded-lg border border-gray-200 dark:border-gray-800 p-3 space-y-2"
+            >
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium">Mined smoke suite</span>
+                <UButton
+                  label="Save as selection"
+                  icon="i-lucide-save"
+                  size="xs"
+                  variant="subtle"
+                  @click="saveSmoke(suggestions.smoke.testCaseIds)"
+                />
+              </div>
+              <p class="text-xs text-gray-500">
+                {{ suggestions.smoke.picks.length }} tests cover
+                <strong>{{ suggestions.smoke.coveredRoutes }}</strong> of {{ suggestions.smoke.totalRoutes }} routes in
+                ~{{ formatDuration(suggestions.smoke.picks.at(-1)?.cumulativeDurationMs ?? 0) }} — each pick buys fewer
+                new routes than the last.
+              </p>
+              <div class="flex flex-wrap gap-1">
+                <UBadge
+                  v-for="pick in suggestions.smoke.picks"
+                  :key="pick.testCaseId"
+                  color="neutral"
+                  variant="subtle"
+                  size="sm"
+                  :title="`+${pick.newRoutes} new routes → ${pick.cumulativeRoutes} total`"
+                >
+                  {{ pick.title }} <span class="opacity-60">+{{ pick.newRoutes }}</span>
+                </UBadge>
+              </div>
+            </div>
+
+            <!-- Tag suggestions -->
+            <div v-if="suggestions.tags.length" class="divide-y divide-gray-200 dark:divide-gray-800">
+              <div
+                v-for="tag in suggestions.tags"
+                :key="`${tag.kind}-${tag.testCaseId}`"
+                class="py-2 flex items-start justify-between gap-3"
+              >
+                <div class="min-w-0 space-y-0.5">
+                  <div class="flex items-center gap-2">
+                    <UBadge :color="tag.kind === 'slow' ? 'warning' : 'primary'" variant="subtle" size="sm"
+                      >@{{ tag.tag }}</UBadge
+                    >
+                    <NuxtLink
+                      :to="`/test-cases/${tag.testCaseId}`"
+                      class="text-sm text-primary hover:underline truncate"
+                    >
+                      {{ tag.title }}
+                    </NuxtLink>
+                  </div>
+                  <p class="text-xs text-gray-500">{{ tag.evidence[0] }}</p>
+                </div>
+              </div>
+            </div>
+            <EmptyState
+              v-if="!suggestions.tags.length && !(suggestions.smoke && suggestions.smoke.picks.length)"
+              icon="i-lucide-check"
+              text="No suggestions — not enough route/duration history yet, or nothing stands out."
+            />
           </div>
         </SectionCard>
       </div>

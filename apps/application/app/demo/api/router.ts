@@ -77,8 +77,10 @@ import {
   resolveSelectionDefinition,
   SelectionError,
 } from '#shared/handlers/selections';
+import { getSelectionSuggestions } from '#shared/handlers/selection-suggestions';
 import {
   isBuiltinKey,
+  parseShard,
   validateSelectionDefinition,
   type SelectionDefinition,
   type SelectionFormat,
@@ -1170,6 +1172,18 @@ const routes: RouteEntry[] = [
     },
   },
   {
+    // Registered before the `[key]` item route so the literal path wins the GET.
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/selections\/suggestions$/,
+    handler: async (m, _b, query, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      const budgetMs = Number(query?.get('budgetMs'));
+      return getSelectionSuggestions(await getDemoDb(), +m[1]!, {
+        budgetMs: Number.isFinite(budgetMs) && budgetMs > 0 ? budgetMs : undefined,
+      });
+    },
+  },
+  {
     method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/selections\/([^/]+)$/,
     handler: async (m, _b, _q, ctx) => {
@@ -1244,6 +1258,7 @@ const routes: RouteEntry[] = [
         key: selection.key,
         version: selection.version,
         format,
+        shard: parseShard(query?.get('shard')) ?? undefined,
       });
     },
   },

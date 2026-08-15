@@ -19,8 +19,9 @@ const VALID_RANK_BY = new Set(['failureLikelihood', 'recentFailure', 'priority',
 /** Predicate keys and their runtime kind, so an unknown key is caught. */
 const PREDICATE_KINDS: Record<
   keyof SelectionPredicateGroup,
-  'stringArray' | 'priorityArray' | 'string' | 'boolean' | 'rate' | 'nonNegative' | 'window'
+  'stringArray' | 'idArray' | 'priorityArray' | 'string' | 'boolean' | 'rate' | 'nonNegative' | 'window'
 > = {
+  ids: 'idArray',
   tags: 'stringArray',
   anyTags: 'stringArray',
   owner: 'stringArray',
@@ -64,6 +65,9 @@ function validateGroup(group: unknown, where: string, errors: string[]): void {
         } else if (value.length === 0) {
           errors.push(`${where}.${key} must not be empty`);
         }
+        break;
+      case 'idArray':
+        validateIdArray(value, `${where}.${key}`, errors);
         break;
       case 'priorityArray':
         if (!Array.isArray(value) || value.some((v) => typeof v !== 'string' || !VALID_PRIORITIES.has(v))) {
@@ -162,6 +166,18 @@ export function validateSelectionDefinition(definition: unknown): { valid: boole
   }
 
   return { valid: errors.length === 0, errors };
+}
+
+/** Parse a `i/n` shard spec (e.g. `2/4`) into 1-based index and total, or null. */
+export function parseShard(raw: unknown): { index: number; total: number } | null {
+  if (typeof raw !== 'string') return null;
+  const match = raw.trim().match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (!match) return null;
+  const index = Number(match[1]);
+  const total = Number(match[2]);
+  if (!Number.isInteger(index) || !Number.isInteger(total)) return null;
+  if (total < 1 || index < 1 || index > total) return null;
+  return { index, total };
 }
 
 /** Validate a selection key slug. */

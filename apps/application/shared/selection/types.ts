@@ -15,6 +15,8 @@ export type SelectionPriority = 'critical' | 'high' | 'medium' | 'low';
  * match the group; an empty group `{}` matches every test. All fields optional.
  */
 export interface SelectionPredicateGroup {
+  /** The test's stable id is one of these (used to pin an exact set, e.g. a mined smoke suite). */
+  ids?: number[];
   /** Test carries every one of these tags ('@' stripped, case-insensitive). */
   tags?: string[];
   /** Test carries at least one of these tags. */

@@ -1,7 +1,7 @@
 import { requireProjectAccess, requireRouteId } from '../../../../../utils/project-access';
 import { getDatabase } from '../../../../../database';
 import { getSelection, resolveSelectionDefinition } from '#shared/handlers/selections';
-import type { SelectionDefinition, SelectionFormat } from '#shared/selection';
+import { parseShard, type SelectionDefinition, type SelectionFormat } from '#shared/selection';
 
 const FORMATS: SelectionFormat[] = ['args', 'grep', 'files', 'json'];
 
@@ -16,6 +16,13 @@ defineRouteMeta({
       { name: 'key', in: 'path', required: true, schema: { type: 'string' } },
       { name: 'format', in: 'query', required: false, schema: { type: 'string', enum: FORMATS } },
       { name: 'budgetMs', in: 'query', required: false, schema: { type: 'integer' } },
+      {
+        name: 'shard',
+        in: 'query',
+        required: false,
+        schema: { type: 'string' },
+        description: 'Keep only shard i of n (e.g. "2/4"), balanced by duration',
+      },
       { name: 'pkgRunner', in: 'query', required: false, schema: { type: 'string' } },
     ],
     'x-required-roles': ['administrator', 'reporter', 'user'],
@@ -46,5 +53,6 @@ export default eventHandler(async (event) => {
     version: selection.version,
     format,
     pkgRunner,
+    shard: parseShard(query.shard) ?? undefined,
   });
 });
