@@ -15,9 +15,15 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { fetchResolution, resolveProjectId, type SelectionResolution } from '../internal/support/selection-client.js';
+import {
+  fetchImpact,
+  fetchResolution,
+  resolveProjectId,
+  type ImpactResolution,
+  type SelectionResolution,
+} from '../internal/support/selection-client.js';
 
 const EXIT_OK = 0;
 const EXIT_ERROR = 2;
@@ -30,6 +36,7 @@ piwi select / piwi run — run a saved selection of tests
 Usage:
   npx @piwitests/reporter select <key> [options]     print the Playwright args
   npx @piwitests/reporter run <key> [options] [-- <playwright args>]
+  npx @piwitests/reporter run impact --base <ref>    run the tests your diff impacts
 
 Connection:
   --server-url <url>    Dashboard URL         (env PIWI_DASHBOARD_URL)
@@ -40,6 +47,7 @@ Selection:
   --format <fmt>        args (file:line, default) | grep | files | json
   --budget <duration>   Cap total time, e.g. 5m, 90s, 300000 (ms)
   --shard <i/n>         Keep only shard i of n, balanced by test duration
+  --base <ref>          For "impact": the ref to diff the working tree against
 
 Behavior:
   --strict              Fail (exit 2) instead of falling back when unreachable
@@ -58,11 +66,16 @@ interface SelectArgs {
   format: string;
   budgetMs: number | null;
   shard: string | null;
+  /** Base ref for `impact` — the diff is computed against it. */
+  base: string | null;
   strict: boolean;
   pkgRunner: string;
   json: boolean;
   extra: string[];
 }
+
+/** The reserved key that resolves the working-tree diff's impact, not a saved selection. */
+const IMPACT_KEY = 'impact';
 
 /** Flags that consume the following token as their value. */
 const VALUE_FLAGS = new Set([
@@ -72,6 +85,7 @@ const VALUE_FLAGS = new Set([
   '--format',
   '--budget',
   '--shard',
+  '--base',
   '--pkg-runner',
 ]);
 
@@ -140,6 +154,7 @@ export function parseSelectArgs(argv: string[], env: NodeJS.ProcessEnv): SelectA
     format: readOption(own, '--format') ?? 'args',
     budgetMs,
     shard,
+    base: readOption(own, '--base') ?? null,
     strict: own.includes('--strict'),
     pkgRunner: readOption(own, '--pkg-runner') ?? 'npx',
     json: own.includes('--json'),
@@ -204,7 +219,54 @@ function printWarnings(resolution: Resolution): void {
   for (const w of resolution.warnings) console.error(`piwi: warning [${w.code}] ${w.message}`);
 }
 
+// ── impact-from-diff ───────────────────────────────────────────────────────────
+
+/** Files changed between `base` and the working tree (committed + uncommitted). */
+function gitChangedFiles(base: string): string[] {
+  const out = execFileSync('git', ['diff', '--name-only', base], {
+    encoding: 'utf-8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  return [
+    ...new Set(
+      out
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/** Compute the working-tree diff and ask the dashboard which tests it impacts. */
+async function loadImpact(args: SelectArgs, projectId: number): Promise<ImpactResolution> {
+  const files = gitChangedFiles(args.base!);
+  return fetchImpact(args, projectId, files);
+}
+
 // ── select ───────────────────────────────────────────────────────────────────
+
+async function runSelectImpact(args: SelectArgs): Promise<number> {
+  let impact: ImpactResolution;
+  try {
+    const projectId = await resolveProjectId(args);
+    impact = await loadImpact(args, projectId);
+  } catch (e) {
+    console.error(`piwi select: ${(e as Error).message}`);
+    return EXIT_ERROR;
+  }
+
+  printWarnings(impact);
+  console.error(
+    `piwi select: ${impact.impact.changedFiles} changed file(s) → ${impact.estimate.count} impacted test(s)${impact.impact.widened ? ' (widened to full suite)' : ''}`,
+  );
+  if (args.json) {
+    console.log(JSON.stringify(impact, null, 2));
+    return EXIT_OK;
+  }
+  // Widened = run everything, which is the empty (no-filter) arg list.
+  console.log(impact.impact.widened ? '' : impact.materialization.args.join(' '));
+  return EXIT_OK;
+}
 
 export async function runSelect(argv: string[], env: NodeJS.ProcessEnv = process.env): Promise<number> {
   if (argv.includes('-h') || argv.includes('--help')) {
@@ -219,6 +281,14 @@ export async function runSelect(argv: string[], env: NodeJS.ProcessEnv = process
     console.error(`piwi select: ${(e as Error).message}\n`);
     console.error(USAGE);
     return EXIT_ERROR;
+  }
+
+  if (args.key === IMPACT_KEY) {
+    if (!args.base) {
+      console.error('piwi select: impact needs a base ref — pass --base <ref> (e.g. --base origin/main)');
+      return EXIT_ERROR;
+    }
+    return runSelectImpact(args);
   }
 
   let resolution: Resolution;
@@ -273,6 +343,53 @@ function spawnPlaywright(pkgRunner: string, playwrightArgs: string[], env: NodeJ
   });
 }
 
+async function runRunImpact(args: SelectArgs, env: NodeJS.ProcessEnv): Promise<number> {
+  let projectId: number;
+  try {
+    projectId = await resolveProjectId(args);
+  } catch (e) {
+    if (args.strict) {
+      console.error(`piwi run: ${(e as Error).message}`);
+      return EXIT_ERROR;
+    }
+    console.error(`piwi run: ${(e as Error).message} — running the full suite`);
+    return spawnPlaywright(args.pkgRunner, args.extra, env);
+  }
+
+  let impact: ImpactResolution;
+  try {
+    impact = await loadImpact(args, projectId);
+  } catch (e) {
+    if (args.strict) {
+      console.error(`piwi run: ${(e as Error).message}`);
+      return EXIT_ERROR;
+    }
+    console.error(`piwi run: ${(e as Error).message} — running the full suite`);
+    return spawnPlaywright(args.pkgRunner, args.extra, env);
+  }
+
+  printWarnings(impact);
+  if (impact.impact.widened) {
+    console.error(
+      `piwi run: impact widened to the full suite (${impact.impact.unmappedSourceFiles.length} unmapped source file(s))`,
+    );
+    return spawnPlaywright(args.pkgRunner, args.extra, env);
+  }
+  if (impact.estimate.count === 0) {
+    console.error(`piwi run: no tests impacted by ${impact.impact.changedFiles} changed file(s) — nothing to run`);
+    return EXIT_OK;
+  }
+  const runEnv: NodeJS.ProcessEnv = {
+    ...env,
+    PIWI_SELECTION: IMPACT_KEY,
+    PIWI_SELECTION_VERSION: '0',
+    PIWI_SELECTION_HASH: impact.resolvedHash,
+    PIWI_SELECTION_COUNT: String(impact.estimate.count),
+  };
+  console.error(`piwi run: impact → ${impact.estimate.count} test(s)`);
+  return spawnPlaywright(args.pkgRunner, [...impact.materialization.args, ...args.extra], runEnv);
+}
+
 export async function runRun(argv: string[], env: NodeJS.ProcessEnv = process.env): Promise<number> {
   if (argv.includes('-h') || argv.includes('--help')) {
     console.log(USAGE);
@@ -290,6 +407,14 @@ export async function runRun(argv: string[], env: NodeJS.ProcessEnv = process.en
   if (args.format === 'json') {
     console.error('piwi run: --format json cannot be run; use args, grep or files');
     return EXIT_ERROR;
+  }
+
+  if (args.key === IMPACT_KEY) {
+    if (!args.base) {
+      console.error('piwi run: impact needs a base ref — pass --base <ref> (e.g. --base origin/main)');
+      return EXIT_ERROR;
+    }
+    return runRunImpact(args, env);
   }
 
   let projectId: number;

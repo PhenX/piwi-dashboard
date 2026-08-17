@@ -131,7 +131,8 @@ export interface SelectionWarning {
     | 'pin-not-found'
     | 'budget-evicted-pin'
     | 'grep-overselects'
-    | 'materialization-truncated';
+    | 'materialization-truncated'
+    | 'impact-widened';
   message: string;
 }
 
