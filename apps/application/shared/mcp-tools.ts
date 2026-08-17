@@ -473,6 +473,70 @@ export const MCP_TOOL_DEFS = [
     },
   },
   {
+    name: 'list_selections',
+    description:
+      "A project's saved test selections plus the built-in ones (failed, quarantine-free). A selection is a named, declarative subset of the suite resolved from run history. Use resolve_selection to turn one into the tests to run.",
+    inputSchema: {
+      type: 'object',
+      properties: { projectId: { type: 'number', description: 'Project ID from list_projects' } },
+      required: ['projectId'],
+    },
+  },
+  {
+    name: 'resolve_selection',
+    description:
+      'Resolve a saved (or built-in) selection to the tests it currently matches and a ready-to-run `playwright test` command. Just landed a fix? Resolve the relevant selection to get the exact command that verifies it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'number', description: 'Project ID' },
+        key: { type: 'string', description: 'Selection key, e.g. "smoke" (or a built-in: failed, quarantine-free)' },
+        format: {
+          type: 'string',
+          enum: ['args', 'grep', 'files', 'json'],
+          description: 'Materialization of the command: args = file:line (default), grep, files, or json (no command)',
+        },
+        budgetMs: { type: 'number', description: 'Optional time budget in ms — take the best tests that fit' },
+      },
+      required: ['projectId', 'key'],
+    },
+  },
+  {
+    name: 'preview_selection',
+    description:
+      'Resolve an ad-hoc selection definition without saving it — the dry-run behind the builder. Supply a definition (include/exclude predicate groups, pins, budget, limit) and get back the matching tests, an estimate, warnings and a command. An unknown predicate is an error, not ignored.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'number', description: 'Project ID' },
+        definition: {
+          type: 'object',
+          description:
+            'A SelectionDefinition: { include?: group[], exclude?: group[], pins?, budget?, limit? }. A group ANDs predicates like tags, priority, files (globs), flaky, minPassRate, maxAvgDurationMs, lastStatus, failedInLastRuns.',
+        },
+        format: {
+          type: 'string',
+          enum: ['args', 'grep', 'files', 'json'],
+          description: 'Command materialization (default args)',
+        },
+      },
+      required: ['projectId', 'definition'],
+    },
+  },
+  {
+    name: 'suggest_selections',
+    description:
+      'Suggest tags and a smoke suite for a project from observed history (suggest-only, with evidence). Returns `slow` tags for duration outliers, `feature` tags from the route families tests hit, and a mined smoke suite — a budgeted set cover over observed routes, each pick buying fewer new routes than the last. `budgetMs` caps the smoke suite (default 5 min).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectId: { type: 'number', description: 'Project ID' },
+        budgetMs: { type: 'number', description: 'Time budget in ms for the mined smoke suite (default 300000)' },
+      },
+      required: ['projectId'],
+    },
+  },
+  {
     name: 'list_open_clusters',
     description:
       'Open failure clusters across all in-scope projects, ranked by occurrences — a cross-project triage queue. Filter by status; paginate with pageSize/cursor.',

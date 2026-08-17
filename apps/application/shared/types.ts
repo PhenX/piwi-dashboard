@@ -2,6 +2,7 @@ import type { LocatorSnapshot } from './locator-healing.types';
 import type {
   BrowserConfig,
   FilterDetails,
+  SelectionStamp,
   SuiteConfigEntry,
   TestAnnotation,
   TestMetadata,
@@ -14,6 +15,7 @@ import type {
 export type {
   BrowserConfig,
   FilterDetails,
+  SelectionStamp,
   SuiteConfigEntry,
   TestAnnotation,
   TestMetadata,

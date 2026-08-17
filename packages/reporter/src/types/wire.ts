@@ -14,6 +14,7 @@
 import type {
   BrowserConfig,
   FilterDetails,
+  SelectionStamp,
   SuiteConfigEntry,
   TestAnnotation,
   TestMetadata,
@@ -24,6 +25,7 @@ import type {
 export type {
   BrowserConfig,
   FilterDetails,
+  SelectionStamp,
   SuiteConfigEntry,
   TestAnnotation,
   TestMetadata,

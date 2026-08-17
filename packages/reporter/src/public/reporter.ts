@@ -17,6 +17,7 @@ import { collectSourceFrames, extractFailingLine, readSourceSnippet } from '../i
 import { detectCiRunLabel } from '../internal/support/ci.js';
 import { workerIndexOf } from '../internal/support/worker-index.js';
 import { detectCliFileFilters } from '../internal/support/cli-filters.js';
+import { readSelectionStamp } from '../internal/support/selection-env.js';
 import { createGlobalSetup } from './global-setup.js';
 import { wrapConfig } from './config-wrapper.js';
 import { toWireTestCase } from '../internal/submit/serializer.js';
@@ -155,14 +156,21 @@ export class PiwiDashboardReporter {
     const grepInvert = grepInvertRe?.source;
     // File/path filters come from the CLI invocation, not config.grep.
     const fileFilters = detectCliFileFilters();
-    if (grep || grepInvert || fileFilters.length > 0) {
+    // A run launched by `piwi run <key>` carries the resolved selection's
+    // identity in the environment; stamp it so the dashboard can name the
+    // subset and a gate can re-resolve the same definition.
+    const selection = readSelectionStamp();
+    if (grep || grepInvert || fileFilters.length > 0 || selection) {
       this.isFullRun = false;
       this.filterDetails = {
         ...(grep ? { grep } : {}),
         ...(grepInvert ? { grepInvert } : {}),
         ...(fileFilters.length > 0 ? { files: fileFilters } : {}),
+        ...(selection ? { selection } : {}),
       };
-      this.logger.info('Partial run detected (filter active)');
+      this.logger.info(
+        selection ? `Selection run detected (${selection.key})` : 'Partial run detected (filter active)',
+      );
     }
 
     this.metadata = this.metadataCollector.collect(config, suite, this.options);

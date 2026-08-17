@@ -72,6 +72,18 @@ export const PIWI_ENV_KEYS = {
  */
 export const PIWI_DESKTOP_CONFIG_ENV = 'PIWI_DESKTOP_CONFIG';
 
+/**
+ * Env vars `piwi run` sets on the Playwright child process so the reporter can
+ * stamp the run with the selection it resolved. Not options — the reporter reads
+ * them directly when building `filterDetails`.
+ */
+export const PIWI_SELECTION_ENV = {
+  key: 'PIWI_SELECTION',
+  version: 'PIWI_SELECTION_VERSION',
+  hash: 'PIWI_SELECTION_HASH',
+  count: 'PIWI_SELECTION_COUNT',
+} as const;
+
 export function readBool(val: string | undefined): boolean | undefined {
   if (val === undefined) return undefined;
   return val === 'true';

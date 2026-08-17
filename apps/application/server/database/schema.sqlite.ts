@@ -947,6 +947,39 @@ export const testFunctions = sqliteTable(
   }),
 );
 
+// Test selections — named, data-driven subsets of a project's tests. The
+// `definition` is declarative JSON (SelectionDefinition in
+// shared/selection/types.ts): rules over catalog facts resolved on demand,
+// never a frozen list, so a saved selection keeps tracking the suite as tests
+// are added, renamed and removed. `version` increments on every definition
+// edit; a run resolved from a selection stamps the version it ran.
+export const testSelections = sqliteTable(
+  'test_selections',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(), // project-unique slug, e.g. 'smoke'
+    name: text('name').notNull(),
+    description: text('description'),
+    definition: text('definition', { mode: 'json' }).notNull(), // SelectionDefinition
+    version: integer('version').notNull().default(1),
+    createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer('updated_at', { mode: 'timestamp' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    projectIdIdx: index('idx_test_selections_project_id').on(table.projectId),
+    createdByIdx: index('idx_test_selections_created_by').on(table.createdBy),
+    keyUnique: uniqueIndex('idx_test_selections_project_key').on(table.projectId, table.key),
+  }),
+);
+
 // Share links — read-only capability tokens for handing one execution or one
 // failure cluster to someone without a dashboard account. The token itself is
 // never stored: only its SHA-256 hash (unguessable 256-bit secrets need no
@@ -1062,3 +1095,5 @@ export type TestFunction = typeof testFunctions.$inferSelect;
 export type ShareLink = typeof shareLinks.$inferSelect;
 export type NewShareLink = typeof shareLinks.$inferInsert;
 export type NewTestFunction = typeof testFunctions.$inferInsert;
+export type TestSelection = typeof testSelections.$inferSelect;
+export type NewTestSelection = typeof testSelections.$inferInsert;

@@ -23,6 +23,22 @@ export interface TestAnnotation {
 export type { TestMetadata } from './test-meta';
 
 /**
+ * A run produced by resolving a named selection (`piwi run <key>`), stamped onto
+ * the run so the dashboard can name the subset and re-resolve the same
+ * definition when a gate requires it.
+ */
+export interface SelectionStamp {
+  /** The selection's project-unique slug. */
+  key: string;
+  /** The definition version this run resolved (definitions increment on edit). */
+  version: number;
+  /** SHA-256 over the sorted stable test identities the definition resolved to. */
+  resolvedHash: string;
+  /** How many tests the definition resolved to. */
+  resolvedCount: number;
+}
+
+/**
  * Filter that narrowed a run to a subset of tests, recorded when `isFullRun`
  * is false.
  */
@@ -33,6 +49,8 @@ export interface FilterDetails {
   grepInvert?: string;
   /** Positional file/path filters from the CLI invocation (e.g. ["tests/login.spec.ts"]). */
   files?: string[];
+  /** Set when the run came from `piwi run <key>` resolving a saved selection. */
+  selection?: SelectionStamp;
 }
 
 export interface BrowserConfig {

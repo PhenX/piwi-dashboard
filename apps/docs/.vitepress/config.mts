@@ -102,6 +102,7 @@ export default defineConfig({
           { text: 'Capture fixtures', link: '/capture-fixtures' },
           { text: 'AI steps', link: '/ai-steps' },
           { text: 'CI & sharding', link: '/ci' },
+          { text: 'Test selections', link: '/test-selection' },
           { text: 'Backend logs', link: '/backend-logs' },
           { text: 'Importing past runs', link: '/importing-runs' },
         ],

@@ -110,6 +110,8 @@ export interface PrSummaryInput {
   }>;
   /** CI minutes this run spent on waits and failed attempts, when known. */
   wastedMinutes: number | null;
+  /** The named selection this run resolved from, when it came from `piwi run`. */
+  selection?: { key: string; testCount: number } | null;
   /** True when no previous green run existed to compare against. */
   hasBaseline: boolean;
 }
@@ -205,6 +207,11 @@ export function buildPrComment(input: PrSummaryInput): string {
     `${formatDuration(input.durationMs)}`,
   ].filter(Boolean);
   sections.push(`${counters.join(' · ')} — [full run](${input.runUrl})`);
+
+  if (input.selection) {
+    const n = input.selection.testCount;
+    sections.push(`🎯 Selection **\`${input.selection.key}\`** — ${n} ${n === 1 ? 'test' : 'tests'}`);
+  }
 
   if (input.newRegressions.length > 0) {
     sections.push(

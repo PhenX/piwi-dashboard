@@ -35,6 +35,7 @@ describe('isEmptyPolicy', () => {
       { maxNewRegressions: 0 },
       { maxNewFlaky: 0 },
       { failOnNewCluster: true },
+      { requireSelection: 'smoke' },
     ];
     for (const policy of policies) expect(isEmptyPolicy(policy)).toBe(false);
   });
@@ -125,6 +126,57 @@ describe('evaluateGatePolicy', () => {
   test('carries the facts through for the caller to render', () => {
     const result = evaluateGatePolicy(facts({ failedTests: 1 }), { maxFailed: 0 });
     expect(result.facts.runId).toBe(42);
+  });
+});
+
+describe('requireSelection', () => {
+  const withSelection = (selection: NonNullable<GateFacts['selection']>) => facts({ selection });
+
+  test('passes when every matched test ran and passed', () => {
+    const result = evaluateGatePolicy(withSelection({ key: 'smoke', matched: 42, notRun: [], failed: [] }), {
+      requireSelection: 'smoke',
+    });
+    expect(result.passed).toBe(true);
+  });
+
+  test('fails when a matched test did not run — the shrunk-smoke case', () => {
+    const result = evaluateGatePolicy(
+      withSelection({ key: 'smoke', matched: 42, notRun: [{ title: 'checkout', filePath: 'a.spec.ts' }], failed: [] }),
+      { requireSelection: 'smoke' },
+    );
+    expect(result.passed).toBe(false);
+    expect(result.violations[0]).toMatchObject({ rule: 'selection-not-run', actual: 1 });
+    expect(result.violations[0]!.message).toContain('checkout');
+  });
+
+  test('fails when a matched test ran and failed', () => {
+    const result = evaluateGatePolicy(
+      withSelection({
+        key: 'smoke',
+        matched: 42,
+        notRun: [],
+        failed: [{ title: 'pay', filePath: 'a.spec.ts', executionId: 7 }],
+      }),
+      { requireSelection: 'smoke' },
+    );
+    expect(result.passed).toBe(false);
+    expect(result.violations[0]?.rule).toBe('selection-failed');
+  });
+
+  test('fails when the selection matches no tests at all', () => {
+    const result = evaluateGatePolicy(withSelection({ key: 'smoke', matched: 0, notRun: [], failed: [] }), {
+      requireSelection: 'smoke',
+    });
+    expect(result.passed).toBe(false);
+    expect(result.violations[0]?.rule).toBe('selection-empty');
+  });
+
+  test('does nothing without the policy flag', () => {
+    const result = evaluateGatePolicy(
+      withSelection({ key: 'smoke', matched: 1, notRun: [{ title: 'x', filePath: 'a.spec.ts' }], failed: [] }),
+      { maxFailed: 0 },
+    );
+    expect(result.passed).toBe(true);
   });
 });
 

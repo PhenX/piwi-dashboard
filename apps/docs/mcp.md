@@ -15,7 +15,7 @@ The MCP server is served from the same Nitro process as the dashboard. There is 
 
 ## What it provides
 
-The server exposes 40 tools — mostly read-only, plus a few write/triage tools — that cover the full diagnostic workflow, from browsing projects to inspecting the exact evidence behind a failure and closing the loop after a fix.
+The server exposes 44 tools — mostly read-only, plus a few write/triage tools — that cover the full diagnostic workflow, from browsing projects to inspecting the exact evidence behind a failure and closing the loop after a fix.
 
 **Projects & activity**
 
@@ -52,6 +52,15 @@ The server exposes 40 tools — mostly read-only, plus a few write/triage tools 
 | `get_case_screenshots` | Screenshots for an execution — metadata by default, or base64 image data on request |
 | `explain_failure` | **One-call evidence bundle** for a failure: error + steps + console + locator fix + diagnosis context |
 | `list_links` | External links (Jira/PR/issue) attached to a run, execution, or test case |
+
+**Test selections** *([named, data-driven test subsets](./test-selection))*
+
+| Tool | Description |
+|------|-------------|
+| `list_selections` | A project's saved selections plus the built-in `failed` / `quarantine-free` |
+| `resolve_selection` | Resolve a saved (or built-in) selection to its matching tests and a ready-to-run `playwright test` command — the verify command after a fix |
+| `preview_selection` | Resolve an ad-hoc selection definition without saving it — the builder's dry-run |
+| `suggest_selections` | Suggested `slow`/`feature` tags and a mined smoke suite (budgeted set cover over observed routes), each with its evidence |
 
 **Failure clusters**
 
@@ -261,7 +270,7 @@ Alongside its tools, the server exposes an MCP **prompt** — a ready-made instr
 
 ## Agent skills
 
-The MCP server gives an agent read access to your results; **skills** tell it what to *do* with them. A skill is a single `SKILL.md` file — the portable open format (a small front-matter block plus Markdown instructions) that Claude Code and other agents pick up from a project's skills directory. Piwi ships four, installed with the reporter's CLI:
+The MCP server gives an agent read access to your results; **skills** tell it what to *do* with them. A skill is a single `SKILL.md` file — the portable open format (a small front-matter block plus Markdown instructions) that Claude Code and other agents pick up from a project's skills directory. Piwi ships five, installed with the reporter's CLI:
 
 ```bash
 npx @piwitests/reporter skills add          # install all of them into .claude/skills/
@@ -269,7 +278,7 @@ npx @piwitests/reporter skills list         # see what each one does
 npx @piwitests/reporter skills add investigate-failure --dir .cursor/skills   # a specific one, elsewhere
 ```
 
-`npx @piwitests/reporter init` installs the three workflow skills automatically as part of setup. (Invoke the CLI through the package name so npx resolves *this* package, not an unrelated `piwi` on npm; a plain `npx piwi …` works once the reporter is a project dependency.)
+`npx @piwitests/reporter init` installs the four workflow skills automatically as part of setup. (Invoke the CLI through the package name so npx resolves *this* package, not an unrelated `piwi` on npm; a plain `npx piwi …` works once the reporter is a project dependency.)
 
 | Skill | What it does |
 |------|--------------|
@@ -277,6 +286,7 @@ npx @piwitests/reporter skills add investigate-failure --dir .cursor/skills   # 
 | `investigate-failure` | Investigate a failed run and propose a fix grounded in Piwi's evidence — error, steps, console, network, and the diff since the last green run. |
 | `apply-locator-healing` | Replace a brittle locator with Piwi's ranked healed selector at its call site, then re-run to confirm. |
 | `stabilize-flaky-tests` | Fix the root cause of the highest-impact flaky tests (never by adding retries), then verify with repeated runs. |
+| `run-the-right-tests` | Pick and run the right [selection](./test-selection) for the task — smoke, recently-broken, a time budget — instead of always running the whole suite. |
 
 The skills are agent-agnostic Markdown — only the destination directory is tool-specific, so `--dir` points the install wherever your agent reads skills from. They pair with this MCP server: each one prefers a connected Piwi MCP tool (`explain_failure`, `get_locator_healing`, `list_flaky_tests`, …) and falls back to the dashboard UI when MCP is not connected.
 

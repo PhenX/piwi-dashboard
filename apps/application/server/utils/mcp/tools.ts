@@ -26,6 +26,14 @@ import { listLinks } from '#shared/handlers/links';
 import { getAdminStats } from '#shared/handlers/admin';
 import { createTestFunction } from '#shared/handlers/test-functions';
 import { createTestFunctionSchema } from '#shared/test-function-schemas';
+import { listSelections, getSelection, resolveSelectionDefinition } from '#shared/handlers/selections';
+import { getSelectionSuggestions } from '#shared/handlers/selection-suggestions';
+import {
+  validateSelectionDefinition,
+  type ResolvedSelection,
+  type SelectionDefinition,
+  type SelectionFormat,
+} from '#shared/selection';
 import { projects, testRuns, testRunsCases, testCases, failureClusters, failureDiagnoses } from '../../database/schema';
 import { buildDiagnosisContext, buildClusterDiagnosisContext } from '../ai-context';
 import { stripAnsi } from '#shared/error-fingerprint';
@@ -182,6 +190,28 @@ export interface McpTool extends McpToolDef {
 
 export function toContent(data: unknown): { content: Array<{ type: 'text'; text: string }> } {
   return { content: [{ type: 'text', text: JSON.stringify(data, null, 0) }] };
+}
+
+/** Compact a resolution into the agent-facing shape (bounded test sample). */
+function selectionToMcp(r: ResolvedSelection): unknown {
+  const SAMPLE = 100;
+  return dropNulls({
+    key: r.key,
+    version: r.version,
+    matched: r.estimate.count,
+    estimatedDurationMs: r.estimate.totalDurationMs,
+    command: r.materialization.command || null,
+    warnings: r.warnings.length ? r.warnings.map((w) => w.message) : null,
+    tests: r.tests
+      .slice(0, SAMPLE)
+      .map((t) => dropNulls({ testCaseId: t.testCaseId, title: t.title, filePath: t.filePath, line: t.line })),
+    truncated: r.tests.length > SAMPLE ? r.tests.length - SAMPLE : null,
+  });
+}
+
+function selectionFormatParam(raw: unknown): SelectionFormat {
+  const formats: SelectionFormat[] = ['args', 'grep', 'files', 'json'];
+  return formats.includes(raw as SelectionFormat) ? (raw as SelectionFormat) : 'args';
 }
 
 // ── Tool handlers ────────────────────────────────────────────────────────────
@@ -1402,6 +1432,97 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         }),
       ),
       nextOffset: offset + pageSize < page.total ? offset + pageSize : null,
+    };
+  },
+
+  // ── list_selections ─────────────────────────────────────────────────────────
+  async list_selections(db, params, ctx) {
+    const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
+    const selections = await listSelections(db, projectId);
+    return {
+      items: selections.map((s) =>
+        dropNulls({
+          key: s.key,
+          name: s.name,
+          description: s.description,
+          version: s.version,
+          builtin: s.builtin || null,
+        }),
+      ),
+    };
+  },
+
+  // ── resolve_selection ───────────────────────────────────────────────────────
+  async resolve_selection(db, params, ctx) {
+    const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
+    const key = typeof params.key === 'string' ? params.key.trim() : '';
+    if (!key) throw new Error('key is required');
+    const selection = await getSelection(db, projectId, key);
+    if (!selection) throw new Error(`No selection "${key}" in this project`);
+
+    let definition: SelectionDefinition = selection.definition;
+    const budgetMs = Number(params.budgetMs);
+    if (Number.isFinite(budgetMs) && budgetMs > 0) {
+      definition = { ...definition, budget: { ...definition.budget, maxTotalDurationMs: budgetMs } };
+    }
+    const resolved = await resolveSelectionDefinition(db, projectId, definition, {
+      key: selection.key,
+      version: selection.version,
+      format: selectionFormatParam(params.format),
+    });
+    return selectionToMcp(resolved);
+  },
+
+  // ── preview_selection ───────────────────────────────────────────────────────
+  async preview_selection(db, params, ctx) {
+    const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
+    const check = validateSelectionDefinition(params.definition);
+    if (!check.valid) throw new Error(`Invalid definition: ${check.errors.join('; ')}`);
+    const resolved = await resolveSelectionDefinition(db, projectId, params.definition as SelectionDefinition, {
+      format: selectionFormatParam(params.format),
+    });
+    return selectionToMcp(resolved);
+  },
+
+  // ── suggest_selections ──────────────────────────────────────────────────────
+  async suggest_selections(db, params, ctx) {
+    const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
+    const budgetMs = Number(params.budgetMs);
+    const suggestions = await getSelectionSuggestions(db, projectId, {
+      budgetMs: Number.isFinite(budgetMs) && budgetMs > 0 ? budgetMs : undefined,
+    });
+    return {
+      tags: suggestions.tags.map((t) =>
+        dropNulls({
+          testCaseId: t.testCaseId,
+          title: t.title,
+          kind: t.kind,
+          tag: t.tag,
+          confidence: Number(t.confidence.toFixed(2)),
+          evidence: t.evidence,
+        }),
+      ),
+      smoke: suggestions.smoke
+        ? dropNulls({
+            budgetMs: suggestions.smoke.budgetMs,
+            totalRoutes: suggestions.smoke.totalRoutes,
+            coveredRoutes: suggestions.smoke.coveredRoutes,
+            testCaseIds: suggestions.smoke.testCaseIds,
+            picks: suggestions.smoke.picks.map((p) =>
+              dropNulls({
+                testCaseId: p.testCaseId,
+                title: p.title,
+                newRoutes: p.newRoutes,
+                cumulativeRoutes: p.cumulativeRoutes,
+                cumulativeDurationMs: p.cumulativeDurationMs,
+              }),
+            ),
+          })
+        : null,
     };
   },
 

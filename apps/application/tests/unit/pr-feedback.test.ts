@@ -79,6 +79,16 @@ describe('buildPrComment', () => {
     expect(body).toContain('No failures.');
   });
 
+  test('names the selection when the run came from one', () => {
+    const body = buildPrComment(summary({ selection: { key: 'smoke', testCount: 42 } }));
+    expect(body).toContain('`smoke`');
+    expect(body).toContain('42 tests');
+  });
+
+  test('says nothing about selections on an ordinary run', () => {
+    expect(buildPrComment(summary())).not.toContain('Selection');
+  });
+
   test('separates new failures from pre-existing ones', () => {
     const body = buildPrComment(
       summary({

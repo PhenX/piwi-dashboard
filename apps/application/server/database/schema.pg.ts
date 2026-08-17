@@ -969,6 +969,39 @@ export const testFunctions = pgTable(
   }),
 );
 
+// Test selections — named, data-driven subsets of a project's tests. The
+// `definition` is declarative JSON (SelectionDefinition in
+// shared/selection/types.ts): rules over catalog facts resolved on demand,
+// never a frozen list, so a saved selection keeps tracking the suite as tests
+// are added, renamed and removed. `version` increments on every definition
+// edit; a run resolved from a selection stamps the version it ran.
+export const testSelections = pgTable(
+  'test_selections',
+  {
+    id: serial('id').primaryKey(),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(), // project-unique slug, e.g. 'smoke'
+    name: text('name').notNull(),
+    description: text('description'),
+    definition: jsonb('definition').notNull(), // SelectionDefinition
+    version: integer('version').notNull().default(1),
+    createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { mode: 'date' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: timestamp('updated_at', { mode: 'date' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => ({
+    projectIdIdx: index('idx_test_selections_project_id').on(table.projectId),
+    createdByIdx: index('idx_test_selections_created_by').on(table.createdBy),
+    keyUnique: uniqueIndex('idx_test_selections_project_key').on(table.projectId, table.key),
+  }),
+);
+
 // Share links — read-only capability tokens for handing one execution or one
 // failure cluster to someone without a dashboard account. The token itself is
 // never stored: only its SHA-256 hash (unguessable 256-bit secrets need no
