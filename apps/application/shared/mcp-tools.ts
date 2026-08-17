@@ -537,6 +537,16 @@ export const MCP_TOOL_DEFS = [
     },
   },
   {
+    name: 'analyze_selections',
+    description:
+      'Health and drift for a project\'s selections. For each: what it resolves to now (count, quarantined members, duration, warnings) and whether that differs from what its most recent stamped run recorded — a silent drift a green build can hide. Plus coverage: how many tests are matched by no stored selection (the "unselected" gap), with a sample. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: { projectId: { type: 'number', description: 'Project ID' } },
+      required: ['projectId'],
+    },
+  },
+  {
     name: 'list_open_clusters',
     description:
       'Open failure clusters across all in-scope projects, ranked by occurrences — a cross-project triage queue. Filter by status; paginate with pageSize/cursor.',

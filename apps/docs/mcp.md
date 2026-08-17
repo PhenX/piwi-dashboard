@@ -15,7 +15,7 @@ The MCP server is served from the same Nitro process as the dashboard. There is 
 
 ## What it provides
 
-The server exposes 44 tools — mostly read-only, plus a few write/triage tools — that cover the full diagnostic workflow, from browsing projects to inspecting the exact evidence behind a failure and closing the loop after a fix.
+The server exposes 45 tools — mostly read-only, plus a few write/triage tools — that cover the full diagnostic workflow, from browsing projects to inspecting the exact evidence behind a failure and closing the loop after a fix.
 
 **Projects & activity**
 
@@ -61,6 +61,7 @@ The server exposes 44 tools — mostly read-only, plus a few write/triage tools 
 | `resolve_selection` | Resolve a saved (or built-in) selection to its matching tests and a ready-to-run `playwright test` command — the verify command after a fix |
 | `preview_selection` | Resolve an ad-hoc selection definition without saving it — the builder's dry-run |
 | `suggest_selections` | Suggested `slow`/`feature` tags and a mined smoke suite (budgeted set cover over observed routes), each with its evidence |
+| `analyze_selections` | Per-selection health and drift (what each resolves to now vs. what its last run recorded) plus the tests no selection covers |
 
 **Failure clusters**
 

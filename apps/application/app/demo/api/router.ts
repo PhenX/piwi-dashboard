@@ -78,6 +78,7 @@ import {
   SelectionError,
 } from '#shared/handlers/selections';
 import { getSelectionSuggestions } from '#shared/handlers/selection-suggestions';
+import { getSelectionAnalytics } from '#shared/handlers/selection-analytics';
 import {
   isBuiltinKey,
   parseShard,
@@ -1181,6 +1182,14 @@ const routes: RouteEntry[] = [
       return getSelectionSuggestions(await getDemoDb(), +m[1]!, {
         budgetMs: Number.isFinite(budgetMs) && budgetMs > 0 ? budgetMs : undefined,
       });
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/selections\/analytics$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return getSelectionAnalytics(await getDemoDb(), +m[1]!);
     },
   },
   {
