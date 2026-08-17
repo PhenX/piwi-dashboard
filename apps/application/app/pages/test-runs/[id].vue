@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, watch, onUnmounted } from 'vue';
 import type { TestRunDetails, TestCaseResult, ReportInfo, TestStepEvent } from '~~/types/api';
+import type { LiveStepsByWorker } from '~/utils/live-steps';
 import { subscribeDemoEvents } from '~/demo/run-events';
 import { useRunStream } from '~/composables/useRunStream';
 
@@ -42,9 +43,9 @@ const liveProgress = ref<{ totalTests: number; passedTests: number; failedTests:
   null,
 );
 // Worker index → the step the worker is currently on (from transient SSE step
-// events; nothing is persisted from them).
-const liveSteps = ref<Record<number, { title: string; category?: string | null; status?: string | null }>>({});
-const hasLiveSteps = computed(() => Object.values(liveSteps.value).some((s) => !!s));
+// events; nothing is persisted from them). Rendered inline on the matching
+// running rows in the test-case views.
+const liveSteps = ref<LiveStepsByWorker>({});
 let eventSource: EventSource | null = null;
 
 // Combined test cases: from server data + live stream.
@@ -197,17 +198,28 @@ function flushPendingEvents() {
         displayTestCases.value = [...liveTestCases.value];
       }
     } else if (parsed.type === 'step-begin') {
-      const d = parsed.data as { title: string; stepCategory?: string | null; workerIndex?: number };
+      const d = parsed.data as {
+        title: string;
+        stepCategory?: string | null;
+        parentTitle?: string | null;
+        workerIndex?: number;
+      };
       // Suite-level hooks (no worker) keep flowing to the timeline instead.
       if (d.workerIndex == null) continue;
       liveSteps.value = {
         ...liveSteps.value,
-        [d.workerIndex]: { title: d.title, category: d.stepCategory ?? null, status: undefined },
+        [d.workerIndex]: {
+          title: d.title,
+          category: d.stepCategory ?? null,
+          status: undefined,
+          parentTitle: d.parentTitle ?? null,
+        },
       };
     } else if (parsed.type === 'step-end') {
       const d = parsed.data as {
         title: string;
         stepCategory?: string | null;
+        parentTitle?: string | null;
         status?: string;
         workerIndex?: number;
       };
@@ -216,7 +228,12 @@ function flushPendingEvents() {
       // begins, so the readout shows "last thing this worker did".
       liveSteps.value = {
         ...liveSteps.value,
-        [d.workerIndex]: { title: d.title, category: d.stepCategory ?? null, status: d.status ?? 'passed' },
+        [d.workerIndex]: {
+          title: d.title,
+          category: d.stepCategory ?? null,
+          status: d.status ?? 'passed',
+          parentTitle: d.parentTitle ?? null,
+        },
       };
     } else if (parsed.type === 'run-progress') {
       liveProgress.value = data as {
@@ -629,7 +646,6 @@ function handleSelectCluster(clusterId: number) {
     <template #body>
       <DetailPageLayout v-model="activeTab" :tab-items="tabItems" :tab-panel-class="tabPanelClass">
         <template #summary>
-          <RunLiveActivity v-if="isLive && hasLiveSteps" :steps="liveSteps" class="px-4 pt-4 lg:px-6" />
           <RunSummary
             v-if="testRun"
             :test-run="testRun"
@@ -665,6 +681,7 @@ function handleSelectCluster(clusterId: number) {
             :test-cases="displayTestCases"
             :suites="testRun?.suites ?? []"
             :is-live="isLive"
+            :live-steps="liveSteps"
             :failure-cluster-filter="selectedClusterFilter"
             :project-key="testRun?.projectId"
             :project-name="testRun?.project?.name"

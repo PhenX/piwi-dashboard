@@ -188,7 +188,7 @@ By default, the reporter streams test results to the dashboard in real-time as t
 2. As each test completes, results are sent in batches to the server
 3. With `liveFileUploads` (the default), each test's trace and attachments are uploaded right after the test finishes, so they are viewable on the test case page while the run is still in progress
 4. The dashboard UI shows a live progress bar and test results as they arrive
-5. While a test runs, the steps it is executing (Playwright `pw:api` actions, `pw:expect` assertions, and hook/fixture steps) stream to the run page as they happen — the "Live activity" strip shows each worker's current step. The polling attempts of `pw:assert` steps are deliberately not streamed; the persisted step events on a completed test still carry everything
+5. While a test runs, the steps it is executing (Playwright `pw:api` actions, `pw:expect` assertions, and hook/fixture steps) stream to the run page as they happen — each running test's row shows the step it is on right now. The polling attempts of `pw:assert` steps are deliberately not streamed; the persisted step events on a completed test still carry everything
 6. When tests finish, the reporter finalizes the run with the overall status
 
 ### Disabling streaming

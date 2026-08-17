@@ -1129,7 +1129,7 @@ async function runSingleSimulation(
         ]);
 
         // Stream a few of the test's steps live (transient SSE events, like the
-        // real reporter) so the demo run page shows the live-activity readout.
+        // real reporter) so the demo run page shows the in-row live step readout.
         // Wait steps are the least interesting to watch; the persisted stepEvents
         // still carry them for the timeline.
         const liveSteps = (test.steps ?? [])
