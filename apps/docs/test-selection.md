@@ -149,6 +149,26 @@ a definition resolves to — the matching tests, the estimated duration, any war
 save it. For AI agents, the [MCP server](/mcp) exposes `list_selections`, `resolve_selection` (key → tests + verify
 command) and `preview_selection` (an ad-hoc definition, dry-run); the `run-the-right-tests` skill ties them together.
 
+## Impact-from-diff
+
+`piwi run impact --base <ref>` runs only the tests your change affects. The reporter computes the working-tree diff
+against `<ref>` locally (`git diff --name-only`), and the dashboard maps those files to tests through two observed
+edges:
+
+- **Direct** — a changed file that _is_ a test file → the tests defined in it.
+- **Reach** — a changed support file (a page object, helper, or app module) that a test's most recent execution
+  actually ran through, per its captured source frames.
+
+```bash
+npx @piwitests/reporter run impact --base origin/main
+```
+
+It fails safe. A changed _source_ file that maps to no test can't be proven irrelevant, so the run **widens to the full
+suite** with a warning rather than silently skipping it — impact never narrows away a test it's unsure about. A
+docs-only or config-only change impacts nothing and runs nothing. This is evidence-based impact, not static analysis:
+route- and page-level mapping (a changed server route → the tests that call it) needs a per-project config and is not
+attempted yet.
+
 ## Suggestions
 
 Piwi can _propose_ selections and tags from the history it keeps — suggest-only, with the evidence attached, never
