@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import type { TestCaseResult, SuiteInfo } from '~~/types/api';
+import type { LiveStepsByWorker } from '~/utils/live-steps';
 
 const props = defineProps<{
   testCases: TestCaseResult[];
   suites: SuiteInfo[];
   hasFilter: boolean;
   highlightedCaseId?: number | null;
+  /** Worker index → current step, rendered inline on the matching running rows. */
+  liveSteps?: LiveStepsByWorker | null;
   /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
   projectKey?: string | number | null;
   projectName?: string | null;
@@ -320,7 +323,14 @@ const flatRows = computed<FlatRow[]>(() => {
             class="shrink-0"
           />
           <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto">
-            <span v-if="row.test.status === 'running'" class="text-xs text-info">In progress...</span>
+            <template v-if="row.test.status === 'running'">
+              <TestRowLiveStep
+                v-if="liveStepForCase(liveSteps, row.test)"
+                :step="liveStepForCase(liveSteps, row.test)!"
+                class="max-w-48 lg:max-w-96"
+              />
+              <span v-else class="text-xs text-info">In progress...</span>
+            </template>
             <DurationValue v-else-if="row.test.duration" :ms="row.test.duration" class="text-xs text-muted" />
             <UBadge
               v-if="row.test.workerIndex != null"

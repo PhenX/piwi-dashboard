@@ -339,7 +339,7 @@ const SCENES = [
   },
   {
     name: 'run-live-activity',
-    description: 'Run page while live: the live-activity strip with each worker\u2019s current step',
+    description: 'Run page while live: each still-running row shows the step its worker is on',
     route: '/projects',
     viewport: { width: 1280, height: 900 },
     async prepare({ request, base }) {
@@ -356,8 +356,28 @@ const SCENES = [
     async run({ page, base, shoot, goto }) {
       await goto(`/test-runs/${this.runId}`);
       // The dev server compiles an API route on its first hit, which can take a
-      // while; retry the push until it lands, then let the strip render.
+      // while; retry the push until it lands, then let the rows render. One
+      // completed row sits above the running ones so the shot shows the live
+      // step readout in contrast with a finished test.
       const events = [
+        {
+          type: 'begin',
+          title: 'guest checkout keeps the cart',
+          location: 'tests/checkout.spec.ts:5:3',
+          workerIndex: 0,
+          startedAt: Date.now() - 9_500,
+          browser: { projectName: 'chromium' },
+        },
+        {
+          type: 'complete',
+          title: 'guest checkout keeps the cart',
+          location: 'tests/checkout.spec.ts:5:3',
+          status: 'passed',
+          duration: 8_400,
+          workerIndex: 0,
+          startedAt: Date.now() - 9_500,
+          browser: { projectName: 'chromium' },
+        },
         {
           type: 'begin',
           title: 'purchase flow submits the order',
@@ -417,7 +437,9 @@ const SCENES = [
         }
       }
       if (!pushed) throw new Error(`could not push step events to run ${this.runId}`);
-      await page.getByTestId('live-activity').waitFor({ timeout: 60_000 });
+      // The card and grid layouts both carry the testid; wait for the visible
+      // one (the grid row at this width, not the `md:hidden` card copy).
+      await page.locator('[data-testid="live-step"]:visible').first().waitFor({ timeout: 60_000 });
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(400);
       await shoot();

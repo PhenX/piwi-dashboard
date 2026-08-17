@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, watch, ref } from 'vue';
 import type { TestCaseResult, SuiteInfo } from '~~/types/api';
+import type { LiveStepsByWorker } from '~/utils/live-steps';
 
 const { treeView, setTreeView } = useTreeViewCookie('test-cases');
 
@@ -8,6 +9,8 @@ const props = defineProps<{
   testCases: TestCaseResult[];
   suites: SuiteInfo[];
   isLive: boolean;
+  /** Worker index → current step, rendered inline on the matching running rows. */
+  liveSteps?: LiveStepsByWorker | null;
   failureClusterFilter?: number | null;
   /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
   projectKey?: string | number | null;
@@ -56,6 +59,11 @@ const testCaseBrowserOptions = computed(() => {
 function statusHint(tc: TestCaseResult): string {
   if (tc.status === 'didnotrun') return formatDidNotRunReason(tc.didNotRunReason);
   return formatStatusLabel(tc.status);
+}
+
+/** The live step to show on a running row (worker-matched, see the helper). */
+function liveStep(tc: TestCaseResult) {
+  return liveStepForCase(props.liveSteps, tc);
 }
 
 function matchesStatus(tc: TestCaseResult, filter: string): boolean {
@@ -359,6 +367,7 @@ defineExpose({ scrollToCase });
       :suites="suites"
       :has-filter="hasFilter"
       :highlighted-case-id="highlightedCaseId"
+      :live-steps="liveSteps"
       :project-key="projectKey"
       :project-name="projectName"
       class="flex-1 min-h-0"
@@ -441,6 +450,7 @@ defineExpose({ scrollToCase });
                     item.isNewFlaky,
                     item.testAnnotations,
                     item.tags,
+                    liveStep(item)?.title,
                   ]"
                   :data-index="index"
                 >
@@ -494,7 +504,10 @@ defineExpose({ scrollToCase });
                     />
 
                     <div class="pl-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-                      <span v-if="item.status === 'running'" class="text-info">In progress...</span>
+                      <template v-if="item.status === 'running'">
+                        <TestRowLiveStep v-if="liveStep(item)" :step="liveStep(item)!" class="max-w-full" />
+                        <span v-else class="text-info">In progress...</span>
+                      </template>
                       <DurationValue v-else-if="item.duration" :ms="item.duration" />
                       <UBadge
                         v-if="item.workerIndex != null"
@@ -562,6 +575,10 @@ defineExpose({ scrollToCase });
                         :project-name="projectName"
                         class="text-xs text-zinc-400 dark:text-zinc-500"
                       />
+                      <!-- The step this row's worker is on right now (live runs only). -->
+                      <div v-if="liveStep(item)" class="min-w-0">
+                        <TestRowLiveStep :step="liveStep(item)!" class="max-w-full" />
+                      </div>
                     </div>
 
                     <!-- status — the flat view's only status encoding, so it keeps a chip (subtle, not solid) -->
