@@ -59,6 +59,11 @@ describe('parseSelectArgs', () => {
     expect(args.base).toBe('origin/main');
     expect(parseSelectArgs(['smoke'], env).base).toBeNull();
   });
+
+  it('maps --fail-fast to a failure-first order', () => {
+    expect(parseSelectArgs(['smoke', '--fail-fast'], env).order).toBe('failureLikelihood');
+    expect(parseSelectArgs(['smoke'], env).order).toBeNull();
+  });
 });
 
 describe('readSelectionStamp', () => {

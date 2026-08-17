@@ -31,6 +31,8 @@ export interface SelectionClientOptions {
   pkgRunner?: string;
   /** Shard spec `i/n` — keep only shard i of n, balanced by duration. */
   shard?: string | null;
+  /** Rank order to emit tests in (fail-fast), e.g. `failureLikelihood`. */
+  order?: string | null;
 }
 
 function authHeaders(apiKey?: string | null): Record<string, string> {
@@ -59,6 +61,7 @@ export async function fetchResolution(
   if (options.pkgRunner) params.set('pkgRunner', options.pkgRunner);
   if (options.budgetMs != null) params.set('budgetMs', String(options.budgetMs));
   if (options.shard) params.set('shard', options.shard);
+  if (options.order) params.set('order', options.order);
   const url = `${options.serverUrl}/api/projects/${projectId}/selections/${encodeURIComponent(options.key)}/resolve?${params}`;
   const res = await fetch(url, { headers: authHeaders(options.apiKey) });
   if (!res.ok) {
@@ -78,7 +81,12 @@ export async function fetchImpact(
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(options.apiKey) },
-    body: JSON.stringify({ changedFiles, format: options.format ?? 'args', shard: options.shard ?? undefined }),
+    body: JSON.stringify({
+      changedFiles,
+      format: options.format ?? 'args',
+      shard: options.shard ?? undefined,
+      order: options.order ?? undefined,
+    }),
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { message?: string };
