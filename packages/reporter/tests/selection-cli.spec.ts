@@ -52,6 +52,13 @@ describe('parseSelectArgs', () => {
     expect(parseSelectArgs(['smoke'], env).shard).toBeNull();
     expect(() => parseSelectArgs(['smoke', '--shard', '2of4'], env)).toThrow(/--shard/);
   });
+
+  it('reads the impact base ref and keeps the key as impact', () => {
+    const args = parseSelectArgs(['impact', '--base', 'origin/main'], env);
+    expect(args.key).toBe('impact');
+    expect(args.base).toBe('origin/main');
+    expect(parseSelectArgs(['smoke'], env).base).toBeNull();
+  });
 });
 
 describe('readSelectionStamp', () => {

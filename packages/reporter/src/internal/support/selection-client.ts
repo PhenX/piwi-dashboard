@@ -15,6 +15,11 @@ export interface SelectionResolution {
   materialization: { format: string; args: string[]; command: string };
 }
 
+/** Impact resolution — a normal resolution plus the diff-mapping summary. */
+export interface ImpactResolution extends SelectionResolution {
+  impact: { changedFiles: number; mappedFiles: number; widened: boolean; unmappedSourceFiles: string[] };
+}
+
 export interface SelectionClientOptions {
   serverUrl: string;
   apiKey?: string | null;
@@ -61,4 +66,23 @@ export async function fetchResolution(
     throw new Error(body.message || `Dashboard returned ${res.status} resolving "${options.key}"`);
   }
   return (await res.json()) as SelectionResolution;
+}
+
+/** Map a set of changed files to the tests they impact. */
+export async function fetchImpact(
+  options: SelectionClientOptions,
+  projectId: number,
+  changedFiles: string[],
+): Promise<ImpactResolution> {
+  const url = `${options.serverUrl}/api/projects/${projectId}/selections/impact`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(options.apiKey) },
+    body: JSON.stringify({ changedFiles, format: options.format ?? 'args', shard: options.shard ?? undefined }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(body.message || `Dashboard returned ${res.status} resolving impact`);
+  }
+  return (await res.json()) as ImpactResolution;
 }
