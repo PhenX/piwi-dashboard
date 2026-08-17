@@ -81,6 +81,7 @@ import { getSelectionSuggestions } from '#shared/handlers/selection-suggestions'
 import { getSelectionAnalytics } from '#shared/handlers/selection-analytics';
 import {
   isBuiltinKey,
+  parseRankBy,
   parseShard,
   validateSelectionDefinition,
   type SelectionDefinition,
@@ -1268,6 +1269,7 @@ const routes: RouteEntry[] = [
         version: selection.version,
         format,
         shard: parseShard(query?.get('shard')) ?? undefined,
+        order: parseRankBy(query?.get('order')) ?? undefined,
       });
     },
   },

@@ -59,6 +59,19 @@ still covers the whole selection (so a `--require-selection` gate sees all of it
 npx @piwitests/reporter run smoke --shard 2/4 -- --shard=2/4
 ```
 
+### Fail fast
+
+`--fail-fast` emits the selection worst-first — the least-reliable tests (by pass rate) lead, so a likely failure
+surfaces early instead of after the stable bulk of the suite has run:
+
+```bash
+npx @piwitests/reporter run smoke --fail-fast
+```
+
+It reorders, it never drops: the same tests run, so the resolved hash is unchanged and a `--require-selection` gate
+still sees the whole set. Ordering is a hint — Playwright owns worker scheduling, so it influences file order rather
+than guaranteeing a strict sequence. It composes with `impact` (`piwi run impact --base origin/main --fail-fast`).
+
 ## Built-in selections
 
 Two selections exist for every project with no setup:

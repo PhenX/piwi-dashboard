@@ -5,7 +5,7 @@
  * writing a definition a newer server would misread, or a typo'd predicate,
  * must fail loudly rather than resolve to a wider set than intended.
  */
-import type { SelectionDefinition, SelectionPredicateGroup } from './types';
+import type { SelectionDefinition, SelectionPredicateGroup, SelectionRankBy } from './types';
 
 /** Slug rule for a selection key — lowercase, digits and hyphens, 1–64 chars. */
 export const SELECTION_KEY_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -166,6 +166,11 @@ export function validateSelectionDefinition(definition: unknown): { valid: boole
   }
 
   return { valid: errors.length === 0, errors };
+}
+
+/** Parse a rank-by name (the order tests are emitted in), or null if unknown. */
+export function parseRankBy(raw: unknown): SelectionRankBy | null {
+  return typeof raw === 'string' && VALID_RANK_BY.has(raw) ? (raw as SelectionRankBy) : null;
 }
 
 /** Parse a `i/n` shard spec (e.g. `2/4`) into 1-based index and total, or null. */

@@ -19,7 +19,7 @@ import { testCases, testRunsCases } from '../database/schema';
 import type { DrizzleDB } from '#shared/handlers/db';
 import { resolveCasePayloadContents } from './case-payloads';
 import { resolveSelectionDefinition } from '#shared/handlers/selections';
-import type { ResolvedSelection, SelectionDefinition, SelectionFormat } from '#shared/selection';
+import type { ResolvedSelection, SelectionDefinition, SelectionFormat, SelectionRankBy } from '#shared/selection';
 
 /** Extensions we treat as source: an unmapped one of these widens to full suite. */
 const SOURCE_EXTENSIONS = new Set([
@@ -128,7 +128,7 @@ export async function resolveImpact(
   db: DrizzleDB,
   projectId: number,
   changedFiles: string[],
-  options: { format?: SelectionFormat; shard?: { index: number; total: number } } = {},
+  options: { format?: SelectionFormat; shard?: { index: number; total: number }; order?: SelectionRankBy } = {},
 ): Promise<ImpactResolution> {
   const files = [...new Set(changedFiles.map(normalizePath).filter(Boolean))];
 
@@ -168,6 +168,7 @@ export async function resolveImpact(
     version: 0,
     format: options.format,
     shard: options.shard,
+    order: options.order,
   });
 
   if (widened) {
