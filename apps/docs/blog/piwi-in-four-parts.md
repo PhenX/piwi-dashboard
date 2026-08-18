@@ -14,18 +14,9 @@ This post goes one level down, into four parts of the project worth a closer loo
 
 ## How Piwi started
 
-<!--
-  TODO (Fabien): expand this section from the original build session.
-  The Claude Code session that kicked the project off is here:
-  https://claude.ai/code/session_01WyRiNoDwToyBMpfhcyyfgr
-  I couldn't read it automatically (the session is private), so drop the
-  highlights in yourself: the very first prompt, the initial scope, and the
-  early decisions that shaped everything after. Delete this comment when done.
--->
+Piwi began as a tool for my own team. Every Playwright HTML report we produced lived and died as a CI artifact: a test failed on Tuesday, the report was gone by Thursday, and "has this been flaky before?" had no answer at all. The first version — built in a day on top of a Nuxt template, one Sunday in December 2025 — did exactly one thing: keep the runs. Everything below grew out of that single decision, over eight months and three AI collaborators.
 
-Piwi began as a tool for my own team. Every Playwright HTML report we produced lived and died as a CI artifact: a test failed on Tuesday, the report was gone by Thursday, and "has this been flaky before?" had no answer at all. The first version did exactly one thing — keep the runs. Everything below grew out of that single decision.
-
-_(The full origin story — how the first prototype came together — goes here.)_
+I wrote the whole story up separately, from the first commit onward: [How Piwi was built](/blog/how-piwi-was-built).
 
 ## 1. The demo is the real app, with a service worker for a backend
 
