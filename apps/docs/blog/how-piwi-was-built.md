@@ -60,6 +60,16 @@ Not everyone wants to run a server. The [desktop app](/desktop) bundles the exac
 
 The part I am happiest with is how the reporter finds it. While the app runs it writes its address and access token to a file in your home directory, and the reporter reads that file *only* when your config and environment set no server URL and no API key, so a project already pointed at a shared dashboard, or a CI job with a key set, is never silently redirected to your laptop. Beyond that it re-runs your failed tests locally with its own bundled Node, imports a Playwright blob report or trace dropped onto the window, and wires up an MCP client (Claude Code, Cursor, and the rest) in one click. The installers are unsigned for now, and built for Windows and Apple-silicon macOS only; on Linux or an Intel Mac, the Docker image or `npx` is the way in.
 
+## The run timeline
+
+A run's test-case list tells you what passed and what failed. It does not tell you how the run spent its wall-clock time across parallel workers, which is where a suite's minutes actually go. The run timeline is a horizontal per-worker view of execution, one lane per worker, each test a bar placed where it really ran. A span-type filter splits each bar into its phases (setup, the test body, wasted waits, teardown), so a worker sitting idle while the others grind, or a fixture that costs more than the test it sets up, is visible at a glance. Click a bar to jump to that test case. The wasted-waits band is the same signal Piwi prices elsewhere in CI minutes; here you can see exactly where it happens.
+
+## Open in IDE
+
+Every source path the dashboard shows, the failing call stack, a test's file, a suggested fix, is clickable, and hovering it reveals an [open in IDE](/ide-integration) control that jumps straight to that file and line in your local editor. Because the dashboard runs in your browser while the source lives on your machine, the mapping from a repo-relative path to a real file is configured per browser and kept in `localStorage`; nothing about your filesystem is sent to the server.
+
+The fiddly part is knowing whether the jump worked. Only the JetBrains local-server method can be confirmed from a web page: the dashboard sends it a `fetch` and waits for the IDE to answer. The `vscode://` and `jetbrains://` URL schemes are handed off to the operating system with no success signal, so the browser's own "Open this app?" prompt is the only confirmation there is. "Auto" is built around that difference: it probes the detectable local server first, and only then falls back to launching a URL scheme, reported honestly as "opening, can't confirm."
+
 ## A few more, in brief
 
 Not every hard part earns its own chapter:
