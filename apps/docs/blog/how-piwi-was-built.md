@@ -10,10 +10,11 @@ sidebar: false
 
 Piwi keeps every Playwright run instead of letting the HTML report die with the CI artifact. It then groups the failures by cause, scores the flaky tests, and points at the locator you should have used instead. It started as one loop (run the tests, the reporter uploads the results, the dashboard keeps them), built in a day on a Nuxt template one Sunday in December 2025. That loop never changed; what changed over the next eight months was the ambition stacked on top of it, from *storing* results to *explaining* the failures to *handing back a fix*.
 
-<!-- STORY 1: WHY YOU STARTED IT.
-     One honest paragraph on the itch. Was there a specific moment, a flaky
-     test that burned an afternoon, a report you needed that CI had already
-     deleted? See question 1 in the chat. -->
+## Why I built it
+
+The idea of building my own Playwright dashboard had been running in my head for years, from before I found [CyborgTests](https://www.cyborgtest.com/). When I started, CyborgTests was essentially an aggregator for HTML reports and traces, and our trace files were enormous, because our tests were genuinely broken. It got slower and slower under them. That, plus a conviction that a dashboard like this could do a great deal more, was enough to push me to start my own. CyborgTests has moved on a lot since, but by then I was already far enough into Piwi to keep going.
+
+There are commercial products in this space. I did not want to depend on a third party, and I took it as a personal challenge, so I built Piwi in my free time. I knew it would help at work, but that is not really why: I like building tools, for my team and for the community, which is most of what my [GitHub](https://github.com/PhenX) is. One thing led to another, and Piwi grew well past a dashboard, into a reporter, an MCP server, a desktop app, a diagnosis tool for humans and for AI assistants, a quality advisor.
 
 This post skips the chronology and picks out the parts that were actually hard to build.
 
@@ -23,9 +24,9 @@ A dashboard needs a server and a database. A demo that needs a backend is a demo
 
 The payoff is that the demo can't drift from the product, because it *is* the product with only its backend relocated. The cost is that every feature built afterwards had to work with no server, which shows up in a long tail of "make this real in the demo too" work.
 
-<!-- STORY 2: THE DEMO DECISION.
-     What pushed you to make the demo the real app rather than a recorded
-     mockup? Was it obviously worth it, or a gamble? See question 2. -->
+The decision to do this came very early, and from earlier experiments. I had built browser playgrounds for EF Core and FluentMigrator on Blazor WebAssembly, and running a real SQLite or PostgreSQL database inside the browser, driven by a C# app compiled to WASM, felt like magic. Doing the same for a Node app looked easy by comparison.
+
+It imposes a discipline. An LLM tends to forget that the demo has to move with every feature change, even when the project's own instructions say so, so I still remind it by hand (not everything can be reused untouched, of course). I think it is worth it. A working app you can open with a few honest compromises, no reporter and no real authentication, which is why the top bar carries a profile chooser and some simulation, is exactly what I miss on most products I would like to try. I am lazy: I want to click a link and form my own opinion, not sign up first.
 
 ## One product, two databases
 
