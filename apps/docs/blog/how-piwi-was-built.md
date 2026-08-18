@@ -52,16 +52,18 @@ Locator healing captures an element's attributes on *passing* runs, so when the 
 
 The objection to natural-language tests is determinism: a model in the hot path is slow, flaky, non-reproducible, and a network dependency in CI. [AI steps](/ai-steps) avoid all of that by running the model exactly *once*, at authoring time — and even then it only ever *names* an element (its ARIA role and accessible name). A deterministic scorer compiles that name into a committed JSON artifact, and every run afterwards replays the artifact as ordinary Playwright: zero model calls, zero network. Determinism comes from the model never touching the committed bytes; safety comes from the artifact being data that is never evaluated (every action is checked against an allowlist), a drift guard that stops before acting on a renamed element, and a postcondition the agent picks so a subtly wrong flow fails loudly instead of passing green.
 
-## Three collaborators, three eras
+## Three assistants, three eras
 
-The other unusual thing about this history is who wrote it. GitHub Copilot's agent built the December skeleton; the spring was hand-driven; Claude wrote most of the code from late June on. I was the architect throughout — the design decisions, the scope cuts, and the reviews were the constant while the tool underneath changed.
+The other unusual thing about this history is who wrote it — and one part of that isn't visible in the commits. GitHub Copilot's agent built the December skeleton. The spring *looks* hand-driven, because those commits are under my name, but it wasn't: that was a more surgical phase — smaller, focused changes made with DeepSeek V4 Flash, which impressed me enough with its speed, and its judgement *at* that speed, that I kept reaching for it. Then Claude wrote most of the code from late June on. Three different assistants across one year; I was the architect throughout, and the design decisions, the scope cuts and the reviews stayed constant while the tool underneath changed.
 
 <!-- ✍️ STORY 5 — AGENT-ASSISTED DEVELOPMENT (the big one).
-     Your honest take on building this way, having gone Copilot → hand →
-     Claude. What is it actually like to be the architect over coding agents —
-     what it's good at, where it fails, what you refuse to hand off? This is
-     also the strongest possible reply to the "AI slop" reaction. And: do you
-     want the commit-count breakdown published, and framed how? See question 5. -->
+     Your honest take on building this way, across three assistants:
+     Copilot (wholesale) → DeepSeek V4 Flash (surgical, committed under your
+     name) → Claude. What each was good at, where they failed, what you refuse
+     to hand off. This is also the strongest reply to the "AI slop" reaction.
+     Sub-question: if the commit-count breakdown goes in, note that the commits
+     "under my name" include the DeepSeek-assisted spring — so they aren't
+     really solo. How do you want that framed? See question 5. -->
 
 ## Where it is now
 
