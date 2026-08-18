@@ -36,7 +36,7 @@ function toDate(value: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-// American English, spelled-out month — matches the docs voice.
+// American English, spelled-out month. Matches the docs voice.
 function formatDate(d: Date | null): string {
   if (!d) return ''
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`

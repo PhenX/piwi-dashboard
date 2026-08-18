@@ -9,7 +9,7 @@ import { data as posts } from './posts.data'
 
 # Blog
 
-Notes on how Piwi is built — the engineering behind the features, and the reasoning behind the trade-offs. Written for people who run Playwright suites and want to know how the parts actually work.
+Notes on how Piwi is built: the engineering behind the features, and the reasoning behind the trade-offs. Written for people who run Playwright suites and want to know how the parts actually work.
 
 <div class="blog-list">
   <article v-for="post of posts" :key="post.url" class="blog-entry">
