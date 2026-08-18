@@ -327,6 +327,19 @@ export interface ResolveOptions {
   pkgRunner?: string;
   /** Keep only this shard of the resolved list, balanced by summed average duration (1-based index). */
   shard?: { index: number; total: number };
+  /**
+   * Emit the resolved tests in this rank order (worst-first for the failure
+   * ranks) — a fail-fast hint that influences Playwright's file order without
+   * changing the set. Independent of a budget's own ranking; does not affect the
+   * resolved hash, which is order-independent.
+   */
+  order?: SelectionRankBy;
+  /**
+   * A catalog already loaded by the caller, reused instead of querying again.
+   * It must carry fail ranks (`withFailRanks: true`) so any definition resolves
+   * correctly. Analytics resolves many selections against one shared catalog.
+   */
+  catalog?: CatalogRow[];
 }
 
 /**
@@ -358,9 +371,11 @@ export async function resolveSelectionDefinition(
   definition: SelectionDefinition,
   options: ResolveOptions = {},
 ): Promise<ResolvedSelection> {
-  const catalog = await loadSelectionCatalog(db, projectId, {
-    withFailRanks: definitionNeedsFailRanks(definition),
-  });
+  const catalog =
+    options.catalog ??
+    (await loadSelectionCatalog(db, projectId, {
+      withFailRanks: definitionNeedsFailRanks(definition) || options.order === 'recentFailure',
+    }));
   const byId = new Map(catalog.map((row) => [row.id, row]));
   const warnings: SelectionWarning[] = [];
 
@@ -415,6 +430,9 @@ export async function resolveSelectionDefinition(
   if (shard && shard.total >= 1 && shard.index >= 1 && shard.index <= shard.total) {
     ordered = partitionByDuration(ordered, shard.total)[shard.index - 1] ?? [];
   }
+
+  // fail-fast: emit worst-first, so the tests most likely to fail start first.
+  if (options.order) ordered = orderTests(ordered, options.order);
 
   if (ordered.some((r) => r.quarantined)) {
     warnings.push({

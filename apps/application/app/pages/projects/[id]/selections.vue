@@ -37,6 +37,45 @@ useHead(
 
 const selections = computed(() => list.value?.items ?? []);
 
+// ── Health & drift analytics ──────────────────────────────────────────────────
+interface SelectionHealth {
+  key: string;
+  resolvedCount: number;
+  quarantinedCount: number;
+  totalDurationMs: number | null;
+  lastRun: { runId: number; at: number; recordedCount: number } | null;
+  drift: { changed: boolean; countDelta: number } | null;
+}
+interface SelectionAnalytics {
+  selections: SelectionHealth[];
+  coverage: {
+    total: number;
+    selected: number;
+    unselected: number;
+    unselectedSample: Array<{ testCaseId: number; title: string; filePath: string }>;
+  };
+}
+
+const { data: analytics, refresh: refreshAnalytics } = await useFetch<SelectionAnalytics>(
+  `/api/projects/${projectId}/selections/analytics`,
+  { lazy: true },
+);
+const coverage = computed(() => analytics.value?.coverage ?? null);
+const healthByKey = computed(() => new Map((analytics.value?.selections ?? []).map((h) => [h.key, h])));
+function healthFor(key: string): SelectionHealth | undefined {
+  return healthByKey.value.get(key);
+}
+function driftLabel(key: string): string {
+  const d = healthFor(key)?.drift;
+  if (!d || d.countDelta === 0) return 'drifted';
+  return `drifted ${d.countDelta > 0 ? '+' : ''}${d.countDelta}`;
+}
+function driftTitle(key: string): string {
+  const h = healthFor(key);
+  if (!h?.drift || !h.lastRun) return '';
+  return `Resolves to ${h.resolvedCount} test(s) now; its most recent run recorded ${h.lastRun.recordedCount}`;
+}
+
 // ── Definition templates (double as documentation of the format) ──────────────
 const TEMPLATES: Array<{ label: string; definition: SelectionDefinition }> = [
   { label: 'Smoke by tag', definition: { include: [{ tags: ['smoke'] }] } },
@@ -120,7 +159,7 @@ async function save() {
     }
     toast.add({ title: editingKey.value ? 'Selection updated' : 'Selection created', color: 'success' });
     showForm.value = false;
-    await refresh();
+    await Promise.all([refresh(), refreshAnalytics()]);
   } catch (e) {
     toast.add({
       title: 'Could not save',
@@ -138,7 +177,7 @@ async function remove(selection: Selection) {
   try {
     await $fetch(`/api/projects/${projectId}/selections/${encodeURIComponent(selection.key)}`, { method: 'DELETE' });
     toast.add({ title: 'Selection deleted', color: 'success' });
-    await refresh();
+    await Promise.all([refresh(), refreshAnalytics()]);
   } catch (e) {
     toast.add({
       title: 'Could not delete',
@@ -294,6 +333,38 @@ function saveSmoke(testCaseIds: number[]) {
             <UButton label="New selection" icon="i-lucide-plus" size="sm" @click="openCreate" />
           </template>
 
+          <div
+            v-if="coverage"
+            class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm mb-3 pb-3 border-b border-gray-200 dark:border-gray-800"
+          >
+            <span class="text-gray-600 dark:text-gray-300">
+              <strong>{{ coverage.selected }}</strong> / {{ coverage.total }} tests in a selection
+            </span>
+            <UPopover v-if="coverage.unselected" mode="hover">
+              <span class="text-warning-600 dark:text-warning-400 cursor-help underline decoration-dotted">
+                <strong>{{ coverage.unselected }}</strong> unselected
+              </span>
+              <template #content>
+                <div class="p-3 max-w-sm space-y-1">
+                  <p class="text-xs text-gray-500">Matched by no stored selection:</p>
+                  <ul class="text-xs font-mono space-y-0.5">
+                    <li
+                      v-for="t in coverage.unselectedSample.slice(0, 12)"
+                      :key="t.testCaseId"
+                      class="truncate text-gray-600 dark:text-gray-300"
+                    >
+                      {{ t.filePath }} › {{ t.title }}
+                    </li>
+                  </ul>
+                  <p v-if="coverage.unselected > 12" class="text-xs text-gray-400">
+                    +{{ coverage.unselected - 12 }} more
+                  </p>
+                </div>
+              </template>
+            </UPopover>
+            <span v-else class="text-gray-500">every test is covered</span>
+          </div>
+
           <LoadingState v-if="status === 'pending'" />
           <EmptyState
             v-else-if="selections.length === 0"
@@ -311,6 +382,28 @@ function saveSmoke(testCaseIds: number[]) {
                   <span class="font-mono text-sm font-medium">{{ selection.key }}</span>
                   <UBadge v-if="selection.builtin" color="neutral" variant="subtle" size="sm">built-in</UBadge>
                   <span class="text-sm text-gray-600 dark:text-gray-300">{{ selection.name }}</span>
+                  <UBadge v-if="healthFor(selection.key)" color="neutral" variant="outline" size="sm">
+                    {{ healthFor(selection.key)?.resolvedCount }}
+                    {{ healthFor(selection.key)?.resolvedCount === 1 ? 'test' : 'tests' }}
+                  </UBadge>
+                  <UBadge
+                    v-if="healthFor(selection.key)?.drift?.changed"
+                    color="warning"
+                    variant="subtle"
+                    size="sm"
+                    :title="driftTitle(selection.key)"
+                  >
+                    {{ driftLabel(selection.key) }}
+                  </UBadge>
+                  <UBadge
+                    v-if="healthFor(selection.key)?.quarantinedCount"
+                    color="warning"
+                    variant="outline"
+                    size="sm"
+                    :title="`${healthFor(selection.key)?.quarantinedCount} quarantined test(s) in this selection`"
+                  >
+                    {{ healthFor(selection.key)?.quarantinedCount }} quarantined
+                  </UBadge>
                 </div>
                 <div v-if="selection.description" class="text-xs text-gray-500 dark:text-gray-400">
                   {{ selection.description }}

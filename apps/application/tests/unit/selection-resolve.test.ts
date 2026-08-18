@@ -249,6 +249,29 @@ describe('duration-balanced sharding', () => {
   });
 });
 
+describe('fail-fast order', () => {
+  test('emits the least-reliable tests first without changing the set or hash', async () => {
+    // Titles ordered so the default (alphabetical) order is the reverse of fail-fast.
+    const reliable = await seedCase('aaa-reliable');
+    await seedExecution(reliable, 'passed');
+    await seedExecution(reliable, 'passed');
+    const flaky = await seedCase('mmm-flaky');
+    await seedExecution(flaky, 'passed');
+    await seedExecution(flaky, 'failed');
+    const broken = await seedCase('zzz-broken');
+    await seedExecution(broken, 'failed');
+    await seedExecution(broken, 'failed');
+
+    const plain = await resolveSelectionDefinition(db, 1, {});
+    const failFast = await resolveSelectionDefinition(db, 1, {}, { order: 'failureLikelihood' });
+
+    expect(plain.tests.map((t) => t.testCaseId)).toEqual([reliable, flaky, broken]);
+    expect(failFast.tests.map((t) => t.testCaseId)).toEqual([broken, flaky, reliable]);
+    // Same tests, different order → identical hash.
+    expect(failFast.resolvedHash).toBe(plain.resolvedHash);
+  });
+});
+
 describe('hash and materialization', () => {
   test('the resolved hash is stable and order-independent', async () => {
     await seedCase('a', { filePath: 'tests/a.spec.ts' });

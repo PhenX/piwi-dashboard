@@ -47,6 +47,7 @@ Selection:
   --format <fmt>        args (file:line, default) | grep | files | json
   --budget <duration>   Cap total time, e.g. 5m, 90s, 300000 (ms)
   --shard <i/n>         Keep only shard i of n, balanced by test duration
+  --fail-fast           Order the least-reliable tests first (fail-fast)
   --base <ref>          For "impact": the ref to diff the working tree against
 
 Behavior:
@@ -66,6 +67,8 @@ interface SelectArgs {
   format: string;
   budgetMs: number | null;
   shard: string | null;
+  /** Rank order to emit tests in (fail-fast) — set by --fail-fast. */
+  order: string | null;
   /** Base ref for `impact` — the diff is computed against it. */
   base: string | null;
   strict: boolean;
@@ -154,6 +157,7 @@ export function parseSelectArgs(argv: string[], env: NodeJS.ProcessEnv): SelectA
     format: readOption(own, '--format') ?? 'args',
     budgetMs,
     shard,
+    order: own.includes('--fail-fast') ? 'failureLikelihood' : null,
     base: readOption(own, '--base') ?? null,
     strict: own.includes('--strict'),
     pkgRunner: readOption(own, '--pkg-runner') ?? 'npx',
@@ -167,7 +171,7 @@ export function parseSelectArgs(argv: string[], env: NodeJS.ProcessEnv): SelectA
 const CACHE_FILE = path.join('.piwi', 'selection-cache.json');
 
 function cacheKey(projectId: number, args: SelectArgs): string {
-  return `${projectId}:${args.key}:${args.format}:${args.budgetMs ?? 0}:${args.shard ?? ''}`;
+  return `${projectId}:${args.key}:${args.format}:${args.budgetMs ?? 0}:${args.shard ?? ''}:${args.order ?? ''}`;
 }
 
 function readCache(projectId: number, args: SelectArgs): Resolution | null {

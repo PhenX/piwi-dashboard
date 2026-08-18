@@ -78,8 +78,10 @@ import {
   SelectionError,
 } from '#shared/handlers/selections';
 import { getSelectionSuggestions } from '#shared/handlers/selection-suggestions';
+import { getSelectionAnalytics } from '#shared/handlers/selection-analytics';
 import {
   isBuiltinKey,
+  parseRankBy,
   parseShard,
   validateSelectionDefinition,
   type SelectionDefinition,
@@ -1185,6 +1187,14 @@ const routes: RouteEntry[] = [
   },
   {
     method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/selections\/analytics$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return getSelectionAnalytics(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/selections\/([^/]+)$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
@@ -1259,6 +1269,7 @@ const routes: RouteEntry[] = [
         version: selection.version,
         format,
         shard: parseShard(query?.get('shard')) ?? undefined,
+        order: parseRankBy(query?.get('order')) ?? undefined,
       });
     },
   },

@@ -59,6 +59,19 @@ still covers the whole selection (so a `--require-selection` gate sees all of it
 npx @piwitests/reporter run smoke --shard 2/4 -- --shard=2/4
 ```
 
+### Fail fast
+
+`--fail-fast` emits the selection worst-first — the least-reliable tests (by pass rate) lead, so a likely failure
+surfaces early instead of after the stable bulk of the suite has run:
+
+```bash
+npx @piwitests/reporter run smoke --fail-fast
+```
+
+It reorders, it never drops: the same tests run, so the resolved hash is unchanged and a `--require-selection` gate
+still sees the whole set. Ordering is a hint — Playwright owns worker scheduling, so it influences file order rather
+than guaranteeing a strict sequence. It composes with `impact` (`piwi run impact --base origin/main --fail-fast`).
+
 ## Built-in selections
 
 Two selections exist for every project with no setup:
@@ -147,7 +160,24 @@ exempt — quarantine already means "don't gate on this test".
 The project's **Selections** tab lists the built-ins and your saved selections, with a builder that previews live what
 a definition resolves to — the matching tests, the estimated duration, any warnings, and the exact command — before you
 save it. For AI agents, the [MCP server](/mcp) exposes `list_selections`, `resolve_selection` (key → tests + verify
-command) and `preview_selection` (an ad-hoc definition, dry-run); the `run-the-right-tests` skill ties them together.
+command), `preview_selection` (an ad-hoc definition, dry-run) and `analyze_selections` (health and drift); the
+`run-the-right-tests` skill ties them together.
+
+## Health and drift
+
+A selection resolves fresh every time, which is the point — and also the risk: the set it runs can quietly change
+under you. A renamed file drops out of a `files` glob, a test turns flaky and falls below a `minPassRate`, and the job
+stays green while covering less than you think. The Selections tab makes that visible.
+
+Each selection shows what it resolves to now, and a **drifted** badge when that differs from what its most recent
+`piwi run` recorded — the run stamped the hash and count it resolved then, so re-resolving and comparing catches a
+silent shrink (or growth) between runs. A quarantined-member count flags selections carrying tests whose verdict is
+already suspended.
+
+Above the list, a **coverage** line answers the question a tag convention can't: how many tests are matched by *no*
+stored selection. Those "unselected" tests are the gap nobody can see today — nothing routine runs them as a named
+subset. Built-in selections don't count toward coverage (`quarantine-free` matches almost everything and would hide the
+signal). The same data is available to agents through the `analyze_selections` MCP tool.
 
 ## Impact-from-diff
 

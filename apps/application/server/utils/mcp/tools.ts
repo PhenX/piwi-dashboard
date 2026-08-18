@@ -28,6 +28,7 @@ import { createTestFunction } from '#shared/handlers/test-functions';
 import { createTestFunctionSchema } from '#shared/test-function-schemas';
 import { listSelections, getSelection, resolveSelectionDefinition } from '#shared/handlers/selections';
 import { getSelectionSuggestions } from '#shared/handlers/selection-suggestions';
+import { getSelectionAnalytics } from '#shared/handlers/selection-analytics';
 import {
   validateSelectionDefinition,
   type ResolvedSelection,
@@ -1523,6 +1524,34 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
             ),
           })
         : null,
+    };
+  },
+
+  // ── analyze_selections ──────────────────────────────────────────────────────
+  async analyze_selections(db, params, ctx) {
+    const projectId = numericParam(params.projectId, 'projectId');
+    assertProject(ctx, projectId);
+    const analytics = await getSelectionAnalytics(db, projectId);
+    return {
+      selections: analytics.selections.map((s) =>
+        dropNulls({
+          key: s.key,
+          name: s.name,
+          builtin: s.builtin || null,
+          resolvedCount: s.resolvedCount,
+          quarantinedCount: s.quarantinedCount || null,
+          totalDurationMs: s.totalDurationMs,
+          warnings: s.warnings.length ? s.warnings.map((w) => w.message) : null,
+          lastRun: s.lastRun ? { runId: s.lastRun.runId, recordedCount: s.lastRun.recordedCount } : null,
+          drift: s.drift ? dropNulls({ changed: s.drift.changed, countDelta: s.drift.countDelta || null }) : null,
+        }),
+      ),
+      coverage: {
+        total: analytics.coverage.total,
+        selected: analytics.coverage.selected,
+        unselected: analytics.coverage.unselected,
+        unselectedSample: analytics.coverage.unselectedSample,
+      },
     };
   },
 

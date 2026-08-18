@@ -1,7 +1,7 @@
 import { requireProjectAccess, requireRouteId } from '../../../../../utils/project-access';
 import { getDatabase } from '../../../../../database';
 import { getSelection, resolveSelectionDefinition } from '#shared/handlers/selections';
-import { parseShard, type SelectionDefinition, type SelectionFormat } from '#shared/selection';
+import { parseRankBy, parseShard, type SelectionDefinition, type SelectionFormat } from '#shared/selection';
 
 const FORMATS: SelectionFormat[] = ['args', 'grep', 'files', 'json'];
 
@@ -24,6 +24,13 @@ defineRouteMeta({
         description: 'Keep only shard i of n (e.g. "2/4"), balanced by duration',
       },
       { name: 'pkgRunner', in: 'query', required: false, schema: { type: 'string' } },
+      {
+        name: 'order',
+        in: 'query',
+        required: false,
+        schema: { type: 'string', enum: ['failureLikelihood', 'recentFailure', 'priority', 'slowest', 'fastest'] },
+        description: 'Emit tests in this rank order (fail-fast): failure ranks put the least-reliable tests first',
+      },
     ],
     'x-required-roles': ['administrator', 'reporter', 'user'],
   },
@@ -54,5 +61,6 @@ export default eventHandler(async (event) => {
     format,
     pkgRunner,
     shard: parseShard(query.shard) ?? undefined,
+    order: parseRankBy(query.order) ?? undefined,
   });
 });
