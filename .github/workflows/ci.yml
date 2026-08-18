@@ -47,10 +47,15 @@ jobs:
           path: |
             node_modules/.cache
             apps/application/node_modules/.cache
-          key: nuxt-build-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          # `nuxt-build-v2-` carries a manual cache version — bump the token to
+          # discard a poisoned build cache. `experimental.buildCache` does not hash
+          # the `#shared` modules (apps/application/shared/**), so a source-only
+          # change there — e.g. the DOCS_BASE_URL constant — can otherwise be served
+          # from a stale cached chunk and inline the old value into the built output.
+          key: nuxt-build-v2-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
           restore-keys: |
-            nuxt-build-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
-            nuxt-build-${{ runner.os }}-
+            nuxt-build-v2-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            nuxt-build-v2-${{ runner.os }}-
 
       # The reporter dist is imported by playwright.config.ts.
       - name: Build reporter
