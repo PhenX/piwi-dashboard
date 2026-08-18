@@ -2,7 +2,7 @@
 title: How Piwi was built
 date: 2026-08-17
 author: Fabien Ménager
-excerpt: 'The parts of Piwi that were actually hard to build: running the whole app in a browser, grouping failures by cause, healing broken locators, and treating the LLM as a compiler. A short technical tour, not a changelog.'
+excerpt: 'The parts of Piwi that were actually hard to build: running the whole app in a browser, grouping failures by cause, healing broken locators without taking the test out of your hands, and treating the LLM as a compiler. A technical tour, not a changelog.'
 sidebar: false
 ---
 
@@ -30,11 +30,7 @@ It imposes a discipline. An LLM tends to forget that the demo has to move with e
 
 ## One product, two databases
 
-"Self-hosted" had to mean either a single file or a real database, with nothing in between forced on the user. So from May the schema is maintained twice, SQLite and Postgres, with two migration folders and a wire-contract test that fails the build if the two dialects drift apart. The blunt version of that maintenance arrived in June: twenty-five accumulated migrations collapsed into one clean baseline in a single commit, titled *"Reset all migrations, from scratch."*
-
-<!-- STORY 3: THE DUAL-DB TAX (optional).
-     Was maintaining two databases worth it in hindsight? And the migration
-     reset, nerve-wracking or an obvious clearing of the decks? See question 3. -->
+Piwi started on SQLite, but I knew from the start it would have to support Postgres too: "self-hosted" had to mean either a single file or a real database, with nothing in between forced on the user. That made an ORM like Drizzle the right choice. I am comfortable with migration systems, but keeping two of them (SQLite and Postgres) in lockstep turned out to be fiddly. The blunt fix arrived in June: I collapsed all twenty-five migrations into a single clean baseline. The lasting fix was smaller, finding the words that finally got the LLM to keep the two dialects in step on every change afterward. A drift test now fails the build if they fall out of step again.
 
 ## Grouping forty failures into three causes
 
@@ -42,22 +38,32 @@ When a shared dependency breaks, one bug shows up as forty red tests. Error fing
 
 ## Healing a broken locator, then opening the PR
 
-Locator healing captures an element's attributes on *passing* runs, so when the selector breaks later there is a record of what the element used to be, and replacements can be ranked from it. The genuinely hard part isn't the ranking. It's doing this safely enough to write to your repository. [Auto-heal PRs](/auto-heal) use deterministic one-line edits taken straight from the captured snapshot (no model-generated code is ever in the write path); they re-read each file at the branch head and touch only the lines that still match exactly, so a line that has drifted is dropped rather than guessed, and they open a *draft* the human reviews. `@piwitests/core` was extracted specifically so the reporter and the dashboard score locators with byte-identical logic.
+Every time I hear locator healing described, it is either magical or dumb, and I agree with both objections. I do not want a tool changing my tests without my say, and I do not want one quietly patching a selector so the test rots and drifts from what it was meant to check. So I built it around one rule: the decision to update a locator, or not, belongs to the developer, never to the system.
 
-<!-- STORY 4: THE HEALING PUSHBACK.
-     This is the feature people challenge: "a healed locator can quietly hide
-     a real UI regression." Your answer, in your own words, is the best part
-     of this section. See question 4. -->
+The mechanism follows from that rule. Like any healing, a locator needs reference data to know what "working" looked like, so Piwi gathers it while the test passes: every successful action and every passing web-first assertion records the element's attributes and a ranked set of alternative locators, stamped with the call site. (That same capture is what led to the browser extension and to the failure-time picker.) When the locator later breaks, Piwi works back from the failure and finds the element again through a ladder of matches: the same call site first, then a renamed-or-moved element, then a locator-signature match, then another test that exercised the same element. It proposes replacements ranked by stability, and two things matter in that ranking. It prefers what Playwright itself prefers, a role or a test id over a structural CSS selector, and it keeps the *style* your suite already uses (`getByRole`, `getByLabel`, and the rest) rather than dropping a raw CSS locator into a codebase that never had one. And it is read-only: it surfaces the suggestion, applying it stays your edit.
+
+The one place Piwi writes is [auto-heal PRs](/auto-heal), and even there the developer stays in charge. The edits are deterministic one-line rewrites taken straight from the captured snapshot (no model-generated code is ever in the write path); Piwi re-reads each file at the branch head and touches only the lines that still match exactly, so a line that has drifted is dropped rather than guessed, and it opens a *draft* you review and merge, or not. `@piwitests/core` was extracted so the reporter, the dashboard, the picker and the extension all score locators with the same logic.
+
+## The browser extension
+
+The capture-while-passing idea has a natural sibling. If the dashboard can score locators, so can a tool that runs on any page, with no test and no run involved. [Piwi Picker](/extension) is a Chrome and Edge extension that picks ranked, stable Playwright locators straight from the page in front of you, scored by that same `@piwitests/core` engine. It is fully standalone: nothing leaves the browser by default, and it works with no Piwi instance at all.
+
+The interesting part is the locator generation. Every candidate is re-checked live against the page as it is right now, and a locator that matches more than one element is ranked below any that resolves to exactly one, so a parent-scoped chain like `getByTestId('product-43').getByRole('button')` beats a bare `getByRole('button')` that hits every card on the page. Parents are anchored on whatever stable hook they actually carry (a test id, an id, a landmark role, or an app-specific `data-*`), framework bookkeeping like `data-v-4f2a1b` is skipped, and an element with no role at all is scoped through its text. It can also record a flow across several pages into a runnable TypeScript spec, and, if you connect it to an instance, collapse those recorded steps into calls to your own page-object functions, matched live as you record.
 
 ## AI steps: the LLM as a compiler, not a runtime
 
 The objection to natural-language tests is determinism: a model in the hot path is slow, flaky, non-reproducible, and a network dependency in CI. [AI steps](/ai-steps) avoid all of that by running the model exactly *once*, at authoring time, and even then it only ever *names* an element (its ARIA role and accessible name). A deterministic scorer compiles that name into a committed JSON artifact, and every run afterwards replays the artifact as ordinary Playwright: zero model calls, zero network. Determinism comes from the model never touching the committed bytes; safety comes from the artifact being data that is never evaluated (every action is checked against an allowlist), a drift guard that stops before acting on a renamed element, and a postcondition the agent picks so a subtly wrong flow fails loudly instead of passing green.
 
+## The desktop app
+
+Not everyone wants to run a server. The [desktop app](/desktop) bundles the exact same server that ships as the Docker image inside a [Tauri](https://tauri.app/) shell, in a native window, bound to `127.0.0.1` with its data in a local folder. It is the single-developer path to permanent history, clustering and healing with nothing to deploy.
+
+The part I am happiest with is how the reporter finds it. While the app runs it writes its address and access token to a file in your home directory, and the reporter reads that file *only* when your config and environment set no server URL and no API key, so a project already pointed at a shared dashboard, or a CI job with a key set, is never silently redirected to your laptop. Beyond that it re-runs your failed tests locally with its own bundled Node, imports a Playwright blob report or trace dropped onto the window, and wires up an MCP client (Claude Code, Cursor, and the rest) in one click. The installers are unsigned for now, and built for Windows and Apple-silicon macOS only; on Linux or an Intel Mac, the Docker image or `npx` is the way in.
+
 ## A few more, in brief
 
 Not every hard part earns its own chapter:
 
-- **The desktop app** bundles the whole server in a Tauri shell bound to loopback, and publishes a discovery file the reporter reads *only* when nothing else is configured, so it runs zero-config on your machine without ever hijacking a CI job or a project already pointed at a shared dashboard.
 - **Live streaming** replaced polling with SSE through a single global stream the day it shipped: runs appear test by test while CI is still executing, and a run is marked `interrupted` after an hour of silence.
 - **The evidence pipeline** rebuilds a failure from stored trace blobs (a sanitized DOM snapshot, a visual diff against the last passing screenshot, web-vitals tiles, a multi-frame call stack with real source), so the diagnosis has something concrete to reason about.
 - **A wire-contract drift guard** in the test suite fails the build if the reporter and the server ever disagree on the shape of what passes between them.
