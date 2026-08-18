@@ -99,7 +99,7 @@ Instead of waiting for a synchronous response, the diagnosis can be **streamed**
 
 - **`POST /api/failure-clusters/[id]/diagnose/stream`** — same request body as the synchronous endpoint, but the response is a `text/event-stream` with `event: thinking` chunks containing incremental text, then a final `event: result` with the complete diagnosis.
 - The client uses `fetch()` with `POST` (not `EventSource`) so it can send request body params (additional context, images, base commit, etc.). The response body is read as a `ReadableStream` and parsed for SSE messages.
-- See the [API docs](https://piwitests.github.io/demo/docs) for the exact protocol (the in-app API reference at `/docs` shows the same spec).
+- See the [API docs](https://piwitests.dev/demo/docs) for the exact protocol (the in-app API reference at `/docs` shows the same spec).
 - In the UI, the live thinking panel shows the accumulating text with a stage indicator and auto-scroll. When the stream completes, the panel transitions to the full result card.
 
 ### Model roles
@@ -266,7 +266,7 @@ Screenshots are the one input a provider can refuse outright: many self-hosted a
 
 ## Try it in the demo
 
-The [live demo](https://piwitests.github.io/demo/) runs entirely in your browser with no AI provider — yet the diagnosis experience is fully wired. Several failing clusters ship with a completed diagnosis (category, confidence, evidence with citations, a validated suggested patch, per-stage pipeline stats, and auto-selected suspect commits); others are left undiagnosed so you can trigger a **simulated streaming diagnosis** yourself and watch the reasoning tokens arrive. The diagnoses are generated from each cluster's real seeded evidence (occurrences, failure rate, affected tests, browsers) and a canned SCM history, so the **Context sent to AI** modal, the data-coverage map, the commit browser, baseline pinning, and the diagnosis version history all behave as they do against a real server. Suggested-fix patches are validated against the seeded source files, so the "Applies cleanly" badge means the same thing it does in production.
+The [live demo](https://piwitests.dev/demo/) runs entirely in your browser with no AI provider — yet the diagnosis experience is fully wired. Several failing clusters ship with a completed diagnosis (category, confidence, evidence with citations, a validated suggested patch, per-stage pipeline stats, and auto-selected suspect commits); others are left undiagnosed so you can trigger a **simulated streaming diagnosis** yourself and watch the reasoning tokens arrive. The diagnoses are generated from each cluster's real seeded evidence (occurrences, failure rate, affected tests, browsers) and a canned SCM history, so the **Context sent to AI** modal, the data-coverage map, the commit browser, baseline pinning, and the diagnosis version history all behave as they do against a real server. Suggested-fix patches are validated against the seeded source files, so the "Applies cleanly" badge means the same thing it does in production.
 
 The demo also carries three clusters with a recorded resolution, one per verdict — including one marked *resolved* by a
 person that the runs show failing again, so the difference between what somebody declared and what actually happened is

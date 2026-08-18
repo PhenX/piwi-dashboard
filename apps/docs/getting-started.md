@@ -26,7 +26,7 @@ The dashboard is one Node process, and there are five ways to get one running:
 
 | Path | Best for | Notes |
 |---|---|---|
-| [Live demo](https://piwitests.github.io/demo/) | Looking around before installing anything | Seeded data, runs in your browser, no backend |
+| [Live demo](https://piwitests.dev/demo/) | Looking around before installing anything | Seeded data, runs in your browser, no backend |
 | [Desktop app](./desktop) | A single developer running Playwright locally | No Docker or Node needed; Windows x64 and Apple-silicon macOS only, and the installers are not yet signed |
 | Docker *(below)* | A shared instance for a team | The recommended path for anything long-lived |
 | [`npx @piwitests/server`](./deployment#npm-npx-quick-local-run) | A quick local run with Node 22+ already installed | Same server, no container |
@@ -231,7 +231,7 @@ Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/test-runs/submit `
 
 :::
 
-The project `my-project` is created automatically if it doesn't exist yet. See the [API docs](https://piwitests.github.io/demo/docs) for the full endpoint reference (or `/docs` on your own instance).
+The project `my-project` is created automatically if it doesn't exist yet. See the [API docs](https://piwitests.dev/demo/docs) for the full endpoint reference (or `/docs` on your own instance).
 
 ## Running in CI
 

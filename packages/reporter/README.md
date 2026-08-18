@@ -1,8 +1,8 @@
 # Piwi Dashboard Reporter
 
-A custom Playwright reporter that sends test results to a [Piwi Dashboard](https://piwitests.github.io) server. It handles uploading test results, HTML reports, trace files, and performance metrics — with optional live streaming of results as tests execute.
+A custom Playwright reporter that sends test results to a [Piwi Dashboard](https://piwitests.dev) server. It handles uploading test results, HTML reports, trace files, and performance metrics — with optional live streaming of results as tests execute.
 
-📖 **[Full documentation](https://piwitests.github.io/reporter)**
+📖 **[Full documentation](https://piwitests.dev/reporter)**
 
 ## Installation
 
@@ -18,7 +18,7 @@ From your Playwright project, `npx @piwitests/reporter init` installs the report
 npx @piwitests/reporter init --server-url http://localhost:3000 --project my-project
 ```
 
-Every step is idempotent (safe to re-run); a config shape it will not rewrite is reported as `manual` with the exact change to make, never mangled. Add `--dry-run` to preview or `--json` for a machine-readable plan an agent can act on. It also installs the [Piwi agent skills](https://piwitests.github.io/mcp#agent-skills) so your coding agent can investigate failures, heal locators, and stabilize flaky tests. Run `npx @piwitests/reporter init --help` for all options, or wire it up by hand with the steps below.
+Every step is idempotent (safe to re-run); a config shape it will not rewrite is reported as `manual` with the exact change to make, never mangled. Add `--dry-run` to preview or `--json` for a machine-readable plan an agent can act on. It also installs the [Piwi agent skills](https://piwitests.dev/mcp#agent-skills) so your coding agent can investigate failures, heal locators, and stabilize flaky tests. Run `npx @piwitests/reporter init --help` for all options, or wire it up by hand with the steps below.
 
 > The package is `@piwitests/reporter`; its command is `piwi`. Invoke it through the package name (`npx @piwitests/reporter <command>`) so npx resolves this package — `npx piwi` would fetch an unrelated `piwi` from npm. Once the reporter is a project dependency, `npx piwi <command>` resolves the local binary and works too.
 
@@ -184,7 +184,7 @@ Then import `test` from your fixtures file in every spec — a spec that imports
 
 Capture works for the `page` fixture, `browser.newPage()`, `browser.newContext().newPage()`, and popups. Everything is only collected when `collectPerformanceMetrics` is `true` (the default); locator snapshots can be disabled separately with `captureLocators: false`.
 
-Without the fixtures you still get full run history, statuses, errors, traces, reports, streaming, and clustering — the fixtures add the slow-endpoint, Web Vitals, console, ARIA, and locator-healing layers. See the [capture fixtures guide](https://piwitests.github.io/capture-fixtures) for the full feature matrix and composition patterns.
+Without the fixtures you still get full run history, statuses, errors, traces, reports, streaming, and clustering — the fixtures add the slow-endpoint, Web Vitals, console, ARIA, and locator-healing layers. See the [capture fixtures guide](https://piwitests.dev/capture-fixtures) for the full feature matrix and composition patterns.
 
 ## AI steps
 
@@ -204,7 +204,7 @@ export const test = extendPiwiAi(extendPiwiFixtures(base))
 
 Author missing entries once in `resolve` mode (`PIWI_AI=resolve`, pointed at a dashboard with an AI provider configured), commit the artifacts, and CI replays them offline. `{param}` placeholders are type-checked and masked out of everything sent to the model. Manage the committed entries with `piwi ai check | resolve | prune`.
 
-See the [AI steps guide](https://piwitests.github.io/ai-steps) for the authoring/replay lifecycle, the safety model (allowlisted, drift-guarded, postcondition-verified), and the full option/env-var reference.
+See the [AI steps guide](https://piwitests.dev/ai-steps) for the authoring/replay lifecycle, the safety model (allowlisted, drift-guarded, postcondition-verified), and the full option/env-var reference.
 
 ## Authentication
 

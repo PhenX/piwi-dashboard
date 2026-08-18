@@ -18,7 +18,7 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
   evidence, Piwi opens the fix PR itself: a branch, a deterministic one-line locator edit per broken call site, and
   an evidence-rich body, with the CI gate and fix verification closing the loop. GitHub, GitLab and Bitbucket; off by
   default, per-project allowlist, draft PRs, and a head-content guard so a drifted line is dropped rather than
-  mis-patched. See [auto-heal PRs](https://piwitests.github.io/auto-heal).
+  mis-patched. See [auto-heal PRs](https://piwitests.dev/auto-heal).
 - **Public share links (opt-in)** — a read-only URL for one execution or one failure cluster that anyone can open
   without an account: the offline-export report rendered live at view time, bounded by the same size budgets,
   revocable, and off unless `PIWI_SHARE_LINKS_ENABLED` is set. Design record in
@@ -76,7 +76,7 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 - **First-class branches** — reliable branch capture on CI (no more detached-HEAD blanks), runs filterable by
   branch, baselines and flakiness scoped to the branch they belong to, and eventually a merge-readiness verdict per
   branch. Design in [proposals/first-class-branches.md](proposals/first-class-branches.md).
-- **Exporting whole runs** — [offline export](https://piwitests.github.io/offline-export) covers one execution and one failure cluster today; a whole run, and a
+- **Exporting whole runs** — [offline export](https://piwitests.dev/offline-export) covers one execution and one failure cluster today; a whole run, and a
   test's history across runs, would follow the same shape.
 - **Self-sufficient trace archives** — an export can carry the trace files, but reading them still needs a Playwright
   trace viewer. Bundling the viewer's assets would close that gap, at roughly 10 MB per export.
@@ -86,5 +86,5 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 
 ## Non-goals
 
-- **Other test frameworks** (Cypress, Jest, JUnit…) — Piwi stays Playwright-only; depth over breadth is the point. See [Why Piwi?](https://piwitests.github.io/comparison) for alternatives that aggregate many frameworks.
+- **Other test frameworks** (Cypress, Jest, JUnit…) — Piwi stays Playwright-only; depth over breadth is the point. See [Why Piwi?](https://piwitests.dev/comparison) for alternatives that aggregate many frameworks.
 - **A hosted SaaS** — Piwi is built to be self-hosted; your data stays yours.

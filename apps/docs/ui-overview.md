@@ -153,7 +153,7 @@ The dashboard uses Server-Sent Events so it never needs a manual refresh:
 
 ## Live demo
 
-The [live demo](https://piwitests.github.io/demo/) runs entirely in your browser (in-memory SQLite) and adds two things the real app doesn't need:
+The [live demo](https://piwitests.dev/demo/) runs entirely in your browser (in-memory SQLite) and adds two things the real app doesn't need:
 
 **Simulate a test run** — the demo banner replays the exact streaming protocol a Piwi reporter speaks during a real run, so you can watch one arrive live. Scenarios: a passing run, a run with failures (joining a known cluster plus a brand-new one), flaky retries, a performance regression, an interrupted run, and a cross-browser run. Each creates a real run in the in-browser database, so worker timeline, failure groups, and history comparisons all behave exactly as they would against a server.
 
