@@ -31,7 +31,7 @@ know what exists and what it costs to switch on.
 | **Dashboard** | Everything, by hand | The server. Always available. |
 | **[Capture fixtures](../capture-fixtures)** | Locator healing, network timing, Web Vitals, console, ARIA snapshots | One file in your test setup, imported by your specs |
 | **[MCP server](../mcp)** | Asking your coding agent instead of clicking | Nothing — it's built into the server at `/mcp` |
-| **REST API** | Scripts, dashboards of your own, CI steps | Nothing; see the [API docs](https://piwitests.github.io/demo/docs) |
+| **REST API** | Scripts, dashboards of your own, CI steps | Nothing; see the [API docs](https://piwitests.dev/demo/docs) |
 | **[AI diagnosis](../ai-diagnosis)** | An explanation of a cluster read against your git diff | An LLM you configure. Off by default; a local model works |
 | **[Open in IDE](../ide-integration)** | Jumping from a stack frame to the file | Per-browser config, no install |
 | **[Browser extension](../extension)** | Picking a locator against the live page | A one-click install from the [Chrome Web Store](https://chromewebstore.google.com/detail/piwi-picker/pakhnokpjboejcghgcmkjlpnogfjihhe) (Edge included) |

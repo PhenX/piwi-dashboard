@@ -43,4 +43,4 @@ This is enabled by default. Set `PIWI_AUTO_MARKERS=false` to turn it off. See th
 
 ## API
 
-Markers are managed through the REST API (`GET`/`POST /api/projects/:id/markers`, `PATCH`/`DELETE /api/markers/:id`). See the interactive [API docs](https://piwitests.github.io/demo/docs) for request and response shapes.
+Markers are managed through the REST API (`GET`/`POST /api/projects/:id/markers`, `PATCH`/`DELETE /api/markers/:id`). See the interactive [API docs](https://piwitests.dev/demo/docs) for request and response shapes.

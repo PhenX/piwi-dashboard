@@ -13,7 +13,7 @@ hero:
       link: /getting-started
     - theme: alt
       text: Live demo
-      link: https://piwitests.github.io/demo/
+      link: https://piwitests.dev/demo/
     - theme: alt
       text: GitHub
       link: https://github.com/PiwiTests/platform

@@ -31,7 +31,7 @@ self-contained in-app reference at `/docs` in the running app are the single sou
 the in-app page renders the spec with no third-party CDN, so it works offline and air-gapped.
 
 When documenting a feature here, link to the live demo reference
-(`[API docs](https://piwitests.github.io/demo/docs)`) and refer to the self-hosted reference as inline code
+(`[API docs](https://piwitests.dev/demo/docs)`) and refer to the self-hosted reference as inline code
 `/docs` rather than inlining endpoint descriptions. Do **not** write a bare `[API docs](/docs)` markdown link:
 `/docs` is a route on the running app, not a page on this docs site, so VitePress's dead-link check fails the
 build. Endpoint documentation is
@@ -132,7 +132,7 @@ Pair it with `deviceScaleFactor: 2` and `outputWidth` to write a crisp image at 
 the docs gallery's featured tile spans the content column (~1152px), and anything wider is bytes the reader never sees.
 
 The gallery images that are still live-demo captures (`projects.png`, `test-run.png`, the failure-cluster set) are
-**1280×720**, taken against `https://piwitests.github.io/demo/` with the `playwright-cli` skill and the demo banner
+**1280×720**, taken against `https://piwitests.dev/demo/` with the `playwright-cli` skill and the demo banner
 hidden via `.demo-banner{display:none!important}`. Give them a scene when you next touch one — the harness renders
 icons offline and pins the clock, which the live demo cannot.
 

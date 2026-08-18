@@ -1,10 +1,10 @@
 # @piwitests/server
 
-Run the self-hosted [Piwi Dashboard](https://piwitests.github.io) server — a permanent
+Run the self-hosted [Piwi Dashboard](https://piwitests.dev) server — a permanent
 home for your Playwright test results — with a single command, no Docker required.
 
 > **Docker is the recommended way to run Piwi in production** (pinned runtime, isolated
-> environment): see the [deployment guide](https://piwitests.github.io/deployment). This
+> environment): see the [deployment guide](https://piwitests.dev/deployment). This
 > npm package is a low-friction path for a quick local run or environments where Docker
 > isn't available.
 
@@ -51,7 +51,7 @@ All configuration is via environment variables (same as the Docker image). Commo
 | `PIWI_DATABASE_PATH` | `.data/piwi.db` | SQLite database path (ignored when `PIWI_DATABASE_URL` is set) |
 | `PIWI_STORAGE_TYPE` | `local` | Storage backend (`local` or `s3`) |
 
-See the [configuration reference](https://piwitests.github.io/configuration) for the full
+See the [configuration reference](https://piwitests.dev/configuration) for the full
 list.
 
 Set variables the usual way for your shell — for example, on a different port:
@@ -70,7 +70,7 @@ $env:PORT='8080'; npx @piwitests/server
 
 Add the [`@piwitests/reporter`](https://www.npmjs.com/package/@piwitests/reporter) to your
 Playwright project and point it at this server — see the
-[getting started guide](https://piwitests.github.io/getting-started).
+[getting started guide](https://piwitests.dev/getting-started).
 
 ## License
 

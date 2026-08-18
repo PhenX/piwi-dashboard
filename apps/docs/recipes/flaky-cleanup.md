@@ -85,7 +85,7 @@ for "what should I fix this sprint?" without opening a browser.
 
 **Script it.** Quarantine is a REST resource — `GET`/`POST /api/projects/:id/quarantine` and
 `DELETE /api/projects/:id/quarantine/:testCaseId` — so promoting candidates or releasing ready tests can
-be a scheduled job. Shapes are in the [API docs](https://piwitests.github.io/demo/docs).
+be a scheduled job. Shapes are in the [API docs](https://piwitests.dev/demo/docs).
 
 **No server at all.** If this is your own laptop suite rather than a team's, the
 [desktop app](../desktop) runs the same analysis with no Docker and no Node — Windows x64 and

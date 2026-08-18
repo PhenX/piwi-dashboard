@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://piwitests.github.io/sitemap.xml
+Sitemap: https://piwitests.dev/sitemap.xml

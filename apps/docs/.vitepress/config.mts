@@ -2,8 +2,8 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vitepress'
 
 // https://vitepress.dev/reference/site-config
-const ogImage = 'https://piwitests.github.io/og-image.png'
-const siteUrl = 'https://piwitests.github.io'
+const ogImage = 'https://piwitests.dev/og-image.png'
+const siteUrl = 'https://piwitests.dev'
 
 export default defineConfig({
   title: 'Piwi Dashboard',
@@ -77,8 +77,8 @@ export default defineConfig({
       { text: 'Home', link: '/' },
       { text: 'Getting started', link: '/getting-started' },
       { text: 'Reporter', link: '/reporter' },
-      { text: 'API docs', link: 'https://piwitests.github.io/demo/docs' },
-      { text: 'Demo', link: 'https://piwitests.github.io/demo/' },
+      { text: 'API docs', link: 'https://piwitests.dev/demo/docs' },
+      { text: 'Demo', link: 'https://piwitests.dev/demo/' },
     ],
 
     // Sidebar order follows the reader's journey: understand it → get results
@@ -152,7 +152,7 @@ export default defineConfig({
           { text: 'Browser extension', link: '/extension' },
           { text: 'Open in IDE', link: '/ide-integration' },
           { text: 'MCP server', link: '/mcp' },
-          { text: 'API docs (interactive)', link: 'https://piwitests.github.io/demo/docs' },
+          { text: 'API docs (interactive)', link: 'https://piwitests.dev/demo/docs' },
         ],
       },
     ],

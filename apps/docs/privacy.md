@@ -79,7 +79,7 @@ API — the settings UI shows them as read-only with a lock badge.
 
 ## The demo
 
-The [live demo](https://piwitests.github.io/demo/) has no backend. It runs the real application against
+The [live demo](https://piwitests.dev/demo/) has no backend. It runs the real application against
 an in-browser SQLite database seeded with fake data, inside a service worker. Nothing you click there
 reaches a server, and there is nothing for it to collect.
 
