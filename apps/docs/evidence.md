@@ -22,6 +22,11 @@ Most links from a run land on an execution; the test's title links to the test c
 
 Everything about a single test execution, laid out **diagnosis-first**. A pinned **summary** carries the status, title, copyable location, duration, worker, retries and duration-vs-average, plus at-a-glance **signal badges** (new regression, new flaky, passed-on-retry), any test annotations (`@fixme`, `@slow`, …), the **wasted time** spent in fixed waits, and metadata cards (environment, CI, branch, commit, author, browser, storage). Traces stream in live while the parent run is still running.
 
+<figure>
+  <img src="/screenshots/gather-evidence.png" alt="A failing execution's Diagnosis tab: the pinned summary, the error and call log, and the folded evidence sections (test source, failure evidence, alternative locators, environment diff, visual diff, console)">
+  <figcaption>A failing execution, diagnosis-first — the summary with its wasted-time readout, the error, and the captured evidence folded into one screen.</figcaption>
+</figure>
+
 The tabs adapt to the result.
 
 **A failing execution opens on the Diagnosis tab** — the whole investigation on one screen, modeled on the [failure cluster](./ui-overview#failure-cluster-detail) page you already know. It leads with the raw **error** (copyable), then splits into a right-hand rail and a left-hand evidence funnel:

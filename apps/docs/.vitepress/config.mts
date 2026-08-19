@@ -77,6 +77,7 @@ export default defineConfig({
       { text: 'Home', link: '/' },
       { text: 'Getting started', link: '/getting-started' },
       { text: 'Reporter', link: '/reporter' },
+      { text: 'Blog', link: '/blog/' },
       { text: 'API docs', link: 'https://piwitests.dev/demo/docs' },
       { text: 'Demo', link: 'https://piwitests.dev/demo/' },
     ],

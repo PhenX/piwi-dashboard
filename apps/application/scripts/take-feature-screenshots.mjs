@@ -117,7 +117,6 @@ function sceneMode(scene) {
  *     has no answer for — it stays a live-demo capture.
  */
 const EXTERNAL_DOCS_IMAGES = new Set([
-  'ai-diagnosis.png',
   'demo-live-run-poster.png',
   'failure-cluster-triage.png',
   'failure-cluster.png',
@@ -204,6 +203,42 @@ const SCENES = [
     expand: ['[data-shot="alternative-locators"]'],
     of: '[data-shot="alternative-locators"]',
     pad: 12,
+  },
+  {
+    name: 'gather-evidence',
+    description: 'Failing execution, Diagnosis tab: the error and the evidence gathered on one screen (dark)',
+    tags: ['docs'],
+    out: 'docs',
+    // Execution 37 carries an attachment, a trace and a visual diff, so the
+    // evidence cards are populated rather than empty.
+    route: '/test-run-cases/37?tab=diagnosis',
+    viewport: { width: 1560, height: 1400 },
+    colorScheme: 'dark',
+  },
+  {
+    name: 'run-timeline',
+    description: 'Per-worker run timeline with the setup/test/wasted/teardown span filter (dark)',
+    tags: ['docs'],
+    out: 'docs',
+    route: '/test-runs/2?tab=workers',
+    viewport: { width: 1600, height: 1000 },
+    of: '[data-shot="run-timeline"]',
+    pad: 12,
+    colorScheme: 'dark',
+  },
+  {
+    name: 'ai-diagnosis',
+    description: 'Failure cluster page: the AI diagnosis beside the error and evidence (dark)',
+    tags: ['docs'],
+    out: 'docs',
+    // Cluster 10 ships a stored, "diagnosis-verified" diagnosis in the demo seed.
+    route: '/failure-clusters/10',
+    viewport: { width: 1600, height: 1240 },
+    colorScheme: 'dark',
+    // The panel hides a stored diagnosis until AI reports configured. Run this
+    // scene with the server's AI env vars set (PIWI_AI_PROVIDER / PIWI_AI_API_KEY
+    // / PIWI_AI_MODEL) so status is configured; the model is never called
+    // because cluster 10's diagnosis is already stored in the demo seed.
   },
   {
     name: 'flaky-detection',

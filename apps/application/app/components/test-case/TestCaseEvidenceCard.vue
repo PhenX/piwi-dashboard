@@ -16,21 +16,27 @@ const props = defineProps<{
 
 const config = useRuntimeConfig();
 
-const screenshotCount = computed(() => props.attachments.filter((a) => isImageFile(a.path, a.contentType)).length);
-const videoCount = computed(() => props.attachments.filter((a) => isVideoFile(a.path, a.contentType)).length);
+// Both lists are optional in practice — a case with no attachments or no traces
+// can arrive with the prop undefined — so read them through null-safe locals to
+// keep the counts numeric (an undefined `.length` turns the total into NaN).
+const attachments = computed(() => (Array.isArray(props.attachments) ? props.attachments : []));
+const traces = computed(() => (Array.isArray(props.traces) ? props.traces : []));
+
+const screenshotCount = computed(() => attachments.value.filter((a) => isImageFile(a.path, a.contentType)).length);
+const videoCount = computed(() => attachments.value.filter((a) => isVideoFile(a.path, a.contentType)).length);
 const otherAttachments = computed(() =>
-  props.attachments.filter((a) => !isImageFile(a.path, a.contentType) && !isVideoFile(a.path, a.contentType)),
+  attachments.value.filter((a) => !isImageFile(a.path, a.contentType) && !isVideoFile(a.path, a.contentType)),
 );
 
 const totalCount = computed(
-  () => screenshotCount.value + videoCount.value + props.traces.length + otherAttachments.value.length,
+  () => screenshotCount.value + videoCount.value + traces.value.length + otherAttachments.value.length,
 );
 
 const peek = computed(() => {
   const parts: string[] = [];
   if (screenshotCount.value) parts.push(`${screenshotCount.value} screenshot${screenshotCount.value === 1 ? '' : 's'}`);
   if (videoCount.value) parts.push(`${videoCount.value} video${videoCount.value === 1 ? '' : 's'}`);
-  if (props.traces.length) parts.push(`${props.traces.length} trace${props.traces.length === 1 ? '' : 's'}`);
+  if (traces.value.length) parts.push(`${traces.value.length} trace${traces.value.length === 1 ? '' : 's'}`);
   if (otherAttachments.value.length) {
     parts.push(`${otherAttachments.value.length} file${otherAttachments.value.length === 1 ? '' : 's'}`);
   }
