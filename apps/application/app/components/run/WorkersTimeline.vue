@@ -100,7 +100,7 @@ function onBarLeave() {
 </script>
 
 <template>
-  <div v-if="timelineData.length > 0" class="relative select-none">
+  <div v-if="timelineData.length > 0" class="relative select-none" data-shot="run-timeline">
     <TimelineHeader
       :worker-count="workerRows.length"
       :shard-total="shardTotal"

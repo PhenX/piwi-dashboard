@@ -43,6 +43,11 @@ only explicit sleeps count — `waitForTimeout` and friends — because framewor
   [`PIWI_WASTED_WAIT_PATTERNS`](../configuration#wasted-time)). Classification happens *when a run is
   viewed*, so widening the patterns re-classifies your whole history immediately — no re-run needed.
 
+<figure>
+  <img src="/screenshots/run-timeline.png" alt="A run's Timeline tab: one horizontal lane per worker, tests as bars, with the fixed-wait sleeps highlighted as wasted-wait spans and a span-type filter above">
+  <figcaption>The Timeline tab — one lane per worker, with the fixed-wait sleeps highlighted as their own span so idle time and slow fixtures are obvious.</figcaption>
+</figure>
+
 Set the patterns to `*` once, look at the damage, then set them back. It is a fast way to see how much
 of the suite is waiting on something.
 

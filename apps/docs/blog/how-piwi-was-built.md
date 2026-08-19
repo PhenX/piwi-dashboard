@@ -43,6 +43,11 @@ Keeping the history was step zero. The real work is turning "the run is red" int
 
 This is the part that changed the most. At the start, Piwi did roughly what its inspiration did: it kept the HTML report and the trace so you could go back and look. Over time it moved **from storing reports to rebuilding the failure on one screen**.
 
+<figure>
+  <img src="/screenshots/gather-evidence.png" alt="A failing execution laid out diagnosis-first: error and call log, wasted waits, evidence sections and a verdict">
+  <figcaption>One failing execution, diagnosis-first: the error, the wasted waits, the evidence, and a verdict, on one screen.</figcaption>
+</figure>
+
 Everything captured about a failed attempt now lands on a single [diagnosis-first page](/evidence): the raw error, a verdict (new regression or just flaky, how many retries, how long it has been failing), the test source as a real call stack (so a failure inside a helper shows the helper, not just the line that called it), screenshots and video, an environment diff and a visual diff against the last green run, console output, network requests with backend logs inlined, the app's state at the end, and the failure-time ARIA and DOM snapshots. Most of it comes from **one opt-in file of capture fixtures** in your Playwright setup.
 
 With a trace attached it goes further: the complete call stack with real source read from the trace's own embedded files, and the full network waterfall. The Playwright trace viewer is bundled and served by the dashboard itself, so **traces never leave your server**. And each trace is stored as a slim events archive plus a shared, hash-deduplicated resource pool, so **keeping every run costs much less than it sounds**. Sensitive headers and token-shaped strings are masked before anything is shown.
@@ -155,6 +160,11 @@ If the dashboard can score locators, so can a tool running on any page, with no 
 ### The run timeline
 
 The test list tells you what failed. It does not tell you **where the minutes actually go**. The run timeline shows one lane per worker, each test a bar placed where it really ran, with a filter that splits each bar into setup, the test body, wasted waits, and teardown. A worker sitting idle while the others grind, or a fixture that costs more than the test it sets up, is visible at a glance, and the wasted-waits band is the same signal Piwi prices elsewhere in CI minutes.
+
+<figure>
+  <img src="/screenshots/run-timeline.png" alt="Per-worker run timeline with a span-type filter, the fixed-wait sleeps highlighted as wasted-wait bands">
+  <figcaption>One lane per worker. The highlighted bands are fixed-wait sleeps, shown where they actually happen.</figcaption>
+</figure>
 
 ### Open in IDE
 
