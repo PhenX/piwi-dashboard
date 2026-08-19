@@ -200,13 +200,13 @@ Assignments are administrator-only and can be edited from either direction:
 
 Both edit the same underlying assignments, so use whichever is more convenient.
 
-> **Try it in the demo:** the [live demo](https://piwitests.github.io/demo/) ships with several pre-seeded identities — an admin, a global CI reporter, and users scoped to one or two projects (plus one with none). Use the **Acting as** picker in the demo banner to switch between them and watch the project list, sidebar, and search change to match each user's access. Acting as the admin, change the assignments live and switch back to see the effect. See [UI overview → Live demo](./ui-overview.md#live-demo).
+> **Try it in the demo:** the [live demo](https://piwitests.dev/demo/) ships with several pre-seeded identities — an admin, a global CI reporter, and users scoped to one or two projects (plus one with none). Use the **Acting as** picker in the demo banner to switch between them and watch the project list, sidebar, and search change to match each user's access. Acting as the admin, change the assignments live and switch back to see the effect. See [UI overview → Live demo](./ui-overview.md#live-demo).
 
 ## API authentication
 
 When authentication is enabled:
 
-- Every endpoint requires an authenticated caller — a session cookie or an API key — with the role the endpoint declares (listed per endpoint in the [API docs](https://piwitests.github.io/demo/docs)). The exceptions are `GET /api/health`, `GET /api/version`, the auth flows themselves (login, initial setup, password reset, email verification, OAuth), and the live-run streaming endpoints, which authenticate with per-run stream tokens instead.
+- Every endpoint requires an authenticated caller — a session cookie or an API key — with the role the endpoint declares (listed per endpoint in the [API docs](https://piwitests.dev/demo/docs)). The exceptions are `GET /api/health`, `GET /api/version`, the auth flows themselves (login, initial setup, password reset, email verification, OAuth), and the live-run streaming endpoints, which authenticate with per-run stream tokens instead.
 - The reporter's submission endpoints (`/api/test-runs/submit` and `/api/test-runs/upload`) accept both session cookies and API keys.
 
 ## API keys

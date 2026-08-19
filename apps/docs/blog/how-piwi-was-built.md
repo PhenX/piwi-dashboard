@@ -121,7 +121,7 @@ Three choices shaped the project beyond any single feature.
 
 ### The demo is the real app
 
-A demo that needs a backend is a demo almost nobody tries, so the [live demo](https://piwitests.github.io/demo/) has no backend at all. The backend was moved *into the browser*: SQLite compiled to WebAssembly behind a Drizzle proxy, stored in the browser's own on-disk storage, with a service worker answering the app's real HTTP calls. The frontend runs unmodified, and a small simulator replays the exact protocol a reporter speaks during a live run. **The demo can't drift from the product, because it is the product** with its backend relocated.
+A demo that needs a backend is a demo almost nobody tries, so the [live demo](https://piwitests.dev/demo/) has no backend at all. The backend was moved *into the browser*: SQLite compiled to WebAssembly behind a Drizzle proxy, stored in the browser's own on-disk storage, with a service worker answering the app's real HTTP calls. The frontend runs unmodified, and a small simulator replays the exact protocol a reporter speaks during a live run. **The demo can't drift from the product, because it is the product** with its backend relocated.
 
 <figure>
   <img src="/diagrams/demo-in-browser.svg" alt="Diagram of the in-browser demo: the unchanged frontend calls a service worker that serves the real API from a WASM SQLite database, while a simulator streams a live run">
@@ -206,4 +206,4 @@ The rhythm is slower now, on purpose. I stabilize what exists: features, perform
 
 ---
 
-The quickest way to see all of this at once is the [demo](https://piwitests.github.io/demo/), which runs entirely in your browser with no signup. The code is [on GitHub](https://github.com/PiwiTests/platform), MIT.
+The quickest way to see all of this at once is the [demo](https://piwitests.dev/demo/), which runs entirely in your browser with no signup. The code is [on GitHub](https://github.com/PiwiTests/platform), MIT.

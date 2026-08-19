@@ -16,7 +16,10 @@ interface ProjectMenuItem {
 
 const toast = useToast();
 const { data: response, refresh } = await useFetch<AutoHealResponse>('/api/settings/auto-heal');
-const { data: projectsMenu } = await useFetch<ProjectMenuItem[]>('/api/projects/menu', { default: () => [] });
+const { data: projectsMenu } = await useFetch('/api/projects/menu', {
+  default: () => [] as ProjectMenuItem[],
+  transform: (r: { items: ProjectMenuItem[] }) => r.items,
+});
 
 const projectItems = computed(() => (projectsMenu.value ?? []).map((p) => ({ label: p.label || p.name, value: p.id })));
 

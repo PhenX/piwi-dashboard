@@ -120,7 +120,7 @@ project, and the traces will attach to the right test cases.
 
 ## Trying it in the demo
 
-The [live demo](https://piwitests.github.io/demo/) supports importing, and nothing you drop on it is uploaded: the demo
+The [live demo](https://piwitests.dev/demo/) supports importing, and nothing you drop on it is uploaded: the demo
 has no server. The archive is read by a service worker, parsed in the page, and stored in your browser's IndexedDB
 alongside the sample data — so you can point the dashboard at one of your own blob reports and see your suite in it
 before installing anything.

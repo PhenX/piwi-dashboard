@@ -111,7 +111,7 @@ just not aggregated across the suite.
 speed up this sprint?" without opening a browser.
 
 **Script it.** The same numbers are on the REST API if you would rather post a weekly CI-cost figure
-into a channel — see the [API docs](https://piwitests.github.io/demo/docs).
+into a channel — see the [API docs](https://piwitests.dev/demo/docs).
 
 **Watch it drift.** Rather than auditing periodically, subscribe to the `perf.regression`
 [notification](../notifications) event and let it tell you when a duration trend breaks.

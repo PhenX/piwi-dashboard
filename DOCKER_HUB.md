@@ -2,7 +2,7 @@
 
 **Your Playwright results, kept and explained.** CI throws away every report it makes. Piwi keeps them — then groups the failures by root cause, scores the flaky tests, and finds the locator you should have used. Self-hosted, MIT, zero telemetry.
 
-📖 [Full documentation](https://piwitests.github.io) · 🎮 [Live demo](https://piwitests.github.io/demo/) · 💬 [GitHub](https://github.com/PiwiTests/platform)
+📖 [Full documentation](https://piwitests.dev) · 🎮 [Live demo](https://piwitests.dev/demo/) · 💬 [GitHub](https://github.com/PiwiTests/platform)
 
 > **Disclaimer:** Piwi Dashboard is not affiliated with, endorsed by, or connected to Microsoft Corporation.
 
@@ -25,7 +25,7 @@ Open `http://localhost:3000`. The SQLite database and file storage are created a
 
 > **Linux hosts:** without the `chown`, Docker auto-creates `.data` owned by `root` and the container (non-root UID 1001) can't write to it. Docker Desktop on Windows and macOS handles this for you.
 
-Then point the [Playwright reporter](https://piwitests.github.io/reporter) at it — one `npm install` and four lines in `playwright.config.ts`, covered in the [getting started guide](https://piwitests.github.io/getting-started).
+Then point the [Playwright reporter](https://piwitests.dev/reporter) at it — one `npm install` and four lines in `playwright.config.ts`, covered in the [getting started guide](https://piwitests.dev/getting-started).
 
 ---
 
@@ -52,19 +52,19 @@ Then point the [Playwright reporter](https://piwitests.github.io/reporter) at it
 
 The same multi-arch image is mirrored to the GitHub Container Registry as `ghcr.io/piwitests/platform`, which additionally carries an `edge` tag built from `main` (no release testing — not for production).
 
-Read [Upgrading](https://piwitests.github.io/upgrading) before bumping a tag: migrations run automatically on startup and are **forward-only**, so rolling back means restoring a backup.
+Read [Upgrading](https://piwitests.dev/upgrading) before bumping a tag: migrations run automatically on startup and are **forward-only**, so rolling back means restoring a backup.
 
 ---
 
 ## Configuration
 
-Piwi runs with **zero configuration** — set variables only to change a default. The full list, with defaults and which ones the Settings UI can override, is the [configuration reference](https://piwitests.github.io/configuration); the [configuration generator](https://piwitests.github.io/configuration/generator) builds a ready-to-paste `.env`, Compose, Kubernetes or systemd block in your browser.
+Piwi runs with **zero configuration** — set variables only to change a default. The full list, with defaults and which ones the Settings UI can override, is the [configuration reference](https://piwitests.dev/configuration); the [configuration generator](https://piwitests.dev/configuration/generator) builds a ready-to-paste `.env`, Compose, Kubernetes or systemd block in your browser.
 
 The three worth knowing before you expose the container to a network:
 
 | Variable | Why |
 |----------|-----|
-| `PIWI_AUTH_ENABLED` | Authentication is **off by default**. Set to `true` for anything beyond localhost — see [Authentication](https://piwitests.github.io/authentication). |
+| `PIWI_AUTH_ENABLED` | Authentication is **off by default**. Set to `true` for anything beyond localhost — see [Authentication](https://piwitests.dev/authentication). |
 | `PIWI_AUTH_SECRET` | Signs session cookies. Required when auth is enabled. |
 | `PIWI_SECRET_KEY` | Encrypts secrets stored in the database (AI keys, SCM tokens). Recommended in every deployment. |
 
@@ -91,7 +91,7 @@ services:
     restart: unless-stopped
 ```
 
-PostgreSQL, S3 and MinIO variants are in the [deployment guide](https://piwitests.github.io/deployment#docker-compose), alongside Kubernetes manifests, reverse-proxy configuration and backups.
+PostgreSQL, S3 and MinIO variants are in the [deployment guide](https://piwitests.dev/deployment#docker-compose), alongside Kubernetes manifests, reverse-proxy configuration and backups.
 
 ---
 
@@ -105,7 +105,7 @@ PostgreSQL, S3 and MinIO variants are in the [deployment guide](https://piwitest
 
 **SQLite locked / concurrent write errors** — SQLite allows one writer at a time; set `PIWI_DATABASE_URL` to switch to PostgreSQL.
 
-More, including port conflicts and reverse-proxy issues: [deployment troubleshooting](https://piwitests.github.io/deployment#troubleshooting).
+More, including port conflicts and reverse-proxy issues: [deployment troubleshooting](https://piwitests.dev/deployment#troubleshooting).
 
 ---
 
