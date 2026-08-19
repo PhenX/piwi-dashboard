@@ -21,6 +21,8 @@ The idea of building my own Playwright dashboard had been running in my head for
 
 There are commercial products in this space. I did not want to depend on a third party, and I took it as a personal challenge, so I built Piwi in my free time. I knew it would help at work, but that is not really why: I like building tools, for my team and for the community, which is most of what my [GitHub](https://github.com/PhenX) is. One thing led to another, and Piwi grew well past a dashboard, into a reporter, an MCP server, a desktop app, a diagnosis tool for humans and for AI assistants, a quality advisor.
 
+The name came later, and out of fear. It started as "Playwright Dashboard", until I worried that a third-party project leaning on Microsoft's trademark might invite trouble, so I wanted something short and memorable instead. At work we write PW for Playwright, which had always sounded like *pi-wi* in my head, and a few searches turned up nothing embarrassing. So Piwi it was.
+
 ## Two rules that run through everything
 
 Looking back at eight months of history, almost every decision comes down to two rules:
@@ -220,6 +222,4 @@ Eight months in, the mission fits in three sentences: **keep the history, explai
 
 The rhythm is slower now, on purpose. I stabilize what exists: features, performance, security, with regular audits to keep the code cohesive, performant, maintainable and secure. New ideas still come, but each one has to answer two questions first: **would I actually use this? Will it help me the day I am fixing or improving my tests?** If the answer is no, it does not get built.
 
----
-
-The quickest way to see all of this at once is the [demo](https://piwitests.dev/demo/), which runs entirely in your browser with no signup. The code is [on GitHub](https://github.com/PiwiTests/platform), MIT.
+If you have ever lost a morning to a flaky test, or gone looking for the report of a failure that CI deleted days ago, you know exactly why I built this. It is open source and MIT, the [demo](https://piwitests.dev/demo/) opens in your browser in about ten seconds with no signup, and the [code is on GitHub](https://github.com/PiwiTests/platform). I hope it gives you back as much time as it has given me.
