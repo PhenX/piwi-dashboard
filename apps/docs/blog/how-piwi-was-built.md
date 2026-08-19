@@ -181,17 +181,19 @@ Every source path in the dashboard is clickable and can [open in your editor](/i
 
 ## Three assistants, three eras
 
-My first AI assistant was GitHub Copilot, through its plugin in Rider, which I have used since last year. The moment it clicked was on a personal project, [PhenX.EntityFrameworkCore.BulkInsert](https://github.com/PhenX/PhenX.EntityFrameworkCore.BulkInsert), something I had wanted to build for years but never found the time, or the courage, to start. **Copilot was the unblocker.** I did not know about GitHub's cloud agent then; once I did, I started reaching for it across a series of .NET community projects. Honestly, I felt like a god.
+My first AI assistant was GitHub Copilot, through its plugin in Rider (a Pro account, free, because I was a beta tester and an open source contributor \o/). The project where it clicked was [PhenX.EntityFrameworkCore.BulkInsert](https://github.com/PhenX/PhenX.EntityFrameworkCore.BulkInsert), something I had wanted to build for years without ever finding the time, or the courage, to start. **Copilot was the unblocker.** Then I discovered GitHub's cloud coding agent and started handing it work across my .NET community projects. I felt like God, the Great Architect, with an army of developers under my orders: very productive, and **overly confident**, which is the thing everyone who vibe codes has to watch for.
 
-That is the backdrop to how Piwi got written, and one part of it is not visible in the commits. Copilot's agent built the December skeleton. The spring *looks* hand-written, because those commits are under my name, but it wasn't: that was a more surgical phase, smaller and focused changes made with DeepSeek V4 Flash, which impressed me with its speed and its judgment *at* that speed. Then Claude wrote most of the code from late June on. Three different assistants across one year; **I was the architect throughout**, and the design decisions, the scope cuts and the reviews stayed constant while the tool underneath changed.
+Piwi started in that period, when Claude Sonnet 4.6 appeared, with Copilot's cloud agent building the first skeleton in a day. I built for a few weeks, got absorbed by other community projects, and came back because at work we needed something exactly like it. Then GitHub's new AI credits arrived, and mine were gone before my second session ended. So I tried opencode with DeepSeek v4 Flash, free, and was amazed at how much it could do: **a feature a day for weeks, with $0 spent on AI**. When the free quota ran out I paid $10 for opencode Go and kept going, mostly v4 Flash (fast, and surprisingly sound at that speed), sometimes v4 Pro, once GLM 5.2 just to try it (a lot pricier). That spring is the part of the history that *looks* hand-written, because those commits are under my name. It was also my introduction to opencode's CLI, a remarkably ergonomic TUI.
+
+Then at work we tried Claude Code, on a Max plan. I had already used Claude through Copilot, but **the same model felt much better in its own tool**, so I brought it to Piwi: Opus, and later Fable 5, to write the plans; Sonnet, or DeepSeek again, to execute them. For a while I was implementing ideas at the same speed they came out of my head, and I could not stop. Good or bad? I honestly don't know. What kept it from going wrong is that every week I stepped away from the new features and spent time on the global coherence of the project. If you keep one lesson from this post, take that one: **when you build fast and alone, step back regularly and put the coherence back in.**
+
+Three eras, several assistants, and **I was the architect throughout**: the design decisions, the scope cuts and the reviews stayed constant while the tool underneath changed.
 
 ## Where it is now
 
 Eight months in, the mission fits in three sentences: **keep the history, explain the failures, hand back a fix**, with the rule that a feature serving none of them is an argument against building it. That clarity was earned, not designed up front. Piwi is at v0.25 and still pre-1.0; the most recent step, [auto-heal PRs](/auto-heal), is the most literal form yet of that third sentence.
 
-<!-- STORY 6: CLOSING OPINION (optional).
-     One thing you learned, or one thing you'd tell someone starting a similar
-     project. See question 6. -->
+The rhythm is slower now, on purpose. I stabilize what exists: features, performance, security, with regular audits to keep the code cohesive, performant, maintainable and secure. New ideas still come, but each one has to answer two questions first: **would I actually use this?** And **will it help me the day I am fixing or improving my tests?** If the answer is no, it does not get built.
 
 ---
 
