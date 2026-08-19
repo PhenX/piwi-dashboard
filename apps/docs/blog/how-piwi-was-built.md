@@ -181,16 +181,9 @@ Every source path in the dashboard is clickable and can [open in your editor](/i
 
 ## Three assistants, three eras
 
-The other unusual thing about this history is who wrote it, and one part of that isn't visible in the commits. GitHub Copilot's agent built the December skeleton. The spring *looks* hand-written, because those commits are under my name, but it wasn't: that was a more surgical phase, smaller and focused changes made with DeepSeek V4 Flash, which impressed me with its speed, and its judgment *at* that speed. Then Claude wrote most of the code from late June on. Three different assistants across one year; **I was the architect throughout**, and the design decisions, the scope cuts and the reviews stayed constant while the tool underneath changed.
+My first AI assistant was GitHub Copilot, through its plugin in Rider, which I have used since last year. The moment it clicked was on a personal project, [PhenX.EntityFrameworkCore.BulkInsert](https://github.com/PhenX/PhenX.EntityFrameworkCore.BulkInsert), something I had wanted to build for years but never found the time, or the courage, to start. **Copilot was the unblocker.** I did not know about GitHub's cloud agent then; once I did, I started reaching for it across a series of .NET community projects. Honestly, I felt like a god.
 
-<!-- STORY 5: AGENT-ASSISTED DEVELOPMENT (the big one).
-     Your honest take on building this way, across three assistants:
-     Copilot (wholesale), then DeepSeek V4 Flash (surgical, committed under
-     your name), then Claude. What each was good at, where they failed, what
-     you refuse to hand off. This is also the strongest reply to the "AI slop"
-     reaction. Sub-question: if the commit-count breakdown goes in, note that
-     the commits "under my name" include the DeepSeek-assisted spring, so they
-     aren't really solo. How do you want that framed? See question 5. -->
+That is the backdrop to how Piwi got written, and one part of it is not visible in the commits. Copilot's agent built the December skeleton. The spring *looks* hand-written, because those commits are under my name, but it wasn't: that was a more surgical phase, smaller and focused changes made with DeepSeek V4 Flash, which impressed me with its speed and its judgment *at* that speed. Then Claude wrote most of the code from late June on. Three different assistants across one year; **I was the architect throughout**, and the design decisions, the scope cuts and the reviews stayed constant while the tool underneath changed.
 
 ## Where it is now
 
