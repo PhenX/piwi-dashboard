@@ -32,9 +32,31 @@ It imposes a discipline. An LLM tends to forget that the demo has to move with e
 
 Piwi started on SQLite, but I knew from the start it would have to support Postgres too: "self-hosted" had to mean either a single file or a real database, with nothing in between forced on the user. That made an ORM like Drizzle the right choice. I am comfortable with migration systems, but keeping two of them (SQLite and Postgres) in lockstep turned out to be fiddly. The blunt fix arrived in June: I collapsed all twenty-five migrations into a single clean baseline. The lasting fix was smaller, finding the words that finally got the LLM to keep the two dialects in step on every change afterward. A drift test now fails the build if they fall out of step again.
 
+The next three sections are the heart of the project. Everything so far is about keeping results; this is about explaining a failure: gather the evidence, group failures by cause, then diagnose them.
+
+## Gathering the evidence
+
+This is the part that changed the most. At the start Piwi did roughly what its inspiration did: it kept the HTML report and the trace so you could go back and look. Keeping the artifact is necessary, but it is not the same as explaining a failure, and over time the evidence side grew from *storing* what Playwright produced into *reconstructing* the failure on one screen.
+
+Everything captured about a failed attempt now lands on a single diagnosis-first page: the raw error, a verdict (is this a new regression or just flaky, how many times it retried, how long it has been failing), the test source as a real call stack so a failure inside a helper shows the helper and not only the line that called it, the screenshots and video, an environment diff and a visual diff against the last green run, console output, network requests with backend logs inlined, the app's state at the end, the failure-time ARIA snapshot, and a reconstructed DOM snapshot. Most of that comes from one opt-in file of capture fixtures added to your Playwright setup.
+
+When a trace is attached it goes further, rebuilding the complete call stack with real source read from the trace's own embedded files (with an open-in-IDE link on every in-project frame) and the full network waterfall. The Playwright trace viewer itself is bundled and served by the dashboard, so the bytes never reach a third party, and each trace is stored as a slim events archive plus a project-wide, hash-deduplicated resource pool, so keeping every run does not cost what it looks like it should. Sensitive headers and token-shaped strings are masked before any of it is shown.
+
+None of the rest of this post works without this layer. Clustering, healing and the AI diagnosis are only ever as good as the evidence they read, which is why it is the part I have rebuilt the most.
+
 ## Grouping forty failures into three causes
 
-When a shared dependency breaks, one bug shows up as forty red tests. Error fingerprinting normalizes each failure into a stable identity, so those forty collapse into the three root causes actually behind them, triaged once instead of forty times. The fingerprint is deterministic first; on top of it sits embedding-based reconciliation for failures that fingerprint slightly differently but are the same bug, with LLM adjudication and a human-in-the-loop merge for the calls it isn't confident about. The hard part is calibration: aggressive enough to be useful, never so aggressive that it merges two genuinely different bugs into one.
+When a shared dependency breaks, one bug shows up as forty red tests. Failures that share an error fingerprint are grouped into a cluster automatically, so instead of forty stack traces you see something like *twenty failures, three root causes*, each triaged once. The fingerprint is a hash of the error after its volatile parts are masked out (timeouts and other numbers, UUIDs, URLs, and both sides of an assertion), while the locator target that actually identifies the failure is kept. It is call-site agnostic, so one root cause reached from several spec files stays a single cluster, and when I improve the normalization the existing clusters are re-fingerprinted in place, so triage notes and diagnoses survive the change.
+
+That deterministic hash is the floor, not the ceiling. Two failures can share a root cause and still word themselves differently enough to dodge the hash, so with an embedding model configured Piwi adds a semantic layer: new clusters are embedded and compared by cosine similarity to the open ones, clear near-duplicates are merged into the longest-lived cluster, and the genuinely ambiguous pairs are handed to a model to adjudicate. It sees more than the error text, each cluster's extracted locator, its most-affected tests, and how much the two overlap, and when even it is unsure the pair becomes a merge suggestion a human approves or dismisses. The calibration is the whole game: aggressive enough to be useful, never so aggressive that it fuses two different bugs into one.
+
+## Diagnosing the failure, with a model you control
+
+Clustering decides what to explain; diagnosis explains why it broke. It is off by default and brings your own model: Anthropic, OpenAI, or anything OpenAI-compatible including a local Ollama, with the key encrypted at rest. The point was never an *ask AI* button, because a useful answer has to be grounded in this failure, and the strongest grounding is the code that actually changed.
+
+So a diagnosis is built around a diff. Piwi finds the last run where the whole suite was green *before* this cluster first appeared, the tightest causal window it can draw, and diffs that commit against the failing run. The changed files are ranked by how likely they are to be the culprit, and the ranking has real signal: a patch that deleted a line containing the very string the test was trying to locate scores highest, because that is usually what broke it. For the most suspect files, and for the page objects and helpers the test imports, Piwi fetches the full current source at the commit under test, with line numbers, so the model has enough to write a real patch instead of a plausible-looking one.
+
+Then it checks the model's work. Every suggested patch is parsed and dry-run against the real source, on the server, before it ever reaches you, and shown with a badge: applies cleanly, applies with an offset, or does not apply. A wrong patch is worse than none, so the model is told to return no patch at all unless it can quote the lines it is changing. Applying it is still your edit; the dashboard does not write to your repository here. There is an optional two-stage mode where a cheaper research model pre-analyzes before the main one writes, the reasoning can stream token by token, and a coverage map shows exactly which evidence the model was given, so you can paste the same bundle into your own tool if you would rather. It is the principle the whole project keeps coming back to: the machine gathers the evidence and proposes, you decide.
 
 ## Healing a broken locator, then opening the PR
 
@@ -75,7 +97,6 @@ The fiddly part is knowing whether the jump worked. Only the JetBrains local-ser
 Not every hard part earns its own chapter:
 
 - **Live streaming** replaced polling with SSE through a single global stream the day it shipped: runs appear test by test while CI is still executing, and a run is marked `interrupted` after an hour of silence.
-- **The evidence pipeline** rebuilds a failure from stored trace blobs (a sanitized DOM snapshot, a visual diff against the last passing screenshot, web-vitals tiles, a multi-frame call stack with real source), so the diagnosis has something concrete to reason about.
 - **A wire-contract drift guard** in the test suite fails the build if the reporter and the server ever disagree on the shape of what passes between them.
 
 ## Three assistants, three eras
