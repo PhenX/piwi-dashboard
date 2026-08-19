@@ -82,7 +82,11 @@ Then it checks the model's work. Every suggested patch is dry-run against your r
 
 Every time I hear locator healing described, it is either magical or dumb, and I agree with both objections. I do not want a tool changing my tests without my say, and I do not want one quietly patching a selector so the test rots and drifts from what it was meant to check. So Piwi's healing is built on rule one: **the decision to update a locator, or not, belongs to the developer, never to the system**.
 
-The trick is *when* the data is collected. Reference data is captured while the tests pass: every successful action and every passing assertion records the element's attributes and a ranked set of alternative locators, stamped with the call site. (That same capture is what later grew into the browser extension and the failure-time picker.) When the locator breaks, Piwi works back from the failure through a ladder of matches (same call site, renamed or moved element, same locator seen in another test) and proposes replacements ranked by stability. Two details matter: it prefers what Playwright itself prefers, a role or a test id over a raw CSS selector, and it keeps the locator style your suite already uses (`getByRole`, `getByLabel`, and so on). And it is read-only: applying the suggestion is your edit.
+The trick is *when* the data is collected. On every successful action and every single-element assertion, an in-page probe records the element's attributes, how many other elements share its test id, its role-and-name, or its text (so it knows what is actually unique), its position among same-role elements, and a stability-ranked set of alternative locators, all stamped with the source call site. That same capture engine later grew into the browser extension and the failure-time picker.
+
+The naive version of this is ruinous for performance. A page object that resolves the same locator in a loop would fire that probe hundreds of times a run, and the server only keeps the latest snapshot per source line anyway. So the probe is injected once per browser context, each snapshot is keyed by its call site read from the Node stack, and a dedupe pass keeps only the last element-bearing capture per line before upload: one snapshot for the `getByRole` at `checkout.spec.ts:42`, not one per iteration. Capture also fires only where it can learn something true, a single resolved element; a passing `toHaveCount(5)` or a negated `not.toBeVisible()` is skipped, because probing it would record the wrong element or none.
+
+When the locator breaks, Piwi works back from the failure through a ladder of matches (same call site, then a renamed or moved element, then the same locator captured by another test) and proposes replacements ranked by stability, keeping the style your suite already uses (`getByRole`, `getByLabel`) instead of dropping in a raw CSS selector. It is read-only: applying the suggestion is your edit.
 
 <figure>
   <img src="/diagrams/locator-healing-capture.svg" alt="Diagram of the capture flow: successful actions and passing assertions produce ranked alternative locators stored per call site">
@@ -132,9 +136,21 @@ The idea came from earlier experiments: I had built browser playgrounds for EF C
 
 ### AI steps: the LLM is a compiler, not a runtime
 
-The usual objection to natural-language tests is that a model in the hot path is slow, flaky, and a network dependency in CI. [AI steps](/ai-steps) avoid all of that by running the model exactly once, at authoring time, and even then it only *names* the element (its ARIA role and accessible name). A deterministic scorer compiles that name into a committed JSON artifact, and every later run replays the artifact as ordinary Playwright: **zero model calls and zero network in CI**.
+The usual objection to natural-language tests is that a model in the hot path is slow, flaky, and a network dependency in CI. [AI steps](/ai-steps) keep it out of the path entirely: `page.piwiLocator('the email address field')` calls the model once, at authoring time, and every run after that is plain Playwright with **zero model calls and zero network**.
 
-Safety comes from the artifact being data, never code: every action is checked against an allowlist before it touches the page, a drift guard stops the flow before acting on a renamed element, and each flow ends with a final check the agent chose (did the URL change, did the element appear), so a wrong flow fails loudly instead of passing green.
+The obvious way to build this is to let the model emit the locator, cache the string, and replay it. That falls apart the moment you commit the cache to git: model output is not byte-stable, so every re-author rewrites the file and your diffs fill with noise, and a stored free-form selector is opaque and unsafe to run. So the model never returns a locator. It returns one decision from a closed schema, the element's ARIA role and accessible name, and a deterministic scorer in `@piwitests/core` compiles that into an allowlisted locator program:
+
+```json
+{
+  "kind": "locator",
+  "template": "the email address field",
+  "locator": { "method": "getByRole", "args": ["textbox", { "name": "Email address" }] }
+}
+```
+
+The file is written canonically, with sorted keys and no timestamps, model names or token counts, so two authoring runs that reach the same element produce byte-identical JSON and a no-op re-resolve leaves your working tree clean. In `replay` mode a missing entry is a hard failure rather than a silent model call, so an air-gapped CI runner can never accidentally author one.
+
+The rest is the boring, important safety: every method and action is checked against an allowlist before it touches the page (the artifact is data, never code), a drift guard halts a flow whose element has been renamed, and each flow ends with a postcondition the agent chose. One detail worth stealing if you ever automate a browser: when a step triggers a request, its `waitForResponse` is armed **before the action fires, not after**, so a fast reply can never resolve in the gap between clicking and waiting.
 
 ### One product, two databases
 
