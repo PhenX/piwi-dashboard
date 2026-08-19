@@ -142,7 +142,7 @@ Piwi started on SQLite, but I knew from day one it would need Postgres too: "sel
 
 ## The toolbox around it
 
-The loop above is the heart. These make it comfortable to live with every day.
+The failure loop is the heart. These make it comfortable to live with every day.
 
 <figure>
   <img src="/diagrams/piwi-ecosystem.svg" alt="Diagram of the Piwi pieces: the Playwright run and instrumented app feeding one server (or the desktop app), with the extension, coding agents, SCM providers and notifications around it">
@@ -151,7 +151,7 @@ The loop above is the heart. These make it comfortable to live with every day.
 
 ### The desktop app
 
-Not everyone wants to run a server. The [desktop app](/desktop) bundles **the same server that ships in the Docker image** inside a [Tauri](https://tauri.app/) shell, bound to `127.0.0.1`, with your data in a local folder. The part I am happiest with is discovery: while the app runs, it writes its address and token to a file in your home directory, and the reporter reads that file **only when nothing else is configured**. A project pointed at a shared dashboard, or a CI job with a key set, is **never silently redirected** to your laptop. It also re-runs failed tests locally with its own bundled Node, imports a dropped trace or blob report, and wires up an MCP client (Claude Code, Cursor, and others) in one click. The installers are unsigned for now, Windows and Apple-silicon macOS only; on Linux, Docker or `npx` is the way in.
+Not everyone wants to run a server. The [desktop app](/desktop) bundles **the same server that ships in the Docker image** inside a [Tauri](https://tauri.app/) shell, bound to `127.0.0.1`, with your data in a local folder. The part I am happiest with is discovery: while the app runs, it writes its address and token to a file in your home directory, and the reporter reads that file **only when nothing else is configured**. A project pointed at a shared dashboard, or a CI job with a key set, is **never silently redirected** to your laptop. It also re-runs failed tests locally with its own bundled Node, imports a dropped trace or blob report, and wires up an MCP client (Claude Code, Cursor, and others) in one click. The installers are unsigned for now, Windows and Apple-silicon macOS only; everywhere else, Docker or `npx` is the way in.
 
 ### The browser extension
 
@@ -179,7 +179,7 @@ Every source path in the dashboard is clickable and can [open in your editor](/i
 - **Notifications and analytics.** Email, Slack, webhook and browser channels with per-project subscriptions, and cross-project analytics (pass-rate heatmap, wasted CI minutes, a flaky leaderboard) with timeline markers to line trends up against deploys.
 - **A wire-contract drift guard** in the test suite fails the build if the reporter and the server ever disagree on the shape of what passes between them.
 
-## Three assistants, three eras
+## Three eras of assistants
 
 My first AI assistant was GitHub Copilot, through its plugin in Rider (a Pro account, free, because I was a beta tester and an open source contributor \o/). The project where it clicked was [PhenX.EntityFrameworkCore.BulkInsert](https://github.com/PhenX/PhenX.EntityFrameworkCore.BulkInsert), something I had wanted to build for years without ever finding the time, or the courage, to start. **Copilot was the unblocker.** Then I discovered GitHub's cloud coding agent and started handing it work across my .NET community projects. I felt like God, the Great Architect, with an army of developers under my orders: very productive, and **overly confident**, which is the thing everyone who vibe codes has to watch for.
 
