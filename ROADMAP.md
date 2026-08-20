@@ -76,6 +76,9 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 - **First-class branches** — reliable branch capture on CI (no more detached-HEAD blanks), runs filterable by
   branch, baselines and flakiness scoped to the branch they belong to, and eventually a merge-readiness verdict per
   branch. Design in [proposals/first-class-branches.md](proposals/first-class-branches.md).
+- **Dual-mode desktop app** — the desktop app keeps its zero-config local server and can also connect to your team's
+  self-hosted instance, with local test runs, imports and notifications aimed at the shared server. Design in
+  [proposals/desktop-remote-connect.md](proposals/desktop-remote-connect.md).
 - **Exporting whole runs** — [offline export](https://piwitests.dev/offline-export) covers one execution and one failure cluster today; a whole run, and a
   test's history across runs, would follow the same shape.
 - **Self-sufficient trace archives** — an export can carry the trace files, but reading them still needs a Playwright
