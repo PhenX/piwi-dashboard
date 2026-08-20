@@ -10,6 +10,7 @@
 // and "start on login". Everything binds 127.0.0.1 — nothing is exposed to the
 // network.
 
+mod connections;
 mod inspect;
 mod mcp_clients;
 mod mcp_stdio;
@@ -35,6 +36,10 @@ use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt as _;
 use tauri_plugin_store::StoreExt as _;
 
+use connections::{
+    desktop_add_connection, desktop_list_connections, desktop_remove_connection,
+    desktop_set_active_connection,
+};
 use inspect::desktop_inspect_folder;
 use mcp_clients::{desktop_mcp_clients, desktop_mcp_connect, desktop_mcp_disconnect, desktop_mcp_reveal};
 use updates::{desktop_check_update, desktop_install_update, desktop_restart_app};
@@ -175,6 +180,92 @@ fn health_ok(port: u16) -> bool {
     match stream.read(&mut buf) {
         Ok(n) => String::from_utf8_lossy(&buf[..n]).contains(" 200 "),
         Err(_) => false,
+    }
+}
+
+/// Whether a remote origin accepts a TCP connection right now.
+///
+/// Used only to decide connect-vs-fallback at startup: a reachable instance is
+/// opened in connect mode, an unreachable one falls back to local rather than
+/// blocking launch. The webview itself performs the authoritative TLS handshake
+/// and certificate validation for the real traffic, so a plain reachability
+/// probe here is enough — and keeps the shell free of a TLS stack.
+///
+/// The probe (DNS resolution + TCP connect) runs on a worker thread with an
+/// overall deadline, so even a hung resolver cannot freeze the launch beyond it.
+fn origin_reachable(origin: &str) -> bool {
+    let origin = origin.to_string();
+    let (tx, rx) = std::sync::mpsc::channel();
+    // Detached: if the resolver hangs, this thread lingers harmlessly and dies
+    // with the process; the send after the receiver has gone away is ignored.
+    std::thread::spawn(move || {
+        let _ = tx.send(origin_reachable_blocking(&origin));
+    });
+    rx.recv_timeout(Duration::from_secs(4)).unwrap_or(false)
+}
+
+/// The blocking half of `origin_reachable`: resolve the origin and try to open a
+/// socket to any of its addresses within a short per-address timeout.
+fn origin_reachable_blocking(origin: &str) -> bool {
+    use std::net::ToSocketAddrs;
+    let Some((scheme, host, port)) = connections::split_origin(origin) else {
+        return false;
+    };
+    let port = port.unwrap_or_else(|| connections::default_port(&scheme));
+    let Ok(addrs) = (host.as_str(), port).to_socket_addrs() else {
+        return false;
+    };
+    addrs
+        .take(4)
+        .any(|addr| std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(3)).is_ok())
+}
+
+/// Decide whether this launch runs in connect mode, and to which origin.
+///
+/// Returns the remote origin to open when the active connection is a *reachable*
+/// remote instance whose capability grant succeeds. Returns `None` — meaning run
+/// today's local mode — when the active connection is local, the remote instance
+/// is unreachable (fall back rather than block startup), or the grant could not
+/// be added. The capability is added only on the success path, so a fallback to
+/// local never leaves a stray remote origin granted.
+fn resolve_connect_origin(
+    app: &AppHandle,
+    active: &connections::Connection,
+    log_path: &Path,
+) -> Option<String> {
+    if !active.is_remote() {
+        return None;
+    }
+    let origin = active.origin.clone();
+    if !origin_reachable(&origin) {
+        append_log(
+            log_path,
+            &format!("active instance {origin} is unreachable — falling back to local mode"),
+        );
+        return None;
+    }
+    let cap = match connections::remote_capability_json(&origin) {
+        Ok(cap) => cap,
+        Err(e) => {
+            append_log(
+                log_path,
+                &format!("could not build the capability for {origin}: {e} — falling back to local mode"),
+            );
+            return None;
+        }
+    };
+    match app.add_capability(cap.as_str()) {
+        Ok(()) => {
+            append_log(log_path, &format!("connect mode: granted native commands to {origin}"));
+            Some(origin)
+        }
+        Err(e) => {
+            append_log(
+                log_path,
+                &format!("could not grant the capability for {origin}: {e} — falling back to local mode"),
+            );
+            None
+        }
     }
 }
 
@@ -619,7 +710,11 @@ pub fn run() {
             desktop_check_update,
             desktop_install_update,
             desktop_restart_app,
-            desktop_set_activity
+            desktop_set_activity,
+            desktop_list_connections,
+            desktop_add_connection,
+            desktop_remove_connection,
+            desktop_set_active_connection
         ])
         .manage(ServerProcess::default())
         .manage(runner::LocalRuns::default())
@@ -633,9 +728,9 @@ pub fn run() {
             let data_dir = app_data_dir.join(".data");
             let storage_dir = data_dir.join("storage");
             // Setting PIWI_DATABASE_PATH disables the server's own auto-mkdir, and
-            // libSQL will not create the DB's parent dir — so create it here.
+            // libSQL will not create the DB's parent dir — so create it here. (Both
+            // modes: the dir is cheap and lets a later switch back to local reuse it.)
             std::fs::create_dir_all(&storage_dir)?;
-            let db_path = data_dir.join("piwi.db");
 
             // Server logs go to a file so failures are visible in a windowed
             // (console-less) release build — read it via the "Open data folder"
@@ -645,32 +740,12 @@ pub fn run() {
             let log_path = log_dir.join("server.log");
             append_log(&log_path, "----- launch -----");
 
-            let secret = load_or_create_secret(&app_data_dir);
-            let token = load_or_create_token(&app_data_dir);
-            let port = pick_port();
-
+            // --- shared state (both modes) ---
             app.manage(DataDir(data_dir.clone()));
-            app.manage(mcp_clients::ServerInfo { port, token: token.clone() });
-
-            // MCP client configs written on earlier launches embed the URL and
-            // token — bring any that drifted (a different port this launch)
-            // back in line before a client tries the dead address.
-            mcp_clients::heal_configured_clients(app.handle());
-
-            // --- publish connection details for the Playwright reporter ---
-            match app.path().home_dir().map_err(|e| e.to_string()).and_then(|home| {
-                write_discovery_file(&home, port, &token).map_err(|e| e.to_string())
-            }) {
-                Ok(path) => {
-                    append_log(&log_path, &format!("reporter discovery file: {}", path.display()));
-                    app.manage(DiscoveryFile(path));
-                }
-                // Not fatal: the reporter can still be pointed here by hand with
-                // the URL and token shown in Settings.
-                Err(e) => append_log(&log_path, &format!("failed to write reporter discovery file: {e}")),
-            }
 
             // --- run-in-background flag (persisted across launches) ---
+            // Read in both modes: the tray checkbox and the window-close handler
+            // consult it whether or not a local server is running this launch.
             let run_bg_initial = app
                 .store(STORE_FILE)
                 .ok()
@@ -680,131 +755,205 @@ pub fn run() {
             let run_bg = Arc::new(AtomicBool::new(run_bg_initial));
             app.manage(RunInBackground(run_bg.clone()));
 
-            // --- resolve the bundled server entry (shipped unpacked via resources) ---
-            // Tauri may place the resource at <res>/resources/app-server (preserving
-            // the config-relative path) or <res>/app-server — accept either.
-            let resource_dir = app.path().resource_dir()?;
-            let candidates = [
-                resource_dir
-                    .join("resources")
-                    .join("app-server")
-                    .join(".output")
-                    .join("server")
-                    .join("index.mjs"),
-                resource_dir
-                    .join("app-server")
-                    .join(".output")
-                    .join("server")
-                    .join("index.mjs"),
-            ];
-            let server_entry = candidates
-                .iter()
-                .find(|p| p.exists())
-                .cloned()
-                .unwrap_or_else(|| candidates[0].clone());
-            append_log(
-                &log_path,
-                &format!(
-                    "server entry: {} (exists: {}), port: {}",
-                    server_entry.display(),
-                    server_entry.exists(),
-                    port
-                ),
-            );
+            // --- choose the instance this launch opens ---
+            // Local mode (the bundled loopback server) is the default zero-config
+            // onramp. Connect mode points the webview at a saved remote instance's
+            // own origin and skips the sidecar entirely; it engages only when a
+            // reachable remote instance is the active connection and its
+            // (origin-pinned) capability grant succeeds.
+            let active = connections::active_connection(app.handle());
+            let connect_origin = resolve_connect_origin(app.handle(), &active, &log_path);
+            // Kept for the tray: the "use local" escape hatch is only offered when
+            // this launch actually opened a remote instance.
+            let in_connect_mode = connect_origin.is_some();
 
-            // --- spawn the Node sidecar running the Nitro server ---
-            // Best-effort: a spawn failure is logged and surfaces as a readiness
-            // timeout (the splash shows an error) instead of a silent panic.
-            match app.shell().sidecar("node") {
-                Err(e) => append_log(&log_path, &format!("sidecar 'node' not found: {e}")),
-                Ok(cmd) => {
-                    let cmd = cmd
-                        .args([node_path(&server_entry)])
-                        .env("NODE_ENV", "production")
-                        .env("NITRO_HOST", "127.0.0.1")
-                        .env("NITRO_PORT", port.to_string())
-                        .env("PIWI_DATABASE_PATH", node_path(&db_path))
-                        .env("PIWI_STORAGE_PATH", node_path(&storage_dir))
-                        .env("PIWI_SECRET_KEY", secret)
-                        .env("PIWI_DESKTOP_TOKEN", token.clone())
-                        // Tell the bundled Nuxt app it is running in the desktop
-                        // shell so it hides account/user management (single-user,
-                        // auth off) and surfaces the local connection details
-                        // (data location, reporter token, MCP endpoint).
-                        .env("NUXT_PUBLIC_DESKTOP", "true");
-
-                    match cmd.spawn() {
-                        Err(e) => append_log(&log_path, &format!("failed to spawn server: {e}")),
-                        Ok((mut rx, child)) => {
-                            app.state::<ServerProcess>().0.lock().unwrap().replace(child);
-
-                            // Tee the sidecar's output to the log file (no console in release).
-                            let drain_log = log_path.clone();
-                            tauri::async_runtime::spawn(async move {
-                                use tauri_plugin_shell::process::CommandEvent;
-                                while let Some(event) = rx.recv().await {
-                                    match event {
-                                        CommandEvent::Stdout(line) => append_log(
-                                            &drain_log,
-                                            &format!("[server] {}", String::from_utf8_lossy(&line).trim_end()),
-                                        ),
-                                        CommandEvent::Stderr(line) => append_log(
-                                            &drain_log,
-                                            &format!("[server:err] {}", String::from_utf8_lossy(&line).trim_end()),
-                                        ),
-                                        CommandEvent::Error(err) => {
-                                            append_log(&drain_log, &format!("[server:proc] {err}"))
-                                        }
-                                        CommandEvent::Terminated(p) => append_log(
-                                            &drain_log,
-                                            &format!("[server] exited: code={:?} signal={:?}", p.code, p.signal),
-                                        ),
-                                        _ => {}
-                                    }
-                                }
-                            });
-                        }
-                    }
-                }
-            }
-
-            // --- when the server is ready, navigate the window to it ---
-            let nav_handle = app.handle().clone();
-            let ready_log = log_path.clone();
-            let bootstrap_url = format!("http://127.0.0.1:{port}/__piwi/session?token={token}");
-            std::thread::spawn(move || {
-                let deadline = Instant::now() + Duration::from_secs(READY_TIMEOUT_SECS);
-                let mut ready = false;
-                while Instant::now() < deadline {
-                    if health_ok(port) {
-                        ready = true;
-                        break;
-                    }
-                    std::thread::sleep(Duration::from_millis(250));
-                }
-                append_log(
-                    &ready_log,
-                    if ready { "server ready" } else { "server NOT ready within timeout" },
-                );
-                let inner = nav_handle.clone();
-                let _ = nav_handle.run_on_main_thread(move || {
-                    if let Some(w) = inner.get_webview_window("main") {
-                        if ready {
-                            let _ =
-                                w.eval(&format!("window.location.replace('{bootstrap_url}')"));
-                        } else {
-                            let _ = w.eval(
-                                "var s=document.querySelector('.status');if(s){s.textContent='The server did not start in time. Quit and relaunch, or check the logs.';}",
-                            );
-                            let _ = w.show();
+            if let Some(origin) = connect_origin {
+                // ---- connect mode ----
+                // The remote instance owns every run, so there is no sidecar, no
+                // reporter discovery file and no local reporter token published.
+                // The webview loads the origin directly: its /login, cookies and
+                // same-origin /api behave exactly as in a browser, and the
+                // capability granted in `resolve_connect_origin` lets this window
+                // drive the native commands — pinned to this one origin.
+                append_log(&log_path, &format!("connect mode: opening {origin}"));
+                let nav_handle = app.handle().clone();
+                let nav_log = log_path.clone();
+                let _ = app.handle().run_on_main_thread(move || {
+                    if let Some(w) = nav_handle.get_webview_window("main") {
+                        // `navigate` commands the webview to load the origin
+                        // regardless of what the initial `index.html` is doing, so
+                        // it does not race the splash load the way an early
+                        // `location.replace` eval would. `origin` is a normalised
+                        // http(s) origin, so parsing cannot fail in practice.
+                        match origin.parse::<tauri::Url>() {
+                            Ok(url) => {
+                                let _ = w.navigate(url);
+                            }
+                            Err(e) => {
+                                append_log(&nav_log, &format!("invalid connect origin {origin}: {e}"));
+                                let _ = w.eval(&format!("window.location.replace('{origin}')"));
+                            }
                         }
                     }
                 });
-            });
+            } else {
+                // ---- local mode (default) ----
+                let secret = load_or_create_secret(&app_data_dir);
+                let token = load_or_create_token(&app_data_dir);
+                let port = pick_port();
+                let db_path = data_dir.join("piwi.db");
+
+                app.manage(mcp_clients::ServerInfo { port, token: token.clone() });
+
+                // MCP client configs written on earlier launches embed the URL and
+                // token — bring any that drifted (a different port this launch)
+                // back in line before a client tries the dead address.
+                mcp_clients::heal_configured_clients(app.handle());
+
+                // --- publish connection details for the Playwright reporter ---
+                match app.path().home_dir().map_err(|e| e.to_string()).and_then(|home| {
+                    write_discovery_file(&home, port, &token).map_err(|e| e.to_string())
+                }) {
+                    Ok(path) => {
+                        append_log(&log_path, &format!("reporter discovery file: {}", path.display()));
+                        app.manage(DiscoveryFile(path));
+                    }
+                    // Not fatal: the reporter can still be pointed here by hand with
+                    // the URL and token shown in Settings.
+                    Err(e) => append_log(&log_path, &format!("failed to write reporter discovery file: {e}")),
+                }
+
+                // --- resolve the bundled server entry (shipped unpacked via resources) ---
+                // Tauri may place the resource at <res>/resources/app-server (preserving
+                // the config-relative path) or <res>/app-server — accept either.
+                let resource_dir = app.path().resource_dir()?;
+                let candidates = [
+                    resource_dir
+                        .join("resources")
+                        .join("app-server")
+                        .join(".output")
+                        .join("server")
+                        .join("index.mjs"),
+                    resource_dir
+                        .join("app-server")
+                        .join(".output")
+                        .join("server")
+                        .join("index.mjs"),
+                ];
+                let server_entry = candidates
+                    .iter()
+                    .find(|p| p.exists())
+                    .cloned()
+                    .unwrap_or_else(|| candidates[0].clone());
+                append_log(
+                    &log_path,
+                    &format!(
+                        "server entry: {} (exists: {}), port: {}",
+                        server_entry.display(),
+                        server_entry.exists(),
+                        port
+                    ),
+                );
+
+                // --- spawn the Node sidecar running the Nitro server ---
+                // Best-effort: a spawn failure is logged and surfaces as a readiness
+                // timeout (the splash shows an error) instead of a silent panic.
+                match app.shell().sidecar("node") {
+                    Err(e) => append_log(&log_path, &format!("sidecar 'node' not found: {e}")),
+                    Ok(cmd) => {
+                        let cmd = cmd
+                            .args([node_path(&server_entry)])
+                            .env("NODE_ENV", "production")
+                            .env("NITRO_HOST", "127.0.0.1")
+                            .env("NITRO_PORT", port.to_string())
+                            .env("PIWI_DATABASE_PATH", node_path(&db_path))
+                            .env("PIWI_STORAGE_PATH", node_path(&storage_dir))
+                            .env("PIWI_SECRET_KEY", secret)
+                            .env("PIWI_DESKTOP_TOKEN", token.clone())
+                            // Tell the bundled Nuxt app it is running in the desktop
+                            // shell so it hides account/user management (single-user,
+                            // auth off) and surfaces the local connection details
+                            // (data location, reporter token, MCP endpoint).
+                            .env("NUXT_PUBLIC_DESKTOP", "true");
+
+                        match cmd.spawn() {
+                            Err(e) => append_log(&log_path, &format!("failed to spawn server: {e}")),
+                            Ok((mut rx, child)) => {
+                                app.state::<ServerProcess>().0.lock().unwrap().replace(child);
+
+                                // Tee the sidecar's output to the log file (no console in release).
+                                let drain_log = log_path.clone();
+                                tauri::async_runtime::spawn(async move {
+                                    use tauri_plugin_shell::process::CommandEvent;
+                                    while let Some(event) = rx.recv().await {
+                                        match event {
+                                            CommandEvent::Stdout(line) => append_log(
+                                                &drain_log,
+                                                &format!("[server] {}", String::from_utf8_lossy(&line).trim_end()),
+                                            ),
+                                            CommandEvent::Stderr(line) => append_log(
+                                                &drain_log,
+                                                &format!("[server:err] {}", String::from_utf8_lossy(&line).trim_end()),
+                                            ),
+                                            CommandEvent::Error(err) => {
+                                                append_log(&drain_log, &format!("[server:proc] {err}"))
+                                            }
+                                            CommandEvent::Terminated(p) => append_log(
+                                                &drain_log,
+                                                &format!("[server] exited: code={:?} signal={:?}", p.code, p.signal),
+                                            ),
+                                            _ => {}
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // --- when the server is ready, navigate the window to it ---
+                let nav_handle = app.handle().clone();
+                let ready_log = log_path.clone();
+                let bootstrap_url = format!("http://127.0.0.1:{port}/__piwi/session?token={token}");
+                std::thread::spawn(move || {
+                    let deadline = Instant::now() + Duration::from_secs(READY_TIMEOUT_SECS);
+                    let mut ready = false;
+                    while Instant::now() < deadline {
+                        if health_ok(port) {
+                            ready = true;
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(250));
+                    }
+                    append_log(
+                        &ready_log,
+                        if ready { "server ready" } else { "server NOT ready within timeout" },
+                    );
+                    let inner = nav_handle.clone();
+                    let _ = nav_handle.run_on_main_thread(move || {
+                        if let Some(w) = inner.get_webview_window("main") {
+                            if ready {
+                                let _ =
+                                    w.eval(&format!("window.location.replace('{bootstrap_url}')"));
+                            } else {
+                                let _ = w.eval(
+                                    "var s=document.querySelector('.status');if(s){s.textContent='The server did not start in time. Quit and relaunch, or check the logs.';}",
+                                );
+                                let _ = w.show();
+                            }
+                        }
+                    });
+                });
+            }
 
             // --- tray ---
             let open_i = MenuItemBuilder::with_id("open", "Open Piwi Dashboard").build(app)?;
             let folder_i = MenuItemBuilder::with_id("open_folder", "Open data folder").build(app)?;
+            // Connect-mode escape hatch: always reachable from the tray, so a user
+            // who connected to a remote instance can return to local even if that
+            // instance's dashboard has no Connections card.
+            let use_local_i =
+                MenuItemBuilder::with_id("use_local", "Disconnect (use this computer)").build(app)?;
             let bg_i = CheckMenuItemBuilder::with_id("run_bg", "Run in background")
                 .checked(run_bg_initial)
                 .build(app)?;
@@ -814,9 +963,11 @@ pub fn run() {
                 .build(app)?;
             let quit_i = MenuItemBuilder::with_id("quit", "Quit Piwi Dashboard").build(app)?;
 
-            let menu = MenuBuilder::new(app)
-                .item(&open_i)
-                .item(&folder_i)
+            let mut menu_builder = MenuBuilder::new(app).item(&open_i).item(&folder_i);
+            if in_connect_mode {
+                menu_builder = menu_builder.item(&use_local_i);
+            }
+            let menu = menu_builder
                 .separator()
                 .item(&bg_i)
                 .item(&login_i)
@@ -873,6 +1024,23 @@ pub fn run() {
                         let enabled = mgr.is_enabled().unwrap_or(false);
                         let _ = if enabled { mgr.disable() } else { mgr.enable() };
                         let _ = login_i.set_checked(!enabled);
+                    }
+                    "use_local" => {
+                        // Switching relaunches the app, which stops any local test
+                        // runs — so confirm first, exactly as Quit does.
+                        let handle = app.clone();
+                        confirm_stopping_local_runs(
+                            app,
+                            "Disconnect?",
+                            "switching to the local server",
+                            "Disconnect",
+                            move || {
+                                let _ = connections::activate_and_restart(
+                                    &handle,
+                                    connections::LOCAL_ID,
+                                );
+                            },
+                        );
                     }
                     "quit" => {
                         let handle = app.clone();

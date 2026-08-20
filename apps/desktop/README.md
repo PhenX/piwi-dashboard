@@ -41,6 +41,42 @@ Local access is gated by a per-launch token (see
 `apps/application/server/middleware/desktop-guard.ts`), so only the app — not other
 local processes or browser pages — can reach the bundled API.
 
+## Connect mode (point at a shared instance)
+
+Local mode above is the default. The app can also point at a **shared Piwi
+instance** someone else runs — the team's self-hosted server — instead of the
+bundled one. This is opt-in and reversible; a user who never connects sees the
+local app exactly as before.
+
+- **State.** `src-tauri/src/connections.rs` keeps the saved instances and the
+  active one in the shell's own `settings.json` (`connections` +
+  `activeConnectionId`), never the server database — which instance a laptop
+  talks to is a fact about the laptop. The local connection is synthetic (always
+  offered, never stored) and is the implicit default.
+- **Startup.** `lib.rs` resolves the active connection. For a **reachable**
+  remote instance it skips the sidecar and the reporter discovery file, grants a
+  runtime capability **pinned to that one origin** (derived from
+  `capabilities/remote.json`, so the connect-mode surface can't drift from the
+  loopback one), and points the window straight at the origin — its `/login`,
+  cookies and same-origin `/api` then behave exactly as in a browser. An
+  unreachable instance falls back to local rather than blocking launch.
+- **The capability grant is the trust boundary.** Connecting means that
+  instance's web app can invoke the shell's native commands (run local tests,
+  read linked folders, save downloads, notify). It is pinned to the exact
+  configured origin — never `*` — and re-scoped on switch, which relaunches the
+  app so a fresh process grants exactly one origin. The `connect-mode-remote`
+  capability needs Tauri's `dynamic-acl` feature (enabled for all builds; it
+  pulls in no extra crates).
+- **UI.** `DesktopConnectionsCard.vue` (on `/setup`, gated on the native bridge
+  so it shows in both modes) lists the local + saved instances, adds one from a
+  URL, and switches between them.
+
+> **Scope.** This is Stage 1 of `proposals/desktop-remote-connect.md`: the
+> webview target, the connections model, TLS/reachability groundwork and the
+> capability ACL. Stage 2 (aiming the local superpowers — local runs, import,
+> the MCP bridge — at the remote instance via a device API key) and Stage 3
+> (multi-instance fast switching, hosted→local hand-off) are not wired yet.
+
 ## Build locally
 
 Prerequisites: Node 24+, the [Rust toolchain](https://rustup.rs), and the

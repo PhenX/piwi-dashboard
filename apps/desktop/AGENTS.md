@@ -19,6 +19,12 @@ Linux is deferred.
 - **Everything binds `127.0.0.1`.** Local access is gated by a per-launch token enforced by
   `apps/application/server/middleware/desktop-guard.ts` — so only the app, not other local processes or browser pages, can
   reach the bundled API. Any new desktop-only route must stay behind that guard.
+- **Connect mode is the exception, and lives client-side.** The shell can instead point the webview at a shared remote
+  instance's own origin (`src-tauri/src/connections.rs`, saved in `settings.json`). There is no bundled server and no
+  desktop token then: the webview authenticates as an ordinary user session on that instance. The one new trust boundary
+  is the runtime capability that grants native commands to the connected origin — it must stay **pinned to the exact
+  configured origin, never `*`**, mirror `capabilities/remote.json`, and be re-scoped on switch (the app relaunches). See
+  `proposals/desktop-remote-connect.md` for the staged plan; local mode stays the untouched default.
 - **The reporter discovery file is a cross-package contract.** The shell publishes `{ url, token }` to
   `~/.piwi/desktop.json` while it runs and deletes it on quit; `@piwitests/reporter` reads it from
   `src/internal/config/desktop.ts`, and `src-tauri/src/mcp_stdio.rs` resolves the app's address from it on every

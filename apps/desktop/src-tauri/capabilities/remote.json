@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "remote-desktop-controls",
-  "description": "Let the bundled dashboard, served from the local loopback server, call the app's own IPC commands: read/set the service settings (run in background, start on login), open external links in the OS browser, show native notifications, save downloads, manage per-project linked folders (including read-only inspection of a chosen folder's Playwright/Piwi setup), and run Playwright tests in a linked folder with streamed output. Scoped to the loopback origins the sidecar binds — no external site is granted access, and only the desktop webview has the native bridge.",
+  "description": "Let the bundled dashboard, served from the local loopback server, call the app's own IPC commands: read/set the service settings (run in background, start on login), open external links in the OS browser, show native notifications, save downloads, manage per-project linked folders (including read-only inspection of a chosen folder's Playwright/Piwi setup), run Playwright tests in a linked folder with streamed output, and list/add/remove/switch the saved instance connections. Scoped to the loopback origins the sidecar binds — no external site is granted access, and only the desktop webview has the native bridge. In connect mode a matching capability, pinned to the one configured remote origin, is added at runtime (see connections.rs).",
   "windows": ["main"],
   "remote": {
     "urls": ["http://localhost:*", "http://127.0.0.1:*"]
@@ -30,6 +30,10 @@
     "allow-desktop-check-update",
     "allow-desktop-install-update",
     "allow-desktop-restart-app",
-    "allow-desktop-set-activity"
+    "allow-desktop-set-activity",
+    "allow-desktop-list-connections",
+    "allow-desktop-add-connection",
+    "allow-desktop-remove-connection",
+    "allow-desktop-set-active-connection"
   ]
 }

@@ -62,6 +62,12 @@ const activeCount = computed(() => rows.value.filter((r) => r.active).length);
 
     <template #body>
       <div class="flex flex-col gap-6 w-full lg:max-w-4xl mx-auto">
+        <!-- Which instance the desktop app points at (local vs a team instance).
+             Rendered outside the isDesktop block and self-gated on the native
+             bridge, so it also shows in connect mode — where the webview is on a
+             remote origin and isDesktop is false — letting the user switch back. -->
+        <DesktopConnectionsCard />
+
         <!-- Desktop build: connecting to this local instance comes before the
              generic reporter steps, since the token/URL are specific to it. -->
         <template v-if="isDesktop">
