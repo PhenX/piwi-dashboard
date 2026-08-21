@@ -10,7 +10,7 @@
 
 **The run page is structurally stronger than the execution page — and still loses the user in four ways.** The tab strip never reflows (failure tabs disable instead of disappearing — exactly what the first audit asked for), counts reconcile in every state including interrupted (12 = 6+3+0+3), statuses go through `formatStatusLabel`, help topics are actually wired (9 of 10), and only 2 of 67 page controls lack an accessible name (vs 22 of 78 on the execution page). But:
 
-1. **Two tabs are broken outright.** Regression — the "what changed since green" tab — renders a completely blank panel on refresh or any shared `?tab=regression` link (hydration mismatch, verified); and the Slow endpoints "Max" column renders unitless numbers.
+1. **Three things are broken outright.** Regression — the "what changed since green" tab — renders a completely blank panel on refresh or any shared `?tab=regression` link (hydration mismatch, verified); the Slow endpoints "Max" column renders unitless numbers; and the Timeline's hover tooltip never fires, so a span can only be read by clicking through to the execution page (reported, R23).
 2. **The landing tab can't answer the landing question.** Test cases shows no error text, doesn't sort failures first (they sit at rows 3 and 7 of 10), and never says which failure group a red row belongs to — while the tab that shows both error messages inline sits two positions away under the jargon label "Failure groups".
 3. **Status evaporates off desktop.** In the tree view and on mobile, pass/fail is an icon whose author-written `aria-label` is silently discarded (`@iconify/vue` forces `aria-hidden`), so a phone user — and every screen-reader user — cannot tell the failed test from the passed ones. The mobile summary also fills the entire first viewport: zero test rows above the fold.
 4. **The words fight the rest of the product.** The "Test cases" tab lists executions; "Failure groups" is a this-page-only rename of failure clusters that the page itself contradicts twice; "Regression" carries four meanings and its help topic describes a different tab; and the summary's amber play-icon "Retry" button copies a command — on the same page where Failure groups labels the identical action honestly ("Copy retry command").
@@ -32,6 +32,14 @@ Direct-load `?tab=regression` → an empty panel (ARIA tree ends at `tabpanel "R
 ### R3. Tree view + zero cases renders nothing at all
 
 `TestCasesList.vue:364` requires `treeView && testCases.length > 0` and `:377` requires `!treeView` — with tree view on (a 1-year cookie) and an empty/filtered-to-zero run, neither branch renders. Blank panel, no empty state. **Fix:** `v-if="treeView"` and let the tree own its empty case.
+
+### R23. The Timeline hover tooltip never fires — only click is live (reported)
+
+Hovering a span on the Timeline graph shows nothing; only clicking does anything. The tooltip is fully built and wired — `TimelineBar.vue:44-46` emits `hover`/`move`/`leave` from `@mouseenter`/`@mousemove`/`@mouseleave` on the `<g class="timeline-bar-group">`, `WorkersTimeline.vue:160-162` feeds `hoveredItem`/`tooltipPos`, and `TimelineTooltip.vue` renders a complete card (title, status, duration, worker, parent) on `v-if="item"`. So this is a wired-but-doesn't-fire bug, not a missing feature: the whole hover path exists and produces no tooltip in practice.
+
+Likely cause: the hover handlers sit on a transparent SVG `<g>` that has no geometry of its own, and `mouseenter`/`mouseleave` are the **non-bubbling** mouse events — they fire unreliably (browser-dependent) when the pointer is actually over a child `<rect>`/`<circle>` rather than the group itself. The bubbling `mouseover`/`mouseout` do not have this problem, which is why the hover-dimming next to it (CSS `:has(.timeline-bar-group:hover)`, `WorkersTimeline.vue:182`) can behave differently from the JS tooltip. Net effect: the only way to learn what a bar is is to click it — which navigates to the execution page — so the Timeline can't be read in place at all. Compounds R15 (that finding assumed the hover tooltip worked and only flagged it as mouse-only; it does not work even for the mouse).
+
+**Fix:** move the hover emit off the non-bubbling pair — either bind `@mouseover`/`@mousemove`/`@mouseout` on the `<g>` (they bubble up from the shapes), or put the handlers directly on each `<rect>`/`<circle>` shape element (which already carry `pointer-events`), or add one transparent full-height hit-`rect` per bar to catch the pointer. Not yet reproduced in a browser here — verify the exact event before committing.
 
 ### R4. Status and browser labels are written — and silently discarded
 
@@ -160,6 +168,7 @@ Date idiom inverted ("Started 8/20/2026, 7:18:32 PM · about 12 hours ago" — t
 | 14 | "Failure groups" → "Failure clusters" (4 strings) | `[id].vue:513,666` · `FailureGroups.vue:84,264` |
 | 15 | `EmptyState` sweep ×7 + neutral icon + clear-filters slot | see R21 |
 | 16 | Relative date first, timestamp on hover; sentence-case 3 strings | `RunSummary.vue:314` etc. |
+| 17 | Timeline hover: bind `mouseover`/`mouseout` (or handlers on the shapes) so the tooltip fires | `TimelineBar.vue:44-46` |
 
 ## Suggested sequencing
 
