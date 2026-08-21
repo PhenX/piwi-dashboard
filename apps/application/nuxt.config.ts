@@ -1,10 +1,12 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { cpSync, existsSync, mkdirSync, readFileSync } from 'fs';
+import { createRequire } from 'module';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const nodeRequire = createRequire(import.meta.url);
 
 const isDemo = process.env.PIWI_DEMO_MODE === 'true';
 
@@ -246,7 +248,7 @@ export default defineNuxtConfig({
         // These assets are bundled with playwright-core and served directly from
         // node_modules. During `nuxt build`, Nitro copies them to .output/public/.
         baseURL: '/trace-viewer',
-        dir: resolve(__dirname, '../node_modules/playwright-core/lib/vite/traceViewer'),
+        dir: resolve(dirname(nodeRequire.resolve('playwright-core/package.json')), 'lib/vite/traceViewer'),
         maxAge: 60 * 60 * 24,
       },
     ],
