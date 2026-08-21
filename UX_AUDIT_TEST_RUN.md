@@ -19,17 +19,17 @@
 
 ## P0 — Broken, fix first (all verified)
 
-### R1. The Regression tab is blank on refresh and on every shared link
+### R1. The Regression tab is blank on refresh and on every shared link — ✅ shipped 2026-08-21
 
 Direct-load `?tab=regression` → an empty panel (ARIA tree ends at `tabpanel "Regression"` with zero children; screenshot confirms ~450px of white). Click the tab in-session → full content renders ("Last passing run: Run #71 · 2 new failures · Commits introduced since last passing run" + copyable `git log` range). The API returns complete data either way (verified live). Cause: `RegressionContext.vue:16` fetches with `{ lazy: true, server: false }` — SSR renders the `EmptyState` branch (`loading` false, `context` null), the client's first paint expects the `LoadingState` branch, and Vue reports `Hydration class mismatch` naming this component, then discards the subtree. Its two working siblings (`FailureGroups.vue:22`, `SlowEndpoints.vue:19`) use the same pattern without `server: false`.
 
 **Fix:** drop `server: false` (lazy alone keeps it off the critical path), or gate the template behind a mounted flag so SSR and first client paint agree. Also give the panel a layout-level fallback so no tab can ever render nothing.
 
-### R2. Slow endpoints' "Max" column has no unit
+### R2. Slow endpoints' "Max" column has no unit — ✅ shipped 2026-08-21
 
 `Avg 202ms · P90 240ms · Max 258` — the `maxDuration` column is declared (`SlowEndpoints.vue:59-61`) but has no cell template, so the raw millisecond number prints beside a "Calls 10" column and reads as a count. **Fix:** a `#maxDuration-cell` with `DurationValue` (3 lines).
 
-### R3. Tree view + zero cases renders nothing at all
+### R3. Tree view + zero cases renders nothing at all — ✅ shipped 2026-08-21
 
 `TestCasesList.vue:364` requires `treeView && testCases.length > 0` and `:377` requires `!treeView` — with tree view on (a 1-year cookie) and an empty/filtered-to-zero run, neither branch renders. Blank panel, no empty state. **Fix:** `v-if="treeView"` and let the tree own its empty case.
 
@@ -45,7 +45,7 @@ The user-saved event markers (deploys, config changes, incidents — the dashed 
 
 **Fix (shared, one component's consumers):** render `<ChartMarkerLines>` **after** the hover-column rects in each chart so the flags sit on top, and add `pointer-events-none` to the decorative dashed `<line>` in `ChartMarkerLines.vue:31` so only the flag circle is interactive (the line shouldn't intercept the bar hover). A taller/rounded flag hit-area helps too, but paint order is the root cause. Affects the project page's run and performance charts and the execution page's History chart — not the run-page tabs themselves (there markers appear only as `MarkerBadge` chips).
 
-### R4. Status and browser labels are written — and silently discarded
+### R4. Status and browser labels are written — and silently discarded — ✅ shipped 2026-08-21
 
 `TestCasesList.vue:471-477` and `TestCasesTree.vue:286-293` set `role="img"` + `aria-label="Status: …"` on a `UIcon`; `BrowserBadge` names the browser only in a tooltip. None of it reaches the accessibility tree: `@iconify/vue` defaults rendered icons to `aria-hidden: true`, which `role`/`aria-label` do not clear. Verified: zero "Status:" strings across all ten snapshots; the Browser column is an empty cell in every desktop row. In the tree and mobile card views the icon is the row's **only** status encoding (the tree's own comment says so), so pass/fail is absent for AT and color-only for everyone else (WCAG 1.1.1, 1.4.1). **Fix:** wrap the icon — `<span role="img" :aria-label="…"><UIcon/></span>` — or an `sr-only` span; three files, three lines. On mobile also render the status word visibly (the desktop badge already exists).
 
@@ -53,7 +53,7 @@ The user-saved event markers (deploys, config changes, incidents — the dashed 
 
 ## P1 — Where users get lost
 
-### R5. The landing tab cannot answer "why did it fail"
+### R5. The landing tab cannot answer "why did it fail" — ✅ shipped 2026-08-21
 
 No row renders error text (the `error` field is on the record but unused in the template); failures don't sort first (`sortKey` defaults to null → insertion order — the two red rows sit at positions 3 and 7); no row names its failure cluster (`failureClusterId` is used only as a filter predicate). Reading both failures' messages costs 1 filter click + **2 full page navigations** — while Failure groups shows both messages inline at 1 click, two tabs away. Sorting by Status doesn't help: `sortValue` uses the raw status, so `timedOut` sorts away from `failed` even though the filter and badge normalize them together. **Fix:** one-line truncated error under failed titles (the sub-line slot exists), failure-first default sort when `failedTests > 0`, a small cluster badge (`G1`/`G2`) linking to the cluster, and `timedOut` normalized in `sortValue`.
 
@@ -85,11 +85,11 @@ The badge counts `flakyTests` and its tooltip promises "passed only after a retr
 
 The right pattern (stable strip), incompletely delivered: `tab … [disabled]` carries no reason, the count drops instead of showing `(0)`, the native `disabled` removes the tab from roving focus (keyboard users can't even land on it to get a tooltip), and visually it's a slightly lighter grey among six grey tabs. **Fix:** `disabledReason` on `DetailTabItem` rendered as `title` + `aria-description`; `aria-disabled` instead of native so it stays focusable.
 
-### R13. Twelve filter controls expose no state, and two filter models contradict each other
+### R13. Twelve filter controls expose no state, and two filter models contradict each other — ✅ shipped 2026-08-21
 
 The five summary tiles (single-select, replaces the set), the five list chips (multi-select), and the two view toggles all carry state as background color only — no `aria-pressed` anywhere, no group labels. Select a tile then add a chip: the list shows a multi-filter while the **Total** tile lights up claiming "no filter"; clicking any tile silently discards the multi-selection. The browser `USelect` has no accessible name; Compare's baseline select is announced as "Show popup" (orphaned label); the storage chip is named by its value ("236.27 KB · 3 files"). Zero-count tiles ("Skipped 0") are live buttons filtering to an empty list. **Fix:** `aria-pressed` across all twelve; make the tiles toggle into the same set the chips use; label the two selects; disable zero tiles.
 
-### R14. The cluster-filter flow drops you into an unnamed mode
+### R14. The cluster-filter flow drops you into an unnamed mode — ✅ shipped 2026-08-21
 
 "Filter" (a one-word button on a cluster row) switches tabs and shows "Filtered by failure group" — naming no group, no count (with 2+ clusters, two consecutive filters are indistinguishable), living outside the toolbar that owns every other filter, absent from the URL (a shared link or refresh silently shows all 10 rows), and force-expanding the tree while disabling Collapse-all. **Fix:** name the cluster + matched count in the chip; `?cluster=` in the query restored like `?tab=`; relabel the button "Show failing tests"; keep collapse enabled.
 
@@ -176,8 +176,8 @@ Date idiom inverted ("Started 8/20/2026, 7:18:32 PM · about 12 hours ago" — t
 
 ## Suggested sequencing
 
-1. **Now:** R1 (blank tab), then quick wins 2–9 — two real bugs and the status-visibility fix cost ~30 lines total.
-2. **Next:** R5 (make the landing tab answer the landing question) + R13/R14 (one filter model, named cluster mode) — the structural "lost" fixes.
+1. ~~**Now:** R1 (blank tab), then quick wins 2–9 — two real bugs and the status-visibility fix cost ~30 lines total.~~ ✅ shipped 2026-08-21 (`fix(ui): fix run page audit findings, aria labels and regression tab`): R1, QW2–9, plus R23's warning fix (`refactor(app)` git-url dedup).
+2. ~~**Next:** R5 (make the landing tab answer the landing question) + R13/R14 (one filter model, named cluster mode) — the structural "lost" fixes.~~ ✅ shipped 2026-08-21 (`fix(ui): sort failures first, unify filters, deep-link cluster mode`): R5 (failure-first default sort, inline error line, cluster badge), R13 (tiles toggle into the chip set, zero tiles disabled), R14 (named/counted cluster chip, `?cluster=` deep link, "Show failing tests", collapse stays enabled). Covered by `tests/run-page-filters.spec.ts`.
 3. **Then:** the shared-root-cause table — each row pays off on both pages at once.
 4. **With the execution page's plan:** the terminology pass (R17–R19 + F11–F13) as one vocabulary change, so both pages shift together.
 
