@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { test, expect } from './fixtures';
 import { PROJECT } from '#shared/test-project-names';
 
@@ -128,6 +129,28 @@ test.describe.serial('Sharding API Tests', () => {
     // Succeeds (shard 1 token is valid) but the duplicate is silently skipped
     expect(res.ok()).toBeTruthy();
     expect((await res.json()).processed).toBe(0);
+  });
+
+  test('shard token is also valid for uploading case files', async ({ request }) => {
+    // tokenShard1 is not the run's primary stream token — uploads from that
+    // shard must be accepted via the shard-token fallback.
+    const traceContent = Buffer.from('Mock shard trace data');
+    const response = await request.post(`/api/test-runs/${runId}/case-files`, {
+      multipart: {
+        streamToken: tokenShard1,
+        testCase: JSON.stringify({ title: 'shard 1 test C', location: 'tests/shard1.spec.ts:8:3', retries: 1 }),
+        trace_hash: createHash('sha256').update(traceContent).digest('hex'),
+        trace: {
+          name: 'trace.zip',
+          mimeType: 'application/zip',
+          buffer: traceContent,
+        },
+      },
+    });
+    expect(response.ok()).toBeTruthy();
+    const data = await response.json();
+    expect(data.success).toBe(true);
+    expect(data.traces).toBe(1);
   });
 
   test('counters reflect events from both shards while still running', async ({ request }) => {
