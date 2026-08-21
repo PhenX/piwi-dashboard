@@ -72,9 +72,9 @@ test.describe('Test-run-case page', () => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
 
-    await expect(page.getByRole('button', { name: 'Diagnosis', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Diagnosis/ })).toBeVisible();
     // The verdict and AI-diagnosis rail cards are the diagnosis-tab signature.
-    await expect(page.getByRole('heading', { name: 'Verdict' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Regression status' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'AI diagnosis' })).toBeVisible();
     // The URL is normalized to the diagnosis tab.
     await expect(page).toHaveURL(/tab=diagnosis/);
@@ -83,16 +83,16 @@ test.describe('Test-run-case page', () => {
   test('legacy ?tab=error redirects to the Diagnosis tab', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}?tab=error`);
     await waitForHydration(page);
-    await expect(page.getByRole('heading', { name: 'Verdict' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Regression status' })).toBeVisible();
   });
 
   test('passing execution opens on Steps and offers an Artifacts tab', async ({ page }) => {
     await page.goto(`/test-run-cases/${passedCaseId}`);
     await waitForHydration(page);
 
-    await expect(page.getByRole('button', { name: 'Artifacts', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Artifacts/ })).toBeVisible();
     // No error → no Diagnosis tab.
-    await expect(page.getByRole('button', { name: 'Diagnosis', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Diagnosis/ })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Steps/ })).toBeVisible();
   });
 
@@ -106,7 +106,7 @@ test.describe('Test-run-case page', () => {
   test('Performance tab is always available and shows an empty state when nothing captured', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}?tab=performance`);
     await waitForHydration(page);
-    await expect(page.getByRole('button', { name: 'Performance', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Performance/ })).toBeVisible();
   });
 
   test('History tab opens populated from the SSR payload, without refetching or a hydration mismatch', async ({

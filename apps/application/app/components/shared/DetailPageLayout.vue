@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { HelpTopicKey } from '~/utils/help-content';
+
 export interface DetailTabItem {
   label: string;
   icon?: string;
@@ -9,6 +11,8 @@ export interface DetailTabItem {
   /** Why the tab is disabled; rendered as muted text beside the label (native
    *  disabled buttons swallow hover, so a tooltip would never appear). */
   disabledReason?: string;
+  /** Inline-help topic rendered after the label. */
+  help?: HelpTopicKey;
 }
 
 const props = defineProps<{
@@ -88,6 +92,7 @@ const navItems = computed(() =>
         >
           <template #item-label="{ item }">
             <span>{{ item.label }}</span>
+            <HelpHint v-if="item.help" :topic="item.help" class="ml-1" />
             <span
               v-if="item.disabled && item.disabledReason"
               :title="item.disabledReason"

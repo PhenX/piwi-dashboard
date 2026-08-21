@@ -799,7 +799,7 @@ function handleSelectCluster(clusterId: number) {
     <UModal :open="isDeleteConfirmOpen" title="Delete test run" @update:open="isDeleteConfirmOpen = $event">
       <template #body>
         <p>
-          Are you sure you want to delete <strong>Test Run #{{ testRun?.id }}</strong
+          Are you sure you want to delete <strong>test run #{{ testRun?.id }}</strong
           >? This will also remove all associated test results, reports, and traces. This action cannot be undone.
         </p>
       </template>

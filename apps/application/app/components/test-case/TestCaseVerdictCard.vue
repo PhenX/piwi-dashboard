@@ -104,7 +104,12 @@ const squareClass = (status: string) => ({
 </script>
 
 <template>
-  <SectionCard icon="i-lucide-clipboard-check" icon-class="text-amber-500" title="Verdict" help="case.verdict">
+  <SectionCard
+    icon="i-lucide-clipboard-check"
+    icon-class="text-amber-500"
+    title="Regression status"
+    help="case.verdict"
+  >
     <div class="space-y-3">
       <!-- Signal chips -->
       <div v-if="chips.length" class="flex flex-wrap gap-1.5">

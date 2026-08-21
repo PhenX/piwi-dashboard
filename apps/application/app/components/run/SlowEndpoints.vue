@@ -78,6 +78,7 @@ const endpointColumns: TableColumn<EndpointSummary>[] = [
       sticky
       :data="endpoints"
       :columns="endpointColumns"
+      aria-label="Slow endpoints"
       class="flex-1 min-h-0"
       :ui="{
         base: 'table-fixed border-separate border-spacing-0 min-w-[44rem]',

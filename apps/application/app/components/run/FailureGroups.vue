@@ -100,7 +100,7 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
 
       <UCard :ui="{ body: 'p-0 sm:p-0' }">
         <TableScroller min-width="46rem" :bleed="false">
-          <UTable :data="groups" :columns="columns">
+          <UTable :data="groups" :columns="columns" aria-label="Failure clusters">
             <template #actions-header>
               <div class="text-right">Actions</div>
             </template>
@@ -268,7 +268,7 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
 
   <UModal
     :open="diagnosisClusterId !== null"
-    title="AI Diagnosis"
+    title="AI diagnosis"
     :ui="{ content: 'max-w-2xl' }"
     @update:open="
       (v) => {

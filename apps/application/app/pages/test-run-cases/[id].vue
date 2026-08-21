@@ -12,6 +12,7 @@ import { CASE_STATUS_SERIES, legendOf } from '~/utils/chart';
 import { getPerformanceHints } from '~/utils/performance-hints';
 import { renderAnsi } from '~/utils';
 import type { NavbarAction } from '~/components/shared/NavbarActions.vue';
+import type { HelpTopicKey } from '~/utils/help-content';
 import { buildRetryCommand } from '~/utils/retry-command';
 import { condenseErrorText } from '#shared/error-fingerprint';
 import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator';
@@ -159,9 +160,16 @@ const tabItems = computed(() => {
     slot: string;
     disabled?: boolean;
     disabledReason?: string;
+    help?: HelpTopicKey;
   }[] = [];
   if (hasFailedAttempt.value) {
-    items.push({ label: 'Diagnosis', icon: 'i-lucide-stethoscope', value: 'diagnosis', slot: 'diagnosis' });
+    items.push({
+      label: 'Diagnosis',
+      icon: 'i-lucide-stethoscope',
+      value: 'diagnosis',
+      slot: 'diagnosis',
+      help: 'case.diagnosis-tab',
+    });
   } else if (runIsActive.value) {
     items.push({
       label: 'Diagnosis',
@@ -172,8 +180,20 @@ const tabItems = computed(() => {
       disabledReason: 'unavailable until a test fails',
     });
   }
-  items.push({ label: `Steps (${steps.value.length})`, icon: 'i-lucide-list-checks', value: 'steps', slot: 'steps' });
-  items.push({ label: 'Artifacts', icon: 'i-lucide-paperclip', value: 'artifacts', slot: 'artifacts' });
+  items.push({
+    label: `Steps (${steps.value.length})`,
+    icon: 'i-lucide-list-checks',
+    value: 'steps',
+    slot: 'steps',
+    help: 'case.steps',
+  });
+  items.push({
+    label: 'Artifacts',
+    icon: 'i-lucide-paperclip',
+    value: 'artifacts',
+    slot: 'artifacts',
+    help: 'case.artifacts',
+  });
   items.push({ label: 'Performance', icon: 'i-lucide-gauge', value: 'performance', slot: 'performance' });
   items.push({
     label: `History${historyData.value?.length ? ` (${historyData.value.length})` : ''}`,
