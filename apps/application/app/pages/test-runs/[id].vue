@@ -553,6 +553,7 @@ const tabItems = computed(() => [
     value: 'failure-groups',
     slot: 'failure-groups',
     disabled: !hasFailures.value,
+    disabledReason: 'No failing tests in this run to group',
   },
   {
     label: 'Regression',
@@ -560,6 +561,7 @@ const tabItems = computed(() => [
     value: 'regression',
     slot: 'regression',
     disabled: !hasFailures.value,
+    disabledReason: 'No failing tests in this run to compare against',
   },
   {
     label: `Timeline${uniqueWorkerCount.value > 0 ? ` (${uniqueWorkerCount.value})` : ''}`,
@@ -672,19 +674,21 @@ function handleSelectCluster(clusterId: number) {
           </BreadcrumbNav>
         </template>
         <template #right>
-          <NavbarActions
-            :actions="[
-              { label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() },
-              {
-                label: 'Delete',
-                icon: 'i-lucide-trash-2',
-                color: 'error',
-                variant: 'soft',
-                loading: deleting,
-                onClick: () => (isDeleteConfirmOpen = true),
-              },
-            ]"
-          />
+          <div class="flex items-center shrink-0 min-w-0">
+            <NavbarActions
+              :actions="[
+                { label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() },
+                {
+                  label: 'Delete',
+                  icon: 'i-lucide-trash-2',
+                  color: 'error',
+                  variant: 'soft',
+                  loading: deleting,
+                  onClick: () => (isDeleteConfirmOpen = true),
+                },
+              ]"
+            />
+          </div>
         </template>
       </UDashboardNavbar>
     </template>
