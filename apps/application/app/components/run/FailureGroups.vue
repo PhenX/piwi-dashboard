@@ -233,7 +233,7 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
                   variant="soft"
                   @click="emit('selectCluster', row.original.clusterId)"
                 >
-                  Filter
+                  Show failing tests
                 </UButton>
                 <UButton
                   size="sm"

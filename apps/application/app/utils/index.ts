@@ -254,6 +254,23 @@ export function formatStatusLabel(status: string): string {
 }
 
 /**
+ * Whether a test-case status is a failure for filtering, sorting and display.
+ * Timeouts fold into failures everywhere (the run counters do the same).
+ */
+export function isFailedStatus(status: string): boolean {
+  return status === 'failed' || status === 'timedOut' || status === 'timedout';
+}
+
+/**
+ * Sort comparator that puts failed (and timed-out) cases first, keeping the
+ * relative order within each group (stable sort). Used as the default ordering
+ * of a run's test cases so the landing view answers "why did it fail" first.
+ */
+export function failureFirstCompare(a: string, b: string): number {
+  return Number(isFailedStatus(b)) - Number(isFailedStatus(a));
+}
+
+/**
  * Short, human-readable label for why a `didnotrun` case never executed. Mirrors
  * the reporter's `DidNotRunReason` taxonomy; an unknown/absent reason falls back
  * to the neutral "didn't run".

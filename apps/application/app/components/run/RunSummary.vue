@@ -9,13 +9,14 @@ const props = defineProps<{
   allReports: ReportInfo[];
   showCustomData: boolean;
   finalizing?: boolean;
-  activeFilter?: string;
+  /** The active status filters, shared with the test-cases list's chips. */
+  activeStatuses: string[];
   totalWastedTime?: number;
 }>();
 
 const emit = defineEmits<{
   'update:showCustomData': [value: boolean];
-  'filter-status': [value: string];
+  'toggle-status': [value: string];
   'label-updated': [];
 }>();
 
@@ -386,14 +387,15 @@ function onLabelKeydown(e: KeyboardEvent) {
 
           <StatTileGrid min-tile-width="7.5rem">
             <button
-              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
+              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
               :class="
-                activeFilter === 'all'
+                activeStatuses.length === 0
                   ? 'bg-accented ring-2 ring-zinc-400 dark:ring-zinc-500'
                   : 'bg-elevated/60 hover:bg-elevated'
               "
-              :aria-pressed="activeFilter === 'all'"
-              @click="emit('filter-status', 'all')"
+              :aria-pressed="activeStatuses.length === 0"
+              :disabled="(displayProgress?.totalTests ?? testRun?.totalTests ?? 0) === 0"
+              @click="emit('toggle-status', 'all')"
             >
               <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider">Total</p>
               <p class="text-xl font-bold mt-0.5">
@@ -406,14 +408,15 @@ function onLabelKeydown(e: KeyboardEvent) {
                  markup valid while giving each its own filter click + active highlight. -->
             <div class="relative">
               <button
-                class="rounded-lg p-3 text-left w-full h-full transition-colors cursor-pointer"
+                class="rounded-lg p-3 text-left w-full h-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                 :class="
-                  activeFilter === 'passed'
+                  activeStatuses.includes('passed')
                     ? 'bg-emerald-100 dark:bg-emerald-900/30 ring-2 ring-emerald-400 dark:ring-emerald-600'
                     : 'bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
                 "
-                :aria-pressed="activeFilter === 'passed'"
-                @click="emit('filter-status', 'passed')"
+                :aria-pressed="activeStatuses.includes('passed')"
+                :disabled="(displayProgress?.passedTests ?? testRun?.passedTests ?? 0) === 0"
+                @click="emit('toggle-status', 'passed')"
               >
                 <p class="text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
                   Passed
@@ -426,27 +429,28 @@ function onLabelKeydown(e: KeyboardEvent) {
                 v-if="(testRun?.flakyTests ?? 0) > 0"
                 class="absolute top-1.5 right-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-semibold leading-none tabular-nums transition-colors cursor-pointer"
                 :class="
-                  activeFilter === 'flaky'
+                  activeStatuses.includes('flaky')
                     ? 'bg-orange-200 dark:bg-orange-800/60 text-orange-800 dark:text-orange-200 ring-2 ring-orange-400 dark:ring-orange-600'
                     : 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-800/60'
                 "
                 title="Flaky — passed only after a retry (a subset of passed). Click to filter."
-                :aria-pressed="activeFilter === 'flaky'"
-                @click="emit('filter-status', 'flaky')"
+                :aria-pressed="activeStatuses.includes('flaky')"
+                @click="emit('toggle-status', 'flaky')"
               >
                 <UIcon name="i-lucide-shuffle" class="size-3" />
                 {{ testRun?.flakyTests ?? 0 }}
               </button>
             </div>
             <button
-              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
+              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
               :class="
-                activeFilter === 'failed'
+                activeStatuses.includes('failed')
                   ? 'bg-rose-100 dark:bg-rose-900/30 ring-2 ring-rose-400 dark:ring-rose-600'
                   : 'bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/30'
               "
-              :aria-pressed="activeFilter === 'failed'"
-              @click="emit('filter-status', 'failed')"
+              :aria-pressed="activeStatuses.includes('failed')"
+              :disabled="(displayProgress?.failedTests ?? testRun?.failedTests ?? 0) === 0"
+              @click="emit('toggle-status', 'failed')"
             >
               <p class="text-xs font-medium text-rose-700 dark:text-rose-400 uppercase tracking-wider">Failed</p>
               <p class="text-xl font-bold mt-0.5 text-rose-600 dark:text-rose-400">
@@ -454,14 +458,15 @@ function onLabelKeydown(e: KeyboardEvent) {
               </p>
             </button>
             <button
-              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
+              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
               :class="
-                activeFilter === 'skipped'
+                activeStatuses.includes('skipped')
                   ? 'bg-accented ring-2 ring-zinc-400 dark:ring-zinc-500'
                   : 'bg-elevated/60 hover:bg-elevated'
               "
-              :aria-pressed="activeFilter === 'skipped'"
-              @click="emit('filter-status', 'skipped')"
+              :aria-pressed="activeStatuses.includes('skipped')"
+              :disabled="(displayProgress?.skippedTests ?? testRun?.skippedTests ?? 0) === 0"
+              @click="emit('toggle-status', 'skipped')"
             >
               <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider">Skipped</p>
               <p class="text-xl font-bold mt-0.5 text-zinc-600 dark:text-zinc-400">
@@ -469,15 +474,16 @@ function onLabelKeydown(e: KeyboardEvent) {
               </p>
             </button>
             <button
-              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
+              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
               :class="
-                activeFilter === 'didnotrun'
+                activeStatuses.includes('didnotrun')
                   ? 'bg-amber-100 dark:bg-amber-900/30 ring-2 ring-amber-400 dark:ring-amber-600'
                   : 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
               "
               title="Tests that never ran (maxFailures cutoff or a serial-group failure)"
-              :aria-pressed="activeFilter === 'didnotrun'"
-              @click="emit('filter-status', 'didnotrun')"
+              :aria-pressed="activeStatuses.includes('didnotrun')"
+              :disabled="(testRun?.didNotRunTests ?? 0) === 0"
+              @click="emit('toggle-status', 'didnotrun')"
             >
               <p class="text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider">Didn't run</p>
               <p class="text-xl font-bold mt-0.5 text-amber-600 dark:text-amber-400">

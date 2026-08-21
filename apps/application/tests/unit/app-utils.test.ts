@@ -12,6 +12,8 @@ import {
   isStatusInFlight,
   toTestPriority,
   formatStatusLabel,
+  isFailedStatus,
+  failureFirstCompare,
   testCaseCategoryColor,
   clusterStatusColor,
   clusterErrorTypeColor,
@@ -159,6 +161,35 @@ describe('formatStatusLabel', () => {
     expect(formatStatusLabel('didnotrun')).toBe("didn't run");
     expect(formatStatusLabel('never-run')).toBe('never run');
     expect(formatStatusLabel('passed')).toBe('passed');
+  });
+});
+
+describe('isFailedStatus', () => {
+  test('treats both timeout spellings as failures, like the run counters', () => {
+    expect(isFailedStatus('failed')).toBe(true);
+    expect(isFailedStatus('timedOut')).toBe(true);
+    expect(isFailedStatus('timedout')).toBe(true);
+    expect(isFailedStatus('passed')).toBe(false);
+    expect(isFailedStatus('skipped')).toBe(false);
+    expect(isFailedStatus('didnotrun')).toBe(false);
+    expect(isFailedStatus('running')).toBe(false);
+  });
+});
+
+describe('failureFirstCompare', () => {
+  test('orders failures (including timeouts) before everything else', () => {
+    const order = ['passed', 'failed', 'skipped', 'timedOut', 'passed'].sort(failureFirstCompare);
+    expect(order.slice(0, 2)).toEqual(['failed', 'timedOut']);
+  });
+
+  test('keeps the relative order within each group (stable)', () => {
+    const order = ['passed', 'failed', 'skipped', 'passed', 'failed'].sort(failureFirstCompare);
+    expect(order).toEqual(['failed', 'failed', 'passed', 'skipped', 'passed']);
+  });
+
+  test('is a no-op when nothing failed', () => {
+    const order = ['passed', 'skipped', 'didnotrun'].sort(failureFirstCompare);
+    expect(order).toEqual(['passed', 'skipped', 'didnotrun']);
   });
 });
 

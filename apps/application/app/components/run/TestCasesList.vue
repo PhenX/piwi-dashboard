@@ -12,6 +12,8 @@ const props = defineProps<{
   /** Worker index → current step, rendered inline on the matching running rows. */
   liveSteps?: LiveStepsByWorker | null;
   failureClusterFilter?: number | null;
+  /** Failure-cluster id → display name, for the cluster badges on failing rows. */
+  clusterNames?: Record<number, string> | null;
   /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
   projectKey?: string | number | null;
   projectName?: string | null;
@@ -67,7 +69,7 @@ function liveStep(tc: TestCaseResult) {
 }
 
 function matchesStatus(tc: TestCaseResult, filter: string): boolean {
-  if (filter === 'failed') return tc.status === 'failed' || tc.status === 'timedOut' || tc.status === 'timedout';
+  if (filter === 'failed') return isFailedStatus(tc.status);
   if (filter === 'flaky') return (tc.retries ?? 0) > 0;
   return tc.status === filter;
 }
@@ -126,7 +128,8 @@ function sortValue(tc: TestCaseResult, key: string): string | number {
     case 'title':
       return tc.title ?? '';
     case 'status':
-      return tc.status ?? '';
+      // Timeouts sort beside failures, matching the filter and the badge.
+      return isFailedStatus(tc.status ?? '') ? 'failed' : (tc.status ?? '');
     case 'duration':
       return tc.duration ?? 0;
     case 'workerIndex':
@@ -140,10 +143,18 @@ function sortValue(tc: TestCaseResult, key: string): string | number {
   }
 }
 
+// A run with failures shows them first by default: the landing view's first
+// job is answering "why did it fail". Stable, so insertion order is kept
+// within each group.
+const failedCount = computed(() => props.testCases.filter((tc) => isFailedStatus(tc.status)).length);
+
 const sortedTestCases = computed<TestCaseResult[]>(() => {
   const cases = filteredTestCases.value;
   const key = sortKey.value;
-  if (!key) return cases;
+  if (!key) {
+    if (failedCount.value === 0) return cases;
+    return [...cases].sort((a, b) => failureFirstCompare(a.status, b.status));
+  }
   const dir = sortDir.value === 'asc' ? 1 : -1;
   // Copy first — never sort the props array in place.
   return [...cases].sort((a, b) => {
@@ -192,7 +203,7 @@ const columns = computed<Column[]>(() => {
 const NATURAL_ORDER = 'natural';
 
 const sortOptions = computed(() => [
-  { label: 'Run order', value: NATURAL_ORDER },
+  { label: failedCount.value > 0 ? 'Failures first' : 'Run order', value: NATURAL_ORDER },
   ...columns.value.map((c) => ({ label: c.label, value: c.key })),
 ]);
 
@@ -207,12 +218,10 @@ const mobileSortKey = computed({
 const gridTemplate = computed(() => columns.value.map((c) => c.width).join(' '));
 const gridMinWidth = computed(() => (hasWastedTime.value ? '47.5rem' : '41.5rem'));
 
+// The cluster filter narrows rows but must not force-expand the tree or
+// disable Collapse-all — those belong to the user, whatever the filter is.
 const hasFilter = computed(
-  () =>
-    testCaseSearch.value !== '' ||
-    activeStatuses.value.length > 0 ||
-    testCaseBrowserFilter.value !== 'all' ||
-    props.failureClusterFilter != null,
+  () => testCaseSearch.value !== '' || activeStatuses.value.length > 0 || testCaseBrowserFilter.value !== 'all',
 );
 
 // Virtualized scroller ref — only the exposed methods we call are typed.
@@ -498,8 +507,25 @@ defineExpose({ scrollToCase });
                         @click.prevent="navigateTo(`/test-run-cases/${item.executionId}`)"
                         >{{ item.title }}</a
                       >
+                      <NuxtLink
+                        v-if="item.failureClusterId && clusterNames?.[item.failureClusterId]"
+                        :to="`/failure-clusters/${item.failureClusterId}`"
+                        class="shrink-0"
+                      >
+                        <UBadge color="info" variant="subtle" size="xs" class="max-w-44">
+                          <span class="truncate">{{ clusterNames[item.failureClusterId] }}</span>
+                        </UBadge>
+                      </NuxtLink>
                       <BrowserBadge :browser="item.browser" size="sm" class="mt-0.5" />
                     </div>
+
+                    <p
+                      v-if="isFailedStatus(item.status) && item.error"
+                      class="pl-6 text-xs text-rose-600 dark:text-rose-400 truncate"
+                      :title="item.error"
+                    >
+                      {{ item.error }}
+                    </p>
 
                     <OpenInIdeLink
                       v-if="item.location"
@@ -583,7 +609,23 @@ defineExpose({ scrollToCase });
                           :max-tags="3"
                           class="shrink-0"
                         />
+                        <NuxtLink
+                          v-if="item.failureClusterId && clusterNames?.[item.failureClusterId]"
+                          :to="`/failure-clusters/${item.failureClusterId}`"
+                          class="shrink-0"
+                        >
+                          <UBadge color="info" variant="subtle" size="xs" class="max-w-44">
+                            <span class="truncate">{{ clusterNames[item.failureClusterId] }}</span>
+                          </UBadge>
+                        </NuxtLink>
                       </div>
+                      <p
+                        v-if="isFailedStatus(item.status) && item.error"
+                        class="text-xs text-rose-600 dark:text-rose-400 truncate"
+                        :title="item.error"
+                      >
+                        {{ item.error }}
+                      </p>
                       <OpenInIdeLink
                         v-if="item.location"
                         :location="item.location"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, watch, onUnmounted } from 'vue';
-import type { TestRunDetails, TestCaseResult, ReportInfo, TestStepEvent } from '~~/types/api';
+import type { TestRunDetails, TestCaseResult, ReportInfo, TestStepEvent, FailureGroup } from '~~/types/api';
 import type { LiveStepsByWorker } from '~/utils/live-steps';
 import { subscribeDemoEvents } from '~/demo/run-events';
 import { useRunStream } from '~/composables/useRunStream';
@@ -442,13 +442,15 @@ const testCaseSearch = ref('');
 const testCaseActiveStatuses = ref<string[]>([]);
 const testCaseBrowserFilter = ref('all');
 
-// Derive a single string for RunSummary's activeFilter highlight
-const statusFilterForSummary = computed(() =>
-  testCaseActiveStatuses.value.length === 1 ? testCaseActiveStatuses.value[0]! : 'all',
-);
-
+// The summary tiles toggle into the same set the list chips use
 function handleFilterStatus(status: string) {
-  testCaseActiveStatuses.value = !status || status === 'all' ? [] : [status];
+  if (!status || status === 'all') {
+    testCaseActiveStatuses.value = [];
+    return;
+  }
+  testCaseActiveStatuses.value = testCaseActiveStatuses.value.includes(status)
+    ? testCaseActiveStatuses.value.filter((s) => s !== status)
+    : [...testCaseActiveStatuses.value, status];
 }
 
 // Reports from the files table
@@ -464,8 +466,41 @@ const totalWastedTime = computed(() => {
 // Right panel tabs
 const activeTab = ref('test-cases');
 
-// Cluster filter state — set by FailureGroups, consumed by TestCasesList
-const selectedClusterFilter = ref<number | null>(null);
+const hasFailures = computed(() => (displayProgress.value?.failedTests ?? 0) > 0);
+
+// Cluster filter state — set by FailureGroups, consumed by TestCasesList. The
+// id doubles as the `?cluster=` deep-link so the mode survives refresh/sharing.
+const selectedClusterFilter = ref<{ id: number; title: string | null } | null>(null);
+
+// Cluster display names for the list's cluster badges and the filter chip,
+// taken from the same failure-groups payload the Failure groups tab shows.
+const clusterNames = ref<Record<number, string>>({});
+if (hasFailures.value && import.meta.client) {
+  $fetch<{ items: FailureGroup[] }>(`/api/test-runs/${runId}/failure-groups`)
+    .then((r) => {
+      clusterNames.value = Object.fromEntries(r.items.map((g) => [g.clusterId, g.title || `Cluster #${g.clusterId}`]));
+    })
+    .catch(() => {});
+}
+
+const clusterFilterName = computed(() => {
+  const f = selectedClusterFilter.value;
+  if (!f) return '';
+  return f.title ?? clusterNames.value[f.id] ?? `Cluster #${f.id}`;
+});
+
+const clusterFilterCount = computed(() => {
+  const f = selectedClusterFilter.value;
+  if (!f) return 0;
+  return displayTestCases.value.filter((tc) => tc.failureClusterId === f.id).length;
+});
+
+// Deep-link the cluster filter via ?cluster= (restored like ?tab= above).
+const clusterQuery = typeof route.query.cluster === 'string' ? Number(route.query.cluster) : null;
+if (clusterQuery && !Number.isNaN(clusterQuery)) {
+  selectedClusterFilter.value = { id: clusterQuery, title: null };
+  activeTab.value = 'test-cases';
+}
 
 // Increments when a live run finishes, so child tabs that keep their own
 // fetch state can refetch instead of showing stale pre-finish data.
@@ -477,8 +512,6 @@ const endpointsCount = ref(0);
 function clearClusterFilter() {
   selectedClusterFilter.value = null;
 }
-
-const hasFailures = computed(() => (displayProgress.value?.failedTests ?? 0) > 0);
 
 const failureGroupCount = computed(() => {
   if (!testRun.value?.testCases) return 0;
@@ -559,9 +592,15 @@ if (typeof route.query.tab === 'string' && runTabValues.value.includes(route.que
 watch(runTabValues, (vals) => {
   if (!vals.includes(activeTab.value)) activeTab.value = 'test-cases';
 });
-watch(activeTab, (tab) => {
-  if (route.query.tab === tab) return;
-  router.replace({ query: { ...route.query, tab } });
+// One watcher owns the ?tab= and ?cluster= query params — two independent
+// replaces would race and drop each other's param.
+watch([activeTab, selectedClusterFilter], ([tab, f]) => {
+  const query = { ...route.query };
+  if (f) query.cluster = String(f.id);
+  else delete query.cluster;
+  query.tab = tab;
+  if (JSON.stringify(query) === JSON.stringify({ ...route.query })) return;
+  router.replace({ query });
 });
 
 // Ref for TestCasesList to call scrollToCase
@@ -577,7 +616,7 @@ function handleSelectTestCase(id: number) {
 }
 
 function handleSelectCluster(clusterId: number) {
-  selectedClusterFilter.value = clusterId;
+  selectedClusterFilter.value = { id: clusterId, title: null };
   activeTab.value = 'test-cases';
 }
 </script>
@@ -660,17 +699,20 @@ function handleSelectCluster(clusterId: number) {
             :all-reports="allReports"
             :show-custom-data="showCustomData"
             :finalizing="isFinalizing"
-            :active-filter="statusFilterForSummary"
+            :active-statuses="testCaseActiveStatuses"
             :total-wasted-time="totalWastedTime"
             @update:show-custom-data="showCustomData = $event"
-            @filter-status="handleFilterStatus"
+            @toggle-status="handleFilterStatus"
             @label-updated="refresh"
           />
         </template>
 
         <template #tab-test-cases>
           <div v-if="selectedClusterFilter != null" class="flex items-center gap-2 mb-3 shrink-0">
-            <UBadge color="info" variant="subtle" size="sm"> Filtered by failure group </UBadge>
+            <UBadge color="info" variant="subtle" size="sm">
+              Cluster: {{ clusterFilterName }} · {{ clusterFilterCount }}
+              {{ clusterFilterCount === 1 ? 'test' : 'tests' }}
+            </UBadge>
             <UButton
               size="xs"
               color="neutral"
@@ -689,7 +731,8 @@ function handleSelectCluster(clusterId: number) {
             :suites="testRun?.suites ?? []"
             :is-live="isLive"
             :live-steps="liveSteps"
-            :failure-cluster-filter="selectedClusterFilter"
+            :failure-cluster-filter="selectedClusterFilter?.id ?? null"
+            :cluster-names="clusterNames"
             :project-key="testRun?.projectId"
             :project-name="testRun?.project?.name"
             class="flex-1 min-h-0"
