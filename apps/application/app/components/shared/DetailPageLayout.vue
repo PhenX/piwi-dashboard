@@ -6,6 +6,8 @@ export interface DetailTabItem {
   slot?: string;
   /** Kept visible but not selectable — a tab that has nothing to show for this record. */
   disabled?: boolean;
+  /** Why the tab is disabled, shown on hover and to assistive tech. */
+  disabledReason?: string;
 }
 
 const props = defineProps<{
@@ -26,7 +28,7 @@ const activeTabIcon = computed(() => props.tabItems.find((t) => t.value === acti
 // the page scroll (no clipping, no nested scroll area).
 function panelClasses(value: string) {
   const desktop = props.tabPanelClass?.[value] ?? 'overflow-y-auto';
-  return ['min-h-0', 'lg:flex-1', desktop, 'max-lg:!block', 'max-lg:!overflow-visible'];
+  return ['min-h-0', 'lg:flex-1', desktop, 'max-lg:!block', 'max-lg:!overflow-visible'].join(' ');
 }
 </script>
 
@@ -47,24 +49,29 @@ function panelClasses(value: string) {
       </button>
     </div>
 
-    <!-- Tab switcher: a full-width select on phones, a (scrollable) tab strip from sm up. Sticky on mobile. -->
+    <!-- Tab switcher: a full-width select on phones, the shared TabStrip from sm up. Sticky on mobile. -->
     <div
       class="lg:shrink-0 max-lg:sticky max-lg:top-0 max-lg:z-10 max-lg:-mx-1 max-lg:bg-(--ui-bg-canvas) max-lg:px-1 max-lg:py-1.5"
     >
-      <USelect v-model="activeTab" :items="tabItems" :icon="activeTabIcon" size="md" class="w-full sm:hidden" />
-      <UTabs
+      <USelect
+        v-model="activeTab"
+        :items="tabItems"
+        :icon="activeTabIcon"
+        size="md"
+        aria-label="Select tab"
+        class="w-full sm:hidden"
+      />
+      <TabStrip
         v-model="activeTab"
         :items="tabItems"
         size="sm"
         class="hidden sm:flex"
-        :ui="{ list: 'overflow-x-auto', trigger: 'shrink-0' }"
-      />
+        :panel-classes="Object.fromEntries(tabItems.map((t) => [t.value, panelClasses(t.value)]))"
+      >
+        <template #panel="{ item }">
+          <slot :name="`tab-${item.slot ?? item.value}`" />
+        </template>
+      </TabStrip>
     </div>
-
-    <template v-for="item in tabItems" :key="item.value">
-      <div v-if="activeTab === item.value" :class="panelClasses(item.value)">
-        <slot :name="`tab-${item.slot ?? item.value}`" />
-      </div>
-    </template>
   </div>
 </template>

@@ -787,13 +787,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
           size="md"
           class="w-full mx-1 mb-1 sm:hidden"
         />
-        <UTabs
-          v-model="activeTab"
-          :items="tabItems"
-          size="sm"
-          class="p-1"
-          :ui="{ list: 'max-sm:hidden overflow-x-auto', trigger: 'shrink-0' }"
-        >
+        <TabStrip v-model="activeTab" :items="tabItems" size="sm" class="max-sm:hidden">
           <!-- TEST RUNS TAB -->
           <template #test-runs>
             <!-- Full runs toggle + Environment filter — drives the chart and the table -->
@@ -1539,7 +1533,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
               @clear-focus="focusMarkerId = null"
             />
           </template>
-        </UTabs>
+        </TabStrip>
       </div>
     </template>
   </UDashboardPanel>

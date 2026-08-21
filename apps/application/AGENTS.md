@@ -186,6 +186,12 @@ Settings pages are driven by the `SETTINGS_PAGES` registry in `app/utils/setting
 
 - Sentence case headings and labels ("Test runs"), relative dates via date-fns (full timestamp on hover), human-readable
   durations (exact ms on hover), `DurationValue` where a tight `210ms` reads better than "0.21 seconds".
+- **Page-level tab strips MUST use the shared `TabStrip`** (`app/components/shared/TabStrip.vue`) — every page renders
+  through it (`DetailPageLayout`, the project detail page) so tabs look, behave and announce identically everywhere.
+  Never hand-roll a `role="tablist"` for page navigation and never introduce a new `UTabs` for it; use `TabStrip`'s
+  `disabled`/`disabledReason` for unselectable tabs and put panel content in its `#<slot>` templates — the
+  `role="tabpanel"` wiring, roving focus and `aria-disabled` come from the component. (Content-level tab switches
+  inside a card, e.g. an mcp code-client picker, may stay on `UTabs`.)
 - Add a `title` attribute to any control whose purpose is not obvious from its label.
 - **Clickable source paths**: render any repo-relative path or `file:line[:col]` with `OpenInIdeLink`, never a bare
   `<span>`/`<code>`. Pass `filePath` (+ `line`/`column`) or `location`, and thread `projectKey` (the Piwi project **id**)

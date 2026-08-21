@@ -11,6 +11,7 @@ import type { TableColumn } from '@nuxt/ui';
 import { CASE_STATUS_SERIES, legendOf } from '~/utils/chart';
 import { getPerformanceHints } from '~/utils/performance-hints';
 import { renderAnsi } from '~/utils';
+import type { NavbarAction } from '~/components/shared/NavbarActions.vue';
 import { buildRetryCommand } from '~/utils/retry-command';
 import { condenseErrorText } from '#shared/error-fingerprint';
 import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator';
@@ -309,10 +310,12 @@ const retryCases = computed(() => [
 const retryCommand = computed(() => buildRetryCommand(retryCases.value));
 const { copy: copyRetry, copied: retryCopied } = useCopy();
 
-const navbarActions = computed(() => [
+const navbarActions = computed<NavbarAction[]>(() => [
   {
-    label: retryCopied.value ? 'Copied' : 'Retry command',
-    icon: retryCopied.value ? 'i-lucide-check' : 'i-lucide-play',
+    label: retryCopied.value ? 'Copied' : 'Copy retry command',
+    icon: retryCopied.value ? 'i-lucide-check' : 'i-lucide-clipboard',
+    variant: 'outline',
+    title: retryCopied.value ? 'Copied!' : copyPreview(retryCommand.value),
     onClick: () => copyRetry(retryCommand.value, { toast: 'Retry command copied' }),
   },
   { label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() },
@@ -465,7 +468,9 @@ provide(clusterSectionLocatorKey, {
 <template>
   <UDashboardPanel id="test-run-case-detail">
     <template #header>
-      <UDashboardNavbar>
+      <UDashboardNavbar
+        :title="`${testCase?.title ?? `Execution #${testCaseId}`}${testCase?.testRun?.id ? ` · Run #${testCase.testRun.id}` : ''}`"
+      >
         <template #leading>
           <UDashboardSidebarCollapse />
           <BreadcrumbNav
@@ -494,29 +499,31 @@ provide(clusterSectionLocatorKey, {
           />
         </template>
         <template #right>
-          <NuxtLink
-            v-if="testCase?.testCaseId"
-            :to="`/test-cases/${testCase.testCaseId}`"
-            class="text-xs text-gray-500 hover:text-primary mr-2 flex items-center gap-1"
-            title="View test case evolution and history"
-          >
-            <UIcon name="i-lucide-trending-up" class="size-3.5" />
-            <span class="hidden sm:inline">Evolution</span>
-          </NuxtLink>
-          <ShareLinksModal v-if="testCase" :endpoint="`/api/test-run-cases/${testCase.id}/share-links`" />
-          <ExportMenu
-            v-if="testCase"
-            :endpoint="`/api/test-run-cases/${testCase.id}/export`"
-            :base-name="`piwi-execution-${testCase.id}`"
-            class="mr-2"
-          />
-          <DesktopRunLocallyButton
-            :project-id="testCase?.testRun?.project?.id"
-            :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
-            :cases="retryCases"
-            class="mr-2"
-          />
-          <NavbarActions :actions="navbarActions" />
+          <div class="flex items-center gap-1 shrink-0 min-w-0">
+            <NuxtLink
+              v-if="testCase?.testCaseId"
+              :to="`/test-cases/${testCase.testCaseId}`"
+              class="text-xs text-gray-500 hover:text-primary mr-2 flex items-center gap-1 shrink-0"
+              title="View test case evolution and history"
+            >
+              <UIcon name="i-lucide-trending-up" class="size-3.5" />
+              <span class="hidden sm:inline">Evolution</span>
+            </NuxtLink>
+            <ShareLinksModal v-if="testCase" :endpoint="`/api/test-run-cases/${testCase.id}/share-links`" />
+            <ExportMenu
+              v-if="testCase"
+              :endpoint="`/api/test-run-cases/${testCase.id}/export`"
+              :base-name="`piwi-execution-${testCase.id}`"
+              class="mr-2"
+            />
+            <DesktopRunLocallyButton
+              :project-id="testCase?.testRun?.project?.id"
+              :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
+              :cases="retryCases"
+              class="mr-2"
+            />
+            <NavbarActions :actions="navbarActions" />
+          </div>
         </template>
       </UDashboardNavbar>
     </template>

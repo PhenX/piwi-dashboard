@@ -265,17 +265,17 @@ test.describe('Dashboard UI Tests', () => {
     await waitForHydration(page);
 
     // Each MetaStripGroup carries its label as a title attribute
-    const ciGroup = page.locator('[title="CI & environment"]');
+    const ciGroup = page.locator('[role="group"][aria-label="CI & environment"]');
     await expect(ciGroup).toBeVisible();
     await expect(ciGroup).toContainText('staging');
     await expect(ciGroup).toContainText('GitHub Actions');
     await expect(ciGroup).toContainText('Build #42');
 
-    const sourceGroup = page.locator('[title="Source"]');
+    const sourceGroup = page.locator('[role="group"][aria-label="Source"]');
     await expect(sourceGroup).toContainText('main');
     await expect(sourceGroup).toContainText('abc123de');
 
-    const tagsGroup = page.locator('[title="Tags"]');
+    const tagsGroup = page.locator('[role="group"][aria-label="Tags"]');
     await expect(tagsGroup).toContainText('smoke');
     await expect(tagsGroup).toContainText('regression');
   });
@@ -308,13 +308,13 @@ test.describe('Dashboard UI Tests', () => {
     await page.goto(`/test-runs/${runId}`);
     await waitForHydration(page);
 
-    const versionsGroup = page.locator('[title="Tooling versions"]');
+    const versionsGroup = page.locator('[role="group"][aria-label="Tooling versions"]');
     await expect(versionsGroup).toBeVisible();
     await expect(versionsGroup).toContainText('Playwright v1.51.0');
     await expect(versionsGroup).toContainText('Piwi v0.7.0');
 
-    await expect(page.locator('[title="Source"]')).toContainText('main');
-    await expect(page.locator('[title="Tags"]')).toContainText('smoke');
+    await expect(page.locator('[role="group"][aria-label="Source"]')).toContainText('main');
+    await expect(page.locator('[role="group"][aria-label="Tags"]')).toContainText('smoke');
   });
 });
 
@@ -401,7 +401,7 @@ test.describe('Foldable Summary', () => {
     await page.waitForURL(/\/test-run-cases\/\d+/);
 
     await expect(page.getByTitle('Collapse summary')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'fold test case' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'fold test case', exact: true })).toBeVisible();
   });
 
   test('should collapse and expand test case summary', async ({ page, request }) => {
@@ -416,7 +416,7 @@ test.describe('Foldable Summary', () => {
     await expect(page.getByTitle('Collapse summary')).toBeVisible();
 
     await page.getByTitle('Collapse summary').click({ force: true });
-    await expect(page.getByRole('heading', { name: 'fold test case' })).not.toBeVisible();
+    await expect(page.getByRole('heading', { name: 'fold test case', exact: true })).not.toBeVisible();
     await expect(page.locator('span:has-text("Dur:")').first()).toBeVisible();
 
     await page.locator('span:has-text("Dur:")').first().click({ force: true });
