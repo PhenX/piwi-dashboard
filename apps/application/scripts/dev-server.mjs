@@ -1,5 +1,5 @@
 /**
- * Start the Nuxt dev server in the background and wait until it responds.
+ * Start the Nuxt dev server fully detached and wait until it responds.
  *
  * Usage: node scripts/dev-server.mjs [port]   |   node scripts/dev-server.mjs --stop [port]
  *
@@ -9,9 +9,14 @@
  * - Refuses to start only when the port is held by a *foreign* process
  *   (usually the Piwi desktop app) — stop that one yourself.
  * - Logs go to `.data/dev-server.log` — watch it for compile errors.
+ *
+ * The server is launched through PowerShell's `Start-Process` (a new process,
+ * hidden window, no inherited handles) so the invoking shell/tool call returns
+ * immediately — spawning `cmd`/node directly kept the caller's process tree
+ * attached and the call hung.
  */
 import { spawn, execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +28,7 @@ const port = args.find((a) => !a.startsWith('-')) ?? '3000';
 
 const dataDir = path.join(appDir, '.data');
 const pidFile = path.join(dataDir, 'dev-server.pid');
+const logPath = path.join(dataDir, 'dev-server.log');
 
 function killRecorded() {
   if (!existsSync(pidFile)) return;
@@ -66,6 +72,50 @@ async function waitForServer(url, timeoutMs = 90_000) {
   return false;
 }
 
+function startServer() {
+  return new Promise((resolve, reject) => {
+    if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
+    // Inherited by Start-Process (no -Environment support on older pwsh).
+    process.env.NUXT_IGNORE_LOCK = '1';
+    const ps = spawn(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        [
+          `$p = Start-Process -FilePath 'npx.cmd'`,
+          `-ArgumentList @('nuxt','dev','--port','${port}')`,
+          `-WorkingDirectory '${appDir}'`,
+          `-WindowStyle Hidden`,
+          `-RedirectStandardOutput '${logPath}'`,
+          `-RedirectStandardError '${logPath}.err'`,
+          `-PassThru;`,
+          `Write-Output $p.Id`,
+        ].join(' '),
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
+    );
+    let out = '';
+    let err = '';
+    ps.stdout.on('data', (d) => {
+      out += String(d);
+    });
+    ps.stderr.on('data', (d) => {
+      err += String(d);
+    });
+    ps.on('error', reject);
+    ps.on('close', (code) => {
+      const pid = Number(out.trim().split(/\s+/).pop());
+      if (code === 0 && Number.isInteger(pid) && pid > 0) {
+        writeFileSync(pidFile, String(pid));
+        resolve(pid);
+      } else {
+        reject(new Error(`Start-Process failed (code ${code}): ${out} ${err}`));
+      }
+    });
+  });
+}
+
 killRecorded();
 if (stopOnly) {
   console.log('Stopped.');
@@ -80,20 +130,8 @@ if (await portInUse(port)) {
   process.exit(1);
 }
 
-if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
-const logFd = openSync(path.join(dataDir, 'dev-server.log'), 'w');
-
-const child = spawn(`npx nuxt dev --port ${port}`, {
-  cwd: appDir,
-  detached: true,
-  shell: true,
-  stdio: ['ignore', logFd, logFd],
-  env: { ...process.env, NUXT_IGNORE_LOCK: '1' },
-});
-writeFileSync(pidFile, String(child.pid));
-child.unref();
-
-console.log(`Starting nuxt dev on http://localhost:${port} (pid ${child.pid}) — logs: .data/dev-server.log`);
+const pid = await startServer();
+console.log(`Starting nuxt dev on http://localhost:${port} (pid ${pid}) — logs: .data/dev-server.log`);
 const ready = await waitForServer(`http://localhost:${port}/api/projects`);
 if (!ready) {
   console.error(`Server did not come up within 90s — check .data/dev-server.log`);
