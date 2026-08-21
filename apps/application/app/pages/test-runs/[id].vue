@@ -25,8 +25,10 @@ const latestRunStatus = computed(() => latestRunInfo.value?.status ?? testRun.va
 const isLatestRunActive = computed(() => latestRunStatus.value === 'running' || latestRunStatus.value === 'finalizing');
 
 const navbarTitle = computed(() => {
+  // The breadcrumb leaf already carries "Run #N" — the title adds the project
+  // identity without repeating the run number.
   const project = testRun.value?.project?.label || testRun.value?.project?.name;
-  return `Run #${runId}${project ? ` · ${project}` : ''}`;
+  return project ?? `Run #${runId}`;
 });
 
 useHead(
@@ -553,7 +555,7 @@ const tabItems = computed(() => [
     value: 'failure-groups',
     slot: 'failure-groups',
     disabled: !hasFailures.value,
-    disabledReason: 'No failing tests in this run to group',
+    disabledReason: 'no failing tests in this run',
   },
   {
     label: 'Regression',
@@ -561,7 +563,7 @@ const tabItems = computed(() => [
     value: 'regression',
     slot: 'regression',
     disabled: !hasFailures.value,
-    disabledReason: 'No failing tests in this run to compare against',
+    disabledReason: 'no failing tests in this run',
   },
   {
     label: `Timeline${uniqueWorkerCount.value > 0 ? ` (${uniqueWorkerCount.value})` : ''}`,

@@ -469,7 +469,7 @@ provide(clusterSectionLocatorKey, {
   <UDashboardPanel id="test-run-case-detail">
     <template #header>
       <UDashboardNavbar
-        :title="`${testCase?.title ?? `Execution #${testCaseId}`}${testCase?.testRun?.id ? ` · Run #${testCase.testRun.id}` : ''}`"
+        :title="`Run #${testCase?.testRun?.id ?? '?'}${testCase?.testRun?.project?.name ? ` · ${testCase.testRun.project.name}` : ''}`"
       >
         <template #leading>
           <UDashboardSidebarCollapse />

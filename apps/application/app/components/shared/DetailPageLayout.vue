@@ -6,7 +6,8 @@ export interface DetailTabItem {
   slot?: string;
   /** Kept visible but not selectable — a tab that has nothing to show for this record. */
   disabled?: boolean;
-  /** Why the tab is disabled, shown on hover and to assistive tech. */
+  /** Why the tab is disabled; rendered as muted text beside the label (native
+   *  disabled buttons swallow hover, so a tooltip would never appear). */
   disabledReason?: string;
 }
 
@@ -30,6 +31,20 @@ function panelClasses(value: string) {
   const desktop = props.tabPanelClass?.[value] ?? 'overflow-y-auto';
   return ['min-h-0', 'lg:flex-1', desktop, 'max-lg:!block', 'max-lg:!overflow-visible'].join(' ');
 }
+
+// The strip is the Settings-style UNavigationMenu. Its active state is
+// route-driven by default; tabs are view state (no routes), so each item
+// carries `active` + `onSelect` explicitly. The page's `slot` field names the
+// `#tab-*` templates — stripped here so the menu uses the shared `#item-label`.
+const navItems = computed(() =>
+  props.tabItems.map(({ slot: _slot, ...item }) => ({
+    ...item,
+    active: activeTab.value === item.value,
+    onSelect: () => {
+      if (!item.disabled) activeTab.value = item.value;
+    },
+  })),
+);
 </script>
 
 <template>
@@ -49,7 +64,8 @@ function panelClasses(value: string) {
       </button>
     </div>
 
-    <!-- Tab switcher: a full-width select on phones, the shared TabStrip from sm up. Sticky on mobile. -->
+    <!-- Tab switcher: a full-width select on phones, the same UTabs strip the
+         project page uses from sm up. Sticky on mobile. -->
     <div
       class="lg:shrink-0 max-lg:sticky max-lg:top-0 max-lg:z-10 max-lg:-mx-1 max-lg:bg-(--ui-bg-canvas) max-lg:px-1 max-lg:py-1.5"
     >
@@ -61,17 +77,33 @@ function panelClasses(value: string) {
         aria-label="Select tab"
         class="w-full sm:hidden"
       />
-      <TabStrip
-        v-model="activeTab"
-        :items="tabItems"
-        size="sm"
-        class="hidden sm:flex"
-        :panel-classes="Object.fromEntries(tabItems.map((t) => [t.value, panelClasses(t.value)]))"
-      >
-        <template #panel="{ item }">
-          <slot :name="`tab-${item.slot ?? item.value}`" />
-        </template>
-      </TabStrip>
+      <!-- Desktop strip: the same UDashboardToolbar + UNavigationMenu the
+           Settings header uses, so page tabs look identical everywhere. -->
+      <UDashboardToolbar class="hidden sm:block p-1">
+        <UNavigationMenu
+          :items="navItems"
+          highlight
+          class="-mx-1 flex-1"
+          :ui="{ list: 'overflow-x-auto', root: 'min-w-0' }"
+        >
+          <template #item-label="{ item }">
+            <span>{{ item.label }}</span>
+            <span
+              v-if="item.disabled && item.disabledReason"
+              :title="item.disabledReason"
+              class="ml-1.5 font-normal opacity-70"
+            >
+              {{ item.disabledReason }}
+            </span>
+          </template>
+        </UNavigationMenu>
+      </UDashboardToolbar>
     </div>
+
+    <template v-for="item in tabItems" :key="item.value">
+      <div v-if="activeTab === item.value" role="tabpanel" :aria-label="item.label" :class="panelClasses(item.value)">
+        <slot :name="`tab-${item.slot ?? item.value}`" />
+      </div>
+    </template>
   </div>
 </template>

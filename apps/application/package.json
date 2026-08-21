@@ -14,6 +14,7 @@
     "app:seed:dev": "node scripts/seed-dev-from-demo.mjs",
     "app:build": "nuxt build",
     "app:dev": "nuxt dev",
+    "app:dev:bg": "node scripts/dev-server.mjs",
     "app:preview": "nuxt preview",
     "app:lint": "oxlint --config oxlint.config.ts .",
     "app:lint:fix": "oxlint --config oxlint.config.ts . --fix",

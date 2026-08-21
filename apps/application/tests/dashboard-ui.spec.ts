@@ -83,10 +83,7 @@ test.describe('Dashboard UI Tests', () => {
     // Click on first test run - wait for table to be interactive before clicking
     const viewButton = page.locator('table').getByRole('link', { name: 'View' }).first();
     await expect(viewButton).toBeVisible({ timeout: 10000 });
-    await viewButton.click();
-
-    // Wait for navigation
-    await page.waitForURL(/\/test-runs\/\d+/);
+    await Promise.all([page.waitForURL(/\/test-runs\/\d+/), viewButton.click()]);
 
     // Check test run details are displayed
     await expect(page.locator('h2').first()).toContainText('Run #');
@@ -100,16 +97,15 @@ test.describe('Dashboard UI Tests', () => {
     await waitForHydration(page);
     const viewButton = page.locator('table').getByRole('link', { name: 'View' }).first();
     await expect(viewButton).toBeVisible({ timeout: 10000 });
-    await viewButton.click();
-    await page.waitForURL(/\/test-runs\/\d+/);
+    await Promise.all([page.waitForURL(/\/test-runs\/\d+/), viewButton.click()]);
     await waitForHydration(page);
 
     await expect(page.getByRole('columnheader', { name: 'Test case' }).first()).toBeVisible();
 
-    await page.getByRole('tab', { name: /^Timeline/ }).click();
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page.getByRole('button', { name: /^Timeline/ }).click();
+    await page.getByRole('button', { name: /^Compare$/ }).click();
     await expect(page.getByText('Run A (baseline)')).toBeVisible({ timeout: 15000 });
-    await page.getByRole('tab', { name: 'Slow endpoints' }).click();
+    await page.getByRole('button', { name: /^Slow endpoints/ }).click();
   });
 
   test('should show project switcher dropdown', async ({ page }) => {

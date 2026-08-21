@@ -119,7 +119,10 @@ test.describe.serial('Run page test-case filters', () => {
     await page.goto(`/test-runs/${runId}`);
     await waitForHydration(page);
 
-    await page.getByRole('tab', { name: /Failure groups/ }).click();
+    await page
+      .getByRole('button', { name: /Failure groups/ })
+      .first()
+      .click();
     const loginGroupRow = page.locator('table').getByRole('row').filter({ hasText: 'Timeout' }).first();
     await loginGroupRow.getByRole('button', { name: 'Show failing tests' }).click();
 

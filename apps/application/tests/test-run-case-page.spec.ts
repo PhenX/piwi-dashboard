@@ -72,7 +72,7 @@ test.describe('Test-run-case page', () => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
 
-    await expect(page.getByRole('tab', { name: 'Diagnosis' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Diagnosis', exact: true })).toBeVisible();
     // The verdict and AI-diagnosis rail cards are the diagnosis-tab signature.
     await expect(page.getByRole('heading', { name: 'Verdict' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'AI diagnosis' })).toBeVisible();
@@ -90,10 +90,10 @@ test.describe('Test-run-case page', () => {
     await page.goto(`/test-run-cases/${passedCaseId}`);
     await waitForHydration(page);
 
-    await expect(page.getByRole('tab', { name: 'Artifacts' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Artifacts', exact: true })).toBeVisible();
     // No error → no Diagnosis tab.
-    await expect(page.getByRole('tab', { name: 'Diagnosis' })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: /Steps/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Diagnosis', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Steps/ })).toBeVisible();
   });
 
   test('the header offers a Copy retry command action', async ({ page }) => {
@@ -106,7 +106,7 @@ test.describe('Test-run-case page', () => {
   test('Performance tab is always available and shows an empty state when nothing captured', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}?tab=performance`);
     await waitForHydration(page);
-    await expect(page.getByRole('tab', { name: 'Performance' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Performance', exact: true })).toBeVisible();
   });
 
   test('History tab opens populated from the SSR payload, without refetching or a hydration mismatch', async ({
@@ -128,7 +128,7 @@ test.describe('Test-run-case page', () => {
     await waitForHydration(page);
 
     await expect(page.getByRole('heading', { name: 'Duration trend' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: /History \(\d+\)/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /History \(\d+\)/ })).toBeVisible();
     expect(historyCalls).toEqual([]);
     expect(hydrationErrors).toEqual([]);
   });
