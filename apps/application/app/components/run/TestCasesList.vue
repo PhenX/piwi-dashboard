@@ -410,7 +410,7 @@ defineExpose({ scrollToCase });
     <template v-else-if="!effectiveTreeView">
       <div
         v-if="sortedTestCases.length > 0"
-        class="flex-1 min-h-0 max-lg:h-[70dvh] md:overflow-x-auto overflow-y-hidden rounded-lg border border-default bg-default"
+        class="flex-1 min-h-0 md:overflow-x-auto overflow-y-hidden rounded-lg border border-default bg-default"
       >
         <!--
           The grid only claims its minimum width from `md` up, where the columns
@@ -498,7 +498,6 @@ defineExpose({ scrollToCase });
                     :class="
                       highlightedCaseId === item.executionId ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''
                     "
-                    role="row"
                   >
                     <div class="flex items-start gap-2">
                       <span
@@ -679,7 +678,7 @@ defineExpose({ scrollToCase });
                     <!-- worker -->
                     <div class="px-3 py-2 flex items-center" role="cell">
                       <UBadge v-if="item.workerIndex != null" color="neutral" variant="soft" class="font-mono text-xs">
-                        {{ item.workerIndex }}
+                        w{{ item.workerIndex }}
                       </UBadge>
                     </div>
 

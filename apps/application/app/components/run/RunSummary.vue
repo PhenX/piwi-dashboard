@@ -252,6 +252,10 @@ function onLabelKeydown(e: KeyboardEvent) {
             <div class="min-w-0 flex-1 basis-64">
               <div class="flex items-center gap-2 flex-wrap">
                 <StatusChip :status="testRun?.status ?? ''" />
+                <HelpHint
+                  v-if="testRun?.status === 'interrupted' || (testRun?.shardTotal && testRun.shardTotal > 1)"
+                  topic="run.partial"
+                />
                 <h2 class="text-base font-bold shrink-0 flex items-center gap-1">
                   Run #{{ testRun?.id }}
                   <template v-if="editingLabel">
@@ -313,10 +317,13 @@ function onLabelKeydown(e: KeyboardEvent) {
                 </UTooltip>
               </div>
               <p class="mt-1 text-xs text-muted flex items-center gap-1.5 flex-wrap">
-                <span>Started {{ prettyDateFormat(testRun?.startTime) }}</span>
-                <ClientOnly>
-                  <span class="text-dimmed">· {{ formatRelativeTime(testRun?.startTime) }}</span>
-                </ClientOnly>
+                <span :title="prettyDateFormat(testRun?.startTime)">
+                  <ClientOnly>Started {{ formatRelativeTime(testRun?.startTime) }}</ClientOnly>
+                </span>
+                <template v-if="testRun?.shardTotal && testRun.shardTotal > 1">
+                  <span class="text-dimmed">·</span>
+                  <HelpHint topic="run.partial" />
+                </template>
               </p>
             </div>
 
@@ -506,6 +513,7 @@ function onLabelKeydown(e: KeyboardEvent) {
             <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs shrink-0">
               <div class="flex items-center gap-1">
                 <UIcon name="i-lucide-clock" class="size-3.5 text-zinc-400" />
+                <span class="text-zinc-500">Duration</span>
                 <DurationValue :ms="testRun?.duration" class="font-medium" />
               </div>
               <div v-if="testRun?.avgTestDuration" class="flex items-center gap-1">
@@ -522,7 +530,11 @@ function onLabelKeydown(e: KeyboardEvent) {
                   unit-class="opacity-60"
                 />
               </div>
-              <div v-if="totalWastedTime && totalWastedTime > 0" class="flex items-center gap-1">
+              <div
+                v-if="totalWastedTime && totalWastedTime > 0"
+                class="flex items-center gap-1"
+                title="Wasted in fixed waits"
+              >
                 <UIcon name="i-lucide-clock" class="size-3.5 text-amber-500" />
                 <span class="text-zinc-500">Wasted</span>
                 <DurationValue

@@ -38,6 +38,11 @@ const segments = computed(() => {
          deuteranopia). -->
     <div
       v-if="total > 0"
+      role="progressbar"
+      :aria-label="`Test results: ${props.passed} passed, ${props.failed} failed, ${props.skipped} skipped`"
+      :aria-valuemin="0"
+      :aria-valuemax="total"
+      :aria-valuenow="props.passed + props.failed + props.skipped + (props.didNotRun ?? 0)"
       class="flex gap-0.5 h-2.5 w-full min-w-30 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700"
     >
       <div
