@@ -75,7 +75,9 @@ function liveStep(tc: TestCaseResult) {
 
 function matchesStatus(tc: TestCaseResult, filter: string): boolean {
   if (filter === 'failed') return isFailedStatus(tc.status);
-  if (filter === 'flaky') return (tc.retries ?? 0) > 0;
+  // "Flaky" means passed only after a retry — a subset of passed. Retried
+  // tests that failed every attempt are failures, not flaky.
+  if (filter === 'flaky') return tc.status === 'passed' && (tc.retries ?? 0) > 0;
   return tc.status === filter;
 }
 
@@ -171,6 +173,9 @@ const sortedTestCases = computed<TestCaseResult[]>(() => {
 });
 
 const hasWastedTime = computed(() => props.testCases.some((tc) => (tc.wastedTimeMs ?? 0) > 0));
+
+// "Completed" must not count rows still running.
+const finishedCount = computed(() => props.testCases.filter((tc) => tc.status !== 'running').length);
 
 // Column layout — one grid template shared by the header and every row so the
 // columns stay aligned. Keep the cell order in the template in sync with this.
@@ -308,8 +313,12 @@ defineExpose({ scrollToCase });
             <UIcon name="i-lucide-folder-tree" class="size-3.5" />
           </button>
         </div>
-        <span v-if="isLive" class="text-sm text-zinc-500 tabular-nums inline-flex items-center gap-1">
-          {{ testCases.length }} completed <HelpHint topic="run.live" />
+        <span
+          v-if="isLive"
+          aria-live="polite"
+          class="text-sm text-zinc-500 tabular-nums inline-flex items-center gap-1"
+        >
+          {{ finishedCount }} / {{ testCases.length }} completed <HelpHint topic="run.live" />
         </span>
         <span v-else class="text-sm text-zinc-500 tabular-nums inline-flex items-center gap-1">
           {{ sortedTestCases.length

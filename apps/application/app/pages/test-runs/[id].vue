@@ -470,6 +470,11 @@ const activeTab = ref('test-cases');
 
 const hasFailures = computed(() => (displayProgress.value?.failedTests ?? 0) > 0);
 
+// A run whose only problem is flakiness has no failures — the failure tabs
+// still have content (clusters track passed-on-retry cases), so they stay
+// enabled whenever there are failures OR flaky tests.
+const showFailureTabs = computed(() => hasFailures.value || (testRun.value?.flakyTests ?? 0) > 0);
+
 // Cluster filter state — set by FailureGroups, consumed by TestCasesList. The
 // id doubles as the `?cluster=` deep-link so the mode survives refresh/sharing.
 const selectedClusterFilter = ref<{ id: number; title: string | null } | null>(null);
@@ -555,7 +560,7 @@ const tabItems = computed(() => [
     icon: 'i-lucide-layers',
     value: 'failure-groups',
     slot: 'failure-groups',
-    disabled: !hasFailures.value,
+    disabled: !showFailureTabs.value,
     disabledReason: 'no failing tests in this run',
   },
   {
@@ -563,7 +568,7 @@ const tabItems = computed(() => [
     icon: 'i-lucide-git-pull-request-arrow',
     value: 'regression',
     slot: 'regression',
-    disabled: !hasFailures.value,
+    disabled: !showFailureTabs.value,
     disabledReason: 'no failing tests in this run',
   },
   {
