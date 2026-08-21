@@ -24,6 +24,11 @@ const latestRunId = computed(() => latestRunInfo.value?.id ?? testRun.value?.pro
 const latestRunStatus = computed(() => latestRunInfo.value?.status ?? testRun.value?.project?.latestRunStatus ?? null);
 const isLatestRunActive = computed(() => latestRunStatus.value === 'running' || latestRunStatus.value === 'finalizing');
 
+const navbarTitle = computed(() => {
+  const project = testRun.value?.project?.label || testRun.value?.project?.name;
+  return `Run #${runId}${project ? ` · ${project}` : ''}`;
+});
+
 useHead(
   computed(() => ({
     title: `Test run #${runId}${testRun.value?.project ? ` — ${testRun.value.project.name}` : ''} — Piwi Dashboard`,
@@ -473,7 +478,7 @@ function clearClusterFilter() {
   selectedClusterFilter.value = null;
 }
 
-const hasFailures = computed(() => testRun.value && testRun.value.failedTests > 0);
+const hasFailures = computed(() => (displayProgress.value?.failedTests ?? 0) > 0);
 
 const failureGroupCount = computed(() => {
   if (!testRun.value?.testCases) return 0;
@@ -580,7 +585,7 @@ function handleSelectCluster(clusterId: number) {
 <template>
   <UDashboardPanel id="test-run-detail">
     <template #header>
-      <UDashboardNavbar>
+      <UDashboardNavbar :title="navbarTitle">
         <template #leading>
           <UDashboardSidebarCollapse />
           <BreadcrumbNav
@@ -606,22 +611,24 @@ function handleSelectCluster(clusterId: number) {
               >
                 {{ item?.label }}
               </NuxtLink>
-              <UTooltip
+              <NuxtLink
                 v-if="latestRunId && latestRunId !== Number(runId)"
-                :text="isLatestRunActive ? 'Go to running run' : 'Go to latest run'"
+                :to="`/test-runs/${latestRunId}`"
+                :aria-label="
+                  isLatestRunActive ? `Go to running run #${latestRunId}` : `Go to latest run #${latestRunId}`
+                "
+                class="shrink-0 inline-flex items-center gap-1 rounded-full bg-blue-500/10 hover:bg-blue-500/20 transition-colors ml-1 px-2 py-0.5 text-xs text-blue-500"
               >
-                <NuxtLink :to="`/test-runs/${latestRunId}`">
-                  <span
-                    class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 transition-colors ml-1"
-                  >
-                    <UIcon
-                      name="i-lucide-circle-play"
-                      class="w-3.5 h-3.5 text-blue-500"
-                      :class="{ 'animate-pulse': isLatestRunActive }"
-                    />
-                  </span>
-                </NuxtLink>
-              </UTooltip>
+                <UIcon name="i-lucide-circle-play" class="size-3.5" :class="{ 'animate-pulse': isLatestRunActive }" />
+                {{ isLatestRunActive ? 'Running' : 'Newer run' }} → #{{ latestRunId }}
+              </NuxtLink>
+              <span
+                v-else-if="latestRunId"
+                class="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 ml-1 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-400"
+              >
+                <UIcon name="i-lucide-check-circle-2" class="size-3.5" />
+                Latest run
+              </span>
             </template>
           </BreadcrumbNav>
         </template>

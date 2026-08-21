@@ -283,14 +283,18 @@ const flatRows = computed<FlatRow[]>(() => {
             a per-row "Passed" badge repeated ten times carries no information,
             it just buries the one failed row in green ink.
           -->
-          <UIcon
-            :name="getStatusIcon(row.test.status)"
+          <span
             class="size-4 shrink-0"
-            :class="[getStatusTextClass(row.test.status), isStatusInFlight(row.test.status) ? 'animate-spin' : '']"
             role="img"
             :aria-label="`Status: ${formatStatusLabel(row.test.status)}`"
             :title="formatStatusLabel(row.test.status)"
-          />
+          >
+            <UIcon
+              :name="getStatusIcon(row.test.status)"
+              class="size-4"
+              :class="[getStatusTextClass(row.test.status), isStatusInFlight(row.test.status) ? 'animate-spin' : '']"
+            />
+          </span>
           <!--
             The title is the row's only navigation — a separate "View" button
             pointed at the same page and just ate width. `self-stretch` keeps the

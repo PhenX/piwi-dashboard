@@ -278,6 +278,7 @@ defineExpose({ scrollToCase });
             class="px-2 py-1 text-xs transition-colors"
             :class="!treeView ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
             title="Flat list"
+            :aria-pressed="!treeView"
             @click="setTreeView(false)"
           >
             <UIcon name="i-lucide-list" class="size-3.5" />
@@ -286,6 +287,7 @@ defineExpose({ scrollToCase });
             class="px-2 py-1 text-xs transition-colors"
             :class="treeView ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
             title="Tree view"
+            :aria-pressed="treeView"
             @click="setTreeView(true)"
           >
             <UIcon name="i-lucide-folder-tree" class="size-3.5" />
@@ -324,6 +326,7 @@ defineExpose({ scrollToCase });
                     : 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300'
               : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
           "
+          :aria-pressed="activeStatuses.includes(opt.value)"
           @click="toggleStatus(opt.value)"
         >
           <span
@@ -341,7 +344,13 @@ defineExpose({ scrollToCase });
           {{ opt.label }}
         </button>
       </div>
-      <USelect v-model="testCaseBrowserFilter" :items="testCaseBrowserOptions" size="sm" class="w-36" />
+      <USelect
+        v-model="testCaseBrowserFilter"
+        :items="testCaseBrowserOptions"
+        size="sm"
+        class="w-36"
+        aria-label="Filter by browser"
+      />
       <UCheckbox v-if="!isLive" v-model="showNewRegressionsOnly" label="New regressions" size="sm" />
       <UCheckbox v-if="!isLive" v-model="showNewFlakyOnly" label="New flaky" size="sm" />
       <!-- Phones get the card layout, which has no sortable column headers. -->
@@ -362,7 +371,7 @@ defineExpose({ scrollToCase });
 
     <!-- Tree view -->
     <TestCasesTree
-      v-if="treeView && testCases.length > 0"
+      v-if="treeView"
       :test-cases="sortedTestCases"
       :suites="suites"
       :has-filter="hasFilter"
@@ -468,14 +477,21 @@ defineExpose({ scrollToCase });
                     role="row"
                   >
                     <div class="flex items-start gap-2">
-                      <UIcon
-                        :name="getStatusIcon(item.status)"
+                      <span
                         class="size-4 shrink-0 mt-0.5"
-                        :class="[getStatusTextClass(item.status), isStatusInFlight(item.status) ? 'animate-spin' : '']"
                         role="img"
                         :aria-label="`Status: ${statusHint(item)}`"
                         :title="statusHint(item)"
-                      />
+                      >
+                        <UIcon
+                          :name="getStatusIcon(item.status)"
+                          class="size-4"
+                          :class="[
+                            getStatusTextClass(item.status),
+                            isStatusInFlight(item.status) ? 'animate-spin' : '',
+                          ]"
+                        />
+                      </span>
                       <a
                         :href="`/test-run-cases/${item.executionId}`"
                         class="text-highlighted hover:text-primary hover:underline font-medium flex-1 min-w-0"

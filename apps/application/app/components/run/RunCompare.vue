@@ -151,8 +151,15 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
       <div class="space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Run A (baseline)</label>
-            <USelectMenu v-model="compareRunA" :items="projectRunOptions" placeholder="Select a baseline run..." />
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="compare-baseline-select"
+              >Run A (baseline)</label
+            >
+            <USelectMenu
+              id="compare-baseline-select"
+              v-model="compareRunA"
+              :items="projectRunOptions"
+              placeholder="Select a baseline run..."
+            />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Run B (this run)</label>

@@ -336,12 +336,12 @@ function onLabelKeydown(e: KeyboardEvent) {
                   size="xs"
                   color="warning"
                   variant="subtle"
-                  :icon="retryCopied ? 'i-lucide-check' : 'i-lucide-play'"
+                  :icon="retryCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
                   :title="retryTitle"
-                  aria-label="Retry"
+                  aria-label="Copy retry command"
                   @click="copyRetryCommand()"
                 >
-                  <span class="hidden @2xl:inline">Retry</span>
+                  <span class="hidden @2xl:inline">Copy retry command</span>
                 </UButton>
                 <template #content>
                   <div class="p-2 space-y-1 min-w-32">
@@ -392,6 +392,7 @@ function onLabelKeydown(e: KeyboardEvent) {
                   ? 'bg-accented ring-2 ring-zinc-400 dark:ring-zinc-500'
                   : 'bg-elevated/60 hover:bg-elevated'
               "
+              :aria-pressed="activeFilter === 'all'"
               @click="emit('filter-status', 'all')"
             >
               <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider">Total</p>
@@ -411,6 +412,7 @@ function onLabelKeydown(e: KeyboardEvent) {
                     ? 'bg-emerald-100 dark:bg-emerald-900/30 ring-2 ring-emerald-400 dark:ring-emerald-600'
                     : 'bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
                 "
+                :aria-pressed="activeFilter === 'passed'"
                 @click="emit('filter-status', 'passed')"
               >
                 <p class="text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
@@ -429,6 +431,7 @@ function onLabelKeydown(e: KeyboardEvent) {
                     : 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-800/60'
                 "
                 title="Flaky — passed only after a retry (a subset of passed). Click to filter."
+                :aria-pressed="activeFilter === 'flaky'"
                 @click="emit('filter-status', 'flaky')"
               >
                 <UIcon name="i-lucide-shuffle" class="size-3" />
@@ -442,6 +445,7 @@ function onLabelKeydown(e: KeyboardEvent) {
                   ? 'bg-rose-100 dark:bg-rose-900/30 ring-2 ring-rose-400 dark:ring-rose-600'
                   : 'bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/30'
               "
+              :aria-pressed="activeFilter === 'failed'"
               @click="emit('filter-status', 'failed')"
             >
               <p class="text-xs font-medium text-rose-700 dark:text-rose-400 uppercase tracking-wider">Failed</p>
@@ -456,6 +460,7 @@ function onLabelKeydown(e: KeyboardEvent) {
                   ? 'bg-accented ring-2 ring-zinc-400 dark:ring-zinc-500'
                   : 'bg-elevated/60 hover:bg-elevated'
               "
+              :aria-pressed="activeFilter === 'skipped'"
               @click="emit('filter-status', 'skipped')"
             >
               <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider">Skipped</p>
@@ -471,6 +476,7 @@ function onLabelKeydown(e: KeyboardEvent) {
                   : 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
               "
               title="Tests that never ran (maxFailures cutoff or a serial-group failure)"
+              :aria-pressed="activeFilter === 'didnotrun'"
               @click="emit('filter-status', 'didnotrun')"
             >
               <p class="text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider">Didn't run</p>
