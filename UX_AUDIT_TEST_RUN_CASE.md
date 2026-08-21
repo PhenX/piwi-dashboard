@@ -153,9 +153,20 @@ The summary's `Open tests/checkout/checkout.spec.ts:9 in IDE` points at the `tes
 
 When the trace has no DOM (the `aria-fallback` path), the DOM card renders the ARIA snapshot as styled HTML — the same six nodes as the ARIA card above it — while its *collapsed* peek claims "Failure-time HTML extracted from the trace" (the honest "(aria-fallback)" subtitle only shows when expanded; the help copy repeats the false claim). The API already returns `availableSources` for a toggle the UI never built. **Fix:** one "Page at failure" card with an ARIA/DOM source toggle; peek reflects `snapshotName`.
 
-### F20. Back never returns to the previous tab
+### F20. ~~Back never returns to the previous tab~~ — withdrawn (by design)
 
-Tab changes use `router.replace` only (`[id].vue:177-184`), so visiting four tabs leaves one history entry — Back ejects the user from the page (for notification arrivals, out of the app). There is also no inbound `route.query.tab` watcher. **Fix:** `replace` for the initial default, `push` for user switches, plus an inbound watcher through `normalizeTab`.
+Product decision: tab switches are view state, not navigation, so `router.replace` (no history entry per switch) is intentional. The stated goal — refresh keeps you on the same tab — already works: the `immediate` watcher writes `?tab=` into the URL on every switch (`[id].vue:177-184`) and `normalizeTab(route.query.tab)` restores it on load. Nothing to change.
+
+### F21. Empty tab states are inconsistent — one is hand-rolled despite a shared component
+
+The app has exactly the right primitives: `EmptyState` (genuinely empty but working — `shared/EmptyState.vue`) and `FeatureUnavailable` (empty because an optional capability is off — its own doc comment draws this line). The page uses them unevenly:
+
+- Steps tab: `EmptyState` (`[id].vue:799`) ✓ · History tab: `EmptyState` + detail slot (`:1115`) ✓
+- **Artifacts tab: a hand-rolled centered `div`** (`:825-844`) with two ad-hoc variants (live-run spinner / inbox icon) that duplicates what `EmptyState` renders — different text size, color and spacing from its sibling tabs.
+- Performance tab: `FeatureUnavailable` (`:1030`) — correct per the component's own rule (data needs the capture fixtures), keep it.
+- Card level, the rule flips between tabs: `TestCaseTracesCard.vue:11` and `TestCaseAttachmentsCard.vue:89` **vanish entirely** when empty, while `TestCaseEvidenceCard.vue:103` shows a `FeatureUnavailable` — so an empty Artifacts tab shows one combined fallback where the Diagnosis funnel would show a per-card one.
+
+**Fix:** Replace the Artifacts block with `EmptyState` (its default slot covers the live-run spinner line), and pick one card rule — either all evidence cards render their empty state, or all vanish and the tab-level `EmptyState` is the single fallback.
 
 ### Smaller polish (P3)
 
@@ -185,6 +196,7 @@ Tab changes use `router.replace` only (`[id].vue:177-184`), so visiting four tab
 | 12 | `role="group" aria-label` on `MetaStripGroup` | `MetaStripGroup.vue:18` |
 | 13 | "execution in run #5" / "Recent executions of this test" | `TestCaseVerdictCard.vue:140,154` |
 | 14 | "Cluster: resolved" prefix; hide `unknown` type badge | `FailureClusterCard.vue:48-70` |
+| 15 | Replace the Artifacts tab's hand-rolled empty block with `EmptyState` | `[id].vue:825-844` |
 
 ## What already works — don't lose it
 
