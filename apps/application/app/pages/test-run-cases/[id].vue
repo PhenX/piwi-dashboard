@@ -504,10 +504,10 @@ provide(clusterSectionLocatorKey, {
               v-if="testCase?.testCaseId"
               :to="`/test-cases/${testCase.testCaseId}`"
               class="text-xs text-gray-500 hover:text-primary mr-2 flex items-center gap-1 shrink-0"
-              title="View test case evolution and history"
+              title="View test case history"
             >
               <UIcon name="i-lucide-trending-up" class="size-3.5" />
-              <span class="hidden sm:inline">Evolution</span>
+              <span class="hidden sm:inline">Test case</span>
             </NuxtLink>
             <ShareLinksModal v-if="testCase" :endpoint="`/api/test-run-cases/${testCase.id}/share-links`" />
             <ExportMenu

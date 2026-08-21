@@ -316,7 +316,7 @@ function formatMs(ms: number | null | undefined): string {
     >
       <div class="grid grid-cols-2 gap-4">
         <div v-if="data.mostRegressed.length > 0">
-          <p class="text-xs font-medium text-red-500 mb-2">Most regressed</p>
+          <p class="text-xs font-medium text-red-500 mb-2">Slower</p>
           <div class="space-y-1">
             <NuxtLink
               v-for="r in data.mostRegressed"

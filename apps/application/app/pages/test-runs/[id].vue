@@ -559,7 +559,7 @@ const tabItems = computed(() => [
     disabledReason: 'no failing tests in this run',
   },
   {
-    label: 'Regression',
+    label: 'Since last pass',
     icon: 'i-lucide-git-pull-request-arrow',
     value: 'regression',
     slot: 'regression',

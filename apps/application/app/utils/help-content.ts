@@ -238,8 +238,8 @@ export const HELP_TOPICS = {
     doc: 'flaky-tests#run-insights',
   },
   'run.regression': {
-    title: 'Regression signals',
-    text: 'Tests that newly started failing in this run versus the project baseline — the most likely fallout from the latest change.',
+    title: 'Since last pass',
+    text: 'Compares this run against the most recent passing run of the project — the commits introduced since and the tests that changed between the two.',
     doc: 'flaky-tests#regression-signals',
   },
   'run.timeline': {

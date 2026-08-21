@@ -164,7 +164,7 @@ test.describe('Mobile responsiveness', () => {
           /Executions/,
           /Insights/,
           /Failure clusters/,
-          /Regression/,
+          /Since last pass/,
           /Timeline/,
           /Compare/,
           /Slow endpoints/,

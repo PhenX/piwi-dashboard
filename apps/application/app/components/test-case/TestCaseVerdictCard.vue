@@ -137,7 +137,7 @@ const squareClass = (status: string) => ({
             <template v-if="verdict.lastPass">
               Last passed in
               <NuxtLink :to="`/test-run-cases/${verdict.lastPass.id}`" class="text-primary hover:underline">
-                run #{{ verdict.lastPass.runId }}
+                execution in run #{{ verdict.lastPass.runId }}
               </NuxtLink>
               ({{ formatRelativeTime(verdict.lastPass.startTime) }}).
             </template>
@@ -151,9 +151,13 @@ const squareClass = (status: string) => ({
 
         <!-- Clickable recent-status strip -->
         <div v-if="strip.length > 1">
-          <p class="text-xs text-gray-400 mb-1">Recent runs (oldest → newest)</p>
+          <p class="text-xs text-gray-400 mb-1">Recent executions of this test (oldest → newest)</p>
           <div class="flex items-center gap-1 flex-wrap">
-            <UTooltip v-for="point in strip" :key="point.id" :text="`Run #${point.runId}: ${point.status}`">
+            <UTooltip
+              v-for="point in strip"
+              :key="point.id"
+              :text="`Execution in run #${point.runId}: ${point.status}`"
+            >
               <NuxtLink
                 :to="`/test-run-cases/${point.id}`"
                 class="size-3.5 rounded-sm inline-block transition-colors"
