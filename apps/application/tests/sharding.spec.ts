@@ -189,8 +189,8 @@ test.describe.serial('Sharding API Tests', () => {
     const runData = await runRes.json();
     expect(runData.status).toBe('running');
     expect(runData.shardsFinished).toBe(1);
-    // Counters should include shard 1's finish totals
-    expect(runData.failedTests).toBeGreaterThanOrEqual(1);
+    // Counters reflect the streamed events; finish totals are not added on top
+    expect(runData.failedTests).toBe(1);
   });
 
   test('run finishes with failed status after all shards report', async ({ request }) => {
@@ -215,18 +215,17 @@ test.describe.serial('Sharding API Tests', () => {
     expect(data.status).toBe('failed');
   });
 
-  test('final counters are properly summed from both shards', async ({ request }) => {
+  test('final counters count each streamed execution exactly once', async ({ request }) => {
     const res = await request.get(`/api/test-runs/${runId}`);
     expect(res.ok()).toBeTruthy();
     const data = await res.json();
     expect(data.status).toBe('failed');
 
-    // Events contributed: shard0 2 passed, shard1 1 failed = 3 total, 2 passed, 1 failed
-    // Finish contributed:  shard1 +1 total (+1 failed), shard0 +2 total (+2 passed)
-    // Final: 3 (events) + 1 + 2 (finish totals) = 6 total
-    expect(data.totalTests).toBe(6);
-    expect(data.passedTests).toBe(4); // 2 from events + 2 from shard0 finish
-    expect(data.failedTests).toBe(2); // 1 from events + 1 from shard1 finish
+    // Streamed events: shard 0 reported 2 passed, shard 1 reported 1 failed.
+    // The shards' finish totals must not be added on top of these.
+    expect(data.totalTests).toBe(3);
+    expect(data.passedTests).toBe(2);
+    expect(data.failedTests).toBe(1);
     expect(data.shardsFinished).toBe(2);
     expect(data.shardTotal).toBe(2);
     expect(data.instanceId).toBe(INSTANCE_ID);
@@ -384,7 +383,11 @@ test.describe.serial('Sharding: flaky-only run finishes as passed', () => {
     expect(runRes.ok()).toBeTruthy();
     const runData = await runRes.json();
     expect(runData.status).toBe('passed');
-    expect(runData.flakyTests).toBeGreaterThanOrEqual(1);
+    expect(runData.flakyTests).toBe(1);
+    // 3 streamed executions (flaky attempt + retry, stable test), counted once.
+    expect(runData.totalTests).toBe(3);
+    expect(runData.passedTests).toBe(2);
+    expect(runData.failedTests).toBe(1);
   });
 });
 

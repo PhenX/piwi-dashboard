@@ -51,7 +51,7 @@ defineRouteMeta({
     tags: ['Test Runs'],
     summary: 'Finish a streaming test run',
     description:
-      'Finalize a streaming test run by setting its final status and calculating performance metrics. Supports pending uploads mode where reports are uploaded asynchronously after finishing. For sharded runs, counters are accumulated and the run finishes only after all shards report.',
+      'Finalize a streaming test run by setting its final status and calculating performance metrics. Supports pending uploads mode where reports are uploaded asynchronously after finishing. For sharded runs, the run finishes only after all shards report; test counters come from the streamed events.',
     parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
     'x-required-roles': [],
     requestBody: {
@@ -137,9 +137,13 @@ export default eventHandler(async (event) => {
   const hasPendingUploads = body.hasPendingUploads === true;
 
   if (isSharded) {
-    // Sharded run: accumulate counters, track shardsFinished
-    // Duration: use the maximum across all shards
-    // Counters: SQL increments to accumulate from multiple shards
+    // Sharded run: track shardsFinished; duration is the maximum across shards.
+    // The test counters are NOT touched here — every case (including
+    // synthesized didnotrun ones) arrives as a streamed event, and the events
+    // endpoint already increments the counters per inserted row. Adding the
+    // shards' finish totals on top would count every execution twice. Only
+    // flakyTests accumulates here: the events tally has no flaky notion, so
+    // the shards' finish bodies are its single source.
 
     // Merge this shard's durations with any previously accumulated ones
     const allDurations: number[] = [];
@@ -151,12 +155,7 @@ export default eventHandler(async (event) => {
     const updateData: Record<string, unknown> = {
       updatedAt: new Date(),
       status: 'running', // keep running until all shards finish
-      passedTests: sql`${testRuns.passedTests} + ${body.passedTests ?? 0}`,
-      failedTests: sql`${testRuns.failedTests} + ${sumFailedAndTimedOut(body.failedTests, body.timedOutTests)}`,
-      skippedTests: sql`${testRuns.skippedTests} + ${body.skippedTests ?? 0}`,
-      didNotRunTests: sql`${testRuns.didNotRunTests} + ${body.didNotRunTests ?? 0}`,
       flakyTests: sql`${testRuns.flakyTests} + ${flakyTests}`,
-      totalTests: sql`${testRuns.totalTests} + ${body.totalTests ?? 0}`,
       shardsFinished: sql`${testRuns.shardsFinished} + 1`,
       // Portable "max of two values": SQLite's scalar MAX(a,b) is an aggregate in
       // Postgres, so use a CASE expression that runs on both dialects.
