@@ -42,7 +42,7 @@ const baselineNote = computed(() => {
   const b = diff.value?.baseline;
   if (!b) return '';
   const when = b.startTime ? ` · ${formatRelativeTime(new Date(b.startTime))}` : '';
-  return `vs last pass in run #${b.runId}${when}`;
+  return `vs last passing run of this test (run #${b.runId}${when})`;
 });
 
 const foldedText = computed(() => {

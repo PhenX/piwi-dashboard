@@ -28,6 +28,16 @@ defineEmits<{
   refresh: [];
 }>();
 
+// The first captured source frame — the failing line — preferred over the
+// test() declaration for the summary's "open in IDE" link.
+const ideTarget = computed(() => {
+  const frames = (props.testCase as { testSourceFrames?: Array<{ filePath?: string; line?: number }> | null } | null)
+    ?.testSourceFrames;
+  const frame = frames?.[0];
+  if (!frame?.filePath) return null;
+  return { filePath: frame.filePath, line: frame.line };
+});
+
 /** At-a-glance signal badges shown next to the title (regression / flaky / retry). */
 const signalBadges = computed(() => {
   const tc = props.testCase;
@@ -129,9 +139,13 @@ function attemptTitle(a: { retry: number; status: string; duration: number; star
                 <TestMetaBadges :tags="testCase?.tags" :meta="testCase?.testMeta" />
               </div>
               <p class="text-xs text-gray-500 mt-0.5 flex items-center gap-x-2 gap-y-0.5 flex-wrap">
+                <!-- The failing frame beats the test() declaration: 0-click IDE
+                     should open the line that actually failed. -->
                 <OpenInIdeLink
-                  v-if="testCase?.location"
-                  :location="testCase.location"
+                  v-if="ideTarget?.filePath || testCase?.location"
+                  :file-path="ideTarget?.filePath"
+                  :line="ideTarget?.line"
+                  :location="ideTarget ? undefined : (testCase?.location ?? undefined)"
                   :project-key="projectKey"
                   :project-name="projectName"
                 />

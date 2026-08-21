@@ -248,7 +248,7 @@ function rowAccent(r: DecoratedRequest): string {
 <template>
   <SectionCard
     icon="i-lucide-network"
-    title="Network & backend logs"
+    title="Network requests"
     :count="view === 'trace' ? traceCount : totals.total"
     help="case.network"
   >
