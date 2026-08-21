@@ -4,6 +4,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { runEventBus } from '../../../utils/run-events';
 import { parseLocation } from '../../../utils/parse-location';
 import { validateAndReviveRun } from '../../../utils/revive-run';
+import { readShardTokensFromMeta } from '../../../utils/shard-tokens';
 import { upsertTraceBlob, findTraceBlob } from '../../../utils/trace-blobs';
 import { getStorage } from '../../../storage';
 import { joinSuitePath } from '#shared/utils/suites';
@@ -130,7 +131,12 @@ export default eventHandler(async (event) => {
     });
   }
 
-  await validateAndReviveRun(db, id, testRun, streamToken);
+  // Accept shard tokens too — in a sharded run every shard uploads its own
+  // case files, and only one of them holds the run's primary stream token.
+  const isSharded = !!(testRun.shardTotal && testRun.shardTotal > 1);
+  const shardTokens = isSharded ? readShardTokensFromMeta(testRun.metadata) : undefined;
+  const isShardToken = shardTokens ? (token: string) => shardTokens.has(token) : undefined;
+  await validateAndReviveRun(db, id, testRun, streamToken, isShardToken);
 
   // Locate the run case row the reporter streamed earlier
   const { filePath } = parseLocation(caseInfo.location);
