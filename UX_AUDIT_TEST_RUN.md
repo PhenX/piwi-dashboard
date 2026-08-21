@@ -81,7 +81,7 @@ Run #4: chip "Interrupted", tiles 12/6/3/0/3 — and no banner, help, or chip sa
 
 The badge counts `flakyTests` and its tooltip promises "passed only after a retry (a subset of passed)"; clicking filters `retries > 0` — any retried test, including ones that failed every attempt (`TestCasesList.vue:71`). And since flaky ⊂ passed, a run whose only problem is flakiness has `failedTests = 0` → Failure groups and Regression disabled, though clusters track passed-on-retry cases. **Fix:** filter `status === 'passed' && retries > 0`; gate the tabs on `failedTests > 0 || flakyTests > 0`.
 
-### R12. Disabled tabs never say why — and keyboard users can't reach them
+### R12. Disabled tabs never say why — and keyboard users can't reach them — ✅ shipped 2026-08-21 (reason displayed; native disabled kept)
 
 The right pattern (stable strip), incompletely delivered: `tab … [disabled]` carries no reason, the count drops instead of showing `(0)`, the native `disabled` removes the tab from roving focus (keyboard users can't even land on it to get a tooltip), and visually it's a slightly lighter grey among six grey tabs. **Fix:** `disabledReason` on `DetailTabItem` rendered as `title` + `aria-description`; `aria-disabled` instead of native so it stays focusable.
 
@@ -93,11 +93,11 @@ The five summary tiles (single-select, replaces the set), the five list chips (m
 
 "Filter" (a one-word button on a cluster row) switches tabs and shows "Filtered by failure group" — naming no group, no count (with 2+ clusters, two consecutive filters are indistinguishable), living outside the toolbar that owns every other filter, absent from the URL (a shared link or refresh silently shows all 10 rows), and force-expanding the tree while disabling Collapse-all. **Fix:** name the cluster + matched count in the chip; `?cluster=` in the query restored like `?tab=`; relabel the button "Show failing tests"; keep collapse enabled.
 
-### R15. The Timeline is one unnamed graphic with mouse-only interactions
+### R15. The Timeline is one unnamed graphic with mouse-only interactions — ✅ shipped 2026-08-21 (scrollToCase no longer rewrites the tree cookie)
 
 The whole tab is a single `img` node — a ~1,300-character blob of tick labels and worker names containing **no test names** — with no `role`/`aria-label` on the SVG; click-to-jump lives on bare `<rect>`s (no tabindex/role/keys), pan/zoom is pointer-only, tooltips are hover-only. Clicking a span also silently calls `setTreeView(false)`, overwriting the user's persisted view preference for a year across all runs. **Fix:** `role="img"` + summary label; make spans focusable links; have `scrollToCase` respect tree mode (or switch view non-persistently).
 
-### R16. "Retry" doesn't retry — and the same page proves the right label
+### R16. "Retry" doesn't retry — and the same page proves the right label — ✅ shipped 2026-08-21 (renamed + clipboard icon)
 
 The summary's amber play-icon button `aria-label="Retry"` copies a command to the clipboard; the click that opens its format-mode popover has *already copied* with the previous mode, so changing mode costs 3 clicks and one wrong clipboard overwrite. Two tabs away, Failure groups labels the identical function "Copy retry command". The execution page's F16 already ruled on this. **Fix:** rename + clipboard icon; apply-on-select in the mode menu. Related inversion: **Delete** is one of only two always-visible navbar actions (the destructive one, beside ever-used Refresh), while Share/Export don't exist at run level and the report button loses its label on mobile. Move Delete to an overflow menu; promote "Copy run summary" to the navbar.
 
@@ -105,23 +105,23 @@ The summary's amber play-icon button `aria-label="Retry"` copies a command to th
 
 ## P2 — Vocabulary and consistency
 
-### R17. "Test cases (N)" is a list of executions
+### R17. "Test cases (N)" is a list of executions — ✅ shipped 2026-08-21 (tab renamed "Executions (N)")
 
 Rows are keyed `executionId`, link to `/test-run-cases/:id`, carry a Browser column and fold retries — the documented definition of *executions*, not browser-independent test cases (`concepts.md`). The same ten objects are called "Test cases", "cases", "tests" and "Total" on one screen, and "execution" appears nowhere in run-page copy. **Fix:** "Executions (10)" (or "Results"), align the toolbar/timeline nouns.
 
-### R18. "Failure groups" exists only on this page — which contradicts itself twice
+### R18. "Failure groups" exists only on this page — which contradicts itself twice — ✅ shipped 2026-08-21 (renamed "Failure clusters", header → Triage, formatted values)
 
 Everywhere else the entity is a **failure cluster** (docs, URL, the execution page's card, the destination page's own title). This page's tab help popover is titled "Failure clusters" and its Insights section says "New failure clusters" — while the tab, chip, count line and empty state say "groups". The cluster table also prints the raw triage enum (`cell "open"`) under a header ("Status") that means test-outcome on the neighboring tab, and green "resolved" can render inside a red run (the first audit's F9 pattern). **Fix:** rename the four strings to "Failure clusters"; header → "Triage"; label-format the value.
 
-### R19. "Regression" ×4, "baseline" ×2, and Compare arrives unset
+### R19. "Regression" ×4, "baseline" ×2, and Compare arrives unset — 🟡 partly shipped 2026-08-21 (tab → "Since last pass", help retitled, "Most regressed" → "Slower"; Compare baseline preselect still open)
 
 The Regression tab shows a commit range; Insights' "New regressions" means newly-failing tests; "Most regressed"/"N regressed" mean *slower*; `@regression` is a test tag rendered beside the `NEW` badge. The tab's own help topic describes the Insights list, not the tab. "Baseline" is the documented auto-selected last-green in Insights but a manual pick in Compare — which lands on "Select a baseline run…" (empty) with a "previous run" shortcut that may be red, disagreeing with the baseline the tile above just used. **Fix:** rename the tab "Since last pass"; retitle the help topic; "Slower" for duration; preselect and name the documented baseline in Compare.
 
-### R20. Count units ×4, and one count appears only after you visit
+### R20. Count units ×4, and one count appears only after you visit — ✅ shipped 2026-08-21 (endpoint count from run payload)
 
 `Test cases (10)` = executions, `Failure groups (2)` = clusters, `Timeline (4)` = **workers**, `Slow endpoints (n)` = routes — where n is emitted by the child, which mounts only when the tab opens: six of seven snapshots show a bare label, the seventh shows "(3)", and it persists after one visit, so the strip mutates mid-session and a bare label falsely reads as "empty". Zero-handling differs three ways. The first audit's F14, recurring at run level. **Fix:** compute the endpoint count with the run payload; "Workers timeline" if the count stays; one zero rule.
 
-### R21. Empty states: 5 correct, 7 hand-rolled, 1 celebration on a failing run
+### R21. Empty states: 5 correct, 7 hand-rolled, 1 celebration on a failing run — ✅ shipped 2026-08-21 (EmptyState sweep + neutral icon)
 
 Inventory (owner decision #2): correct — Insights ×3 (`EmptyState`), Slow endpoints (`FeatureUnavailable` + doc), Regression's coded branches (blocked by R1). Hand-rolled — the list's no-cases and no-match divs (`TestCasesList.vue:643-651`, no clear-filters action despite `hasFilter` existing), Compare ×3 (`RunCompare.vue:295-309`), Timeline (`WorkersTimeline.vue:169-171`), and Failure groups' empty state pairing a **party-popper icon** with a failing run (`FailureGroups.vue:262-264`). Plus the R3 no-render hole. **Fix:** swap all seven for `EmptyState` (clear-filters button in its slot); neutral icon.
 
@@ -176,10 +176,10 @@ Date idiom inverted ("Started 8/20/2026, 7:18:32 PM · about 12 hours ago" — t
 
 ## Suggested sequencing
 
-1. ~~**Now:** R1 (blank tab), then quick wins 2–9 — two real bugs and the status-visibility fix cost ~30 lines total.~~ ✅ shipped 2026-08-21 (`fix(ui): fix run page audit findings, aria labels and regression tab`): R1, QW2–9, plus R23's warning fix (`refactor(app)` git-url dedup).
-2. ~~**Next:** R5 (make the landing tab answer the landing question) + R13/R14 (one filter model, named cluster mode) — the structural "lost" fixes.~~ ✅ shipped 2026-08-21 (`fix(ui): sort failures first, unify filters, deep-link cluster mode`): R5 (failure-first default sort, inline error line, cluster badge), R13 (tiles toggle into the chip set, zero tiles disabled), R14 (named/counted cluster chip, `?cluster=` deep link, "Show failing tests", collapse stays enabled). Covered by `tests/run-page-filters.spec.ts`.
-3. **Then:** the shared-root-cause table — each row pays off on both pages at once.
-4. **With the execution page's plan:** the terminology pass (R17–R19 + F11–F13) as one vocabulary change, so both pages shift together.
+1. ~~**Now:** R1 (blank tab), then quick wins 2–9~~ ✅ shipped 2026-08-21 (`fix(ui): fix run page audit findings, aria labels and regression tab`).
+2. ~~**Next:** R5 + R13/R14 — the structural "lost" fixes~~ ✅ shipped 2026-08-21 (`fix(ui): sort failures first, unify filters, deep-link cluster mode`).
+3. ~~**Then:** the shared-root-cause table — each row pays off on both pages at once.~~ ✅ shipped 2026-08-21: navbar titles both pages, `DetailPageLayout` (Settings-style tab strip via `UNavigationMenu`, labeled mobile select, real tabpanel wrappers), `BreadcrumbNav` leaf truncation + `shrink-0` actions, `MetaStripGroup role="group"`, "Copy retry command" on both pages, one `(n)` count rule (endpoint count from run payload), `EmptyState` sweep on both pages, tree-view cookie no longer rewritten. Remaining from the table: fold cookies scoped per entity (F17).
+4. ~~**With the execution page's plan:** the terminology pass (R17–R19 + F11–F13)~~ 🟡 mostly shipped 2026-08-21: R17/R18 done; R19 done except the Compare baseline preselect; F11/F12 wording done (F12's sibling-execution History links open); F13 open. Open: R23 (chart markers, P0), R6, R8–R11, R22, F1–F15 (except the parts above).
 
 ## Appendix — regenerating the evidence
 
