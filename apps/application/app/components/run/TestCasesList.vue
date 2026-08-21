@@ -5,6 +5,11 @@ import type { LiveStepsByWorker } from '~/utils/live-steps';
 
 const { treeView, setTreeView } = useTreeViewCookie('test-cases');
 
+// Transient flat-view override for scrollToCase: reveals the row without
+// persisting the switch in the tree-view cookie (which lasts a year).
+const flatViewOverride = ref(false);
+const effectiveTreeView = computed(() => treeView.value && !flatViewOverride.value);
+
 const props = defineProps<{
   testCases: TestCaseResult[];
   suites: SuiteInfo[];
@@ -259,8 +264,9 @@ watch(
 );
 
 function scrollToCase(id: number) {
-  // Switch to the flat view so the row exists and can be scrolled to.
-  setTreeView(false);
+  // Reveal the row without touching the user's persisted view preference:
+  // the flat override lives for this mount only, the cookie is untouched.
+  flatViewOverride.value = true;
   highlightedCaseId.value = id;
   const doScroll = () => {
     const index = sortedTestCases.value.findIndex((tc) => tc.executionId === id);
@@ -380,7 +386,7 @@ defineExpose({ scrollToCase });
 
     <!-- Tree view -->
     <TestCasesTree
-      v-if="treeView"
+      v-if="effectiveTreeView"
       :test-cases="sortedTestCases"
       :suites="suites"
       :has-filter="hasFilter"
@@ -392,7 +398,7 @@ defineExpose({ scrollToCase });
     />
 
     <!-- Flat, virtualized table view -->
-    <template v-else-if="!treeView">
+    <template v-else-if="!effectiveTreeView">
       <div
         v-if="sortedTestCases.length > 0"
         class="flex-1 min-h-0 max-lg:h-[70dvh] md:overflow-x-auto overflow-y-hidden rounded-lg border border-default bg-default"
@@ -698,15 +704,25 @@ defineExpose({ scrollToCase });
         </div>
       </div>
 
-      <div v-else-if="testCases.length === 0" class="text-center py-10 text-zinc-500">
-        <UIcon name="i-lucide-beaker" class="size-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
-        <p>No test cases recorded for this run.</p>
-      </div>
+      <EmptyState
+        v-else-if="testCases.length === 0"
+        icon="i-lucide-beaker"
+        text="No test cases recorded for this run."
+      />
 
-      <div v-else class="text-center py-10 text-zinc-500">
-        <UIcon name="i-lucide-search-x" class="size-8 mx-auto mb-2 text-zinc-300 dark:text-zinc-600" />
-        <p>No test cases match your filters.</p>
-      </div>
+      <EmptyState v-else icon="i-lucide-search-x" text="No test cases match your filters.">
+        <UButton
+          size="xs"
+          variant="outline"
+          color="neutral"
+          label="Clear filters"
+          @click="
+            testCaseSearch = '';
+            activeStatuses = [];
+            testCaseBrowserFilter = 'all';
+          "
+        />
+      </EmptyState>
     </template>
   </div>
 </template>

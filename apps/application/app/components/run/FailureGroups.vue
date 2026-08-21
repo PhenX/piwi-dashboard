@@ -259,10 +259,11 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
       </UCard>
     </template>
 
-    <div v-else class="flex flex-col items-center justify-center py-8 text-gray-500 gap-2">
-      <UIcon name="i-lucide-party-popper" class="size-6" />
-      <span>No failure groups — failed tests without error details are not grouped</span>
-    </div>
+    <EmptyState
+      v-else
+      icon="i-lucide-shield-check"
+      text="No failure clusters — failed tests without error details are not grouped"
+    />
   </div>
 
   <UModal

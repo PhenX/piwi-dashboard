@@ -829,26 +829,20 @@ provide(clusterSectionLocatorKey, {
               :has-trace="hasTrace"
             />
 
-            <div
+            <EmptyState
               v-if="
                 !(traceData as any[])?.length &&
                 !(testCase as any)?.attachments?.length &&
                 !(testCase as any)?.consoleLogs?.length &&
                 !networkRequests.length
               "
-              class="flex flex-col items-center justify-center py-12 text-gray-400"
-            >
-              <template v-if="runIsActive">
-                <UIcon name="i-lucide-loader-circle" class="size-8 mb-2 animate-spin" />
-                <p class="text-sm">
-                  Run in progress — traces and attachments appear here as soon as they are uploaded.
-                </p>
-              </template>
-              <template v-else>
-                <UIcon name="i-lucide-inbox" class="size-8 mb-2" />
-                <p class="text-sm">No traces, console logs, or network requests captured for this test case.</p>
-              </template>
-            </div>
+              :icon="runIsActive ? 'i-lucide-loader-circle' : 'i-lucide-inbox'"
+              :text="
+                runIsActive
+                  ? 'Run in progress — traces and attachments appear here as soon as they are uploaded.'
+                  : 'No traces, console logs, or network requests captured for this test case.'
+              "
+            />
           </div>
         </template>
 

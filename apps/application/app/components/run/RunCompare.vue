@@ -299,15 +299,13 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
           </TableScroller>
         </template>
 
-        <div v-else-if="compareRunA && !loadingBaseline" class="text-center py-8 text-gray-500">
-          <UIcon name="i-lucide-git-compare-arrows" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
-          <p>No comparison data available.</p>
-        </div>
+        <EmptyState
+          v-else-if="compareRunA && !loadingBaseline"
+          icon="i-lucide-git-compare-arrows"
+          text="No comparison data available."
+        />
 
-        <div v-else class="text-center py-8 text-gray-500">
-          <UIcon name="i-lucide-arrow-left-right" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
-          <p>Select a baseline run to compare.</p>
-        </div>
+        <EmptyState v-else icon="i-lucide-arrow-left-right" text="Select a baseline run to compare." />
       </div>
     </template>
     <div v-else-if="isLive" class="text-center py-10 text-gray-500">

@@ -100,7 +100,7 @@ test.describe('Test-run-case page', () => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
     // NavbarActions keeps the label as accessible name even when icon-only on mobile.
-    await expect(page.getByRole('button', { name: /Retry command/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Copy retry command/ })).toBeVisible();
   });
 
   test('Performance tab is always available and shows an empty state when nothing captured', async ({ page }) => {

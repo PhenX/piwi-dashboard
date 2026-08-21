@@ -166,10 +166,7 @@ function onBarLeave() {
 
     <TimelineTooltip :item="hoveredItem" :pos="tooltipPos" />
   </div>
-  <div v-else class="text-center py-10 text-gray-500">
-    <UIcon name="i-lucide-rows-3" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
-    <p>No worker data available for this run.</p>
-  </div>
+  <EmptyState v-else icon="i-lucide-rows-3" text="No worker data available for this run." />
 </template>
 
 <style>
