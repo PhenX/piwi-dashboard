@@ -233,7 +233,8 @@ const stepSummary = computed(() => {
 });
 
 // Row index of the single slowest step, used to tag that row. Mirrors the header's
-// slowestStep (max flat-step duration) but resolved to a stable row.
+// slowestStep (max flat-step duration) but resolved to a stable row. All-zero
+// durations (a test that never ran) must not tag row 0 as "slowest".
 const slowestStepIndex = computed(() => {
   let idx = -1;
   let max = -1;
@@ -243,7 +244,7 @@ const slowestStepIndex = computed(() => {
       idx = i;
     }
   });
-  return idx;
+  return max > 0 ? idx : -1;
 });
 
 const maxStepDuration = computed(() => steps.value.reduce((m, s) => Math.max(m, s.duration || 0), 0));
@@ -700,6 +701,18 @@ provide(clusterSectionLocatorKey, {
         <!-- ── Steps ────────────────────────────────────────────────────── -->
         <template #tab-steps>
           <div class="space-y-3">
+            <UAlert
+              v-if="
+                (testCase?.status === 'failed' || testCase?.status === 'timedout') &&
+                steps.length > 0 &&
+                !steps.some((s) => s.failed)
+              "
+              color="warning"
+              variant="subtle"
+              icon="i-lucide-info"
+              title="The failure was not captured at step level"
+              description="The test failed, but none of the recorded steps is marked failed — the error happened outside the step list."
+            />
             <div v-if="steps.length > 0">
               <!-- Per-category summary strip -->
               <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs mb-3">
@@ -732,7 +745,13 @@ provide(clusterSectionLocatorKey, {
                   </template>
                   <template #status-cell="{ row }">
                     <span
-                      v-if="row.original.failed"
+                      v-if="testCase?.status === 'didnotrun'"
+                      class="inline-flex items-center justify-center size-5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 text-xs leading-none"
+                      title="Not run"
+                      >–</span
+                    >
+                    <span
+                      v-else-if="row.original.failed"
                       class="inline-flex items-center justify-center size-5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs leading-none"
                       title="Step failed"
                       >✗</span
@@ -1073,24 +1092,16 @@ provide(clusterSectionLocatorKey, {
                   }"
                 >
                   <template #startTime-cell="{ row }">
-                    <span class="text-xs whitespace-nowrap">
-                      <span class="text-gray-500">{{
-                        new Date(row.original.startTime).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                        })
-                      }}</span>
-                      <span class="text-gray-400 ml-1">{{
-                        new Date(row.original.startTime).toLocaleTimeString('en-US', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      }}</span>
+                    <span
+                      class="text-xs whitespace-nowrap"
+                      :title="new Date(row.original.startTime).toLocaleString('en-US')"
+                    >
+                      <ClientOnly>{{ formatRelativeTime(row.original.startTime) }}</ClientOnly>
                     </span>
                   </template>
                   <template #status-cell="{ row }">
                     <UBadge :color="getStatusColor(row.original.status)" variant="subtle" class="capitalize">{{
-                      row.original.status
+                      formatStatusLabel(row.original.status)
                     }}</UBadge>
                   </template>
                   <template #duration-cell="{ row }">

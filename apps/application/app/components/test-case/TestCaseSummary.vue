@@ -151,11 +151,16 @@ function attemptTitle(a: { retry: number; status: string; duration: number; star
           </div>
 
           <StatTileGrid>
+            <!-- A did-not-run execution never measured anything: the tiles and
+                 the slowest-step line below are gated so they don't fabricate
+                 "Duration 0ms / Attempts 1" claims. -->
             <StatTile label="Duration">
-              <DurationValue :ms="testCase?.duration" />
+              <DurationValue v-if="testCase?.status !== 'didnotrun'" :ms="testCase?.duration" />
+              <span v-else class="text-gray-400">—</span>
             </StatTile>
             <StatTile label="Attempts" size="sm">
-              <template v-if="attempts && attempts.length > 1">
+              <span v-if="testCase?.status === 'didnotrun'" class="text-gray-400">—</span>
+              <template v-else-if="attempts && attempts.length > 1">
                 <div class="flex items-center gap-1 flex-wrap">
                   <UBadge
                     v-for="a in attempts"
@@ -179,7 +184,7 @@ function attemptTitle(a: { retry: number; status: string; duration: number; star
             <StatTile label="Worker" :value="testCase?.workerIndex ?? '—'" />
           </StatTileGrid>
 
-          <div v-if="testCase?.slowestStep" class="flex items-center gap-2 text-sm">
+          <div v-if="testCase?.slowestStep && testCase?.status !== 'didnotrun'" class="flex items-center gap-2 text-sm">
             <UIcon name="i-lucide-zap" class="size-4 text-amber-500 shrink-0" />
             <span class="font-medium text-amber-700 dark:text-amber-300">Slowest step:</span>
             <span class="text-gray-700 dark:text-gray-300 truncate">{{ testCase.slowestStep }}</span>
