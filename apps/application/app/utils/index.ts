@@ -301,6 +301,23 @@ export function clusterStatusColor(status: string | null | undefined): 'success'
 }
 
 /**
+ * Human-readable label for a failure cluster's triage status — the raw enum
+ * (`open`) is a value, not display copy.
+ */
+export function formatTriageStatus(status: string | null | undefined): string {
+  switch (status) {
+    case 'open':
+      return 'Open';
+    case 'resolved':
+      return 'Resolved';
+    case 'ignored':
+      return 'Ignored';
+    default:
+      return status ?? '—';
+  }
+}
+
+/**
  * How a landed fix should be presented.
  *
  * The three verdicts are deliberately not interchangeable: only

@@ -537,7 +537,7 @@ const uniqueWorkerCount = computed(() => {
 
 const tabItems = computed(() => [
   {
-    label: `Test cases (${displayTestCases.value.length})`,
+    label: `Executions (${displayTestCases.value.length})`,
     icon: 'i-lucide-beaker',
     value: 'test-cases',
     slot: 'test-cases',
@@ -551,7 +551,7 @@ const tabItems = computed(() => [
   // Failure-only tabs stay visible but disabled on a green run: tabs that
   // appear and disappear shift every other tab's position between runs.
   {
-    label: hasFailures.value ? `Failure groups (${failureGroupCount.value})` : 'Failure groups',
+    label: hasFailures.value ? `Failure clusters (${failureGroupCount.value})` : 'Failure clusters',
     icon: 'i-lucide-layers',
     value: 'failure-groups',
     slot: 'failure-groups',

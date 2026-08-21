@@ -120,7 +120,7 @@ test.describe.serial('Run page test-case filters', () => {
     await waitForHydration(page);
 
     await page
-      .getByRole('button', { name: /Failure groups/ })
+      .getByRole('button', { name: /Failure clusters/ })
       .first()
       .click();
     const loginGroupRow = page.locator('table').getByRole('row').filter({ hasText: 'Timeout' }).first();

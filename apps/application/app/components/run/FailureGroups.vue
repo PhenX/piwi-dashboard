@@ -60,7 +60,7 @@ function copyRetryCommand() {
 const columns: TableColumn<FailureGroup>[] = [
   { accessorKey: 'signature', header: createSortHeader<FailureGroup>('Signature') },
   { accessorKey: 'errorType', header: createSortHeader<FailureGroup>('Type') },
-  { accessorKey: 'status', header: createSortHeader<FailureGroup>('Status') },
+  { accessorKey: 'status', header: createSortHeader<FailureGroup>('Triage') },
   { accessorKey: 'caseCount', header: createSortHeader<FailureGroup>('Tests') },
   { accessorKey: 'signals', header: 'Signals' },
   { accessorKey: 'diagnosis', header: 'AI' },
@@ -82,7 +82,7 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
       <div class="flex items-center justify-between gap-3">
         <p class="text-sm text-gray-500 dark:text-gray-400 inline-flex items-center gap-1">
           {{ totalCases }} failing {{ totalCases === 1 ? 'test' : 'tests' }} across {{ groups.length }}
-          {{ groups.length === 1 ? 'group' : 'groups' }}
+          {{ groups.length === 1 ? 'cluster' : 'clusters' }}
           <HelpHint topic="cluster.concept" />
         </p>
         <UButton
@@ -138,7 +138,7 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
                 variant="subtle"
                 size="sm"
               >
-                {{ row.original.status }}
+                {{ formatTriageStatus(row.original.status) }}
               </UBadge>
               <span v-else class="text-gray-400 text-xs">—</span>
             </template>

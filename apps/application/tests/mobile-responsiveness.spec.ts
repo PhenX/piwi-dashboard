@@ -161,9 +161,9 @@ test.describe('Mobile responsiveness', () => {
         await waitForHydration(page);
 
         const tabLabels = [
-          /Test cases/,
+          /Executions/,
           /Insights/,
-          /Failure groups/,
+          /Failure clusters/,
           /Regression/,
           /Timeline/,
           /Compare/,
