@@ -160,6 +160,8 @@ const squareClass = (status: string) => ({
             >
               <NuxtLink
                 :to="`/test-run-cases/${point.id}`"
+                :aria-label="`Execution in run #${point.runId}: ${formatStatusLabel(point.status)}`"
+                :aria-current="point.id === currentId ? 'true' : undefined"
                 class="size-3.5 rounded-sm inline-block transition-colors"
                 :class="[squareClass(point.status), point.id === currentId ? 'ring-2 ring-offset-1 ring-primary' : '']"
               />

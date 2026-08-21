@@ -467,9 +467,11 @@ onMounted(async () => {
 
     <UDashboardSearch v-model:search-term="searchTerm" :groups="groups" :preserve-group-order="!!searchResults" />
 
-    <!-- Focus target for the skip link; the next Tab lands inside the page panel. -->
-    <span id="main-content" tabindex="-1" class="sr-only">Main content</span>
-    <slot />
+    <!-- The real main landmark the skip link targets. Fills the group's content
+         area so the page panel keeps its full width/height. -->
+    <main id="main-content" tabindex="-1" class="flex-1 min-w-0 flex flex-col outline-none">
+      <slot />
+    </main>
 
     <!-- Global "Open in IDE" settings modal, toggled from file-path choosers and the user menu -->
     <OpenInIdeSettingsModal />

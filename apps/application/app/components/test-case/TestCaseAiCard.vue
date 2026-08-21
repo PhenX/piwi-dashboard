@@ -152,7 +152,7 @@ const showRunning = computed(
     </template>
 
     <div class="space-y-3">
-      <p class="text-xs text-gray-400 inline-flex items-center gap-1">
+      <p v-if="aiStatus?.configured" class="text-xs text-gray-400 inline-flex items-center gap-1">
         <UIcon name="i-lucide-triangle-alert" class="size-3 shrink-0" />
         AI-generated — verify before applying.
       </p>

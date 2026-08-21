@@ -597,6 +597,7 @@ provide(clusterSectionLocatorKey, {
                       variant="ghost"
                       color="neutral"
                       :icon="failureCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
+                      aria-label="Copy failure"
                       @click="copyFailure"
                     />
                   </UTooltip>

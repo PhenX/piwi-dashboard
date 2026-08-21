@@ -10,9 +10,12 @@ const { folded, toggle } = useFoldableSummary(props.storageKey);
 
 <template>
   <div>
-    <div
+    <button
       v-if="folded"
-      class="border border-gray-200 dark:border-gray-800 rounded-xl p-2.5 shadow-xs cursor-pointer select-none"
+      type="button"
+      aria-expanded="false"
+      title="Expand summary"
+      class="w-full text-left border border-gray-200 dark:border-gray-800 rounded-xl p-2.5 shadow-xs cursor-pointer select-none"
       @click="toggle"
     >
       <div class="flex items-center gap-3">
@@ -21,7 +24,7 @@ const { folded, toggle } = useFoldableSummary(props.storageKey);
           <UIcon name="i-lucide-chevron-down" class="size-4 text-gray-400" />
         </div>
       </div>
-    </div>
+    </button>
     <div v-else class="relative">
       <div class="absolute top-1 right-1 z-10">
         <UButton
@@ -31,6 +34,7 @@ const { folded, toggle } = useFoldableSummary(props.storageKey);
           variant="ghost"
           @click="toggle"
           title="Collapse summary"
+          aria-expanded="true"
         />
       </div>
       <slot />
