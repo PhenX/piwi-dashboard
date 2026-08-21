@@ -1165,10 +1165,7 @@ provide(clusterSectionLocatorKey, {
                   }"
                 >
                   <template #startTime-cell="{ row }">
-                    <span
-                      class="text-xs whitespace-nowrap"
-                      :title="new Date(row.original.startTime).toLocaleString('en-US')"
-                    >
+                    <span class="text-xs whitespace-nowrap" :title="prettyDateFormat(row.original.startTime)">
                       <ClientOnly>{{ formatRelativeTime(row.original.startTime) }}</ClientOnly>
                     </span>
                   </template>

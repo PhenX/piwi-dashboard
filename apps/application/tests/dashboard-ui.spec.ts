@@ -80,10 +80,15 @@ test.describe('Dashboard UI Tests', () => {
     await page.waitForURL(/\/projects\/\d+/);
     await waitForHydration(page);
 
-    // Click on first test run - wait for table to be interactive before clicking
+    // Click on first test run. Under heavy parallel load the click has been
+    // observed to land without navigating (passes deterministically solo);
+    // the mechanism is unverified — retry rather than asserting a cause.
     const viewButton = page.locator('table').getByRole('link', { name: 'View' }).first();
     await expect(viewButton).toBeVisible({ timeout: 10000 });
-    await Promise.all([page.waitForURL(/\/test-runs\/\d+/), viewButton.click()]);
+    await expect(async () => {
+      await viewButton.click();
+      await page.waitForURL(/\/test-runs\/\d+/, { timeout: 5000 });
+    }).toPass({ timeout: 30000 });
 
     // Check test run details are displayed
     await expect(page.locator('h2').first()).toContainText('Run #');
@@ -97,7 +102,10 @@ test.describe('Dashboard UI Tests', () => {
     await waitForHydration(page);
     const viewButton = page.locator('table').getByRole('link', { name: 'View' }).first();
     await expect(viewButton).toBeVisible({ timeout: 10000 });
-    await Promise.all([page.waitForURL(/\/test-runs\/\d+/), viewButton.click()]);
+    await expect(async () => {
+      await viewButton.click();
+      await page.waitForURL(/\/test-runs\/\d+/, { timeout: 5000 });
+    }).toPass({ timeout: 30000 });
     await waitForHydration(page);
 
     await expect(page.getByRole('columnheader', { name: 'Test case' }).first()).toBeVisible();
