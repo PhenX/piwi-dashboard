@@ -7,6 +7,7 @@ import type { ComparisonRow } from '~/composables/useRunComparison';
 interface RunOption {
   label: string;
   value: number;
+  status: string;
 }
 
 const props = defineProps<{
@@ -69,7 +70,17 @@ const projectRunOptions = computed<RunOption[]>(() => {
     .map((r) => ({
       label: `Run #${r.id} — ${prettyDateFormat(r.startTime, { dateOnly: true })} (${r.status})`,
       value: r.id,
+      status: r.status,
     }));
+});
+
+// Preselect the documented baseline: the most recent passing run. Without
+// this, Compare opens on "Select a baseline run…" even though every other
+// surface already picked a baseline.
+watch(projectRunOptions, (options) => {
+  if (!compareRunA.value && options.length > 0) {
+    compareRunA.value = options.find((o) => o.status === 'passed') ?? options[0];
+  }
 });
 
 const previousRunId = computed<number | null>(() => {

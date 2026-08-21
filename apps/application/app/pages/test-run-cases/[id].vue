@@ -490,6 +490,20 @@ const sectionToAction: Record<string, () => void> = {
   },
 };
 
+// The jump-chip row under the error — the same section map the AI citations
+// use, so the funnel has a map even when no AI is configured.
+const sectionChips = [
+  { id: 'testSource', label: 'Test source' },
+  { id: 'environmentDiff', label: 'Environment diff' },
+  { id: 'visualDiff', label: 'Visual diff' },
+  { id: 'domSnapshot', label: 'DOM snapshot' },
+  { id: 'ariaSnapshot', label: 'ARIA snapshot' },
+  { id: 'screenshots', label: 'Screenshots' },
+  { id: 'console', label: 'Console' },
+  { id: 'networkRequests', label: 'Network' },
+  { id: 'steps', label: 'Steps' },
+];
+
 provide(clusterSectionLocatorKey, {
   canLocate: (id: string) => id in sectionToAction,
   open: (id: string) => sectionToAction[id]?.(),
@@ -610,9 +624,20 @@ provide(clusterSectionLocatorKey, {
             </div>
 
             <!-- Two columns: evidence funnel (left) + verdict/cluster/AI rail (right) -->
+            <div class="flex flex-wrap gap-1.5">
+              <UButton
+                v-for="s in sectionChips"
+                :key="s.id"
+                size="xs"
+                variant="soft"
+                color="neutral"
+                :label="s.label"
+                @click="sectionToAction[s.id]?.()"
+              />
+            </div>
             <div class="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4">
               <!-- Right rail (DOM-first so it follows the error on mobile) -->
-              <div class="space-y-4 xl:order-2">
+              <div class="space-y-4 lg:order-2">
                 <TestCaseVerdictCard
                   :test-case="(testCase as any) ?? null"
                   :history="historyData"
@@ -625,7 +650,7 @@ provide(clusterSectionLocatorKey, {
               </div>
 
               <!-- Left column: evidence funnel -->
-              <div class="space-y-4 xl:order-1 min-w-0">
+              <div class="space-y-4 lg:order-1 min-w-0">
                 <!-- Test source: the failing line and its callers; full trace call stack when available -->
                 <TestSourceCard
                   v-if="testCase?.testSourceFrames?.length || testCase?.testSource || hasTrace"
