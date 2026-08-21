@@ -37,6 +37,7 @@ const { data: hovered, pos, show, move, hide } = useChartTooltip<MarkerInfo>();
         :stroke-width="hovered?.id === marker.id ? 2 : 1.5"
         stroke-dasharray="4 3"
         :opacity="hovered?.id === marker.id ? 1 : 0.75"
+        class="pointer-events-none"
       />
       <circle
         :cx="x"

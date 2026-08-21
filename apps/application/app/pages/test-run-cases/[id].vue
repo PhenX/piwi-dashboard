@@ -34,9 +34,12 @@ const { data: historyData } = await useAsyncData(
   { default: (): TestCaseHistoryPoint[] => [], watch: [() => testCase.value?.testCaseId] },
 );
 
-const { data: traceData, refresh: refreshTraces } = await useFetch<TraceInfo[]>(
-  `/api/test-run-cases/${testCaseId}/traces`,
-);
+const { data: traceData, refresh: refreshTraces } = await useFetch(`/api/test-run-cases/${testCaseId}/traces`, {
+  // The endpoint returns `{ items: [...] }` — without the unwrap, `hasTrace`
+  // and every trace-gated view stay false and the Artifacts tab never shows
+  // the Traces card.
+  transform: (r: { items: TraceInfo[] }) => r.items,
+});
 
 /** Whether a trace file exists for this execution — unlocks the "go deeper" evidence views. */
 const hasTrace = computed(() => (traceData.value?.length ?? 0) > 0);
