@@ -8,7 +8,6 @@
 *.gif binary
 *.webp binary
 *.ico binary
-*.svg binary
 *.woff binary
 *.woff2 binary
 *.ttf binary
@@ -21,4 +20,3 @@
 *.db binary
 *.webm binary
 *.mp4 binary
-*.lock binary
