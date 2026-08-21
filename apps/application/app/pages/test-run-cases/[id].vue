@@ -56,7 +56,22 @@ useHead(
   })),
 );
 
-const hasError = computed(() => Boolean(testCase.value?.error));
+// Tab membership branches on *status*, not the error string: a flaky
+// passed-on-retry execution still failed at attempt 1 and must offer the
+// Diagnosis tab; a passing one keeps a stable strip.
+const hasFailedAttempt = computed(() => {
+  const tc = testCase.value;
+  if (!tc) return false;
+  const statuses = [tc.status, ...(tc.attempts ?? []).map((a: { status: string }) => a.status)];
+  return statuses.some((s) => isFailedStatus(s));
+});
+
+// Declared before the tab set: `normalizeTab` evaluates `tabItems` during
+// setup, so every computed it touches must already be initialized.
+const runIsActive = computed(() => {
+  const status = testCase.value?.testRun?.status;
+  return status === 'running' || status === 'finalizing';
+});
 
 const performanceHints = computed(() => {
   if (!testCase.value) return [];
@@ -131,17 +146,34 @@ const failureCluster = computed(() => {
 });
 
 // ── Tabs ────────────────────────────────────────────────────────────────────
-// The tab set depends on whether this execution has an error: a failing case
-// leads with Diagnosis; a passing one with its Steps and Artifacts.
+// The tab set branches on status, not the error string: a failing execution
+// (or one whose earlier attempt failed) leads with Diagnosis; Artifacts is
+// always present in a fixed order so content never relocates between states.
+// While a run streams, the Diagnosis slot is reserved (disabled) instead of
+// appearing mid-view and reflowing the strip.
 const tabItems = computed(() => {
-  const items: { label: string; icon: string; value: string; slot: string }[] = [];
-  if (hasError.value) {
+  const items: {
+    label: string;
+    icon: string;
+    value: string;
+    slot: string;
+    disabled?: boolean;
+    disabledReason?: string;
+  }[] = [];
+  if (hasFailedAttempt.value) {
     items.push({ label: 'Diagnosis', icon: 'i-lucide-stethoscope', value: 'diagnosis', slot: 'diagnosis' });
+  } else if (runIsActive.value) {
+    items.push({
+      label: 'Diagnosis',
+      icon: 'i-lucide-stethoscope',
+      value: 'diagnosis',
+      slot: 'diagnosis',
+      disabled: true,
+      disabledReason: 'unavailable until a test fails',
+    });
   }
   items.push({ label: `Steps (${steps.value.length})`, icon: 'i-lucide-list-checks', value: 'steps', slot: 'steps' });
-  if (!hasError.value) {
-    items.push({ label: 'Artifacts', icon: 'i-lucide-paperclip', value: 'artifacts', slot: 'artifacts' });
-  }
+  items.push({ label: 'Artifacts', icon: 'i-lucide-paperclip', value: 'artifacts', slot: 'artifacts' });
   items.push({ label: 'Performance', icon: 'i-lucide-gauge', value: 'performance', slot: 'performance' });
   items.push({
     label: `History${historyData.value?.length ? ` (${historyData.value.length})` : ''}`,
@@ -155,14 +187,14 @@ const tabItems = computed(() => {
 const tabValues = computed(() => tabItems.value.map((t) => t.value));
 
 function defaultTab() {
-  return hasError.value ? 'diagnosis' : 'steps';
+  return hasFailedAttempt.value ? 'diagnosis' : 'steps';
 }
 
 /** Map a raw ?tab= value (incl. legacy aliases) to a currently-valid tab. */
 function normalizeTab(raw: unknown): string {
   let t = typeof raw === 'string' ? raw : '';
   if (t === 'error') t = 'diagnosis'; // legacy: the old Failure tab
-  if (t === 'traces') t = hasError.value ? 'diagnosis' : 'artifacts'; // legacy: old Traces & Console tab
+  if (t === 'traces') t = 'artifacts'; // legacy: old Traces & Console tab
   return tabValues.value.includes(t) ? t : defaultTab();
 }
 
@@ -328,11 +360,6 @@ const navbarActions = computed<NavbarAction[]>(() => [
 // ── Live streaming ──────────────────────────────────────────────────────────
 const isDemoMode = Boolean(useRuntimeConfig().public.demoMode);
 let eventSource: EventSource | null = null;
-
-const runIsActive = computed(() => {
-  const status = testCase.value?.testRun?.status;
-  return status === 'running' || status === 'finalizing';
-});
 
 function connectToRunStream() {
   if (!import.meta.client || isDemoMode || eventSource) return;
