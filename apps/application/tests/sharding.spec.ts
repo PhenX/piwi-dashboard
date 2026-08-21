@@ -243,6 +243,128 @@ test.describe.serial('Sharding API Tests', () => {
   });
 });
 
+test.describe.serial('Sharding: flaky-only run finishes as passed', () => {
+  const INSTANCE_ID = 'sharding-flaky-only-instance-e2e';
+  let runId: number;
+  let tokenShard0: string;
+  let tokenShard1: string;
+
+  test('two shards start and stream a flaky test plus a passing test', async ({ request }) => {
+    const res0 = await request.post('/api/test-runs/start', {
+      data: {
+        projectName: PROJECT.SHARDING_TEST,
+        startTime: new Date().toISOString(),
+        instanceId: INSTANCE_ID,
+        shardIndex: 1,
+        shardTotal: 2,
+      },
+    });
+    expect(res0.ok()).toBeTruthy();
+    const data0 = await res0.json();
+    runId = data0.runId;
+    tokenShard0 = data0.streamToken;
+
+    const res1 = await request.post('/api/test-runs/start', {
+      data: {
+        projectName: PROJECT.SHARDING_TEST,
+        startTime: new Date().toISOString(),
+        instanceId: INSTANCE_ID,
+        shardIndex: 2,
+        shardTotal: 2,
+      },
+    });
+    expect(res1.ok()).toBeTruthy();
+    tokenShard1 = (await res1.json()).streamToken;
+
+    // Shard 0 reports a flaky test: a failed first attempt, then a passed retry.
+    const events0 = await request.post(`/api/test-runs/${runId}/events`, {
+      data: {
+        streamToken: tokenShard0,
+        testCases: [
+          {
+            type: 'complete',
+            title: 'flaky test',
+            status: 'failed',
+            duration: 1200,
+            location: 'tests/flaky.spec.ts:5:3',
+            retries: 0,
+            error: 'Expected element to be visible',
+          },
+          {
+            type: 'complete',
+            title: 'flaky test',
+            status: 'passed',
+            duration: 900,
+            location: 'tests/flaky.spec.ts:5:3',
+            retries: 1,
+          },
+        ],
+      },
+    });
+    expect(events0.ok()).toBeTruthy();
+    expect((await events0.json()).processed).toBe(2);
+
+    // Shard 1 reports a plain passing test
+    const events1 = await request.post(`/api/test-runs/${runId}/events`, {
+      data: {
+        streamToken: tokenShard1,
+        testCases: [
+          {
+            type: 'complete',
+            title: 'stable test',
+            status: 'passed',
+            duration: 700,
+            location: 'tests/stable.spec.ts:5:3',
+            retries: 0,
+          },
+        ],
+      },
+    });
+    expect(events1.ok()).toBeTruthy();
+  });
+
+  test('run finishes as passed although a flaky attempt failed', async ({ request }) => {
+    // Both shards report 'passed' (Playwright's verdict for a flaky-only run);
+    // shard 0's counters still carry the failed attempt.
+    const finish0 = await request.post(`/api/test-runs/${runId}/finish`, {
+      data: {
+        streamToken: tokenShard0,
+        status: 'passed',
+        duration: 4000,
+        totalTests: 2,
+        passedTests: 1,
+        failedTests: 1,
+        skippedTests: 0,
+        flakyTests: 1,
+      },
+    });
+    expect(finish0.ok()).toBeTruthy();
+    expect((await finish0.json()).status).toBe('running');
+
+    const finish1 = await request.post(`/api/test-runs/${runId}/finish`, {
+      data: {
+        streamToken: tokenShard1,
+        status: 'passed',
+        duration: 3000,
+        totalTests: 1,
+        passedTests: 1,
+        failedTests: 0,
+        skippedTests: 0,
+        flakyTests: 0,
+      },
+    });
+    expect(finish1.ok()).toBeTruthy();
+    // The flaky test's failed attempt must not flip the merged run to failed.
+    expect((await finish1.json()).status).toBe('passed');
+
+    const runRes = await request.get(`/api/test-runs/${runId}`);
+    expect(runRes.ok()).toBeTruthy();
+    const runData = await runRes.json();
+    expect(runData.status).toBe('passed');
+    expect(runData.flakyTests).toBeGreaterThanOrEqual(1);
+  });
+});
+
 test.describe.serial('Sharding: cross-run instanceId cancellation', () => {
   const INSTANCE_A = 'sharding-cancel-instance-a';
   const INSTANCE_B = 'sharding-cancel-instance-b';

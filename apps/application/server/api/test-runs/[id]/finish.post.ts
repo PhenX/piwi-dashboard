@@ -1,6 +1,7 @@
 import { sql, eq } from 'drizzle-orm';
 import { getDatabase } from '../../../database';
-import { testRuns } from '../../../database/schema';
+import type { DbClient } from '../../../database';
+import { testRuns, testRunsCases } from '../../../database/schema';
 import { runEventBus } from '../../../utils/run-events';
 import { sanitizeMetadata } from '../../../utils/sanitize';
 import { resolveRunBranch } from '../../../utils/run-branch';
@@ -12,7 +13,38 @@ import { postRunPrFeedbackInBackground } from '../../../utils/scm/pr-feedback';
 import { maybeEnqueueHealActionInBackground } from '../../../utils/heal/policy';
 import { computeRegressionSignals } from '../../../utils/compute-regression-signals';
 import { syncAutoMarkersForRun } from '#shared/handlers/markers';
-import { sumFailedAndTimedOut } from '#shared/utils/test-counts';
+import { FAILED_STATUS_KEYS, sumFailedAndTimedOut } from '#shared/utils/test-counts';
+
+const FAIL_STATUSES = new Set<string>(FAILED_STATUS_KEYS);
+
+/**
+ * Whether any test in the run failed, judged by each test's last attempt per browser.
+ * The `failedTests` counter counts attempts, so it would fail flaky-only runs.
+ */
+async function hasFinalAttemptFailure(db: DbClient, runId: number): Promise<boolean> {
+  const rows = await db
+    .select({
+      testCaseId: testRunsCases.testCaseId,
+      browserName: testRunsCases.browserName,
+      retries: testRunsCases.retries,
+      status: testRunsCases.status,
+    })
+    .from(testRunsCases)
+    .where(eq(testRunsCases.testRunId, runId));
+
+  const finalAttempts = new Map<string, { retries: number; status: string }>();
+  for (const row of rows) {
+    const key = `${row.testCaseId}|${row.browserName ?? ''}`;
+    const retries = row.retries ?? 0;
+    const prev = finalAttempts.get(key);
+    if (!prev || retries > prev.retries) finalAttempts.set(key, { retries, status: row.status });
+  }
+
+  for (const attempt of finalAttempts.values()) {
+    if (FAIL_STATUSES.has(attempt.status)) return true;
+  }
+  return false;
+}
 
 defineRouteMeta({
   openAPI: {
@@ -153,7 +185,7 @@ export default eventHandler(async (event) => {
       updatedRun.shardsFinished >= updatedRun.shardTotal
     ) {
       // All shards done — determine final status
-      finalStatus = (updatedRun.failedTests ?? 0) > 0 ? 'failed' : 'passed';
+      finalStatus = (await hasFinalAttemptFailure(db, id)) ? 'failed' : 'passed';
 
       if (allDurations.length > 0) {
         const aggStats = durationStats(allDurations);
