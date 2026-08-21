@@ -508,8 +508,9 @@ if (clusterQuery && !Number.isNaN(clusterQuery)) {
 // fetch state can refetch instead of showing stale pre-finish data.
 const runRefreshKey = ref(0);
 
-// Endpoints count from SlowEndpoints
-const endpointsCount = ref(0);
+// Endpoints count: seeded from the run payload (so the tab never shows a bare
+// label), then kept live by the Slow endpoints tab's emit.
+const endpointsCount = ref(testRun.value?.networkRequestCount ?? 0);
 
 function clearClusterFilter() {
   selectedClusterFilter.value = null;

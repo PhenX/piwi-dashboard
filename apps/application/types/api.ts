@@ -350,6 +350,8 @@ export interface TestRunDetails {
   projectId: number;
   status: string;
   startTime: string | Date;
+  /** Distinct endpoints captured for the run — the "Slow endpoints (n)" tab count. */
+  networkRequestCount?: number;
   duration?: number | null;
   totalTests: number;
   passedTests: number;

@@ -214,11 +214,19 @@ export async function getTestRun(
   const precedingMarker =
     precedingMarkerCandidates.find((m) => m.environment == null || m.environment === testRun.environment) ?? null;
 
+  // Distinct endpoints seen by the run — feeds the "Slow endpoints (n)" tab
+  // count from the run payload, so the strip never shows a bare label.
+  const endpointCountResult = await db
+    .select({ count: count() })
+    .from(networkRequests)
+    .where(eq(networkRequests.testRunId, id));
+
   return {
     ...testRunPublic,
     precedingMarker,
     isFullRun: testRun.isFullRun === 1,
     project: projectPublic,
+    networkRequestCount: Number(endpointCountResult[0]?.count ?? 0),
     reports: reportResults.map((r: any) => ({
       id: r.id,
       type: r.subtype || r.type,
