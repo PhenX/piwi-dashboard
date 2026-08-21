@@ -15,7 +15,7 @@ import { createScmProvider } from '../scm';
 import { resolveOwners } from '../scm/ownership';
 import { resolveDefaultBranch } from '../scm/default-branch';
 import { resolveRunBranch } from '../run-branch';
-import { normalizeGitUrl } from '../regression-context';
+import { normalizeGitUrl } from '../scm/git-url';
 import { getAutoHealSettings, resolveHealSiteUrl } from './settings';
 import { buildRetryCommand } from '#shared/retry-command';
 import {

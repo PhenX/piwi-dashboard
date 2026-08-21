@@ -24,7 +24,7 @@
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
 import { failureClusters, failureDiagnoses, testRuns, testRunsCases } from '../database/schema';
 import { createScmProvider } from './scm';
-import { normalizeGitUrl } from './regression-context';
+import { normalizeGitUrl } from './scm/git-url';
 import { parseUnifiedDiff, stripAbPrefix } from '#shared/patch';
 import type { RunMetadata } from './run-json-types';
 import type { DbClient } from '../database';

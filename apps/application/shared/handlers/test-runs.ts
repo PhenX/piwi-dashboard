@@ -22,7 +22,7 @@ import type { TestStepEvent } from '../types';
 import type { EndpointSummary, DiagnosisCompact } from '../../types/api';
 
 import type { DrizzleDB } from './db';
-import { normalizeGitUrl } from '../../server/utils/regression-context';
+import { normalizeGitUrl } from '../../server/utils/scm/git-url';
 import { getLocatorHealingBatch } from '../../server/utils/locator-healing';
 
 type ProjectScope = 'all' | Set<number>;
