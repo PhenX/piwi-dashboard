@@ -92,7 +92,9 @@ const navItems = computed(() =>
         >
           <template #item-label="{ item }">
             <span>{{ item.label }}</span>
-            <HelpHint v-if="item.help" :topic="item.help" class="ml-1" />
+            <ClientOnly>
+              <HelpHint v-if="item.help" :topic="item.help" class="ml-1" />
+            </ClientOnly>
             <span
               v-if="item.disabled && item.disabledReason"
               :title="item.disabledReason"

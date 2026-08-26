@@ -2,7 +2,12 @@ import { h } from 'vue';
 import { UIcon } from '#components';
 import type { Column } from '@tanstack/vue-table';
 import type { CommitListItem } from '~~/types/api';
-import { formatDuration as formatDurationLib, formatDistanceToNow, intervalToDuration } from 'date-fns';
+import {
+  format as formatDate,
+  formatDistanceToNow,
+  formatDuration as formatDurationLib,
+  intervalToDuration,
+} from 'date-fns';
 import { TEST_PRIORITIES, type TestPriority } from '@piwitests/core/test-meta';
 
 /**
@@ -49,9 +54,13 @@ export { formatBytes } from '#shared/utils/format-bytes';
  * works for both `integer(timestamp)` columns (seconds) and raw millisecond
  * fields such as `startedAt`, as well as `Date` objects (e.g. PostgreSQL).
  *
+ * The format is fixed (not locale-dependent): the server renders the same
+ * strings the client hydrates, and the server has no browser locale to match.
+ * Dates read in American English, consistent with the rest of the UI copy.
+ *
  * @param date The value to format.
  * @param options.dateOnly Omit the time component (date only).
- * @returns A locale string, or `'N/A'` for empty/invalid input.
+ * @returns A formatted string, or `'N/A'` for empty/invalid input.
  */
 export function prettyDateFormat(
   date: string | Date | number | null | undefined,
@@ -74,7 +83,7 @@ export function prettyDateFormat(
   }
 
   if (Number.isNaN(d.getTime())) return 'N/A';
-  return options.dateOnly ? d.toLocaleDateString() : d.toLocaleString();
+  return options.dateOnly ? formatDate(d, 'M/d/yyyy') : formatDate(d, 'M/d/yyyy, h:mm:ss a');
 }
 
 export function formatRelativeTime(date: string | Date | number | null | undefined): string {
