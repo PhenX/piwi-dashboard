@@ -11,7 +11,8 @@ import * as schema from '../../server/database/schema.sqlite';
 delete process.env.PIWI_DATABASE_URL;
 const { resolveRunBranch, resolveRunPrNumber } = await import('../../server/utils/run-branch');
 const { selectBaselineRun } = await import('../../server/utils/branch-baseline');
-const { resolveDefaultBranch, FALLBACK_DEFAULT_BRANCH } = await import('../../server/utils/scm/default-branch');
+const { resolveDefaultBranch } = await import('../../server/utils/scm/default-branch');
+const { FALLBACK_DEFAULT_BRANCH } = await import('../../server/utils/scm/git-url');
 
 let db: ReturnType<typeof drizzle<typeof schema>>;
 

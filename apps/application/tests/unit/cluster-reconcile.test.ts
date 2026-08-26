@@ -125,9 +125,21 @@ beforeEach(async () => {
   run1 = await seedRun();
 });
 
-afterEach(() => {
-  client.close();
-  rmSync(tmpDir, { recursive: true, force: true });
+afterEach(async () => {
+  // Await the close: on Windows the client still holds the DB file handles
+  // until the promise settles (and sometimes a beat longer), so retry the
+  // removal instead of failing with EPERM.
+  await client.close();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      rmSync(tmpDir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'EPERM' || attempt >= 5) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+    }
+  }
 });
 
 describe('reconcileNewClusters', () => {
