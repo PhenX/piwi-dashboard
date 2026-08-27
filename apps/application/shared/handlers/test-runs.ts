@@ -215,18 +215,23 @@ export async function getTestRun(
     precedingMarkerCandidates.find((m) => m.environment == null || m.environment === testRun.environment) ?? null;
 
   // Distinct endpoints seen by the run — feeds the "Slow endpoints (n)" tab
-  // count from the run payload, so the strip never shows a bare label.
-  const endpointCountResult = await db
-    .select({ count: count() })
+  // count from the run payload, so the strip never shows a bare label. Uses
+  // the same method + normalized-route grouping as getNetworkRequests, so the
+  // label counts the table's rows, not the raw request rows.
+  const endpointRows = await db
+    .select({ method: networkRequests.method, normalizedUrl: networkRequests.normalizedUrl, url: networkRequests.url })
     .from(networkRequests)
     .where(eq(networkRequests.testRunId, id));
+  const endpointCount = new Set(
+    endpointRows.map((r) => `${r.method}|${r.normalizedUrl ?? (r.url ? normalizeRoute(r.url) : r.method)}`),
+  ).size;
 
   return {
     ...testRunPublic,
     precedingMarker,
     isFullRun: testRun.isFullRun === 1,
     project: projectPublic,
-    networkRequestCount: Number(endpointCountResult[0]?.count ?? 0),
+    networkRequestCount: endpointCount,
     reports: reportResults.map((r: any) => ({
       id: r.id,
       type: r.subtype || r.type,
