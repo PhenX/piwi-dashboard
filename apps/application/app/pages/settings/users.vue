@@ -433,9 +433,7 @@ async function handleInviteUser(user: UserDetails) {
           </template>
 
           <template #createdAt-cell="{ row }">
-            <span class="text-sm text-muted">
-              {{ prettyDateFormat(row.original.createdAt, { dateOnly: true }) }}
-            </span>
+            <ClientDate :date="row.original.createdAt" date-only class="text-sm text-muted" />
           </template>
 
           <template #actions-cell="{ row }">
@@ -645,13 +643,11 @@ async function handleInviteUser(user: UserDetails) {
                   <span
                     >Prefix: <code class="font-mono">pd_{{ key.keyPrefix }}…</code></span
                   >
-                  <span>Created: {{ prettyDateFormat(key.createdAt, { dateOnly: true }) }}</span>
-                  <span v-if="key.lastUsedAt"
-                    >Last used: {{ prettyDateFormat(key.lastUsedAt, { dateOnly: true }) }}</span
-                  >
+                  <span>Created: <ClientDate :date="key.createdAt" date-only /></span>
+                  <span v-if="key.lastUsedAt">Last used: <ClientDate :date="key.lastUsedAt" date-only /></span>
                   <span v-else class="italic">Never used</span>
                   <span v-if="key.expiresAt" :class="new Date(key.expiresAt) < new Date() ? 'text-error' : ''">
-                    Expires: {{ prettyDateFormat(key.expiresAt, { dateOnly: true }) }}
+                    Expires: <ClientDate :date="key.expiresAt" date-only />
                   </span>
                 </div>
               </div>

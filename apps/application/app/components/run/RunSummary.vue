@@ -317,9 +317,11 @@ function onLabelKeydown(e: KeyboardEvent) {
                 </UTooltip>
               </div>
               <p class="mt-1 text-xs text-muted flex items-center gap-1.5 flex-wrap">
-                <span :title="prettyDateFormat(testRun?.startTime)">
-                  <ClientOnly>Started {{ formatRelativeTime(testRun?.startTime) }}</ClientOnly>
-                </span>
+                <ClientOnly>
+                  <span :title="prettyDateFormat(testRun?.startTime)">
+                    Started {{ formatRelativeTime(testRun?.startTime) }}
+                  </span>
+                </ClientOnly>
                 <template v-if="testRun?.shardTotal && testRun.shardTotal > 1">
                   <span class="text-dimmed">·</span>
                   <HelpHint topic="run.partial" />
