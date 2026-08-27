@@ -25,10 +25,10 @@ const latestRunStatus = computed(() => latestRunInfo.value?.status ?? testRun.va
 const isLatestRunActive = computed(() => latestRunStatus.value === 'running' || latestRunStatus.value === 'finalizing');
 
 const navbarTitle = computed(() => {
-  // The breadcrumb leaf already carries "Run #N" — the title adds the project
-  // identity without repeating the run number.
+  // The page heading must name this specific run — the breadcrumb and the
+  // URL carry the project identity.
   const project = testRun.value?.project?.label || testRun.value?.project?.name;
-  return project ?? `Run #${runId}`;
+  return project ? `Run #${runId} — ${project}` : `Run #${runId}`;
 });
 
 useHead(
@@ -481,14 +481,28 @@ const selectedClusterFilter = ref<{ id: number; title: string | null } | null>(n
 
 // Cluster display names for the list's cluster badges and the filter chip,
 // taken from the same failure-groups payload the Failure groups tab shows.
+// Fetched whenever the failure tabs become available: a flaky-only run has no
+// failedTests yet still has clusters, and a live run can gain its first
+// failure mid-stream — a one-time check at mount misses both.
 const clusterNames = ref<Record<number, string>>({});
-if (hasFailures.value && import.meta.client) {
-  $fetch<{ items: FailureGroup[] }>(`/api/test-runs/${runId}/failure-groups`)
-    .then((r) => {
-      clusterNames.value = Object.fromEntries(r.items.map((g) => [g.clusterId, g.title || `Cluster #${g.clusterId}`]));
-    })
-    .catch(() => {});
+
+async function fetchClusterNames() {
+  if (!import.meta.client) return;
+  try {
+    const r = await $fetch<{ items: FailureGroup[] }>(`/api/test-runs/${runId}/failure-groups`);
+    clusterNames.value = Object.fromEntries(r.items.map((g) => [g.clusterId, g.title || `Cluster #${g.clusterId}`]));
+  } catch {
+    // badges fall back to plain cluster ids
+  }
 }
+
+watch(
+  showFailureTabs,
+  (show) => {
+    if (show) fetchClusterNames();
+  },
+  { immediate: true },
+);
 
 const clusterFilterName = computed(() => {
   const f = selectedClusterFilter.value;
@@ -513,9 +527,23 @@ if (clusterQuery && !Number.isNaN(clusterQuery)) {
 // fetch state can refetch instead of showing stale pre-finish data.
 const runRefreshKey = ref(0);
 
+// A finishing run can grow its failure-groups payload (new clusters); refetch
+// the display names so newly-appearing badges are labelled.
+watch(runRefreshKey, () => {
+  if (showFailureTabs.value) fetchClusterNames();
+});
+
 // Endpoints count: seeded from the run payload (so the tab never shows a bare
-// label), then kept live by the Slow endpoints tab's emit.
+// label), then kept live by the Slow endpoints tab's emit. The payload value
+// also changes on refresh (live finish, manual Refresh), so follow it too.
 const endpointsCount = ref(testRun.value?.networkRequestCount ?? 0);
+
+watch(
+  () => testRun.value?.networkRequestCount,
+  (count) => {
+    if (count != null) endpointsCount.value = count;
+  },
+);
 
 function clearClusterFilter() {
   selectedClusterFilter.value = null;

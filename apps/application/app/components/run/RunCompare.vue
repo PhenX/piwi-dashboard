@@ -8,6 +8,7 @@ interface RunOption {
   label: string;
   value: number;
   status: string;
+  startTime: number;
 }
 
 const props = defineProps<{
@@ -71,16 +72,19 @@ const projectRunOptions = computed<RunOption[]>(() => {
       label: `Run #${r.id} — ${prettyDateFormat(r.startTime, { dateOnly: true })} (${r.status})`,
       value: r.id,
       status: r.status,
+      startTime: new Date(r.startTime).getTime(),
     }));
 });
 
-// Preselect the documented baseline: the most recent passing run. Without
-// this, Compare opens on "Select a baseline run…" even though every other
-// surface already picked a baseline.
+// Preselect the documented baseline: the most recent passing run *before* this
+// one. A newest-first list also contains runs newer than the viewed run, so
+// restricting to earlier start times keeps a historical run from comparing
+// against a pass that happened after it.
 watch(projectRunOptions, (options) => {
-  if (!compareRunA.value && options.length > 0) {
-    compareRunA.value = options.find((o) => o.status === 'passed') ?? options[0];
-  }
+  if (compareRunA.value || options.length === 0) return;
+  const currentStart = props.testRun ? new Date(props.testRun.startTime).getTime() : Number.POSITIVE_INFINITY;
+  const earlier = options.filter((o) => o.startTime < currentStart);
+  compareRunA.value = earlier.find((o) => o.status === 'passed') ?? earlier[0] ?? undefined;
 });
 
 const previousRunId = computed<number | null>(() => {
