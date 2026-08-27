@@ -405,7 +405,9 @@ test.describe('Foldable Summary', () => {
     await page.waitForURL(/\/test-run-cases\/\d+/);
 
     await expect(page.getByTitle('Collapse summary')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'fold test case', exact: true })).toBeVisible();
+    // The navbar h1 repeats the execution title; the foldable summary heading
+    // is the h2.
+    await expect(page.getByRole('heading', { name: 'fold test case', exact: true, level: 2 })).toBeVisible();
   });
 
   test('should collapse and expand test case summary', async ({ page, request }) => {
@@ -420,7 +422,7 @@ test.describe('Foldable Summary', () => {
     await expect(page.getByTitle('Collapse summary')).toBeVisible();
 
     await page.getByTitle('Collapse summary').click({ force: true });
-    await expect(page.getByRole('heading', { name: 'fold test case', exact: true })).not.toBeVisible();
+    await expect(page.getByRole('heading', { name: 'fold test case', exact: true, level: 2 })).not.toBeVisible();
     await expect(page.locator('span:has-text("Dur:")').first()).toBeVisible();
 
     await page.locator('span:has-text("Dur:")').first().click({ force: true });
