@@ -270,11 +270,14 @@ const tabGroups = computed(() => [
 const tabItems = computed(() => tabGroups.value.flatMap((g) => g.items));
 
 // The strip is the Settings-style UNavigationMenu (active state is explicit:
-// tabs are view state, not routes).
+// tabs are view state, not routes). The active item carries `aria-current` so
+// the strip reads as "current view"; the panels deliberately carry no
+// tabpanel role (the menu exposes plain buttons, not a tablist).
 const tabNavItems = computed(() =>
   tabItems.value.map((item) => ({
     ...item,
     active: activeTab.value === item.value,
+    'aria-current': activeTab.value === item.value ? 'true' : undefined,
     onSelect: () => {
       activeTab.value = item.value;
     },
@@ -809,7 +812,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
           />
         </UDashboardToolbar>
         <!-- TEST RUNS TAB -->
-        <div v-if="activeTab === 'test-runs'" role="tabpanel" aria-label="Test runs">
+        <div v-if="activeTab === 'test-runs'">
           <!-- Full runs toggle + Environment filter — drives the chart and the table -->
           <div class="flex flex-wrap items-center gap-3 mb-4">
             <div class="inline-flex items-center gap-1">
@@ -970,7 +973,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
                 </div>
               </template>
               <template #startTime-cell="{ row }">
-                <span class="text-xs text-gray-600">{{ prettyDateFormat(row.original.startTime) }}</span>
+                <ClientDate :date="row.original.startTime" class="text-xs text-gray-600" />
               </template>
               <template #environment-cell="{ row }">
                 <UBadge v-if="row.original.environment" color="info" variant="subtle" size="sm">
@@ -1054,7 +1057,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
         </div>
 
         <!-- FAILURE CLUSTERS TAB -->
-        <div v-if="activeTab === 'failure-clusters'" role="tabpanel" aria-label="Failure clusters">
+        <div v-if="activeTab === 'failure-clusters'">
           <template v-if="activeTab === 'failure-clusters'">
             <ClusterMergeSuggestions
               :key="`sug-${clustersRefreshKey}`"
@@ -1066,7 +1069,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
         </div>
 
         <!-- FLAKY TESTS TAB -->
-        <div v-if="activeTab === 'flaky-tests'" role="tabpanel" aria-label="Flaky tests">
+        <div v-if="activeTab === 'flaky-tests'">
           <FlakyTestsList
             v-if="activeTab === 'flaky-tests'"
             :project-id="String(projectId)"
@@ -1077,7 +1080,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
         </div>
 
         <!-- PERFORMANCE TAB -->
-        <div v-if="activeTab === 'performance'" role="tabpanel" aria-label="Performance">
+        <div v-if="activeTab === 'performance'">
           <div class="flex flex-wrap items-center gap-3">
             <span class="text-sm text-muted shrink-0">Date range:</span>
             <UInput v-model="dateFrom" type="date" size="sm" placeholder="From" class="w-40" />
@@ -1283,7 +1286,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
         </div>
 
         <!-- TEST CASES TAB -->
-        <div v-if="activeTab === 'test-cases'" role="tabpanel" aria-label="Test cases">
+        <div v-if="activeTab === 'test-cases'">
           <ProjectTestCasesTable
             :project-id="projectId"
             :project-name="project?.name"
@@ -1293,7 +1296,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
         </div>
 
         <!-- COMPARE TAB -->
-        <div v-if="activeTab === 'compare'" role="tabpanel" aria-label="Compare">
+        <div v-if="activeTab === 'compare'">
           <UCard>
             <template #header>
               <div class="flex items-center justify-between">
@@ -1453,21 +1456,21 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
         </div>
 
         <!-- SPEC HEALTH TAB -->
-        <div v-if="activeTab === 'spec-health'" role="tabpanel" aria-label="Spec health">
+        <div v-if="activeTab === 'spec-health'">
           <SpecHealthTable :project-id="String(projectId)" />
         </div>
 
-        <div v-if="activeTab === 'ai-steps'" role="tabpanel" aria-label="AI steps">
+        <div v-if="activeTab === 'ai-steps'">
           <AiStepCoverage :project-id="String(projectId)" />
         </div>
 
         <!-- QUARANTINE TAB -->
-        <div v-if="activeTab === 'quarantine'" role="tabpanel" aria-label="Quarantine">
+        <div v-if="activeTab === 'quarantine'">
           <QuarantineTable :project-id="String(projectId)" :project-name="project?.name" />
         </div>
 
         <!-- MEMBERS TAB -->
-        <div v-if="activeTab === 'members'" role="tabpanel" aria-label="Members">
+        <div v-if="activeTab === 'members'">
           <UCard>
             <template #header>
               <div class="flex items-center justify-between">
@@ -1522,7 +1525,7 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
         </div>
 
         <!-- TIMELINE TAB -->
-        <div v-if="activeTab === 'timeline'" role="tabpanel" aria-label="Timeline">
+        <div v-if="activeTab === 'timeline'">
           <ProjectTimeline
             :project-id="Number(projectId)"
             :markers="markers"

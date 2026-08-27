@@ -11,7 +11,7 @@ export interface DetailTabItem {
   /** Why the tab is disabled; rendered as muted text beside the label (native
    *  disabled buttons swallow hover, so a tooltip would never appear). */
   disabledReason?: string;
-  /** Inline-help topic rendered after the label. */
+  /** Inline-help topic for the tab; rendered beside the strip while the tab is active. */
   help?: HelpTopicKey;
 }
 
@@ -40,15 +40,24 @@ function panelClasses(value: string) {
 // route-driven by default; tabs are view state (no routes), so each item
 // carries `active` + `onSelect` explicitly. The page's `slot` field names the
 // `#tab-*` templates — stripped here so the menu uses the shared `#item-label`.
+// The active item also carries `aria-current` so the strip reads as "current
+// view" to assistive technology; the panels below deliberately carry no
+// tabpanel role (UNavigationMenu exposes plain buttons, not a tablist).
 const navItems = computed(() =>
   props.tabItems.map(({ slot: _slot, ...item }) => ({
     ...item,
     active: activeTab.value === item.value,
+    'aria-current': activeTab.value === item.value ? 'true' : undefined,
     onSelect: () => {
       if (!item.disabled) activeTab.value = item.value;
     },
   })),
 );
+
+// Help for the active tab renders beside the strip: `HelpHint` is a button,
+// and nesting it inside the navigation trigger's label would create nested
+// interactive controls (and the trigger would swallow its click).
+const activeTabHelp = computed(() => props.tabItems.find((t) => t.value === activeTab.value)?.help);
 </script>
 
 <template>
@@ -92,9 +101,6 @@ const navItems = computed(() =>
         >
           <template #item-label="{ item }">
             <span>{{ item.label }}</span>
-            <ClientOnly>
-              <HelpHint v-if="item.help" :topic="item.help" class="ml-1" />
-            </ClientOnly>
             <span
               v-if="item.disabled && item.disabledReason"
               :title="item.disabledReason"
@@ -104,11 +110,14 @@ const navItems = computed(() =>
             </span>
           </template>
         </UNavigationMenu>
+        <ClientOnly>
+          <HelpHint v-if="activeTabHelp" :topic="activeTabHelp" class="ml-2 shrink-0" />
+        </ClientOnly>
       </UDashboardToolbar>
     </div>
 
     <template v-for="item in tabItems" :key="item.value">
-      <div v-if="activeTab === item.value" role="tabpanel" :aria-label="item.label" :class="panelClasses(item.value)">
+      <div v-if="activeTab === item.value" :class="panelClasses(item.value)">
         <slot :name="`tab-${item.slot ?? item.value}`" />
       </div>
     </template>
