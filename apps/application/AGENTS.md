@@ -186,11 +186,16 @@ Settings pages are driven by the `SETTINGS_PAGES` registry in `app/utils/setting
 
 - Sentence case headings and labels ("Test runs"), relative dates via date-fns (full timestamp on hover), human-readable
   durations (exact ms on hover), `DurationValue` where a tight `210ms` reads better than "0.21 seconds".
+- **Absolute timestamps render client-only**: `prettyDateFormat` output never appears in SSR'd markup (the server host
+  and the browser rarely share a time zone). Render the date with `ClientDate`, and wrap title-tooltip spans that bind
+  `prettyDateFormat` in `ClientOnly`.
 - **Page-level tab strips MUST match the Settings header**: `UDashboardToolbar` + `UNavigationMenu` with
   `highlight` (`settings.vue` is the reference). `DetailPageLayout` already renders it — pages using
   `DetailPageLayout` never touch the strip themselves, and no other page-level strip (UTabs pill, hand-rolled
   tablist) may be introduced. Content-level tab switches inside a card (e.g. an mcp code-client picker) are
-  free to differ.
+  free to differ. The strip is a navigation menu, not an ARIA tablist: panels carry **no** `tabpanel` role,
+  the active item carries `aria-current`, and inline `HelpHint`s render beside the strip for the active tab
+  (never inside a navigation trigger's label — that nests buttons).
 - Add a `title` attribute to any control whose purpose is not obvious from its label.
 - **Clickable source paths**: render any repo-relative path or `file:line[:col]` with `OpenInIdeLink`, never a bare
   `<span>`/`<code>`. Pass `filePath` (+ `line`/`column`) or `location`, and thread `projectKey` (the Piwi project **id**)
