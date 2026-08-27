@@ -29,6 +29,13 @@ const segments = computed(() => {
       displayPct: ((s.count / props.total) * 100).toFixed(1),
     }));
 });
+
+// Names every segment the bar visibly renders, so the announced summary
+// matches what the eyes see (flaky and didn't-run included).
+const accessibleLabel = computed(() => {
+  const parts = segments.value.map((s) => `${s.count} ${s.label.toLowerCase()}`);
+  return `Test results: ${parts.join(', ')}`;
+});
 </script>
 
 <template>
@@ -39,7 +46,7 @@ const segments = computed(() => {
     <div
       v-if="total > 0"
       role="progressbar"
-      :aria-label="`Test results: ${props.passed} passed, ${props.failed} failed, ${props.skipped} skipped`"
+      :aria-label="accessibleLabel"
       :aria-valuemin="0"
       :aria-valuemax="total"
       :aria-valuenow="props.passed + props.failed + props.skipped + (props.didNotRun ?? 0)"
