@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, watch, ref } from 'vue';
+import { computed, nextTick, watch, ref, onMounted } from 'vue';
 import type { TestCaseResult, SuiteInfo } from '~~/types/api';
 import type { LiveStepsByWorker } from '~/utils/live-steps';
 
@@ -286,6 +286,28 @@ function scrollToCase(id: number) {
   });
 }
 
+// An explicit toggle choice ends the transient flat override (the timeline
+// jump put the list in flat view for one reveal) and records the preference.
+function selectView(tree: boolean) {
+  flatViewOverride.value = false;
+  setTreeView(tree);
+}
+
+// The table roles only describe the desktop grid layout. Below `md` the same
+// rows render as cards, so leaving role="table"/"rowgroup" on the shared
+// container would expose a table with no rows to assistive technology. The
+// flag initializes after mount so the SSR payload and the first client render
+// agree (attribute-only change later, no hydration mismatch).
+const isDesktopList = ref(false);
+onMounted(() => {
+  const mq = window.matchMedia('(min-width: 768px)');
+  const apply = () => {
+    isDesktopList.value = mq.matches;
+  };
+  apply();
+  mq.addEventListener('change', apply);
+});
+
 defineExpose({ scrollToCase });
 </script>
 
@@ -296,19 +318,19 @@ defineExpose({ scrollToCase });
         <div class="flex items-center rounded-md border border-default overflow-hidden">
           <button
             class="px-2 py-1 text-xs transition-colors"
-            :class="!treeView ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
+            :class="!effectiveTreeView ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
             title="Flat list"
-            :aria-pressed="!treeView"
-            @click="setTreeView(false)"
+            :aria-pressed="!effectiveTreeView"
+            @click="selectView(false)"
           >
             <UIcon name="i-lucide-list" class="size-3.5" />
           </button>
           <button
             class="px-2 py-1 text-xs transition-colors"
-            :class="treeView ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
+            :class="effectiveTreeView ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
             title="Tree view"
-            :aria-pressed="treeView"
-            @click="setTreeView(true)"
+            :aria-pressed="effectiveTreeView"
+            @click="selectView(true)"
           >
             <UIcon name="i-lucide-folder-tree" class="size-3.5" />
           </button>
@@ -378,7 +400,7 @@ defineExpose({ scrollToCase });
       <UCheckbox v-if="!isLive" v-model="showNewRegressionsOnly" label="New regressions" size="sm" />
       <UCheckbox v-if="!isLive" v-model="showNewFlakyOnly" label="New flaky" size="sm" />
       <!-- Phones get the card layout, which has no sortable column headers. -->
-      <div v-if="!treeView" class="flex items-center gap-1 md:hidden">
+      <div v-if="!effectiveTreeView" class="flex items-center gap-1 md:hidden">
         <USelect v-model="mobileSortKey" :items="sortOptions" size="sm" class="w-32" aria-label="Sort cases by" />
         <UButton
           size="sm"
@@ -419,9 +441,9 @@ defineExpose({ scrollToCase });
         -->
         <div
           class="flex flex-col h-full md:min-w-(--grid-min-width)"
-          role="table"
-          aria-label="Test cases"
-          :aria-rowcount="sortedTestCases.length + 1"
+          :role="isDesktopList ? 'table' : undefined"
+          :aria-label="isDesktopList ? 'Test cases' : undefined"
+          :aria-rowcount="isDesktopList ? sortedTestCases.length + 1 : undefined"
           :style="{ '--grid-min-width': gridMinWidth }"
         >
           <!-- Header — the sort control below `md` lives in the toolbar instead -->
@@ -468,7 +490,7 @@ defineExpose({ scrollToCase });
               :items="sortedTestCases"
               :min-item-size="44"
               key-field="executionId"
-              role="rowgroup"
+              :role="isDesktopList ? 'rowgroup' : undefined"
               class="flex-1 min-h-0"
               @scroll.passive="onScrollerScroll"
             >
