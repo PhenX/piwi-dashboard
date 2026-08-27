@@ -511,18 +511,26 @@ const sectionToAction: Record<string, () => void> = {
 };
 
 // The jump-chip row under the error — the same section map the AI citations
-// use, so the funnel has a map even when no AI is configured.
-const sectionChips = [
-  { id: 'testSource', label: 'Test source' },
-  { id: 'environmentDiff', label: 'Environment diff' },
-  { id: 'visualDiff', label: 'Visual diff' },
-  { id: 'domSnapshot', label: 'DOM snapshot' },
-  { id: 'ariaSnapshot', label: 'ARIA snapshot' },
-  { id: 'screenshots', label: 'Screenshots' },
-  { id: 'console', label: 'Console' },
-  { id: 'networkRequests', label: 'Network' },
-  { id: 'steps', label: 'Steps' },
-];
+// use, so the funnel has a map even when no AI is configured. Each chip is
+// gated by the same availability condition as the section it targets: a chip
+// that scrolls to nothing reads as broken.
+const sectionChips = computed(() =>
+  [
+    {
+      id: 'testSource',
+      label: 'Test source',
+      available: Boolean(testCase.value?.testSourceFrames?.length || testCase.value?.testSource || hasTrace.value),
+    },
+    { id: 'environmentDiff', label: 'Environment diff', available: Boolean(testCase.value?.testRun?.id) },
+    { id: 'visualDiff', label: 'Visual diff', available: Boolean(testCase.value?.testRun?.id) },
+    { id: 'domSnapshot', label: 'DOM snapshot', available: Boolean(testCase.value?.testRun?.id) },
+    { id: 'ariaSnapshot', label: 'ARIA snapshot', available: Boolean(testCase.value?.ariaSnapshot) },
+    { id: 'screenshots', label: 'Screenshots', available: true },
+    { id: 'console', label: 'Console', available: Boolean((testCase.value as any)?.consoleLogs?.length) },
+    { id: 'networkRequests', label: 'Network', available: networkRequests.value.length > 0 || hasTrace.value },
+    { id: 'steps', label: 'Steps', available: true },
+  ].filter((c) => c.available),
+);
 
 provide(clusterSectionLocatorKey, {
   canLocate: (id: string) => id in sectionToAction,
@@ -533,9 +541,7 @@ provide(clusterSectionLocatorKey, {
 <template>
   <UDashboardPanel id="test-run-case-detail">
     <template #header>
-      <UDashboardNavbar
-        :title="`Run #${testCase?.testRun?.id ?? '?'}${testCase?.testRun?.project?.name ? ` · ${testCase.testRun.project.name}` : ''}`"
-      >
+      <UDashboardNavbar :title="testCase?.title ?? `Execution #${testCaseId}`">
         <template #leading>
           <UDashboardSidebarCollapse />
           <BreadcrumbNav
@@ -775,11 +781,7 @@ provide(clusterSectionLocatorKey, {
         <template #tab-steps>
           <div class="space-y-3">
             <UAlert
-              v-if="
-                (testCase?.status === 'failed' || testCase?.status === 'timedout') &&
-                steps.length > 0 &&
-                !steps.some((s) => s.failed)
-              "
+              v-if="isFailedStatus(testCase?.status ?? '') && steps.length > 0 && !steps.some((s) => s.failed)"
               color="warning"
               variant="subtle"
               icon="i-lucide-info"
@@ -1165,8 +1167,12 @@ provide(clusterSectionLocatorKey, {
                   }"
                 >
                   <template #startTime-cell="{ row }">
-                    <span class="text-xs whitespace-nowrap" :title="prettyDateFormat(row.original.startTime)">
-                      <ClientOnly>{{ formatRelativeTime(row.original.startTime) }}</ClientOnly>
+                    <span class="text-xs whitespace-nowrap">
+                      <ClientOnly>
+                        <span :title="prettyDateFormat(row.original.startTime)">
+                          {{ formatRelativeTime(row.original.startTime) }}
+                        </span>
+                      </ClientOnly>
                     </span>
                   </template>
                   <template #status-cell="{ row }">
