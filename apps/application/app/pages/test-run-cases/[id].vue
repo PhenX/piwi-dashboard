@@ -204,7 +204,10 @@ const tabItems = computed(() => {
   return items;
 });
 
-const tabValues = computed(() => tabItems.value.map((t) => t.value));
+// A disabled tab (e.g. the reserved Diagnosis slot on an active, not-yet-failed
+// run) is not a navigable target, so a `?tab=` pointing at it must fall back to
+// the default rather than render a panel whose control is disabled.
+const tabValues = computed(() => tabItems.value.filter((t) => !t.disabled).map((t) => t.value));
 
 function defaultTab() {
   return hasFailedAttempt.value ? 'diagnosis' : 'steps';

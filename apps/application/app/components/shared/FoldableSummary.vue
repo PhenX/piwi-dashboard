@@ -6,25 +6,43 @@ const props = defineProps<{
 }>();
 
 const { folded, toggle } = useFoldableSummary(props.storageKey);
+
+// Clicking the folded card expands it — but the folded slot may hold its own
+// controls (e.g. the run's label editor), so a click that lands on an
+// interactive element keeps that element's behavior instead of toggling. The
+// chevron is the real, keyboard-focusable expand control.
+function onFoldedClick(event: MouseEvent) {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('button, a, input, select, textarea, [role="button"]')) return;
+  toggle();
+}
 </script>
 
 <template>
   <div>
-    <button
+    <!-- A non-interactive container, not a <button>: the folded slot can carry
+         its own interactive controls, which must not nest inside a button. -->
+    <div
       v-if="folded"
-      type="button"
-      aria-expanded="false"
-      title="Expand summary"
-      class="w-full text-left border border-gray-200 dark:border-gray-800 rounded-xl p-2.5 shadow-xs cursor-pointer select-none"
-      @click="toggle"
+      class="border border-gray-200 dark:border-gray-800 rounded-xl p-2.5 shadow-xs cursor-pointer select-none"
+      @click="onFoldedClick"
     >
       <div class="flex items-center gap-3">
         <slot name="folded" />
         <div class="ml-auto shrink-0">
-          <UIcon name="i-lucide-chevron-down" class="size-4 text-gray-400" />
+          <UButton
+            icon="i-lucide-chevron-down"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            title="Expand summary"
+            aria-label="Expand summary"
+            :aria-expanded="false"
+            @click="toggle"
+          />
         </div>
       </div>
-    </button>
+    </div>
     <div v-else class="relative">
       <div class="absolute top-1 right-1 z-10">
         <UButton

@@ -63,28 +63,51 @@ const markersBetween = computed<MarkerInfo[]>(() => {
   });
 });
 
-const projectRunOptions = computed<RunOption[]>(() => {
-  if (!projectData.value?.testRuns) return [];
-  return projectData.value.testRuns
-    .filter((r) => r.id !== Number(runId))
-    .slice(0, 50)
-    .map((r) => ({
-      label: `Run #${r.id} — ${prettyDateFormat(r.startTime, { dateOnly: true })} (${r.status})`,
-      value: r.id,
-      status: r.status,
-      startTime: new Date(r.startTime).getTime(),
-    }));
+function runToOption(r: { id: number; startTime: string | Date; status: string }): RunOption {
+  return {
+    label: `Run #${r.id} — ${prettyDateFormat(r.startTime, { dateOnly: true })} (${r.status})`,
+    value: r.id,
+    status: r.status,
+    startTime: new Date(r.startTime).getTime(),
+  };
+}
+
+// The documented baseline: the most recent passing run *before* this one,
+// chosen from the full project history rather than the capped dropdown, so a
+// historical run with many newer runs still finds its baseline. Falls back to
+// the run immediately before this one. Restricting to earlier start times keeps
+// a historical run from comparing against a pass that happened after it.
+const defaultBaselineOption = computed<RunOption | null>(() => {
+  const runs = projectData.value?.testRuns;
+  if (!runs || !props.testRun) return null;
+  const currentStart = new Date(props.testRun.startTime).getTime();
+  const earlier = runs
+    .filter((r) => r.id !== Number(runId) && new Date(r.startTime).getTime() < currentStart)
+    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  const pick = earlier.find((r) => r.status === 'passed') ?? earlier[0];
+  return pick ? runToOption(pick) : null;
 });
 
-// Preselect the documented baseline: the most recent passing run *before* this
-// one. A newest-first list also contains runs newer than the viewed run, so
-// restricting to earlier start times keeps a historical run from comparing
-// against a pass that happened after it.
-watch(projectRunOptions, (options) => {
-  if (compareRunA.value || options.length === 0) return;
-  const currentStart = props.testRun ? new Date(props.testRun.startTime).getTime() : Number.POSITIVE_INFINITY;
-  const earlier = options.filter((o) => o.startTime < currentStart);
-  compareRunA.value = earlier.find((o) => o.status === 'passed') ?? earlier[0] ?? undefined;
+const projectRunOptions = computed<RunOption[]>(() => {
+  const runs = projectData.value?.testRuns;
+  if (!runs) return [];
+  const options = runs
+    .filter((r) => r.id !== Number(runId))
+    .slice(0, 50)
+    .map(runToOption);
+  // The auto-selected baseline can fall outside the 50 newest on a historical
+  // run — keep it in the list so the select shows and can re-pick it.
+  const baseline = defaultBaselineOption.value;
+  if (baseline && !options.some((o) => o.value === baseline.value)) options.push(baseline);
+  return options;
+});
+
+// Preselect the baseline once the run list arrives (projectData loads async, so
+// this fires on that change), matching it to the in-list option so the select
+// renders it as selected.
+watch([projectRunOptions, defaultBaselineOption], ([options, baseline]) => {
+  if (compareRunA.value || !baseline) return;
+  compareRunA.value = options.find((o) => o.value === baseline.value) ?? baseline;
 });
 
 const previousRunId = computed<number | null>(() => {

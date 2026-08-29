@@ -218,8 +218,18 @@ export async function getTestRun(
   // count from the run payload, so the strip never shows a bare label. Uses
   // the same method + normalized-route grouping as getNetworkRequests, so the
   // label counts the table's rows, not the raw request rows.
+  //
+  // `selectDistinct` collapses duplicate (method, url) tuples in the database,
+  // so the rows transferred scale with the number of distinct endpoints, not
+  // with raw request volume. The `normalizeRoute` fallback (for rows the
+  // reporter left without a `normalizedUrl`) still runs in JS, but only over
+  // that already-deduplicated set.
   const endpointRows = await db
-    .select({ method: networkRequests.method, normalizedUrl: networkRequests.normalizedUrl, url: networkRequests.url })
+    .selectDistinct({
+      method: networkRequests.method,
+      normalizedUrl: networkRequests.normalizedUrl,
+      url: networkRequests.url,
+    })
     .from(networkRequests)
     .where(eq(networkRequests.testRunId, id));
   const endpointCount = new Set(

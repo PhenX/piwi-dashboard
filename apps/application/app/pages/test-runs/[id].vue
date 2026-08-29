@@ -32,9 +32,14 @@ const navbarTitle = computed(() => {
 });
 
 useHead(
-  computed(() => ({
-    title: `Test run #${runId}${testRun.value?.project ? ` — ${testRun.value.project.name}` : ''} — Piwi Dashboard`,
-  })),
+  computed(() => {
+    // Match the on-page heading: prefer the project's display label so a
+    // labeled project reads the same in the tab title and the navbar.
+    const project = testRun.value?.project?.label || testRun.value?.project?.name;
+    return {
+      title: `Test run #${runId}${project ? ` — ${project}` : ''} — Piwi Dashboard`,
+    };
+  }),
 );
 
 const toast = useToast();
@@ -688,26 +693,23 @@ function handleSelectCluster(clusterId: number) {
               >
                 {{ item?.label }}
               </NuxtLink>
-              <NuxtLink
-                v-if="latestRunId && latestRunId !== Number(runId)"
-                :to="`/test-runs/${latestRunId}`"
-                :aria-label="
-                  isLatestRunActive ? `Go to running run #${latestRunId}` : `Go to latest run #${latestRunId}`
-                "
-                class="shrink-0 inline-flex items-center gap-1 rounded-full bg-blue-500/10 hover:bg-blue-500/20 transition-colors ml-1 px-2 py-0.5 text-xs text-blue-500"
-              >
-                <UIcon name="i-lucide-circle-play" class="size-3.5" :class="{ 'animate-pulse': isLatestRunActive }" />
-                {{ isLatestRunActive ? 'Running' : 'Newer run' }} → #{{ latestRunId }}
-              </NuxtLink>
-              <span
-                v-else-if="latestRunId"
-                class="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 ml-1 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-400"
-              >
-                <UIcon name="i-lucide-check-circle-2" class="size-3.5" />
-                Latest run
-              </span>
+              <RunFreshnessPill
+                class="ml-1"
+                :latest-run-id="latestRunId"
+                :current-run-id="Number(runId)"
+                :is-active="isLatestRunActive"
+              />
             </template>
           </BreadcrumbNav>
+          <!-- BreadcrumbNav renders only the current-page label below `sm`, so the
+               ancestor `#project` slot (and its pill) is desktop-only. Repeat the
+               freshness pill here for phones. -->
+          <RunFreshnessPill
+            class="ml-1 sm:hidden"
+            :latest-run-id="latestRunId"
+            :current-run-id="Number(runId)"
+            :is-active="isLatestRunActive"
+          />
         </template>
         <template #right>
           <div class="flex items-center shrink-0 min-w-0">

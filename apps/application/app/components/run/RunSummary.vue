@@ -180,8 +180,11 @@ function onLabelKeydown(e: KeyboardEvent) {
             <template v-else>
               <span
                 v-if="testRun?.label"
+                role="button"
+                tabindex="0"
                 class="font-normal text-zinc-500 ml-1.5 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300 border-b border-dashed border-transparent hover:border-zinc-400"
-                @click="startEditLabel"
+                @click.stop="startEditLabel"
+                @keydown.enter.stop="startEditLabel"
                 >— {{ testRun.label }}</span
               >
               <button

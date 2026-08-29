@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, watch, ref, onMounted } from 'vue';
+import { computed, nextTick, watch, ref, onMounted, onUnmounted } from 'vue';
 import type { TestCaseResult, SuiteInfo } from '~~/types/api';
 import type { LiveStepsByWorker } from '~/utils/live-steps';
 
@@ -71,6 +71,13 @@ function statusHint(tc: TestCaseResult): string {
 /** The live step to show on a running row (worker-matched, see the helper). */
 function liveStep(tc: TestCaseResult) {
   return liveStepForCase(props.liveSteps, tc);
+}
+
+// A failing row always identifies its cluster from `failureClusterId` alone —
+// the display name is a nicety, so a missing/failed names request falls back to
+// the cluster id rather than hiding the badge.
+function clusterLabel(id: number): string {
+  return props.clusterNames?.[id] ?? `Cluster #${id}`;
 }
 
 function matchesStatus(tc: TestCaseResult, filter: string): boolean {
@@ -306,6 +313,9 @@ onMounted(() => {
   };
   apply();
   mq.addEventListener('change', apply);
+  // Tab switches unmount this component; drop the listener so old closures
+  // don't accumulate across mounts.
+  onUnmounted(() => mq.removeEventListener('change', apply));
 });
 
 defineExpose({ scrollToCase });
@@ -544,12 +554,12 @@ defineExpose({ scrollToCase });
                         >{{ item.title }}</a
                       >
                       <NuxtLink
-                        v-if="item.failureClusterId && clusterNames?.[item.failureClusterId]"
+                        v-if="item.failureClusterId"
                         :to="`/failure-clusters/${item.failureClusterId}`"
                         class="shrink-0"
                       >
                         <UBadge color="info" variant="subtle" size="xs" class="max-w-44">
-                          <span class="truncate">{{ clusterNames[item.failureClusterId] }}</span>
+                          <span class="truncate">{{ clusterLabel(item.failureClusterId) }}</span>
                         </UBadge>
                       </NuxtLink>
                       <BrowserBadge :browser="item.browser" size="sm" class="mt-0.5" />
@@ -646,12 +656,12 @@ defineExpose({ scrollToCase });
                           class="shrink-0"
                         />
                         <NuxtLink
-                          v-if="item.failureClusterId && clusterNames?.[item.failureClusterId]"
+                          v-if="item.failureClusterId"
                           :to="`/failure-clusters/${item.failureClusterId}`"
                           class="shrink-0"
                         >
                           <UBadge color="info" variant="subtle" size="xs" class="max-w-44">
-                            <span class="truncate">{{ clusterNames[item.failureClusterId] }}</span>
+                            <span class="truncate">{{ clusterLabel(item.failureClusterId) }}</span>
                           </UBadge>
                         </NuxtLink>
                       </div>

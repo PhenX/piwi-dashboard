@@ -31,11 +31,36 @@ const dataDir = path.join(appDir, '.data');
 const pidFile = path.join(dataDir, 'dev-server.pid');
 const logPath = path.join(dataDir, 'dev-server.log');
 
+// The recorded PID can outlive a crash, and the OS reuses PIDs, so before
+// killing we confirm the live process still looks like our dev server (a node
+// or nuxt/npx command). An unconfirmed PID is treated as stale — we never
+// signal an unrelated program that happened to inherit the number.
+function processMatchesServer(pid) {
+  try {
+    if (process.platform === 'win32') {
+      const out = execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      return /node\.exe|npx/i.test(out);
+    }
+    const out = execFileSync('ps', ['-p', String(pid), '-o', 'command='], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return /nuxt|node/i.test(out);
+  } catch {
+    // ps/tasklist exits non-zero when the PID is gone — nothing to kill.
+    return false;
+  }
+}
+
 function killRecorded() {
   if (!existsSync(pidFile)) return;
   const pid = Number(readFileSync(pidFile, 'utf8').trim());
   rmSync(pidFile, { force: true });
   if (!Number.isInteger(pid) || pid <= 0) return;
+  if (!processMatchesServer(pid)) return;
   try {
     if (process.platform === 'win32') {
       execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });
