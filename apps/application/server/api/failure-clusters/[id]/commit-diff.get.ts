@@ -1,6 +1,6 @@
 import { failureClusters, testRuns } from '../../../database/schema';
 import { eq } from 'drizzle-orm';
-import { normalizeGitUrl } from '../../../utils/regression-context';
+import { normalizeGitUrl } from '../../../utils/scm/git-url';
 import { createScmProvider } from '../../../utils/scm';
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../../utils/project-access';
 

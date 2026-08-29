@@ -78,6 +78,7 @@ const endpointColumns: TableColumn<EndpointSummary>[] = [
       sticky
       :data="endpoints"
       :columns="endpointColumns"
+      aria-label="Slow endpoints"
       class="flex-1 min-h-0"
       :ui="{
         base: 'table-fixed border-separate border-spacing-0 min-w-[44rem]',
@@ -133,6 +134,19 @@ const endpointColumns: TableColumn<EndpointSummary>[] = [
           "
         >
           <DurationValue :ms="row.original.p90Duration" unit-class="opacity-60" />
+        </span>
+      </template>
+      <template #maxDuration-cell="{ row }">
+        <span
+          :class="
+            row.original.maxDuration > 2000
+              ? 'text-red-600 font-medium'
+              : row.original.maxDuration > 1000
+                ? 'text-orange-500'
+                : ''
+          "
+        >
+          <DurationValue :ms="row.original.maxDuration" unit-class="opacity-60" />
         </span>
       </template>
       <template #errorRate-cell="{ row }">

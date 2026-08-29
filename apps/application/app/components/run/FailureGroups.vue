@@ -60,7 +60,7 @@ function copyRetryCommand() {
 const columns: TableColumn<FailureGroup>[] = [
   { accessorKey: 'signature', header: createSortHeader<FailureGroup>('Signature') },
   { accessorKey: 'errorType', header: createSortHeader<FailureGroup>('Type') },
-  { accessorKey: 'status', header: createSortHeader<FailureGroup>('Status') },
+  { accessorKey: 'status', header: createSortHeader<FailureGroup>('Triage') },
   { accessorKey: 'caseCount', header: createSortHeader<FailureGroup>('Tests') },
   { accessorKey: 'signals', header: 'Signals' },
   { accessorKey: 'diagnosis', header: 'AI' },
@@ -82,7 +82,7 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
       <div class="flex items-center justify-between gap-3">
         <p class="text-sm text-gray-500 dark:text-gray-400 inline-flex items-center gap-1">
           {{ totalCases }} failing {{ totalCases === 1 ? 'test' : 'tests' }} across {{ groups.length }}
-          {{ groups.length === 1 ? 'group' : 'groups' }}
+          {{ groups.length === 1 ? 'cluster' : 'clusters' }}
           <HelpHint topic="cluster.concept" />
         </p>
         <UButton
@@ -100,7 +100,7 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
 
       <UCard :ui="{ body: 'p-0 sm:p-0' }">
         <TableScroller min-width="46rem" :bleed="false">
-          <UTable :data="groups" :columns="columns">
+          <UTable :data="groups" :columns="columns" aria-label="Failure clusters">
             <template #actions-header>
               <div class="text-right">Actions</div>
             </template>
@@ -138,7 +138,7 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
                 variant="subtle"
                 size="sm"
               >
-                {{ row.original.status }}
+                {{ formatTriageStatus(row.original.status) }}
               </UBadge>
               <span v-else class="text-gray-400 text-xs">—</span>
             </template>
@@ -233,7 +233,7 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
                   variant="soft"
                   @click="emit('selectCluster', row.original.clusterId)"
                 >
-                  Filter
+                  Show failing tests
                 </UButton>
                 <UButton
                   size="sm"
@@ -259,15 +259,16 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
       </UCard>
     </template>
 
-    <div v-else class="flex flex-col items-center justify-center py-8 text-gray-500 gap-2">
-      <UIcon name="i-lucide-party-popper" class="size-6" />
-      <span>No failure groups — failed tests without error details are not grouped</span>
-    </div>
+    <EmptyState
+      v-else
+      icon="i-lucide-shield-check"
+      text="No failure clusters — failed tests without error details are not grouped"
+    />
   </div>
 
   <UModal
     :open="diagnosisClusterId !== null"
-    title="AI Diagnosis"
+    title="AI diagnosis"
     :ui="{ content: 'max-w-2xl' }"
     @update:open="
       (v) => {

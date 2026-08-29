@@ -69,7 +69,7 @@ const ratioColor = computed<'success' | 'warning' | 'error'>(() => {
 const foldedText = computed(() => {
   if (!diff.value) return 'No comparable screenshots';
   if (diff.value.dimensionMismatch) return `${changedPct.value}% changed — dimensions differ, unreliable`;
-  return `${changedPct.value}% of pixels changed vs last pass`;
+  return `${changedPct.value}% of pixels changed vs visual baseline`;
 });
 
 // Lightbox over the three views (failing / baseline / overlay)
@@ -103,7 +103,7 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
       <span>{{ foldedText }}</span>
     </template>
     <template #subtitle>
-      <span>vs last pass in run #{{ diff.baselineRunId }}</span>
+      <span>vs visual baseline (run #{{ diff.baselineRunId }})</span>
     </template>
     <template #actions>
       <UBadge :color="ratioColor" variant="subtle" size="sm" class="font-mono tabular-nums">
@@ -167,7 +167,7 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
       </div>
       <div class="rounded overflow-hidden border border-green-200 dark:border-green-900 bg-gray-50 dark:bg-gray-900">
         <p class="px-2 py-1 text-[10px] font-medium text-green-600 dark:text-green-400">
-          Last pass (run #{{ diff.baselineRunId }})
+          Visual baseline (run #{{ diff.baselineRunId }})
         </p>
         <img
           :src="baselineSrc"

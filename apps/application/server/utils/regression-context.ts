@@ -6,11 +6,9 @@ import { buildCompareUrl, computeMetadataDiff, type MetaDiffEntry } from '#share
 import { FAILED_STATUS_KEYS } from '#shared/utils/test-counts';
 import { normalizeGitUrl } from './scm/git-url';
 import { resolveRunBranch } from './run-branch';
-import { resolveDefaultBranch, FALLBACK_DEFAULT_BRANCH } from './scm/default-branch';
+import { resolveDefaultBranch } from './scm/default-branch';
+import { FALLBACK_DEFAULT_BRANCH } from './scm/git-url';
 import { selectBaselineRun } from './branch-baseline';
-
-// Re-exported so the many callers importing it from here keep working.
-export { normalizeGitUrl };
 
 export interface RunForRegression {
   id: number;

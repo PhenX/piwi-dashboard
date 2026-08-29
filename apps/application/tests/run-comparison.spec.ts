@@ -247,7 +247,10 @@ test.describe.serial('Run Comparison', () => {
     await waitForHydration(page);
 
     // Switch to the Compare tab
-    await page.getByRole('tab', { name: 'Compare' }).click();
+    await page
+      .getByRole('button', { name: /^Compare$/ })
+      .first()
+      .click();
 
     // Use "Compare with previous run" button
     await page.getByRole('button', { name: 'Compare with previous run' }).click();

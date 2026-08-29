@@ -76,6 +76,7 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
           variant="ghost"
           color="neutral"
           :icon="copied ? 'i-lucide-check' : 'i-lucide-clipboard'"
+          aria-label="Copy full HTML"
           @click="copy(snapshot.html)"
         />
       </UTooltip>

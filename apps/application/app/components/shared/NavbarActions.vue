@@ -11,6 +11,8 @@ export interface NavbarAction {
   icon: string;
   color?: 'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral';
   variant?: 'solid' | 'outline' | 'soft' | 'subtle' | 'ghost' | 'link';
+  /** Hover/name detail shown in the `title` attribute (defaults to `label`). */
+  title?: string;
   to?: string;
   loading?: boolean;
   disabled?: boolean;
@@ -41,7 +43,7 @@ withDefaults(
       :loading="action.loading"
       :disabled="action.disabled"
       :aria-label="action.label"
-      :title="action.label"
+      :title="action.title ?? action.label"
       @click="action.onClick?.()"
     >
       <span class="hidden sm:inline">{{ action.label }}</span>

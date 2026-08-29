@@ -22,7 +22,7 @@ import type { TestStepEvent } from '../types';
 import type { EndpointSummary, DiagnosisCompact } from '../../types/api';
 
 import type { DrizzleDB } from './db';
-import { normalizeGitUrl } from '../../server/utils/regression-context';
+import { normalizeGitUrl } from '../../server/utils/scm/git-url';
 import { getLocatorHealingBatch } from '../../server/utils/locator-healing';
 
 type ProjectScope = 'all' | Set<number>;
@@ -214,11 +214,34 @@ export async function getTestRun(
   const precedingMarker =
     precedingMarkerCandidates.find((m) => m.environment == null || m.environment === testRun.environment) ?? null;
 
+  // Distinct endpoints seen by the run — feeds the "Slow endpoints (n)" tab
+  // count from the run payload, so the strip never shows a bare label. Uses
+  // the same method + normalized-route grouping as getNetworkRequests, so the
+  // label counts the table's rows, not the raw request rows.
+  //
+  // `selectDistinct` collapses duplicate (method, url) tuples in the database,
+  // so the rows transferred scale with the number of distinct endpoints, not
+  // with raw request volume. The `normalizeRoute` fallback (for rows the
+  // reporter left without a `normalizedUrl`) still runs in JS, but only over
+  // that already-deduplicated set.
+  const endpointRows = await db
+    .selectDistinct({
+      method: networkRequests.method,
+      normalizedUrl: networkRequests.normalizedUrl,
+      url: networkRequests.url,
+    })
+    .from(networkRequests)
+    .where(eq(networkRequests.testRunId, id));
+  const endpointCount = new Set(
+    endpointRows.map((r) => `${r.method}|${r.normalizedUrl ?? (r.url ? normalizeRoute(r.url) : r.method)}`),
+  ).size;
+
   return {
     ...testRunPublic,
     precedingMarker,
     isFullRun: testRun.isFullRun === 1,
     project: projectPublic,
+    networkRequestCount: endpointCount,
     reports: reportResults.map((r: any) => ({
       id: r.id,
       type: r.subtype || r.type,

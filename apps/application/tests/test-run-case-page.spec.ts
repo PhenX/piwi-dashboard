@@ -72,9 +72,9 @@ test.describe('Test-run-case page', () => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
 
-    await expect(page.getByRole('tab', { name: 'Diagnosis' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Diagnosis/ })).toBeVisible();
     // The verdict and AI-diagnosis rail cards are the diagnosis-tab signature.
-    await expect(page.getByRole('heading', { name: 'Verdict' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Regression status' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'AI diagnosis' })).toBeVisible();
     // The URL is normalized to the diagnosis tab.
     await expect(page).toHaveURL(/tab=diagnosis/);
@@ -83,30 +83,30 @@ test.describe('Test-run-case page', () => {
   test('legacy ?tab=error redirects to the Diagnosis tab', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}?tab=error`);
     await waitForHydration(page);
-    await expect(page.getByRole('heading', { name: 'Verdict' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Regression status' })).toBeVisible();
   });
 
   test('passing execution opens on Steps and offers an Artifacts tab', async ({ page }) => {
     await page.goto(`/test-run-cases/${passedCaseId}`);
     await waitForHydration(page);
 
-    await expect(page.getByRole('tab', { name: 'Artifacts' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Artifacts/ })).toBeVisible();
     // No error → no Diagnosis tab.
-    await expect(page.getByRole('tab', { name: 'Diagnosis' })).toHaveCount(0);
-    await expect(page.getByRole('tab', { name: /Steps/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Diagnosis/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Steps/ })).toBeVisible();
   });
 
   test('the header offers a Copy retry command action', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
     // NavbarActions keeps the label as accessible name even when icon-only on mobile.
-    await expect(page.getByRole('button', { name: /Retry command/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Copy retry command/ })).toBeVisible();
   });
 
   test('Performance tab is always available and shows an empty state when nothing captured', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}?tab=performance`);
     await waitForHydration(page);
-    await expect(page.getByRole('tab', { name: 'Performance' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Performance/ })).toBeVisible();
   });
 
   test('History tab opens populated from the SSR payload, without refetching or a hydration mismatch', async ({
@@ -128,7 +128,7 @@ test.describe('Test-run-case page', () => {
     await waitForHydration(page);
 
     await expect(page.getByRole('heading', { name: 'Duration trend' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: /History \(\d+\)/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /History \(\d+\)/ })).toBeVisible();
     expect(historyCalls).toEqual([]);
     expect(hydrationErrors).toEqual([]);
   });

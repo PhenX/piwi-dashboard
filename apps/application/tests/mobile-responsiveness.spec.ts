@@ -161,10 +161,10 @@ test.describe('Mobile responsiveness', () => {
         await waitForHydration(page);
 
         const tabLabels = [
-          /Test cases/,
+          /Executions/,
           /Insights/,
-          /Failure groups/,
-          /Regression/,
+          /Failure clusters/,
+          /Since last pass/,
           /Timeline/,
           /Compare/,
           /Slow endpoints/,
@@ -176,7 +176,7 @@ test.describe('Mobile responsiveness', () => {
             await page.getByRole('combobox').first().click();
             await page.getByRole('option', { name: label }).click();
           } else {
-            await page.getByRole('tab', { name: label }).click();
+            await page.getByRole('button', { name: label }).first().click();
           }
           await expectNoHorizontalOverflow(page, `run detail tab ${label}`);
         }
@@ -211,7 +211,7 @@ test.describe('Mobile responsiveness', () => {
           await page.getByRole('combobox').first().click();
           await page.getByRole('option', { name: 'Spec health' }).click();
         } else {
-          await page.getByRole('tab', { name: 'Spec health' }).click();
+          await page.getByRole('button', { name: 'Spec health' }).click();
         }
 
         const table = page.locator('table').first();

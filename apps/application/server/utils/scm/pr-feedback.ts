@@ -15,7 +15,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { failureClusters, projects, testCases, testRuns, testRunsCases } from '../../database/schema';
 import { getAppSetting } from '../app-settings';
 import { createScmProvider } from './index';
-import { normalizeGitUrl } from '../regression-context';
+import { normalizeGitUrl } from './git-url';
 import { getLocatorHealingBatch } from '../locator-healing';
 import { mapHealActionsByCluster } from '../heal/lookup';
 import { resolveOwners } from './ownership';

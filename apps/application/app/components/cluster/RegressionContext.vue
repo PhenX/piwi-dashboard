@@ -13,7 +13,7 @@ const {
   data: context,
   pending: loading,
   refresh: refreshContext,
-} = await useFetch<RegressionContext>(`/api/test-runs/${runId}/regression-context`, { lazy: true, server: false });
+} = await useFetch<RegressionContext>(`/api/test-runs/${runId}/regression-context`, { lazy: true });
 
 // Refetch when the run finishes (the tab stays mounted if it's active).
 watch(

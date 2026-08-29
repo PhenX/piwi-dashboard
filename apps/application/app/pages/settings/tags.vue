@@ -174,9 +174,7 @@ async function handleDeleteTag() {
         </template>
 
         <template #createdAt-cell="{ row }">
-          <span class="text-sm text-muted">
-            {{ prettyDateFormat(row.original.createdAt, { dateOnly: true }) }}
-          </span>
+          <ClientDate :date="row.original.createdAt" date-only class="text-sm text-muted" />
         </template>
 
         <template #actions-cell="{ row }">

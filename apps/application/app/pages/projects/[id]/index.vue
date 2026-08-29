@@ -269,6 +269,21 @@ const tabGroups = computed(() => [
 
 const tabItems = computed(() => tabGroups.value.flatMap((g) => g.items));
 
+// The strip is the Settings-style UNavigationMenu (active state is explicit:
+// tabs are view state, not routes). The active item carries `aria-current` so
+// the strip reads as "current view"; the panels deliberately carry no
+// tabpanel role (the menu exposes plain buttons, not a tablist).
+const tabNavItems = computed(() =>
+  tabItems.value.map((item) => ({
+    ...item,
+    active: activeTab.value === item.value,
+    'aria-current': activeTab.value === item.value ? 'true' : undefined,
+    onSelect: () => {
+      activeTab.value = item.value;
+    },
+  })),
+);
+
 /** Grouped shape for `USelect` (mobile) — array-of-arrays renders as sections. */
 const tabSelectGroups = computed(() => tabGroups.value.map((g) => g.items).filter((items) => items.length > 0));
 
@@ -785,761 +800,742 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
           :items="tabSelectGroups"
           :icon="activeTabIcon"
           size="md"
+          aria-label="Select tab"
           class="w-full mx-1 mb-1 sm:hidden"
         />
-        <UTabs
-          v-model="activeTab"
-          :items="tabItems"
-          size="sm"
-          class="p-1"
-          :ui="{ list: 'max-sm:hidden overflow-x-auto', trigger: 'shrink-0' }"
-        >
-          <!-- TEST RUNS TAB -->
-          <template #test-runs>
-            <!-- Full runs toggle + Environment filter — drives the chart and the table -->
-            <div class="flex flex-wrap items-center gap-3 mb-4">
-              <div class="inline-flex items-center gap-1">
-                <USwitch v-model="fullRunsOnly" label="Full runs only" :ui="{ label: 'text-sm' }" />
-                <HelpHint topic="project.run-scope" />
-              </div>
-              <template v-if="availableEnvironments.length > 0">
-                <span class="text-sm text-muted shrink-0">Environment:</span>
-                <button
-                  v-for="env in availableEnvironments"
-                  :key="env"
-                  type="button"
-                  :class="[
-                    'text-xs font-medium px-2 py-1 rounded border cursor-pointer focus:outline-none transition-colors',
-                    isEnvironmentFilterActive(env)
-                      ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700'
-                      : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 dark:hover:bg-zinc-700',
-                  ]"
-                  @click="toggleEnvironmentFilter(env)"
-                >
-                  {{ env }}
-                </button>
-                <UButton
-                  v-if="selectedEnvironments.length > 0"
-                  size="xs"
-                  variant="ghost"
-                  color="neutral"
-                  icon="i-lucide-x"
-                  label="Clear filter"
-                  @click="selectedEnvironments = []"
-                />
-              </template>
-              <template v-if="availableBranches.length > 0">
-                <span class="text-sm text-muted shrink-0">Branch:</span>
-                <button
-                  v-for="branch in availableBranches"
-                  :key="branch"
-                  type="button"
-                  :title="branch"
-                  :class="[
-                    'text-xs font-medium px-2 py-1 rounded border cursor-pointer focus:outline-none transition-colors max-w-[12rem] truncate',
-                    isBranchFilterActive(branch)
-                      ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700'
-                      : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 dark:hover:bg-zinc-700',
-                  ]"
-                  @click="toggleBranchFilter(branch)"
-                >
-                  {{ branch }}
-                </button>
-                <UButton
-                  v-if="selectedBranches.length > 0"
-                  size="xs"
-                  variant="ghost"
-                  color="neutral"
-                  icon="i-lucide-x"
-                  label="Clear filter"
-                  @click="selectedBranches = []"
-                />
-              </template>
+        <UDashboardToolbar class="hidden sm:block p-1">
+          <UNavigationMenu
+            :items="tabNavItems"
+            highlight
+            class="-mx-1 flex-1"
+            :ui="{ list: 'overflow-x-auto', root: 'min-w-0' }"
+          />
+        </UDashboardToolbar>
+        <!-- TEST RUNS TAB -->
+        <div v-if="activeTab === 'test-runs'">
+          <!-- Full runs toggle + Environment filter — drives the chart and the table -->
+          <div class="flex flex-wrap items-center gap-3 mb-4">
+            <div class="inline-flex items-center gap-1">
+              <USwitch v-model="fullRunsOnly" label="Full runs only" :ui="{ label: 'text-sm' }" />
+              <HelpHint topic="project.run-scope" />
             </div>
-
-            <ChartCard
-              v-if="filteredRuns.length > 0"
-              title="Run trend"
-              subtitle="One bar per run, newest on the right"
-              help="project.runs-trend"
-              :legend="legendOf(RUN_STATUS_SERIES)"
-              data-shot="run-trend"
-            >
-              <TestRunsChart :test-runs="filteredRuns" :markers="visibleMarkers" @marker-click="handleMarkerClick" />
-            </ChartCard>
-
-            <UCard class="mt-4">
-              <!-- Comparison action bar -->
-              <div
-                v-if="selectedRunIds.length > 0"
-                class="flex items-center gap-3 px-3 py-2 mb-3 rounded-lg bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800"
+            <template v-if="availableEnvironments.length > 0">
+              <span class="text-sm text-muted shrink-0">Environment:</span>
+              <button
+                v-for="env in availableEnvironments"
+                :key="env"
+                type="button"
+                :class="[
+                  'text-xs font-medium px-2 py-1 rounded border cursor-pointer focus:outline-none transition-colors',
+                  isEnvironmentFilterActive(env)
+                    ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700'
+                    : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 dark:hover:bg-zinc-700',
+                ]"
+                @click="toggleEnvironmentFilter(env)"
               >
-                <span class="text-sm text-primary-700 dark:text-primary-300">
-                  {{ selectedRunIds.length }} run{{ selectedRunIds.length > 1 ? 's' : '' }} selected
-                </span>
-                <UButton
-                  v-if="selectedRunIds.length === 2"
-                  icon="i-lucide-git-compare-arrows"
-                  size="sm"
-                  color="primary"
-                  label="Compare selected runs"
-                  @click="compareSelectedRuns"
-                />
-                <span v-else class="text-xs text-primary-500"> Select another run to compare </span>
-                <UButton
-                  size="xs"
-                  variant="ghost"
-                  color="neutral"
-                  icon="i-lucide-x"
-                  label="Clear"
-                  @click="selectedRunIds = []"
-                />
-              </div>
-
-              <UTable
-                v-if="filteredRuns.length > 0"
-                :data="filteredRuns"
-                :columns="runsColumns"
-                :ui="{
-                  base: 'table-fixed border-separate border-spacing-0',
-                  thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-                  tbody: '[&>tr]:last:[&>td]:border-b-0',
-                  th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-                  td: 'border-b border-default',
-                }"
-              >
-                <template #select-cell="{ row }">
-                  <input
-                    type="checkbox"
-                    :checked="isRunSelected(row.original.id)"
-                    class="cursor-pointer size-4 accent-primary"
-                    @click.stop="toggleRunSelection(row.original.id)"
-                  />
-                </template>
-                <template #id-cell="{ row }">
-                  <div class="flex items-center gap-2">
-                    <a
-                      :href="`/test-runs/${row.original.id}`"
-                      class="text-primary hover:underline font-medium"
-                      @click.prevent="navigateTo(`/test-runs/${row.original.id}`)"
-                    >
-                      Run #{{ row.original.id }}
-                    </a>
-                    <span v-if="row.original.label" class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-32">
-                      {{ row.original.label }}
-                    </span>
-                  </div>
-                </template>
-                <template #status-cell="{ row }">
-                  <RunStatusBadge :status="row.original.status" />
-                </template>
-                <template #isFullRun-header>
-                  <span class="inline-flex items-center gap-1">Scope <HelpHint topic="run.partial" /></span>
-                </template>
-                <template #isFullRun-cell="{ row }">
-                  <UTooltip :text="scopeTooltip(row.original)">
-                    <UIcon
-                      :name="row.original.isFullRun === false ? 'i-lucide-list-filter' : 'i-lucide-list-checks'"
-                      class="size-4 shrink-0 cursor-help"
-                      :class="row.original.isFullRun === false ? 'text-amber-500' : 'text-green-500'"
-                    />
-                  </UTooltip>
-                </template>
-                <template #browsers-cell="{ row }">
-                  <div v-if="row.original.browsers?.length" class="flex items-center gap-1">
-                    <BrowserBadge
-                      v-for="name in row.original.browsers"
-                      :key="name"
-                      :browser="{ projectName: name }"
-                      size="sm"
-                    />
-                  </div>
-                </template>
-                <template #startTime-cell="{ row }">
-                  <span class="text-xs text-gray-600">{{ prettyDateFormat(row.original.startTime) }}</span>
-                </template>
-                <template #environment-cell="{ row }">
-                  <UBadge v-if="row.original.environment" color="info" variant="subtle" size="sm">
-                    {{ row.original.environment }}
-                  </UBadge>
-                </template>
-                <template #metadata-cell="{ row }">
-                  <div
-                    v-if="runBranch(row.original) || row.original.metadata?.scm?.commit"
-                    class="flex items-center gap-1 flex-wrap"
-                  >
-                    <button
-                      v-if="runBranch(row.original)"
-                      type="button"
-                      :title="`Filter runs on ${runBranch(row.original)}`"
-                      :class="[
-                        'text-xs font-medium px-1.5 py-0.5 rounded cursor-pointer transition-colors max-w-[12rem] truncate',
-                        isBranchFilterActive(runBranch(row.original)!)
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                          : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700',
-                      ]"
-                      @click="toggleBranchFilter(runBranch(row.original)!)"
-                    >
-                      {{ runBranch(row.original) }}
-                    </button>
-                    <code v-if="row.original.metadata?.scm?.commit" class="text-xs text-gray-500">
-                      {{ row.original.metadata.scm.commit.substring(0, 7) }}
-                    </code>
-                  </div>
-                </template>
-                <template #duration-cell="{ row }">
-                  <div class="space-y-1">
-                    <TestStatusBar
-                      :passed="row.original.passedTests"
-                      :failed="row.original.failedTests"
-                      :skipped="row.original.skippedTests"
-                      :flaky="row.original.flakyTests"
-                      :did-not-run="row.original.didNotRunTests ?? 0"
-                      :total="row.original.totalTests"
-                    />
-                    <DurationValue :ms="row.original.duration" class="text-xs text-gray-500" />
-                  </div>
-                </template>
-                <template #reports-cell="{ row }">
-                  <RunReports :reports="row.original.reports" />
-                </template>
-                <template #actions-header>
-                  <div class="text-right">Actions</div>
-                </template>
-                <template #actions-cell="{ row }">
-                  <div class="flex justify-end gap-2">
-                    <UButton :to="`/test-runs/${row.original.id}`" size="sm" variant="outline"> View </UButton>
-                    <UButton
-                      size="sm"
-                      color="error"
-                      variant="soft"
-                      icon="i-lucide-trash-2"
-                      :loading="deletingRunId === row.original.id"
-                      @click="confirmDeleteRunId = row.original.id"
-                    >
-                      Delete
-                    </UButton>
-                  </div>
-                </template>
-              </UTable>
-
-              <div v-else-if="project?.testRuns && project.testRuns.length > 0" class="text-center py-8 text-gray-500">
-                No test runs match the selected environment filter.
-              </div>
-
-              <EmptyState v-else icon="i-lucide-rocket" text="No test runs yet for this project.">
-                <p class="text-xs text-gray-400 max-w-sm">
-                  Point the reporter's <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">projectName</code> at
-                  <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">{{ project?.name }}</code> to send results
-                  here — see the
-                  <DocLink to="reporter" no-icon class="text-primary hover:underline">reporter docs</DocLink> for setup
-                  instructions.
-                </p>
-              </EmptyState>
-            </UCard>
-          </template>
-
-          <!-- FAILURE CLUSTERS TAB -->
-          <template #failure-clusters>
-            <template v-if="activeTab === 'failure-clusters'">
-              <ClusterMergeSuggestions
-                :key="`sug-${clustersRefreshKey}`"
-                :project-id="String(projectId)"
-                @merged="clustersRefreshKey++"
-              />
-              <FailureClustersList :key="clustersRefreshKey" :project-id="String(projectId)" />
-            </template>
-          </template>
-
-          <!-- FLAKY TESTS TAB -->
-          <template #flaky-tests>
-            <FlakyTestsList
-              v-if="activeTab === 'flaky-tests'"
-              :project-id="String(projectId)"
-              :environment="flakyEnvironment"
-              :branch="flakyBranch"
-              :project-name="project?.name"
-            />
-          </template>
-
-          <!-- PERFORMANCE TAB -->
-          <template #performance>
-            <div class="flex flex-wrap items-center gap-3">
-              <span class="text-sm text-muted shrink-0">Date range:</span>
-              <UInput v-model="dateFrom" type="date" size="sm" placeholder="From" class="w-40" />
-              <span class="text-sm text-muted">to</span>
-              <UInput v-model="dateTo" type="date" size="sm" placeholder="To" class="w-40" />
+                {{ env }}
+              </button>
               <UButton
-                v-if="dateFrom || dateTo"
+                v-if="selectedEnvironments.length > 0"
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                icon="i-lucide-x"
+                label="Clear filter"
+                @click="selectedEnvironments = []"
+              />
+            </template>
+            <template v-if="availableBranches.length > 0">
+              <span class="text-sm text-muted shrink-0">Branch:</span>
+              <button
+                v-for="branch in availableBranches"
+                :key="branch"
+                type="button"
+                :title="branch"
+                :class="[
+                  'text-xs font-medium px-2 py-1 rounded border cursor-pointer focus:outline-none transition-colors max-w-[12rem] truncate',
+                  isBranchFilterActive(branch)
+                    ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700'
+                    : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700 dark:hover:bg-zinc-700',
+                ]"
+                @click="toggleBranchFilter(branch)"
+              >
+                {{ branch }}
+              </button>
+              <UButton
+                v-if="selectedBranches.length > 0"
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                icon="i-lucide-x"
+                label="Clear filter"
+                @click="selectedBranches = []"
+              />
+            </template>
+          </div>
+
+          <ChartCard
+            v-if="filteredRuns.length > 0"
+            title="Run trend"
+            subtitle="One bar per run, newest on the right"
+            help="project.runs-trend"
+            :legend="legendOf(RUN_STATUS_SERIES)"
+            data-shot="run-trend"
+          >
+            <TestRunsChart :test-runs="filteredRuns" :markers="visibleMarkers" @marker-click="handleMarkerClick" />
+          </ChartCard>
+
+          <UCard class="mt-4">
+            <!-- Comparison action bar -->
+            <div
+              v-if="selectedRunIds.length > 0"
+              class="flex items-center gap-3 px-3 py-2 mb-3 rounded-lg bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800"
+            >
+              <span class="text-sm text-primary-700 dark:text-primary-300">
+                {{ selectedRunIds.length }} run{{ selectedRunIds.length > 1 ? 's' : '' }} selected
+              </span>
+              <UButton
+                v-if="selectedRunIds.length === 2"
+                icon="i-lucide-git-compare-arrows"
+                size="sm"
+                color="primary"
+                label="Compare selected runs"
+                @click="compareSelectedRuns"
+              />
+              <span v-else class="text-xs text-primary-500"> Select another run to compare </span>
+              <UButton
                 size="xs"
                 variant="ghost"
                 color="neutral"
                 icon="i-lucide-x"
                 label="Clear"
-                @click="
-                  dateFrom = '';
-                  dateTo = '';
-                "
+                @click="selectedRunIds = []"
               />
             </div>
 
-            <ChartCard
-              title="Performance trend"
-              subtitle="Duration metrics per run, newest on the right"
-              help="project.performance"
-              :legend="legendOf(RUN_DURATION_SERIES)"
-              data-shot="performance-trend"
+            <UTable
+              v-if="filteredRuns.length > 0"
+              :data="filteredRuns"
+              :columns="runsColumns"
+              :ui="{
+                base: 'table-fixed border-separate border-spacing-0',
+                thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
+                tbody: '[&>tr]:last:[&>td]:border-b-0',
+                th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
+                td: 'border-b border-default',
+              }"
             >
-              <LoadingState v-if="performanceInitialLoading" text="Loading chart…" />
-              <PerformanceTrendChart
-                v-else
-                :data="performanceData || []"
-                :markers="visibleMarkers"
-                @marker-click="handleMarkerClick"
-              />
-            </ChartCard>
-
-            <UCard data-shot="slowest-tests">
-              <template #header>
-                <h2 class="text-xl font-semibold inline-flex items-center gap-1">
-                  Slowest tests <HelpHint topic="project.slowest-tests" />
-                </h2>
-                <p class="text-sm text-gray-600 mt-1">Top 20 slowest test cases across recent runs</p>
+              <template #select-cell="{ row }">
+                <input
+                  type="checkbox"
+                  :checked="isRunSelected(row.original.id)"
+                  class="cursor-pointer size-4 accent-primary"
+                  @click.stop="toggleRunSelection(row.original.id)"
+                />
               </template>
-
-              <LoadingState v-if="slowTestsLoading && slowTests === null" text="Loading…" />
-
-              <UTable
-                v-else-if="slowTests && slowTests.length > 0"
-                :data="slowTests"
-                :columns="slowTestsColumns"
-                :ui="{
-                  base: 'table-fixed border-separate border-spacing-0',
-                  thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-                  tbody: '[&>tr]:last:[&>td]:border-b-0',
-                  th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-                  td: 'border-b border-default',
-                }"
-              >
-                <template #title-cell="{ row }">
-                  <div>
-                    <div class="font-medium">{{ row.original.title }}</div>
-                    <div class="mt-1">
-                      <OpenInIdeLink
-                        :file-path="row.original.filePath"
-                        :project-key="projectId"
-                        :project-name="project?.name"
-                        class="text-xs"
-                      />
-                    </div>
-                  </div>
-                </template>
-                <template #trend-cell="{ row }">
-                  <span v-if="row.original.trend === 'slower'" class="text-red-600 font-medium">▲ Slower</span>
-                  <span v-else-if="row.original.trend === 'faster'" class="text-green-600 font-medium">▼ Faster</span>
-                  <span v-else class="text-gray-500">&mdash; Stable</span>
-                </template>
-              </UTable>
-
-              <div v-else-if="slowTestsError" class="text-center py-8 text-red-500">
-                Couldn't load the slowest tests — try refreshing.
-              </div>
-
-              <div v-else class="text-center py-8 text-gray-500">No slow test data available yet.</div>
-            </UCard>
-
-            <TimeoutOpportunitiesTable :project-id="String(projectId)" :project-name="project?.name" />
-
-            <UCard>
-              <template #header>
-                <div class="flex items-center justify-between">
-                  <div>
-                    <h2 class="text-xl font-semibold inline-flex items-center gap-1">
-                      Run comparison <HelpHint topic="project.run-compare" />
-                    </h2>
-                    <p class="text-sm text-gray-600 mt-1">Compare duration changes between two runs</p>
-                  </div>
-                  <UButton
-                    v-if="runOptions.length >= 2"
-                    icon="i-lucide-git-compare-arrows"
-                    size="sm"
-                    variant="outline"
-                    label="Compare latest vs previous"
-                    @click="compareLatestWithPrevious"
-                  />
-                </div>
-              </template>
-              <div class="space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                      >Run A (baseline)</label
-                    >
-                    <USelectMenu v-model="compareRunA" :items="runOptions" placeholder="Select run A..." />
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                      >Run B (comparison)</label
-                    >
-                    <USelectMenu v-model="compareRunB" :items="runOptions" placeholder="Select run B..." />
-                  </div>
-                </div>
-                <div v-if="compareLoading" class="text-center py-4 text-gray-500">
-                  <UIcon name="i-lucide-loader-2" class="animate-spin mr-2" />
-                  Loading run data…
-                </div>
-                <div v-else-if="compareRunA && compareRunB && comparisonData.length > 0" class="space-y-4">
-                  <div class="flex gap-4 text-sm">
-                    <UBadge color="success" variant="soft" size="lg">{{ comparisonSummary.improved }} improved</UBadge>
-                    <UBadge color="error" variant="soft" size="lg">{{ comparisonSummary.regressed }} regressed</UBadge>
-                    <UBadge color="neutral" variant="soft" size="lg"
-                      >{{ comparisonSummary.unchanged }} unchanged</UBadge
-                    >
-                  </div>
-                  <UTable
-                    :data="comparisonData"
-                    :columns="comparisonColumns"
-                    :ui="{
-                      base: 'table-fixed border-separate border-spacing-0',
-                      thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-                      tbody: '[&>tr]:last:[&>td]:border-b-0',
-                      th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-                      td: 'border-b border-default',
-                    }"
+              <template #id-cell="{ row }">
+                <div class="flex items-center gap-2">
+                  <a
+                    :href="`/test-runs/${row.original.id}`"
+                    class="text-primary hover:underline font-medium"
+                    @click.prevent="navigateTo(`/test-runs/${row.original.id}`)"
                   >
-                    <template #statusA-cell="{ row }">
-                      <span v-if="!row.original.statusA" class="text-gray-400">&mdash;</span>
-                      <UBadge
-                        v-else
-                        :color="getStatusColor(row.original.statusA)"
-                        variant="subtle"
-                        class="capitalize"
-                        >{{ row.original.statusA }}</UBadge
-                      >
-                    </template>
-                    <template #statusB-cell="{ row }">
-                      <span v-if="!row.original.statusB" class="text-gray-400">&mdash;</span>
-                      <UBadge
-                        v-else
-                        :color="getStatusColor(row.original.statusB)"
-                        variant="subtle"
-                        class="capitalize"
-                        >{{ row.original.statusB }}</UBadge
-                      >
-                    </template>
-                    <template #durationA-cell="{ row }">
-                      <DurationValue v-if="row.original.durationA !== null" :ms="row.original.durationA" />
-                      <span v-else class="text-gray-400">&mdash;</span>
-                    </template>
-                    <template #durationB-cell="{ row }">
-                      <DurationValue v-if="row.original.durationB !== null" :ms="row.original.durationB" />
-                      <span v-else class="text-gray-400">&mdash;</span>
-                    </template>
-                    <template #delta-cell="{ row }">
-                      <span v-if="row.original.delta === null" class="text-gray-400">&mdash;</span>
-                      <span
-                        v-else
-                        :class="
-                          row.original.delta > 0
-                            ? 'text-red-600'
-                            : row.original.delta < 0
-                              ? 'text-green-600'
-                              : 'text-gray-500'
-                        "
-                      >
-                        {{ row.original.delta > 0 ? '+' : ''
-                        }}<DurationValue :ms="row.original.delta" unit-class="opacity-60" />
-                      </span>
-                    </template>
-                    <template #percentChange-cell="{ row }">
-                      <span v-if="row.original.percentChange === null" class="text-gray-400">&mdash;</span>
-                      <span
-                        v-else
-                        :class="
-                          row.original.percentChange > 10
-                            ? 'text-red-600 font-medium'
-                            : row.original.percentChange < -10
-                              ? 'text-green-600 font-medium'
-                              : 'text-gray-500'
-                        "
-                      >
-                        {{ row.original.percentChange > 0 ? '+' : '' }}{{ row.original.percentChange }}%
-                      </span>
-                    </template>
-                  </UTable>
+                    Run #{{ row.original.id }}
+                  </a>
+                  <span v-if="row.original.label" class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-32">
+                    {{ row.original.label }}
+                  </span>
                 </div>
-                <div v-else-if="!compareRunA || !compareRunB" class="text-center py-8 text-gray-500">
-                  Select two runs to compare their performance.
-                </div>
-                <div v-else class="text-center py-8 text-gray-500">
-                  No overlapping test cases found between the selected runs.
-                </div>
-              </div>
-            </UCard>
-          </template>
-
-          <!-- TEST CASES TAB -->
-          <template #test-cases>
-            <ProjectTestCasesTable
-              :project-id="projectId"
-              :project-name="project?.name"
-              sync-query
-              @total="testCasesTotal = $event"
-            />
-          </template>
-
-          <!-- COMPARE TAB -->
-          <template #compare>
-            <UCard>
-              <template #header>
-                <div class="flex items-center justify-between">
-                  <p class="text-sm text-gray-600 inline-flex items-center gap-1">
-                    Compare two test runs side-by-side — status changes and duration deltas
-                    <HelpHint topic="project.compare" />
-                  </p>
-                  <UButton
-                    v-if="runOptions.length >= 2"
-                    icon="i-lucide-git-compare-arrows"
+              </template>
+              <template #status-cell="{ row }">
+                <RunStatusBadge :status="row.original.status" />
+              </template>
+              <template #isFullRun-header>
+                <span class="inline-flex items-center gap-1">Scope <HelpHint topic="run.partial" /></span>
+              </template>
+              <template #isFullRun-cell="{ row }">
+                <UTooltip :text="scopeTooltip(row.original)">
+                  <UIcon
+                    :name="row.original.isFullRun === false ? 'i-lucide-list-filter' : 'i-lucide-list-checks'"
+                    class="size-4 shrink-0 cursor-help"
+                    :class="row.original.isFullRun === false ? 'text-amber-500' : 'text-green-500'"
+                  />
+                </UTooltip>
+              </template>
+              <template #browsers-cell="{ row }">
+                <div v-if="row.original.browsers?.length" class="flex items-center gap-1">
+                  <BrowserBadge
+                    v-for="name in row.original.browsers"
+                    :key="name"
+                    :browser="{ projectName: name }"
                     size="sm"
-                    variant="outline"
-                    label="Latest vs previous"
-                    @click="compareLatestWithPrevious"
                   />
                 </div>
               </template>
-
-              <div class="space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                      >Run A (baseline)</label
-                    >
-                    <USelectMenu v-model="compareRunA" :items="runOptions" placeholder="Select run A..." />
-                  </div>
-                  <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                      >Run B (comparison)</label
-                    >
-                    <USelectMenu v-model="compareRunB" :items="runOptions" placeholder="Select run B..." />
-                  </div>
-                </div>
-
-                <!-- Loading -->
-                <div v-if="compareLoading" class="text-center py-8 text-gray-500">
-                  <UIcon name="i-lucide-loader-2" class="animate-spin mr-2" />
-                  Loading run data…
-                </div>
-
-                <!-- Comparison results -->
-                <div v-else-if="compareRunA && compareRunB && comparisonData.length > 0" class="space-y-4">
-                  <div class="space-y-2">
-                    <div class="flex flex-wrap gap-4 text-sm">
-                      <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1"
-                        >Status changes</span
-                      >
-                      <UBadge v-if="comparisonSummary.newFailures > 0" color="error" variant="soft" size="lg">
-                        {{ comparisonSummary.newFailures }} new failure{{
-                          comparisonSummary.newFailures > 1 ? 's' : ''
-                        }}
-                      </UBadge>
-                      <UBadge v-if="comparisonSummary.recovered > 0" color="success" variant="soft" size="lg">
-                        {{ comparisonSummary.recovered }} recovered
-                      </UBadge>
-                      <UBadge v-if="comparisonSummary.stillFailing > 0" color="warning" variant="soft" size="lg">
-                        {{ comparisonSummary.stillFailing }} still failing
-                      </UBadge>
-                      <span
-                        v-if="
-                          comparisonSummary.newFailures === 0 &&
-                          comparisonSummary.recovered === 0 &&
-                          comparisonSummary.stillFailing === 0
-                        "
-                        class="text-sm text-gray-500"
-                        >No status changes</span
-                      >
-                    </div>
-                    <div class="flex flex-wrap gap-4 text-sm">
-                      <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1"
-                        >Duration changes</span
-                      >
-                      <UBadge v-if="comparisonSummary.regressed > 0" color="error" variant="soft" size="lg">
-                        {{ comparisonSummary.regressed }} regressed
-                      </UBadge>
-                      <UBadge v-if="comparisonSummary.improved > 0" color="success" variant="soft" size="lg">
-                        {{ comparisonSummary.improved }} improved
-                      </UBadge>
-                      <UBadge color="neutral" variant="soft" size="lg">
-                        {{ comparisonSummary.unchanged }} unchanged
-                      </UBadge>
-                    </div>
-                  </div>
-
-                  <UTable
-                    :data="comparisonData"
-                    :columns="comparisonColumns"
-                    :ui="{
-                      base: 'table-fixed border-separate border-spacing-0',
-                      thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-                      tbody: '[&>tr]:last:[&>td]:border-b-0',
-                      th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-                      td: 'border-b border-default',
-                    }"
-                  >
-                    <template #statusA-cell="{ row }">
-                      <span v-if="!row.original.statusA" class="text-gray-400">&mdash;</span>
-                      <UBadge
-                        v-else
-                        :color="getStatusColor(row.original.statusA)"
-                        variant="subtle"
-                        class="capitalize"
-                        >{{ row.original.statusA }}</UBadge
-                      >
-                    </template>
-                    <template #statusB-cell="{ row }">
-                      <span v-if="!row.original.statusB" class="text-gray-400">&mdash;</span>
-                      <UBadge
-                        v-else
-                        :color="getStatusColor(row.original.statusB)"
-                        variant="subtle"
-                        class="capitalize"
-                        >{{ row.original.statusB }}</UBadge
-                      >
-                    </template>
-                    <template #durationA-cell="{ row }">
-                      <DurationValue v-if="row.original.durationA !== null" :ms="row.original.durationA" />
-                      <span v-else class="text-gray-400">&mdash;</span>
-                    </template>
-                    <template #durationB-cell="{ row }">
-                      <DurationValue v-if="row.original.durationB !== null" :ms="row.original.durationB" />
-                      <span v-else class="text-gray-400">&mdash;</span>
-                    </template>
-                    <template #delta-cell="{ row }">
-                      <span v-if="row.original.delta === null" class="text-gray-400">&mdash;</span>
-                      <span
-                        v-else
-                        :class="
-                          row.original.delta > 0
-                            ? 'text-red-600'
-                            : row.original.delta < 0
-                              ? 'text-green-600'
-                              : 'text-gray-500'
-                        "
-                      >
-                        {{ row.original.delta > 0 ? '+' : ''
-                        }}<DurationValue :ms="row.original.delta" unit-class="opacity-60" />
-                      </span>
-                    </template>
-                    <template #percentChange-cell="{ row }">
-                      <span v-if="row.original.percentChange === null" class="text-gray-400">&mdash;</span>
-                      <span
-                        v-else
-                        :class="
-                          row.original.percentChange > 10
-                            ? 'text-red-600 font-medium'
-                            : row.original.percentChange < -10
-                              ? 'text-green-600 font-medium'
-                              : 'text-gray-500'
-                        "
-                      >
-                        {{ row.original.percentChange > 0 ? '+' : '' }}{{ row.original.percentChange }}%
-                      </span>
-                    </template>
-                  </UTable>
-                </div>
-
-                <div v-else-if="!compareRunA || !compareRunB" class="text-center py-8 text-gray-500">
-                  Select two runs to compare test results.
-                </div>
-
-                <div v-else class="text-center py-8 text-gray-500">
-                  No overlapping test cases found between the selected runs.
-                </div>
-              </div>
-            </UCard>
-          </template>
-
-          <!-- SPEC HEALTH TAB -->
-          <template #spec-health>
-            <SpecHealthTable :project-id="String(projectId)" />
-          </template>
-
-          <template #ai-steps>
-            <AiStepCoverage :project-id="String(projectId)" />
-          </template>
-
-          <!-- QUARANTINE TAB -->
-          <template #quarantine>
-            <QuarantineTable :project-id="String(projectId)" :project-name="project?.name" />
-          </template>
-
-          <!-- MEMBERS TAB -->
-          <template #members>
-            <UCard>
-              <template #header>
-                <div class="flex items-center justify-between">
-                  <p class="text-sm text-gray-600 inline-flex items-center gap-1">
-                    Users with access to this project
-                    <HelpHint topic="project.members" />
-                  </p>
-                  <UButton
-                    label="Save changes"
-                    icon="i-lucide-check"
-                    size="sm"
-                    :disabled="!membersChanged"
-                    @click="handleSaveMembers"
-                  />
-                </div>
+              <template #startTime-cell="{ row }">
+                <ClientDate :date="row.original.startTime" class="text-xs text-gray-600" />
               </template>
-
-              <div v-if="mergedMembers.length > 0" class="space-y-2">
+              <template #environment-cell="{ row }">
+                <UBadge v-if="row.original.environment" color="info" variant="subtle" size="sm">
+                  {{ row.original.environment }}
+                </UBadge>
+              </template>
+              <template #metadata-cell="{ row }">
                 <div
-                  v-for="member in mergedMembers"
-                  :key="member.id"
-                  class="flex items-center justify-between rounded-lg border border-default px-4 py-3"
+                  v-if="runBranch(row.original) || row.original.metadata?.scm?.commit"
+                  class="flex items-center gap-1 flex-wrap"
                 >
-                  <div>
-                    <div class="font-medium text-sm">{{ member.name || member.username }}</div>
-                    <div class="text-xs text-muted flex items-center gap-2">
-                      <span>@{{ member.username }}</span>
-                      <UBadge
-                        :color="
-                          member.role === 'administrator' ? 'primary' : member.role === 'reporter' ? 'info' : 'neutral'
-                        "
-                        variant="subtle"
-                        size="xs"
-                      >
-                        {{ member.role }}
-                      </UBadge>
-                      <span v-if="member.global" class="italic">Global access</span>
-                    </div>
-                  </div>
-                  <UCheckbox
-                    v-if="member.role !== 'administrator'"
-                    :model-value="selectedMemberIds.includes(member.id)"
-                    :disabled="member.global"
-                    :title="member.global ? 'Has global access — remove global assignment first' : ''"
-                    @change="toggleMemberSelection(member.id)"
+                  <button
+                    v-if="runBranch(row.original)"
+                    type="button"
+                    :title="`Filter runs on ${runBranch(row.original)}`"
+                    :class="[
+                      'text-xs font-medium px-1.5 py-0.5 rounded cursor-pointer transition-colors max-w-[12rem] truncate',
+                      isBranchFilterActive(runBranch(row.original)!)
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                        : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700',
+                    ]"
+                    @click="toggleBranchFilter(runBranch(row.original)!)"
+                  >
+                    {{ runBranch(row.original) }}
+                  </button>
+                  <code v-if="row.original.metadata?.scm?.commit" class="text-xs text-gray-500">
+                    {{ row.original.metadata.scm.commit.substring(0, 7) }}
+                  </code>
+                </div>
+              </template>
+              <template #duration-cell="{ row }">
+                <div class="space-y-1">
+                  <TestStatusBar
+                    :passed="row.original.passedTests"
+                    :failed="row.original.failedTests"
+                    :skipped="row.original.skippedTests"
+                    :flaky="row.original.flakyTests"
+                    :did-not-run="row.original.didNotRunTests ?? 0"
+                    :total="row.original.totalTests"
                   />
-                  <span v-else class="text-xs text-muted italic">Admin</span>
+                  <DurationValue :ms="row.original.duration" class="text-xs text-gray-500" />
+                </div>
+              </template>
+              <template #reports-cell="{ row }">
+                <RunReports :reports="row.original.reports" />
+              </template>
+              <template #actions-header>
+                <div class="text-right">Actions</div>
+              </template>
+              <template #actions-cell="{ row }">
+                <div class="flex justify-end gap-2">
+                  <UButton :to="`/test-runs/${row.original.id}`" size="sm" variant="outline"> View </UButton>
+                  <UButton
+                    size="sm"
+                    color="error"
+                    variant="soft"
+                    icon="i-lucide-trash-2"
+                    :loading="deletingRunId === row.original.id"
+                    @click="confirmDeleteRunId = row.original.id"
+                  >
+                    Delete
+                  </UButton>
+                </div>
+              </template>
+            </UTable>
+
+            <div v-else-if="project?.testRuns && project.testRuns.length > 0" class="text-center py-8 text-gray-500">
+              No test runs match the selected environment filter.
+            </div>
+
+            <EmptyState v-else icon="i-lucide-rocket" text="No test runs yet for this project.">
+              <p class="text-xs text-gray-400 max-w-sm">
+                Point the reporter's <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">projectName</code> at
+                <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">{{ project?.name }}</code> to send results here
+                — see the
+                <DocLink to="reporter" no-icon class="text-primary hover:underline">reporter docs</DocLink> for setup
+                instructions.
+              </p>
+            </EmptyState>
+          </UCard>
+        </div>
+
+        <!-- FAILURE CLUSTERS TAB -->
+        <div v-if="activeTab === 'failure-clusters'">
+          <template v-if="activeTab === 'failure-clusters'">
+            <ClusterMergeSuggestions
+              :key="`sug-${clustersRefreshKey}`"
+              :project-id="String(projectId)"
+              @merged="clustersRefreshKey++"
+            />
+            <FailureClustersList :key="clustersRefreshKey" :project-id="String(projectId)" />
+          </template>
+        </div>
+
+        <!-- FLAKY TESTS TAB -->
+        <div v-if="activeTab === 'flaky-tests'">
+          <FlakyTestsList
+            v-if="activeTab === 'flaky-tests'"
+            :project-id="String(projectId)"
+            :environment="flakyEnvironment"
+            :branch="flakyBranch"
+            :project-name="project?.name"
+          />
+        </div>
+
+        <!-- PERFORMANCE TAB -->
+        <div v-if="activeTab === 'performance'">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="text-sm text-muted shrink-0">Date range:</span>
+            <UInput v-model="dateFrom" type="date" size="sm" placeholder="From" class="w-40" />
+            <span class="text-sm text-muted">to</span>
+            <UInput v-model="dateTo" type="date" size="sm" placeholder="To" class="w-40" />
+            <UButton
+              v-if="dateFrom || dateTo"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              icon="i-lucide-x"
+              label="Clear"
+              @click="
+                dateFrom = '';
+                dateTo = '';
+              "
+            />
+          </div>
+
+          <ChartCard
+            title="Performance trend"
+            subtitle="Duration metrics per run, newest on the right"
+            help="project.performance"
+            :legend="legendOf(RUN_DURATION_SERIES)"
+            data-shot="performance-trend"
+          >
+            <LoadingState v-if="performanceInitialLoading" text="Loading chart…" />
+            <PerformanceTrendChart
+              v-else
+              :data="performanceData || []"
+              :markers="visibleMarkers"
+              @marker-click="handleMarkerClick"
+            />
+          </ChartCard>
+
+          <UCard data-shot="slowest-tests">
+            <template #header>
+              <h2 class="text-xl font-semibold inline-flex items-center gap-1">
+                Slowest tests <HelpHint topic="project.slowest-tests" />
+              </h2>
+              <p class="text-sm text-gray-600 mt-1">Top 20 slowest test cases across recent runs</p>
+            </template>
+
+            <LoadingState v-if="slowTestsLoading && slowTests === null" text="Loading…" />
+
+            <UTable
+              v-else-if="slowTests && slowTests.length > 0"
+              :data="slowTests"
+              :columns="slowTestsColumns"
+              :ui="{
+                base: 'table-fixed border-separate border-spacing-0',
+                thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
+                tbody: '[&>tr]:last:[&>td]:border-b-0',
+                th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
+                td: 'border-b border-default',
+              }"
+            >
+              <template #title-cell="{ row }">
+                <div>
+                  <div class="font-medium">{{ row.original.title }}</div>
+                  <div class="mt-1">
+                    <OpenInIdeLink
+                      :file-path="row.original.filePath"
+                      :project-key="projectId"
+                      :project-name="project?.name"
+                      class="text-xs"
+                    />
+                  </div>
+                </div>
+              </template>
+              <template #trend-cell="{ row }">
+                <span v-if="row.original.trend === 'slower'" class="text-red-600 font-medium">▲ Slower</span>
+                <span v-else-if="row.original.trend === 'faster'" class="text-green-600 font-medium">▼ Faster</span>
+                <span v-else class="text-gray-500">&mdash; Stable</span>
+              </template>
+            </UTable>
+
+            <div v-else-if="slowTestsError" class="text-center py-8 text-red-500">
+              Couldn't load the slowest tests — try refreshing.
+            </div>
+
+            <div v-else class="text-center py-8 text-gray-500">No slow test data available yet.</div>
+          </UCard>
+
+          <TimeoutOpportunitiesTable :project-id="String(projectId)" :project-name="project?.name" />
+
+          <UCard>
+            <template #header>
+              <div class="flex items-center justify-between">
+                <div>
+                  <h2 class="text-xl font-semibold inline-flex items-center gap-1">
+                    Run comparison <HelpHint topic="project.run-compare" />
+                  </h2>
+                  <p class="text-sm text-gray-600 mt-1">Compare duration changes between two runs</p>
+                </div>
+                <UButton
+                  v-if="runOptions.length >= 2"
+                  icon="i-lucide-git-compare-arrows"
+                  size="sm"
+                  variant="outline"
+                  label="Compare latest vs previous"
+                  @click="compareLatestWithPrevious"
+                />
+              </div>
+            </template>
+            <div class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                    >Run A (baseline)</label
+                  >
+                  <USelectMenu v-model="compareRunA" :items="runOptions" placeholder="Select run A..." />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                    >Run B (comparison)</label
+                  >
+                  <USelectMenu v-model="compareRunB" :items="runOptions" placeholder="Select run B..." />
                 </div>
               </div>
-              <div v-else class="text-center py-8 text-muted text-sm">Loading members…</div>
-            </UCard>
-          </template>
+              <div v-if="compareLoading" class="text-center py-4 text-gray-500">
+                <UIcon name="i-lucide-loader-2" class="animate-spin mr-2" />
+                Loading run data…
+              </div>
+              <div v-else-if="compareRunA && compareRunB && comparisonData.length > 0" class="space-y-4">
+                <div class="flex gap-4 text-sm">
+                  <UBadge color="success" variant="soft" size="lg">{{ comparisonSummary.improved }} improved</UBadge>
+                  <UBadge color="error" variant="soft" size="lg">{{ comparisonSummary.regressed }} regressed</UBadge>
+                  <UBadge color="neutral" variant="soft" size="lg">{{ comparisonSummary.unchanged }} unchanged</UBadge>
+                </div>
+                <UTable
+                  :data="comparisonData"
+                  :columns="comparisonColumns"
+                  :ui="{
+                    base: 'table-fixed border-separate border-spacing-0',
+                    thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
+                    tbody: '[&>tr]:last:[&>td]:border-b-0',
+                    th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
+                    td: 'border-b border-default',
+                  }"
+                >
+                  <template #statusA-cell="{ row }">
+                    <span v-if="!row.original.statusA" class="text-gray-400">&mdash;</span>
+                    <UBadge v-else :color="getStatusColor(row.original.statusA)" variant="subtle" class="capitalize">{{
+                      row.original.statusA
+                    }}</UBadge>
+                  </template>
+                  <template #statusB-cell="{ row }">
+                    <span v-if="!row.original.statusB" class="text-gray-400">&mdash;</span>
+                    <UBadge v-else :color="getStatusColor(row.original.statusB)" variant="subtle" class="capitalize">{{
+                      row.original.statusB
+                    }}</UBadge>
+                  </template>
+                  <template #durationA-cell="{ row }">
+                    <DurationValue v-if="row.original.durationA !== null" :ms="row.original.durationA" />
+                    <span v-else class="text-gray-400">&mdash;</span>
+                  </template>
+                  <template #durationB-cell="{ row }">
+                    <DurationValue v-if="row.original.durationB !== null" :ms="row.original.durationB" />
+                    <span v-else class="text-gray-400">&mdash;</span>
+                  </template>
+                  <template #delta-cell="{ row }">
+                    <span v-if="row.original.delta === null" class="text-gray-400">&mdash;</span>
+                    <span
+                      v-else
+                      :class="
+                        row.original.delta > 0
+                          ? 'text-red-600'
+                          : row.original.delta < 0
+                            ? 'text-green-600'
+                            : 'text-gray-500'
+                      "
+                    >
+                      {{ row.original.delta > 0 ? '+' : ''
+                      }}<DurationValue :ms="row.original.delta" unit-class="opacity-60" />
+                    </span>
+                  </template>
+                  <template #percentChange-cell="{ row }">
+                    <span v-if="row.original.percentChange === null" class="text-gray-400">&mdash;</span>
+                    <span
+                      v-else
+                      :class="
+                        row.original.percentChange > 10
+                          ? 'text-red-600 font-medium'
+                          : row.original.percentChange < -10
+                            ? 'text-green-600 font-medium'
+                            : 'text-gray-500'
+                      "
+                    >
+                      {{ row.original.percentChange > 0 ? '+' : '' }}{{ row.original.percentChange }}%
+                    </span>
+                  </template>
+                </UTable>
+              </div>
+              <div v-else-if="!compareRunA || !compareRunB" class="text-center py-8 text-gray-500">
+                Select two runs to compare their performance.
+              </div>
+              <div v-else class="text-center py-8 text-gray-500">
+                No overlapping test cases found between the selected runs.
+              </div>
+            </div>
+          </UCard>
+        </div>
 
-          <!-- TIMELINE TAB -->
-          <template #timeline>
-            <ProjectTimeline
-              :project-id="Number(projectId)"
-              :markers="markers"
-              :environments="availableEnvironments"
-              :can-edit="canEditMarkers"
-              :focus-marker-id="focusMarkerId"
-              @changed="refreshMarkers"
-              @clear-focus="focusMarkerId = null"
-            />
-          </template>
-        </UTabs>
+        <!-- TEST CASES TAB -->
+        <div v-if="activeTab === 'test-cases'">
+          <ProjectTestCasesTable
+            :project-id="projectId"
+            :project-name="project?.name"
+            sync-query
+            @total="testCasesTotal = $event"
+          />
+        </div>
+
+        <!-- COMPARE TAB -->
+        <div v-if="activeTab === 'compare'">
+          <UCard>
+            <template #header>
+              <div class="flex items-center justify-between">
+                <p class="text-sm text-gray-600 inline-flex items-center gap-1">
+                  Compare two test runs side-by-side — status changes and duration deltas
+                  <HelpHint topic="project.compare" />
+                </p>
+                <UButton
+                  v-if="runOptions.length >= 2"
+                  icon="i-lucide-git-compare-arrows"
+                  size="sm"
+                  variant="outline"
+                  label="Latest vs previous"
+                  @click="compareLatestWithPrevious"
+                />
+              </div>
+            </template>
+
+            <div class="space-y-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                    >Run A (baseline)</label
+                  >
+                  <USelectMenu v-model="compareRunA" :items="runOptions" placeholder="Select run A..." />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                    >Run B (comparison)</label
+                  >
+                  <USelectMenu v-model="compareRunB" :items="runOptions" placeholder="Select run B..." />
+                </div>
+              </div>
+
+              <!-- Loading -->
+              <div v-if="compareLoading" class="text-center py-8 text-gray-500">
+                <UIcon name="i-lucide-loader-2" class="animate-spin mr-2" />
+                Loading run data…
+              </div>
+
+              <!-- Comparison results -->
+              <div v-else-if="compareRunA && compareRunB && comparisonData.length > 0" class="space-y-4">
+                <div class="space-y-2">
+                  <div class="flex flex-wrap gap-4 text-sm">
+                    <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1"
+                      >Status changes</span
+                    >
+                    <UBadge v-if="comparisonSummary.newFailures > 0" color="error" variant="soft" size="lg">
+                      {{ comparisonSummary.newFailures }} new failure{{ comparisonSummary.newFailures > 1 ? 's' : '' }}
+                    </UBadge>
+                    <UBadge v-if="comparisonSummary.recovered > 0" color="success" variant="soft" size="lg">
+                      {{ comparisonSummary.recovered }} recovered
+                    </UBadge>
+                    <UBadge v-if="comparisonSummary.stillFailing > 0" color="warning" variant="soft" size="lg">
+                      {{ comparisonSummary.stillFailing }} still failing
+                    </UBadge>
+                    <span
+                      v-if="
+                        comparisonSummary.newFailures === 0 &&
+                        comparisonSummary.recovered === 0 &&
+                        comparisonSummary.stillFailing === 0
+                      "
+                      class="text-sm text-gray-500"
+                      >No status changes</span
+                    >
+                  </div>
+                  <div class="flex flex-wrap gap-4 text-sm">
+                    <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider mr-1"
+                      >Duration changes</span
+                    >
+                    <UBadge v-if="comparisonSummary.regressed > 0" color="error" variant="soft" size="lg">
+                      {{ comparisonSummary.regressed }} regressed
+                    </UBadge>
+                    <UBadge v-if="comparisonSummary.improved > 0" color="success" variant="soft" size="lg">
+                      {{ comparisonSummary.improved }} improved
+                    </UBadge>
+                    <UBadge color="neutral" variant="soft" size="lg">
+                      {{ comparisonSummary.unchanged }} unchanged
+                    </UBadge>
+                  </div>
+                </div>
+
+                <UTable
+                  :data="comparisonData"
+                  :columns="comparisonColumns"
+                  :ui="{
+                    base: 'table-fixed border-separate border-spacing-0',
+                    thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
+                    tbody: '[&>tr]:last:[&>td]:border-b-0',
+                    th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
+                    td: 'border-b border-default',
+                  }"
+                >
+                  <template #statusA-cell="{ row }">
+                    <span v-if="!row.original.statusA" class="text-gray-400">&mdash;</span>
+                    <UBadge v-else :color="getStatusColor(row.original.statusA)" variant="subtle" class="capitalize">{{
+                      row.original.statusA
+                    }}</UBadge>
+                  </template>
+                  <template #statusB-cell="{ row }">
+                    <span v-if="!row.original.statusB" class="text-gray-400">&mdash;</span>
+                    <UBadge v-else :color="getStatusColor(row.original.statusB)" variant="subtle" class="capitalize">{{
+                      row.original.statusB
+                    }}</UBadge>
+                  </template>
+                  <template #durationA-cell="{ row }">
+                    <DurationValue v-if="row.original.durationA !== null" :ms="row.original.durationA" />
+                    <span v-else class="text-gray-400">&mdash;</span>
+                  </template>
+                  <template #durationB-cell="{ row }">
+                    <DurationValue v-if="row.original.durationB !== null" :ms="row.original.durationB" />
+                    <span v-else class="text-gray-400">&mdash;</span>
+                  </template>
+                  <template #delta-cell="{ row }">
+                    <span v-if="row.original.delta === null" class="text-gray-400">&mdash;</span>
+                    <span
+                      v-else
+                      :class="
+                        row.original.delta > 0
+                          ? 'text-red-600'
+                          : row.original.delta < 0
+                            ? 'text-green-600'
+                            : 'text-gray-500'
+                      "
+                    >
+                      {{ row.original.delta > 0 ? '+' : ''
+                      }}<DurationValue :ms="row.original.delta" unit-class="opacity-60" />
+                    </span>
+                  </template>
+                  <template #percentChange-cell="{ row }">
+                    <span v-if="row.original.percentChange === null" class="text-gray-400">&mdash;</span>
+                    <span
+                      v-else
+                      :class="
+                        row.original.percentChange > 10
+                          ? 'text-red-600 font-medium'
+                          : row.original.percentChange < -10
+                            ? 'text-green-600 font-medium'
+                            : 'text-gray-500'
+                      "
+                    >
+                      {{ row.original.percentChange > 0 ? '+' : '' }}{{ row.original.percentChange }}%
+                    </span>
+                  </template>
+                </UTable>
+              </div>
+
+              <div v-else-if="!compareRunA || !compareRunB" class="text-center py-8 text-gray-500">
+                Select two runs to compare test results.
+              </div>
+
+              <div v-else class="text-center py-8 text-gray-500">
+                No overlapping test cases found between the selected runs.
+              </div>
+            </div>
+          </UCard>
+        </div>
+
+        <!-- SPEC HEALTH TAB -->
+        <div v-if="activeTab === 'spec-health'">
+          <SpecHealthTable :project-id="String(projectId)" />
+        </div>
+
+        <div v-if="activeTab === 'ai-steps'">
+          <AiStepCoverage :project-id="String(projectId)" />
+        </div>
+
+        <!-- QUARANTINE TAB -->
+        <div v-if="activeTab === 'quarantine'">
+          <QuarantineTable :project-id="String(projectId)" :project-name="project?.name" />
+        </div>
+
+        <!-- MEMBERS TAB -->
+        <div v-if="activeTab === 'members'">
+          <UCard>
+            <template #header>
+              <div class="flex items-center justify-between">
+                <p class="text-sm text-gray-600 inline-flex items-center gap-1">
+                  Users with access to this project
+                  <HelpHint topic="project.members" />
+                </p>
+                <UButton
+                  label="Save changes"
+                  icon="i-lucide-check"
+                  size="sm"
+                  :disabled="!membersChanged"
+                  @click="handleSaveMembers"
+                />
+              </div>
+            </template>
+
+            <div v-if="mergedMembers.length > 0" class="space-y-2">
+              <div
+                v-for="member in mergedMembers"
+                :key="member.id"
+                class="flex items-center justify-between rounded-lg border border-default px-4 py-3"
+              >
+                <div>
+                  <div class="font-medium text-sm">{{ member.name || member.username }}</div>
+                  <div class="text-xs text-muted flex items-center gap-2">
+                    <span>@{{ member.username }}</span>
+                    <UBadge
+                      :color="
+                        member.role === 'administrator' ? 'primary' : member.role === 'reporter' ? 'info' : 'neutral'
+                      "
+                      variant="subtle"
+                      size="xs"
+                    >
+                      {{ member.role }}
+                    </UBadge>
+                    <span v-if="member.global" class="italic">Global access</span>
+                  </div>
+                </div>
+                <UCheckbox
+                  v-if="member.role !== 'administrator'"
+                  :model-value="selectedMemberIds.includes(member.id)"
+                  :disabled="member.global"
+                  :title="member.global ? 'Has global access — remove global assignment first' : ''"
+                  @change="toggleMemberSelection(member.id)"
+                />
+                <span v-else class="text-xs text-muted italic">Admin</span>
+              </div>
+            </div>
+            <div v-else class="text-center py-8 text-muted text-sm">Loading members…</div>
+          </UCard>
+        </div>
+
+        <!-- TIMELINE TAB -->
+        <div v-if="activeTab === 'timeline'">
+          <ProjectTimeline
+            :project-id="Number(projectId)"
+            :markers="markers"
+            :environments="availableEnvironments"
+            :can-edit="canEditMarkers"
+            :focus-marker-id="focusMarkerId"
+            @changed="refreshMarkers"
+            @clear-focus="focusMarkerId = null"
+          />
+        </div>
       </div>
     </template>
   </UDashboardPanel>

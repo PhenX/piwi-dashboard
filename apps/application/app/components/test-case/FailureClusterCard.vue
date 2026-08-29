@@ -48,12 +48,12 @@ const confidenceColor = (c?: string | null): 'success' | 'warning' | 'neutral' =
       <UBadge v-if="cluster.isNew" color="warning" variant="subtle" size="sm">New</UBadge>
       <UBadge
         v-if="cluster.status && cluster.status !== 'open'"
-        :color="cluster.status === 'resolved' ? 'success' : 'neutral'"
+        color="neutral"
         variant="subtle"
         size="sm"
         class="capitalize"
       >
-        {{ cluster.status }}
+        Triage: {{ formatTriageStatus(cluster.status) }}
       </UBadge>
     </template>
 

@@ -22,11 +22,24 @@ const ancestorItems = computed<DropdownMenuItem[]>(() =>
 );
 
 const hasAncestors = computed(() => ancestorItems.value.length > 0);
+
+// The leaf truncates so a long page title never collides with the navbar
+// actions; every level needs `min-w-0` for the truncation to take effect.
+const truncatingItems = computed(() => {
+  const items = props.items.map((item) => ({ ...item }));
+  const last = items[items.length - 1];
+  if (last) last.class = 'truncate';
+  return items;
+});
 </script>
 
 <template>
   <!-- Desktop: full breadcrumb, forwarding any custom per-item slots (e.g. #project). -->
-  <UBreadcrumb :items="items" class="hidden min-w-0 sm:flex">
+  <UBreadcrumb
+    :items="truncatingItems"
+    class="hidden min-w-0 sm:flex"
+    :ui="{ root: 'min-w-0', list: 'min-w-0', item: 'min-w-0', link: 'min-w-0' }"
+  >
     <template v-for="(_, name) in $slots" #[name]="slotData">
       <slot :name="name" v-bind="slotData ?? {}" />
     </template>

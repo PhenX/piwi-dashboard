@@ -125,13 +125,6 @@ const { data: tooltipData, pos: tooltipPos, show, move, hide } = useChartTooltip
         {{ tick.label }}
       </text>
 
-      <ChartMarkerLines
-        :markers="markers"
-        :x-of="(occurredAt) => markerX(plotWidth, occurredAt)"
-        :plot-height="plotHeight"
-        @marker-click="emit('marker-click', $event)"
-      />
-
       <rect
         v-for="(d, i) in chartData"
         :key="`hover-${d.id}`"
@@ -145,6 +138,15 @@ const { data: tooltipData, pos: tooltipPos, show, move, hide } = useChartTooltip
         @mouseenter="show($event, d)"
         @mousemove="move($event)"
         @mouseleave="hide()"
+      />
+
+      <!-- Markers render after the hover columns so their flags stay on top
+           and hover/click reach them (SVG paints in document order). -->
+      <ChartMarkerLines
+        :markers="markers"
+        :x-of="(occurredAt) => markerX(plotWidth, occurredAt)"
+        :plot-height="plotHeight"
+        @marker-click="emit('marker-click', $event)"
       />
     </ChartFrame>
 

@@ -5,9 +5,6 @@ import type { RunMetadata } from '../run-json-types';
 import { createScmProvider } from './index';
 import { normalizeGitUrl, FALLBACK_DEFAULT_BRANCH } from './git-url';
 
-// Re-exported so callers can import the constant alongside the resolver.
-export { FALLBACK_DEFAULT_BRANCH };
-
 /** The project fields the resolver needs — a partial row is enough. */
 export interface DefaultBranchProject {
   id: number;

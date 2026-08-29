@@ -9,13 +9,14 @@ const props = defineProps<{
   allReports: ReportInfo[];
   showCustomData: boolean;
   finalizing?: boolean;
-  activeFilter?: string;
+  /** The active status filters, shared with the test-cases list's chips. */
+  activeStatuses: string[];
   totalWastedTime?: number;
 }>();
 
 const emit = defineEmits<{
   'update:showCustomData': [value: boolean];
-  'filter-status': [value: string];
+  'toggle-status': [value: string];
   'label-updated': [];
 }>();
 
@@ -179,8 +180,11 @@ function onLabelKeydown(e: KeyboardEvent) {
             <template v-else>
               <span
                 v-if="testRun?.label"
+                role="button"
+                tabindex="0"
                 class="font-normal text-zinc-500 ml-1.5 cursor-pointer hover:text-zinc-700 dark:hover:text-zinc-300 border-b border-dashed border-transparent hover:border-zinc-400"
-                @click="startEditLabel"
+                @click.stop="startEditLabel"
+                @keydown.enter.stop="startEditLabel"
                 >— {{ testRun.label }}</span
               >
               <button
@@ -251,6 +255,10 @@ function onLabelKeydown(e: KeyboardEvent) {
             <div class="min-w-0 flex-1 basis-64">
               <div class="flex items-center gap-2 flex-wrap">
                 <StatusChip :status="testRun?.status ?? ''" />
+                <HelpHint
+                  v-if="testRun?.status === 'interrupted' || (testRun?.shardTotal && testRun.shardTotal > 1)"
+                  topic="run.partial"
+                />
                 <h2 class="text-base font-bold shrink-0 flex items-center gap-1">
                   Run #{{ testRun?.id }}
                   <template v-if="editingLabel">
@@ -312,10 +320,15 @@ function onLabelKeydown(e: KeyboardEvent) {
                 </UTooltip>
               </div>
               <p class="mt-1 text-xs text-muted flex items-center gap-1.5 flex-wrap">
-                <span>Started {{ prettyDateFormat(testRun?.startTime) }}</span>
                 <ClientOnly>
-                  <span class="text-dimmed">· {{ formatRelativeTime(testRun?.startTime) }}</span>
+                  <span :title="prettyDateFormat(testRun?.startTime)">
+                    Started {{ formatRelativeTime(testRun?.startTime) }}
+                  </span>
                 </ClientOnly>
+                <template v-if="testRun?.shardTotal && testRun.shardTotal > 1">
+                  <span class="text-dimmed">·</span>
+                  <HelpHint topic="run.partial" />
+                </template>
               </p>
             </div>
 
@@ -336,12 +349,12 @@ function onLabelKeydown(e: KeyboardEvent) {
                   size="xs"
                   color="warning"
                   variant="subtle"
-                  :icon="retryCopied ? 'i-lucide-check' : 'i-lucide-play'"
+                  :icon="retryCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
                   :title="retryTitle"
-                  aria-label="Retry"
+                  aria-label="Copy retry command"
                   @click="copyRetryCommand()"
                 >
-                  <span class="hidden @2xl:inline">Retry</span>
+                  <span class="hidden @2xl:inline">Copy retry command</span>
                 </UButton>
                 <template #content>
                   <div class="p-2 space-y-1 min-w-32">
@@ -386,13 +399,15 @@ function onLabelKeydown(e: KeyboardEvent) {
 
           <StatTileGrid min-tile-width="7.5rem">
             <button
-              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
+              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
               :class="
-                activeFilter === 'all'
+                activeStatuses.length === 0
                   ? 'bg-accented ring-2 ring-zinc-400 dark:ring-zinc-500'
                   : 'bg-elevated/60 hover:bg-elevated'
               "
-              @click="emit('filter-status', 'all')"
+              :aria-pressed="activeStatuses.length === 0"
+              :disabled="(displayProgress?.totalTests ?? testRun?.totalTests ?? 0) === 0"
+              @click="emit('toggle-status', 'all')"
             >
               <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider">Total</p>
               <p class="text-xl font-bold mt-0.5">
@@ -405,13 +420,15 @@ function onLabelKeydown(e: KeyboardEvent) {
                  markup valid while giving each its own filter click + active highlight. -->
             <div class="relative">
               <button
-                class="rounded-lg p-3 text-left w-full h-full transition-colors cursor-pointer"
+                class="rounded-lg p-3 text-left w-full h-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                 :class="
-                  activeFilter === 'passed'
+                  activeStatuses.includes('passed')
                     ? 'bg-emerald-100 dark:bg-emerald-900/30 ring-2 ring-emerald-400 dark:ring-emerald-600'
                     : 'bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'
                 "
-                @click="emit('filter-status', 'passed')"
+                :aria-pressed="activeStatuses.includes('passed')"
+                :disabled="(displayProgress?.passedTests ?? testRun?.passedTests ?? 0) === 0"
+                @click="emit('toggle-status', 'passed')"
               >
                 <p class="text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
                   Passed
@@ -424,25 +441,28 @@ function onLabelKeydown(e: KeyboardEvent) {
                 v-if="(testRun?.flakyTests ?? 0) > 0"
                 class="absolute top-1.5 right-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-semibold leading-none tabular-nums transition-colors cursor-pointer"
                 :class="
-                  activeFilter === 'flaky'
+                  activeStatuses.includes('flaky')
                     ? 'bg-orange-200 dark:bg-orange-800/60 text-orange-800 dark:text-orange-200 ring-2 ring-orange-400 dark:ring-orange-600'
                     : 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-800/60'
                 "
                 title="Flaky — passed only after a retry (a subset of passed). Click to filter."
-                @click="emit('filter-status', 'flaky')"
+                :aria-pressed="activeStatuses.includes('flaky')"
+                @click="emit('toggle-status', 'flaky')"
               >
                 <UIcon name="i-lucide-shuffle" class="size-3" />
                 {{ testRun?.flakyTests ?? 0 }}
               </button>
             </div>
             <button
-              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
+              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
               :class="
-                activeFilter === 'failed'
+                activeStatuses.includes('failed')
                   ? 'bg-rose-100 dark:bg-rose-900/30 ring-2 ring-rose-400 dark:ring-rose-600'
                   : 'bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/30'
               "
-              @click="emit('filter-status', 'failed')"
+              :aria-pressed="activeStatuses.includes('failed')"
+              :disabled="(displayProgress?.failedTests ?? testRun?.failedTests ?? 0) === 0"
+              @click="emit('toggle-status', 'failed')"
             >
               <p class="text-xs font-medium text-rose-700 dark:text-rose-400 uppercase tracking-wider">Failed</p>
               <p class="text-xl font-bold mt-0.5 text-rose-600 dark:text-rose-400">
@@ -450,13 +470,15 @@ function onLabelKeydown(e: KeyboardEvent) {
               </p>
             </button>
             <button
-              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
+              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
               :class="
-                activeFilter === 'skipped'
+                activeStatuses.includes('skipped')
                   ? 'bg-accented ring-2 ring-zinc-400 dark:ring-zinc-500'
                   : 'bg-elevated/60 hover:bg-elevated'
               "
-              @click="emit('filter-status', 'skipped')"
+              :aria-pressed="activeStatuses.includes('skipped')"
+              :disabled="(displayProgress?.skippedTests ?? testRun?.skippedTests ?? 0) === 0"
+              @click="emit('toggle-status', 'skipped')"
             >
               <p class="text-xs font-medium text-zinc-500 uppercase tracking-wider">Skipped</p>
               <p class="text-xl font-bold mt-0.5 text-zinc-600 dark:text-zinc-400">
@@ -464,14 +486,16 @@ function onLabelKeydown(e: KeyboardEvent) {
               </p>
             </button>
             <button
-              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer"
+              class="rounded-lg p-3 text-left w-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
               :class="
-                activeFilter === 'didnotrun'
+                activeStatuses.includes('didnotrun')
                   ? 'bg-amber-100 dark:bg-amber-900/30 ring-2 ring-amber-400 dark:ring-amber-600'
                   : 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30'
               "
               title="Tests that never ran (maxFailures cutoff or a serial-group failure)"
-              @click="emit('filter-status', 'didnotrun')"
+              :aria-pressed="activeStatuses.includes('didnotrun')"
+              :disabled="(testRun?.didNotRunTests ?? 0) === 0"
+              @click="emit('toggle-status', 'didnotrun')"
             >
               <p class="text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider">Didn't run</p>
               <p class="text-xl font-bold mt-0.5 text-amber-600 dark:text-amber-400">
@@ -494,6 +518,7 @@ function onLabelKeydown(e: KeyboardEvent) {
             <div class="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs shrink-0">
               <div class="flex items-center gap-1">
                 <UIcon name="i-lucide-clock" class="size-3.5 text-zinc-400" />
+                <span class="text-zinc-500">Duration</span>
                 <DurationValue :ms="testRun?.duration" class="font-medium" />
               </div>
               <div v-if="testRun?.avgTestDuration" class="flex items-center gap-1">
@@ -510,7 +535,11 @@ function onLabelKeydown(e: KeyboardEvent) {
                   unit-class="opacity-60"
                 />
               </div>
-              <div v-if="totalWastedTime && totalWastedTime > 0" class="flex items-center gap-1">
+              <div
+                v-if="totalWastedTime && totalWastedTime > 0"
+                class="flex items-center gap-1"
+                title="Wasted in fixed waits"
+              >
                 <UIcon name="i-lucide-clock" class="size-3.5 text-amber-500" />
                 <span class="text-zinc-500">Wasted</span>
                 <DurationValue

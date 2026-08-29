@@ -128,12 +128,12 @@ test.describe('Performance UI Tests', () => {
       await expect(page.getByText('Slowest step')).toBeVisible();
 
       // Should show steps section
-      await expect(page.getByRole('tab', { name: /Steps/ })).toBeVisible();
+      await expect(page.getByRole('button', { name: /^Steps/ })).toBeVisible();
     }
   });
 
   test('should show performance tab in page navigation', async ({ page }) => {
     await page.goto(`/projects/${projectId}`);
-    await expect(page.getByRole('tab', { name: /Performance/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Performance/ })).toBeVisible();
   });
 });

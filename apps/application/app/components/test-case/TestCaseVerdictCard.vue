@@ -104,7 +104,12 @@ const squareClass = (status: string) => ({
 </script>
 
 <template>
-  <SectionCard icon="i-lucide-clipboard-check" icon-class="text-amber-500" title="Verdict" help="case.verdict">
+  <SectionCard
+    icon="i-lucide-clipboard-check"
+    icon-class="text-amber-500"
+    title="Regression status"
+    help="case.verdict"
+  >
     <div class="space-y-3">
       <!-- Signal chips -->
       <div v-if="chips.length" class="flex flex-wrap gap-1.5">
@@ -137,7 +142,7 @@ const squareClass = (status: string) => ({
             <template v-if="verdict.lastPass">
               Last passed in
               <NuxtLink :to="`/test-run-cases/${verdict.lastPass.id}`" class="text-primary hover:underline">
-                run #{{ verdict.lastPass.runId }}
+                execution in run #{{ verdict.lastPass.runId }}
               </NuxtLink>
               ({{ formatRelativeTime(verdict.lastPass.startTime) }}).
             </template>
@@ -151,11 +156,17 @@ const squareClass = (status: string) => ({
 
         <!-- Clickable recent-status strip -->
         <div v-if="strip.length > 1">
-          <p class="text-xs text-gray-400 mb-1">Recent runs (oldest → newest)</p>
+          <p class="text-xs text-gray-400 mb-1">Recent executions of this test (oldest → newest)</p>
           <div class="flex items-center gap-1 flex-wrap">
-            <UTooltip v-for="point in strip" :key="point.id" :text="`Run #${point.runId}: ${point.status}`">
+            <UTooltip
+              v-for="point in strip"
+              :key="point.id"
+              :text="`Execution in run #${point.runId}: ${point.status}`"
+            >
               <NuxtLink
                 :to="`/test-run-cases/${point.id}`"
+                :aria-label="`Execution in run #${point.runId}: ${formatStatusLabel(point.status)}`"
+                :aria-current="point.id === currentId ? 'true' : undefined"
                 class="size-3.5 rounded-sm inline-block transition-colors"
                 :class="[squareClass(point.status), point.id === currentId ? 'ring-2 ring-offset-1 ring-primary' : '']"
               />

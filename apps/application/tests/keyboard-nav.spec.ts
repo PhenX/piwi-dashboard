@@ -68,9 +68,9 @@ test.describe('Keyboard navigation & tab URL sync', () => {
 
     const startLen = await page.evaluate(() => history.length);
 
-    await page.getByRole('tab', { name: 'Performance' }).click();
+    await page.getByRole('button', { name: 'Performance' }).click();
     await expect(page).toHaveURL(/[?&]tab=performance/);
-    await page.getByRole('tab', { name: 'Spec health' }).click();
+    await page.getByRole('button', { name: 'Spec health' }).click();
     await expect(page).toHaveURL(/[?&]tab=spec-health/);
 
     const endLen = await page.evaluate(() => history.length);

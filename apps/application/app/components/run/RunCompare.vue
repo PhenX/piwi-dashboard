@@ -7,6 +7,8 @@ import type { ComparisonRow } from '~/composables/useRunComparison';
 interface RunOption {
   label: string;
   value: number;
+  status: string;
+  startTime: number;
 }
 
 const props = defineProps<{
@@ -61,15 +63,51 @@ const markersBetween = computed<MarkerInfo[]>(() => {
   });
 });
 
+function runToOption(r: { id: number; startTime: string | Date; status: string }): RunOption {
+  return {
+    label: `Run #${r.id} — ${prettyDateFormat(r.startTime, { dateOnly: true })} (${r.status})`,
+    value: r.id,
+    status: r.status,
+    startTime: new Date(r.startTime).getTime(),
+  };
+}
+
+// The documented baseline: the most recent passing run *before* this one,
+// chosen from the full project history rather than the capped dropdown, so a
+// historical run with many newer runs still finds its baseline. Falls back to
+// the run immediately before this one. Restricting to earlier start times keeps
+// a historical run from comparing against a pass that happened after it.
+const defaultBaselineOption = computed<RunOption | null>(() => {
+  const runs = projectData.value?.testRuns;
+  if (!runs || !props.testRun) return null;
+  const currentStart = new Date(props.testRun.startTime).getTime();
+  const earlier = runs
+    .filter((r) => r.id !== Number(runId) && new Date(r.startTime).getTime() < currentStart)
+    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+  const pick = earlier.find((r) => r.status === 'passed') ?? earlier[0];
+  return pick ? runToOption(pick) : null;
+});
+
 const projectRunOptions = computed<RunOption[]>(() => {
-  if (!projectData.value?.testRuns) return [];
-  return projectData.value.testRuns
+  const runs = projectData.value?.testRuns;
+  if (!runs) return [];
+  const options = runs
     .filter((r) => r.id !== Number(runId))
     .slice(0, 50)
-    .map((r) => ({
-      label: `Run #${r.id} — ${prettyDateFormat(r.startTime, { dateOnly: true })} (${r.status})`,
-      value: r.id,
-    }));
+    .map(runToOption);
+  // The auto-selected baseline can fall outside the 50 newest on a historical
+  // run — keep it in the list so the select shows and can re-pick it.
+  const baseline = defaultBaselineOption.value;
+  if (baseline && !options.some((o) => o.value === baseline.value)) options.push(baseline);
+  return options;
+});
+
+// Preselect the baseline once the run list arrives (projectData loads async, so
+// this fires on that change), matching it to the in-list option so the select
+// renders it as selected.
+watch([projectRunOptions, defaultBaselineOption], ([options, baseline]) => {
+  if (compareRunA.value || !baseline) return;
+  compareRunA.value = options.find((o) => o.value === baseline.value) ?? baseline;
 });
 
 const previousRunId = computed<number | null>(() => {
@@ -151,8 +189,15 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
       <div class="space-y-4">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Run A (baseline)</label>
-            <USelectMenu v-model="compareRunA" :items="projectRunOptions" placeholder="Select a baseline run..." />
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="compare-baseline-select"
+              >Run A (baseline)</label
+            >
+            <USelectMenu
+              id="compare-baseline-select"
+              v-model="compareRunA"
+              :items="projectRunOptions"
+              placeholder="Select a baseline run..."
+            />
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Run B (this run)</label>
@@ -292,15 +337,13 @@ const comparisonColumns: TableColumn<ComparisonRow>[] = [
           </TableScroller>
         </template>
 
-        <div v-else-if="compareRunA && !loadingBaseline" class="text-center py-8 text-gray-500">
-          <UIcon name="i-lucide-git-compare-arrows" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
-          <p>No comparison data available.</p>
-        </div>
+        <EmptyState
+          v-else-if="compareRunA && !loadingBaseline"
+          icon="i-lucide-git-compare-arrows"
+          text="No comparison data available."
+        />
 
-        <div v-else class="text-center py-8 text-gray-500">
-          <UIcon name="i-lucide-arrow-left-right" class="size-8 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
-          <p>Select a baseline run to compare.</p>
-        </div>
+        <EmptyState v-else icon="i-lucide-arrow-left-right" text="Select a baseline run to compare." />
       </div>
     </template>
     <div v-else-if="isLive" class="text-center py-10 text-gray-500">

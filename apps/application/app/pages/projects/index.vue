@@ -299,9 +299,11 @@ const columns: TableColumn<ProjectWithStats>[] = [
             <span v-else>{{ row.original.totalRuns }} runs</span>
           </template>
           <template #latestRun-cell="{ row }">
-            <span v-if="row.original.latestRun" class="text-xs text-gray-600">{{
-              prettyDateFormat(row.original.latestRun.startTime)
-            }}</span>
+            <ClientDate
+              v-if="row.original.latestRun"
+              :date="row.original.latestRun.startTime"
+              class="text-xs text-gray-600"
+            />
             <span v-else class="text-xs text-gray-600 italic">No data</span>
           </template>
           <template #branch-cell="{ row }">
