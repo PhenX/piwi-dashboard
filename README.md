@@ -149,6 +149,11 @@ Import `test` from this file in your specs instead of `@playwright/test` — tha
 Details in the [capture fixtures guide](https://piwitests.dev/capture-fixtures); a runnable
 project lives in [`examples/playwright-fixtures`](./examples/playwright-fixtures).
 
+Steps 2–4 are also one command, if you prefer:
+`npx @piwitests/reporter init --server-url http://localhost:3000 --project my-project` — idempotent,
+and anything it won't rewrite is reported as a manual step with the exact change to make. See
+[Getting started → Fast path](https://piwitests.dev/getting-started#fast-path-one-command).
+
 In CI, set `PIWI_DASHBOARD_URL` (and `PIWI_API_KEY` if auth is on) and you're done — branch, commit, CI
 metadata and `--shard` merging are detected automatically. See
 [CI & sharding](https://piwitests.dev/ci).

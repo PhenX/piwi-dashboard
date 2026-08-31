@@ -153,6 +153,7 @@ export default defineConfig({
           { text: 'Browser extension', link: '/extension' },
           { text: 'Open in IDE', link: '/ide-integration' },
           { text: 'MCP server', link: '/mcp' },
+          { text: 'Agent skills', link: '/mcp#agent-skills' },
           { text: 'API docs (interactive)', link: 'https://piwitests.dev/demo/docs' },
         ],
       },

@@ -481,6 +481,31 @@ const SCENES = [
     },
   },
 
+  {
+    name: 'setup-companion-tools',
+    description: 'Setup page: the companion-tools card below the capability ladder',
+    route: '/setup',
+    viewport: { width: 1280, height: 2600 },
+    of: '[data-shot="companion-tools"]',
+    pad: 12,
+  },
+  {
+    name: 'wizard-fast-path',
+    description: 'Get-started wizard: the one-command init fast path above the manual steps',
+    route: '/setup',
+    viewport: { width: 1280, height: 2600 },
+    of: '[data-shot="wizard-fast-path"]',
+    pad: 12,
+  },
+  {
+    name: 'mcp-agent-skills',
+    description: 'MCP page: the agent-skills section with the install command',
+    route: '/mcp',
+    viewport: { width: 1280, height: 2400 },
+    of: '[data-shot="mcp-agent-skills"]',
+    pad: 12,
+  },
+
   // ── Desktop shell (report artifacts) ──────────────────────────────────────
   {
     name: 'desktop-nav',

@@ -370,6 +370,8 @@ A confirmed pick is recorded in three places:
 
 The gate is identical to `inspectOnFailure` (headed browser, never under CI, final attempt only), and the picker suppresses the page's own click handlers while active, so picking can't navigate or mutate the failing page. Picking never rewrites your test — it records the choice so you (or the dashboard) can apply it.
 
+The same picker engine also ships as the [Piwi Picker browser extension](./extension) — pick ranked, uniqueness-checked locators from any live page in Chrome or Edge, with no test run and no server required.
+
 ## Automatic metadata collection
 
 ### SCM information (Git)
