@@ -59,6 +59,16 @@ export const SETUP_CAPABILITIES: SetupCapabilityCopy[] = [
     doc: 'capture-fixtures',
   },
   {
+    id: 'backend-logs',
+    title: 'Backend logs',
+    summary:
+      'Server-side warnings, errors and spans captured during each test and shown next to the network request that triggered them.',
+    how: 'Install a Piwi instrumentation package in the app under test — @piwitests/instrumentation-nitro on npm, or PiwiTests.Instrumentation.AspNetCore on NuGet.',
+    icon: 'i-lucide-server',
+    doc: 'backend-logs',
+    optional: true,
+  },
+  {
     id: 'clustering',
     title: 'Failure clustering',
     summary: 'Forty red tests collapsed into the three root causes behind them, each triaged once.',

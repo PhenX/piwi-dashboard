@@ -92,7 +92,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 | Option                      | Type     | Default                   | Description                                                                                 |
 |-----------------------------|----------|---------------------------|---------------------------------------------------------------------------------------------|
 | `enabled`                   | boolean  | `true` when `serverUrl` is set | Explicitly turn the reporter off without removing it from the config                   |
-| `serverUrl`                 | string   | `'http://localhost:3000'` | URL of the Piwi Dashboard server                                                            |
+| `serverUrl`                 | string   | —                         | URL of the Piwi Dashboard server. With none set anywhere, the reporter looks for the [desktop app](#finding-the-desktop-app-automatically), and disables itself when that finds nothing either |
 | `projectName`               | string   | `'default-project'`       | Name of the project to report results under                                                 |
 | `uploadTraces`              | boolean  | `true`                    | Upload trace files to the dashboard                                                         |
 | `uploadReport`              | boolean  | `true`                    | Upload the Playwright HTML report                                                           |
@@ -126,7 +126,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 
 ### Environment variables
 
-Every option above can also be set via a `PIWI_*` environment variable. Env vars are fallbacks — an option passed in the reporter config takes precedence. The one exception is `PIWI_VERBOSE`, which wins over both the default and an explicit option (useful for toggling debug output without editing the config). The mapping is centralized in `src/internal/config/env.ts` (`PIWI_ENV_KEYS`):
+The options in the table below can also be set via a `PIWI_*` environment variable. Env vars are fallbacks — an option passed in the reporter config takes precedence. The one exception is `PIWI_VERBOSE`, which wins over both the default and an explicit option (useful for toggling debug output without editing the config). The mapping is centralized in `src/internal/config/env.ts` (`PIWI_ENV_KEYS`). The remaining options — `enabled`, `reports`, `projectDescription`, `relatedIssue`, `ciInfo`, `tags`, `customData`, `collectScmInfo`, `collectCiInfo` and `collectPerformanceMetrics` — are config-only:
 
 | Env var                         | Option                  | Format          |
 |---------------------------------|-------------------------|-----------------|
@@ -370,6 +370,8 @@ A confirmed pick is recorded in three places:
 
 The gate is identical to `inspectOnFailure` (headed browser, never under CI, final attempt only), and the picker suppresses the page's own click handlers while active, so picking can't navigate or mutate the failing page. Picking never rewrites your test — it records the choice so you (or the dashboard) can apply it.
 
+The same picker engine also ships as the [Piwi Picker browser extension](./extension) — pick ranked, uniqueness-checked locators from any live page in Chrome or Edge, with no test run and no server required.
+
 ## Automatic metadata collection
 
 ### SCM information (Git)
@@ -560,6 +562,15 @@ Uploaded traces open in the dashboard's **built-in, self-hosted trace viewer** �
 
 - Verify `serverUrl` is correct and the server is running
 - Check network connectivity and firewall settings
+- A run the reporter could not deliver — dashboard down, or a 401 because no
+  credential was configured — is not lost: a recovery copy of the results is
+  saved locally and submitted automatically on the next run for the same
+  project, in streaming and batch mode alike. The recovery copy carries the
+  results only, not traces, reports or attachments.
+- When live streaming is interrupted mid-run, the reporter warns once, buffers
+  the events, and keeps retrying; delivery retries at the end of the run can
+  add a few minutes of teardown while the dashboard stays unreachable, after
+  which the run falls back to the batch submit.
 
 ## With authentication enabled
 

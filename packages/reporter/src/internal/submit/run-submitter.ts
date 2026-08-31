@@ -107,8 +107,13 @@ export class RunSubmitter {
       auth = sm?.auth ?? (await this.httpClient.resolveAuth(run.options));
     } catch (error) {
       this.logger.error(`Authentication failed: ${errorMessage(error)}`);
+      this.saveRecovery(this.buildRunPayload(run, overallStatus, duration));
       throw error;
     }
+
+    // A streaming session retries the recovery file when it opens; without one,
+    // retry it here so a saved payload still reaches the server.
+    if (!sm) await this.recovery.tryUpload(this.httpClient, auth);
 
     let outcome: SubmitOutcome = { done: false, output: null };
 
@@ -255,17 +260,15 @@ export class RunSubmitter {
     duration: number,
     auth: string | null,
   ): Promise<SubmitOutcome> {
+    const payload = this.buildRunPayload(run, overallStatus, duration);
     try {
-      const response = await this.uploader.uploadWithFiles(
-        this.buildRunPayload(run, overallStatus, duration),
-        this.reportOptions(run),
-        auth,
-      );
+      const response = await this.uploader.uploadWithFiles(payload, this.reportOptions(run), auth);
       this.recovery.clear();
       return { done: true, output: this.buildOutput(response?.runId, response?.projectId, run, overallStatus) };
     } catch (error) {
       if (error instanceof HttpError && error.status === 401 && !auth) {
         this.logAuthRequired(run.options.serverUrl);
+        this.saveRecovery(payload);
         throw error;
       }
       this.logger.warn(`Failed to upload with files: ${errorMessage(error)}`);
@@ -290,6 +293,7 @@ export class RunSubmitter {
       // configuration error — throw so the caller knows it's fatal.
       if (error instanceof HttpError && error.status === 401 && !auth) {
         this.logAuthRequired(run.options.serverUrl);
+        this.saveRecovery(payload);
         throw error;
       }
       this.logger.error(`All upload methods failed: ${errorMessage(error)}`);
@@ -297,12 +301,18 @@ export class RunSubmitter {
         `Saved a local recovery copy — it will be uploaded automatically on your next test run. ` +
           `If this keeps happening, check that serverUrl (${run.options.serverUrl ?? 'not set'}) is correct and reachable.`,
       );
-      // Save the wire-serialized form so the recovery file matches the
-      // original submit payload (no raw attachments / internal fields).
-      this.recovery.save(serializeRun(payload, { includeTestCases: true }));
+      this.saveRecovery(payload);
       // The ladder is exhausted; nothing to surface to CI.
       return { done: true, output: null };
     }
+  }
+
+  /**
+   * Persist the wire-serialized payload (no raw attachments / internal fields)
+   * so a later run can retry the submit.
+   */
+  private saveRecovery(payload: RunPayload): void {
+    this.recovery.save(serializeRun(payload, { includeTestCases: true }));
   }
 
   /** Log one actionable line explaining how to fix a 401 caused by a missing credential. */

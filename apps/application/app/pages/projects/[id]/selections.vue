@@ -370,7 +370,15 @@ function saveSmoke(testCaseIds: number[]) {
             v-else-if="selections.length === 0"
             icon="i-lucide-list-filter"
             text="No selections yet — create one, or run a built-in with piwi run failed."
-          />
+          >
+            <p class="text-xs text-gray-400 max-w-sm">
+              Selections are named subsets — smoke, recently broken, a time budget — that the reporter CLI's
+              <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">piwi run</code> and
+              <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">piwi select</code> resolve against this dashboard
+              — see the
+              <DocLink to="test-selection" no-icon class="text-primary hover:underline">test selection docs</DocLink>.
+            </p>
+          </EmptyState>
           <div v-else class="divide-y divide-gray-200 dark:divide-gray-800">
             <div
               v-for="selection in selections"

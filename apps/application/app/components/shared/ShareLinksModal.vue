@@ -178,6 +178,11 @@ function linkState(link: ShareLinkSummary): { label: string; color: 'success' | 
           </div>
         </div>
         <EmptyState v-else-if="settings?.enabled" text="No share links yet for this page." />
+
+        <p class="text-xs text-gray-400">
+          A link renders the same bounded report as an offline export, live at view time —
+          <DocLink to="share-links" no-icon class="text-primary hover:underline">how share links work</DocLink>.
+        </p>
       </div>
     </template>
   </UModal>

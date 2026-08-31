@@ -36,6 +36,7 @@ export type SetupCapabilityId =
   | 'reporter'
   | 'fixtures'
   | 'locator-healing'
+  | 'backend-logs'
   | 'clustering'
   | 'ai'
   | 'notifications'
@@ -65,6 +66,7 @@ export async function getSetupStatus(db: DrizzleDB): Promise<SetupStatus> {
     hasRuns,
     hasNetwork,
     hasLocators,
+    hasServerTraces,
     hasClusters,
     hasAiSetting,
     hasChannels,
@@ -76,6 +78,14 @@ export async function getSetupStatus(db: DrizzleDB): Promise<SetupStatus> {
     exists(db, db.select({ id: testRuns.id }).from(testRuns).limit(1)),
     exists(db, db.select({ id: networkRequests.id }).from(networkRequests).limit(1)),
     exists(db, db.select({ id: locatorSnapshots.id }).from(locatorSnapshots).limit(1)),
+    exists(
+      db,
+      db
+        .select({ id: networkRequests.id })
+        .from(networkRequests)
+        .where(isNotNull(networkRequests.serverTraces))
+        .limit(1),
+    ),
     exists(db, db.select({ id: failureClusters.id }).from(failureClusters).limit(1)),
     exists(db, db.select({ key: appSettings.key }).from(appSettings).where(eq(appSettings.key, 'ai')).limit(1)),
     exists(db, db.select({ id: notificationChannels.id }).from(notificationChannels).limit(1)),
@@ -95,6 +105,7 @@ export async function getSetupStatus(db: DrizzleDB): Promise<SetupStatus> {
     { id: 'reporter', active: hasRuns },
     { id: 'fixtures', active: hasNetwork },
     { id: 'locator-healing', active: hasLocators },
+    { id: 'backend-logs', active: hasServerTraces },
     { id: 'clustering', active: hasClusters },
     { id: 'ai', active: hasAiSetting || aiFromEnv },
     { id: 'notifications', active: hasChannels },

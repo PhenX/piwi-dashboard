@@ -642,7 +642,16 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
           >Enable Piwi dashboard fixtures</DocLink
         >
         to capture element attributes at test time, or use “Pick from snapshot” above to choose a locator by hand on the
-        failure-time page.
+        failure-time page. In local headed runs,
+        <DocLink
+          to="reporter#pick-a-replacement-locator-on-the-failing-page-local-runs"
+          no-icon
+          class="text-primary hover:underline"
+          >pickLocatorOnFailure</DocLink
+        >
+        opens the same picker on the still-open failing page, and the
+        <DocLink to="extension" no-icon class="text-primary hover:underline">Piwi Picker browser extension</DocLink>
+        picks from any live page without a test run.
       </template>
     </UAlert>
   </component>
