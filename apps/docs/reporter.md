@@ -560,6 +560,15 @@ Uploaded traces open in the dashboard's **built-in, self-hosted trace viewer** �
 
 - Verify `serverUrl` is correct and the server is running
 - Check network connectivity and firewall settings
+- A run the reporter could not deliver — dashboard down, or a 401 because no
+  credential was configured — is not lost: a recovery copy of the results is
+  saved locally and submitted automatically on the next run for the same
+  project, in streaming and batch mode alike. The recovery copy carries the
+  results only, not traces, reports or attachments.
+- When live streaming is interrupted mid-run, the reporter warns once, buffers
+  the events, and keeps retrying; delivery retries at the end of the run can
+  add a few minutes of teardown while the dashboard stays unreachable, after
+  which the run falls back to the batch submit.
 
 ## With authentication enabled
 

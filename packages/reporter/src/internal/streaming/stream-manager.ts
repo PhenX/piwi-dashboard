@@ -222,7 +222,9 @@ export class StreamManager {
             `Falling back to batch upload at the end of the run.`,
         );
       } else {
-        this.logger.debug(`Streaming not available: ${errorMessage(error)}. Will use batch mode.`);
+        this.logger.warn(
+          `Live streaming is unavailable (${errorMessage(error)}) — results will be submitted in one batch when the run finishes.`,
+        );
       }
       this._enabled = false;
     }
@@ -269,9 +271,9 @@ export class StreamManager {
           this.lastActivityAt = Date.now();
           return true;
         },
-        () => {
+        (error) => {
           this.pendingEvents = events.concat(this.pendingEvents);
-          this.scheduleRetry();
+          this.scheduleRetry(errorMessage(error));
           return false;
         },
       );
@@ -280,9 +282,12 @@ export class StreamManager {
     return promise;
   }
 
-  private scheduleRetry(): void {
+  private scheduleRetry(reason: string): void {
     if (this.retryTimer) return;
     this.retryCount++;
+    if (this.retryCount === 1) {
+      this.logger.warn(`Streaming to the dashboard was interrupted (${reason}) — events are buffered and retried.`);
+    }
     const delay = Math.min(1000 * Math.pow(2, this.retryCount - 1), this.maxRetryDelay);
     this.logger.debug(`Will retry streaming flush in ${delay}ms (attempt ${this.retryCount})`);
 
@@ -340,40 +345,63 @@ export class StreamManager {
     }
   }
 
+  /** Clear a scheduled flush retry so its timer cannot fire after the run wraps up. */
+  private clearRetryTimer(): void {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+  }
+
   /** Drain all pending and buffered events before the run finishes. Retries up to 10 times with exponential back-off. */
   async drain(): Promise<void> {
     this.stopHeartbeat();
+    this.clearRetryTimer();
     if (!this._enabled) {
       this.pendingEvents = [];
       this.flushPromises = [];
       return;
     }
 
-    const MAX_ATTEMPTS = 10;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      if (this._enabled && this.pendingEvents.length > 0) this.flush();
-      if (this.flushPromises.length > 0) {
-        await Promise.allSettled(this.flushPromises);
-        this.flushPromises = [];
-      }
-      if (this.pendingEvents.length === 0) {
-        const buffered = this.streamBuffer.load();
-        if (buffered.length > 0) {
-          this.pendingEvents = buffered;
-          this.streamBuffer.clear();
-          continue;
+    try {
+      const MAX_ATTEMPTS = 10;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        if (this._enabled && this.pendingEvents.length > 0) this.flush();
+        if (this.flushPromises.length > 0) {
+          await Promise.allSettled(this.flushPromises);
+          this.flushPromises = [];
         }
-        return;
+        if (this.pendingEvents.length === 0) {
+          const buffered = this.streamBuffer.load();
+          if (buffered.length > 0) {
+            this.pendingEvents = buffered;
+            this.streamBuffer.clear();
+            continue;
+          }
+          return;
+        }
+        if (attempt === 0) {
+          this.logger.warn(
+            `The dashboard has not accepted ${this.pendingEvents.length} live event(s) yet — retrying delivery before the final submit (this can take a few minutes)...`,
+          );
+        }
+        this.logger.debugError(
+          `${this.pendingEvents.length} events pending, retrying (attempt ${attempt + 1}/${MAX_ATTEMPTS})...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * Math.pow(2, attempt), 10000)));
       }
-      this.logger.debugError(
-        `${this.pendingEvents.length} events pending, retrying (attempt ${attempt + 1}/${MAX_ATTEMPTS})...`,
-      );
-      await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * Math.pow(2, attempt), 10000)));
-    }
 
-    if (this.pendingEvents.length > 0) {
-      this.streamBuffer.append(this.pendingEvents);
-      this.pendingEvents = [];
+      if (this.pendingEvents.length > 0) {
+        this.logger.warn(
+          `Could not deliver ${this.pendingEvents.length} live event(s) to the dashboard — continuing with the end-of-run submit.`,
+        );
+        this.streamBuffer.append(this.pendingEvents);
+        this.pendingEvents = [];
+      }
+    } finally {
+      // Flush failures inside the loop re-arm the retry timer; the drain is the
+      // last delivery attempt, so nothing may stay scheduled past it.
+      this.clearRetryTimer();
     }
   }
 

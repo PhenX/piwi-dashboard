@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { PiwiDashboardReporter } from '../src/public/reporter.js';
+import { hashForProject } from '../src/internal/support/instance-id.js';
 import {
   startServer,
   jsonRes,
@@ -20,13 +21,13 @@ const STREAM_PREFIX = 'piwi-dashboard-stream-';
 const SETUP_PREFIX = 'piwi-dashboard-setup-';
 
 function cleanupProjectArtifacts(projectName: string): void {
-  // Recovery and stream-buffer files are keyed by a sha1 of the project name.
-  // We don't know the hash here, so sweep tmpdir for piwi-dashboard-* files
-  // matching this test run's marker.
+  // Recovery and stream-buffer files are keyed by a sha1 hash of the project
+  // name, so match on the hash rather than the raw name.
   const tmp = os.tmpdir();
+  const hash = hashForProject(projectName);
   for (const f of fs.readdirSync(tmp)) {
     if (f.startsWith(RECOVERY_PREFIX) || f.startsWith(STREAM_PREFIX) || f.startsWith(SETUP_PREFIX)) {
-      if (f.includes(projectName)) {
+      if (f.includes(hash) || f.includes(projectName)) {
         try {
           fs.unlinkSync(path.join(tmp, f));
         } catch {
@@ -35,6 +36,10 @@ function cleanupProjectArtifacts(projectName: string): void {
       }
     }
   }
+}
+
+function recoveryFilePath(projectName: string): string {
+  return path.join(os.tmpdir(), `${RECOVERY_PREFIX}${hashForProject(projectName)}.json`);
 }
 
 async function runOneTest(reporter: PiwiDashboardReporter, title: string, status = 'passed'): Promise<void> {
@@ -252,14 +257,50 @@ describe('PiwiDashboardReporter submit/fallback ladder', () => {
     await runOneTest(reporter, 'recovery-test');
 
     // A recovery file should now exist in tmpdir for this project.
-    const tmp = os.tmpdir();
-    const files = fs.readdirSync(tmp).filter((f) => f.startsWith(RECOVERY_PREFIX));
-    expect(files.length > 0, 'expected a recovery file to be written').toBeTruthy();
-    const recovered = JSON.parse(fs.readFileSync(path.join(tmp, files[0]), 'utf8'));
+    const recovered = JSON.parse(fs.readFileSync(recoveryFilePath(projectName), 'utf8'));
     expect(recovered.projectName).toBe(projectName);
   });
 
-  it('401 with no auth propagates (does not fall back)', async () => {
+  it('batch mode retries a saved recovery payload on the next run', async () => {
+    server = await startServer((_req, res) => textRes(res, 500, 'down'));
+    const failing = new PiwiDashboardReporter({
+      serverUrl: server.url,
+      projectName,
+      streaming: false,
+      uploadReport: false,
+      uploadTraces: false,
+      liveFileUploads: false,
+    });
+    await runOneTest(failing, 'lost-run-test');
+    await server.close();
+    expect(fs.existsSync(recoveryFilePath(projectName)), 'expected a recovery file after the failed run').toBe(true);
+
+    const submits: any[] = [];
+    server = await startServer((req, res) => {
+      if (req.url === '/api/test-runs/submit') {
+        submits.push(JSON.parse(req.body));
+        jsonRes(res, 200, { runId: 30 + submits.length, projectId: 20 });
+      } else {
+        textRes(res, 404, 'nope');
+      }
+    });
+    const reporter = new PiwiDashboardReporter({
+      serverUrl: server.url,
+      projectName,
+      streaming: false,
+      uploadReport: false,
+      uploadTraces: false,
+      liveFileUploads: false,
+    });
+    await runOneTest(reporter, 'second-run-test');
+
+    const titles = submits.map((s) => s.testCases[0].title);
+    expect(titles, `submits: ${titles.join(', ')}`).toContain('lost-run-test');
+    expect(titles, `submits: ${titles.join(', ')}`).toContain('second-run-test');
+    expect(fs.existsSync(recoveryFilePath(projectName)), 'recovery file is cleared after the retry').toBe(false);
+  });
+
+  it('401 with no auth propagates (does not fall back) and saves a recovery copy', async () => {
     server = await startServer((req, res) => {
       if (req.url === '/api/test-runs/submit') {
         textRes(res, 401, 'unauthorized');
@@ -280,5 +321,10 @@ describe('PiwiDashboardReporter submit/fallback ladder', () => {
       reports: [{ type: 'missing-type', dir: '/nonexistent' }],
     });
     await expect(runOneTest(reporter, 'auth-fail-test')).rejects.toThrow(/401/);
+
+    // The run is not lost: a recovery copy is written before the throw.
+    const recovered = JSON.parse(fs.readFileSync(recoveryFilePath(projectName), 'utf8'));
+    expect(recovered.projectName).toBe(projectName);
+    expect(recovered.testCases[0].title).toBe('auth-fail-test');
   });
 });
