@@ -92,7 +92,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 | Option                      | Type     | Default                   | Description                                                                                 |
 |-----------------------------|----------|---------------------------|---------------------------------------------------------------------------------------------|
 | `enabled`                   | boolean  | `true` when `serverUrl` is set | Explicitly turn the reporter off without removing it from the config                   |
-| `serverUrl`                 | string   | `'http://localhost:3000'` | URL of the Piwi Dashboard server                                                            |
+| `serverUrl`                 | string   | —                         | URL of the Piwi Dashboard server. With none set anywhere, the reporter looks for the [desktop app](#finding-the-desktop-app-automatically), and disables itself when that finds nothing either |
 | `projectName`               | string   | `'default-project'`       | Name of the project to report results under                                                 |
 | `uploadTraces`              | boolean  | `true`                    | Upload trace files to the dashboard                                                         |
 | `uploadReport`              | boolean  | `true`                    | Upload the Playwright HTML report                                                           |
@@ -126,7 +126,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 
 ### Environment variables
 
-Every option above can also be set via a `PIWI_*` environment variable. Env vars are fallbacks — an option passed in the reporter config takes precedence. The one exception is `PIWI_VERBOSE`, which wins over both the default and an explicit option (useful for toggling debug output without editing the config). The mapping is centralized in `src/internal/config/env.ts` (`PIWI_ENV_KEYS`):
+The options in the table below can also be set via a `PIWI_*` environment variable. Env vars are fallbacks — an option passed in the reporter config takes precedence. The one exception is `PIWI_VERBOSE`, which wins over both the default and an explicit option (useful for toggling debug output without editing the config). The mapping is centralized in `src/internal/config/env.ts` (`PIWI_ENV_KEYS`). The remaining options — `enabled`, `reports`, `projectDescription`, `relatedIssue`, `ciInfo`, `tags`, `customData`, `collectScmInfo`, `collectCiInfo` and `collectPerformanceMetrics` — are config-only:
 
 | Env var                         | Option                  | Format          |
 |---------------------------------|-------------------------|-----------------|
