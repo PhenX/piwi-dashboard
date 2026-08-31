@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { MCP_TOOL_DEFS } from '#shared/mcp-tools';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
@@ -63,16 +63,20 @@ describe('docs pages the app deep-links into', () => {
       .trim()
       .replace(/\s+/g, '-');
 
-  const sources = [
-    'apps/application/app/utils/help-content.ts',
-    'apps/application/app/components/test-case/TestCaseNetworkRequests.vue',
-    'apps/application/app/components/test-case/TestSourceCard.vue',
-  ];
+  // Every .vue/.ts file under app/ — any of them may carry a `doc: '…'`
+  // registry field or a static `DocLink to="…"`.
+  const sources = (function walk(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return walk(path);
+      return /\.(vue|ts)$/.test(entry.name) ? [relative(repoRoot, path)] : [];
+    });
+  })(join(repoRoot, 'apps/application/app'));
 
   const targets = [
     ...new Set(
-      sources.flatMap((relative) => {
-        const contents = read(relative);
+      sources.flatMap((source) => {
+        const contents = read(source);
         return [
           ...[...contents.matchAll(/doc: '([^']+)'/g)].map((m) => m[1]!),
           ...[...contents.matchAll(/DocLink\s+to="([^"]+)"/g)].map((m) => m[1]!),
