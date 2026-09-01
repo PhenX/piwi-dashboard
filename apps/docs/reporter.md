@@ -81,9 +81,9 @@ export { expect } from '@playwright/test'
 ### What gets captured
 
 - **Network requests** — method, URL, status code, duration, resource type. Aggregated on the dashboard into a *Slow API endpoints* table grouped by `METHOD + normalized route` (e.g. `/api/users/:id`).
-- **Console entries** — `warning`, `error`, and `assert` messages with their source location, shown on the test case page and included in the AI diagnosis evidence.
+- **Console entries** — `warning`, `error`, and `assert` messages with their source location, shown on the [execution page](./evidence#one-execution-diagnosis-first) and included in the AI diagnosis evidence.
 - **Browser Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint, plus Core Web Vitals (LCP, CLS, INP) — displayed with color-coded thresholds. LCP/CLS/INP come from buffered `PerformanceObserver` entries and are Chromium-only; INP needs at least one interaction, so it is often `n/a` in short tests.
-- **ARIA snapshot** — Captured automatically on failed/timed-out tests via `page.locator(':root').ariaSnapshot()`. Included in both the debug prompt (`/test-cases/:id`) and the cluster AI diagnosis context.
+- **ARIA snapshot** — Captured automatically on failed/timed-out tests via `page.locator(':root').ariaSnapshot()`. Included in the **Copy AI context** bundle on the [execution page](./evidence#one-execution-diagnosis-first)'s Diagnosis tab (`/test-run-cases/:id`) and in the cluster AI diagnosis context.
 - **Locator snapshots** — For each element a test proves resolvable — every successful action (click, fill, etc.) *and* every passing web-first assertion (`expect(locator).toBeVisible()`, `toHaveText()`, …) — the fixtures record the element's attributes and a ranked list of alternative locators, stamped with the call site. These power [locator healing](#locator-healing) when a locator later breaks. Gated by `captureLocators` (default on).
 
 These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).
@@ -189,7 +189,7 @@ By default, the reporter streams test results to the dashboard in real-time as t
 
 1. When tests start, the reporter creates a run on the server with `running` status
 2. As each test completes, results are sent in batches to the server
-3. With `liveFileUploads` (the default), each test's trace and attachments are uploaded right after the test finishes, so they are viewable on the test case page while the run is still in progress
+3. With `liveFileUploads` (the default), each test's trace and attachments are uploaded right after the test finishes, so they are viewable on the [execution page](./evidence#one-execution-diagnosis-first) while the run is still in progress
 4. The dashboard UI shows a live progress bar and test results as they arrive
 5. While a test runs, the steps it is executing (Playwright `pw:api` actions, `pw:expect` assertions, and hook/fixture steps) stream to the run page as they happen — each running test's row shows the step it is on right now. The polling attempts of `pw:assert` steps are deliberately not streamed; the persisted step events on a completed test still carry everything
 6. When tests finish, the reporter finalizes the run with the overall status
@@ -322,7 +322,7 @@ When a stored snapshot is found but the element's captured accessible name is pr
   <figcaption>Healing runs from the failure's own error text: stored history is matched by call site, then signature, then across tests — and every hit is sanity-checked against the failing page before anything is recommended.</figcaption>
 </figure>
 
-The result is shown as an **Alternative locators** panel on the test-case and failure-cluster pages, and folded into the AI diagnosis context so the model recommends a grounded fix (see [AI diagnosis](./ai-diagnosis#locator-healing)). A single **recommended fix** is highlighted — it keeps your original locator *style* where that style is stable enough (a minimal, idiomatic edit), and escalates to the sturdiest alternative (or advises adding a `data-testid`) only when the original style has nothing stable to fall back on.
+The result is shown as an **Alternative locators** panel on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, and folded into the AI diagnosis context so the model recommends a grounded fix (see [AI diagnosis](./ai-diagnosis#locator-healing)). A single **recommended fix** is highlighted — it keeps your original locator *style* where that style is stable enough (a minimal, idiomatic edit), and escalates to the sturdiest alternative (or advises adding a `data-testid`) only when the original style has nothing stable to fall back on.
 
 <figure>
   <img src="/screenshots/locator-healing.png" alt="Alternative locators panel showing ranked replacement locators with stability scores and a recommended fix">
