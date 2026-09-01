@@ -471,10 +471,9 @@ function copyFailure() {
 // Lets an AI-diagnosis evidence citation (in TestCaseAiCard → DiagnosisResult)
 // unfold and scroll to the matching evidence section on this page.
 const errorEl = ref<HTMLElement | null>(null);
-const consoleEl = ref<HTMLElement | null>(null);
-const networkEl = ref<HTMLElement | null>(null);
 const testSourceCard = ref<{ reveal: () => void } | null>(null);
-const networkCard = ref<{ showTraceMode: () => void } | null>(null);
+const consoleCard = ref<{ reveal: () => void } | null>(null);
+const networkCard = ref<{ showTraceMode: () => void; reveal: () => void } | null>(null);
 const evidenceCard = ref<{ reveal: () => void } | null>(null);
 const envDiffCard = ref<{ reveal: () => void } | null>(null);
 const visualDiffCard = ref<{ reveal: () => void } | null>(null);
@@ -497,13 +496,13 @@ const sectionToAction: Record<string, () => void> = {
   screenshots: () => evidenceCard.value?.reveal(),
   tracePointers: () => evidenceCard.value?.reveal(),
   artifacts: () => evidenceCard.value?.reveal(),
-  console: () => scrollToEl(consoleEl.value),
-  networkRequests: () => scrollToEl(networkEl.value),
-  serverTraces: () => scrollToEl(networkEl.value),
+  console: () => consoleCard.value?.reveal(),
+  networkRequests: () => networkCard.value?.reveal(),
+  serverTraces: () => networkCard.value?.reveal(),
   traceCallStack: () => testSourceCard.value?.reveal(),
   traceNetwork: () => {
     networkCard.value?.showTraceMode();
-    scrollToEl(networkEl.value);
+    networkCard.value?.reveal();
   },
   steps: () => {
     activeTab.value = 'steps';
@@ -685,6 +684,7 @@ provide(clusterSectionLocatorKey, {
                   v-if="testCase?.testSourceFrames?.length || testCase?.testSource || hasTrace"
                   ref="testSourceCard"
                   storage-key="case-test-source"
+                  :default-folded="false"
                   :frames="testCase?.testSourceFrames ?? null"
                   :test-source="testCase?.testSource ?? null"
                   :run-id="testCase?.testRun?.id ?? null"
@@ -698,6 +698,7 @@ provide(clusterSectionLocatorKey, {
                 <TestCaseEvidenceCard
                   ref="evidenceCard"
                   storage-key="case-evidence"
+                  :default-folded="false"
                   :attachments="(testCase as any)?.attachments ?? []"
                   :traces="(traceData as any[]) ?? []"
                 />
@@ -730,20 +731,23 @@ provide(clusterSectionLocatorKey, {
                 />
 
                 <!-- Console output -->
-                <div v-if="(testCase as any)?.consoleLogs?.length" ref="consoleEl" class="scroll-mt-4">
-                  <TestCaseConsoleCard :entries="(testCase as any)?.consoleLogs ?? []" />
-                </div>
+                <TestCaseConsoleCard
+                  v-if="(testCase as any)?.consoleLogs?.length"
+                  ref="consoleCard"
+                  storage-key="case-console"
+                  :entries="(testCase as any)?.consoleLogs ?? []"
+                />
 
                 <!-- Network requests + backend logs; full trace network when available -->
-                <div v-if="networkRequests.length > 0 || hasTrace" ref="networkEl" class="scroll-mt-4">
-                  <TestCaseNetworkRequests
-                    ref="networkCard"
-                    :requests="networkRequests"
-                    :run-id="testCase?.testRun?.id ?? null"
-                    :test-runs-case-id="Number(testCaseId)"
-                    :has-trace="hasTrace"
-                  />
-                </div>
+                <TestCaseNetworkRequests
+                  v-if="networkRequests.length > 0 || hasTrace"
+                  ref="networkCard"
+                  storage-key="case-network"
+                  :requests="networkRequests"
+                  :run-id="testCase?.testRun?.id ?? null"
+                  :test-runs-case-id="Number(testCaseId)"
+                  :has-trace="hasTrace"
+                />
 
                 <!-- App state at test end -->
                 <PageStateCard
