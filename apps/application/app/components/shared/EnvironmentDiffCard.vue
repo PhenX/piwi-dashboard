@@ -34,6 +34,12 @@ const {
   lazy: true,
 });
 
+// The card renders only for a usable diff; the page reads `available` to show
+// its jump chip for exactly the same condition.
+const emit = defineEmits<{ available: [value: boolean] }>();
+const available = computed(() => !pending.value && !error.value && diff.value?.status === 'ok');
+watch(available, (value) => emit('available', value), { immediate: true });
+
 const entries = computed<EnvironmentDiffEntry[]>(() => diff.value?.entries ?? []);
 const meaningful = computed(() => entries.value.filter((e) => !e.informational));
 const informational = computed(() => entries.value.filter((e) => e.informational));
@@ -60,7 +66,7 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
 <template>
   <component
     :is="cardComponent"
-    v-if="!pending && !error && diff?.status === 'ok'"
+    v-if="available && diff"
     ref="card"
     v-bind="cardBind"
     icon="i-lucide-git-compare-arrows"

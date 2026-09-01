@@ -512,6 +512,12 @@ const sectionToAction: Record<string, () => void> = {
   },
 };
 
+// The lazily fetched cards report whether they rendered anything (no baseline,
+// no screenshot or no trace leaves them empty), so their chips follow the card.
+const envDiffAvailable = ref(false);
+const visualDiffAvailable = ref(false);
+const domSnapshotAvailable = ref(false);
+
 // The jump-chip row under the error — the same section map the AI citations
 // use, so the funnel has a map even when no AI is configured. Each chip is
 // gated by the same availability condition as the section it targets: a chip
@@ -523,9 +529,9 @@ const sectionChips = computed(() =>
       label: 'Test source',
       available: Boolean(testCase.value?.testSourceFrames?.length || testCase.value?.testSource || hasTrace.value),
     },
-    { id: 'environmentDiff', label: 'Environment diff', available: Boolean(testCase.value?.testRun?.id) },
-    { id: 'visualDiff', label: 'Visual diff', available: Boolean(testCase.value?.testRun?.id) },
-    { id: 'domSnapshot', label: 'DOM snapshot', available: Boolean(testCase.value?.testRun?.id) },
+    { id: 'environmentDiff', label: 'Environment diff', available: envDiffAvailable.value },
+    { id: 'visualDiff', label: 'Visual diff', available: visualDiffAvailable.value },
+    { id: 'domSnapshot', label: 'DOM snapshot', available: domSnapshotAvailable.value },
     { id: 'ariaSnapshot', label: 'ARIA snapshot', available: Boolean(testCase.value?.ariaSnapshot) },
     { id: 'screenshots', label: 'Screenshots', available: true },
     { id: 'console', label: 'Console', available: Boolean((testCase.value as any)?.consoleLogs?.length) },
@@ -664,8 +670,8 @@ provide(clusterSectionLocatorKey, {
               />
             </div>
             <div class="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4">
-              <!-- Right rail (DOM-first so it follows the error on mobile) -->
-              <div class="space-y-4 lg:order-2">
+              <!-- Right rail (DOM-first so it follows the error below the xl split) -->
+              <div class="space-y-4 xl:order-2">
                 <TestCaseVerdictCard
                   :test-case="(testCase as any) ?? null"
                   :history="historyData"
@@ -678,7 +684,7 @@ provide(clusterSectionLocatorKey, {
               </div>
 
               <!-- Left column: evidence funnel -->
-              <div class="space-y-4 lg:order-1 min-w-0">
+              <div class="space-y-4 xl:order-1 min-w-0">
                 <!-- Test source: the failing line and its callers; full trace call stack when available -->
                 <TestSourceCard
                   v-if="testCase?.testSourceFrames?.length || testCase?.testSource || hasTrace"
@@ -719,6 +725,7 @@ provide(clusterSectionLocatorKey, {
                   storage-key="case-env-diff"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
+                  @available="envDiffAvailable = $event"
                 />
 
                 <!-- What changed visually since the last pass -->
@@ -728,6 +735,7 @@ provide(clusterSectionLocatorKey, {
                   storage-key="case-visual-diff"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
+                  @available="visualDiffAvailable = $event"
                 />
 
                 <!-- Console output -->
@@ -778,6 +786,7 @@ provide(clusterSectionLocatorKey, {
                   storage-key="case-dom-snapshot"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
+                  @available="domSnapshotAvailable = $event"
                 />
               </div>
             </div>
