@@ -32,10 +32,13 @@ export default defineConfig({
   ],
   use: {
     trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
 })
 ```
+
+The `use` block is Playwright's, not Piwi's: `trace`, `screenshot` and `video` decide what Playwright records, and the reporter uploads whatever exists. Leave `screenshot` at its default (`'off'`) and the failure evidence has no screenshot to show.
 
 <a id="performance-metrics-web-vitals"></a>
 
@@ -85,7 +88,7 @@ export { expect } from '@playwright/test'
 
 These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).
 
-Any attachments Playwright records — including **videos** (`video: 'retain-on-failure'`) and screenshots — are uploaded automatically and shown as first-class evidence on the test-case and failure-cluster pages, alongside traces. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
+Any attachments Playwright records — including **screenshots** (`screenshot: 'only-on-failure'`) and **videos** (`video: 'retain-on-failure'`) — are uploaded automatically and shown as first-class evidence on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, alongside traces. Screenshots are the evidence most pages on this site count on, and Playwright records none unless the option is set. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
 
 ## Configuration options
 
@@ -549,6 +552,7 @@ Uploaded traces open in the dashboard's **built-in, self-hosted trace viewer** �
 
 - Make sure an HTML reporter is configured: `['html', { outputFolder: 'playwright-report' }]`
 - Make sure traces are enabled: `use: { trace: 'retain-on-failure' }`
+- Make sure screenshots are enabled: `use: { screenshot: 'only-on-failure' }` — Playwright's default is `'off'`, so an unset option means no screenshot to upload
 - Check the dashboard server is running and accessible at `serverUrl`
 
 ### Fixture data not appearing (network, Web Vitals, console, ARIA snapshot, locator healing)

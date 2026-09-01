@@ -281,6 +281,10 @@ network, or a missing API key against an instance with authentication enabled.
 **Traces are missing.** Traces have to be recorded before they can be uploaded — set
 `use: { trace: 'retain-on-failure' }` (or `'on-first-retry'`) in your Playwright config.
 
+**Screenshots are missing.** Same cause: Playwright's `screenshot` option defaults to `'off'`, so
+nothing is recorded for the reporter to upload. Set `use: { screenshot: 'only-on-failure' }` (or
+`'on'`) in your Playwright config; the reporter needs no option of its own.
+
 **A run is stuck as `interrupted`.** A live reporter heartbeats every ~15s; when a run goes quiet for
 two minutes — a cancelled job, an OOM-killed runner, a dropped network — the server marks it
 `interrupted` rather than leaving it `running` forever. If the reporter comes back (a long test, a
