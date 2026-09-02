@@ -9,7 +9,7 @@
  * the demo. Playwright's call log is the evidence: a `waiting for <locator>`
  * line followed by `locator resolved to …` means the locator worked.
  */
-import { extractLeafSelector, stripAnsi } from '#shared/error-fingerprint';
+import { parsePlaywrightError, type ParsedPlaywrightError } from '#shared/error-parse';
 
 export type LocatorResolutionKind =
   /** `waiting for <locator>` with no later `locator resolved to` line. */
@@ -35,37 +35,33 @@ export interface LocatorResolutionVerdict {
   reason: string | null;
 }
 
-const NAVIGATION_RE =
-  /\b(?:page|frame)\.(?:goto|waitForURL|waitForNavigation|reload|goBack|goForward)\b|net::ERR_|NS_ERROR_|Navigation failed|navigating to "/i;
+/** Call-log states in which the locator did match an element at least once. */
+const RESOLVED_STATES = new Set<ParsedPlaywrightError['lastState']>([
+  'resolved',
+  'hidden',
+  'not-visible',
+  'not-enabled',
+  'not-editable',
+  'not-stable',
+  'outside-viewport',
+  'intercepts-pointer',
+  'detached',
+]);
 
-/** The call-log line naming the locator being waited for. */
-const WAITING_FOR_LOCATOR_RE = /waiting for (?:\w+\.)?(?:getBy\w+|locator|frameLocator)\(/;
+const NO_LOCATOR: LocatorResolutionVerdict = {
+  kind: 'no-locator',
+  applicable: false,
+  reason: 'No locator in the error; nothing to heal.',
+};
 
 /**
- * Evidence that the locator matched at least one element: Playwright prints
- * `locator resolved to …` (an element, a count, a visibility state), or moves
- * on to an action phase that needs a resolved element.
+ * Classify from the parsed error, so this gate and
+ * `ParsedPlaywrightError.isLocatorResolutionFailure` always agree.
  */
-const RESOLVED_RE =
-  /\bresolved to (?!0 elements)\S|element is not (?:enabled|visible|stable|editable|attached)|intercepts pointer events|attempting \w+ action/;
+export function classifyParsedLocatorResolution(parsed: ParsedPlaywrightError): LocatorResolutionVerdict {
+  if (parsed.kind === 'strict-mode') return { kind: 'strict-mode', applicable: true, reason: null };
 
-/** Drop the JS stack frames so a helper named `goto` in a path never reads as a navigation. */
-function withoutStackFrames(text: string): string {
-  return text
-    .split('\n')
-    .filter((line) => !/^\s+at /.test(line))
-    .join('\n');
-}
-
-export function classifyLocatorResolution(error: string | null | undefined): LocatorResolutionVerdict {
-  const text = error ? withoutStackFrames(stripAnsi(error)) : '';
-  if (!text.trim()) {
-    return { kind: 'no-locator', applicable: false, reason: 'No locator in the error; nothing to heal.' };
-  }
-
-  if (/strict mode violation/i.test(text)) return { kind: 'strict-mode', applicable: true, reason: null };
-
-  if (NAVIGATION_RE.test(text)) {
+  if (parsed.isNavigationFailure) {
     return {
       kind: 'navigation',
       applicable: false,
@@ -73,20 +69,22 @@ export function classifyLocatorResolution(error: string | null | undefined): Loc
     };
   }
 
-  if (!extractLeafSelector(text)) {
-    return { kind: 'no-locator', applicable: false, reason: 'No locator in the error; nothing to heal.' };
-  }
+  if (!parsed.leafLocator) return NO_LOCATOR;
 
-  if (/resolved to 0 elements/i.test(text)) return { kind: 'zero-elements', applicable: true, reason: null };
-
-  const waiting = WAITING_FOR_LOCATOR_RE.exec(text);
-  const afterWaiting = waiting ? text.slice(waiting.index) : text;
-  if (RESOLVED_RE.test(afterWaiting)) {
+  if (parsed.lastState === 'resolved-count') {
+    if (parsed.resolvedCount === 0) return { kind: 'zero-elements', applicable: true, reason: null };
     return { kind: 'resolved', applicable: false, reason: 'The locator resolved; this is not a locator problem.' };
   }
-
-  if (waiting) return { kind: 'never-resolved', applicable: true, reason: null };
+  if (RESOLVED_STATES.has(parsed.lastState)) {
+    return { kind: 'resolved', applicable: false, reason: 'The locator resolved; this is not a locator problem.' };
+  }
+  if (parsed.lastState === 'not-found') return { kind: 'never-resolved', applicable: true, reason: null };
   return { kind: 'unknown', applicable: true, reason: null };
+}
+
+export function classifyLocatorResolution(error: string | null | undefined): LocatorResolutionVerdict {
+  if (!error || !error.trim()) return NO_LOCATOR;
+  return classifyParsedLocatorResolution(parsePlaywrightError(error));
 }
 
 /**
