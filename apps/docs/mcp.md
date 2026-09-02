@@ -50,7 +50,7 @@ The server exposes 45 tools — mostly read-only, plus a few write/triage tools 
 | `get_locator_healing` | Ranked alternative locators for a failing case — the recommended durable fix plus full alternatives |
 | `list_case_traces` | Playwright trace files for an execution, with download paths |
 | `get_case_screenshots` | Screenshots for an execution — metadata by default, or base64 image data on request |
-| `explain_failure` | **One-call evidence bundle** for a failure: error + steps + console + locator fix + diagnosis context |
+| `explain_failure` | **One-call evidence bundle** for a failure: one-line headline + error + steps + console + locator fix + diagnosis context |
 | `list_links` | External links (Jira/PR/issue) attached to a run, execution, or test case |
 
 **Test selections** *([named, data-driven test subsets](./test-selection))*

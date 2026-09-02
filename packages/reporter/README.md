@@ -249,9 +249,11 @@ When `collectCiInfo` is enabled (default), the reporter auto-detects:
 After a run is submitted, the reporter surfaces the dashboard run URL so a later
 CI step (a custom email, a Slack message, a deploy gate) can pick it up without
 scraping the log. The URL is always printed as `View run: <url>`, preceded by
-one `✗ <title> → <url>` line per failed test — each linking straight to that
-execution on the dashboard, printed the moment the test's final attempt fails
-(in streaming mode, before the run is over). In addition:
+one `✗ <title> — <headline> → <url>` line per failed test: a one-line
+explanation of the failure (`getByLabel('Email address') was not found on the
+page — fill timed out after 10 s`) and a link straight to that execution on the
+dashboard, printed the moment the test's final attempt fails (in streaming
+mode, before the run is over). In addition:
 
 - **Any CI — JSON output file.** Set `outputFile` (or `PIWI_OUTPUT_FILE`) and the
   reporter writes a small JSON file when the run lands:
