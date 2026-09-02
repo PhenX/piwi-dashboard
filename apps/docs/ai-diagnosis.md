@@ -72,6 +72,16 @@ Two rules keep the verdict honest:
 - **Every affected test must pass**, not just some — a cluster is one root cause, and half of it passing means it isn't
   fixed.
 
+The verdict moves the triage status only when the evidence is strong enough to stand in for a person: *Diagnosis
+verified* sets an **open** cluster to **resolved**, and *Regressed* sets a **resolved** cluster back to **open**. Each
+transition appends a line to the triage note ("Resolved automatically: diagnosis verified in run #42", "Reopened
+automatically: regressed in run #57"), so the status still reads as something you can audit and override. *Stopped
+failing* alone changes nothing — a flaky test achieves it by accident — and a cluster marked *ignored* is never touched.
+The verdict badge stays separate from the status either way.
+
+Two [notifications](./notifications) follow the verdict: `cluster.fixed` whenever a fix is recorded (its payload says
+which verdict), and `cluster.regressed` when a fix does not hold.
+
 When [pull-request feedback](./ci#pull-request-feedback) is on, the comment gains a **Fixed by this change** section
 naming what the pull request closed. That section is worth a comment on its own, so a green run that closed a cluster
 still gets one even with *only comment on failures* set.
@@ -281,5 +291,5 @@ API keys are encrypted at rest with [`PIWI_SECRET_KEY`](./configuration#general)
 - [Core concepts](./concepts#error-fingerprint-failure-cluster) — fingerprints, clusters, and baselines in one place
 - [Privacy & data flow](./privacy) — exactly what a diagnosis sends, and where
 - [Configuration reference](./configuration) — all environment variables
-- [Notifications](./notifications) — subscribe to `cluster.new` and `diagnosis.completed` to get alerted when a new cluster appears or a diagnosis completes (browser, email, Slack, or webhook)
+- [Notifications](./notifications) — subscribe to `cluster.new`, `cluster.fixed`, `cluster.regressed` and `diagnosis.completed` to get alerted when a new cluster appears, a fix lands or regresses, or a diagnosis completes (browser, email, Slack, or webhook)
 - [MCP server](./mcp) — let AI agents query clusters and diagnoses directly

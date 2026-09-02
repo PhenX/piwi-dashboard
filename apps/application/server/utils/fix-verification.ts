@@ -18,13 +18,20 @@
  * is failing again is marked `regressed`, because a fix that did not hold is
  * worth more than no record at all.
  *
+ * The verdict moves the triage status only when the evidence is strong:
+ * `diagnosis-verified` resolves an open cluster, `regressed` reopens a resolved
+ * one, each appending a system line to the triage note. `stopped-failing`
+ * alone changes nothing — a flaky test achieves it by accident. Every recorded
+ * fix emits `cluster.fixed`; every regression emits `cluster.regressed`.
+ *
  * Every step is best-effort — the run is already stored, and SCM being
  * unreachable must never turn into an ingest error.
  */
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
-import { failureClusters, failureDiagnoses, testRuns, testRunsCases } from '../database/schema';
+import { failureClusters, failureDiagnoses, projects, testRuns, testRunsCases } from '../database/schema';
 import { createScmProvider } from './scm';
 import { normalizeGitUrl } from './scm/git-url';
+import { emitNotification } from './notifications/emit';
 import { parseUnifiedDiff, stripAbPrefix } from '#shared/patch';
 import type { RunMetadata } from './run-json-types';
 import type { DbClient } from '../database';
@@ -43,6 +50,12 @@ export interface VerifiedFix {
   timeToResolutionMs: number | null;
   /** Tests that were failing and now pass. */
   testCount: number;
+}
+
+/** Append a system-written line to a triage note, keeping what a person wrote. */
+export function appendTriageNote(existing: string | null | undefined, line: string): string {
+  const current = existing?.trim();
+  return current ? `${current}\n${line}` : line;
 }
 
 /** The files a cluster's completed diagnosis proposed changing, if any. */
@@ -136,11 +149,24 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
     if (row.clusterId != null && FAIL_STATUSES.includes(row.status)) clustersSeenNow.add(row.clusterId);
   }
 
+  const [project] = await db
+    .select({ name: projects.name, label: projects.label })
+    .from(projects)
+    .where(eq(projects.id, run.projectId));
+  const projectName = project?.label || project?.name || `Project #${run.projectId}`;
+
   // ── Regressions: a recorded fix that did not hold ─────────────────────────
   if (clustersSeenNow.size > 0) {
-    await db
-      .update(failureClusters)
-      .set({ fixVerification: 'regressed', updatedAt: new Date() })
+    const regressing = await db
+      .select({
+        id: failureClusters.id,
+        signature: failureClusters.signature,
+        title: failureClusters.title,
+        status: failureClusters.status,
+        triageNote: failureClusters.triageNote,
+        fixLandedRunId: failureClusters.fixLandedRunId,
+      })
+      .from(failureClusters)
       .where(
         and(
           inArray(failureClusters.id, [...clustersSeenNow]),
@@ -148,6 +174,36 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
           ne(failureClusters.fixVerification, 'regressed'),
         ),
       );
+
+    for (const cluster of regressing) {
+      // A person's "resolved" was contradicted by the runs, so the cluster goes
+      // back to open with the reason on record; "ignored" is left alone.
+      const reopened = cluster.status === 'resolved';
+      await db
+        .update(failureClusters)
+        .set({
+          fixVerification: 'regressed',
+          updatedAt: new Date(),
+          ...(reopened
+            ? {
+                status: 'open',
+                triageNote: appendTriageNote(cluster.triageNote, `Reopened automatically: regressed in run #${runId}`),
+              }
+            : {}),
+        })
+        .where(eq(failureClusters.id, cluster.id));
+
+      await emitNotification(db, 'cluster.regressed', {
+        clusterId: cluster.id,
+        projectId: run.projectId,
+        projectName,
+        signature: cluster.signature,
+        title: cluster.title,
+        runId,
+        fixLandedRunId: cluster.fixLandedRunId,
+        reopened,
+      });
+    }
   }
 
   // ── Candidates: clusters that were failing and are quiet in this run ──────
@@ -160,6 +216,7 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
       firstSeenRunId: failureClusters.firstSeenRunId,
       lastSeenRunId: failureClusters.lastSeenRunId,
       status: failureClusters.status,
+      triageNote: failureClusters.triageNote,
     })
     .from(failureClusters)
     .where(
@@ -238,6 +295,9 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
       startTimeByRunId.get(cluster.firstSeenRunId) ?? (cluster.createdAt instanceof Date ? cluster.createdAt : null);
     const timeToResolutionMs = brokeAt ? Math.max(0, landedAt.getTime() - brokeAt.getTime()) : null;
 
+    // The diagnosis pointing at the change that fixed it is strong enough to
+    // close the triage; "stopped failing" alone is not.
+    const resolved = verification === 'diagnosis-verified' && cluster.status === 'open';
     await db
       .update(failureClusters)
       .set({
@@ -247,6 +307,15 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
         timeToResolutionMs,
         fixVerification: verification,
         updatedAt: new Date(),
+        ...(resolved
+          ? {
+              status: 'resolved',
+              triageNote: appendTriageNote(
+                cluster.triageNote,
+                `Resolved automatically: diagnosis verified in run #${runId}`,
+              ),
+            }
+          : {}),
       })
       .where(eq(failureClusters.id, cluster.id));
 
@@ -257,6 +326,20 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
       verification,
       timeToResolutionMs,
       testCount: clusterCases.size,
+    });
+
+    await emitNotification(db, 'cluster.fixed', {
+      clusterId: cluster.id,
+      projectId: run.projectId,
+      projectName,
+      signature: cluster.signature,
+      title: cluster.title,
+      runId,
+      verification,
+      commit: currentCommit,
+      timeToResolutionMs,
+      testCount: clusterCases.size,
+      resolved,
     });
   }
 

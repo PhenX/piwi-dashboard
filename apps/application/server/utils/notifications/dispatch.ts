@@ -11,6 +11,8 @@ import {
 import { decryptSecret, getEncryptionKey } from '../crypto';
 import { safeFetch } from '../safe-fetch';
 import type {
+  ClusterFixedPayload,
+  ClusterRegressedPayload,
   NotificationEvent,
   NotificationPayload,
   RunFinishedPayload,
@@ -109,6 +111,8 @@ async function sendToSlack(config: Record<string, unknown>, event: NotificationE
   let emoji = ':bell:';
   if (event.startsWith('run.failed')) emoji = ':x:';
   else if (event === 'cluster.new') emoji = ':bug:';
+  else if (event === 'cluster.fixed') emoji = ':white_check_mark:';
+  else if (event === 'cluster.regressed') emoji = ':rotating_light:';
   else if (event === 'flakiness.spike') emoji = ':game_die:';
 
   const base = siteBase();
@@ -129,6 +133,17 @@ async function sendToSlack(config: Record<string, unknown>, event: NotificationE
     const parts: string[] = [];
     if (p.affectedCases) parts.push(`${p.affectedCases} affected test${p.affectedCases === 1 ? '' : 's'}`);
     if (p.sampleErrorExcerpt) parts.push(`\`\`\`${slackExcerpt(p.sampleErrorExcerpt)}\`\`\``);
+    parts.push(`<${base}/failure-clusters/${p.clusterId}|View cluster>`);
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: parts.join('\n') } });
+  } else if (event === 'cluster.fixed' || event === 'cluster.regressed') {
+    const p = payload as ClusterFixedPayload | ClusterRegressedPayload;
+    const parts: string[] = [p.title || `\`${slackExcerpt(p.signature)}\``];
+    if (event === 'cluster.fixed') {
+      const fixed = p as ClusterFixedPayload;
+      if (fixed.resolved) parts.push('Triage status set to resolved.');
+    } else if ((p as ClusterRegressedPayload).reopened) {
+      parts.push('Triage status set back to open.');
+    }
     parts.push(`<${base}/failure-clusters/${p.clusterId}|View cluster>`);
     blocks.push({ type: 'section', text: { type: 'mrkdwn', text: parts.join('\n') } });
   }

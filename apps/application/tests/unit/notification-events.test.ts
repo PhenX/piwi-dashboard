@@ -1,6 +1,8 @@
 import { describe, test, expect } from 'vitest';
 import {
   renderEventSubject,
+  notificationTargetPath,
+  buildNotificationDedupeKey,
   buildTopFailures,
   truncateExcerpt,
   TOP_FAILURES_LIMIT,
@@ -43,6 +45,31 @@ describe('renderEventSubject', () => {
 
   test('cluster.new names the project, not the signature', () => {
     expect(renderEventSubject('cluster.new', clusterPayload)).toBe('New failure cluster — my-project');
+  });
+
+  test('cluster.fixed names the verdict, cluster.regressed the regression', () => {
+    const base = { clusterId: 5, projectId: 2, projectName: 'my-project', signature: 'sig', runId: 9 };
+    expect(renderEventSubject('cluster.fixed', { ...base, verification: 'diagnosis-verified' })).toBe(
+      'Diagnosis verified — my-project',
+    );
+    expect(renderEventSubject('cluster.fixed', { ...base, verification: 'stopped-failing' })).toBe(
+      'Cluster stopped failing — my-project',
+    );
+    expect(renderEventSubject('cluster.regressed', { ...base, fixLandedRunId: 7 })).toBe('Fix regressed — my-project');
+  });
+
+  test('cluster.fixed and cluster.regressed link to the cluster and dedupe per cluster and run', () => {
+    const base = { clusterId: 5, projectId: 2, projectName: 'my-project', signature: 'sig', runId: 9 };
+    const fixed = { ...base, verification: 'stopped-failing' as const };
+    expect(notificationTargetPath('cluster.fixed', fixed)).toBe('/failure-clusters/5');
+    expect(notificationTargetPath('cluster.regressed', { ...base, fixLandedRunId: 7 })).toBe('/failure-clusters/5');
+    expect(buildNotificationDedupeKey('cluster.fixed', fixed, 3)).toBe('cluster.fixed:c5:r9:3');
+    expect(buildNotificationDedupeKey('cluster.fixed', { ...fixed, runId: 10 }, 3)).not.toBe(
+      buildNotificationDedupeKey('cluster.fixed', fixed, 3),
+    );
+    expect(buildNotificationDedupeKey('cluster.regressed', { ...base, fixLandedRunId: 7 }, 3)).toBe(
+      'cluster.regressed:c5:r9:3',
+    );
   });
 
   test('flakiness.spike and perf.regression produce distinct subjects', () => {
