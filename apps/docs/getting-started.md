@@ -136,9 +136,12 @@ export default defineConfig({
   ],
   use: {
     trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
 })
 ```
+
+Both `use` options are Playwright's own: `trace` records the trace the dashboard's deep views read, and `screenshot` records the failure screenshot shown as evidence. Neither is on by default in Playwright, so without them a failing test uploads its error and steps but no trace or screenshot.
 
 Run your tests and results will appear in the dashboard:
 

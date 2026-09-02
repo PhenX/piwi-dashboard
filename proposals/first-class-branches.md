@@ -1,9 +1,17 @@
 # First-class branches
 
 A proposal to promote the git branch from a display string inside a run's `metadata` JSON to a reliable, queryable,
-analysis-bearing dimension — and, in its final stage, to an entity with a lifecycle. Nothing here has shipped; the
-document argues the case, stages the work so each stage pays for itself, and records the alternatives and open
-questions.
+analysis-bearing dimension — and, in its final stage, to an entity with a lifecycle. The document argues the case,
+stages the work so each stage pays for itself, and records the alternatives and open questions.
+
+**Status.** Tiers 1 and 2 have shipped: the reporter resolves the branch from the CI provider's variables instead of
+recording a detached `HEAD`, honors a `PIWI_BRANCH` override and captures the pull-request number; `test_runs` carries
+an indexed scalar `branch` column; projects carry a `defaultBranch`, resolved from the SCM provider when unset; runs,
+the flaky leaderboard and the MCP tools take a `branch` filter; regression baselines and the visual-diff baseline
+prefer the same branch, then the default branch; and PR feedback exonerates a test that is also flaky on the default
+branch. Still open from Tier 2: scoping flakiness and trends to the default branch *by default* (the filter exists,
+the default does not). Tier 3 — branches as entities, the merge-readiness verdict, branch-class policies and retention
+— has not shipped and stays under *Exploring* in [`ROADMAP.md`](../ROADMAP.md). The design below is the original text.
 
 **Summary.** Branch is already load-bearing: pull-request feedback, the auto-heal policy, notification filters and
 the run-comparison diff all read it. But it is collected in a way that records the literal string `HEAD` on most CI
