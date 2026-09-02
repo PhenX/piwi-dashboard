@@ -93,6 +93,7 @@ import {
   getTestCaseHistory,
   getTestRunCaseTraces,
   getTestCaseStabilityTrend,
+  getFailureTimeline,
 } from '#shared/handlers/test-cases';
 import {
   getFailureCluster,
@@ -897,6 +898,14 @@ const routes: RouteEntry[] = [
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'execution', +m[1]!);
       return getEnvironmentDiff(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/timeline$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getFailureTimeline(await getDemoDb(), +m[1]!);
     },
   },
   {

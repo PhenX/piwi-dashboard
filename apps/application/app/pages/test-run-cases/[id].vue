@@ -652,6 +652,9 @@ provide(clusterSectionLocatorKey, {
               </SectionCard>
             </div>
 
+            <!-- One time axis: steps, console, network and backend logs correlated -->
+            <FailureTimelineCard :test-runs-case-id="Number(testCaseId)" :has-trace="hasTrace" />
+
             <!-- Two columns: evidence funnel (left) + verdict/cluster/AI rail (right) -->
             <div class="flex flex-wrap gap-1.5">
               <UButton
