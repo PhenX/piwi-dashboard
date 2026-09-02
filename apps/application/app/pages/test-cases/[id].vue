@@ -287,13 +287,7 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
               </NuxtLink>
             </template>
             <template #error-cell="{ row }">
-              <span
-                v-if="row.original.error"
-                class="text-red-600 text-xs truncate max-w-xs block"
-                :title="row.original.error"
-              >
-                {{ row.original.error.length > 80 ? `${row.original.error.substring(0, 80)}…` : row.original.error }}
-              </span>
+              <ErrorText v-if="row.original.error" :text="row.original.error" class="max-w-xs" />
             </template>
             <template #actions-header>
               <div class="text-right">Actions</div>

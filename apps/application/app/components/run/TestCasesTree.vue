@@ -376,13 +376,11 @@ const flatRows = computed<FlatRow[]>(() => {
             </span>
           </div>
           <!-- The one-line error under a failing row, the same as the flat list shows -->
-          <p
+          <ErrorText
             v-if="isFailedStatus(row.test.status) && row.test.error"
-            class="basis-full min-w-0 pl-6 text-xs text-rose-600 dark:text-rose-400 truncate"
-            :title="row.test.error"
-          >
-            {{ row.test.error }}
-          </p>
+            :text="row.test.error"
+            class="basis-full pl-6"
+          />
         </div>
       </template>
 

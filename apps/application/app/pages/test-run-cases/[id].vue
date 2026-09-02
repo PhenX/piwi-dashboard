@@ -13,7 +13,6 @@ import { getPerformanceHints } from '~/utils/performance-hints';
 import { renderAnsi } from '~/utils';
 import type { NavbarAction } from '~/components/shared/NavbarActions.vue';
 import type { HelpTopicKey } from '~/utils/help-content';
-import { buildRetryCommand } from '~/utils/retry-command';
 import { condenseErrorText } from '#shared/error-fingerprint';
 import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator';
 
@@ -358,6 +357,8 @@ function stepBarColorClass(duration: number): string {
 const environment = computed(() => testCase.value?.testRun?.environment);
 
 // ── Retry command ─────────────────────────────────────────────────────────
+// The summary card owns the copy and run-locally controls (as the run page's
+// summary does); the navbar keeps only the page-level actions.
 const retryCases = computed(() => [
   {
     filePath: testCase.value?.filePath ?? '',
@@ -366,17 +367,8 @@ const retryCases = computed(() => [
     projectName: (testCase.value?.browser as { projectName?: string } | null)?.projectName ?? null,
   },
 ]);
-const retryCommand = computed(() => buildRetryCommand(retryCases.value));
-const { copy: copyRetry, copied: retryCopied } = useCopy();
 
 const navbarActions = computed<NavbarAction[]>(() => [
-  {
-    label: retryCopied.value ? 'Copied' : 'Copy retry command',
-    icon: retryCopied.value ? 'i-lucide-check' : 'i-lucide-clipboard',
-    variant: 'outline',
-    title: retryCopied.value ? 'Copied!' : copyPreview(retryCommand.value),
-    onClick: () => copyRetry(retryCommand.value, { toast: 'Retry command copied' }),
-  },
   { label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() },
 ]);
 
@@ -549,7 +541,8 @@ provide(clusterSectionLocatorKey, {
 <template>
   <UDashboardPanel id="test-run-case-detail">
     <template #header>
-      <UDashboardNavbar :title="testCase?.title ?? `Execution #${testCaseId}`">
+      <!-- The breadcrumb's current crumb is the page title; a navbar title would repeat it. -->
+      <UDashboardNavbar>
         <template #leading>
           <UDashboardSidebarCollapse />
           <BreadcrumbNav
@@ -565,13 +558,7 @@ provide(clusterSectionLocatorKey, {
                   ]
                 : [{ label: 'Project' }]),
               ...(testCase?.testRun?.id
-                ? [
-                    {
-                      label:
-                        `Run #${testCase.testRun.id}` + (testCase.testRun.label ? ` — ${testCase.testRun.label}` : ''),
-                      to: `/test-runs/${testCase.testRun.id}`,
-                    },
-                  ]
+                ? [{ label: `Run #${testCase.testRun.id}`, to: `/test-runs/${testCase.testRun.id}` }]
                 : [{ label: 'Test run' }]),
               { label: testCase?.title || `Execution #${testCaseId}` },
             ]"
@@ -584,9 +571,10 @@ provide(clusterSectionLocatorKey, {
               :to="`/test-cases/${testCase.testCaseId}`"
               class="text-xs text-gray-500 hover:text-primary mr-2 flex items-center gap-1 shrink-0"
               title="View test case history"
+              aria-label="Test case history"
             >
               <UIcon name="i-lucide-trending-up" class="size-3.5" />
-              <span class="hidden sm:inline">Test case</span>
+              <span class="hidden xl:inline">Test case</span>
             </NuxtLink>
             <ShareLinksModal
               v-if="testCase && !isDemoMode"
@@ -596,12 +584,6 @@ provide(clusterSectionLocatorKey, {
               v-if="testCase"
               :endpoint="`/api/test-run-cases/${testCase.id}/export`"
               :base-name="`piwi-execution-${testCase.id}`"
-              class="mr-2"
-            />
-            <DesktopRunLocallyButton
-              :project-id="testCase?.testRun?.project?.id"
-              :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
-              :cases="retryCases"
               class="mr-2"
             />
             <NavbarActions :actions="navbarActions" />
@@ -624,6 +606,8 @@ provide(clusterSectionLocatorKey, {
             :stable-links="(testCase as any)?.stableLinks ?? null"
             :project-key="testCase?.testRun?.project?.id"
             :project-name="testCase?.testRun?.project?.name"
+            :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
+            :retry-cases="retryCases"
             @refresh="refresh()"
           />
           <DidNotRunCard
@@ -878,12 +862,12 @@ provide(clusterSectionLocatorKey, {
                         slowest
                       </UBadge>
                     </div>
-                    <p
+                    <ErrorText
                       v-if="row.original.failed && row.original.error?.message"
-                      class="text-xs text-red-500 mt-1 whitespace-pre-wrap break-words font-mono"
-                    >
-                      {{ row.original.error.message }}
-                    </p>
+                      mode="block"
+                      :text="row.original.error.message"
+                      class="mt-1"
+                    />
                     <OpenInIdeLink
                       v-if="row.original.location"
                       :location="row.original.location"
@@ -1209,15 +1193,7 @@ provide(clusterSectionLocatorKey, {
                     </NuxtLink>
                   </template>
                   <template #error-cell="{ row }">
-                    <span
-                      v-if="row.original.error"
-                      class="text-red-600 text-xs truncate max-w-xs block"
-                      :title="row.original.error"
-                    >
-                      {{
-                        row.original.error.length > 80 ? `${row.original.error.substring(0, 80)}…` : row.original.error
-                      }}
-                    </span>
+                    <ErrorText v-if="row.original.error" :text="row.original.error" class="max-w-xs" />
                   </template>
                 </UTable>
               </TableScroller>
