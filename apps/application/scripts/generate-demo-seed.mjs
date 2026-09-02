@@ -399,6 +399,10 @@ const RUN_GREPS = {
 // simulator), so the Workers timeline shows dense rows instead of large gaps.
 const SEED_WORKER_COUNT = 4;
 const SEED_WORKER_GAP_MS = 200;
+/** How long after a test starts its first captured request fires. */
+const SEED_FIRST_REQUEST_OFFSET_MS = 120;
+/** Idle time between one captured request finishing and the next starting. */
+const SEED_REQUEST_GAP_MS = 35;
 
 /**
  * Build realistic `step_events` for a seeded case: before/after hooks, the
@@ -876,7 +880,12 @@ for (const proj of DEMO_PROJECTS) {
       workerCursorMs[workerIndex] += caseDuration + SEED_WORKER_GAP_MS;
 
       if (!isDidNotRunCase) {
+        // Requests fire one after another from shortly after the test starts,
+        // so the execution page can order them by start time.
+        let requestStartMs = caseStartMs + SEED_FIRST_REQUEST_OFFSET_MS;
         for (const req of buildNetwork(proj, storyEntry)) {
+          const startTime = requestStartMs;
+          requestStartMs += (req.duration ?? 0) + SEED_REQUEST_GAP_MS;
           NETWORK_REQUESTS.push({
             id: nrId++,
             test_runs_case_id: trcIdVal,
@@ -886,6 +895,7 @@ for (const proj of DEMO_PROJECTS) {
             normalized_url: seedNormalizeUrl(req.url),
             status: req.status,
             duration: req.duration ?? null,
+            start_time: startTime,
             resource_type: req.resourceType ?? null,
             content_type: req.contentType ?? (req.resourceType === 'document' ? 'text/html' : 'application/json'),
             server_logs: req.serverLogs ?? null,
@@ -2590,6 +2600,7 @@ const REBASE_SQL = [
   '',
   '-- Millisecond timestamp columns',
   `UPDATE test_runs_cases SET started_at = started_at + ${D_MS}, created_at = created_at + ${D_MS};`,
+  `UPDATE network_requests SET start_time = start_time + ${D_MS};`,
   `UPDATE project_assignments SET created_at = created_at + ${D_MS};`,
   `UPDATE entity_links SET created_at = created_at + ${D_MS}, updated_at = updated_at + ${D_MS};`,
   `UPDATE locator_snapshots SET last_seen_at = last_seen_at + ${D_MS};`,

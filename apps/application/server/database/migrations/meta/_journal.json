@@ -379,6 +379,13 @@
       "when": 1786729137251,
       "tag": "0053_damp_dark_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "6",
+      "when": 1788322663506,
+      "tag": "0054_stale_zzzax",
+      "breakpoints": true
     }
   ]
 }

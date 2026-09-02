@@ -260,6 +260,7 @@ export async function getTestRunCase(
     url: nr.url,
     status: nr.status,
     duration: nr.duration,
+    startTime: nr.startTime ?? undefined,
     resourceType: nr.resourceType,
     contentType: nr.contentType,
     serverLogs: nr.serverLogs,

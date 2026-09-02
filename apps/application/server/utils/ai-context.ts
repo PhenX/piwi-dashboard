@@ -1685,8 +1685,8 @@ export function representativeExecutionSections(
   // D9: Network — correlate with the failure when timing data allows
   const nrItems = (rep as any).nrItems ?? [];
   const networkLines: string[] = [];
-  // Time anchor: the case's startedAt and the request's startTime are both
-  // Unix epoch milliseconds, so their difference is already the ms offset
+  // Time anchor: the case's startedAt and the request's stored startTime are
+  // both Unix epoch milliseconds, so their difference is already the ms offset
   // from test start.
   const failureAnchor = rep.startedAt ?? 0;
   const failedReqs = nrItems.filter((r: any) => r.status >= 400 || r.status === 0).slice(0, limits.networkRequests);

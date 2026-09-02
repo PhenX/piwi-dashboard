@@ -670,6 +670,10 @@ export interface EndpointSummary {
   minDuration: number;
   p90Duration: number;
   errorRate: number;
+  /** Earliest request start in the group (Unix epoch ms) — null when no capture carried a start time. */
+  firstStartTime: number | null;
+  /** Latest request start in the group (Unix epoch ms) — null when no capture carried a start time. */
+  lastStartTime: number | null;
   testCases: string[];
 }
 
