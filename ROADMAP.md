@@ -14,6 +14,11 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 
 ## Recently shipped
 
+- **Branch-aware runs and baselines** — the reporter records the real branch on CI (from the provider's variables,
+  or `PIWI_BRANCH`) instead of a detached `HEAD`; runs carry a queryable `branch` column and a per-project default
+  branch; runs, flaky tests and MCP tools filter by branch; regression and visual-diff baselines prefer the same
+  branch, then the default branch; and PR feedback flags a failure that is already flaky on the default branch.
+  Tiers 1–2 of [proposals/first-class-branches.md](proposals/first-class-branches.md).
 - **Auto-heal pull requests** — when a locator breaks on the default branch and healing has high-confidence
   evidence, Piwi opens the fix PR itself: a branch, a deterministic one-line locator edit per broken call site, and
   an evidence-rich body, with the CI gate and fix verification closing the loop. GitHub, GitLab and Bitbucket; off by
@@ -73,9 +78,10 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 
 ## Exploring
 
-- **First-class branches** — reliable branch capture on CI (no more detached-HEAD blanks), runs filterable by
-  branch, baselines and flakiness scoped to the branch they belong to, and eventually a merge-readiness verdict per
-  branch. Design in [proposals/first-class-branches.md](proposals/first-class-branches.md).
+- **Branches as entities** — on top of the shipped branch column: a merge-readiness verdict per branch,
+  branch-class gate policies, cross-branch fix verification and retention by branch class, plus flakiness and trends
+  scoped to the default branch by default. Tier 3 of
+  [proposals/first-class-branches.md](proposals/first-class-branches.md).
 - **Exporting whole runs** — [offline export](https://piwitests.dev/offline-export) covers one execution and one failure cluster today; a whole run, and a
   test's history across runs, would follow the same shape.
 - **Self-sufficient trace archives** — an export can carry the trace files, but reading them still needs a Playwright
