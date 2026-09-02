@@ -49,6 +49,12 @@ const {
 
 const diff = computed(() => (result.value?.status === 'ok' ? (result.value.diff ?? null) : null));
 
+// The card renders only for a usable diff; the page reads `available` to show
+// its jump chip for exactly the same condition.
+const emit = defineEmits<{ available: [value: boolean] }>();
+const available = computed(() => !pending.value && !error.value && !!diff.value);
+watch(available, (value) => emit('available', value), { immediate: true });
+
 const view = ref<'overlay' | 'side-by-side'>('overlay');
 const viewItems = [
   { label: 'Overlay', value: 'overlay' as const },
@@ -94,7 +100,7 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
 <template>
   <component
     :is="cardComponent"
-    v-if="!pending && !error && diff"
+    v-if="available && diff"
     ref="card"
     v-bind="cardBind"
     icon="i-lucide-images"

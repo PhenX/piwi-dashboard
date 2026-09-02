@@ -23,8 +23,8 @@ Most links from a run land on an execution; the test's title links to the test c
 Everything about a single test execution, laid out **diagnosis-first**. A pinned **summary** carries the status, title, copyable location, duration, worker, retries and duration-vs-average, plus at-a-glance **signal badges** (new regression, new flaky, passed-on-retry), any test annotations (`@fixme`, `@slow`, …), the **wasted time** spent in fixed waits, and metadata cards (environment, CI, branch, commit, author, browser, storage). Traces stream in live while the parent run is still running.
 
 <figure>
-  <img src="/screenshots/gather-evidence.png" alt="A failing execution's Diagnosis tab: the pinned summary, the error and call log, and the folded evidence sections (test source, failure evidence, alternative locators, environment diff, visual diff, console)">
-  <figcaption>A failing execution, diagnosis-first — the summary with its wasted-time readout, the error, and the captured evidence folded into one screen.</figcaption>
+  <img src="/screenshots/gather-evidence.png" alt="A failing execution's Diagnosis tab: the pinned summary, the error and call log, the test source and failure evidence open, and the remaining evidence sections folded (alternative locators, environment diff, visual diff, console, network)">
+  <figcaption>A failing execution, diagnosis-first — the summary with its wasted-time readout, the error, the test source and screenshots open, and the rest of the captured evidence folded into one screen.</figcaption>
 </figure>
 
 The tabs adapt to the result.
@@ -34,13 +34,17 @@ The tabs adapt to the result.
 - **Verdict** — is this a new regression or flaky, how many times it retried, and how long the test has been failing, with a clickable recent-runs strip to jump between executions.
 - **Failure cluster** *(when the failure is clustered)* — signature, error type, how many tests it hit, the cluster's own AI verdict, and a hand-off to the full cross-test investigation.
 - **AI diagnosis** — diagnose *this execution* with one click, or **Copy AI context** to paste the full evidence bundle into your own assistant (works even with no provider configured). Cited evidence links jump to the matching section on the page.
-- **Evidence funnel** — the **test source** as a call stack (the line that actually threw plus the callers above it, so a failure inside a helper is visible, not just the test line that invoked it — and, [with a trace](#trace-powered-deep-views), the complete stack with real source), grouped **failure evidence** (screenshots, video, traces, attachments), [alternative locators](./reporter#locator-healing) for a broken locator, an **environment diff** and **visual diff** against the last green run, **console** output, **network requests** with inline [backend logs](./backend-logs) and a [Full trace](#trace-powered-deep-views) network view, **app state**, the failure-time **ARIA snapshot**, and the reconstructed **DOM snapshot**.
+- **Evidence funnel** — every section is a card that folds to a one-line peek and remembers your choice; the test source and the failure evidence open expanded so the failing line and the screenshot are on the first screen, the rest starts folded. It runs from the **test source** as a call stack (the line that actually threw plus the callers above it, so a failure inside a helper is visible, not just the test line that invoked it — and, [with a trace](#trace-powered-deep-views), the complete stack with real source), grouped **failure evidence** (screenshots, video, traces, attachments), [alternative locators](./reporter#locator-healing) for a broken locator, an **environment diff** and **visual diff** against the last green run, **console** output, **network requests** with inline [backend logs](./backend-logs) and a [Full trace](#trace-powered-deep-views) network view, **app state**, the failure-time **ARIA snapshot**, and the reconstructed **DOM snapshot**.
 
 **A passing execution opens on Steps**, with an **Artifacts** tab for its traces, attachments, console and network.
 
-Both keep a **Performance** tab (performance hints plus color-coded **Web Vitals**) and a **History** tab (this test's status and duration trend over recent runs, linking through to the full test history). A **Copy retry command** button in the header gives you the exact Playwright command to re-run just this test. The Web Vitals, network, console, ARIA-snapshot and alternative-locator data all come from the [capture fixtures](./capture-fixtures).
+Both keep a **Performance** tab (performance hints plus color-coded **Web Vitals**) and a **History** tab (this test's status and duration trend over recent runs, linking through to the full test history). A **Copy retry command** button in the summary gives you the exact Playwright command to re-run just this test. The Web Vitals, network, console, ARIA-snapshot and alternative-locator data all come from the [capture fixtures](./capture-fixtures).
 
 ## Trace-powered deep views
+
+::: tip Screenshots are Playwright's to record
+The screenshots in **failure evidence** come from Playwright's `screenshot: 'only-on-failure'` `use` option (`'on'` records every test). Playwright's default is `'off'`, so with the option unset the block shows video and traces but no screenshot. Set it beside `trace` in your Playwright config; see [Basic configuration](./reporter#basic-configuration) on the reporter page.
+:::
 
 When an execution has an uploaded trace, two evidence blocks go deeper — no configuration beyond recording traces (`trace: 'retain-on-failure'` or `'on-first-retry'` in your Playwright config):
 

@@ -7,6 +7,8 @@ import { buildRetryCommand } from '~/utils/retry-command';
 
 const route = useRoute();
 const clusterId = parseInt(String(route.params.id));
+// Share links need the server; the public demo has no share-link routes.
+const isDemoMode = Boolean(useRuntimeConfig().public.demoMode);
 
 // Provide shared diagnosis/investigation state (consumed by ClusterInvestigation
 // and ClusterDiagnosis). Must run before the top-level await below so provide()
@@ -202,7 +204,10 @@ const breadcrumbItems = computed(() => [
           <BreadcrumbNav :items="breadcrumbItems" />
         </template>
         <template #right>
-          <ShareLinksModal v-if="cluster" :endpoint="`/api/failure-clusters/${cluster.id}/share-links`" />
+          <ShareLinksModal
+            v-if="cluster && !isDemoMode"
+            :endpoint="`/api/failure-clusters/${cluster.id}/share-links`"
+          />
           <ExportMenu
             v-if="cluster"
             :endpoint="`/api/failure-clusters/${cluster.id}/export`"
@@ -389,7 +394,11 @@ const breadcrumbItems = computed(() => [
         </div>
       </div>
 
-      <div v-else class="flex items-center justify-center h-64 text-gray-500">Cluster not found.</div>
+      <ErrorState v-else text="Cluster not found." icon="i-lucide-search-x" class="h-64">
+        <template #action>
+          <UButton to="/projects" size="xs" color="neutral" variant="outline">Back to projects</UButton>
+        </template>
+      </ErrorState>
     </template>
   </UDashboardPanel>
 

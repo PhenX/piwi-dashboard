@@ -167,9 +167,12 @@ Shared building blocks worth knowing before writing new markup (`AGENTS.md` make
   y-axis) / `ChartTooltip` / `ChartMarkerLines` / `ChartLegend` / `ChartMarkerTooltip`, `MiniRunBars`,
   `DurationValue` (tight `210ms` via
   the pure `splitDuration`), `CodeBlock`, `MarkdownPreview`, `DiffPatch` / `DiffFile`, `LocatorCode` (a locator
-  expression syntax-highlighted through `@piwitests/picker-dom`'s `tokenizeLocator`).
+  expression syntax-highlighted through `@piwitests/picker-dom`'s `tokenizeLocator`), `ErrorText` (error text with
+  its ANSI colors rendered — a one-line `line` preview for lists and cells, or the full `block`).
 - **Navigation & actions** — `NavbarActions` (every `UDashboardNavbar` `#right` group; labels collapse to icons below
-  `sm`), `BreadcrumbNav` (drop-in for `UBreadcrumb`, collapses ancestors below `sm`), `OpenInIdeLink` +
+  `xl`), `BreadcrumbNav` (drop-in for `UBreadcrumb` and the page title of every detail page — the navbar never
+  repeats it; only the current crumb truncates, middle levels hide below `2xl`, ancestors collapse into a dropdown
+  below `sm`), `OpenInIdeLink` +
   `OpenInIdeSettingsModal`, `DocLink`, `LinkChip` / `EntityLinks`.
 - **Help & settings** — `HelpHint` (topic keys from `app/utils/help-content.ts`), `SettingsField`, `EnvManagedBadge`,
   `EnvManagedAlert`.
@@ -184,7 +187,8 @@ Shared building blocks worth knowing before writing new markup (`AGENTS.md` make
 (`useRunStream`, `useNotificationStream`), diagnosis (`useClusterDiagnosis`, `useStreamingDiagnosis`,
 `useDiagnosisNotification`), timeline (`useTimelineModel`, `useTimelineViewport`), fold/tree state
 (`useFoldedState`, `useFoldableSummary`, `useTreeViewCookie`), settings derivation (`useSettingsNav`,
-`useSettingsEnvState`), analytics scope, IDE preferences (`useOpenInIde`), desktop detection (`useIsDesktop`,
+`useSettingsEnvState`), analytics scope, the run page's retry command (`useRunRetryCommand` — one failing set and one
+shared mode for every copy button on the page), IDE preferences (`useOpenInIde`), desktop detection (`useIsDesktop`,
 `useTauri`), demo helpers, and small utilities (`useCopy` / `useCopyRich` — use these instead of hand-rolling
 `navigator.clipboard`, `useAiStatus`, `useChartTooltip`).
 

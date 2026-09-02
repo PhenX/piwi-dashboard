@@ -2,7 +2,17 @@
 
 A design record for **selections**: named, data-driven subsets of a project's tests that the dashboard computes from
 the history it keeps, and that a developer, a CI job or an AI agent can actually *run* — `piwi run smoke` — instead of
-maintaining grep patterns and tag lists by hand. Status: proposal, nothing shipped.
+maintaining grep patterns and tag lists by hand.
+
+**Status.** M1 and M2 have shipped, and most of M3 and M4: the selection model with its catalog predicates and
+built-ins, `piwi select` / `piwi run` with duration-balanced `--shard` and `--fail-fast` ordering, run stamping, the
+`--require-selection` gate policy, the project's Selections tab with builder and live preview, the PR-feedback
+summary line, five MCP tools (`list_selections`, `resolve_selection`, `preview_selection`, `suggest_selections`,
+`analyze_selections`) with the `run-the-right-tests` skill, suggested tags and budgeted smoke mining, impact-from-diff
+over captured source frames, and selection health and drift analytics. Not shipped: applying tag suggestions back to
+the spec files as a pull request, suggestion digests through notifications, and route-level impact mapping behind a
+per-project config. The user guide is [Test selections](../apps/docs/test-selection.md) on the docs site; the design
+below is the original text.
 
 **Summary.** Piwi already knows which tests are fast, stable, flaky, slow, quarantined, recently broken, owned by
 whom, and which routes and source files each test actually exercised. Today that knowledge flows only into dashboards;

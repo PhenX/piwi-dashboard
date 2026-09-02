@@ -126,7 +126,7 @@ export default defineConfig({
       projectName: 'my-project',
     }],
   ],
-  use: { trace: 'retain-on-failure' },
+  use: { trace: 'retain-on-failure', screenshot: 'only-on-failure' },
 })
 ```
 

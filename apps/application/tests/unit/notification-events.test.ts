@@ -5,6 +5,8 @@ import {
   buildNotificationDedupeKey,
   buildTopFailures,
   truncateExcerpt,
+  errorExcerpt,
+  failureTargetPath,
   TOP_FAILURES_LIMIT,
   ERROR_EXCERPT_MAX,
   type RunFinishedPayload,
@@ -118,6 +120,81 @@ describe('truncateExcerpt', () => {
   });
 });
 
+const TIMEOUT_ERROR = `TimeoutError: locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for getByRole('button', { name: 'Submit' })
+  - locator resolved to <button disabled>Submit</button>
+  - attempting click action
+  - waiting for element to be visible, enabled and stable
+  - element is not enabled
+  - retrying click action
+  - waiting for getByRole('button', { name: 'Submit' })
+  - locator resolved to <button disabled>Submit</button>
+
+    at tests/checkout.spec.ts:12:40`;
+
+const ASSERTION_ERROR = `Error: expect(locator).toBeVisible() failed
+
+Locator: getByText('Order confirmed')
+Expected: visible
+Received: <element(s) not found>
+Timeout: 5000ms
+
+Call log:
+  - Expect "toBeVisible" with timeout 5000ms
+  - waiting for getByText('Order confirmed')
+
+    at tests/checkout.spec.ts:20:45
+    at node_modules/@playwright/test/lib/worker.js:1:1`;
+
+describe('errorExcerpt', () => {
+  test('returns undefined for empty input', () => {
+    expect(errorExcerpt(undefined)).toBeUndefined();
+    expect(errorExcerpt('  \n ')).toBeUndefined();
+  });
+
+  test('quotes the message head without the call log or the stack', () => {
+    expect(errorExcerpt(ASSERTION_ERROR)).toBe(
+      [
+        'Error: expect(locator).toBeVisible() failed',
+        "Locator: getByText('Order confirmed')",
+        'Expected: visible',
+        'Received: <element(s) not found>',
+        'Timeout: 5000ms',
+      ].join('\n'),
+    );
+  });
+
+  test('appends the last call-log state line to a bare timeout', () => {
+    expect(errorExcerpt(TIMEOUT_ERROR)).toBe(
+      'TimeoutError: locator.click: Timeout 30000ms exceeded.\nlocator resolved to <button disabled>Submit</button>',
+    );
+    expect(errorExcerpt("Test timeout of 30000ms exceeded.\nCall log:\n  - waiting for getByTestId('cart')\n")).toBe(
+      "Test timeout of 30000ms exceeded.\nwaiting for getByTestId('cart')",
+    );
+  });
+
+  test('leaves a bare timeout alone when there is no call log', () => {
+    expect(errorExcerpt('Test timeout of 30000ms exceeded.')).toBe('Test timeout of 30000ms exceeded.');
+  });
+
+  test('strips ANSI codes and caps the result', () => {
+    const esc = String.fromCharCode(27);
+    expect(errorExcerpt(`${esc}[31mError: boom${esc}[0m`)).toBe('Error: boom');
+    const out = errorExcerpt(`Error: ${'x'.repeat(400)}`, 50)!;
+    expect(out.length).toBe(51);
+    expect(out.endsWith('…')).toBe(true);
+  });
+});
+
+describe('failureTargetPath', () => {
+  test('prefers the execution over the test history page', () => {
+    expect(failureTargetPath({ testCaseId: 5, executionId: 90 })).toBe('/test-run-cases/90');
+    expect(failureTargetPath({ testCaseId: 5 })).toBe('/test-cases/5');
+    expect(failureTargetPath({})).toBeNull();
+  });
+});
+
 describe('buildTopFailures', () => {
   test('caps to the limit and maps fields, dropping empty ones', () => {
     const rows = Array.from({ length: 5 }, (_, i) => ({
@@ -138,6 +215,13 @@ describe('buildTopFailures', () => {
     });
     // Row without filePath/error omits those keys entirely
     expect(out[1]).toEqual({ title: 'test 1', testCaseId: 1, executionId: 101 });
+  });
+
+  test('quotes the error head, not its call log', () => {
+    const [failure] = buildTopFailures([{ title: 'a', error: TIMEOUT_ERROR }]);
+    expect(failure!.errorExcerpt).toBe(
+      'TimeoutError: locator.click: Timeout 30000ms exceeded.\nlocator resolved to <button disabled>Submit</button>',
+    );
   });
 
   test('respects a custom limit', () => {

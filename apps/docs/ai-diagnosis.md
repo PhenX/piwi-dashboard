@@ -233,7 +233,7 @@ Every `suggestedFix.patch` is checked server-side, before it reaches you, agains
 | `invalid` | ❌ Invalid diff | The text isn't a parseable unified diff |
 | `unchecked` | Unverified | The target file wasn't in context, so the patch couldn't be validated |
 
-A wrong patch is worse than none, so the model is instructed to set `patch` to null unless it can quote the lines it changes from the `Source Files` / `Test Source` sections. The patch card offers **Copy**, **Copy `git apply` command**, and **Download `.patch`**; applying is always manual (the dashboard never writes to your repository).
+A wrong patch is worse than none, so the model is instructed to set `patch` to null unless it can quote the lines it changes from the `Source Files` / `Test Source` sections. The patch card offers **Copy**, **Copy `git apply` command**, and **Download `.patch`**; applying an AI-suggested patch is always manual — the dashboard never writes one to your repository. The one feature that does write to your repository is [auto-heal](./auto-heal): deterministic one-line locator edits taken from captured snapshots, never model output, and off by default.
 
 ## Locator healing
 
@@ -244,7 +244,7 @@ When the failure is a broken locator, the context includes an **Alternative Loca
   <figcaption>The Alternative locators panel — the broken locator, ranked replacements scored for stability, and a single recommended fix that preserves your locator style.</figcaption>
 </figure>
 
-This evidence is generated from the locator snapshots recorded by the [capture fixtures](./capture-fixtures) while tests run — make sure your specs import `test` from a fixtures file that extends `piwiFixtures`. Capture is gated by the default-on `captureLocators` reporter option. The same data drives the standalone **Alternative locators** panel on the test-case and cluster pages.
+This evidence is generated from the locator snapshots recorded by the [capture fixtures](./capture-fixtures) while tests run — make sure your specs import `test` from a fixtures file that extends `piwiFixtures`. Capture is gated by the default-on `captureLocators` reporter option. The same data drives the standalone **Alternative locators** panel on the [execution](./evidence#one-execution-diagnosis-first) and cluster pages.
 
 ## Fix plans for coding agents
 

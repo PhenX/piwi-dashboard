@@ -6,6 +6,7 @@ import {
   locatorIdentityEquals,
   alternativeUsesName,
   CONVENTION_STABILITY_FLOOR,
+  locatorExpression,
 } from '#shared/locator-healing';
 import type { RankedLocator } from '#shared/locator-healing.types';
 import { extractLeafSelector } from '#shared/error-fingerprint';
@@ -294,5 +295,30 @@ describe('alternativeUsesName', () => {
 
   test('false for an empty name', () => {
     expect(alternativeUsesName(alt('getByLabel', { label: 'Email' }), '  ')).toBe(false);
+  });
+});
+
+describe('locatorExpression', () => {
+  test('renders the positional arg and options as Playwright source', () => {
+    expect(locatorExpression('getByRole', { role: 'row' })).toBe("getByRole('row')");
+    expect(locatorExpression('getByRole', { role: 'button', name: 'Pay now', exact: true })).toBe(
+      "getByRole('button', { name: 'Pay now', exact: true })",
+    );
+    expect(locatorExpression('getByRole', { role: 'heading', level: 2 })).toBe("getByRole('heading', { level: 2 })");
+    expect(locatorExpression('getByLabel', { label: 'Email address' })).toBe("getByLabel('Email address')");
+    expect(locatorExpression('getByTestId', { testId: 'submit' })).toBe("getByTestId('submit')");
+    expect(locatorExpression('locator', { selector: '.btn-primary' })).toBe("locator('.btn-primary')");
+  });
+
+  test('keeps regex options verbatim and escapes quotes', () => {
+    expect(locatorExpression('getByText', { text: "it's here" })).toBe("getByText('it\\'s here')");
+    expect(locatorExpression('getByRole', { role: 'link', name: '/^Docs/i' })).toBe(
+      "getByRole('link', { name: /^Docs/i })",
+    );
+  });
+
+  test('falls back to positional args for an unknown method', () => {
+    expect(locatorExpression('frameLocator', { args: ['#frame'] })).toBe("frameLocator('#frame')");
+    expect(locatorExpression('getByRole', {})).toBe('getByRole()');
   });
 });

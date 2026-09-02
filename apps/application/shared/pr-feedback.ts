@@ -119,6 +119,8 @@ export interface PrSummaryInput {
 // ── Rendering ────────────────────────────────────────────────────────────────
 
 const MAX_LISTED = 5;
+/** Max characters of an error excerpt quoted in the pull-request comment. */
+export const PR_EXCERPT_MAX = 200;
 
 /** Escape the characters that would break out of a markdown table cell. */
 function escapeCell(text: string): string {

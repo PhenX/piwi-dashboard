@@ -13,6 +13,13 @@ const state = reactive({
 const loading = ref(false);
 const error = ref('');
 
+// Where to land after signing in: a same-origin path handed over by a link
+// that needed a session first (the reporter's per-failure links), else home.
+function redirectTarget(): string {
+  const target = route.query.redirect;
+  return typeof target === 'string' && target.startsWith('/') && !target.startsWith('//') ? target : '/';
+}
+
 // Fresh instance with auth enabled and zero users: the login form can never
 // succeed, so show a first-admin setup form instead (mirrors the documented
 // `POST /api/auth/setup` curl flow, but reachable from the UI).
@@ -124,7 +131,7 @@ async function handleLogin() {
       title: 'Login successful',
       color: 'success',
     });
-    router.push('/');
+    router.push(redirectTarget());
   } catch (err: unknown) {
     const errorMessage =
       err && typeof err === 'object' && 'data' in err ? (err.data as { message?: string })?.message : undefined;

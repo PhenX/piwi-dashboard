@@ -69,7 +69,9 @@ the same run. So is each browser in a project matrix.
 
 This is the object at `/test-run-cases/:id` — the error, steps, trace, screenshots, console, network,
 Web Vitals, and (for a failure) the diagnosis view. When the docs say *execution* or *test-run case*,
-this is what they mean; when they say *test case*, they mean the identity above it.
+this is what they mean; when they say *test case*, they mean the identity above it. The run page's
+list still calls executions *cases* in a few labels (the counter, the search box, the title column) —
+same object, older name.
 
 The distinction matters in practice: "this test is flaky" is a statement about a **test case**, and
 "here is the stack trace" is a statement about one **execution**.
@@ -82,7 +84,7 @@ with its dynamic arguments masked. That hash is the **error fingerprint**.
 
 Every failed execution sharing a fingerprint joins one **failure cluster**. Fifty red tests caused by
 one broken endpoint become one cluster you triage once, with a status (open / resolved / ignored) and
-a note.
+a note. API routes and a few components say *failure groups* for the same thing.
 
 Fingerprints deliberately **ignore the failing stack frame**, so the same root cause reached from six
 different spec files stays one cluster. Full detail:

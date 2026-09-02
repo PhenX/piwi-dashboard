@@ -1,3 +1,5 @@
+import { extractMessageHead, stripAnsi } from '#shared/error-fingerprint';
+
 /** All notification event keys supported by the subscription system. */
 export const NOTIFICATION_EVENTS = [
   'run.finished',
@@ -74,16 +76,61 @@ export interface ClusterNewPayload {
 }
 
 /**
- * Trim, strip ANSI colour codes, and cap an error message so it can be embedded
- * in a notification payload (and rendered in email/Slack) without bloating it.
+ * Trim, strip ANSI colour codes, and cap a text so it can be embedded in a
+ * notification payload (and rendered in email/Slack) without bloating it.
  * Returns undefined for empty input.
  */
 export function truncateExcerpt(text?: string | null, max: number = ERROR_EXCERPT_MAX): string | undefined {
   if (!text) return undefined;
-  const esc = String.fromCharCode(27);
-  const clean = text.replace(new RegExp(esc + '\\[[0-9;]*m', 'g'), '').trim();
+  const clean = stripAnsi(text).trim();
   if (!clean) return undefined;
   return clean.length > max ? clean.slice(0, max).trimEnd() + '…' : clean;
+}
+
+/** A message head that says nothing but that a timeout elapsed. */
+const BARE_TIMEOUT_RE = /^(?:\w*Error:\s*)?(?:[\w.]+:\s*)?(?:Test )?[Tt]imeout(?: of)? \d+m?s exceeded\.?$/;
+/** Call-log lines that say where Playwright was when the timeout hit. */
+const CALL_LOG_STATE_RE = /^\s*-\s*((?:waiting for|locator resolved to)\b.*)$/;
+
+/**
+ * The part of an error worth quoting outward — in a notification, a
+ * pull-request comment, a digest: the message head (the lines before the
+ * Playwright call log and the stack trace, at most five), with the last
+ * `waiting for …` / `locator resolved to …` call-log line appended when the
+ * head is only a bare timeout. ANSI codes are stripped and the result is
+ * capped at `max` characters. Returns undefined for empty input.
+ */
+export function errorExcerpt(text?: string | null, max: number = ERROR_EXCERPT_MAX): string | undefined {
+  if (!text) return undefined;
+  const clean = stripAnsi(text).trim();
+  if (!clean) return undefined;
+  let head = extractMessageHead(clean) || clean.split('\n')[0]!.trim();
+  if (BARE_TIMEOUT_RE.test(head)) {
+    const state = lastCallLogState(clean);
+    if (state) head = `${head}\n${state}`;
+  }
+  return truncateExcerpt(head, max);
+}
+
+function lastCallLogState(text: string): string | null {
+  const start = text.indexOf('Call log:');
+  if (start === -1) return null;
+  let last: string | null = null;
+  for (const line of text.slice(start).split('\n')) {
+    const match = CALL_LOG_STATE_RE.exec(line);
+    if (match) last = match[1]!.trim();
+  }
+  return last;
+}
+
+/**
+ * Dashboard path for one failing test: the execution with its evidence when
+ * the payload carries one, otherwise the test's history page.
+ */
+export function failureTargetPath(failure: Pick<TopFailure, 'testCaseId' | 'executionId'>): string | null {
+  if (failure.executionId != null) return `/test-run-cases/${failure.executionId}`;
+  if (failure.testCaseId != null) return `/test-cases/${failure.testCaseId}`;
+  return null;
 }
 
 /** Raw failing-case row shape consumed by {@link buildTopFailures}. */
@@ -97,7 +144,8 @@ export interface TopFailureInput {
 
 /**
  * Map raw failing-case rows to the compact {@link TopFailure} shape embedded in
- * run notifications: capped to `limit` entries with truncated error excerpts.
+ * run notifications: capped to `limit` entries, each error cut to its
+ * {@link errorExcerpt}.
  */
 export function buildTopFailures(rows: TopFailureInput[], limit: number = TOP_FAILURES_LIMIT): TopFailure[] {
   return rows.slice(0, limit).map((r) => {
@@ -105,7 +153,7 @@ export function buildTopFailures(rows: TopFailureInput[], limit: number = TOP_FA
     if (r.filePath) failure.filePath = r.filePath;
     if (r.testCaseId != null) failure.testCaseId = r.testCaseId;
     if (r.executionId != null) failure.executionId = r.executionId;
-    const excerpt = truncateExcerpt(r.error);
+    const excerpt = errorExcerpt(r.error);
     if (excerpt) failure.errorExcerpt = excerpt;
     return failure;
   });

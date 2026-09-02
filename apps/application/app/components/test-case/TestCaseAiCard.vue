@@ -254,7 +254,7 @@ const showRunning = computed(
             AI diagnosis is not configured <HelpHint topic="cluster.ai-setup" />
           </p>
           <p class="text-xs mt-2 max-w-xs mx-auto">
-            Use <strong>Export → AI context</strong> in the header to grab the full evidence bundle for your own AI
+            Use <strong>Copy prompt</strong> in this card's header to grab the full evidence bundle for your own AI
             tool, or configure a provider.
           </p>
           <UButton to="/settings/ai" size="xs" color="neutral" variant="outline" class="mt-3">

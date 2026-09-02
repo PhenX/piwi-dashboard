@@ -13,7 +13,6 @@ import { getPerformanceHints } from '~/utils/performance-hints';
 import { renderAnsi } from '~/utils';
 import type { NavbarAction } from '~/components/shared/NavbarActions.vue';
 import type { HelpTopicKey } from '~/utils/help-content';
-import { buildRetryCommand } from '~/utils/retry-command';
 import { condenseErrorText } from '#shared/error-fingerprint';
 import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator';
 
@@ -360,6 +359,8 @@ function stepBarColorClass(duration: number): string {
 const environment = computed(() => testCase.value?.testRun?.environment);
 
 // ── Retry command ─────────────────────────────────────────────────────────
+// The summary card owns the copy and run-locally controls (as the run page's
+// summary does); the navbar keeps only the page-level actions.
 const retryCases = computed(() => [
   {
     filePath: testCase.value?.filePath ?? '',
@@ -368,17 +369,8 @@ const retryCases = computed(() => [
     projectName: (testCase.value?.browser as { projectName?: string } | null)?.projectName ?? null,
   },
 ]);
-const retryCommand = computed(() => buildRetryCommand(retryCases.value));
-const { copy: copyRetry, copied: retryCopied } = useCopy();
 
 const navbarActions = computed<NavbarAction[]>(() => [
-  {
-    label: retryCopied.value ? 'Copied' : 'Copy retry command',
-    icon: retryCopied.value ? 'i-lucide-check' : 'i-lucide-clipboard',
-    variant: 'outline',
-    title: retryCopied.value ? 'Copied!' : copyPreview(retryCommand.value),
-    onClick: () => copyRetry(retryCommand.value, { toast: 'Retry command copied' }),
-  },
   { label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() },
 ]);
 
@@ -473,10 +465,9 @@ function copyFailure() {
 // Lets an AI-diagnosis evidence citation (in TestCaseAiCard → DiagnosisResult)
 // unfold and scroll to the matching evidence section on this page.
 const errorEl = ref<HTMLElement | null>(null);
-const consoleEl = ref<HTMLElement | null>(null);
-const networkEl = ref<HTMLElement | null>(null);
 const testSourceCard = ref<{ reveal: () => void } | null>(null);
-const networkCard = ref<{ showTraceMode: () => void } | null>(null);
+const consoleCard = ref<{ reveal: () => void } | null>(null);
+const networkCard = ref<{ showTraceMode: () => void; reveal: () => void } | null>(null);
 const evidenceCard = ref<{ reveal: () => void } | null>(null);
 const envDiffCard = ref<{ reveal: () => void } | null>(null);
 const visualDiffCard = ref<{ reveal: () => void } | null>(null);
@@ -499,13 +490,13 @@ const sectionToAction: Record<string, () => void> = {
   screenshots: () => evidenceCard.value?.reveal(),
   tracePointers: () => evidenceCard.value?.reveal(),
   artifacts: () => evidenceCard.value?.reveal(),
-  console: () => scrollToEl(consoleEl.value),
-  networkRequests: () => scrollToEl(networkEl.value),
-  serverTraces: () => scrollToEl(networkEl.value),
+  console: () => consoleCard.value?.reveal(),
+  networkRequests: () => networkCard.value?.reveal(),
+  serverTraces: () => networkCard.value?.reveal(),
   traceCallStack: () => testSourceCard.value?.reveal(),
   traceNetwork: () => {
     networkCard.value?.showTraceMode();
-    scrollToEl(networkEl.value);
+    networkCard.value?.reveal();
   },
   steps: () => {
     activeTab.value = 'steps';
@@ -514,6 +505,12 @@ const sectionToAction: Record<string, () => void> = {
     activeTab.value = 'steps';
   },
 };
+
+// The lazily fetched cards report whether they rendered anything (no baseline,
+// no screenshot or no trace leaves them empty), so their chips follow the card.
+const envDiffAvailable = ref(false);
+const visualDiffAvailable = ref(false);
+const domSnapshotAvailable = ref(false);
 
 // The jump-chip row under the error — the same section map the AI citations
 // use, so the funnel has a map even when no AI is configured. Each chip is
@@ -526,9 +523,9 @@ const sectionChips = computed(() =>
       label: 'Test source',
       available: Boolean(testCase.value?.testSourceFrames?.length || testCase.value?.testSource || hasTrace.value),
     },
-    { id: 'environmentDiff', label: 'Environment diff', available: Boolean(testCase.value?.testRun?.id) },
-    { id: 'visualDiff', label: 'Visual diff', available: Boolean(testCase.value?.testRun?.id) },
-    { id: 'domSnapshot', label: 'DOM snapshot', available: Boolean(testCase.value?.testRun?.id) },
+    { id: 'environmentDiff', label: 'Environment diff', available: envDiffAvailable.value },
+    { id: 'visualDiff', label: 'Visual diff', available: visualDiffAvailable.value },
+    { id: 'domSnapshot', label: 'DOM snapshot', available: domSnapshotAvailable.value },
     { id: 'ariaSnapshot', label: 'ARIA snapshot', available: Boolean(testCase.value?.ariaSnapshot) },
     { id: 'screenshots', label: 'Screenshots', available: true },
     { id: 'console', label: 'Console', available: Boolean((testCase.value as any)?.consoleLogs?.length) },
@@ -546,7 +543,8 @@ provide(clusterSectionLocatorKey, {
 <template>
   <UDashboardPanel id="test-run-case-detail">
     <template #header>
-      <UDashboardNavbar :title="testCase?.title ?? `Execution #${testCaseId}`">
+      <!-- The breadcrumb's current crumb is the page title; a navbar title would repeat it. -->
+      <UDashboardNavbar>
         <template #leading>
           <UDashboardSidebarCollapse />
           <BreadcrumbNav
@@ -562,13 +560,7 @@ provide(clusterSectionLocatorKey, {
                   ]
                 : [{ label: 'Project' }]),
               ...(testCase?.testRun?.id
-                ? [
-                    {
-                      label:
-                        `Run #${testCase.testRun.id}` + (testCase.testRun.label ? ` — ${testCase.testRun.label}` : ''),
-                      to: `/test-runs/${testCase.testRun.id}`,
-                    },
-                  ]
+                ? [{ label: `Run #${testCase.testRun.id}`, to: `/test-runs/${testCase.testRun.id}` }]
                 : [{ label: 'Test run' }]),
               { label: testCase?.title || `Execution #${testCaseId}` },
             ]"
@@ -581,21 +573,19 @@ provide(clusterSectionLocatorKey, {
               :to="`/test-cases/${testCase.testCaseId}`"
               class="text-xs text-gray-500 hover:text-primary mr-2 flex items-center gap-1 shrink-0"
               title="View test case history"
+              aria-label="Test case history"
             >
               <UIcon name="i-lucide-trending-up" class="size-3.5" />
-              <span class="hidden sm:inline">Test case</span>
+              <span class="hidden xl:inline">Test case</span>
             </NuxtLink>
-            <ShareLinksModal v-if="testCase" :endpoint="`/api/test-run-cases/${testCase.id}/share-links`" />
+            <ShareLinksModal
+              v-if="testCase && !isDemoMode"
+              :endpoint="`/api/test-run-cases/${testCase.id}/share-links`"
+            />
             <ExportMenu
               v-if="testCase"
               :endpoint="`/api/test-run-cases/${testCase.id}/export`"
               :base-name="`piwi-execution-${testCase.id}`"
-              class="mr-2"
-            />
-            <DesktopRunLocallyButton
-              :project-id="testCase?.testRun?.project?.id"
-              :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
-              :cases="retryCases"
               class="mr-2"
             />
             <NavbarActions :actions="navbarActions" />
@@ -618,6 +608,8 @@ provide(clusterSectionLocatorKey, {
             :stable-links="(testCase as any)?.stableLinks ?? null"
             :project-key="testCase?.testRun?.project?.id"
             :project-name="testCase?.testRun?.project?.name"
+            :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
+            :retry-cases="retryCases"
             @refresh="refresh()"
           />
           <DidNotRunCard
@@ -667,8 +659,8 @@ provide(clusterSectionLocatorKey, {
               />
             </div>
             <div class="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4">
-              <!-- Right rail (DOM-first so it follows the error on mobile) -->
-              <div class="space-y-4 lg:order-2">
+              <!-- Right rail (DOM-first so it follows the error below the xl split) -->
+              <div class="space-y-4 xl:order-2">
                 <TestCaseVerdictCard
                   :test-case="(testCase as any) ?? null"
                   :history="historyData"
@@ -681,12 +673,13 @@ provide(clusterSectionLocatorKey, {
               </div>
 
               <!-- Left column: evidence funnel -->
-              <div class="space-y-4 lg:order-1 min-w-0">
+              <div class="space-y-4 xl:order-1 min-w-0">
                 <!-- Test source: the failing line and its callers; full trace call stack when available -->
                 <TestSourceCard
                   v-if="testCase?.testSourceFrames?.length || testCase?.testSource || hasTrace"
                   ref="testSourceCard"
                   storage-key="case-test-source"
+                  :default-folded="false"
                   :frames="testCase?.testSourceFrames ?? null"
                   :test-source="testCase?.testSource ?? null"
                   :run-id="testCase?.testRun?.id ?? null"
@@ -700,6 +693,7 @@ provide(clusterSectionLocatorKey, {
                 <TestCaseEvidenceCard
                   ref="evidenceCard"
                   storage-key="case-evidence"
+                  :default-folded="false"
                   :attachments="(testCase as any)?.attachments ?? []"
                   :traces="(traceData as any[]) ?? []"
                 />
@@ -720,6 +714,7 @@ provide(clusterSectionLocatorKey, {
                   storage-key="case-env-diff"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
+                  @available="envDiffAvailable = $event"
                 />
 
                 <!-- What changed visually since the last pass -->
@@ -729,23 +724,27 @@ provide(clusterSectionLocatorKey, {
                   storage-key="case-visual-diff"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
+                  @available="visualDiffAvailable = $event"
                 />
 
                 <!-- Console output -->
-                <div v-if="(testCase as any)?.consoleLogs?.length" ref="consoleEl" class="scroll-mt-4">
-                  <TestCaseConsoleCard :entries="(testCase as any)?.consoleLogs ?? []" />
-                </div>
+                <TestCaseConsoleCard
+                  v-if="(testCase as any)?.consoleLogs?.length"
+                  ref="consoleCard"
+                  storage-key="case-console"
+                  :entries="(testCase as any)?.consoleLogs ?? []"
+                />
 
                 <!-- Network requests + backend logs; full trace network when available -->
-                <div v-if="networkRequests.length > 0 || hasTrace" ref="networkEl" class="scroll-mt-4">
-                  <TestCaseNetworkRequests
-                    ref="networkCard"
-                    :requests="networkRequests"
-                    :run-id="testCase?.testRun?.id ?? null"
-                    :test-runs-case-id="Number(testCaseId)"
-                    :has-trace="hasTrace"
-                  />
-                </div>
+                <TestCaseNetworkRequests
+                  v-if="networkRequests.length > 0 || hasTrace"
+                  ref="networkCard"
+                  storage-key="case-network"
+                  :requests="networkRequests"
+                  :run-id="testCase?.testRun?.id ?? null"
+                  :test-runs-case-id="Number(testCaseId)"
+                  :has-trace="hasTrace"
+                />
 
                 <!-- App state at test end -->
                 <PageStateCard
@@ -776,6 +775,7 @@ provide(clusterSectionLocatorKey, {
                   storage-key="case-dom-snapshot"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
+                  @available="domSnapshotAvailable = $event"
                 />
               </div>
             </div>
@@ -864,12 +864,12 @@ provide(clusterSectionLocatorKey, {
                         slowest
                       </UBadge>
                     </div>
-                    <p
+                    <ErrorText
                       v-if="row.original.failed && row.original.error?.message"
-                      class="text-xs text-red-500 mt-1 whitespace-pre-wrap break-words font-mono"
-                    >
-                      {{ row.original.error.message }}
-                    </p>
+                      mode="block"
+                      :text="row.original.error.message"
+                      class="mt-1"
+                    />
                     <OpenInIdeLink
                       v-if="row.original.location"
                       :location="row.original.location"
@@ -1195,15 +1195,7 @@ provide(clusterSectionLocatorKey, {
                     </NuxtLink>
                   </template>
                   <template #error-cell="{ row }">
-                    <span
-                      v-if="row.original.error"
-                      class="text-red-600 text-xs truncate max-w-xs block"
-                      :title="row.original.error"
-                    >
-                      {{
-                        row.original.error.length > 80 ? `${row.original.error.substring(0, 80)}…` : row.original.error
-                      }}
-                    </span>
+                    <ErrorText v-if="row.original.error" :text="row.original.error" class="max-w-xs" />
                   </template>
                 </UTable>
               </TableScroller>

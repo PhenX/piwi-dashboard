@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { NetworkRequest, ServerLogEntry, ServerSpanEntry } from '~~/types/api';
+import SectionCard from '../shared/SectionCard.vue';
+import CollapsibleSectionCard from '../shared/CollapsibleSectionCard.vue';
 
 const props = defineProps<{
   requests: NetworkRequest[];
@@ -7,7 +9,16 @@ const props = defineProps<{
   runId?: number | null;
   testRunsCaseId?: number | null;
   hasTrace?: boolean;
+  /** When set, the card folds to a header with a peek (persisted per user). */
+  storageKey?: string;
+  /** Whether the card starts folded on first visit (no stored cookie). */
+  defaultFolded?: boolean;
 }>();
+
+const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
+const cardBind = computed(() =>
+  props.storageKey ? { storageKey: props.storageKey, defaultFolded: props.defaultFolded } : {},
+);
 
 type Filter = 'all' | 'failed' | 'logs';
 const filter = ref<Filter>('all');
@@ -55,7 +66,22 @@ const viewItems = computed(() => [
 function showTraceMode() {
   if (props.hasTrace) manualView.value = 'trace';
 }
-defineExpose({ showTraceMode });
+
+// Forward reveal so a jump chip or diagnosis citation can unfold + scroll to this card.
+const card = ref<{ reveal?: () => void; $el?: HTMLElement } | null>(null);
+function reveal() {
+  if (card.value?.reveal) card.value.reveal();
+  else card.value?.$el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+}
+defineExpose({ showTraceMode, reveal });
+
+/** Folded peek: the captured request count and the first request, or the trace-only hint. */
+const peek = computed(() => {
+  const n = props.requests.length;
+  if (n === 0) return 'Full network activity from the trace';
+  const first = props.requests[0]!;
+  return `${n} request${n === 1 ? '' : 's'} · ${first.method} ${toPath(first.url)} → ${first.status}`;
+});
 
 /** Per-request expansion state (keyed by stable index). */
 const expanded = ref<Set<number>>(new Set());
@@ -247,12 +273,16 @@ function rowAccent(r: DecoratedRequest): string {
 </script>
 
 <template>
-  <SectionCard
+  <component
+    :is="cardComponent"
+    ref="card"
+    v-bind="cardBind"
     icon="i-lucide-network"
     title="Network requests"
     :count="view === 'trace' ? traceCount : totals.total"
     help="case.network"
   >
+    <template v-if="storageKey" #folded>{{ peek }}</template>
     <template #actions>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
         <template v-if="view === 'captured'">
@@ -473,5 +503,5 @@ function rowAccent(r: DecoratedRequest): string {
         <DocLink to="evidence#trace-powered-deep-views" no-icon class="underline">Learn more</DocLink>
       </span>
     </p>
-  </SectionCard>
+  </component>
 </template>
