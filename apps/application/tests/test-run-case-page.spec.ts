@@ -118,6 +118,38 @@ test.describe('Test-run-case page', () => {
     await expect(page.getByRole('button', { name: /^Performance/ })).toBeVisible();
   });
 
+  test('GET /api/test-run-cases/:id/timeline places the steps and marks the failure', async ({ request }) => {
+    const res = await request.get(`/api/test-run-cases/${failedCaseId}/timeline`);
+    expect(res.ok()).toBeTruthy();
+    const tl = await res.json();
+    // Two steps, neither carrying a start time, so positions are estimated.
+    expect(tl.lanes.steps).toHaveLength(2);
+    expect(tl.estimated).toBe(true);
+    // The step marked failed is the failure; its end is the failure moment.
+    expect(tl.failedStep.index).toBe(1);
+    expect(tl.failureAt).toBe(5800);
+    expect(tl.lanes.steps[1].failed).toBe(true);
+    expect(tl.window).toBeDefined();
+  });
+
+  test('the failure timeline card renders below the error on the Diagnosis tab', async ({ page }) => {
+    await page.goto(`/test-run-cases/${failedCaseId}`);
+    await waitForHydration(page);
+
+    const timeline = page.getByRole('heading', { name: 'Failure timeline' });
+    await expect(timeline).toBeVisible();
+    // It sits below the raw error card.
+    const errorBox = await page.getByRole('heading', { name: 'Error', exact: true }).boundingBox();
+    const timelineBox = await timeline.boundingBox();
+    expect(timelineBox!.y).toBeGreaterThan(errorBox!.y);
+    // The chronological list and both window controls are present.
+    await expect(page.getByRole('heading', { name: 'What happened in this window' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Around the failure' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Whole test' })).toBeVisible();
+    // This run recorded no step start times, so the estimated note shows.
+    await expect(page.getByText(/Step positions are derived from durations/)).toBeVisible();
+  });
+
   test('History tab opens populated from the SSR payload, without refetching or a hydration mismatch', async ({
     page,
   }) => {
