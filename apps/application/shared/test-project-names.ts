@@ -111,6 +111,7 @@ export const PROJECT = {
   REVOKED_KEY: 'revoked-key-test',
   RUN_COMPARE: 'run-compare',
   RUN_LABEL: 'run-label-test',
+  RUN_LOCATE: 'run-locate-test',
   RUN_PAGE_FILTERS: 'run-page-filters-test',
   RUN_SUMMARY_TEST: 'run-summary-test',
   SHARDING_TEST: 'sharding-test',
