@@ -89,6 +89,13 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
     />
 
     <div v-else class="space-y-2">
+      <!-- Which side is which: the failing run on the left, its last pass on the right -->
+      <div class="flex items-center gap-1.5 text-xs font-medium px-3">
+        <span class="hidden sm:block sm:w-40 shrink-0" aria-hidden="true" />
+        <span class="text-red-700 dark:text-red-400">This run</span>
+        <UIcon name="i-lucide-arrow-left" class="size-3 shrink-0 text-gray-400" />
+        <span class="text-green-700 dark:text-green-400">Last pass, run #{{ diff?.baseline?.runId }}</span>
+      </div>
       <div
         v-for="entry in meaningful"
         :key="entry.key"

@@ -204,3 +204,52 @@ export async function locatorSignatureFromExpression(expr: string): Promise<stri
   const method = locatorExpressionMethod(expr) ?? '';
   return sha256Hex(`${method} ${JSON.stringify(locatorExpressionStrings(expr))}`);
 }
+
+/**
+ * The positional first argument of each Playwright locator method, as keyed by
+ * the parsed failing locator (`{ method, args }`); every other arg key is an
+ * option. `getByAltText` shares the `text` key with `getByText`.
+ */
+const LOCATOR_PRIMARY_ARG: Record<string, string> = {
+  getByTestId: 'testId',
+  getByRole: 'role',
+  getByText: 'text',
+  getByLabel: 'label',
+  getByPlaceholder: 'placeholder',
+  getByAltText: 'text',
+  getByTitle: 'title',
+  locator: 'selector',
+  'page.locator': 'selector',
+};
+
+/** A parsed arg value as Playwright source: quoted string, bare literal, or regex text as-is. */
+function locatorArgLiteral(value: unknown): string {
+  if (typeof value === 'string') {
+    if (value.startsWith('/') && /\/[a-z]*$/.test(value) && value.length > 1) return value;
+    return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value == null) return 'undefined';
+  return JSON.stringify(value);
+}
+
+/**
+ * Render a parsed locator back to the Playwright expression a developer would
+ * write, e.g. `{ method: 'getByRole', args: { role: 'row', name: 'Total' } }`
+ * → `getByRole('row', { name: 'Total' })`. The inverse of the server-side
+ * expression parser, so the failing locator reads like every alternative.
+ */
+export function locatorExpression(method: string, args: Record<string, unknown> | null | undefined): string {
+  const a = args ?? {};
+  const parts: string[] = [];
+  if (Array.isArray(a.args) && !(method in LOCATOR_PRIMARY_ARG)) {
+    return `${method}(${a.args.map(locatorArgLiteral).join(', ')})`;
+  }
+  const primary = LOCATOR_PRIMARY_ARG[method];
+  if (primary && a[primary] !== undefined) parts.push(locatorArgLiteral(a[primary]));
+  const options = Object.entries(a).filter(([key, value]) => key !== primary && value !== undefined);
+  if (options.length) {
+    parts.push(`{ ${options.map(([key, value]) => `${key}: ${locatorArgLiteral(value)}`).join(', ')} }`);
+  }
+  return `${method}(${parts.join(', ')})`;
+}
