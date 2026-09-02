@@ -28,7 +28,10 @@ export interface FailureDescription {
 }
 
 export interface DescribeFailureContext {
-  /** The title of the failed step (or the last step that ran), for a test timeout. */
+  /**
+   * The title of the failed step (or the last step that ran). Names what a
+   * test timeout interrupted when the error itself carries no pending action.
+   */
   lastStepTitle?: string | null;
 }
 
@@ -423,8 +426,6 @@ function buildTestTimeout(
   ctx: DescribeFailureContext | undefined,
 ): Line {
   const line = new Line().text('Test timed out').text(timeoutSuffix(parsed.timeoutMs));
-  const step = ctx?.lastStepTitle?.trim();
-  if (step) return line.text(' while ').value(`"${truncateValue(step, opts.valueMax * 1.5)}"`);
   if (parsed.timeoutPhase) {
     const phase = parsed.timeoutPhase;
     const isHook = /^(?:before|after)(?:Each|All)$/.test(phase);
@@ -445,6 +446,8 @@ function buildTestTimeout(
     return subject(line, parsed.locator, opts);
   }
   if (parsed.subject && parsed.action) return line.text(` during ${parsed.subject}.${parsed.action}`);
+  const step = ctx?.lastStepTitle?.trim();
+  if (step) return line.text(' while ').value(`"${truncateValue(step, opts.valueMax * 1.5)}"`);
   return line;
 }
 

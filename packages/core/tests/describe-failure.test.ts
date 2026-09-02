@@ -78,17 +78,18 @@ describe('describeFailure — one line per shape', () => {
   });
 });
 
-describe('describeFailure — test timeouts name the step when the caller knows it', () => {
-  test('the last step title wins over the pending action', () => {
-    expect(headline('testTimeoutJoined', { lastStepTitle: 'fillPaymentDetails(page)' })).toBe(
-      'Test timed out after 30 s while "fillPaymentDetails(page)"',
+describe('describeFailure — test timeouts name the step when the error carries no pending action', () => {
+  test('the pending action in the error wins over a step title', () => {
+    expect(headline('testTimeoutJoined', { lastStepTitle: 'Verify confirmation' })).toBe(
+      "Test timed out after 30 s while clicking getByRole('button', { name: 'Pay' })",
     );
   });
 
-  test('an empty step title falls back to the pending action', () => {
-    expect(headline('testTimeoutJoined', { lastStepTitle: '  ' })).toBe(
-      "Test timed out after 30 s while clicking getByRole('button', { name: 'Pay' })",
+  test('a bare test timeout names the step the caller knows', () => {
+    expect(headline('testTimeoutBare', { lastStepTitle: 'fillPaymentDetails(page)' })).toBe(
+      'Test timed out after 30 s while "fillPaymentDetails(page)"',
     );
+    expect(headline('testTimeoutBare', { lastStepTitle: '  ' })).toBe('Test timed out after 30 s');
   });
 });
 
