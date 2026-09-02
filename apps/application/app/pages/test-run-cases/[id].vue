@@ -588,7 +588,10 @@ provide(clusterSectionLocatorKey, {
               <UIcon name="i-lucide-trending-up" class="size-3.5" />
               <span class="hidden sm:inline">Test case</span>
             </NuxtLink>
-            <ShareLinksModal v-if="testCase" :endpoint="`/api/test-run-cases/${testCase.id}/share-links`" />
+            <ShareLinksModal
+              v-if="testCase && !isDemoMode"
+              :endpoint="`/api/test-run-cases/${testCase.id}/share-links`"
+            />
             <ExportMenu
               v-if="testCase"
               :endpoint="`/api/test-run-cases/${testCase.id}/export`"

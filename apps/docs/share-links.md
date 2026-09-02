@@ -12,6 +12,9 @@ export time, the link renders the investigation as it stands when it is opened.
 Share links are **off by default**. Set `PIWI_SHARE_LINKS_ENABLED=true` to allow them — see the
 [configuration reference](./configuration#authentication).
 
+The [live demo](https://piwitests.dev/demo/) runs without a server, so it has no share links and hides the **Share**
+button.
+
 ## Creating a link
 
 On an execution page or a failure-cluster page, open **Share** (next to **Export**):
