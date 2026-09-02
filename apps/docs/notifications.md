@@ -68,7 +68,7 @@ The body is `{ "event": "run.failed", "payload": { … }, "timestamp": "…" }`.
       {
         "title": "applies discount code",
         "filePath": "tests/checkout.spec.ts",
-        "errorExcerpt": "TimeoutError: locator.click: Timeout 30000ms exceeded",
+        "errorExcerpt": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nlocator resolved to <button disabled>Pay</button>",
         "testCaseId": 815,
         "executionId": 9001
       }
@@ -78,7 +78,15 @@ The body is `{ "event": "run.failed", "payload": { … }, "timestamp": "…" }`.
 }
 ```
 
-`cluster.new` payloads similarly carry `sampleErrorExcerpt` and `affectedCases`. These fields are **additive** — existing consumers keep working, but if you re-serialize the payload to re-check the HMAC, sign the exact bytes you received.
+`errorExcerpt` is the error's message head — the lines before Playwright's call log and the stack trace,
+at most five, capped at 300 characters. When that head is only a bare timeout line, the last
+`waiting for …` / `locator resolved to …` line of the call log is appended so the excerpt says what
+Playwright was waiting on. Slack and email messages quote the same excerpt, and link each failure to its
+execution (`/test-run-cases/<executionId>`), falling back to the test's history page when a payload
+carries no execution id. The [pull-request comment](./ci#pull-request-feedback) quotes failures the same
+way.
+
+`cluster.new` payloads similarly carry `sampleErrorExcerpt` (cut the same way) and `affectedCases`. These fields are **additive** — existing consumers keep working, but if you re-serialize the payload to re-check the HMAC, sign the exact bytes you received.
 
 ### Global channels & subscriptions
 

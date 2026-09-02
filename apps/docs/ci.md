@@ -135,9 +135,22 @@ After results land, the reporter surfaces the dashboard run URL wherever a pipel
 a later step (a Slack post, a deploy gate, a PR comment) doesn't have to scrape stdout. All of it is
 best-effort — a failure in any channel is logged and never fails your run.
 
-**Always** — a `View run: <url>` line in the log.
+**Always** — one line per failed test, printed the moment its final attempt fails, then a
+`View run: <url>` line once the run lands:
 
-**GitHub Actions (automatic)** — step outputs, a job-summary link, and a `::notice::` annotation:
+```
+[Piwi Dashboard] ✗ applies the discount code → https://piwi.example.com/test-runs/42/locate?file=tests%2Fcheckout.spec.ts&title=applies%20the%20discount%20code&retry=1&browser=chromium
+[Piwi Dashboard] View run: https://piwi.example.com/test-runs/42
+```
+
+The per-test link resolves to the failing execution's page (`/test-run-cases/:id`) and works in
+streaming and batch mode alike — it is built from what the reporter knows at that moment (run id,
+spec file, title, retry and Playwright project), so it prints while the run is still going. A link to a
+test the dashboard cannot find (results pruned by retention, an upload that never landed) renders a
+readable "not found" page instead of an error.
+
+**GitHub Actions (automatic)** — step outputs, a job summary listing the failed tests with their links
+(20 at most, the rest counted as "+N more"), and a `::notice::` annotation:
 
 ```yaml
 - run: npx playwright test
@@ -148,10 +161,11 @@ best-effort — a failure in any channel is logged and never fails your run.
   if: always()
 ```
 
-Available outputs: `piwi_run_url`, `piwi_run_id`, `piwi_run_status`, `piwi_project_id`.
+Available outputs: `piwi_run_url`, `piwi_run_id`, `piwi_run_status`, `piwi_failed_count`, `piwi_project_id`.
 
 **GitLab CI (automatic)** — a dotenv report (`piwi.env` by default, override with `PIWI_DOTENV_FILE`)
-carrying `PIWI_RUN_URL`, `PIWI_RUN_ID`, `PIWI_RUN_STATUS`, `PIWI_PROJECT_ID` and `PIWI_CI_BUILD_URL`.
+carrying `PIWI_RUN_URL`, `PIWI_RUN_ID`, `PIWI_RUN_STATUS`, `PIWI_FAILED_COUNT`, `PIWI_PROJECT_ID` and
+`PIWI_CI_BUILD_URL`.
 Declare it so later jobs inherit the variables:
 
 ```yaml
@@ -169,8 +183,11 @@ e2e:
 - run: npx playwright test
   env:
     PIWI_OUTPUT_FILE: piwi-run.json
-- run: cat piwi-run.json   # { runUrl, runId, projectId, projectName, status, ciBuildUrl }
+- run: cat piwi-run.json   # { runUrl, runId, projectId, projectName, status, ciBuildUrl, failedCount, failures }
 ```
+
+`failures` lists every test whose final attempt failed as `{ title, file, retry, browser, url }`, with
+`url` the same per-test link the log prints.
 
 ## Pull-request feedback
 

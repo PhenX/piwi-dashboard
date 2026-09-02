@@ -8,7 +8,7 @@ import { projects, testRuns, failureClusters, testRunsCases, testCases } from '.
 import { emitNotification } from './emit';
 import {
   buildTopFailures,
-  truncateExcerpt,
+  errorExcerpt,
   computePerfBaseline,
   TOP_FAILURES_LIMIT,
   PERF_BASELINE_RUNS,
@@ -153,7 +153,7 @@ export async function emitRunNotifications(db: DbClient, runId: number): Promise
         projectName: project.label || project.name,
         signature: cluster.signature,
         runId,
-        sampleErrorExcerpt: truncateExcerpt(cluster.sampleError),
+        sampleErrorExcerpt: errorExcerpt(cluster.sampleError),
         affectedCases: affected.length,
       });
     }

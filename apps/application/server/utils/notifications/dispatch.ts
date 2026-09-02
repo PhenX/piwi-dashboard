@@ -16,7 +16,7 @@ import type {
   RunFinishedPayload,
   ClusterNewPayload,
 } from '#shared/notification-events';
-import { renderEventSubject, notificationTargetPath } from '#shared/notification-events';
+import { renderEventSubject, notificationTargetPath, failureTargetPath } from '#shared/notification-events';
 import type { LibSQLDatabase } from 'drizzle-orm/libsql';
 
 const MAX_ATTEMPTS = 5;
@@ -120,7 +120,8 @@ async function sendToSlack(config: Record<string, unknown>, event: NotificationE
   if (event.startsWith('run.')) {
     const p = payload as RunFinishedPayload;
     for (const f of p.topFailures ?? []) {
-      const link = f.testCaseId ? `<${base}/test-cases/${f.testCaseId}|${f.title}>` : f.title;
+      const path = failureTargetPath(f);
+      const link = path ? `<${base}${path}|${f.title}>` : f.title;
       const excerpt = f.errorExcerpt ? `\n\`\`\`${slackExcerpt(f.errorExcerpt)}\`\`\`` : '';
       blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `• *${link}*${excerpt}` } });
     }

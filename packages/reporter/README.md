@@ -248,15 +248,20 @@ When `collectCiInfo` is enabled (default), the reporter auto-detects:
 
 After a run is submitted, the reporter surfaces the dashboard run URL so a later
 CI step (a custom email, a Slack message, a deploy gate) can pick it up without
-scraping the log. The URL is always printed as `View run: <url>`, and in
-addition:
+scraping the log. The URL is always printed as `View run: <url>`, preceded by
+one `✗ <title> → <url>` line per failed test — each linking straight to that
+execution on the dashboard, printed the moment the test's final attempt fails
+(in streaming mode, before the run is over). In addition:
 
 - **Any CI — JSON output file.** Set `outputFile` (or `PIWI_OUTPUT_FILE`) and the
   reporter writes a small JSON file when the run lands:
 
   ```json
-  { "runUrl": "https://piwi.example.com/test-runs/1234", "runId": 1234, "projectId": 5, "projectName": "checkout", "status": "passed", "ciBuildUrl": "https://ci.example.com/build/9" }
+  { "runUrl": "https://piwi.example.com/test-runs/1234", "runId": 1234, "projectId": 5, "projectName": "checkout", "status": "passed", "ciBuildUrl": "https://ci.example.com/build/9", "failedCount": 0, "failures": [] }
   ```
+
+  `failures` lists every test whose final attempt failed as
+  `{ title, file, retry, browser, url }`.
 
   Read it from any pipeline, e.g. `node -e "console.log(require('./piwi-run.json').runUrl)"`
   (portable) or `cat piwi-run.json` and parse it in your email step. In Jenkins,
@@ -264,9 +269,10 @@ addition:
 
 - **GitHub Actions (automatic).** When `GITHUB_ACTIONS` is set, the reporter
   appends step outputs to `$GITHUB_OUTPUT` (`piwi_run_url`, `piwi_run_id`,
-  `piwi_project_id`, `piwi_run_status`), writes a markdown link to the job
-  summary, and prints a `::notice::` annotation. Give the test step an `id` and a
-  downstream step can read it:
+  `piwi_project_id`, `piwi_run_status`, `piwi_failed_count`), writes a markdown
+  link plus the failed tests with their links to the job summary (20 at most,
+  the rest counted), and prints a `::notice::` annotation. Give the test step an
+  `id` and a downstream step can read it:
 
   ```yaml
   - id: tests
@@ -275,8 +281,10 @@ addition:
   ```
 
 - **GitLab CI (automatic).** When `GITLAB_CI` is set, the reporter writes a
-  dotenv report (`piwi.env` by default, override with `PIWI_DOTENV_FILE`).
-  Declare it so later jobs inherit `$PIWI_RUN_URL`:
+  dotenv report (`piwi.env` by default, override with `PIWI_DOTENV_FILE`)
+  carrying `PIWI_RUN_URL`, `PIWI_RUN_ID`, `PIWI_RUN_STATUS`, `PIWI_FAILED_COUNT`,
+  `PIWI_PROJECT_ID` and `PIWI_CI_BUILD_URL`. Declare it so later jobs inherit
+  `$PIWI_RUN_URL`:
 
   ```yaml
   test:

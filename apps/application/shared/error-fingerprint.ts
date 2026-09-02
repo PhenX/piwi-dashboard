@@ -90,8 +90,9 @@ function classifyError(text: string): ErrorType {
  * Cut the error down to its message head: everything before the Playwright
  * call log and the JS stack trace, capped at 5 non-empty lines so long
  * element dumps (strict-mode violations) don't destabilize the fingerprint.
+ * Notifications and pull-request comments quote the same head.
  */
-function extractMessageHead(text: string): string {
+export function extractMessageHead(text: string): string {
   let head = text;
   const callLogIdx = head.indexOf('\nCall log:');
   if (callLogIdx !== -1) head = head.slice(0, callLogIdx);

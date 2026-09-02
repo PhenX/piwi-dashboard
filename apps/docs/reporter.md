@@ -88,7 +88,7 @@ export { expect } from '@playwright/test'
 
 These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).
 
-Any attachments Playwright records — including **screenshots** (`screenshot: 'only-on-failure'`) and **videos** (`video: 'retain-on-failure'`) — are uploaded automatically and shown as first-class evidence on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, alongside traces. Screenshots are the evidence most pages on this site count on, and Playwright records none unless the option is set. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
+Any attachments Playwright records — including **screenshots** (`screenshot: 'only-on-failure'`) and **videos** (`video: 'retain-on-failure'`) — are uploaded automatically and shown as first-class evidence on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, alongside traces. That includes what a test attaches itself: both `testInfo.attach('payload', { path })` and the inline form `testInfo.attach('payload', { body: JSON.stringify(data), contentType: 'application/json' })` reach the dashboard (an inline body is staged as a temp file under the OS temp directory for the upload and removed when the run ends). One attachment above 500 MB — the dashboard's default upload ceiling — is skipped with a warning naming it rather than failing the upload. Screenshots are the evidence most pages on this site count on, and Playwright records none unless the option is set. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
 
 ## Configuration options
 
@@ -192,7 +192,8 @@ By default, the reporter streams test results to the dashboard in real-time as t
 3. With `liveFileUploads` (the default), each test's trace and attachments are uploaded right after the test finishes, so they are viewable on the [execution page](./evidence#one-execution-diagnosis-first) while the run is still in progress
 4. The dashboard UI shows a live progress bar and test results as they arrive
 5. While a test runs, the steps it is executing (Playwright `pw:api` actions, `pw:expect` assertions, and hook/fixture steps) stream to the run page as they happen — each running test's row shows the step it is on right now. The polling attempts of `pw:assert` steps are deliberately not streamed; the persisted step events on a completed test still carry everything
-6. When tests finish, the reporter finalizes the run with the overall status
+6. When a test's final attempt fails, the reporter prints `[Piwi Dashboard] ✗ <title> → <url>` right away — the link opens that execution on the dashboard, so you can start reading the failure while the rest of the suite is still running. In batch mode the same lines print after the upload
+7. When tests finish, the reporter finalizes the run with the overall status and prints `View run: <url>` (see [CI → Getting the run URL back out](./ci#getting-the-run-url-back-out-of-ci) for the step outputs and job summary that go with it)
 
 ### Disabling streaming
 
