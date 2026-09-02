@@ -4,10 +4,12 @@ import {
   buildPrComment,
   DEFAULT_PR_FEEDBACK,
   PR_COMMENT_MARKER,
+  PR_EXCERPT_MAX,
   resolvePrFeedbackSettings,
   type PrFailureEntry,
   type PrSummaryInput,
 } from '#shared/pr-feedback';
+import { errorExcerpt } from '#shared/notification-events';
 
 function entry(overrides: Partial<PrFailureEntry> = {}): PrFailureEntry {
   return {
@@ -137,6 +139,28 @@ describe('buildPrComment', () => {
   test('escapes a pipe so a test title cannot break the layout', () => {
     const body = buildPrComment(summary({ failedTests: 1, newRegressions: [entry({ title: 'a | b' })] }));
     expect(body).toContain('a \\| b');
+  });
+
+  test('quotes a timeout with where Playwright was waiting, the way notifications do', () => {
+    const raw = `TimeoutError: locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for getByRole('button', { name: 'Pay' })
+  - locator resolved to <button disabled>Pay</button>
+
+    at tests/checkout.spec.ts:12:40`;
+    const excerpt = errorExcerpt(raw, PR_EXCERPT_MAX)!;
+    const body = buildPrComment(summary({ failedTests: 1, newRegressions: [entry({ errorExcerpt: excerpt })] }));
+    expect(body).toContain(
+      'TimeoutError: locator.click: Timeout 30000ms exceeded. locator resolved to <button disabled>Pay</button>',
+    );
+    expect(body).not.toContain('Call log');
+    expect(body).not.toContain('checkout.spec.ts:12:40');
+  });
+
+  test('keeps a pull-request excerpt within its own cap', () => {
+    const excerpt = errorExcerpt(`Error: ${'x'.repeat(500)}`, PR_EXCERPT_MAX)!;
+    expect(excerpt.length).toBe(PR_EXCERPT_MAX + 1);
+    expect(excerpt.endsWith('…')).toBe(true);
   });
 
   test('flattens a multi-line error excerpt onto one line', () => {

@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
-import { renderEventSubject, notificationTargetPath } from '#shared/notification-events';
+import { renderEventSubject, notificationTargetPath, failureTargetPath } from '#shared/notification-events';
 import type {
   NotificationEvent,
   NotificationPayload,
@@ -173,6 +173,12 @@ export function renderTestEmail(to: string): { html: string; text: string } {
   return { html, text };
 }
 
+/** Where a failing test links to: its execution, else its history, else the run. */
+function failureUrl(failure: TopFailure, runUrl: string): string {
+  const path = failureTargetPath(failure);
+  return path ? `${siteUrl()}${path}` : runUrl;
+}
+
 export function renderRunNotificationEmail(opts: {
   projectName: string;
   runId: number;
@@ -191,7 +197,7 @@ export function renderRunNotificationEmail(opts: {
   if (failures.length > 0) {
     const rows = failures
       .map((f) => {
-        const caseUrl = f.testCaseId ? `${siteUrl()}/test-cases/${f.testCaseId}` : url;
+        const caseUrl = failureUrl(f, url);
         const title = escapeHtml(f.title);
         const titleHtml = `<a href="${caseUrl}" style="color:#18181b;font-weight:600;text-decoration:none;">${title}</a>`;
         const loc = f.filePath ? `<div style="color:#a1a1aa;font-size:12px;">${escapeHtml(f.filePath)}</div>` : '';
@@ -204,7 +210,7 @@ export function renderRunNotificationEmail(opts: {
     failuresHtml = `<ul style="margin:0 0 24px;padding:0;">${rows}</ul>`;
     failuresText = failures
       .map((f) => {
-        const caseUrl = f.testCaseId ? `${siteUrl()}/test-cases/${f.testCaseId}` : url;
+        const caseUrl = failureUrl(f, url);
         const loc = f.filePath ? ` (${f.filePath})` : '';
         const excerpt = f.errorExcerpt ? `\n    ${f.errorExcerpt.replace(/\n/g, '\n    ')}` : '';
         return `- ${f.title}${loc}\n  ${caseUrl}${excerpt}`;

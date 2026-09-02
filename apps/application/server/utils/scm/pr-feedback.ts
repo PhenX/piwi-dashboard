@@ -29,6 +29,7 @@ import {
   buildPrComment,
   DEFAULT_PR_FEEDBACK,
   PR_COMMENT_MARKER,
+  PR_EXCERPT_MAX,
   PR_FEEDBACK_KEY,
   resolvePrFeedbackSettings,
   type PrFailureEntry,
@@ -39,6 +40,7 @@ import type { VerifiedFix } from '../fix-verification';
 import type { RunMetadata } from '../run-json-types';
 import type { DbClient } from '../../database';
 import type { FilterDetails } from '#shared/types';
+import { errorExcerpt } from '#shared/notification-events';
 
 /** Read the resolved settings, falling back to the (disabled) defaults. */
 export async function getPrFeedbackSettings(db: DbClient): Promise<PrFeedbackSettings> {
@@ -50,15 +52,6 @@ const FAIL_STATUSES = ['failed', 'timedOut', 'timedout'];
 
 /** Recent default-branch runs scanned to decide whether a failure is already flaky there. */
 const DEFAULT_BRANCH_FLAKY_RUNS = 50;
-
-/** First line of an error, capped so a comment stays readable. */
-function excerpt(error: string | null): string | null {
-  if (!error) return null;
-  const firstLine = error.split('\n').find((line) => line.trim().length > 0);
-  if (!firstLine) return null;
-  const trimmed = firstLine.trim();
-  return trimmed.length > 200 ? `${trimmed.slice(0, 199)}…` : trimmed;
-}
 
 /** What the dashboard is reachable at, for the links inside the comment. */
 function resolveSiteUrl(): string | null {
@@ -123,7 +116,7 @@ async function buildFailureEntries(
     return {
       title: row.title,
       filePath: row.filePath,
-      errorExcerpt: excerpt(row.error),
+      errorExcerpt: errorExcerpt(row.error, PR_EXCERPT_MAX) ?? null,
       executionId: row.id,
       clusterId: row.failureClusterId,
       clusterSignature: row.failureClusterId ? (clusterSignatures.get(row.failureClusterId) ?? null) : null,
