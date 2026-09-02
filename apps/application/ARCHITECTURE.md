@@ -184,7 +184,8 @@ Shared building blocks worth knowing before writing new markup (`AGENTS.md` make
 (`useRunStream`, `useNotificationStream`), diagnosis (`useClusterDiagnosis`, `useStreamingDiagnosis`,
 `useDiagnosisNotification`), timeline (`useTimelineModel`, `useTimelineViewport`), fold/tree state
 (`useFoldedState`, `useFoldableSummary`, `useTreeViewCookie`), settings derivation (`useSettingsNav`,
-`useSettingsEnvState`), analytics scope, IDE preferences (`useOpenInIde`), desktop detection (`useIsDesktop`,
+`useSettingsEnvState`), analytics scope, the run page's retry command (`useRunRetryCommand` — one failing set and one
+shared mode for every copy button on the page), IDE preferences (`useOpenInIde`), desktop detection (`useIsDesktop`,
 `useTauri`), demo helpers, and small utilities (`useCopy` / `useCopyRich` — use these instead of hand-rolling
 `navigator.clipboard`, `useAiStatus`, `useChartTooltip`).
 

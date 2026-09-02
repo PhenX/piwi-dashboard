@@ -791,7 +791,11 @@ function handleSelectCluster(clusterId: number) {
         </template>
 
         <template #tab-failure-groups>
-          <FailureGroups :refresh-key="runRefreshKey" @select-cluster="handleSelectCluster" />
+          <FailureGroups
+            :refresh-key="runRefreshKey"
+            :test-cases="testRun?.testCases ?? []"
+            @select-cluster="handleSelectCluster"
+          />
         </template>
 
         <template #tab-regression>
