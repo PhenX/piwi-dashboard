@@ -223,7 +223,7 @@ Every `suggestedFix.patch` is checked server-side, before it reaches you, agains
 | `invalid` | ❌ Invalid diff | The text isn't a parseable unified diff |
 | `unchecked` | Unverified | The target file wasn't in context, so the patch couldn't be validated |
 
-A wrong patch is worse than none, so the model is instructed to set `patch` to null unless it can quote the lines it changes from the `Source Files` / `Test Source` sections. The patch card offers **Copy**, **Copy `git apply` command**, and **Download `.patch`**; applying is always manual (the dashboard never writes to your repository).
+A wrong patch is worse than none, so the model is instructed to set `patch` to null unless it can quote the lines it changes from the `Source Files` / `Test Source` sections. The patch card offers **Copy**, **Copy `git apply` command**, and **Download `.patch`**; applying an AI-suggested patch is always manual — the dashboard never writes one to your repository. The one feature that does write to your repository is [auto-heal](./auto-heal): deterministic one-line locator edits taken from captured snapshots, never model output, and off by default.
 
 ## Locator healing
 
