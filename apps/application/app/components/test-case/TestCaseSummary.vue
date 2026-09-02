@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { isPiwiAnnotation } from '@piwitests/core/test-meta';
-import type { TestCaseResult, EntityLinkInfo, TestRunScmMetadata, TestRunCiMetadata } from '~~/types/api';
+import type {
+  AttemptOutcome,
+  TestCaseResult,
+  EntityLinkInfo,
+  TestRunScmMetadata,
+  TestRunCiMetadata,
+} from '~~/types/api';
 import type { BrowserConfig } from '#shared/types';
+import type { RetryCase } from '~/utils/retry-command';
+import { buildRetryCommand } from '~/utils/retry-command';
 
 interface HistoricalTiming {
   avg: number;
@@ -22,6 +30,10 @@ const props = defineProps<{
   /** Piwi project id/name, threaded into `OpenInIdeLink` for workspace overrides. */
   projectKey?: number | string;
   projectName?: string;
+  /** Display label of the project, for the desktop run-locally button. */
+  projectLabel?: string;
+  /** The execution as a retry target — powers the copy and run-locally controls. */
+  retryCases?: RetryCase[];
 }>();
 
 defineEmits<{
@@ -62,9 +74,20 @@ const annotations = computed(() =>
 
 const startedAtMs = computed<number | null>(() => props.testCase?.startedAt ?? null);
 
+// Inside the desktop shell the run-locally split button covers copying the
+// command ("Copy as command"), so the copy-only button stays web-only.
+const desktopBridge = ref(false);
+onMounted(() => {
+  desktopBridge.value = !!tauriCore();
+});
+
+const retryCommand = computed(() => buildRetryCommand(props.retryCases ?? []));
+const { copy: copyRetry, copied: retryCopied } = useCopy();
+const retryTitle = computed(() => (retryCopied.value ? 'Copied!' : copyPreview(retryCommand.value)));
+
 const showCiGroup = computed(() => !!(props.ciInfo || props.environment));
 
-/** Per-attempt outcomes `{ retry, status, duration, startedAt }`, oldest first. */
+/** Per-attempt outcomes, oldest first. */
 const attempts = computed(() => props.testCase?.attempts ?? null);
 
 function attemptColor(status: string): 'success' | 'error' | 'neutral' {
@@ -73,9 +96,19 @@ function attemptColor(status: string): 'success' | 'error' | 'neutral' {
   return 'neutral';
 }
 
-function attemptTitle(a: { retry: number; status: string; duration: number; startedAt: number | null }): string {
+function attemptTitle(a: AttemptOutcome): string {
   const when = a.startedAt ? ` at ${new Date(a.startedAt).toLocaleString()}` : '';
   return `Attempt ${a.retry + 1}: ${a.status} (${Math.round(a.duration)} ms)${when}`;
+}
+
+// The execution being viewed is the row whose `retries` equals the attempt's
+// retry index; every other attempt links to its own sibling execution row.
+function isCurrentAttempt(a: AttemptOutcome): boolean {
+  return a.retry === (props.testCase?.retries ?? 0);
+}
+
+function attemptLink(a: AttemptOutcome): string | null {
+  return !isCurrentAttempt(a) && a.executionId ? `/test-run-cases/${a.executionId}` : null;
 }
 </script>
 
@@ -162,6 +195,26 @@ function attemptTitle(a: { retry: number; status: string; duration: number; star
                 </span>
               </p>
             </div>
+            <!-- Re-run controls sit with the execution they target, as on the run summary -->
+            <div v-if="retryCommand" class="flex items-center gap-1.5 shrink-0">
+              <UButton
+                v-if="!desktopBridge"
+                size="xs"
+                color="warning"
+                variant="subtle"
+                :icon="retryCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
+                :title="retryTitle"
+                aria-label="Copy retry command"
+                @click="copyRetry(retryCommand, { toast: 'Retry command copied' })"
+              >
+                <span class="hidden @2xl:inline">Copy retry command</span>
+              </UButton>
+              <DesktopRunLocallyButton
+                :project-id="projectKey"
+                :project-label="projectLabel ?? projectName"
+                :cases="retryCases ?? []"
+              />
+            </div>
           </div>
 
           <StatTileGrid>
@@ -175,19 +228,39 @@ function attemptTitle(a: { retry: number; status: string; duration: number; star
             <StatTile label="Attempts" size="sm">
               <span v-if="testCase?.status === 'didnotrun'" class="text-gray-400">—</span>
               <template v-else-if="attempts && attempts.length > 1">
-                <div class="flex items-center gap-1 flex-wrap">
-                  <UBadge
-                    v-for="a in attempts"
-                    :key="a.retry"
-                    :color="attemptColor(a.status)"
-                    variant="soft"
-                    size="sm"
-                    class="font-mono"
-                    :title="attemptTitle(a)"
-                  >
-                    {{ a.retry + 1 }}/{{ attempts.length }}
-                    <UIcon :name="a.status === 'passed' ? 'i-lucide-check' : 'i-lucide-x'" class="w-3 h-3" />
-                  </UBadge>
+                <div
+                  class="flex items-center gap-1 flex-wrap"
+                  role="group"
+                  aria-label="Attempts of this test in this run"
+                >
+                  <template v-for="a in attempts" :key="a.retry">
+                    <!-- A sibling attempt links to its own execution; the viewed one is the ringed, non-link chip -->
+                    <NuxtLink
+                      v-if="attemptLink(a)"
+                      :to="attemptLink(a)!"
+                      :title="`${attemptTitle(a)} — open this attempt`"
+                      :aria-label="`Open attempt ${a.retry + 1} of ${attempts.length}: ${a.status}`"
+                      class="inline-flex rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary hover:opacity-80"
+                    >
+                      <UBadge :color="attemptColor(a.status)" variant="soft" size="sm" class="font-mono">
+                        {{ a.retry + 1 }}/{{ attempts.length }}
+                        <UIcon :name="a.status === 'passed' ? 'i-lucide-check' : 'i-lucide-x'" class="w-3 h-3" />
+                      </UBadge>
+                    </NuxtLink>
+                    <UBadge
+                      v-else
+                      :color="attemptColor(a.status)"
+                      variant="soft"
+                      size="sm"
+                      class="font-mono"
+                      :class="isCurrentAttempt(a) ? 'ring-2 ring-offset-1 ring-primary' : ''"
+                      :title="isCurrentAttempt(a) ? `${attemptTitle(a)} — this execution` : attemptTitle(a)"
+                      :aria-current="isCurrentAttempt(a) ? 'true' : undefined"
+                    >
+                      {{ a.retry + 1 }}/{{ attempts.length }}
+                      <UIcon :name="a.status === 'passed' ? 'i-lucide-check' : 'i-lucide-x'" class="w-3 h-3" />
+                    </UBadge>
+                  </template>
                 </div>
               </template>
               <!-- One attempt, or a row recorded before attempts were stored:

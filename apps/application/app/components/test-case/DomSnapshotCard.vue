@@ -35,6 +35,14 @@ const {
   lazy: true,
 });
 
+// The card renders only for a usable snapshot; the page reads `available` to show
+// its jump chip for exactly the same condition.
+const emit = defineEmits<{ available: [value: boolean] }>();
+const available = computed(
+  () => !pending.value && !error.value && snapshot.value?.status === 'ok' && !!snapshot.value.html,
+);
+watch(available, (value) => emit('available', value), { immediate: true });
+
 // Highlighting hundreds of KB of HTML would freeze the tab — show a capped
 // excerpt inline and offer the full document via copy.
 const DISPLAY_CAP = 20_000;
@@ -58,7 +66,7 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
 <template>
   <component
     :is="cardComponent"
-    v-if="!pending && !error && snapshot?.status === 'ok' && snapshot.html"
+    v-if="available && snapshot?.html"
     ref="card"
     v-bind="cardBind"
     icon="i-lucide-file-code"

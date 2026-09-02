@@ -100,7 +100,7 @@ those fields — intentional).
 `app/components/shared/` holds the building blocks — **prefer them over re-implementing**. `SectionCard` /
 `CollapsibleSectionCard` (headers + folding), `EmptyState` / `LoadingState` / `ErrorState`, `StatTile` + `StatTileGrid`
 (never hand-rolled tile markup), `FilterToolbar`, `TableScroller`, `NavbarActions`, `BreadcrumbNav`, `ChartCard`,
-`DurationValue`, `DiffPatch` / `DiffFile`, `HelpHint`, `DocLink`, `EnvManagedBadge` / `EnvManagedAlert`,
+`DurationValue`, `ErrorText` (never print a raw error string — it carries ANSI codes), `DiffPatch` / `DiffFile`, `HelpHint`, `DocLink`, `EnvManagedBadge` / `EnvManagedAlert`,
 `SettingsField`, `OpenInIdeLink`. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for what each one does.
 
 ### Responsive / mobile (MUST follow)

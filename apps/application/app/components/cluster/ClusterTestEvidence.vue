@@ -243,9 +243,7 @@ const evidenceChips = computed(() => {
         <div class="divide-y divide-default">
           <div v-for="(step, idx) in failingSteps" :key="idx" class="px-3 py-2 space-y-0.5">
             <p class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ idx + 1 }}. {{ step.title }}</p>
-            <p v-if="step.error?.message" class="text-xs font-mono text-red-500 whitespace-pre-wrap break-all">
-              {{ step.error.message }}
-            </p>
+            <ErrorText v-if="step.error?.message" mode="block" :text="step.error.message" />
           </div>
         </div>
       </TestEvidenceSection>

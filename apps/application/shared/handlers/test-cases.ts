@@ -158,6 +158,26 @@ export async function getTestRunCase(
   // Large evidence payloads are content-addressed; legacy rows keep them inline.
   const evidence = await inlineCasePayloads(db, trc);
 
+  // Every attempt is its own execution row (unique on run + test case + retries
+  // + browser), so each stored attempt maps to the sibling row that holds it.
+  const siblingRows = await db
+    .select({ id: testRunsCases.id, retries: testRunsCases.retries })
+    .from(testRunsCases)
+    .where(
+      and(
+        eq(testRunsCases.testRunId, trc.testRunId),
+        eq(testRunsCases.testCaseId, trc.testCaseId),
+        trc.browserName ? eq(testRunsCases.browserName, trc.browserName) : sql`${testRunsCases.browserName} IS NULL`,
+      ),
+    );
+  const executionByRetry = new Map(siblingRows.map((r: any) => [r.retries ?? 0, r.id as number]));
+  const attempts = Array.isArray(trc.attempts)
+    ? (trc.attempts as Array<{ retry: number }>).map((a) => ({
+        ...a,
+        executionId: executionByRetry.get(a.retry) ?? null,
+      }))
+    : null;
+
   const [[testCase], [testRun], reportList, attachmentList] = await Promise.all([
     db
       .select()
@@ -342,7 +362,7 @@ export async function getTestRunCase(
     duration: trc.duration,
     error: trc.error,
     retries: trc.retries,
-    attempts: trc.attempts ?? null,
+    attempts,
     steps: trc.steps,
     testSource: evidence.testSource,
     testSourceFrames: evidence.testSourceFrames,

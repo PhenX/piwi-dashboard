@@ -67,8 +67,15 @@ function copyReport() {
 
 <template>
   <UPopover v-model:open="open">
-    <UButton icon="i-lucide-share" size="xs" color="neutral" variant="outline" title="Take this investigation away">
-      Export
+    <UButton
+      icon="i-lucide-share"
+      size="xs"
+      color="neutral"
+      variant="outline"
+      title="Take this investigation away"
+      aria-label="Export"
+    >
+      <span class="hidden xl:inline">Export</span>
     </UButton>
 
     <template #content>
