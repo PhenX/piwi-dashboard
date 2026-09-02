@@ -18,6 +18,7 @@ import { resolveOwners } from '../scm/ownership';
 import { resolveDefaultBranch } from '../scm/default-branch';
 import { resolveRunBranch } from '../run-branch';
 import { FAILED_STATUS_KEYS } from '#shared/utils/test-counts';
+import { describeCluster } from '#shared/describe-cluster';
 import type { DbClient } from '../../database';
 
 /**
@@ -136,6 +137,9 @@ export async function emitRunNotifications(db: DbClient, runId: number): Promise
       .select({
         id: failureClusters.id,
         signature: failureClusters.signature,
+        title: failureClusters.title,
+        errorType: failureClusters.errorType,
+        selector: failureClusters.selector,
         sampleError: failureClusters.sampleError,
       })
       .from(failureClusters)
@@ -152,6 +156,7 @@ export async function emitRunNotifications(db: DbClient, runId: number): Promise
         projectId: runRow.projectId,
         projectName: project.label || project.name,
         signature: cluster.signature,
+        title: describeCluster(cluster),
         runId,
         sampleErrorExcerpt: truncateExcerpt(cluster.sampleError),
         affectedCases: affected.length,

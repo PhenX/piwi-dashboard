@@ -84,6 +84,8 @@ export async function getTestCase(db: DrizzleDB, id: number) {
       .selectDistinct({
         id: failureClusters.id,
         signature: failureClusters.signature,
+        title: failureClusters.title,
+        selector: failureClusters.selector,
         errorType: failureClusters.errorType,
         status: failureClusters.status,
         occurrences: failureClusters.occurrences,
@@ -235,6 +237,7 @@ export async function getTestRunCase(
       failureCluster = {
         id: cluster.id,
         signature: cluster.signature,
+        title: cluster.title,
         errorType: cluster.errorType,
         selector: cluster.selector,
         status: cluster.status ?? 'open',

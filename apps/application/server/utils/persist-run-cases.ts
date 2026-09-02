@@ -1,6 +1,10 @@
 import { testCases, testRunsCases, testSuites, networkRequests } from '../database/schema';
 import { eq, inArray } from 'drizzle-orm';
-import { buildNetworkRequestItems, buildNetworkRequestInsertValues } from './network-request-helpers';
+import {
+  buildNetworkRequestItems,
+  buildNetworkRequestInsertValues,
+  type NetworkRequestBuilder,
+} from './network-request-helpers';
 import {
   capArray,
   capConsoleLogs,
@@ -306,19 +310,7 @@ export async function persistRunCases(
   // loop; the junction rows store only the payload ids (inline columns stay
   // null on new rows — readers coalesce via inlineCasePayloads).
   const rowPayloads: Array<{ aria: string | null; source: string | null; framesJson: string | null }> = [];
-  const networkRequestBuilders: Array<{
-    items: Array<{
-      method: string;
-      url: string | null;
-      normalizedUrl: string;
-      status: number;
-      duration: number | null;
-      resourceType: string | null;
-      contentType: string | null;
-      serverLogs: unknown;
-      serverTraces: unknown;
-    }>;
-  }> = [];
+  const networkRequestBuilders: NetworkRequestBuilder[] = [];
   const rowFingerprints: Array<ErrorFingerprint | null> = [];
   const pendingClusters = new Map<string, PendingCluster>();
   // Locator snapshots to upsert, grouped by resolved test case id; the shared
@@ -436,7 +428,7 @@ export async function persistRunCases(
     });
 
     const nrItems = buildNetworkRequestItems(c.networkRequests as Array<Record<string, unknown>> | null | undefined);
-    networkRequestBuilders.push({ items: nrItems as any });
+    networkRequestBuilders.push({ items: nrItems });
   }
 
   if (runCasesRows.length === 0) return [];

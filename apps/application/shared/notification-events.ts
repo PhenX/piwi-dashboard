@@ -66,6 +66,8 @@ export interface ClusterNewPayload {
   projectId: number;
   projectName: string;
   signature: string;
+  /** Display name — the AI title when one exists, else the deterministic title. */
+  title?: string | null;
   runId: number;
   sampleErrorExcerpt?: string;
   affectedCases?: number;

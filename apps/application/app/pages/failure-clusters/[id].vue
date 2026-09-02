@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { describeCluster } from '#shared/describe-cluster';
 import type { FailureClusterDetail } from '~~/types/api';
 import { renderAnsi } from '~/utils';
 import { stripAnsi } from '~/utils/text-format';
@@ -15,7 +16,11 @@ const clusterDiagnosis = provideClusterDiagnosis(clusterId);
 
 const { data: cluster, refresh } = await useFetch<FailureClusterDetail>(`/api/failure-clusters/${clusterId}`);
 
-useHead(computed(() => ({ title: `${cluster.value?.signature ?? 'Failure cluster'} — Piwi Dashboard` })));
+useHead(
+  computed(() => ({
+    title: `${cluster.value ? describeCluster({ ...cluster.value, filePath: cluster.value.affectedTestCases?.[0]?.filePath ?? null }) : 'Failure cluster'} — Piwi Dashboard`,
+  })),
+);
 
 // Triage
 const triageStatus = ref(cluster.value?.status ?? 'open');
@@ -84,8 +89,10 @@ function copyCluster() {
       ? `AI diagnosis (${c.diagnosis.category ?? 'unknown'}, ${c.diagnosis.confidence ?? '?'} confidence): ${c.diagnosis.summary}`
       : null;
 
+  const name = describeCluster({ ...c, filePath: c.affectedTestCases?.[0]?.filePath ?? null });
   const plain = [
-    `❌ Failure cluster: ${c.signature}`,
+    `❌ Failure cluster: ${name}`,
+    ...(name !== c.signature ? [`Signature: ${c.signature}`] : []),
     meta,
     '',
     ...(c.sampleError ? ['Sample error:', stripAnsi(c.sampleError), ''] : []),
@@ -94,7 +101,8 @@ function copyCluster() {
   ].join('\n');
 
   const html = [
-    `<p><strong>❌ Failure cluster</strong>: <code>${esc(c.signature)}</code></p>`,
+    `<p><strong>❌ Failure cluster</strong>: ${esc(name)}</p>`,
+    name !== c.signature ? `<p><code>${esc(c.signature)}</code></p>` : '',
     `<p><em>${esc(meta)}</em></p>`,
     c.sampleError ? `<p><strong>Sample error:</strong></p><pre>${renderAnsi(c.sampleError)}</pre>` : '',
     aiSummary

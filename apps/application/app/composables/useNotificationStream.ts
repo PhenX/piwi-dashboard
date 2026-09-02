@@ -65,7 +65,7 @@ function renderBody(data: NotificationEventData): string {
     }
     case 'cluster.new':
       lines.push(`${data.projectName ?? `Project #${data.projectId}`}: new failure cluster`);
-      if (data.signature) lines.push(data.signature);
+      if (data.title || data.signature) lines.push(data.title || data.signature || '');
       break;
     case 'cluster.fixed':
       lines.push(

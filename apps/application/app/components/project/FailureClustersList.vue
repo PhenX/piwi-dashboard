@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { describeCluster, clusterSignatureLine } from '#shared/describe-cluster';
 import type { TableColumn } from '@nuxt/ui';
 import type { ProjectFailureCluster } from '~~/types/api';
 
@@ -69,11 +70,13 @@ const columns: TableColumn<ProjectFailureCluster>[] = [
             <NuxtLink
               :to="`/failure-clusters/${row.original.id}`"
               class="text-sm text-primary hover:underline truncate block"
-              :class="row.original.title ? '' : 'font-mono'"
               :title="row.original.signature"
             >
-              {{ row.original.title || row.original.signature }}
+              {{ describeCluster(row.original) }}
             </NuxtLink>
+            <p v-if="clusterSignatureLine(row.original)" class="text-xs text-gray-500 font-mono truncate">
+              {{ row.original.signature }}
+            </p>
             <p v-if="row.original.triageNote" class="text-xs text-gray-500 italic truncate">
               {{ row.original.triageNote }}
             </p>

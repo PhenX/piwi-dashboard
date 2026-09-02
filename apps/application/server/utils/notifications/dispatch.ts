@@ -82,6 +82,7 @@ async function sendToEmail(to: string, event: NotificationEvent, payload: Notifi
       projectName: p.projectName,
       clusterId: p.clusterId,
       signature: p.signature,
+      title: p.title,
       sampleErrorExcerpt: p.sampleErrorExcerpt,
       affectedCases: p.affectedCases,
     }));
@@ -131,6 +132,8 @@ async function sendToSlack(config: Record<string, unknown>, event: NotificationE
   } else if (event === 'cluster.new') {
     const p = payload as ClusterNewPayload;
     const parts: string[] = [];
+    if (p.title && p.title !== p.signature) parts.push(`*${p.title}*`);
+    parts.push(`\`${slackExcerpt(p.signature)}\``);
     if (p.affectedCases) parts.push(`${p.affectedCases} affected test${p.affectedCases === 1 ? '' : 's'}`);
     if (p.sampleErrorExcerpt) parts.push(`\`\`\`${slackExcerpt(p.sampleErrorExcerpt)}\`\`\``);
     parts.push(`<${base}/failure-clusters/${p.clusterId}|View cluster>`);

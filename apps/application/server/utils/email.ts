@@ -235,6 +235,8 @@ export function renderNewClusterEmail(opts: {
   projectName: string;
   clusterId: number;
   signature: string;
+  /** Display name shown above the signature when it adds something. */
+  title?: string | null;
   sampleErrorExcerpt?: string;
   affectedCases?: number;
 }): {
@@ -252,12 +254,13 @@ export function renderNewClusterEmail(opts: {
   const body = `
     <h2 style="margin:0 0 8px;font-size:20px;color:#18181b;">New failure cluster</h2>
     <p style="margin:0 0 24px;color:#52525b;font-size:14px;">${escapeHtml(opts.projectName)}</p>
+    ${opts.title && opts.title !== opts.signature ? `<p style="margin:0 0 8px;font-size:15px;font-weight:600;color:#18181b;">${escapeHtml(opts.title)}</p>` : ''}
     <p style="margin:0 0 16px;font-family:monospace;font-size:13px;background:#f4f4f5;padding:12px;border-radius:6px;overflow:auto;">${escapeHtml(opts.signature)}</p>
     ${affected}
     ${excerpt}
     <a href="${url}" style="display:inline-block;background:#18181b;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">View cluster</a>`;
   const { html } = emailLayout(`New failure cluster — ${opts.projectName}`, body);
-  const text = `New failure cluster in ${opts.projectName}${opts.affectedCases ? ` (${opts.affectedCases} affected)` : ''}\n\n${opts.signature}${opts.sampleErrorExcerpt ? `\n\n${opts.sampleErrorExcerpt}` : ''}\n\nView: ${url}`;
+  const text = `New failure cluster in ${opts.projectName}${opts.affectedCases ? ` (${opts.affectedCases} affected)` : ''}\n\n${opts.title && opts.title !== opts.signature ? `${opts.title}\n` : ''}${opts.signature}${opts.sampleErrorExcerpt ? `\n\n${opts.sampleErrorExcerpt}` : ''}\n\nView: ${url}`;
   return { html, text };
 }
 
