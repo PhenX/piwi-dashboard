@@ -28,6 +28,7 @@ export type SectionId =
   | 'browserDistribution'
   | 'representativeExecution'
   | 'executionError'
+  | 'clues'
   | 'runContext'
   | 'testAnnotations'
   | 'testSource'

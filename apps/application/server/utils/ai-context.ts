@@ -42,7 +42,7 @@ import {
 } from './trace-insights';
 import { getTraceDomSnapshot } from './dom-snapshot';
 import { renderAppStateMarkdown, type PageStateLike } from '#shared/page-state';
-import { getLastPassPageState } from '#shared/handlers/test-cases';
+import { getLastPassPageState, getFailureClues } from '#shared/handlers/test-cases';
 import { getLocatorHealing } from './locator-healing';
 import { healingNotApplicableMarkdown } from '#shared/locator-resolution';
 import { getEnvironmentDiff } from './environment-diff';
@@ -119,6 +119,7 @@ const SECTION_ORDER: SectionId[] = [
   'clusterSummary',
   'sampleError',
   'executionError',
+  'clues',
   'representativeExecution',
   'testSource',
   'sourceFiles',
@@ -677,6 +678,23 @@ async function environmentDiffSection(
       baselineRunId: result.baseline.runId,
     },
   };
+}
+
+/**
+ * Deterministic clues for the representative execution: the rule-based
+ * correlations `buildFailureClues` finds over the same evidence, rendered as
+ * ranked lines each carrying the `[section]` citation of the evidence it came
+ * from — so the model reads them as findings to confirm or refute, not as
+ * conclusions, and can follow each back to its source.
+ */
+async function cluesSection(db: DbClient, rep: RepresentativeRow, limits: ContextLimits): Promise<string | null> {
+  const { clues } = await getFailureClues(db, rep.id, { slowRequestMs: limits.slowRequestMs });
+  if (clues.length === 0) return null;
+  const lines = clues.map((clue) => {
+    const cites = clue.citations.map((c) => `[${c.section}]`).join('');
+    return `- [${clue.strength}] ${clue.title} — ${clue.detail} ${cites}`.trimEnd();
+  });
+  return `## Clues\nDeterministic, rule-based correlations found in the evidence below. Treat each as a hypothesis to confirm or refute against its cited section, not as a conclusion:\n${lines.join('\n')}`;
 }
 
 /**
@@ -2604,6 +2622,10 @@ export async function buildDiagnosisContext(
     for (const s of representativeExecutionSections(rep, cluster, limits)) {
       push(section(s.id, REP_SECTION_TITLES[s.id] ?? s.id, s.markdown));
     }
+
+    // Deterministic clues — placed right after the errors so the model reads
+    // them as evidence to confirm or refute, each with its [section] citation.
+    push(section('clues', 'Clues', await cluesSection(db, rep, limits)));
 
     // Failing steps (D6)
     push(section('failingSteps', 'Failed Steps', failingStepsSection(rep, limits)));
