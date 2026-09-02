@@ -187,6 +187,6 @@ test.describe.serial('Fix verification', () => {
     // Asserted separately so a failure says whether the row or the badge is
     // missing — the table loads client-side, after the page itself is ready.
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await expect(row.getByText('Regressed')).toBeVisible();
+    await expect(row.getByText('Regressed', { exact: true })).toBeVisible();
   });
 });
