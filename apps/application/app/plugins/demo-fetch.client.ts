@@ -105,6 +105,25 @@ export default defineNuxtPlugin(() => {
     }
   }
 
+  // Drive the loading overlay from the service worker, not from an intercepted
+  // app request. The app's own data fetching does not always flow through the
+  // patched globalThis.$fetch below (Nuxt resolves `$fetch` with its own base
+  // URL), so waiting for one of those calls to reach `markReady` could leave the
+  // overlay up forever. Once the worker controls the page it can serve the
+  // in-browser API, so run one query to load the database (WASM + seed) and then
+  // clear the overlay. A native `fetch` to the scoped path is used so it goes
+  // through the worker without Nuxt's base URL being applied twice.
+  void swReady.then(async () => {
+    try {
+      await fetch(`${base}/api/projects/menu`);
+    } catch {
+      // A failed probe still means the worker took control; clear the overlay
+      // rather than leaving it up on a transient error.
+    } finally {
+      markReady();
+    }
+  });
+
   // @ts-expect-error monkey-patching $fetch for demo mode
   globalThis.$fetch = async (request: unknown, options?: unknown) => {
     await swReady;
