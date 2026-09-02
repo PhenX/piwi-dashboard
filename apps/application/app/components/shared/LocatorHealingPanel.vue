@@ -288,12 +288,17 @@ const showAllAlternatives = ref(false);
 const visibleAlternatives = computed<RankedLocator[]>(() =>
   showAllAlternatives.value ? alternatives.value : alternatives.value.slice(0, ALT_PREVIEW),
 );
+
+// Forward the fold/scroll so a clue or AI citation to `locatorHealing` can reveal it.
+const cardRef = ref<{ reveal?: () => void } | null>(null);
+defineExpose({ reveal: () => cardRef.value?.reveal?.() });
 </script>
 
 <template>
   <component
     :is="cardComponent"
     v-if="!pending && !error && hasData"
+    ref="cardRef"
     v-bind="cardBind"
     data-shot="alternative-locators"
     icon="i-lucide-bandage"

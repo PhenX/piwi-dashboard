@@ -7,8 +7,15 @@
  * raw error stays verbatim in the Error card right below.
  */
 import type { FailureVerdict, FailureWhy } from '#shared/failure-verdict';
+import type { FailureClue } from '#shared/failure-clues';
 
-const props = defineProps<{ verdict: FailureVerdict }>();
+const props = defineProps<{ verdict: FailureVerdict; topClue?: FailureClue | null }>();
+
+const STRENGTH_COLOR: Record<FailureClue['strength'], 'error' | 'warning' | 'neutral'> = {
+  strong: 'error',
+  medium: 'warning',
+  weak: 'neutral',
+};
 
 const WHY: Record<FailureWhy, { label: string; color: 'error' | 'warning' | 'neutral'; icon: string; title: string }> =
   {
@@ -58,6 +65,16 @@ const commitTitle = computed(() => {
         </h2>
         <p v-if="verdict.detail" class="font-mono text-xs text-muted truncate" :title="verdict.detail">
           {{ verdict.detail }}
+        </p>
+
+        <!-- The strongest deterministic clue, in one line — the CluesCard lists them all. -->
+        <p v-if="topClue" class="flex items-start gap-1.5 text-sm text-toned">
+          <UBadge :color="STRENGTH_COLOR[topClue.strength]" variant="subtle" size="sm" class="mt-0.5 shrink-0">
+            The one clue
+          </UBadge>
+          <span class="min-w-0"
+            ><span class="font-medium text-highlighted">{{ topClue.title }}</span> — {{ topClue.detail }}</span
+          >
         </p>
 
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted">

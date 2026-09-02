@@ -15,6 +15,7 @@ import type { NavbarAction } from '~/components/shared/NavbarActions.vue';
 import type { HelpTopicKey } from '~/utils/help-content';
 import { condenseErrorText } from '#shared/error-fingerprint';
 import type { FailureVerdict } from '#shared/failure-verdict';
+import type { FailureCluesResult } from '#shared/handlers/test-cases';
 import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator';
 
 const route = useRoute();
@@ -34,6 +35,15 @@ const { data: historyData } = await useAsyncData(
   },
   { default: (): TestCaseHistoryPoint[] => [], watch: [() => testCase.value?.testCaseId] },
 );
+
+// The deterministic clues for this execution: fed to the headline (top clue as
+// one line) and the CluesCard, and shared with the AI diagnosis as evidence.
+const { data: cluesData } = await useFetch<FailureCluesResult>(`/api/test-run-cases/${testCaseId}/clues`, {
+  default: (): FailureCluesResult => ({ clues: [], failureAt: null }),
+});
+const clues = computed(() => cluesData.value?.clues ?? []);
+const cluesFailureAt = computed(() => cluesData.value?.failureAt ?? null);
+const topClue = computed(() => clues.value[0] ?? null);
 
 const { data: traceData, refresh: refreshTraces } = await useFetch(`/api/test-run-cases/${testCaseId}/traces`, {
   // The endpoint returns `{ items: [...] }` — without the unwrap, `hasTrace`
@@ -477,6 +487,8 @@ const envDiffCard = ref<{ reveal: () => void } | null>(null);
 const visualDiffCard = ref<{ reveal: () => void } | null>(null);
 const domSnapshotCard = ref<{ reveal: () => void } | null>(null);
 const ariaCard = ref<{ reveal: () => void } | null>(null);
+const pageStateCard = ref<{ reveal: () => void } | null>(null);
+const locatorHealingCard = ref<{ reveal: () => void } | null>(null);
 
 function scrollToEl(el: HTMLElement | null) {
   el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -497,6 +509,9 @@ const sectionToAction: Record<string, () => void> = {
   console: () => consoleCard.value?.reveal(),
   networkRequests: () => networkCard.value?.reveal(),
   serverTraces: () => networkCard.value?.reveal(),
+  serverLogs: () => networkCard.value?.reveal(),
+  appState: () => pageStateCard.value?.reveal(),
+  locatorHealing: () => locatorHealingCard.value?.reveal(),
   traceCallStack: () => testSourceCard.value?.reveal(),
   traceNetwork: () => {
     networkCard.value?.showTraceMode();
@@ -629,7 +644,10 @@ provide(clusterSectionLocatorKey, {
         <template #tab-diagnosis>
           <div class="space-y-4">
             <!-- What broke, in one line — the raw error follows verbatim -->
-            <TestCaseHeadlineCard v-if="verdict" :verdict="verdict" />
+            <TestCaseHeadlineCard v-if="verdict" :verdict="verdict" :top-clue="topClue" />
+
+            <!-- Deterministic, ranked clues correlated from the captured evidence -->
+            <CluesCard :clues="clues" :failure-at="cluesFailureAt" />
 
             <div ref="errorEl" class="scroll-mt-4">
               <SectionCard v-if="testCase?.error" icon="i-lucide-circle-x" icon-class="text-red-500" title="Error">
@@ -715,6 +733,7 @@ provide(clusterSectionLocatorKey, {
                 <!-- Alternative locators for a broken locator -->
                 <LocatorHealingPanel
                   v-if="testCase?.testRun?.id"
+                  ref="locatorHealingCard"
                   storage-key="case-locators"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
@@ -763,6 +782,7 @@ provide(clusterSectionLocatorKey, {
                 <!-- App state at test end -->
                 <PageStateCard
                   v-if="(testCase as any)?.pageState"
+                  ref="pageStateCard"
                   storage-key="case-page-state"
                   :page-state="(testCase as any).pageState"
                 />
