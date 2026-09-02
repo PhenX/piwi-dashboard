@@ -116,7 +116,9 @@ A failing execution opens diagnosis-first: the error, a verdict, the cluster it 
 evidence funnel running from the call stack down to the ARIA snapshot — deeper still when a trace is
 attached. All of it, plus the bundled trace viewer, is described in
 [Failure evidence](./evidence). The summary shows one chip per **attempt** (with its outcome and
-duration) when a test retried, so "how did this execution get here" is answerable at a glance.
+duration) when a test retried, so "how did this execution get here" is answerable at a glance; every
+attempt is its own execution, and each chip links to that attempt's page while the one you are viewing
+is ringed.
 
 ## Failure cluster detail
 

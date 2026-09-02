@@ -95,6 +95,9 @@ const verdict = computed(() => {
   return { streak, lastPass, total: h.length, anchorFailing: isFail(h[anchor]?.status) };
 });
 
+// Names the strip for assistive tech: the visible caption labels the group of links.
+const stripLabelId = useId();
+
 const squareClass = (status: string) => ({
   'bg-red-500 hover:bg-red-600': isFail(status),
   'bg-green-500 hover:bg-green-600': status === 'passed',
@@ -156,8 +159,8 @@ const squareClass = (status: string) => ({
 
         <!-- Clickable recent-status strip -->
         <div v-if="strip.length > 1">
-          <p class="text-xs text-gray-400 mb-1">Recent executions of this test (oldest → newest)</p>
-          <div class="flex items-center gap-1 flex-wrap">
+          <p :id="stripLabelId" class="text-xs text-gray-400 mb-1">Recent executions of this test (oldest → newest)</p>
+          <div class="flex items-center gap-1 flex-wrap" role="group" :aria-labelledby="stripLabelId">
             <UTooltip
               v-for="point in strip"
               :key="point.id"
@@ -167,7 +170,7 @@ const squareClass = (status: string) => ({
                 :to="`/test-run-cases/${point.id}`"
                 :aria-label="`Execution in run #${point.runId}: ${formatStatusLabel(point.status)}`"
                 :aria-current="point.id === currentId ? 'true' : undefined"
-                class="size-3.5 rounded-sm inline-block transition-colors"
+                class="size-3.5 rounded-sm inline-block transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                 :class="[squareClass(point.status), point.id === currentId ? 'ring-2 ring-offset-1 ring-primary' : '']"
               />
             </UTooltip>
