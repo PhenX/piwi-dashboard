@@ -435,6 +435,7 @@ defineExpose({ scrollToCase });
       :live-steps="liveSteps"
       :project-key="projectKey"
       :project-name="projectName"
+      :cluster-names="clusterNames"
       class="flex-1 min-h-0"
     />
 
