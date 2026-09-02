@@ -113,9 +113,10 @@ function linkState(link: ShareLinkSummary): { label: string; color: 'success' | 
     color="neutral"
     variant="outline"
     title="Hand this investigation to someone without an account"
+    aria-label="Share"
     @click="open = true"
   >
-    Share
+    <span class="hidden xl:inline">Share</span>
   </UButton>
 
   <UModal v-model:open="open" title="Share links" description="Read-only links anyone can open — no account needed.">

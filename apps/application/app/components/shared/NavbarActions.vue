@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Responsive action row for `UDashboardNavbar` `#right` slots. Renders each
- * action as a `UButton` whose text label collapses below the `sm` breakpoint
+ * action as a `UButton` whose text label collapses below the `xl` breakpoint
  * (icon-only, `aria-label`/`title` preserved), so page actions never crowd
  * the breadcrumb on phones. Extra custom controls can be placed in the
  * `leading` (before) and default (after) slots.
@@ -46,7 +46,7 @@ withDefaults(
       :title="action.title ?? action.label"
       @click="action.onClick?.()"
     >
-      <span class="hidden sm:inline">{{ action.label }}</span>
+      <span class="hidden xl:inline">{{ action.label }}</span>
     </UButton>
     <slot />
   </div>

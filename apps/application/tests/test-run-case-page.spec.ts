@@ -96,10 +96,10 @@ test.describe('Test-run-case page', () => {
     await expect(page.getByRole('button', { name: /^Steps/ })).toBeVisible();
   });
 
-  test('the header offers a Copy retry command action', async ({ page }) => {
+  test('the summary offers a Copy retry command action', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
-    // NavbarActions keeps the label as accessible name even when icon-only on mobile.
+    // The button keeps its label as accessible name even when icon-only in a narrow card.
     await expect(page.getByRole('button', { name: /Copy retry command/ })).toBeVisible();
   });
 

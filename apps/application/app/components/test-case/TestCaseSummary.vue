@@ -8,6 +8,8 @@ import type {
   TestRunCiMetadata,
 } from '~~/types/api';
 import type { BrowserConfig } from '#shared/types';
+import type { RetryCase } from '~/utils/retry-command';
+import { buildRetryCommand } from '~/utils/retry-command';
 
 interface HistoricalTiming {
   avg: number;
@@ -28,6 +30,10 @@ const props = defineProps<{
   /** Piwi project id/name, threaded into `OpenInIdeLink` for workspace overrides. */
   projectKey?: number | string;
   projectName?: string;
+  /** Display label of the project, for the desktop run-locally button. */
+  projectLabel?: string;
+  /** The execution as a retry target — powers the copy and run-locally controls. */
+  retryCases?: RetryCase[];
 }>();
 
 defineEmits<{
@@ -67,6 +73,17 @@ const annotations = computed(() =>
 );
 
 const startedAtMs = computed<number | null>(() => props.testCase?.startedAt ?? null);
+
+// Inside the desktop shell the run-locally split button covers copying the
+// command ("Copy as command"), so the copy-only button stays web-only.
+const desktopBridge = ref(false);
+onMounted(() => {
+  desktopBridge.value = !!tauriCore();
+});
+
+const retryCommand = computed(() => buildRetryCommand(props.retryCases ?? []));
+const { copy: copyRetry, copied: retryCopied } = useCopy();
+const retryTitle = computed(() => (retryCopied.value ? 'Copied!' : copyPreview(retryCommand.value)));
 
 const showCiGroup = computed(() => !!(props.ciInfo || props.environment));
 
@@ -177,6 +194,26 @@ function attemptLink(a: AttemptOutcome): string | null {
                   </span>
                 </span>
               </p>
+            </div>
+            <!-- Re-run controls sit with the execution they target, as on the run summary -->
+            <div v-if="retryCommand" class="flex items-center gap-1.5 shrink-0">
+              <UButton
+                v-if="!desktopBridge"
+                size="xs"
+                color="warning"
+                variant="subtle"
+                :icon="retryCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
+                :title="retryTitle"
+                aria-label="Copy retry command"
+                @click="copyRetry(retryCommand, { toast: 'Retry command copied' })"
+              >
+                <span class="hidden @2xl:inline">Copy retry command</span>
+              </UButton>
+              <DesktopRunLocallyButton
+                :project-id="projectKey"
+                :project-label="projectLabel ?? projectName"
+                :cases="retryCases ?? []"
+              />
             </div>
           </div>
 
