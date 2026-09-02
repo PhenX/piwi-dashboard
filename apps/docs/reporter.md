@@ -189,7 +189,8 @@ By default, the reporter streams test results to the dashboard in real-time as t
 3. With `liveFileUploads` (the default), each test's trace and attachments are uploaded right after the test finishes, so they are viewable on the test case page while the run is still in progress
 4. The dashboard UI shows a live progress bar and test results as they arrive
 5. While a test runs, the steps it is executing (Playwright `pw:api` actions, `pw:expect` assertions, and hook/fixture steps) stream to the run page as they happen — each running test's row shows the step it is on right now. The polling attempts of `pw:assert` steps are deliberately not streamed; the persisted step events on a completed test still carry everything
-6. When tests finish, the reporter finalizes the run with the overall status
+6. When a test's final attempt fails, the reporter prints `[Piwi Dashboard] ✗ <title> → <url>` right away — the link opens that execution on the dashboard, so you can start reading the failure while the rest of the suite is still running. In batch mode the same lines print after the upload
+7. When tests finish, the reporter finalizes the run with the overall status and prints `View run: <url>` (see [CI → Getting the run URL back out](./ci#getting-the-run-url-back-out-of-ci) for the step outputs and job summary that go with it)
 
 ### Disabling streaming
 

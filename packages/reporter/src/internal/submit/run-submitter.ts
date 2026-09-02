@@ -11,6 +11,7 @@ import { computePerformanceSummary } from '../collect/step-analyzer.js';
 import { resolveOverallStatus, serializeRun } from './serializer.js';
 import { runUrl } from '../support/run-url.js';
 import { emitRunOutputs, ciBuildUrlFromMetadata, type RunOutput } from '../support/ci-output.js';
+import type { FailureLinks } from '../support/failure-links.js';
 import type { CollectedTestCase, SetupStep, FilterDetails } from '../../types.js';
 
 /**
@@ -68,6 +69,7 @@ export class RunSubmitter {
    * @param recovery      Crash-recovery persistence.
    * @param streamManager Streaming session (may be `null` when streaming is disabled).
    * @param logger        Prefixed logger.
+   * @param failureLinks  Failed tests collected during the run, for the per-failure links.
    */
   constructor(
     private readonly httpClient: HttpClient,
@@ -75,6 +77,7 @@ export class RunSubmitter {
     private readonly recovery: CrashRecovery,
     private readonly streamManager: StreamManager | null,
     private readonly logger: Logger = new Logger(),
+    private readonly failureLinks: FailureLinks | null = null,
   ) {}
 
   /** Run the fallback ladder for a completed test run. */
@@ -129,7 +132,12 @@ export class RunSubmitter {
       outcome = await this.tryUploadJSON(run, overallStatus, duration, auth);
     }
 
-    if (outcome.output) emitRunOutputs(outcome.output, this.logger, run.options.outputFile);
+    if (outcome.output) {
+      // Failures that had no run id yet (batch mode, or a stream that never
+      // opened) get their link lines now, ahead of the run URL.
+      this.failureLinks?.printPending(outcome.output.runId);
+      emitRunOutputs(outcome.output, this.logger, run.options.outputFile);
+    }
   }
 
   /** Assemble a CI-facing run output, or `null` when the server returned no run id. */
@@ -147,6 +155,7 @@ export class RunSubmitter {
       projectName: run.options.projectName!,
       status,
       ciBuildUrl: ciBuildUrlFromMetadata(run.metadata),
+      failures: this.failureLinks?.resolve(runId) ?? [],
     };
   }
 

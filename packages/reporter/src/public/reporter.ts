@@ -31,6 +31,7 @@ import { collectTestMetadata, collectTestTags } from '../internal/collect/test-m
 import { buildErrorText } from '../internal/collect/error-text.js';
 import { RunSubmitter } from '../internal/submit/run-submitter.js';
 import { Logger } from '../internal/support/logger.js';
+import { FailureLinks } from '../internal/support/failure-links.js';
 import type { CollectedTestCase, StreamEvent, SetupStep, FilterDetails, TestAnnotation } from '../types.js';
 
 /**
@@ -39,8 +40,12 @@ import type { CollectedTestCase, StreamEvent, SetupStep, FilterDetails, TestAnno
  * retry command) match on every platform — `path.relative` yields backslashes on Windows.
  */
 function testLocation(test: TestCase): string {
-  const relativeFilePath = path.relative(process.cwd(), test.location.file).split(path.sep).join('/');
-  return `${relativeFilePath}:${test.location.line}:${test.location.column}`;
+  return `${testFile(test)}:${test.location.line}:${test.location.column}`;
+}
+
+/** Spec path relative to the working directory, POSIX separators — the `filePath` the dashboard stores. */
+function testFile(test: TestCase): string {
+  return path.relative(process.cwd(), test.location.file).split(path.sep).join('/');
 }
 
 /**
@@ -91,6 +96,7 @@ export class PiwiDashboardReporter {
   private streamManager: StreamManager | null = null;
   private recovery: CrashRecovery;
   private submitter: RunSubmitter;
+  private readonly failureLinks: FailureLinks;
   private readonly logger: Logger;
 
   static wrapConfig = wrapConfig;
@@ -110,6 +116,7 @@ export class PiwiDashboardReporter {
     this.uploader = new Uploader(this.httpClient, this.fileHandler, logger);
     this.recovery = new CrashRecovery(this.options.projectName!, logger);
     this.metadataCollector = new MetadataCollector(logger);
+    this.failureLinks = new FailureLinks(this.httpClient.baseUrl, logger);
 
     const streamBuffer = new StreamBuffer(this.options.projectName!);
     streamBuffer.clearStale();
@@ -126,7 +133,14 @@ export class PiwiDashboardReporter {
       );
     }
 
-    this.submitter = new RunSubmitter(this.httpClient, this.uploader, this.recovery, this.streamManager, logger);
+    this.submitter = new RunSubmitter(
+      this.httpClient,
+      this.uploader,
+      this.recovery,
+      this.streamManager,
+      logger,
+      this.failureLinks,
+    );
   }
 
   /** Playwright reporter hook: called once at the start of the test run */
@@ -397,6 +411,20 @@ export class PiwiDashboardReporter {
     // it first), so resolve `blockedBy` now — the streamed event then carries
     // the link even though the whole run isn't collected yet.
     if (status === 'didnotrun') linkBlockedTests(this.testCases);
+
+    // The final attempt of a failing test gets a dashboard link, printed as
+    // soon as a run id exists (immediately while streaming, after the submit otherwise).
+    const isFailure = status === 'failed' || status === 'timedOut';
+    if (isFailure && result.retry >= (test.retries ?? 0)) {
+      this.failureLinks.add({
+        title: test.title,
+        file: testFile(test),
+        retry: result.retry,
+        browser: typeof testCase.browser?.projectName === 'string' ? testCase.browser.projectName : null,
+      });
+    }
+    const liveRunId = this.streamManager?.runId;
+    if (liveRunId != null) this.failureLinks.printPending(liveRunId);
 
     if (this.streamManager) {
       this.streamManager.queueEvent(toWireTestCase(testCase) as StreamEvent);
