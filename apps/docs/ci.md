@@ -139,9 +139,11 @@ best-effort — a failure in any channel is logged and never fails your run.
 `View run: <url>` line once the run lands:
 
 ```
-[Piwi Dashboard] ✗ applies the discount code → https://piwi.example.com/test-runs/42/locate?file=tests%2Fcheckout.spec.ts&title=applies%20the%20discount%20code&retry=1&browser=chromium
+[Piwi Dashboard] ✗ applies the discount code — getByRole('button', { name: 'Pay' }) never became enabled — click timed out after 30 s → https://piwi.example.com/test-runs/42/locate?file=tests%2Fcheckout.spec.ts&title=applies%20the%20discount%20code&retry=1&browser=chromium
 [Piwi Dashboard] View run: https://piwi.example.com/test-runs/42
 ```
+
+The part between the title and the link is the failure **headline** — the one-line explanation the dashboard builds from the Playwright error (see [Failure evidence](./evidence#one-execution-diagnosis-first)). The GitHub job summary lists the same headline next to each failed test.
 
 The per-test link resolves to the failing execution's page (`/test-run-cases/:id`) and works in
 streaming and batch mode alike — it is built from what the reporter knows at that moment (run id,

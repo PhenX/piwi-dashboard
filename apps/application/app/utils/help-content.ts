@@ -253,6 +253,11 @@ export const HELP_TOPICS = {
     text: 'Everything you need to understand and fix this failure in one place — the error, a verdict on what kind of failure it is, the captured evidence, and an AI diagnosis.',
     doc: 'evidence#one-execution-diagnosis-first',
   },
+  'case.headline': {
+    title: 'Failure headline',
+    text: 'What broke, in one sentence built from the Playwright error itself: the locator, the last state its call log reported, the expected and received values, the timeout. The chips say why (new regression, passed on retry), since when and on which commit, how many other tests in the run share the cause, and who owns the test. The raw error is right below, verbatim.',
+    doc: 'evidence#one-execution-diagnosis-first',
+  },
   'case.verdict': {
     title: 'Failure verdict',
     text: 'An at-a-glance read on this failure: whether it newly regressed or is flaky, how many times it retried, and how long the test has been failing.',

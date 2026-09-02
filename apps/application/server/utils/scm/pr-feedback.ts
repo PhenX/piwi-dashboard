@@ -41,6 +41,7 @@ import type { RunMetadata } from '../run-json-types';
 import type { DbClient } from '../../database';
 import type { FilterDetails } from '#shared/types';
 import { errorExcerpt } from '#shared/notification-events';
+import { caseHeadline } from '#shared/failure-verdict';
 
 /** Read the resolved settings, falling back to the (disabled) defaults. */
 export async function getPrFeedbackSettings(db: DbClient): Promise<PrFeedbackSettings> {
@@ -116,6 +117,7 @@ async function buildFailureEntries(
     return {
       title: row.title,
       filePath: row.filePath,
+      headline: caseHeadline(row)?.headline ?? null,
       errorExcerpt: errorExcerpt(row.error, PR_EXCERPT_MAX) ?? null,
       executionId: row.id,
       clusterId: row.failureClusterId,

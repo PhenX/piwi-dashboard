@@ -277,3 +277,32 @@ describe('buildCommitStatus', () => {
     expect(status.description.length).toBeLessThanOrEqual(140);
   });
 });
+
+describe('buildPrComment — failure headline', () => {
+  test('leads each failure with its headline in bold, markdown-escaped, before the raw excerpt', () => {
+    const body = buildPrComment(
+      summary({
+        failedTests: 1,
+        newRegressions: [
+          entry({
+            headline: "Expected 26 rows, found 51 — getByRole('row') toHaveCount",
+            errorExcerpt: 'Error: expect(locator).toHaveCount(expected) failed',
+          }),
+        ],
+      }),
+    );
+    const headlineAt = body.indexOf("  **Expected 26 rows, found 51 — getByRole('row') toHaveCount**");
+    const excerptAt = body.indexOf('  ```\n  Error: expect(locator).toHaveCount(expected) failed\n  ```');
+    expect(headlineAt).toBeGreaterThan(-1);
+    expect(excerptAt).toBeGreaterThan(headlineAt);
+  });
+
+  test('escapes markdown inside a headline and omits the line without one', () => {
+    const escaped = buildPrComment(
+      summary({ failedTests: 1, newRegressions: [entry({ headline: 'Expected `a_b`, got *c* — toBe' })] }),
+    );
+    expect(escaped).toContain('**Expected \\`a\\_b\\`, got \\*c\\* — toBe**');
+    const plain = buildPrComment(summary({ failedTests: 1, newRegressions: [entry({ headline: null })] }));
+    expect(plain).not.toContain('**Expected');
+  });
+});

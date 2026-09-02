@@ -375,11 +375,13 @@ const flatRows = computed<FlatRow[]>(() => {
               <DurationValue :ms="row.test.wastedTimeMs" unit-class="opacity-60" no-title />
             </span>
           </div>
-          <!-- The one-line error under a failing row, the same as the flat list shows -->
-          <ErrorText
+          <!-- The one-line headline under a failing row, the same as the flat list shows -->
+          <FailureHeadline
             v-if="isFailedStatus(row.test.status) && row.test.error"
-            :text="row.test.error"
-            class="basis-full pl-6"
+            :error="row.test.error"
+            :steps="row.test.steps"
+            truncate
+            class="basis-full pl-6 text-xs text-gray-600 dark:text-gray-400"
           />
         </div>
       </template>

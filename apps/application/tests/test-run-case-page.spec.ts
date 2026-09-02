@@ -73,6 +73,15 @@ test.describe('Test-run-case page', () => {
     await waitForHydration(page);
 
     await expect(page.getByRole('button', { name: /^Diagnosis/ })).toBeVisible();
+    // The one-line headline leads the tab, ahead of the raw error.
+    const headline = page.getByRole('heading', {
+      name: /getByRole\('button', \{ name: 'Pay' \}\) was not found on the page — click timed out after 30 s/,
+    });
+    await expect(headline).toBeVisible();
+    await expect(page.getByText('First failure in this run')).toBeVisible();
+    const headlineBox = await headline.boundingBox();
+    const errorBox = await page.getByRole('heading', { name: 'Error', exact: true }).boundingBox();
+    expect(headlineBox!.y).toBeLessThan(errorBox!.y);
     // The verdict and AI-diagnosis rail cards are the diagnosis-tab signature.
     await expect(page.getByRole('heading', { name: 'Regression status' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'AI diagnosis' })).toBeVisible();

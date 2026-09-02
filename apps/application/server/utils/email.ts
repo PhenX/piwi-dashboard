@@ -201,10 +201,13 @@ export function renderRunNotificationEmail(opts: {
         const title = escapeHtml(f.title);
         const titleHtml = `<a href="${caseUrl}" style="color:#18181b;font-weight:600;text-decoration:none;">${title}</a>`;
         const loc = f.filePath ? `<div style="color:#a1a1aa;font-size:12px;">${escapeHtml(f.filePath)}</div>` : '';
+        const headline = f.headline
+          ? `<div style="margin-top:4px;color:#18181b;font-size:14px;">${escapeHtml(f.headline)}</div>`
+          : '';
         const excerpt = f.errorExcerpt
           ? `<pre style="margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;color:#52525b;background:#fafafa;padding:8px;border-radius:4px;">${escapeHtml(f.errorExcerpt)}</pre>`
           : '';
-        return `<li style="margin-bottom:12px;list-style:none;">${titleHtml}${loc}${excerpt}</li>`;
+        return `<li style="margin-bottom:12px;list-style:none;">${titleHtml}${loc}${headline}${excerpt}</li>`;
       })
       .join('');
     failuresHtml = `<ul style="margin:0 0 24px;padding:0;">${rows}</ul>`;
@@ -212,8 +215,9 @@ export function renderRunNotificationEmail(opts: {
       .map((f) => {
         const caseUrl = failureUrl(f, url);
         const loc = f.filePath ? ` (${f.filePath})` : '';
+        const headline = f.headline ? `\n  ${f.headline}` : '';
         const excerpt = f.errorExcerpt ? `\n    ${f.errorExcerpt.replace(/\n/g, '\n    ')}` : '';
-        return `- ${f.title}${loc}\n  ${caseUrl}${excerpt}`;
+        return `- ${f.title}${loc}${headline}\n  ${caseUrl}${excerpt}`;
       })
       .join('\n');
   }

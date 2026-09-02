@@ -1,4 +1,5 @@
 import { extractMessageHead, stripAnsi } from '#shared/error-fingerprint';
+import { describeFailureText } from '#shared/describe-failure';
 
 /** All notification event keys supported by the subscription system. */
 export const NOTIFICATION_EVENTS = [
@@ -31,6 +32,9 @@ export const PERF_REGRESSION_MIN_PCT = 20;
 export interface TopFailure {
   title: string;
   filePath?: string;
+  /** The one-line failure headline (`getByLabel('Email') was not found on the page — fill timed out after 10 s`). */
+  headline?: string;
+  /** The error's message head, ANSI-stripped and capped at {@link ERROR_EXCERPT_MAX} characters. */
   errorExcerpt?: string;
   testCaseId?: number;
   executionId?: number;
@@ -144,8 +148,8 @@ export interface TopFailureInput {
 
 /**
  * Map raw failing-case rows to the compact {@link TopFailure} shape embedded in
- * run notifications: capped to `limit` entries, each error cut to its
- * {@link errorExcerpt}.
+ * run notifications: capped to `limit` entries, each error described by its
+ * headline and cut to its {@link errorExcerpt}.
  */
 export function buildTopFailures(rows: TopFailureInput[], limit: number = TOP_FAILURES_LIMIT): TopFailure[] {
   return rows.slice(0, limit).map((r) => {
@@ -153,6 +157,8 @@ export function buildTopFailures(rows: TopFailureInput[], limit: number = TOP_FA
     if (r.filePath) failure.filePath = r.filePath;
     if (r.testCaseId != null) failure.testCaseId = r.testCaseId;
     if (r.executionId != null) failure.executionId = r.executionId;
+    const headline = describeFailureText(r.error)?.headline;
+    if (headline) failure.headline = headline;
     const excerpt = errorExcerpt(r.error);
     if (excerpt) failure.errorExcerpt = excerpt;
     return failure;

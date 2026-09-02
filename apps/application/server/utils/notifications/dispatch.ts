@@ -127,8 +127,9 @@ async function sendToSlack(config: Record<string, unknown>, event: NotificationE
     for (const f of p.topFailures ?? []) {
       const path = failureTargetPath(f);
       const link = path ? `<${base}${path}|${f.title}>` : f.title;
+      const headline = f.headline ? `\n${slackExcerpt(f.headline)}` : '';
       const excerpt = f.errorExcerpt ? `\n\`\`\`${slackExcerpt(f.errorExcerpt)}\`\`\`` : '';
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `• *${link}*${excerpt}` } });
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `• *${link}*${headline}${excerpt}` } });
     }
   } else if (event === 'cluster.new') {
     const p = payload as ClusterNewPayload;

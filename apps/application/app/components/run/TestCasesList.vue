@@ -566,7 +566,13 @@ defineExpose({ scrollToCase });
                       <BrowserBadge :browser="item.browser" size="sm" class="mt-0.5" />
                     </div>
 
-                    <ErrorText v-if="isFailedStatus(item.status) && item.error" :text="item.error" class="pl-6" />
+                    <FailureHeadline
+                      v-if="isFailedStatus(item.status) && item.error"
+                      :error="item.error"
+                      :steps="item.steps"
+                      truncate
+                      class="pl-6 text-xs text-gray-600 dark:text-gray-400"
+                    />
 
                     <OpenInIdeLink
                       v-if="item.location"
@@ -660,7 +666,13 @@ defineExpose({ scrollToCase });
                           </UBadge>
                         </NuxtLink>
                       </div>
-                      <ErrorText v-if="isFailedStatus(item.status) && item.error" :text="item.error" />
+                      <FailureHeadline
+                        v-if="isFailedStatus(item.status) && item.error"
+                        :error="item.error"
+                        :steps="item.steps"
+                        truncate
+                        class="text-xs text-gray-600 dark:text-gray-400"
+                      />
                       <OpenInIdeLink
                         v-if="item.location"
                         :location="item.location"

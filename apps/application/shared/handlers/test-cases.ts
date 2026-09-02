@@ -12,7 +12,9 @@ import {
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-waits';
 import { inlineCasePayloads } from '../../server/utils/case-payloads';
+import { buildFailureVerdict } from '../failure-verdict';
 import type { TestStepEvent } from '../types';
+import type { RunMetadata } from '../../server/utils/run-json-types';
 
 import type { DrizzleDB } from './db';
 
@@ -355,6 +357,28 @@ export async function getTestRunCase(
 
   const { streamToken: _streamToken, ...testRunPublic } = testRun ?? {};
 
+  // The one-line verdict on a failing execution — headline, why, since when,
+  // cluster and owner — built from what is already loaded above. The owner
+  // here is the test's own annotation; the server route layers CODEOWNERS on.
+  const scm = ((testRun?.metadata as RunMetadata | null)?.scm ?? null) as {
+    commit?: string | null;
+    branch?: string | null;
+    author?: string | null;
+    commitMessage?: string | null;
+  } | null;
+  const verdict = buildFailureVerdict({
+    error: trc.error,
+    steps: trc.steps,
+    status: trc.status,
+    retries: trc.retries,
+    isNewRegression: trc.isNewRegression,
+    isNewFlaky: trc.isNewFlaky,
+    runId: trc.testRunId,
+    scm,
+    cluster: failureCluster ? { ...failureCluster, sampleError: null, filePath: testCase?.filePath ?? null } : null,
+    owner: testCase?.owner ?? null,
+  });
+
   return {
     id: trc.id,
     testCaseId: trc.testCaseId,
@@ -398,6 +422,7 @@ export async function getTestRunCase(
     blockedByCase,
     blockedTests,
     failureCluster,
+    verdict,
     testRun: testRun ? { ...testRunPublic, project, reports: reportList } : testRun,
     attachments: attachmentList,
     links: linksForCaseRun,

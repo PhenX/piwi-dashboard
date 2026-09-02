@@ -88,7 +88,8 @@ export const MCP_TOOL_DEFS = [
   },
   {
     name: 'list_failed_cases',
-    description: 'List failed and timed-out test cases across recent runs for a project.',
+    description:
+      'List failed and timed-out test cases across recent runs for a project. Each item carries a one-line headline explaining the failure ahead of the truncated error.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -255,7 +256,7 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'get_test_run_case',
     description:
-      'Get a single test-run-case execution record with full (untruncated) error text plus steps, console logs, web vitals, and ARIA snapshot. Use include to fetch only the blobs you need. The ID is the executionId from get_run.cases or testRunsCaseId from get_cluster.affectedTestCases.',
+      'Get a single test-run-case execution record with a one-line failure headline, the full (untruncated) error text plus steps, console logs, web vitals, and ARIA snapshot. Use include to fetch only the blobs you need. The ID is the executionId from get_run.cases or testRunsCaseId from get_cluster.affectedTestCases.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -568,7 +569,7 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'explain_failure',
     description:
-      'One-call evidence bundle for a single failing execution: error, steps, console, ARIA snapshot, the recommended locator fix, a screenshot count, and the AI diagnosis context. Prefer this over chaining get_test_run_case + get_locator_healing + get_test_case_context.',
+      'One-call evidence bundle for a single failing execution: a one-line headline, the error, steps, console, ARIA snapshot, the recommended locator fix, a screenshot count, and the AI diagnosis context. Prefer this over chaining get_test_run_case + get_locator_healing + get_test_case_context.',
     inputSchema: {
       type: 'object',
       properties: { executionId: { type: 'number', description: 'Test run case ID (executionId)' } },
@@ -772,6 +773,8 @@ export interface McpCaseSummary {
   status: string;
   duration?: number;
   retries?: number;
+  /** One-line explanation of the failure, derived from the error text. */
+  headline?: string | null;
   error?: string | null;
   clusterId?: number;
   browser?: string;

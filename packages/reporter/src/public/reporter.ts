@@ -31,7 +31,7 @@ import { collectTestMetadata, collectTestTags } from '../internal/collect/test-m
 import { buildErrorText } from '../internal/collect/error-text.js';
 import { RunSubmitter } from '../internal/submit/run-submitter.js';
 import { Logger } from '../internal/support/logger.js';
-import { FailureLinks } from '../internal/support/failure-links.js';
+import { FailureLinks, failureHeadline } from '../internal/support/failure-links.js';
 import type { CollectedTestCase, StreamEvent, SetupStep, FilterDetails, TestAnnotation } from '../types.js';
 
 /**
@@ -421,6 +421,7 @@ export class PiwiDashboardReporter {
         file: testFile(test),
         retry: result.retry,
         browser: typeof testCase.browser?.projectName === 'string' ? testCase.browser.projectName : null,
+        headline: failureHeadline(testCase.error, testCase.performanceMetrics?.steps),
       });
     }
     const liveRunId = this.streamManager?.runId;

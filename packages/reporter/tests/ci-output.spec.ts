@@ -27,6 +27,7 @@ function failure(i: number): FailureLink {
     file: 'tests/checkout.spec.ts',
     retry: 1,
     browser: 'chromium',
+    headline: null,
     url: `https://dash.example.com/test-runs/42/locate?file=tests%2Fcheckout.spec.ts&title=test%20${i}&retry=1&browser=chromium`,
   };
 }
@@ -124,6 +125,19 @@ describe('emitRunOutputs — GitHub Actions', () => {
     expect(summary).toContain(`- ❌ [test 1](${failure(1).url}) — \`tests/checkout.spec.ts\``);
     expect(summary).toContain(`- ❌ [test 2](${failure(2).url})`);
     expect(summary).not.toContain('more');
+  });
+
+  it('puts the failure headline between the link and the file in the job summary', () => {
+    const summaryFile = path.join(tmpDir, 'gh-summary');
+    const withHeadline = { ...failure(1), headline: "Expected 26 rows, found 51 — getByRole('row') toHaveCount" };
+    emitRunOutputs({ ...OUTPUT, status: 'failed', failures: [withHeadline] }, silentLogger, undefined, {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_STEP_SUMMARY: summaryFile,
+    });
+    const summary = fs.readFileSync(summaryFile, 'utf8');
+    expect(summary).toContain(
+      `- ❌ [test 1](${withHeadline.url}) — Expected 26 rows, found 51 — getByRole('row') toHaveCount — \`tests/checkout.spec.ts\``,
+    );
   });
 
   it('caps the job summary list and counts the rest', () => {
