@@ -671,13 +671,13 @@ export const HELP_TOPICS = {
   // ── Environment diff ────────────────────────────────────────────────────
   'environment-diff': {
     title: 'Environment diff',
-    text: 'Compares this execution’s environment (Playwright version, browser config, locale, viewport, CI provider, …) against the same test’s last passing run on the same browser. Only changed keys are shown — an empty diff rules out environment drift as the cause.',
+    text: 'Compares this execution’s environment (Playwright version, browser config, locale, viewport, CI provider, …) against the same test’s last passing run on the same browser — from the same environment when one exists, then the same branch, then the most recent; the subtitle says when the baseline had to come from another environment. Only changed keys are shown — an empty diff rules out environment drift as the cause.',
   },
 
   // ── Visual diff ──────────────────────────────────────────────────────────
   'visual-diff': {
     title: 'Visual diff',
-    text: 'Pixel-compares the failing screenshot against the same test’s last passing screenshot (same browser). Red pixels in the overlay mark what changed. When the two screenshots have different dimensions the ratio is flagged as unreliable.',
+    text: 'Pixel-compares the failing screenshot against the same test’s last passing screenshot (same browser, preferring the same environment and then the same branch). Red pixels in the overlay mark what changed. When the two screenshots have different dimensions the ratio is flagged as unreliable.',
   },
 
   // ── DOM snapshot ─────────────────────────────────────────────────────────

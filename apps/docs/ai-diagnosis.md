@@ -34,7 +34,7 @@ If an **embedding** model role is configured (Settings → AI), Piwi adds a sema
 
 The text fed to the embedder is cleaned first — ANSI color codes stripped, framework stack frames collapsed, and volatile tokens (URLs, ids, received/expected values) masked — so vectors measure a failure's shape rather than its per-occurrence noise. Each pass also backfills a bounded batch of older open clusters that don't have a usable vector yet (created before the embedding role existed, or embedded with a different model), so a pre-existing backlog of near-duplicates converges over the runs that follow. Vectors are only ever compared within one embedding model: after switching models, stale vectors are re-embedded by the same backfill instead of being scored against the new model's output.
 
-When auto-diagnose is enabled, new clusters are also given a short **human-readable title** (one cheap batched model call per run, using the research model when one is configured, otherwise the diagnosis model) shown in place of the raw normalized signature across the lists and the cluster page — the signature stays available on hover and below the title. Clusters fall back to the signature when no title has been generated.
+When auto-diagnose is enabled, new clusters are also given a short **human-readable title** (one cheap batched model call per run, using the research model when one is configured, otherwise the diagnosis model) shown in place of the raw normalized signature across the lists and the cluster page — the signature stays available on hover and below the title. Without a generated title, a cluster still gets a readable name built from what it knows — the error kind, the locator it targets, the route a navigation was heading for and the spec file it hit (`Timeout on getByLabel('Email address') in checkout.spec.ts`, `toHaveCount mismatch on getByRole('row') in users.spec.ts`, `Navigation timeout on /users`) — never the masked signature with its `<N>` placeholders. The signature stays as the line below the name.
 
 Pairs that fall in the **ambiguous band** (similarity between `PIWI_CLUSTER_SUGGEST_THRESHOLD`, default `0.80`, and the merge threshold) aren't merged automatically. Whenever AI is configured, a model adjudicates the pair ("same root cause?") — the **research** model when one is configured, the diagnosis model otherwise — and merges only on a high-confidence yes; when it's unsure (or no AI is configured at all), the pair becomes a **merge suggestion** on the project's Failure clusters tab, where a reporter or admin approves (merge) or dismisses it. The adjudicator sees more than the error text: each cluster's extracted locator, its most-affected tests, and how much the two clusters overlap (tests failing in both, runs where both fired) — signals that separate "one cause, reworded message" from "similar boilerplate, different problems". Adjudication is budget-capped per run to control cost.
 
@@ -71,6 +71,16 @@ Two rules keep the verdict honest:
   closes a cluster.
 - **Every affected test must pass**, not just some — a cluster is one root cause, and half of it passing means it isn't
   fixed.
+
+The verdict moves the triage status only when the evidence is strong enough to stand in for a person: *Diagnosis
+verified* sets an **open** cluster to **resolved**, and *Regressed* sets a **resolved** cluster back to **open**. Each
+transition appends a line to the triage note ("Resolved automatically: diagnosis verified in run #42", "Reopened
+automatically: regressed in run #57"), so the status still reads as something you can audit and override. *Stopped
+failing* alone changes nothing — a flaky test achieves it by accident — and a cluster marked *ignored* is never touched.
+The verdict badge stays separate from the status either way.
+
+Two [notifications](./notifications) follow the verdict: `cluster.fixed` whenever a fix is recorded (its payload says
+which verdict), and `cluster.regressed` when a fix does not hold.
 
 When [pull-request feedback](./ci#pull-request-feedback) is on, the comment gains a **Fixed by this change** section
 naming what the pull request closed. That section is worth a comment on its own, so a green run that closed a cluster
@@ -227,7 +237,7 @@ A wrong patch is worse than none, so the model is instructed to set `patch` to n
 
 ## Locator healing
 
-When the failure is a broken locator, the context includes an **Alternative Locators** section: ranked replacement locators sourced from a prior passing run (highest confidence — captured against the real DOM), from a fresh match of the renamed/moved element on the failing page, or from the failure-time ARIA snapshot. The section also names a single **recommended fix** — convention-preserving where the original locator style is stable enough — which the model is instructed to use verbatim in `suggestedFix.code` rather than fabricating a locator. When nothing scores as stable, it advises adding a `data-testid` to the application as the durable fix.
+When the failure is a broken locator, the context includes an **Alternative Locators** section: ranked replacement locators sourced from a prior passing run (highest confidence — captured against the real DOM), from a fresh match of the renamed/moved element on the failing page, or from the failure-time ARIA snapshot. The section also names a single **recommended fix** — convention-preserving where the original locator style is stable enough — which the model is instructed to use verbatim in `suggestedFix.code` rather than fabricating a locator. When nothing scores as stable, it advises adding a `data-testid` to the application as the durable fix. When the locator resolved and the failure came after it (an assertion mismatch, a disabled element), the section instead states that healing is not applicable, so the model does not propose a replacement locator for a problem that is not one.
 
 <figure>
   <img src="/screenshots/locator-healing.png" alt="Alternative locators panel with ranked replacement locators and a recommended fix">
@@ -281,5 +291,5 @@ API keys are encrypted at rest with [`PIWI_SECRET_KEY`](./configuration#general)
 - [Core concepts](./concepts#error-fingerprint-failure-cluster) — fingerprints, clusters, and baselines in one place
 - [Privacy & data flow](./privacy) — exactly what a diagnosis sends, and where
 - [Configuration reference](./configuration) — all environment variables
-- [Notifications](./notifications) — subscribe to `cluster.new` and `diagnosis.completed` to get alerted when a new cluster appears or a diagnosis completes (browser, email, Slack, or webhook)
+- [Notifications](./notifications) — subscribe to `cluster.new`, `cluster.fixed`, `cluster.regressed` and `diagnosis.completed` to get alerted when a new cluster appears, a fix lands or regresses, or a diagnosis completes (browser, email, Slack, or webhook)
 - [MCP server](./mcp) — let AI agents query clusters and diagnoses directly

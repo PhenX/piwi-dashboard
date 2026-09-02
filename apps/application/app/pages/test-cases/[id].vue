@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { describeCluster } from '#shared/describe-cluster';
 import type { TestCaseHistoryPoint, MarkerInfo, MarkersResponse } from '~~/types/api';
 import type { TableColumn } from '@nuxt/ui';
 import { CASE_STATUS_SERIES, legendOf } from '~/utils/chart';
@@ -325,7 +326,7 @@ const executionColumns: TableColumn<ExecutionRow>[] = [
                 <UBadge :color="clusterColor(cluster.status)" variant="soft" size="xs" class="capitalize">
                   {{ cluster.status }}
                 </UBadge>
-                <span class="text-sm truncate">{{ cluster.signature }}</span>
+                <span class="text-sm truncate" :title="cluster.signature">{{ describeCluster(cluster) }}</span>
                 <span v-if="cluster.occurrences > 1" class="text-xs text-gray-400 shrink-0">
                   {{ cluster.occurrences }} occurrences
                 </span>

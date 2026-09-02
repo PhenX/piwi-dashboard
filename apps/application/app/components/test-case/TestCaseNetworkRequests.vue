@@ -247,11 +247,12 @@ const visibleRequests = computed<DecoratedRequest[]>(() => {
   if (filter.value === 'failed') list = list.filter((r) => r.failed);
   else if (filter.value === 'logs') list = list.filter((r) => r.logs.length > 0);
   // Surface the requests that matter most: failures and those carrying backend
-  // logs float to the top; the rest keep their original (chronological) order.
+  // logs float to the top; the rest follow their start time when the capture
+  // recorded one, else their original order.
   return [...list].sort((a, b) => {
     const score = (r: DecoratedRequest) =>
       (r.errorLogCount > 0 ? 3 : 0) + (r.failed ? 2 : 0) + (r.logs.length > 0 ? 1 : 0);
-    return score(b) - score(a) || a._index - b._index;
+    return score(b) - score(a) || (a.startTime ?? 0) - (b.startTime ?? 0) || a._index - b._index;
   });
 });
 

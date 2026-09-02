@@ -14,6 +14,7 @@ interface Cluster {
   id: number;
   signature: string;
   status: string;
+  triageNote: string | null;
   fixLandedRunId: number | null;
   fixCommit: string | null;
   timeToResolutionMs: number | null;
@@ -123,8 +124,15 @@ test.describe.serial('Fix verification', () => {
     expect(fixed.timeToResolutionMs).toBeGreaterThan(0);
   });
 
-  test('a fix that does not hold is marked regressed', async ({ request }) => {
-    await submitRun(request, [{ title: 'checkout pays', status: 'failed', error: failingError() }], {
+  test('a fix that does not hold is marked regressed and reopens a resolved cluster', async ({ request }) => {
+    // Someone closed the triage on the strength of the recorded fix.
+    const fixed = (await clusters(request, projectId)).find((c) => c.fixLandedRunId != null)!;
+    const patched = await request.patch(`/api/failure-clusters/${fixed.id}/status`, {
+      data: { status: 'resolved', triageNote: 'Closed after the fix landed' },
+    });
+    expect(patched.ok()).toBeTruthy();
+
+    const runId = await submitRun(request, [{ title: 'checkout pays', status: 'failed', error: failingError() }], {
       commit: 'ccccccc1',
     });
 
@@ -132,7 +140,14 @@ test.describe.serial('Fix verification', () => {
       .poll(async () => (await clusters(request, projectId)).find((c) => c.fixVerification === 'regressed')?.id, {
         timeout: 15_000,
       })
-      .toBeTruthy();
+      .toBe(fixed.id);
+
+    // The runs contradicted the person's "resolved", so the status goes back
+    // to open with the reason on record — and the note they wrote survives.
+    const regressed = (await clusters(request, projectId)).find((c) => c.id === fixed.id)!;
+    expect(regressed.status).toBe('open');
+    expect(regressed.triageNote).toContain('Closed after the fix landed');
+    expect(regressed.triageNote).toContain(`Reopened automatically: regressed in run #${runId}`);
   });
 
   test('a partial run never records a fix', async ({ request }) => {
@@ -172,6 +187,6 @@ test.describe.serial('Fix verification', () => {
     // Asserted separately so a failure says whether the row or the badge is
     // missing — the table loads client-side, after the page itself is ready.
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await expect(row.getByText('Regressed')).toBeVisible();
+    await expect(row.getByText('Regressed', { exact: true })).toBeVisible();
   });
 });

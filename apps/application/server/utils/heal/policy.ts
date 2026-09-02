@@ -64,7 +64,7 @@ export function selectHealEdits(
     const h = healing.get(row.executionId);
     const rec = h?.recommendation?.recommended;
     const edit = h?.edit;
-    if (!h || !rec || !edit || !edit.unifiedDiff || !edit.filePath) continue;
+    if (!h || h.applicable === false || !rec || !edit || !edit.unifiedDiff || !edit.filePath) continue;
 
     // Real captured evidence only — ARIA-snapshot guesses never open a PR.
     if (!ELIGIBLE_SOURCES.has(h.source)) continue;

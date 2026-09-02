@@ -380,6 +380,7 @@ export async function getNetworkRequests(db: DrizzleDB, runId: number) {
       url: networkRequests.url,
       status: networkRequests.status,
       duration: networkRequests.duration,
+      startTime: networkRequests.startTime,
       title: testCases.title,
     })
     .from(networkRequests)
@@ -393,13 +394,21 @@ export async function getNetworkRequests(db: DrizzleDB, runId: number) {
       route: r.normalizedUrl ?? (r.url ? normalizeRoute(r.url) : r.method),
       duration: r.duration ?? 0,
       status: r.status,
+      startTime: r.startTime ?? null,
       title: r.title,
     })),
   );
 }
 
 function buildEndpointSummaries(
-  rows: Array<{ method: string; route: string; duration: number; status: number; title: string }>,
+  rows: Array<{
+    method: string;
+    route: string;
+    duration: number;
+    status: number;
+    startTime: number | null;
+    title: string;
+  }>,
 ): EndpointSummary[] {
   const grouped = new Map<
     string,
@@ -408,6 +417,8 @@ function buildEndpointSummaries(
       route: string;
       durations: number[];
       statuses: number[];
+      firstStartTime: number | null;
+      lastStartTime: number | null;
       testCases: Set<string>;
     }
   >();
@@ -420,12 +431,19 @@ function buildEndpointSummaries(
         route: row.route,
         durations: [],
         statuses: [],
+        firstStartTime: null,
+        lastStartTime: null,
         testCases: new Set(),
       });
     }
     const group = grouped.get(key)!;
     group.durations.push(row.duration);
     group.statuses.push(row.status);
+    if (row.startTime != null) {
+      group.firstStartTime =
+        group.firstStartTime == null ? row.startTime : Math.min(group.firstStartTime, row.startTime);
+      group.lastStartTime = group.lastStartTime == null ? row.startTime : Math.max(group.lastStartTime, row.startTime);
+    }
     group.testCases.add(row.title);
   }
 
@@ -444,6 +462,8 @@ function buildEndpointSummaries(
       minDuration: sorted[0] ?? 0,
       p90Duration: percentile(sorted, 90),
       errorRate: group.durations.length > 0 ? Math.round((errorCount / group.durations.length) * 100) : 0,
+      firstStartTime: group.firstStartTime,
+      lastStartTime: group.lastStartTime,
       testCases: Array.from(group.testCases),
     });
   }
@@ -630,7 +650,7 @@ export async function getFailureGroups(db: DrizzleDB, runId: number) {
     for (const { clusterId, repId } of reps) {
       const h = healingMap.get(repId);
       const rec = h?.recommendation?.recommended;
-      if (h && h.source !== 'none' && rec) {
+      if (h && h.applicable !== false && h.source !== 'none' && rec) {
         healingByCluster.set(clusterId, {
           recommended: rec.locator,
           source: h.source,

@@ -22,7 +22,11 @@ import {
 } from '~~/server/database/schema.sqlite';
 import { parseLocation } from '~~/server/utils/parse-location';
 import { mapCompleteEventToRunCase } from '~~/server/utils/map-complete-event';
-import { buildNetworkRequestItems, buildNetworkRequestInsertValues } from '~~/server/utils/network-request-helpers';
+import {
+  buildNetworkRequestItems,
+  buildNetworkRequestInsertValues,
+  type NetworkRequestBuilder,
+} from '~~/server/utils/network-request-helpers';
 import { upsertLocatorSnapshots } from '~~/server/utils/locator-healing';
 import { resolveRunBranch } from '~~/server/utils/run-branch';
 import type { LocatorSnapshot } from '#shared/locator-healing.types';
@@ -572,19 +576,7 @@ export async function persistRunCases(
   }
 
   const runCasesRows: Array<typeof testRunsCases.$inferInsert> = [];
-  const networkRequestBuilders: Array<{
-    items: Array<{
-      method: string;
-      url: string | null;
-      normalizedUrl: string;
-      status: number;
-      duration: number | null;
-      resourceType: string | null;
-      contentType: string | null;
-      serverLogs: unknown;
-      serverTraces: unknown;
-    }>;
-  }> = [];
+  const networkRequestBuilders: NetworkRequestBuilder[] = [];
   const rowFingerprints: Array<ErrorFingerprint | null> = [];
   const pendingClusters = new Map<string, PendingCluster>();
   const perCaseLocators: Array<{
@@ -695,7 +687,7 @@ export async function persistRunCases(
     });
 
     const nrItems = buildNetworkRequestItems(c.networkRequests as Array<Record<string, unknown>> | null | undefined);
-    networkRequestBuilders.push({ items: nrItems as any });
+    networkRequestBuilders.push({ items: nrItems });
   }
 
   if (runCasesRows.length === 0) return [];

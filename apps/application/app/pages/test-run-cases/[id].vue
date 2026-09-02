@@ -128,6 +128,8 @@ const failureCluster = computed(() => {
   return (testCase.value?.failureCluster ?? null) as {
     id: number;
     signature: string;
+    title: string | null;
+    selector: string | null;
     errorType: string | null;
     status: string | null;
     triageNote: string | null;

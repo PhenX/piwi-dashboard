@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { describeCluster, clusterSignatureLine } from '#shared/describe-cluster';
 import type { FailureClusterDetail } from '~~/types/api';
 
 const props = defineProps<{
@@ -19,6 +20,15 @@ const emit = defineEmits<{
 // clusters that are still broken.
 const resolution = computed(() => fixVerificationBadge(props.cluster.fixVerification));
 
+// The AI title when one exists, else a deterministic name built from the error
+// kind, locator and spec; the raw signature moves below it.
+const describable = computed(() => ({
+  ...props.cluster,
+  filePath: props.cluster.affectedTestCases?.[0]?.filePath ?? null,
+}));
+const clusterName = computed(() => describeCluster(describable.value));
+const signatureLine = computed(() => clusterSignatureLine(describable.value));
+
 const triageStatusOptions = [
   { label: 'Open', value: 'open', color: 'warning' as const },
   { label: 'Resolved', value: 'resolved', color: 'success' as const },
@@ -34,8 +44,8 @@ const triageStatusOptions = [
           <UBadge :color="clusterStatusColor(cluster.status)" variant="solid" size="sm" class="shrink-0 capitalize">
             {{ cluster.status }}
           </UBadge>
-          <span class="font-mono text-sm truncate text-gray-600 dark:text-gray-400 min-w-0">
-            {{ cluster.signature }}
+          <span class="text-sm truncate min-w-0" :title="cluster.signature">
+            {{ clusterName }}
           </span>
           <UBadge v-if="cluster.errorType" :color="clusterErrorTypeColor(cluster.errorType)" variant="subtle" size="sm">
             {{ cluster.errorType }}
@@ -72,10 +82,10 @@ const triageStatusOptions = [
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
       <!-- Left: cluster metadata -->
       <div class="lg:col-span-9">
-        <SectionCard :title="cluster.signature">
+        <SectionCard :title="clusterName">
           <div class="space-y-3">
-            <p v-if="cluster.title" class="text-sm font-medium break-words text-gray-500 dark:text-gray-400">
-              {{ cluster.title }}
+            <p v-if="signatureLine" class="font-mono text-xs break-all text-gray-500 dark:text-gray-400">
+              {{ signatureLine }}
             </p>
             <div class="flex flex-wrap gap-2">
               <UBadge v-if="cluster.errorType" :color="clusterErrorTypeColor(cluster.errorType)" variant="subtle">

@@ -6,6 +6,8 @@ export const NOTIFICATION_EVENTS = [
   'run.failed',
   'run.failed.default_branch',
   'cluster.new',
+  'cluster.fixed',
+  'cluster.regressed',
   'flakiness.spike',
   'perf.regression',
   'diagnosis.completed',
@@ -66,6 +68,8 @@ export interface ClusterNewPayload {
   projectId: number;
   projectName: string;
   signature: string;
+  /** Display name — the AI title when one exists, else the deterministic title. */
+  title?: string | null;
   runId: number;
   sampleErrorExcerpt?: string;
   affectedCases?: number;
@@ -155,6 +159,41 @@ export function buildTopFailures(rows: TopFailureInput[], limit: number = TOP_FA
   });
 }
 
+/** A cluster whose every affected test passed again in a full run. */
+export interface ClusterFixedPayload {
+  clusterId: number;
+  projectId: number;
+  projectName: string;
+  signature: string;
+  /** The cluster's display title when it has one. */
+  title?: string | null;
+  /** The run in which the fix landed. */
+  runId: number;
+  /** `diagnosis-verified` when the commits since the last failure touched a file the diagnosis named. */
+  verification: 'stopped-failing' | 'diagnosis-verified';
+  commit?: string | null;
+  timeToResolutionMs?: number | null;
+  /** Tests that were failing and now pass. */
+  testCount?: number;
+  /** True when this verdict also moved the triage status from open to resolved. */
+  resolved?: boolean;
+}
+
+/** A cluster with a recorded fix that is failing again. */
+export interface ClusterRegressedPayload {
+  clusterId: number;
+  projectId: number;
+  projectName: string;
+  signature: string;
+  title?: string | null;
+  /** The run that failed the cluster again. */
+  runId: number;
+  /** The run the fix had landed in. */
+  fixLandedRunId: number | null;
+  /** True when this verdict also moved the triage status from resolved back to open. */
+  reopened?: boolean;
+}
+
 export interface DiagnosisCompletedPayload {
   clusterId: number;
   projectId: number;
@@ -181,6 +220,8 @@ export interface AutoHealPrOpenedPayload {
 export type NotificationPayload =
   | RunFinishedPayload
   | ClusterNewPayload
+  | ClusterFixedPayload
+  | ClusterRegressedPayload
   | DiagnosisCompletedPayload
   | AutoHealPrOpenedPayload;
 
@@ -238,8 +279,10 @@ export function passesSubscriptionFilters(
 /**
  * Idempotency key for one logical notification to one channel. Keyed on the
  * entity the event is about — the run for run-scoped events, the cluster for
- * cluster.new (one run can surface several new clusters), and the cluster plus
- * completion time for diagnosis.completed (the same cluster can be re-diagnosed).
+ * cluster.new (one run can surface several new clusters), the cluster plus the
+ * run for cluster.fixed / cluster.regressed (a cluster can be fixed and regress
+ * more than once), and the cluster plus completion time for
+ * diagnosis.completed (the same cluster can be re-diagnosed).
  */
 export function buildNotificationDedupeKey(
   event: NotificationEvent,
@@ -249,6 +292,10 @@ export function buildNotificationDedupeKey(
   if (event === 'cluster.new') {
     const p = payload as ClusterNewPayload;
     return `${event}:c${p.clusterId}:${channelId}`;
+  }
+  if (event === 'cluster.fixed' || event === 'cluster.regressed') {
+    const p = payload as ClusterFixedPayload;
+    return `${event}:c${p.clusterId}:r${p.runId}:${channelId}`;
   }
   if (event === 'diagnosis.completed') {
     const p = payload as DiagnosisCompletedPayload;
@@ -280,7 +327,12 @@ export function computePerfBaseline(
 
 /** Dashboard path the notification links to, or null when it has no target. */
 export function notificationTargetPath(event: NotificationEvent, payload: NotificationPayload): string | null {
-  if (event === 'cluster.new' || event === 'diagnosis.completed') {
+  if (
+    event === 'cluster.new' ||
+    event === 'cluster.fixed' ||
+    event === 'cluster.regressed' ||
+    event === 'diagnosis.completed'
+  ) {
     const clusterId = (payload as ClusterNewPayload).clusterId;
     return clusterId ? `/failure-clusters/${clusterId}` : null;
   }
@@ -300,6 +352,15 @@ export function renderEventSubject(event: NotificationEvent, payload: Notificati
     case 'cluster.new': {
       const p = payload as ClusterNewPayload;
       return `New failure cluster — ${p.projectName}`;
+    }
+    case 'cluster.fixed': {
+      const p = payload as ClusterFixedPayload;
+      const what = p.verification === 'diagnosis-verified' ? 'Diagnosis verified' : 'Cluster stopped failing';
+      return `${what} — ${p.projectName}`;
+    }
+    case 'cluster.regressed': {
+      const p = payload as ClusterRegressedPayload;
+      return `Fix regressed — ${p.projectName}`;
     }
     case 'flakiness.spike': {
       const p = payload as RunFinishedPayload;

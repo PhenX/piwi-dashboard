@@ -561,6 +561,7 @@ export const networkRequests = pgTable(
     normalizedUrl: text('normalized_url'),
     status: integer('status').notNull(),
     duration: integer('duration'),
+    startTime: bigint('start_time', { mode: 'number' }), // Request start, Unix timestamp in ms (exceeds 32-bit int range)
     resourceType: text('resource_type'),
     contentType: text('content_type'),
     serverLogs: jsonb('server_logs'),

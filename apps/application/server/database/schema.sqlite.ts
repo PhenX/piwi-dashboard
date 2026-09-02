@@ -532,6 +532,7 @@ export const networkRequests = sqliteTable(
     normalizedUrl: text('normalized_url'), // Route pattern for grouping (no ids, no query)
     status: integer('status').notNull(),
     duration: integer('duration'), // Response time in ms
+    startTime: integer('start_time'), // Request start, Unix timestamp in ms (null for older captures)
     resourceType: text('resource_type'), // 'fetch', 'xhr', 'document', 'other'
     contentType: text('content_type'), // Response content-type header
     serverLogs: text('server_logs', { mode: 'json' }), // Backend server logs from X-Piwi-Logs header

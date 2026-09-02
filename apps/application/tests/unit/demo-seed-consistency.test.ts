@@ -439,7 +439,7 @@ describe('authored DOM snapshots (served as trace-extracted)', () => {
 });
 
 describe('cluster 9 (assertion-captured healing) coherence', () => {
-  test('the expect()-captured snapshot heals the dark-mode failure through the real ladder', async () => {
+  test('the expect()-captured snapshot sits at the failing call site; the resolved-but-hidden failure is not healed', async () => {
     const story = FAILURE_STORIES.find((s) => s.clusterId === 9)!;
     const rows = q(`
       select * from locator_snapshots
@@ -468,20 +468,19 @@ describe('cluster 9 (assertion-captured healing) coherence', () => {
       lastSeenAt: null,
     } as unknown as import('~~/server/database/schema').LocatorSnapshotRow;
 
+    // The stored row describes the element the failing assertion targets.
+    expect(row.usedMethod).toBe('getByRole');
+    const alternatives = JSON.parse(row.alternatives) as Array<{ locator: string }>;
+    expect(alternatives.some((a) => a.locator === "locator('.export-btn')")).toBe(true);
+
+    // The call log says the locator resolved (to a hidden button) — the CSS is
+    // the bug, not the selector — so the healing gate declines to suggest a
+    // replacement even though a snapshot sits at the exact call site.
     const healing = await resolveHealingForCase({ error: failing.error, ariaSnapshot: story.aria }, [row], null);
-
-    // Exact-location rung hits, so the assertion-only locator has real
-    // prior-success history — the point of assertion capture.
-    expect(healing.source).toBe('prior-run');
-    expect(healing.location).toBe(story.captureLocation);
-
-    // The hidden button is absent from the failing page's ARIA snapshot, so
-    // the name-derived alternatives are flagged stale and the recommendation
-    // falls to the surviving class selector, with add-a-testid advice.
-    expect(healing.priorNameMayBeStale).toBe(true);
-    expect(healing.recommendation?.recommended?.locator).toBe("locator('.export-btn')");
-    expect(healing.recommendation?.suggestAddTestId).toBe(true);
-    expect(healing.fromAriaSnapshot?.length).toBeGreaterThan(0);
+    expect(healing.applicable).toBe(false);
+    expect(healing.reason).toBe('The locator resolved; this is not a locator problem.');
+    expect(healing.recommendation).toBeNull();
+    expect(healing.failingLocator?.method).toBe('getByRole');
   });
 });
 

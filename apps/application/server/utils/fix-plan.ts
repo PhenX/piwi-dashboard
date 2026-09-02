@@ -155,7 +155,7 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
   for (const test of failingTests.slice(0, MAX_HEALED_CASES)) {
     const result = healing.get(test.executionId);
     const recommended = result?.recommendation?.recommended ?? null;
-    if (!result || !recommended) continue;
+    if (!result || result.applicable === false || !recommended) continue;
 
     const loc = parseCallsiteLocation(result.location);
     edits.push({

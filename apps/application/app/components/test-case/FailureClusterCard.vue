@@ -7,10 +7,13 @@
  * (evidence across every affected test, what changed, AI diagnosis) lives.
  */
 import { clusterErrorTypeColor } from '~/utils';
+import { describeCluster, clusterSignatureLine } from '#shared/describe-cluster';
 
 export interface FailureClusterCardCluster {
   id: number;
   signature: string;
+  title?: string | null;
+  selector?: string | null;
   errorType?: string | null;
   status?: string | null;
   triageNote?: string | null;
@@ -68,7 +71,11 @@ const confidenceColor = (c?: string | null): 'success' | 'warning' | 'neutral' =
             {{ cluster.occurrences ?? 0 }} occurrence{{ (cluster.occurrences ?? 0) === 1 ? '' : 's' }}
           </span>
         </div>
-        <p class="font-mono text-xs text-gray-600 dark:text-gray-400 break-all line-clamp-2" :title="cluster.signature">
+        <p class="text-sm font-medium break-words" :title="cluster.signature">{{ describeCluster(cluster) }}</p>
+        <p
+          v-if="clusterSignatureLine(cluster)"
+          class="font-mono text-xs text-gray-600 dark:text-gray-400 break-all line-clamp-2"
+        >
           {{ cluster.signature }}
         </p>
       </div>

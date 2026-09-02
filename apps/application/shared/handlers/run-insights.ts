@@ -40,7 +40,13 @@ interface RunInsightsResult {
   workerImbalance: Array<{ workerIndex: number; count: number }>;
   workerImbalanceWarning: string | null;
   flakyOnRetry: Array<{ executionId: number; title: string; filePath: string; retries: number }>;
-  clusterNew: Array<{ clusterId: number; signature: string }>;
+  clusterNew: Array<{
+    clusterId: number;
+    signature: string;
+    title: string | null;
+    errorType: string | null;
+    selector: string | null;
+  }>;
 }
 
 const FAIL_STATUSES: ReadonlySet<string> = new Set(['failed', 'timedOut', 'timedout']);
@@ -256,7 +262,13 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
 
   // New clusters (firstSeenRunId === runId)
   const clusterRows: any[] = await db
-    .select({ id: failureClusters.id, signature: failureClusters.signature })
+    .select({
+      id: failureClusters.id,
+      signature: failureClusters.signature,
+      title: failureClusters.title,
+      errorType: failureClusters.errorType,
+      selector: failureClusters.selector,
+    })
     .from(failureClusters)
     .where(and(eq(failureClusters.firstSeenRunId, runId)))
     .limit(20);
@@ -280,6 +292,12 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
     workerImbalance,
     workerImbalanceWarning,
     flakyOnRetry,
-    clusterNew: clusterRows.map((c: any) => ({ clusterId: c.id, signature: c.signature })),
+    clusterNew: clusterRows.map((c: any) => ({
+      clusterId: c.id,
+      signature: c.signature,
+      title: c.title ?? null,
+      errorType: c.errorType ?? null,
+      selector: c.selector ?? null,
+    })),
   };
 }

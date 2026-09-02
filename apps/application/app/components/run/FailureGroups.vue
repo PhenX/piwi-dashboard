@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { describeCluster, clusterSignatureLine } from '#shared/describe-cluster';
 import type { TableColumn } from '@nuxt/ui';
 import type { FailureGroup, TestCaseResult } from '~~/types/api';
 
@@ -92,11 +93,13 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
 
             <template #signature-cell="{ row }">
               <div class="min-w-0 space-y-0.5">
+                <span class="text-sm block truncate" :title="row.original.signature">{{
+                  describeCluster({ ...row.original, filePath: row.original.cases[0]?.filePath })
+                }}</span>
                 <span
-                  class="text-sm block truncate"
-                  :class="row.original.title ? '' : 'font-mono'"
-                  :title="row.original.signature"
-                  >{{ row.original.title || row.original.signature }}</span
+                  v-if="clusterSignatureLine({ ...row.original, filePath: row.original.cases[0]?.filePath })"
+                  class="text-xs text-gray-500 font-mono truncate block"
+                  >{{ row.original.signature }}</span
                 >
                 <span v-if="row.original.selector" class="text-xs text-gray-500 truncate block">
                   Locator: <code class="font-mono">{{ row.original.selector }}</code>

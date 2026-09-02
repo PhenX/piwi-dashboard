@@ -50,6 +50,7 @@ const CANONICAL_TYPES: Record<string, string> = {
 const KNOWN_DIALECT_DIFFS: Record<string, [string, string]> = {
   // Millisecond epoch values exceed int32 on PostgreSQL.
   'test_runs_cases.started_at': ['int', 'bigint'],
+  'network_requests.start_time': ['int', 'bigint'],
 };
 
 interface ColumnShape {

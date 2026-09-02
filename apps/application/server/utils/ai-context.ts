@@ -44,6 +44,7 @@ import { getTraceDomSnapshot } from './dom-snapshot';
 import { renderAppStateMarkdown, type PageStateLike } from '#shared/page-state';
 import { getLastPassPageState } from '#shared/handlers/test-cases';
 import { getLocatorHealing } from './locator-healing';
+import { healingNotApplicableMarkdown } from '#shared/locator-resolution';
 import { getEnvironmentDiff } from './environment-diff';
 import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
 import { selectCaseScreenshots } from './case-screenshots';
@@ -1447,6 +1448,16 @@ async function locatorHealingSection(
   const healing = await getLocatorHealing(db, rep.id);
   const alternatives = healing.fromElementMatch ?? healing.fromPriorSuccess ?? healing.fromAriaSnapshot ?? [];
 
+  // The gate rejected healing (the locator resolved, a navigation failed, no
+  // locator): tell the model so, rather than leaving it to guess a selector.
+  const notApplicable = healingNotApplicableMarkdown(healing);
+  if (notApplicable) {
+    return {
+      section: healing.failingLocator ? notApplicable : null,
+      coverage: healing.failingLocator ? { source: healing.source, alternativesCount: 0 } : null,
+    };
+  }
+
   if (alternatives.length === 0) {
     // No alternatives — only report coverage when we actually recognized a
     // failing locator (so the UI can show "none found" rather than "n/a").
@@ -1674,8 +1685,8 @@ export function representativeExecutionSections(
   // D9: Network — correlate with the failure when timing data allows
   const nrItems = (rep as any).nrItems ?? [];
   const networkLines: string[] = [];
-  // Time anchor: the case's startedAt and the request's startTime are both
-  // Unix epoch milliseconds, so their difference is already the ms offset
+  // Time anchor: the case's startedAt and the request's stored startTime are
+  // both Unix epoch milliseconds, so their difference is already the ms offset
   // from test start.
   const failureAnchor = rep.startedAt ?? 0;
   const failedReqs = nrItems.filter((r: any) => r.status >= 400 || r.status === 0).slice(0, limits.networkRequests);
@@ -2715,7 +2726,8 @@ export async function buildDiagnosisContext(
         const mismatchNote = d.dimensionMismatch
           ? '\n- ⚠️ The screenshots have different dimensions (viewport change?) — compared on a padded union canvas, so the ratio is inflated and unreliable.'
           : '';
-        const md = `## Visual Diff vs Last Pass\nPixel comparison of the failing screenshot against the same test's last passing screenshot (run #${d.baselineRunId}):\n- Changed pixels: ${d.changedPixels} of ${d.width * d.height} (${pct}%)${mismatchNote}\n- The diff overlay (red = changed pixels) is attached as image "visual-diff".`;
+        const baselineNote = d.baselineNote ? ` — ${d.baselineNote}` : '';
+        const md = `## Visual Diff vs Last Pass\nPixel comparison of the failing screenshot against the same test's last passing screenshot (run #${d.baselineRunId}${baselineNote}):\n- Changed pixels: ${d.changedPixels} of ${d.width * d.height} (${pct}%)${mismatchNote}\n- The diff overlay (red = changed pixels) is attached as image "visual-diff".`;
         push(section('visualDiff', 'Visual Diff vs Last Pass', md));
         coverage = {
           ...coverage,

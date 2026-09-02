@@ -11,7 +11,11 @@ import sharp from 'sharp';
 import { files, testRuns, testRunsCases } from '../database/schema';
 import { getStorage } from '../storage';
 import { selectCaseScreenshots, type ScreenshotFileRow } from './case-screenshots';
+import { baselineEnvironmentNote, rankBaselineCandidates } from '#shared/baseline-order';
 import type { DrizzleDB } from '#shared/handlers/db';
+
+/** Passing executions inspected when choosing the baseline. */
+const BASELINE_CANDIDATES = 20;
 
 export interface VisualDiffMetadata {
   changedPixels: number;
@@ -29,6 +33,11 @@ export interface VisualDiffMetadata {
   baselineRunId: number;
   failingPath: string;
   baselinePath: string;
+  /**
+   * Set when no passing screenshot from the failing run's environment exists
+   * and the baseline came from another one.
+   */
+  baselineNote?: string | null;
 }
 
 export interface VisualDiffResult {
@@ -132,6 +141,7 @@ export async function getOrComputeVisualDiff(db: DrizzleDB, testRunsCaseId: numb
       browserName: testRunsCases.browserName,
       projectId: testRuns.projectId,
       branch: testRuns.branch,
+      environment: testRuns.environment,
     })
     .from(testRunsCases)
     .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
@@ -145,28 +155,28 @@ export async function getOrComputeVisualDiff(db: DrizzleDB, testRunsCaseId: numb
   const failingShot = failingShots[0]!;
 
   // Last passing execution (same browser) that has at least one screenshot.
-  // Prefer executions on the failing run's own branch before older ones from
-  // other branches, so a branch that intentionally redesigns a page is diffed
-  // against its own last-good state, not the pre-redesign baseline.
+  // Executions from the failing run's environment come first, then its own
+  // branch (a branch that intentionally redesigns a page is diffed against its
+  // own last-good state, not the pre-redesign baseline), then the most recent.
   const conds = [eq(testRunsCases.testCaseId, failing.testCaseId), eq(testRunsCases.status, 'passed')];
   if (failing.browserName) conds.push(eq(testRunsCases.browserName, failing.browserName));
   const passingRows = await db
-    .select({ id: testRunsCases.id, runId: testRunsCases.testRunId, branch: testRuns.branch })
+    .select({
+      id: testRunsCases.id,
+      runId: testRunsCases.testRunId,
+      branch: testRuns.branch,
+      environment: testRuns.environment,
+    })
     .from(testRunsCases)
     .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
     .where(and(...conds))
     .orderBy(desc(testRuns.startTime), desc(testRunsCases.id))
-    .limit(20);
+    .limit(BASELINE_CANDIDATES);
 
-  // Same-branch executions first (recency preserved), then the rest.
-  const passings = failing.branch
-    ? [
-        ...passingRows.filter((p) => p.branch === failing.branch),
-        ...passingRows.filter((p) => p.branch !== failing.branch),
-      ]
-    : passingRows;
+  const failingScope = { environment: failing.environment ?? null, branch: failing.branch ?? null };
+  const passings = rankBaselineCandidates(failingScope, passingRows);
 
-  let baseline: { id: number; runId: number } | null = null;
+  let baseline: (typeof passingRows)[number] | null = null;
   let baselineShot: ScreenshotFileRow | null = null;
   for (const p of passings) {
     const shots = await selectCaseScreenshots(db, p.id);
@@ -207,6 +217,7 @@ export async function getOrComputeVisualDiff(db: DrizzleDB, testRunsCaseId: numb
       baselineRunId: baseline.runId,
       failingPath: failingShot.path,
       baselinePath: baselineShot.path,
+      baselineNote: baselineEnvironmentNote(failingScope, baseline),
     };
 
     await db.insert(files).values({

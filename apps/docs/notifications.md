@@ -25,6 +25,8 @@ Manage both from **Settings → Notifications**, and subscribe to a single proje
 | `run.failed` | A run completes with failures |
 | `run.failed.default_branch` | A run fails on the repository's default branch |
 | `cluster.new` | A new failure cluster appears |
+| `cluster.fixed` | A full run passes every test a cluster covers — the fix landed. The payload's `verification` says whether the diagnosis was corroborated (`diagnosis-verified`) or the tests merely stopped failing, and `resolved` whether the triage status was closed automatically |
+| `cluster.regressed` | A cluster with a recorded fix fails again; `reopened` says whether a *resolved* cluster was set back to open |
 | `flakiness.spike` | A completed run contains flaky tests — use the flakiness-threshold filter to only hear about rates above N% |
 | `perf.regression` | A run is at least 20% slower than the median of the previous five completed runs on the same branch — raise the bar per subscription with the regression-% filter |
 | `diagnosis.completed` | An AI diagnosis finishes (requires an AI provider) |
@@ -86,7 +88,7 @@ execution (`/test-run-cases/<executionId>`), falling back to the test's history 
 carries no execution id. The [pull-request comment](./ci#pull-request-feedback) quotes failures the same
 way.
 
-`cluster.new` payloads similarly carry `sampleErrorExcerpt` (cut the same way) and `affectedCases`. These fields are **additive** — existing consumers keep working, but if you re-serialize the payload to re-check the HMAC, sign the exact bytes you received.
+`cluster.new` payloads similarly carry `sampleErrorExcerpt` (cut the same way) and `affectedCases`; `cluster.fixed` and `cluster.regressed` carry the cluster's `signature`, `title`, the `runId` that decided the verdict and, for a fix, the `commit` and `timeToResolutionMs`. These fields are **additive** — existing consumers keep working, but if you re-serialize the payload to re-check the HMAC, sign the exact bytes you received.
 
 ### Global channels & subscriptions
 
@@ -125,4 +127,4 @@ Send a test email from **Settings → Notifications** to confirm delivery.
 - [CI & sharding](./ci) — the alternative: pull the run URL into your pipeline instead
 - [Authentication](./authentication) — per-user channels and subscriptions
 - [Configuration reference](./configuration) — all environment variables
-- [AI diagnosis & failure clustering](./ai-diagnosis) — what triggers `cluster.new` and `diagnosis.completed`
+- [AI diagnosis & failure clustering](./ai-diagnosis) — what triggers `cluster.new`, `cluster.fixed`, `cluster.regressed` and `diagnosis.completed`
