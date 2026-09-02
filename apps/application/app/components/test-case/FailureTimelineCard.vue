@@ -16,11 +16,15 @@ import { useClusterSectionLocator } from '~/composables/useClusterSectionLocator
 import SectionCard from '../shared/SectionCard.vue';
 import ChartTooltip from '../shared/ChartTooltip.vue';
 import ChartLegend from '../shared/ChartLegend.vue';
+import OpenInIdeLink from '../shared/OpenInIdeLink.vue';
 
 const props = defineProps<{
   testRunsCaseId: number;
   /** Whether a trace exists — enables the "View trace" affordance in the header. */
   hasTrace?: boolean;
+  /** Piwi project id/name — passed to the open-in-IDE links for call sites. */
+  projectKey?: string | number | null;
+  projectName?: string | null;
 }>();
 
 const { data } = await useFetch<FailureTimeline>(`/api/test-run-cases/${props.testRunsCaseId}/timeline`);
@@ -76,14 +80,21 @@ const TOP = 8;
 const LANE_H = 22;
 const AXIS_H = 18;
 
+const CALL_BAND_H = 16;
+
 const wrapper = ref<HTMLElement | null>(null);
 const { width } = useElementSize(wrapper);
 const svgWidth = computed(() => Math.max(0, width.value));
 const plotLeft = LABEL_W;
 const plotRight = computed(() => Math.max(plotLeft + 1, svgWidth.value - PAD_R));
 const plotWidth = computed(() => plotRight.value - plotLeft);
+// The "Calls" band sits above the lanes when at least one step has a call site.
+const hasCallBand = computed(() => (data.value?.lanes.steps ?? []).some((s) => s.origin != null || s.group != null));
+const bandH = computed(() => (hasCallBand.value ? CALL_BAND_H : 0));
+const lanesTop = computed(() => TOP + bandH.value);
 const lanesHeight = computed(() => visibleLanes.value.length * LANE_H);
-const svgHeight = computed(() => TOP + lanesHeight.value + AXIS_H);
+const marksBottom = computed(() => lanesTop.value + lanesHeight.value);
+const svgHeight = computed(() => marksBottom.value + AXIS_H);
 
 function xOf(at: number): number {
   const { start, end } = domain.value;
@@ -99,7 +110,7 @@ function barRect(at: number, dur: number): { x: number; w: number } {
 }
 
 function laneY(lane: TimelineLane): number {
-  return TOP + visibleLanes.value.indexOf(lane) * LANE_H;
+  return lanesTop.value + visibleLanes.value.indexOf(lane) * LANE_H;
 }
 
 const failureX = computed(() => (data.value ? xOf(data.value.failureAt) : 0));
@@ -144,6 +155,7 @@ function networkClass(item: TimelineItem): string {
 
 const legendItems = computed(() => {
   const items: { color: string; label: string }[] = [];
+  if (hasCallBand.value) items.push({ color: 'rgb(129, 140, 248)', label: 'Calls' });
   if (visibleLanes.value.includes('steps')) {
     items.push({ color: 'rgb(239, 68, 68)', label: 'Failed step' });
     items.push({ color: 'rgb(156, 163, 175)', label: 'Step' });
@@ -173,6 +185,75 @@ function kindTag(item: TimelineItem): string {
   if (item.kind === 'backend') return `backend ${item.status ?? ''}`.trim();
   return '';
 }
+
+// ── Call context (which method / test.step each action came from) ─────────────
+function basename(file: string): string {
+  const parts = file.split('/').filter(Boolean);
+  return parts[parts.length - 1] ?? file;
+}
+/** The band/group key: the method or test.step title, else the call-site file. */
+function callKey(item: TimelineItem): string | null {
+  return item.group ?? item.origin?.file ?? null;
+}
+function callLabel(item: TimelineItem): string {
+  return item.group ?? (item.origin ? basename(item.origin.file) : '');
+}
+/** A header names a method when its group is that method's function name. */
+function isMethodHeader(item: TimelineItem): boolean {
+  return item.origin?.function != null && item.origin.function === item.group;
+}
+
+/** Runs of consecutive steps that share a call site, drawn as one span in the band. */
+const callSpans = computed(() => {
+  const steps = data.value?.lanes.steps ?? [];
+  const spans: Array<{
+    id: string;
+    key: string;
+    label: string;
+    start: number;
+    end: number;
+    origin: TimelineItem['origin'];
+  }> = [];
+  let cur: (typeof spans)[number] | null = null;
+  for (const step of steps) {
+    const key = callKey(step);
+    if (key == null) {
+      cur = null;
+      continue;
+    }
+    const end = step.at + (step.duration ?? 0);
+    if (cur && cur.key === key) {
+      cur.end = Math.max(cur.end, end);
+    } else {
+      cur = { id: step.id, key, label: callLabel(step), start: step.at, end, origin: step.origin ?? null };
+      spans.push(cur);
+    }
+  }
+  return spans;
+});
+
+function bandTitle(span: { label: string; origin: TimelineItem['origin'] }): string {
+  const where = span.origin ? ` · ${span.origin.file}:${span.origin.line}` : '';
+  return `${span.label}${where}`;
+}
+
+/** The window list, with a header row before each run of same-origin actions. */
+type WindowRow = { kind: 'header'; item: TimelineItem } | { kind: 'item'; item: TimelineItem; indented: boolean };
+const windowRows = computed<WindowRow[]>(() => {
+  const out: WindowRow[] = [];
+  let curKey: string | null = null;
+  for (const item of windowItems.value) {
+    const key = item.kind === 'step' ? (item.group ?? null) : null;
+    if (key !== curKey) {
+      curKey = key;
+      if (key != null) out.push({ kind: 'header', item });
+    }
+    // A `test.step` entry is shown as the group header, not as an event line too.
+    if (item.kind === 'step' && item.category === 'test.step') continue;
+    out.push({ kind: 'item', item, indented: key != null });
+  }
+  return out;
+});
 
 function revealItem(item: TimelineItem) {
   const sectionId = SECTION_ACTION[item.ref.section];
@@ -229,9 +310,50 @@ function onViewTrace() {
             :x="windowShade.x"
             :y="TOP"
             :width="windowShade.w"
-            :height="lanesHeight"
+            :height="marksBottom - TOP"
             class="fill-gray-400/10 dark:fill-gray-300/5"
           />
+
+          <!-- Calls band: which method / test.step each run of actions came from -->
+          <g v-if="hasCallBand">
+            <text
+              :x="0"
+              :y="TOP + CALL_BAND_H / 2"
+              dominant-baseline="middle"
+              class="fill-gray-500 dark:fill-gray-400 text-[10px]"
+            >
+              Calls
+            </text>
+            <g v-for="span in callSpans" :key="span.id">
+              <rect
+                :x="barRect(span.start, span.end - span.start).x"
+                :y="TOP + 2"
+                :width="barRect(span.start, span.end - span.start).w"
+                :height="CALL_BAND_H - 4"
+                rx="2"
+                class="fill-indigo-400/70 dark:fill-indigo-500/60"
+              >
+                <title>{{ bandTitle(span) }}</title>
+              </rect>
+              <text
+                v-if="barRect(span.start, span.end - span.start).w > 44"
+                :x="barRect(span.start, span.end - span.start).x + 4"
+                :y="TOP + CALL_BAND_H / 2"
+                dominant-baseline="middle"
+                class="fill-white text-[9px] pointer-events-none"
+                :style="{ clipPath: `inset(0 0 0 0)` }"
+              >
+                {{
+                  span.label.length > Math.floor((barRect(span.start, span.end - span.start).w - 8) / 5.5)
+                    ? span.label.slice(
+                        0,
+                        Math.max(1, Math.floor((barRect(span.start, span.end - span.start).w - 8) / 5.5) - 1),
+                      ) + '…'
+                    : span.label
+                }}
+              </text>
+            </g>
+          </g>
 
           <!-- Lane rows -->
           <g v-for="lane in visibleLanes" :key="lane">
@@ -321,7 +443,7 @@ function onViewTrace() {
             :x1="failureX"
             :x2="failureX"
             :y1="TOP"
-            :y2="TOP + lanesHeight"
+            :y2="marksBottom"
             class="stroke-red-500"
             stroke-width="1.5"
             stroke-dasharray="4 3"
@@ -333,7 +455,7 @@ function onViewTrace() {
               v-for="(tick, i) in ticks"
               :key="i"
               :x="Math.max(plotLeft, Math.min(plotRight, xOf(tick)))"
-              :y="TOP + lanesHeight + 12"
+              :y="marksBottom + 12"
               :text-anchor="i === 0 ? 'start' : i === ticks.length - 1 ? 'end' : 'middle'"
               class="fill-gray-400 dark:fill-gray-500 text-[10px] tabular-nums"
             >
@@ -353,36 +475,75 @@ function onViewTrace() {
       <div>
         <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">What happened in this window</h4>
         <ul class="space-y-0.5">
-          <li v-for="item in windowItems" :key="item.id">
-            <button
-              type="button"
-              class="w-full text-left text-xs font-mono px-1.5 py-1 rounded flex items-baseline gap-2 hover:bg-gray-50 dark:hover:bg-gray-800/60"
-              :class="item.failed ? 'bg-red-50 dark:bg-red-950/30' : ''"
-              @click="revealItem(item)"
+          <template v-for="row in windowRows" :key="(row.kind === 'header' ? 'h-' : 'i-') + row.item.id">
+            <!-- Group header: the method or test.step a run of actions came from -->
+            <li
+              v-if="row.kind === 'header'"
+              class="text-xs font-mono px-1.5 pt-1.5 flex items-baseline gap-1 flex-wrap"
             >
-              <span class="tabular-nums text-gray-400 dark:text-gray-500 shrink-0 w-14">{{ formatRel(item.at) }}</span>
-              <span class="min-w-0 break-words">
-                <template v-if="item.kind === 'network'">
-                  <span class="text-gray-700 dark:text-gray-300">{{ item.label }}</span>
-                  <span class="text-gray-500"> → {{ item.status }}</span>
-                  <span v-if="item.duration != null" class="text-gray-400"> ({{ Math.round(item.duration) }} ms)</span>
+              <span class="text-gray-400 dark:text-gray-500">↳</span>
+              <template v-if="isMethodHeader(row.item) && row.item.origin">
+                <span class="text-gray-600 dark:text-gray-300">in {{ row.item.origin.function }}()</span>
+                <span class="text-gray-400">·</span>
+                <OpenInIdeLink
+                  :location="`${row.item.origin.file}:${row.item.origin.line}`"
+                  :project-key="projectKey"
+                  :project-name="projectName"
+                />
+                <template v-if="row.item.origin.chain[0]">
+                  <span class="text-gray-400">←</span>
+                  <OpenInIdeLink
+                    :location="`${row.item.origin.chain[0].file}:${row.item.origin.chain[0].line}`"
+                    :project-key="projectKey"
+                    :project-name="projectName"
+                  />
                 </template>
-                <template v-else-if="item.kind === 'step'">
-                  <span
-                    :class="
-                      item.failed ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-700 dark:text-gray-300'
-                    "
-                    >{{ item.label }}</span
-                  >
-                  <span v-if="item.failed" class="text-red-500"> failed</span>
-                </template>
-                <template v-else>
-                  <span class="text-gray-500">{{ kindTag(item) }} · </span>
-                  <span class="text-gray-700 dark:text-gray-300">“{{ item.label }}”</span>
-                </template>
-              </span>
-            </button>
-          </li>
+              </template>
+              <span v-else class="text-gray-600 dark:text-gray-300">{{ row.item.group }}</span>
+            </li>
+
+            <!-- One event line -->
+            <li v-else>
+              <button
+                type="button"
+                class="w-full text-left text-xs font-mono px-1.5 py-1 rounded flex items-baseline gap-2 hover:bg-gray-50 dark:hover:bg-gray-800/60"
+                :class="[row.item.failed ? 'bg-red-50 dark:bg-red-950/30' : '', row.indented ? 'pl-5' : '']"
+                @click="revealItem(row.item)"
+              >
+                <span class="tabular-nums text-gray-400 dark:text-gray-500 shrink-0 w-14">{{
+                  formatRel(row.item.at)
+                }}</span>
+                <span class="min-w-0 break-words">
+                  <template v-if="row.item.kind === 'network'">
+                    <span class="text-gray-700 dark:text-gray-300">{{ row.item.label }}</span>
+                    <span class="text-gray-500"> → {{ row.item.status }}</span>
+                    <span v-if="row.item.duration != null" class="text-gray-400">
+                      ({{ Math.round(row.item.duration) }} ms)</span
+                    >
+                  </template>
+                  <template v-else-if="row.item.kind === 'step'">
+                    <span
+                      :class="
+                        row.item.failed
+                          ? 'text-red-600 dark:text-red-400 font-medium'
+                          : 'text-gray-700 dark:text-gray-300'
+                      "
+                      >{{ row.item.label }}</span
+                    >
+                    <span v-if="row.item.failed" class="text-red-500"> failed</span>
+                    <!-- Reporter-only call site (no method group): a muted file:line suffix -->
+                    <span v-if="!row.indented && row.item.origin" class="text-gray-400 dark:text-gray-500">
+                      · {{ basename(row.item.origin.file) }}:{{ row.item.origin.line }}</span
+                    >
+                  </template>
+                  <template v-else>
+                    <span class="text-gray-500">{{ kindTag(row.item) }} · </span>
+                    <span class="text-gray-700 dark:text-gray-300">“{{ row.item.label }}”</span>
+                  </template>
+                </span>
+              </button>
+            </li>
+          </template>
         </ul>
       </div>
 

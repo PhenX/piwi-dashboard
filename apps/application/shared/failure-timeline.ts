@@ -12,6 +12,7 @@
  * yields a valid (possibly empty) timeline, and anything without a usable
  * timestamp is listed in `unplaced` with a reason rather than guessed at.
  */
+import { parseCallsiteLocation } from './callsite-location';
 
 /** The rows a lane groups. `backend` holds log entries attached to a request. */
 export type TimelineLane = 'steps' | 'console' | 'network' | 'backend';
@@ -24,6 +25,26 @@ export interface TimelineRef {
   section: 'steps' | 'console' | 'networkRequests' | 'backendLogs';
   /** Index within the source list; backend logs carry their parent request's index. */
   index: number;
+}
+
+/** One frame of a step's caller chain: where in the source the call was made. */
+export interface TimelineFrame {
+  file: string;
+  line: number;
+  function: string | null;
+}
+
+/**
+ * Where a step's action came from: the enclosing method (the nearest in-project
+ * frame outside the spec file) plus the caller chain up to the spec. `function`
+ * needs an uploaded trace; `file`/`line` come from the reporter's call site, so
+ * the shallowest form is just `{ file, line, function: null, chain: [] }`.
+ */
+export interface TimelineOrigin {
+  file: string;
+  line: number;
+  function: string | null;
+  chain: TimelineFrame[];
 }
 
 /** One placed item, positioned at `at` ms relative to the timeline `origin`. */
@@ -41,6 +62,12 @@ export interface TimelineItem {
   ref: TimelineRef;
   /** The failed step, or a request that errored — drawn in the critical color. */
   failed?: boolean;
+  /** Steps only: the call site the action came from, or null when unknown. */
+  origin?: TimelineOrigin | null;
+  /** Steps only: the enclosing `test.step` title or method name the action groups under. */
+  group?: string | null;
+  /** Steps only: the reporter step category (`action`, `test.step`, `hook`, …). */
+  category?: string;
 }
 
 /** Something that exists but carries no usable timestamp, so it cannot be placed. */
@@ -87,6 +114,14 @@ export interface TimelineTraceAnchor {
   failingActionEnd?: number | null;
 }
 
+/** One trace action's call stack, matched to a step by its call-site `location`. */
+export interface TimelineCallsite {
+  /** `file:line[:col]` of the action's innermost in-project frame. */
+  location: string;
+  /** Frames innermost-first, with function names when the trace recorded them. */
+  frames: Array<{ file: string; line: number; function?: string | null; inProject?: boolean }>;
+}
+
 export interface FailureTimelineInput {
   startedAt?: number | null;
   duration?: number | null;
@@ -97,6 +132,10 @@ export interface FailureTimelineInput {
   consoleLogs?: unknown;
   networkRequests?: unknown;
   traceAnchor?: TimelineTraceAnchor | null;
+  /** The test's spec file (project-relative) — the boundary for the "enclosing method". */
+  specFile?: string | null;
+  /** Per-action call stacks from the trace, matched to steps by call-site location. */
+  traceCallsites?: TimelineCallsite[] | null;
 }
 
 /** The default window reaches this far before the failed step… */
@@ -164,6 +203,52 @@ function stepFailed(step: StepRow): boolean {
 
 const FAILED_STATUSES = new Set(['failed', 'timedout', 'timedOut', 'interrupted']);
 
+function normalizeSlashes(path: string): string {
+  return path.replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+/** A `file:line` key for matching a step's call site to a trace action (column ignored). */
+function fileLineKey(location: string | null | undefined): string | null {
+  const parsed = parseCallsiteLocation(location);
+  return parsed ? `${normalizeSlashes(parsed.file)}:${parsed.line}` : null;
+}
+
+/**
+ * Where a step's action came from. With trace frames: the enclosing method is
+ * the nearest in-project frame outside the spec file, and `chain` is the callers
+ * above it up to the spec. Without frames: the reporter's own call-site
+ * `location` gives file and line, with no function name.
+ */
+function deriveOrigin(
+  location: string | null | undefined,
+  frames: TimelineCallsite['frames'] | null,
+  specFile: string | null,
+): TimelineOrigin | null {
+  const spec = specFile ? normalizeSlashes(specFile) : null;
+  if (frames && frames.length > 0) {
+    const norm = frames
+      .filter((f) => f && typeof f.file === 'string' && isFiniteNumber(f.line))
+      .map((f) => ({
+        file: normalizeSlashes(f.file),
+        line: f.line,
+        function: typeof f.function === 'string' ? f.function : null,
+        inProject: f.inProject !== false,
+      }));
+    if (norm.length > 0) {
+      const inProject = norm.filter((f) => f.inProject);
+      const pool = inProject.length > 0 ? inProject : norm;
+      let enclosingIdx = spec ? pool.findIndex((f) => f.file !== spec) : 0;
+      if (enclosingIdx === -1) enclosingIdx = 0;
+      const enclosing = pool[enclosingIdx]!;
+      const chain = pool.slice(enclosingIdx + 1).map((f) => ({ file: f.file, line: f.line, function: f.function }));
+      return { file: enclosing.file, line: enclosing.line, function: enclosing.function, chain };
+    }
+  }
+  const parsed = parseCallsiteLocation(location);
+  if (parsed) return { file: normalizeSlashes(parsed.file), line: parsed.line, function: null, chain: [] };
+  return null;
+}
+
 export function buildFailureTimeline(input: FailureTimelineInput): FailureTimeline {
   const steps = rows<StepRow>(input.steps);
   const consoleLogs = rows<ConsoleRow>(input.consoleLogs);
@@ -211,14 +296,50 @@ export function buildFailureTimeline(input: FailureTimelineInput): FailureTimeli
     return null;
   })();
 
-  let failedStep: FailureTimeline['failedStep'] = null;
-  steps.forEach((step, index) => {
+  // Position every step first (real or cumulative), so `test.step` group spans
+  // are known before each action is asked which one contains it.
+  const positions: Array<{ at: number; dur: number }> = [];
+  steps.forEach((step) => {
     const dur = isFiniteNumber(step.duration) && step.duration >= 0 ? step.duration : 0;
     const absStart = stepsHaveStartTimes ? (step.startTime as number) : cursor;
     if (!stepsHaveStartTimes) cursor += dur;
-    const at = absStart - origin;
+    positions.push({ at: absStart - origin, dur });
+  });
+
+  // `test.step` groups: an action's group is the innermost test.step whose span
+  // contains it (a test.step contains itself, so it heads its own group).
+  const testStepSpans = steps
+    .map((step, index) => ({ index, title: clampLabel(str(step.title)), ...positions[index]! }))
+    .filter((s) => str(steps[s.index]!.category) === 'test.step' && s.title.length > 0);
+  const groupTitleFor = (at: number, dur: number): string | null => {
+    const mid = at + dur / 2;
+    let best: { title: string; width: number } | null = null;
+    for (const span of testStepSpans) {
+      if (span.at <= mid && mid <= span.at + span.dur) {
+        const width = span.dur;
+        if (!best || width < best.width) best = { title: span.title, width };
+      }
+    }
+    return best?.title ?? null;
+  };
+
+  // Match each step to a trace action's frames by call-site file:line.
+  const callsiteByKey = new Map<string, TimelineCallsite['frames']>();
+  for (const cs of asArray(input.traceCallsites) as TimelineCallsite[]) {
+    const key = fileLineKey(cs?.location);
+    if (key && Array.isArray(cs.frames) && !callsiteByKey.has(key)) callsiteByKey.set(key, cs.frames);
+  }
+  const specFile = typeof input.specFile === 'string' ? input.specFile : null;
+
+  let failedStep: FailureTimeline['failedStep'] = null;
+  steps.forEach((step, index) => {
+    const { at, dur } = positions[index]!;
     const failed = index === failedStepIndex;
     const label = clampLabel(str(step.title, `Step ${index + 1}`));
+    const location = typeof step.location === 'string' ? step.location : null;
+    const frames = (location && callsiteByKey.get(fileLineKey(location) ?? '')) || null;
+    const stepOrigin = deriveOrigin(location, frames, specFile);
+    const group = groupTitleFor(at, dur) ?? stepOrigin?.function ?? null;
     lanes.steps.push({
       id: `step-${index}`,
       lane: 'steps',
@@ -228,6 +349,9 @@ export function buildFailureTimeline(input: FailureTimelineInput): FailureTimeli
       status: failed ? 'failed' : 'passed',
       kind: 'step',
       ref: { section: 'steps', index },
+      origin: stepOrigin,
+      group,
+      ...(str(step.category) ? { category: str(step.category) } : {}),
       ...(failed ? { failed: true } : {}),
     });
     noteEnd(at, dur);

@@ -11,12 +11,14 @@ import { getStorage } from '../storage';
 import { parseZip, type ZipEntry } from './trace-zip';
 import { parseTraceTexts, traceFileRank, type ParsedTraceData } from './trace-events';
 import {
+  buildActionCallsites,
   buildTraceBodyPreview,
   buildTraceCallStack,
   buildTraceNetwork,
   matchNetworkBodySha1,
   parseNetworkTexts,
   parseStacksTexts,
+  type ActionCallsite,
   type TraceResourceReader,
   type TraceResourceSnapshot,
   type TraceStacksIndex,
@@ -130,6 +132,16 @@ export async function getTraceCallStackFromBlob(
   const bundle = await loadTraceBundle(blobPath);
   if (!bundle || !bundle.parsed) return { status: 'no-trace' };
   return buildTraceCallStack(bundle.parsed, bundle.stacks, bundle.readResource, { knownTestFilePath });
+}
+
+/** Per-action call sites (lightweight display frames) for the failure timeline. */
+export async function getTraceActionCallsitesFromBlob(
+  blobPath: string,
+  knownTestFilePath: string | null,
+): Promise<ActionCallsite[]> {
+  const bundle = await loadTraceBundle(blobPath);
+  if (!bundle || !bundle.parsed) return [];
+  return buildActionCallsites(bundle.parsed, bundle.stacks, { knownTestFilePath });
 }
 
 /** Full network activity from the trace's HAR-like stream. */

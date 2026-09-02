@@ -243,4 +243,95 @@ describe('buildFailureTimeline', () => {
     expect(tl.origin).toBe(T0 - 500);
     for (const item of tl.lanes.console) expect(item.at).toBeGreaterThanOrEqual(0);
   });
+
+  describe('call-site origin and group', () => {
+    test('derives the enclosing method and caller chain from trace frames', () => {
+      const tl = buildFailureTimeline({
+        startedAt: T0,
+        duration: 2_000,
+        status: 'failed',
+        specFile: 'tests/checkout.spec.ts',
+        steps: [
+          {
+            title: 'click Pay',
+            category: 'action',
+            duration: 2_000,
+            startTime: T0,
+            location: 'pages/checkout.ts:42:10',
+            error: 'not enabled',
+          },
+        ],
+        traceCallsites: [
+          {
+            location: 'pages/checkout.ts:42',
+            frames: [
+              { file: 'pages/checkout.ts', line: 42, function: 'CheckoutPage.pay', inProject: true },
+              { file: 'tests/checkout.spec.ts', line: 23, function: 'test body', inProject: true },
+              { file: 'node_modules/@playwright/test/index.js', line: 9, function: 'Runner', inProject: false },
+            ],
+          },
+        ],
+      });
+      const step = tl.lanes.steps[0]!;
+      expect(step.origin).toEqual({
+        file: 'pages/checkout.ts',
+        line: 42,
+        function: 'CheckoutPage.pay',
+        chain: [{ file: 'tests/checkout.spec.ts', line: 23, function: 'test body' }],
+      });
+      // With no test.step, the method name is the group.
+      expect(step.group).toBe('CheckoutPage.pay');
+    });
+
+    test('falls back to the reporter call-site location when there is no trace', () => {
+      const tl = buildFailureTimeline({
+        startedAt: T0,
+        duration: 1_000,
+        status: 'failed',
+        specFile: 'tests/checkout.spec.ts',
+        steps: [
+          { title: 'goto', category: 'action', duration: 1_000, startTime: T0, location: 'pages/checkout.ts:12:3' },
+        ],
+      });
+      const step = tl.lanes.steps[0]!;
+      expect(step.origin).toEqual({ file: 'pages/checkout.ts', line: 12, function: null, chain: [] });
+      // No trace ⇒ no function name ⇒ no method group without a test.step.
+      expect(step.group).toBeNull();
+    });
+
+    test('groups actions under the enclosing test.step title', () => {
+      const tl = buildFailureTimeline({
+        startedAt: T0,
+        duration: 3_000,
+        status: 'failed',
+        steps: [
+          { title: 'Pay for the order', category: 'test.step', duration: 3_000, startTime: T0 },
+          { title: 'fill card', category: 'action', duration: 1_000, startTime: T0, location: 'pages/checkout.ts:8:1' },
+          {
+            title: 'click Pay',
+            category: 'action',
+            duration: 2_000,
+            startTime: T0 + 1_000,
+            location: 'pages/checkout.ts:12:1',
+            error: 'boom',
+          },
+        ],
+      });
+      expect(tl.lanes.steps[1]!.group).toBe('Pay for the order');
+      expect(tl.lanes.steps[2]!.group).toBe('Pay for the order');
+      // The test.step entry heads its own group.
+      expect(tl.lanes.steps[0]!.group).toBe('Pay for the order');
+    });
+
+    test('leaves origin null and group null when there is no call data', () => {
+      const tl = buildFailureTimeline({
+        startedAt: T0,
+        duration: 1_000,
+        status: 'failed',
+        steps: [{ title: 'a', category: 'action', duration: 1_000, startTime: T0 }],
+      });
+      expect(tl.lanes.steps[0]!.origin).toBeNull();
+      expect(tl.lanes.steps[0]!.group).toBeNull();
+    });
+  });
 });

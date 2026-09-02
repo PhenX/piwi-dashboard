@@ -37,12 +37,18 @@ test.describe('Test-run-case page', () => {
             workerIndex: 0,
             startedAt: startTime,
             steps: [
-              { title: "page.goto('/checkout')", duration: 800, category: 'navigation' },
+              {
+                title: "page.goto('/checkout')",
+                duration: 800,
+                category: 'navigation',
+                location: 'pages/checkout.ts:11:5',
+              },
               {
                 title: "getByRole('button', { name: 'Pay' }).click()",
                 duration: 5000,
                 category: 'action',
                 failed: true,
+                location: 'pages/checkout.ts:42:5',
               },
             ],
           },
@@ -130,6 +136,8 @@ test.describe('Test-run-case page', () => {
     expect(tl.failureAt).toBe(5800);
     expect(tl.lanes.steps[1].failed).toBe(true);
     expect(tl.window).toBeDefined();
+    // Each step is attributed to its reporter call site (file:line; no trace, so no function).
+    expect(tl.lanes.steps[1].origin).toEqual({ file: 'pages/checkout.ts', line: 42, function: null, chain: [] });
   });
 
   test('the failure timeline card renders below the error on the Diagnosis tab', async ({ page }) => {
