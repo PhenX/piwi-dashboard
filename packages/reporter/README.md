@@ -36,6 +36,7 @@ export default wrapConfig(
   defineConfig({
     use: {
       trace: 'retain-on-failure',
+      screenshot: 'only-on-failure',
     },
   }),
   {
@@ -79,6 +80,7 @@ export default defineConfig({
   ],
   use: {
     trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
 })
 ```
@@ -333,6 +335,7 @@ Everything public — the reporter, config helpers, and the capture fixtures —
 
 - Ensure an HTML reporter is configured: `['html', { outputFolder: 'playwright-report' }]`
 - Ensure traces are enabled: `use: { trace: 'retain-on-failure' }`
+- Ensure screenshots are enabled: `use: { screenshot: 'only-on-failure' }` — Playwright's default is `'off'`
 - Check the dashboard server is running and accessible at `serverUrl`
 
 ### Fixture data not appearing (network, Web Vitals, console, ARIA, locator healing)
