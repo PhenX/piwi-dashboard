@@ -506,6 +506,28 @@ const SCENES = [
     pad: 12,
   },
 
+  // ── Failure headline (report artifacts) ──────────────────────────────────
+  {
+    name: 'failure-headline',
+    description: 'Failing execution, Diagnosis tab: the one-line headline card above the raw error',
+    tags: ['desktop'],
+    // Execution 37 is clustered with a sibling in its run, so the facts row
+    // carries the cluster link next to the why and since-when chips.
+    route: '/test-run-cases/37?tab=diagnosis',
+    viewport: { width: 1280, height: 900 },
+    of: '[data-shot="failure-headline"]',
+    pad: 12,
+  },
+  {
+    name: 'failure-headline-mobile',
+    description: 'The same headline card at phone width',
+    tags: ['desktop'],
+    route: '/test-run-cases/37?tab=diagnosis',
+    viewport: { width: 375, height: 812 },
+    of: '[data-shot="failure-headline"]',
+    pad: 8,
+  },
+
   // ── Desktop shell (report artifacts) ──────────────────────────────────────
   {
     name: 'desktop-nav',

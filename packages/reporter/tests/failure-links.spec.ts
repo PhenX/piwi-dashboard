@@ -1,8 +1,19 @@
 import { describe, it, expect, vi } from 'vitest';
-import { FailureLinks, caseLocateUrl, formatFailureLine } from '../src/internal/support/failure-links.js';
+import {
+  FailureLinks,
+  caseLocateUrl,
+  failureHeadline,
+  formatFailureLine,
+} from '../src/internal/support/failure-links.js';
 import { Logger } from '../src/internal/support/logger.js';
 
-const TEST = { title: 'applies the discount', file: 'tests/checkout.spec.ts', retry: 2, browser: 'chromium' };
+const TEST = {
+  title: 'applies the discount',
+  file: 'tests/checkout.spec.ts',
+  retry: 2,
+  browser: 'chromium',
+  headline: null,
+};
 
 describe('caseLocateUrl', () => {
   it('builds the resolver URL from the run id and the test identity', () => {
@@ -20,6 +31,33 @@ describe('caseLocateUrl', () => {
   it('encodes characters a title may carry', () => {
     const url = caseLocateUrl('https://dash.example.com', 1, { ...TEST, title: 'a+b & c=d #1' });
     expect(url).toContain('title=a%2Bb%20%26%20c%3Dd%20%231');
+  });
+});
+
+describe('failureHeadline', () => {
+  it('explains the error in one line, naming the failed step on a test timeout', () => {
+    expect(
+      failureHeadline(
+        "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Pay' })\n",
+      ),
+    ).toBe("getByRole('button', { name: 'Pay' }) was not found on the page — click timed out after 30 s");
+    expect(
+      failureHeadline('Test timeout of 30000ms exceeded.', [
+        { title: "page.goto('/checkout')" },
+        { title: 'fillPaymentDetails(page)', failed: true },
+      ]),
+    ).toBe('Test timed out after 30 s while "fillPaymentDetails(page)"');
+    expect(failureHeadline(null)).toBeNull();
+  });
+});
+
+describe('formatFailureLine', () => {
+  it('puts the headline between the title and the link, and omits it when there is none', () => {
+    const url = 'https://dash.example.com/test-runs/1/locate?file=a';
+    expect(formatFailureLine({ ...TEST, url, headline: 'Navigation to /users timed out after 30 s' })).toBe(
+      `✗ applies the discount — Navigation to /users timed out after 30 s → ${url}`,
+    );
+    expect(formatFailureLine({ ...TEST, url })).toBe(`✗ applies the discount → ${url}`);
   });
 });
 

@@ -105,3 +105,24 @@ describe('healingNotApplicableMarkdown', () => {
     expect(md).toContain('Do not propose a replacement locator.');
   });
 });
+
+describe('classifyLocatorResolution agrees with the parser', () => {
+  test('a resolution failure per the parser is always healable, and a resolved locator never is', async () => {
+    const { parsePlaywrightError } = await import('#shared/error-parse');
+    const errors = [
+      `TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Pay' })\n${STACK}`,
+      `Error: expect(locator).toHaveCount(expected) failed\n\nLocator: getByRole('row')\nExpected: 26\nReceived: 51\nTimeout: 5000ms\n\nCall log:\n  - waiting for getByRole('row')\n  - 9 × locator resolved to 51 elements\n${STACK}`,
+      `Error: locator.click: Error: strict mode violation: getByRole('button') resolved to 2 elements:\n    1) <button>Save</button>\n    2) <button>Cancel</button>\n${STACK}`,
+      `TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Pay' })\n  - locator resolved to <button disabled>Pay</button>\n  - element is not enabled\n${STACK}`,
+      `Error: page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:3000/\nCall log:\n  - navigating to "http://localhost:3000/", waiting until "load"\n${STACK}`,
+      `Error: expect(locator).toHaveCount(expected) failed\n\nCall log:\n  - waiting for getByRole('row')\n  - locator resolved to 0 elements\n${STACK}`,
+    ];
+    for (const error of errors) {
+      const parsed = parsePlaywrightError(error);
+      const verdict = classifyLocatorResolution(error);
+      if (parsed.isLocatorResolutionFailure) expect(verdict.applicable, error).toBe(true);
+      if (verdict.kind === 'resolved' || verdict.kind === 'navigation')
+        expect(parsed.isLocatorResolutionFailure, error).toBe(false);
+    }
+  });
+});

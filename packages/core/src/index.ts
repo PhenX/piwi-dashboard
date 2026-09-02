@@ -12,6 +12,8 @@ export * from './locator-generation';
 export * from './locator-fingerprint';
 export * from './codeowners';
 export * from './error-text';
+export * from './error-parse';
+export * from './describe-failure';
 export * from './gate';
 export * from './locator-methods';
 export * from './status-classify';

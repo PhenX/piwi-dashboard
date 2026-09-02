@@ -209,6 +209,7 @@ describe('buildTopFailures', () => {
     expect(out[0]).toEqual({
       title: 'test 0',
       filePath: 'tests/a.spec.ts',
+      headline: 'boom',
       errorExcerpt: 'boom',
       testCaseId: 0,
       executionId: 100,
@@ -222,6 +223,13 @@ describe('buildTopFailures', () => {
     expect(failure!.errorExcerpt).toBe(
       'TimeoutError: locator.click: Timeout 30000ms exceeded.\nlocator resolved to <button disabled>Submit</button>',
     );
+  });
+
+  test('leads with the one-line headline built from the error', () => {
+    const [timeout] = buildTopFailures([{ title: 'a', error: TIMEOUT_ERROR }]);
+    expect(timeout!.headline).toBe("click on getByRole('button', { name: 'Submit' }) timed out after 30 s");
+    const [assertion] = buildTopFailures([{ title: 'b', error: ASSERTION_ERROR }]);
+    expect(assertion!.headline).toBe('Text "Order confirmed" never became visible (5 s)');
   });
 
   test('respects a custom limit', () => {

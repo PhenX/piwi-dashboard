@@ -1,3 +1,4 @@
+import { describeFailureText, lastStepTitle } from '@piwitests/core/describe-failure';
 import type { Logger } from './logger.js';
 
 /** A test whose final attempt failed, with what the dashboard needs to find its execution. */
@@ -9,6 +10,19 @@ export interface FailedTest {
   retry: number;
   /** Playwright project name the test ran under, when known. */
   browser: string | null;
+  /** The one-line explanation of the failure, built from the error text by `@piwitests/core`. */
+  headline: string | null;
+}
+
+/**
+ * The headline for a collected failure: the parsed error, with the failed
+ * step's title feeding a test-timeout line. Null when there is no error text.
+ */
+export function failureHeadline(
+  error: string | null | undefined,
+  steps?: ReadonlyArray<{ title: string; failed?: boolean }> | null,
+): string | null {
+  return describeFailureText(error, { lastStepTitle: lastStepTitle(steps) })?.headline ?? null;
 }
 
 /** A failed test paired with the dashboard link that resolves to its execution. */
@@ -32,9 +46,10 @@ export function caseLocateUrl(serverUrl: string, runId: number | string, test: F
   return `${serverUrl.replace(/\/+$/, '')}/test-runs/${runId}/locate?${params.join('&')}`;
 }
 
-/** The terminal line printed for one failed test. */
+/** The terminal line printed for one failed test: `✗ <title> — <headline> → <url>`. */
 export function formatFailureLine(link: FailureLink): string {
-  return `✗ ${link.title} → ${link.url}`;
+  const headline = link.headline ? ` — ${link.headline}` : '';
+  return `✗ ${link.title}${headline} → ${link.url}`;
 }
 
 /**

@@ -42,7 +42,8 @@ export const SUMMARY_MAX_FAILURES = 20;
  *     (`cat piwi-run.json`, Jenkins `readJSON`, etc.).
  *  3. GitHub Actions (auto): step outputs on `$GITHUB_OUTPUT`
  *     (`steps.<id>.outputs.piwi_run_url`), a markdown link plus the failed
- *     tests on `$GITHUB_STEP_SUMMARY`, and a `::notice::` workflow annotation.
+ *     tests with their headlines on `$GITHUB_STEP_SUMMARY`, and a `::notice::`
+ *     workflow annotation.
  *  4. GitLab CI (auto): a dotenv report file (default `piwi.env`) to be wired as
  *     `artifacts:reports:dotenv:` so later jobs inherit `$PIWI_RUN_URL`.
  */
@@ -128,9 +129,10 @@ function emitGitHubActions(output: RunOutput, env: NodeJS.ProcessEnv, logger: Lo
 /** Markdown list of the failed tests for the job summary, capped at `SUMMARY_MAX_FAILURES`. */
 function summaryFailureLines(output: RunOutput): string[] {
   if (output.failures.length === 0) return [];
-  const lines = output.failures
-    .slice(0, SUMMARY_MAX_FAILURES)
-    .map((f) => `- ❌ [${escapeMarkdown(f.title)}](${f.url}) — \`${f.file}\``);
+  const lines = output.failures.slice(0, SUMMARY_MAX_FAILURES).map((f) => {
+    const headline = f.headline ? ` — ${escapeMarkdown(f.headline)}` : '';
+    return `- ❌ [${escapeMarkdown(f.title)}](${f.url})${headline} — \`${f.file}\``;
+  });
   const hidden = output.failures.length - SUMMARY_MAX_FAILURES;
   if (hidden > 0) lines.push(`- +${hidden} more`);
   lines.push('');

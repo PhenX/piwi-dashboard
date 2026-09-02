@@ -38,6 +38,7 @@ import {
 import { projects, testRuns, testRunsCases, testCases, failureClusters, failureDiagnoses } from '../../database/schema';
 import { buildDiagnosisContext, buildClusterDiagnosisContext } from '../ai-context';
 import { stripAnsi } from '#shared/error-fingerprint';
+import { caseHeadline } from '#shared/failure-verdict';
 import { MCP_TOOL_DEFS } from '#shared/mcp-tools';
 import type {
   McpToolDef,
@@ -527,6 +528,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         status: r.status,
         duration: r.duration,
         retries: r.retries || null,
+        headline: caseHeadline(r)?.headline ?? null,
         error: trunc(r.error, 400),
         clusterId: r.clusterId || null,
         runId: r.runId,
@@ -1037,6 +1039,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       status: row.status,
       duration: row.duration,
       retries: row.retries || null,
+      headline: caseHeadline(row)?.headline ?? null,
       error: row.error, // full, untruncated
       clusterId: row.failureClusterId || null,
       line: row.line || null,
@@ -1647,6 +1650,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       title: tc?.title || null,
       filePath: tc?.filePath || null,
       status: row.status,
+      headline: caseHeadline(row)?.headline ?? null,
       error: trunc(row.error, 1500),
       clusterId: row.failureClusterId || null,
       slowestStep: row.slowestStep || null,

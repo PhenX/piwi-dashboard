@@ -14,6 +14,7 @@ import { renderAnsi } from '~/utils';
 import type { NavbarAction } from '~/components/shared/NavbarActions.vue';
 import type { HelpTopicKey } from '~/utils/help-content';
 import { condenseErrorText } from '#shared/error-fingerprint';
+import type { FailureVerdict } from '#shared/failure-verdict';
 import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator';
 
 const route = useRoute();
@@ -123,6 +124,9 @@ const ciInfo = computed(() => {
   if (!m?.ci) return null;
   return m.ci as { provider?: string; buildNumber?: string; buildUrl?: string; workflow?: string };
 });
+
+/** The one-line verdict on a failing execution, built server-side from the stored error and signals. */
+const verdict = computed(() => (testCase.value as { verdict?: FailureVerdict | null } | null)?.verdict ?? null);
 
 const failureCluster = computed(() => {
   return (testCase.value?.failureCluster ?? null) as {
@@ -624,7 +628,9 @@ provide(clusterSectionLocatorKey, {
         <!-- ── Diagnosis (failing cases) ────────────────────────────────── -->
         <template #tab-diagnosis>
           <div class="space-y-4">
-            <!-- The error itself, first — it's what you open this tab for -->
+            <!-- What broke, in one line — the raw error follows verbatim -->
+            <TestCaseHeadlineCard v-if="verdict" :verdict="verdict" />
+
             <div ref="errorEl" class="scroll-mt-4">
               <SectionCard v-if="testCase?.error" icon="i-lucide-circle-x" icon-class="text-red-500" title="Error">
                 <template #actions>

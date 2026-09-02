@@ -12,6 +12,8 @@
     "./locator-fingerprint": "./src/locator-fingerprint.ts",
     "./locator-healing-types": "./src/locator-healing-types.ts",
     "./error-text": "./src/error-text.ts",
+    "./error-parse": "./src/error-parse.ts",
+    "./describe-failure": "./src/describe-failure.ts",
     "./locator-methods": "./src/locator-methods.ts",
     "./status-classify": "./src/status-classify.ts",
     "./step-analysis": "./src/step-analysis.ts",

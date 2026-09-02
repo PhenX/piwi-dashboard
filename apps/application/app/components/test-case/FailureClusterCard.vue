@@ -34,8 +34,6 @@ const props = defineProps<{
   cluster: FailureClusterCardCluster;
 }>();
 
-const otherFailingCount = computed(() => Math.max(0, props.cluster.sameRunCaseCount - 1));
-
 const aiVerdict = computed(() => {
   const d = props.cluster.diagnosis;
   return d && d.status === 'completed' && d.summary ? d : null;
@@ -80,11 +78,8 @@ const confidenceColor = (c?: string | null): 'success' | 'warning' | 'neutral' =
         </p>
       </div>
 
-      <!-- Scope: siblings in this run + new/known -->
+      <!-- New or known; the headline card above names the same-run siblings -->
       <p class="text-xs text-gray-500 dark:text-gray-400">
-        <template v-if="otherFailingCount > 0">
-          Matches {{ otherFailingCount }} other failing {{ otherFailingCount === 1 ? 'test' : 'tests' }} in this run.
-        </template>
         <template v-if="!cluster.isNew">
           Known failure — first seen in
           <NuxtLink :to="`/test-runs/${cluster.firstSeenRunId}`" class="text-primary hover:underline">
