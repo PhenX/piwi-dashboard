@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Piwi Picker",
+  "short_name": "Piwi Picker",
+  "version": "0.26.1",
+  "description": "Ranked, stable Playwright locators for any element on the page — scored the same way Piwi's dashboard scores them.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "piwi-picker@piwitests.dev",
+      "strict_min_version": "116.0"
+    }
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "commands": {
+    "pick-element": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
+      },
+      "description": "Pick a locator for an element on the page"
+    }
+  }
+}

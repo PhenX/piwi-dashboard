@@ -1,2 +1,25 @@
-(cd application && npm run app:format) && git add -u application/
-(cd reporter && npm run reporter:format) && git add -u reporter/src/
+#!/usr/bin/env sh
+# Keep committed code formatted — but only ever re-stage the files THIS commit
+# already staged. `git add -u <dir>` was wrong: it stages every modified tracked
+# file under the dir, so an unrelated work-in-progress edit gets swept into the
+# commit alongside the files you meant to commit.
+#
+# We still run the same whole-workspace formatter the CI `format:check` gate
+# uses (so formatting coverage can't drift), then hand `git add` the exact list
+# of already-staged files. Files you did not stage are left untouched in the
+# working tree.
+
+# $1: workspace dir to format in   $2: format npm script   $3: pathspec of that
+# workspace's files (matches which staged paths get re-added).
+format_staged() {
+  staged=$(git diff --cached --name-only --diff-filter=ACMR -- "$3")
+  [ -z "$staged" ] && return 0
+  (cd "$1" && npm run "$2") || exit 1
+  printf '%s\n' "$staged" | tr '\n' '\0' | xargs -0 git add --
+}
+
+format_staged apps/application app:format apps/application/
+format_staged packages/reporter reporter:format packages/reporter/src/
+format_staged packages/core core:format packages/core/
+format_staged packages/picker-dom picker-dom:format packages/picker-dom/
+format_staged apps/extension extension:format apps/extension/

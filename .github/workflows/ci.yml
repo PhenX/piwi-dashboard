@@ -11,17 +11,188 @@ concurrency:
 
 defaults:
   run:
-    working-directory: ./application
+    working-directory: ./apps/application
 
 jobs:
-  ci:
-    name: CI (storage=${{ matrix.storage }}, db=${{ matrix.database }})
+  # Builds once for every E2E cell: the storage and database backends are read
+  # from the environment at request time, so a single production output covers
+  # the whole matrix.
+  build:
+    name: Build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+
+      - name: Install dependencies
+        working-directory: .
+        run: npm ci --prefer-offline --no-audit --fund=false
+
+      # Restored after the install so the postinstall `nuxt prepare` cannot
+      # clobber it. `experimental.buildCache` reuses whatever still matches.
+      # npm hoists the workspace, so the build cache lands in the root
+      # node_modules; the application copy holds the font and jiti caches.
+      - name: Cache Nuxt build
+        uses: actions/cache@v6
+        with:
+          path: |
+            node_modules/.cache
+            apps/application/node_modules/.cache
+          # `nuxt-build-v2-` carries a manual cache version — bump the token to
+          # discard a poisoned build cache. `experimental.buildCache` does not hash
+          # the `#shared` modules (apps/application/shared/**), so a source-only
+          # change there — e.g. the DOCS_BASE_URL constant — can otherwise be served
+          # from a stale cached chunk and inline the old value into the built output.
+          key: nuxt-build-v2-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            nuxt-build-v2-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+            nuxt-build-v2-${{ runner.os }}-
+
+      # The reporter dist is imported by playwright.config.ts.
+      - name: Build reporter
+        working-directory: ./packages/reporter
+        run: npm run reporter:build
+
+      - name: Build application
+        run: npm run app:build
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-output
+          path: |
+            apps/application/.output
+            packages/reporter/dist
+          # `.output` is dot-prefixed, so without this the upload silently skips it.
+          include-hidden-files: true
+          retention-days: 1
+          compression-level: 1
+
+  # Backend-agnostic checks. Independent of the E2E matrix, so they run alongside it.
+  checks:
+    name: Lint, typecheck and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     permissions:
       contents: read
       # Lets the coverage-report steps below post/update a sticky PR comment.
       pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+
+      - name: Install dependencies
+        working-directory: .
+        run: npm ci --prefer-offline --no-audit --fund=false
+
+      - name: Lint
+        run: npm run app:lint
+
+      - name: Typecheck
+        run: npm run app:typecheck
+
+      - name: Lint reporter
+        working-directory: ./packages/reporter
+        run: npm run reporter:lint
+
+      - name: Typecheck reporter
+        working-directory: ./packages/reporter
+        run: npm run reporter:typecheck
+
+      - name: Lint, typecheck and test core
+        working-directory: ./packages/core
+        run: |
+          npm run core:lint
+          npm run core:typecheck
+          npm run core:test
+
+      - name: Lint, typecheck and test picker-dom
+        working-directory: ./packages/picker-dom
+        run: |
+          npm run picker-dom:lint
+          npm run picker-dom:typecheck
+          npm run picker-dom:test
+
+      - name: Lint, typecheck and unit-test extension
+        working-directory: ./apps/extension
+        run: |
+          npm run extension:lint
+          npm run extension:typecheck
+          npm run extension:test
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps --only-shell
+
+      - name: Test picker-dom integration (drives a real browser)
+        working-directory: ./packages/picker-dom
+        run: npm run picker-dom:test:integration
+
+      - name: Test reporter
+        working-directory: ./packages/reporter
+        run: npm run reporter:test:coverage
+
+      # Full AI-step pipeline (resolve → compile → replay) end to end against a
+      # real browser, with a stub standing in for the LLM: no network, no tokens.
+      - name: Test reporter AI steps (integration, drives a real browser)
+        working-directory: ./packages/reporter
+        run: npm run reporter:test:integration:ai
+
+      - name: Report reporter coverage on the PR
+        if: github.event_name == 'pull_request'
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          working-directory: ./packages/reporter
+          name: Reporter
+          file-coverage-mode: changes
+
+      # locator-generate-drift.test.ts compares the app copy of the locator
+      # helpers against the reporter's compiled one, so it needs the dist.
+      - name: Build reporter
+        working-directory: ./packages/reporter
+        run: npm run reporter:build
+
+      - name: Test application unit tests
+        run: npm run app:test:unit:coverage
+
+      - name: Report application coverage on the PR
+        if: github.event_name == 'pull_request'
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          working-directory: ./apps/application
+          name: Application
+          file-coverage-mode: changes
+
+  e2e:
+    name: E2E (storage=${{ matrix.storage }}, db=${{ matrix.database }}, shard ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 15
 
     strategy:
       # Run every cell to completion so one backend failing doesn't mask the others.
@@ -29,11 +200,28 @@ jobs:
       matrix:
         storage: [local, s3]
         database: [sqlite, postgres]
+        # Five shards across four backends fill the 20 concurrent job slots
+        # exactly; a sixth pushes four jobs into a queue that costs more than
+        # the extra parallelism buys.
+        shard: [1, 2, 3, 4, 5]
+        # The sqlite/local leg runs on Node 22 — the dashboard's engines floor —
+        # against the Node 24-built output, the same combination an npm user on
+        # LTS gets. The other legs run current Node (24, the default below).
+        include:
+          - storage: local
+            database: sqlite
+            node: 22
+
+    env:
+      # Keep in step with the shard list above.
+      SHARD_TOTAL: 5
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # The containers boot while node and the dependencies install; the readiness
+      # probes below collect them once that work is done.
       - name: Start MinIO (local S3 server)
         if: matrix.storage == 's3'
         working-directory: .
@@ -44,20 +232,6 @@ jobs:
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
             minio/minio server /data
-          # Wait up to 30 s for MinIO to become healthy
-          timeout 30 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 1; done'
-
-      - name: Create S3 buckets
-        if: matrix.storage == 's3'
-        working-directory: .
-        env:
-          AWS_ACCESS_KEY_ID: minioadmin
-          AWS_SECRET_ACCESS_KEY: minioadmin
-        run: |
-          # Bucket for the main app server under test, plus the bucket the
-          # dedicated s3-storage.spec.ts adapter tests target.
-          aws --endpoint-url http://localhost:9000 s3 mb s3://piwi-main --region us-east-1
-          aws --endpoint-url http://localhost:9000 s3 mb s3://playwright-test --region us-east-1
 
       - name: Start PostgreSQL
         if: matrix.database == 'postgres'
@@ -70,6 +244,41 @@ jobs:
             -e POSTGRES_PASSWORD=postgres \
             -e POSTGRES_DB=playwright_test \
             postgres:16-alpine
+
+      - name: Install node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node || 24 }}
+          cache: npm
+          cache-dependency-path: ./package-lock.json
+
+      - name: Install dependencies
+        working-directory: .
+        run: npm ci --prefer-offline --no-audit --fund=false
+
+      - name: Download build output
+        uses: actions/download-artifact@v8
+        with:
+          name: build-output
+
+      - name: Create S3 buckets
+        if: matrix.storage == 's3'
+        working-directory: .
+        env:
+          AWS_ACCESS_KEY_ID: minioadmin
+          AWS_SECRET_ACCESS_KEY: minioadmin
+        run: |
+          # Wait up to 30 s for MinIO to become healthy
+          timeout 30 bash -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 1; done'
+          # Bucket for the main app server under test, plus the bucket the
+          # dedicated s3-storage.spec.ts adapter tests target.
+          aws --endpoint-url http://localhost:9000 s3 mb s3://piwi-main --region us-east-1
+          aws --endpoint-url http://localhost:9000 s3 mb s3://playwright-test --region us-east-1
+
+      - name: Create PostgreSQL databases
+        if: matrix.database == 'postgres'
+        working-directory: .
+        run: |
           # Wait for the real server over TCP. During initdb the alpine image runs
           # a temporary server that listens only on the unix socket, so unix-socket
           # probes (pg_isready / psql) pass against it and then get killed on
@@ -80,78 +289,25 @@ jobs:
           # dedicated postgresql.spec.ts server (which owns playwright_test).
           docker exec -e PGPASSWORD=postgres postgres psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE playwright_main;'
 
-      - name: Install node
-        uses: actions/setup-node@v7
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v6
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: ./package-lock.json
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
-      - name: Install dependencies
-        working-directory: .
-        run: npm ci
-
-      # Backend-agnostic checks only need to run once; pin them to the baseline cell.
-      - name: Lint
-        if: matrix.storage == 'local' && matrix.database == 'sqlite'
-        run: npm run app:lint
-
-      - name: Typecheck
-        if: matrix.storage == 'local' && matrix.database == 'sqlite'
-        run: npm run app:typecheck
-
-      - name: Lint reporter
-        if: matrix.storage == 'local' && matrix.database == 'sqlite'
-        working-directory: ./reporter
-        run: npm run reporter:lint
-
-      - name: Typecheck reporter
-        if: matrix.storage == 'local' && matrix.database == 'sqlite'
-        working-directory: ./reporter
-        run: npm run reporter:typecheck
-
-      - name: Lint and test core
-        if: matrix.storage == 'local' && matrix.database == 'sqlite'
-        working-directory: ./packages/core
-        run: |
-          npm run core:lint
-          npm run core:test
-
-      # The reporter dist is imported by playwright.config.ts, so build it in every cell.
-      - name: Build reporter
-        working-directory: ./reporter
-        run: npm run reporter:build
-
-      - name: Test reporter
-        if: matrix.storage == 'local' && matrix.database == 'sqlite'
-        working-directory: ./reporter
-        run: npm run reporter:test:coverage
-
-      - name: Report reporter coverage on the PR
-        if: matrix.storage == 'local' && matrix.database == 'sqlite' && github.event_name == 'pull_request'
-        uses: davelosert/vitest-coverage-report-action@v2
-        with:
-          working-directory: ./reporter
-          name: Reporter
-          file-coverage-mode: changes
-
-      - name: Test application unit tests
-        if: matrix.storage == 'local' && matrix.database == 'sqlite'
-        run: npm run app:test:unit:coverage
-
-      - name: Report application coverage on the PR
-        if: matrix.storage == 'local' && matrix.database == 'sqlite' && github.event_name == 'pull_request'
-        uses: davelosert/vitest-coverage-report-action@v2
-        with:
-          working-directory: ./application
-          name: Application
-          file-coverage-mode: changes
-
-      - name: Install Playwright Browsers
-        run: npx playwright install chromium firefox --with-deps --only-shell
+      # Only the chromium project is enabled in playwright.config.ts. The runner
+      # image already carries the shared libraries the headless shell links
+      # against, so a cache hit needs no apt work at all.
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium --with-deps --only-shell
 
       - name: Run Playwright Tests
         env:
+          # The suite runs against the production build, where the cleanup
+          # endpoint its global setup/teardown calls is disabled by default.
+          PIWI_TEST_CLEANUP_ENABLED: 'true'
           # --- Main app server backend (driven by the matrix) ---
           PIWI_STORAGE_TYPE: ${{ matrix.storage }}
           PIWI_S3_ENDPOINT: ${{ matrix.storage == 's3' && 'http://localhost:9000' || '' }}
@@ -169,15 +325,24 @@ jobs:
           PIWI_S3_TEST_ACCESS_KEY_ID: ${{ matrix.storage == 's3' && 'minioadmin' || '' }}
           PIWI_S3_TEST_SECRET_ACCESS_KEY: ${{ matrix.storage == 's3' && 'minioadmin' || '' }}
           PIWI_POSTGRES_TEST_URL: ${{ matrix.database == 'postgres' && 'postgresql://postgres:postgres@localhost:5432/playwright_test' || '' }}
-        run: npm run app:test
+        # The servers pointed at .test-temp only create their database file, not
+        # the directory holding it, and Playwright starts them before globalSetup.
+        run: |
+          mkdir -p .test-temp
+          npm run app:test -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }}
+
+      - name: Upload blob report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: blob-report-${{ matrix.storage }}-${{ matrix.database }}-${{ matrix.shard }}
+          path: apps/application/blob-report
+          retention-days: 3
 
   demo:
     name: Test demo generation
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: ./application
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -192,7 +357,21 @@ jobs:
 
       - name: Install dependencies
         working-directory: .
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --fund=false
+
+      - name: Install Playwright chromium
+        run: npx playwright install chromium --with-deps --only-shell
+
+      # seed.sql is gitignored, so the build has no database to load until it is
+      # generated here — exactly as the docs deploy does before building.
+      - name: Generate demo seed data
+        run: npm run app:seed:demo
 
       - name: Run demo-generate
         run: npm run app:generate:demo
+
+      # Building the demo only proves it compiles. This drives the built SPA
+      # from its real sub-path with the service worker installed, which is the
+      # only way base-path, worker-scope and demo-handler breakage shows up.
+      - name: Check the built demo actually runs
+        run: npm run app:check:demo:runtime

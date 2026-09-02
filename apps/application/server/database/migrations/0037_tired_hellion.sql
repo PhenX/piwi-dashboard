@@ -1,0 +1,1 @@
+ALTER TABLE `network_requests` ADD `server_traces` text;

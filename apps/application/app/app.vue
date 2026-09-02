@@ -1,0 +1,46 @@
+<script setup lang="ts">
+const config = useRuntimeConfig();
+const colorMode = useColorMode();
+
+// Matches --ui-bg-canvas (zinc-950 / zinc-100) so mobile browser chrome
+// blends with the page background.
+const color = computed(() => (colorMode.value === 'dark' ? '#09090b' : '#f4f4f5'));
+// Prepend the app base URL so the favicon resolves correctly in demo mode
+// (where baseURL is /demo/) and in normal mode (where it is /).
+const iconHref = (config.app?.baseURL ?? '/').replace(/\/$/, '') + '/logo.svg';
+
+useHead({
+  meta: [
+    { charset: 'utf-8' },
+    { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+    { key: 'theme-color', name: 'theme-color', content: color },
+  ],
+  link: [{ rel: 'icon', type: 'image/svg+xml', href: iconHref }],
+  htmlAttrs: {
+    lang: 'en',
+  },
+});
+
+const title = 'Piwi Dashboard';
+const description = 'Your Playwright results, kept and explained.';
+
+useSeoMeta({
+  title,
+  description,
+  ogTitle: title,
+  ogDescription: description,
+  twitterCard: 'summary_large_image',
+});
+</script>
+
+<template>
+  <UApp>
+    <DemoInitScreen />
+    <DemoBanner />
+    <NuxtLoadingIndicator />
+
+    <NuxtLayout>
+      <NuxtPage />
+    </NuxtLayout>
+  </UApp>
+</template>

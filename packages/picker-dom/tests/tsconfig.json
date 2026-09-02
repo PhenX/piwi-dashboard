@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // Tests drive real browser pages (Playwright) and reference DOM globals
+    // directly, unlike src/ (browser-context code kept `any`-typed on purpose
+    // — see each module's doc comment).
+    "lib": ["ES2021", "dom"]
+  },
+  "include": ["**/*.ts"]
+}

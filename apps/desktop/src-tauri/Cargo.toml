@@ -1,0 +1,46 @@
+[package]
+name = "piwi-desktop"
+version = "0.26.1" # x-release-please-version
+description = "Piwi Dashboard desktop app"
+authors = ["piwitests"]
+license = "MIT"
+repository = "https://github.com/PiwiTests/platform"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "piwi_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-store = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-updater = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rand = "0.8"
+# Only compiled into e2e test builds (see the `e2e-testing` feature). Lets a
+# Playwright runner drive the real webview to smoke-test the shell integration.
+tauri-plugin-playwright = { version = "0.4", optional = true }
+
+[features]
+# Build with `--features e2e-testing` for Playwright end-to-end tests. Pulls in
+# the playwright control plugin and Tauri's runtime-ACL support so the capability
+# it needs can be added only in test builds — never in shipped installers.
+e2e-testing = ["dep:tauri-plugin-playwright", "tauri/dynamic-acl"]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

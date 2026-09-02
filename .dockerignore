@@ -3,9 +3,9 @@
 
 # Build outputs
 **/.nuxt
-application/.output
+apps/application/.output
 **/.turbo
-reporter/dist
+packages/reporter/dist
 
 # Local data
 **/.data
@@ -35,12 +35,18 @@ docker-compose*.yml
 # CI/CD
 .github
 
+# Hosting-platform manifests (read by the providers, not by the build)
+deploy/
+render.yaml
+fly.toml
+railway.json
+
 # Docs
-docs/
+apps/docs/
 **/*.md
 
 # Tests (not needed for Docker build)
-application/tests/
+apps/application/tests/
 **/test/
 **/tests/
 **/__tests__/
@@ -49,8 +55,8 @@ application/tests/
 **/.nyc_output
 
 # Reporter (not needed for Docker build)
-reporter/src/
-reporter/dist/
+packages/reporter/src/
+packages/reporter/dist/
 
 # Source maps & declarations (dev artifacts)
 **/*.map

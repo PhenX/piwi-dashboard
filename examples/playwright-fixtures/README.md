@@ -1,12 +1,12 @@
 # Capture fixtures example
 
-A small, runnable Playwright project wired to [Piwi Dashboard](https://piwitests.github.io) with the **[capture fixtures](https://piwitests.github.io/capture-fixtures)** — the one-file addition that unlocks slow-endpoint analysis, Web Vitals, console capture, failure-time ARIA snapshots, and locator healing.
+A small, runnable Playwright project wired to [Piwi Dashboard](https://piwitests.dev) with the **[capture fixtures](https://piwitests.dev/capture-fixtures)** — the one-file addition that unlocks slow-endpoint analysis, Web Vitals, console capture, failure-time ARIA snapshots, and locator healing.
 
-It tests a tiny [Nitro](https://nitro.build) web app (`app/`, started automatically by Playwright) and exercises **every capture path** the fixtures support — including **[backend logs](https://piwitests.github.io/backend-logs)**: the app is instrumented with [`@piwitests/instrumentation`](../../integrations/nitro), so server-side warnings and errors ride back to the dashboard on the `X-Piwi-Logs` response header.
+It tests a tiny [Nitro](https://nitro.build) web app (`app/`, started automatically by Playwright) and exercises **every capture path** the fixtures support — including **[backend logs](https://piwitests.dev/backend-logs)**: the app is instrumented with [`@piwitests/instrumentation-nitro`](../../integrations/nitro), so server-side warnings and errors ride back to the dashboard on the `X-Piwi-Logs` response header.
 
 ## Run it
 
-Start a dashboard (see the [getting started guide](https://piwitests.github.io/getting-started)), then:
+Start a dashboard (see the [getting started guide](https://piwitests.dev/getting-started)), then:
 
 ```bash
 npm install
@@ -37,6 +37,7 @@ Results appear at `http://localhost:3000` under the `playwright-fixtures-example
 | `skipped.spec.ts` | Skipped tests produce no capture attachments |
 | `before-all.spec.ts` | `beforeAll` activity is intentionally **not** captured |
 | `custom-fixtures.spec.ts` | Dashboard capture composed with your own fixtures (`fixtures-composed.ts`) |
+| `tags-and-ownership.spec.ts` | Test tags (both declaration styles) and `piwi:` owner / priority / feature / link annotations |
 
 ## The two setup options
 
@@ -55,7 +56,7 @@ Every spec imports `test` from one of these files — never from `@playwright/te
 The entire backend-log setup is `app/plugins/piwi-test-logs.ts`:
 
 ```ts
-export { default } from '@piwitests/instrumentation';
+export { default } from '@piwitests/instrumentation-nitro';
 ```
 
 Nitro auto-loads it from `plugins/` (in a Nuxt app, put the same file in `server/plugins/`). Two things worth knowing:

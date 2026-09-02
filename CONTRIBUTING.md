@@ -8,16 +8,16 @@ Prerequisites: **Node.js 24+**, npm, Git.
 
 ```bash
 git clone https://github.com/PiwiTests/platform.git
-cd platform/application
+cd platform/apps/application
 npm install
 npm run app:dev      # dashboard at http://localhost:3000
 ```
 
-The SQLite database and `.data/` storage are created automatically on first API call — no configuration needed. To hack on the reporter package instead, work in `reporter/` (`npm run reporter:build`, or `npm run reporter:dev` for watch mode).
+The SQLite database and `.data/` storage are created automatically on first API call — no configuration needed. To hack on the reporter package instead, work in `packages/reporter/` (`npm run reporter:build`, or `npm run reporter:dev` for watch mode).
 
 ## Quality checks & tests
 
-Run from `application/` unless noted:
+Run from `apps/application/` unless noted:
 
 | Command | What it does |
 |---|---|
@@ -27,9 +27,21 @@ Run from `application/` unless noted:
 | `npm run app:test:unit` | Unit tests (Vitest) |
 | `npm run app:test` | E2E tests (Playwright — needs browsers: `npx playwright install chromium`) |
 | `npm test` | Everything (unit first, then E2E) |
-| `npm run reporter:test` | Reporter unit tests (from `reporter/`) |
+| `npm run reporter:test` | Reporter unit tests (from `packages/reporter/`) |
 
-If an E2E test creates a project, use a static name registered in `application/shared/test-project-names.ts` (see the conventions in [AGENTS.md](AGENTS.md)).
+If an E2E test creates a project, use a static name registered in `apps/application/shared/test-project-names.ts` (see the conventions in [AGENTS.md](AGENTS.md)).
+
+## Database & demo data
+
+| Command | What it does |
+|---|---|
+| `npm run db:generate` | Generate a SQLite migration from schema changes |
+| `npm run db:generate:pg` | Generate a PostgreSQL migration from schema changes |
+| `npm run db:studio` | Browse the SQLite database in Drizzle Studio |
+| `npm run db:studio:pg` | Browse the PostgreSQL database in Drizzle Studio |
+| `npm run app:seed:demo` | Regenerate the demo seed data used by the live demo |
+
+**Migration workflow:** edit `server/database/schema.sqlite.ts` (and `schema.pg.ts` for the PostgreSQL equivalent — `schema.ts` is just a dialect-selecting re-export, don't edit it) → run `npm run db:generate` (SQLite) or `npm run db:generate:pg` (PostgreSQL) → review the generated `.sql` file → restart the app. Never create migration files or edit `meta/_journal.json` by hand — the Drizzle migrator depends on the journal to track which migrations have been applied, and manual entries cause it to silently skip the migration.
 
 ## What to work on
 
@@ -66,7 +78,8 @@ type(scope): subject
 
 ### Scopes
 
-`app`, `reporter`, `db`, `ui`, `demo`, `ci`, `docs`, `deps`, `auth`, `ai`, `notifications`, `release`
+`app`, `reporter`, `db`, `ui`, `demo`, `desktop`, `extension`, `ci`, `docs`, `deps`, `auth`, `ai`, `notifications`,
+`release`
 
 (`main` is also allowed, but only appears in release-please's own auto-generated `chore(main): release X.Y.Z` PRs — don't use it for your own commits.)
 

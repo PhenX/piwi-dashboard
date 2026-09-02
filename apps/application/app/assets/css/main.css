@@ -1,0 +1,208 @@
+@import 'tailwindcss' theme(static);
+@import '@nuxt/ui';
+
+@theme static {
+  --font-sans: 'Public Sans', sans-serif;
+
+  --color-green-50: #effdf5;
+  --color-green-100: #d9fbe8;
+  --color-green-200: #b3f5d1;
+  --color-green-300: #75edae;
+  --color-green-400: #00dc82;
+  --color-green-500: #00c16a;
+  --color-green-600: #00a155;
+  --color-green-700: #007f45;
+  --color-green-800: #016538;
+  --color-green-900: #0a5331;
+  --color-green-950: #052e16;
+}
+
+/*
+ * Surface contrast
+ * ----------------
+ * Nuxt UI paints the page <body> with `bg-default` — the same token cards and
+ * most raised surfaces use — so the canvas, blocks and block headers all sit
+ * within a few lightness points of each other (white-on-white in light mode,
+ * zinc-900-on-zinc-900 in dark mode). Give the page canvas its own token one
+ * clear step away from surfaces, so cards/blocks read as raised:
+ *   light: zinc-100 canvas under white cards
+ *   dark:  zinc-950 canvas under zinc-900 cards
+ * Popovers, modals, inputs and everything else on `bg-default` are untouched.
+ */
+:root {
+  --ui-bg-canvas: var(--ui-color-neutral-100);
+  /* Default muted (zinc-50) is invisible against white cards — muted
+     surfaces (card headers, code chips) need a real step. */
+  --ui-bg-muted: var(--ui-color-neutral-100);
+}
+.dark {
+  --ui-bg-canvas: var(--ui-color-neutral-950);
+  /* Restate Nuxt UI's dark value: the unlayered `:root` override above would
+     otherwise beat their layered `.dark` rule and leak the light value. */
+  --ui-bg-muted: var(--ui-color-neutral-800);
+}
+
+/* Deliberately unlayered so it beats Nuxt UI's `@layer base` body rule. */
+body {
+  background-color: var(--ui-bg-canvas);
+}
+
+/* highlight.js theme (GitHub-style) */
+.hljs {
+  background: transparent;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.hljs-keyword,
+.hljs-literal,
+.hljs-symbol,
+.hljs-name {
+  color: #8250df;
+}
+
+.hljs-string,
+.hljs-meta .hljs-string,
+.hljs-regexp {
+  color: #0a3069;
+}
+
+.hljs-number,
+.hljs-attr,
+.hljs-built_in,
+.hljs-selector-class,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: #0550ae;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: #6e7781;
+  font-style: italic;
+}
+
+.hljs-title,
+.hljs-section {
+  color: #8250df;
+  font-weight: 600;
+}
+
+.hljs-type,
+.hljs-class .hljs-title {
+  color: #0550ae;
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: #953800;
+}
+
+.hljs-bullet,
+.hljs-meta {
+  color: #8250df;
+}
+
+.hljs-link {
+  color: #0550ae;
+  text-decoration: underline;
+}
+
+.hljs-property {
+  color: #0550ae;
+}
+
+.hljs-punctuation {
+  color: #1f2328;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+.hljs-addition {
+  background: #e6ffec;
+  color: #116329;
+}
+
+.hljs-deletion {
+  background: #ffebe9;
+  color: #82071e;
+}
+
+@media (prefers-color-scheme: dark) {
+  .hljs-keyword,
+  .hljs-literal,
+  .hljs-symbol,
+  .hljs-name {
+    color: #d2a8ff;
+  }
+
+  .hljs-string,
+  .hljs-meta .hljs-string,
+  .hljs-regexp {
+    color: #a5d6ff;
+  }
+
+  .hljs-number,
+  .hljs-attr,
+  .hljs-built_in,
+  .hljs-selector-class,
+  .hljs-selector-attr,
+  .hljs-selector-pseudo {
+    color: #79c0ff;
+  }
+
+  .hljs-comment,
+  .hljs-quote {
+    color: #8b949e;
+  }
+
+  .hljs-title,
+  .hljs-section {
+    color: #d2a8ff;
+  }
+
+  .hljs-type,
+  .hljs-class .hljs-title {
+    color: #79c0ff;
+  }
+
+  .hljs-variable,
+  .hljs-template-variable,
+  .hljs-params {
+    color: #db6d28;
+  }
+
+  .hljs-bullet,
+  .hljs-meta {
+    color: #d2a8ff;
+  }
+
+  .hljs-link {
+    color: #79c0ff;
+  }
+
+  .hljs-property {
+    color: #79c0ff;
+  }
+
+  .hljs-punctuation {
+    color: #e6edf3;
+  }
+
+  .hljs-addition {
+    background: #122620;
+    color: #7ee787;
+  }
+
+  .hljs-deletion {
+    background: #25171c;
+    color: #ff7b72;
+  }
+}

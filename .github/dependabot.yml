@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Root lockfile covers the npm workspaces (application, reporter, integrations/nitro)
+  # Root lockfile covers the npm workspaces (apps/*, packages/*, integrations/nitro)
   - package-ecosystem: npm
     directory: "/"
     schedule:

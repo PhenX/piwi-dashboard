@@ -1,0 +1,147 @@
+/**
+ * Trace-derived "go deeper" evidence for demo mode — the full call stack and
+ * full network trace, parsed in the browser from the real committed demo
+ * trace. The ZIP is inflated with `../trace-zip.client.ts` and every stream
+ * runs through the exact node-free builders the server uses
+ * (`~~/server/utils/trace-insights`), so the demo behaves like production —
+ * including source resolution from `resources/src@{sha1}.txt` entries and
+ * body previews from the ZIP's own resources.
+ */
+import { and, eq } from 'drizzle-orm';
+import { files, testCases, testRunsCases } from '~~/server/database/schema.sqlite';
+import { parseTraceTexts, traceFileRank, type ParsedTraceData } from '~~/server/utils/trace-events';
+import {
+  buildTraceBodyPreview,
+  buildTraceCallStack,
+  buildTraceNetwork,
+  matchNetworkBodySha1,
+  parseNetworkTexts,
+  parseStacksTexts,
+  type TraceResourceReader,
+  type TraceResourceSnapshot,
+  type TraceStacksIndex,
+} from '~~/server/utils/trace-insights';
+import { readZipEntries } from '../trace-zip.client';
+import { getDemoDb, getDemoDbBaseUrl } from '../db.client';
+
+/** Only committed demo assets may be fetched (mirrors files.ts). */
+const ALLOWED_TRACE_PREFIX = 'demo/traces/';
+
+const SHA1_NAME_RE = /^[a-f0-9]{40}(\.[a-z0-9]{1,10})?$/;
+
+interface DemoTraceBundle {
+  parsed: ParsedTraceData | null;
+  stacks: TraceStacksIndex | null;
+  network: TraceResourceSnapshot[];
+  readResource: TraceResourceReader;
+}
+
+// The committed trace is immutable for the lifetime of a build — inflate and
+// parse it once, shared by the stacks/network/body endpoints. Failed loads are
+// not cached so a transient fetch error can recover on the next request.
+const bundleCache = new Map<string, Promise<DemoTraceBundle | null>>();
+
+function getTraceBundle(path: string): Promise<DemoTraceBundle | null> {
+  const cached = bundleCache.get(path);
+  if (cached) return cached;
+  const promise = loadTraceBundle(path)
+    .catch(() => null)
+    .then((result) => {
+      if (!result) bundleCache.delete(path);
+      return result;
+    });
+  bundleCache.set(path, promise);
+  return promise;
+}
+
+async function loadTraceBundle(path: string): Promise<DemoTraceBundle | null> {
+  if (!path.startsWith(ALLOWED_TRACE_PREFIX)) return null;
+
+  const base = getDemoDbBaseUrl().replace(/\/$/, '');
+  const response = await fetch(`${base}/${path}`);
+  if (!response.ok) return null;
+  const bytes = new Uint8Array(await response.arrayBuffer());
+
+  const entries = await readZipEntries(bytes, () => true);
+  const decoder = new TextDecoder();
+  const textsOf = (suffix: string) =>
+    entries
+      .filter((e) => e.name.endsWith(suffix))
+      .sort((a, b) => traceFileRank(a.name) - traceFileRank(b.name))
+      .map((e) => decoder.decode(e.data));
+
+  const traceTexts = textsOf('.trace');
+  const resources = new Map(
+    entries.filter((e) => e.name.startsWith('resources/')).map((e) => [e.name.slice('resources/'.length), e.data]),
+  );
+
+  return {
+    parsed: traceTexts.length > 0 ? parseTraceTexts(traceTexts) : null,
+    stacks: parseStacksTexts(textsOf('.stacks')),
+    network: parseNetworkTexts(textsOf('.network')),
+    readResource: async (name) => {
+      const exact = resources.get(name);
+      if (exact) return exact;
+      // `_sha1` refs may carry the stored extension or not — match on the bare hash.
+      const bare = name.split('.')[0]!;
+      for (const [known, data] of resources) {
+        if (known.split('.')[0] === bare) return data;
+      }
+      return null;
+    },
+  };
+}
+
+/** The case's trace path + its spec file path, or nulls. */
+async function resolveCaseTrace(testRunsCaseId: number): Promise<{ path: string | null; filePath: string | null }> {
+  const db = await getDemoDb();
+  const [traceRows, caseRows] = await Promise.all([
+    db
+      .select({ path: files.path })
+      .from(files)
+      .where(and(eq(files.testRunsCaseId, testRunsCaseId), eq(files.type, 'trace')))
+      .limit(1),
+    db
+      .select({ filePath: testCases.filePath })
+      .from(testRunsCases)
+      .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+      .where(eq(testRunsCases.id, testRunsCaseId))
+      .limit(1),
+  ]);
+  return { path: traceRows[0]?.path ?? null, filePath: caseRows[0]?.filePath ?? null };
+}
+
+/** GET /api/test-run-cases/:id/trace-stacks — mirrors trace-stacks.get.ts. */
+export async function apiGetDemoTraceStacks(testRunsCaseId: number): Promise<unknown> {
+  const { path, filePath } = await resolveCaseTrace(testRunsCaseId);
+  if (!path) return { status: 'no-trace' };
+  const bundle = await getTraceBundle(path);
+  if (!bundle?.parsed) return { status: 'no-trace' };
+  return buildTraceCallStack(bundle.parsed, bundle.stacks, bundle.readResource, { knownTestFilePath: filePath });
+}
+
+/** GET /api/test-run-cases/:id/trace-network — mirrors trace-network.get.ts. */
+export async function apiGetDemoTraceNetwork(testRunsCaseId: number): Promise<unknown> {
+  const { path } = await resolveCaseTrace(testRunsCaseId);
+  if (!path) return { status: 'no-trace' };
+  const bundle = await getTraceBundle(path);
+  if (!bundle) return { status: 'no-trace' };
+  return buildTraceNetwork(bundle.parsed, bundle.network);
+}
+
+/** GET /api/test-run-cases/:id/trace-network-body?sha1= — mirrors trace-network-body.get.ts. */
+export async function apiGetDemoTraceNetworkBody(testRunsCaseId: number, query?: URLSearchParams): Promise<unknown> {
+  const sha1 = (query?.get('sha1') ?? '').toLowerCase();
+  if (!SHA1_NAME_RE.test(sha1)) return { status: 'not-found' };
+
+  const { path } = await resolveCaseTrace(testRunsCaseId);
+  if (!path) return { status: 'not-found' };
+  const bundle = await getTraceBundle(path);
+  if (!bundle) return { status: 'not-found' };
+
+  const match = matchNetworkBodySha1(bundle.network, sha1);
+  if (!match) return { status: 'not-found' };
+  const bytes = await bundle.readResource(match.name);
+  if (!bytes) return { status: 'not-found' };
+  return buildTraceBodyPreview(bytes, match.mimeType);
+}

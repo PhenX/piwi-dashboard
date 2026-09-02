@@ -1,0 +1,72 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { test, expect } from './fixtures.js';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const DIST = path.join(here, '..', '..', 'dist');
+
+/**
+ * The lint panel (and its per-element outline boxes) lives in a closed
+ * shadow root by design (same reasoning as `results-panel.ts`), so — like
+ * `pick.spec.ts` — these tests assert only externally-observable effects
+ * (host presence, toggling, and that the page underneath stays interactive)
+ * rather than shadow-root-internal content. `scanForLintIssues`'s own
+ * matching/scoring logic is covered directly in `lint-scan.spec.ts`.
+ */
+test.describe('lint-overlay.js', () => {
+  test('mounts on trigger and a second trigger toggles it back off', async ({ context }) => {
+    const page = await context.newPage();
+    await page.setContent(`<!doctype html><html><body><button></button><button></button></body></html>`);
+    await page.addScriptTag({ path: path.join(DIST, 'lint-overlay.js') });
+    expect(await page.evaluate(() => !!document.getElementById('piwi-lint-overlay-host'))).toBe(true);
+
+    await page.addScriptTag({ path: path.join(DIST, 'lint-overlay.js') });
+    expect(await page.evaluate(() => !!document.getElementById('piwi-lint-overlay-host'))).toBe(false);
+  });
+
+  test('Escape closes it', async ({ context }) => {
+    const page = await context.newPage();
+    await page.setContent(`<!doctype html><html><body><button></button><button></button></body></html>`);
+    await page.addScriptTag({ path: path.join(DIST, 'lint-overlay.js') });
+    await page.keyboard.press('Escape');
+    expect(await page.evaluate(() => !!document.getElementById('piwi-lint-overlay-host'))).toBe(false);
+  });
+
+  test('mounts even when nothing scores badly (empty-state panel)', async ({ context }) => {
+    const page = await context.newPage();
+    await page.setContent(`<!doctype html><html><body><button data-testid="ok-btn">Save</button></body></html>`);
+    await page.addScriptTag({ path: path.join(DIST, 'lint-overlay.js') });
+    expect(await page.evaluate(() => !!document.getElementById('piwi-lint-overlay-host'))).toBe(true);
+  });
+
+  test('the page underneath stays clickable while the overlay is open', async ({ context }) => {
+    const page = await context.newPage();
+    await page.setContent(`<!doctype html><html><body>
+      <button id="target" style="position:absolute;top:200px;left:10px;">Click me</button>
+      <button></button>
+    </body></html>`);
+    await page.addScriptTag({ path: path.join(DIST, 'lint-overlay.js') });
+
+    let clicked = false;
+    await page.exposeFunction('__recordClick', () => {
+      clicked = true;
+    });
+    await page.evaluate(() =>
+      document.getElementById('target')!.addEventListener('click', () => (window as any).__recordClick()),
+    );
+
+    await page.click('#target');
+    expect(clicked).toBe(true);
+  });
+
+  test('re-injecting while already open does not stack a second host', async ({ context }) => {
+    const page = await context.newPage();
+    await page.setContent(`<!doctype html><html><body><button></button></body></html>`);
+    await page.addScriptTag({ path: path.join(DIST, 'lint-overlay.js') });
+    await page.addScriptTag({ path: path.join(DIST, 'lint-overlay.js') });
+    await page.addScriptTag({ path: path.join(DIST, 'lint-overlay.js') });
+    // An odd number of toggles (3) ends up open — this just confirms each
+    // toggle fully tears down the previous host rather than stacking hosts.
+    expect(await page.locator('#piwi-lint-overlay-host').count()).toBe(1);
+  });
+});

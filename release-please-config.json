@@ -10,9 +10,16 @@
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         { "type": "json", "path": "packages/core/package.json", "jsonpath": "$.version" },
-        { "type": "json", "path": "application/package.json", "jsonpath": "$.version" },
-        { "type": "json", "path": "reporter/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "packages/picker-dom/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "packages/server/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "apps/application/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "packages/reporter/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "integrations/nitro/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "apps/desktop/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "apps/desktop/src-tauri/tauri.conf.json", "jsonpath": "$.version" },
+        { "type": "generic", "path": "apps/desktop/src-tauri/Cargo.toml" },
+        { "type": "json", "path": "apps/extension/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "apps/extension/manifest.json", "jsonpath": "$.version" },
         {
           "type": "json",
           "path": "examples/playwright-fixtures/package.json",
@@ -21,7 +28,7 @@
         {
           "type": "json",
           "path": "examples/playwright-fixtures/package.json",
-          "jsonpath": "$.devDependencies['@piwitests/instrumentation']"
+          "jsonpath": "$.devDependencies['@piwitests/instrumentation-nitro']"
         },
         {
           "type": "generic",

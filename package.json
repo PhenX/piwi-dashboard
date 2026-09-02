@@ -1,11 +1,14 @@
 {
   "private": true,
-  "version": "0.14.0",
+  "version": "0.26.1",
   "type": "module",
   "workspaces": [
     "packages/core",
-    "application",
-    "reporter",
+    "packages/picker-dom",
+    "packages/server",
+    "packages/reporter",
+    "apps/application",
+    "apps/extension",
     "integrations/nitro"
   ],
   "engines": {
@@ -13,10 +16,6 @@
   },
   "scripts": {
     "prepare": "husky"
-  },
-  "overrides": {
-    "@unhead/vue": "^3.1.8",
-    "unhead": "^3.1.8"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",

@@ -1,18 +1,30 @@
 {
   "name": "@piwitests/core",
-  "version": "0.14.0",
+  "version": "0.26.1",
   "description": "Pure cross-cutting logic and wire shapes shared by the Piwi Dashboard app and the Playwright reporter",
   "private": true,
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./codeowners": "./src/codeowners.ts",
+    "./gate": "./src/gate.ts",
     "./locator-generation": "./src/locator-generation.ts",
     "./locator-fingerprint": "./src/locator-fingerprint.ts",
     "./locator-healing-types": "./src/locator-healing-types.ts",
+    "./error-text": "./src/error-text.ts",
+    "./error-parse": "./src/error-parse.ts",
+    "./describe-failure": "./src/describe-failure.ts",
     "./locator-methods": "./src/locator-methods.ts",
-    "./wire": "./src/wire.ts"
+    "./status-classify": "./src/status-classify.ts",
+    "./step-analysis": "./src/step-analysis.ts",
+    "./test-meta": "./src/test-meta.ts",
+    "./wire": "./src/wire.ts",
+    "./recording": "./src/recording.ts",
+    "./function-match": "./src/function-match.ts",
+    "./codegen": "./src/codegen.ts"
   },
   "scripts": {
+    "core:typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tests/tsconfig.json",
     "core:test": "vitest run",
     "core:test:watch": "vitest",
     "core:lint": "oxlint --config oxlint.config.mts .",

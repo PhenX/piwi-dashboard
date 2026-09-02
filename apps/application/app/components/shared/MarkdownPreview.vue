@@ -1,0 +1,122 @@
+<script setup lang="ts">
+import { highlightCode } from '#shared/highlight';
+
+const props = defineProps<{
+  text: string | null;
+  loading?: boolean;
+  maxHeight?: string;
+}>();
+
+type PreviewLine =
+  | { kind: 'h2'; text: string }
+  | { kind: 'h3'; text: string }
+  | { kind: 'note'; text: string }
+  | { kind: 'bullet'; text: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'blank' }
+  | { kind: 'code-start'; lang: string }
+  | { kind: 'code-block'; html: string }
+  | { kind: 'code-end' };
+
+function parse(text: string): PreviewLine[] {
+  const result: PreviewLine[] = [];
+  let inCode = false;
+  let codeLang = '';
+  let codeLines: string[] = [];
+
+  for (const line of text.split('\n')) {
+    if (!inCode) {
+      if (line.startsWith('```')) {
+        inCode = true;
+        codeLang = line.slice(3).trim();
+        codeLines = [];
+      } else if (line.startsWith('## ')) {
+        result.push({ kind: 'h2', text: line.slice(3) });
+      } else if (line.startsWith('### ')) {
+        result.push({ kind: 'h3', text: line.slice(4) });
+      } else if (line.startsWith('> ')) {
+        result.push({ kind: 'note', text: line.slice(2) });
+      } else if (line.startsWith('- ')) {
+        result.push({ kind: 'bullet', text: line.slice(2) });
+      } else if (line.trim() === '') {
+        result.push({ kind: 'blank' });
+      } else {
+        result.push({ kind: 'text', text: line });
+      }
+    } else {
+      if (line === '```') {
+        const code = codeLines.join('\n');
+        if (codeLines.length) {
+          const { html } = highlightCode(code, codeLang);
+          result.push({ kind: 'code-start', lang: codeLang || 'code' });
+          result.push({ kind: 'code-block', html });
+          result.push({ kind: 'code-end' });
+        }
+        inCode = false;
+      } else {
+        codeLines.push(line);
+      }
+    }
+  }
+
+  if (inCode && codeLines.length) {
+    const { html } = highlightCode(codeLines.join('\n'), codeLang);
+    result.push({ kind: 'code-start', lang: codeLang || 'code' });
+    result.push({ kind: 'code-block', html });
+    result.push({ kind: 'code-end' });
+  }
+
+  return result;
+}
+
+const lines = computed<PreviewLine[]>(() => (props.text ? parse(props.text) : []));
+</script>
+
+<template>
+  <div class="rounded-lg border border-default overflow-hidden bg-muted min-h-16">
+    <div v-if="loading" class="flex items-center gap-2 p-4 text-sm text-gray-500">
+      <UIcon name="i-lucide-loader-2" class="size-4 animate-spin" />
+      <span>Fetching context… (includes SCM diff lookup)</span>
+    </div>
+    <div
+      v-else-if="lines.length"
+      class="overflow-auto p-3 text-xs font-mono leading-relaxed"
+      :style="{ maxHeight: maxHeight ?? '45vh' }"
+    >
+      <template v-for="(line, i) in lines" :key="i">
+        <div v-if="line.kind === 'h2'" class="text-sm font-bold text-gray-900 dark:text-white mt-4 mb-0.5 first:mt-0">
+          {{ line.text }}
+        </div>
+        <div v-else-if="line.kind === 'h3'" class="font-semibold text-gray-700 dark:text-gray-200 mt-2 mb-0.5">
+          {{ line.text }}
+        </div>
+        <div
+          v-else-if="line.kind === 'note'"
+          class="my-1 px-2 py-0.5 rounded bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 italic"
+        >
+          {{ line.text }}
+        </div>
+        <div v-else-if="line.kind === 'bullet'" class="text-gray-600 dark:text-gray-400 flex gap-1.5">
+          <span class="text-gray-400 shrink-0">·</span>
+          <span>{{ line.text }}</span>
+        </div>
+        <div v-else-if="line.kind === 'text'" class="text-gray-600 dark:text-gray-400">
+          {{ line.text }}
+        </div>
+        <div v-else-if="line.kind === 'blank'" class="h-2" />
+        <div
+          v-else-if="line.kind === 'code-start'"
+          class="mt-2 px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-t text-[10px] uppercase tracking-wide"
+        >
+          {{ line.lang || 'code' }}
+        </div>
+        <div v-else-if="line.kind === 'code-block'" class="overflow-x-auto bg-gray-50 dark:bg-gray-900/40">
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <pre class="hljs px-2 py-1 !bg-transparent whitespace-pre-wrap" v-html="line.html" />
+        </div>
+        <div v-else-if="line.kind === 'code-end'" class="h-1 bg-gray-100 dark:bg-gray-800/50 rounded-b mb-2" />
+      </template>
+    </div>
+    <div v-else class="p-3 text-xs text-gray-400 italic">No context loaded</div>
+  </div>
+</template>

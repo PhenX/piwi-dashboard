@@ -1,0 +1,79 @@
+{
+  "name": "@piwitests/reporter",
+  "version": "0.26.1",
+  "description": "Playwright reporter that streams results, traces and HTML reports to a Piwi Dashboard instance",
+  "url": "https://github.com/PiwiTests/platform",
+  "homepage": "https://piwitests.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PiwiTests/platform"
+  },
+  "bugs": {
+    "url": "https://github.com/PiwiTests/platform/issues"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "piwi": "dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "keywords": [
+    "ci",
+    "dashboard",
+    "playwright",
+    "quality-gate",
+    "reporter",
+    "test-results"
+  ],
+  "author": "piwitests",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "reporter:build": "tsup",
+    "reporter:dev": "tsup --watch",
+    "reporter:typecheck": "tsc --noEmit",
+    "reporter:format": "oxfmt --config oxfmt.config.mts --write \"src/\"",
+    "reporter:format:check": "oxfmt --config oxfmt.config.mts --check \"src/\"",
+    "reporter:lint": "oxlint --config oxlint.config.mts .",
+    "reporter:lint:fix": "oxlint --config oxlint.config.mts . --fix",
+    "reporter:test": "vitest run",
+    "reporter:test:coverage": "vitest run --coverage",
+    "reporter:test:watch": "vitest",
+    "reporter:test:integration": "npm run reporter:build && playwright test --config=tests/integration/playwright.config.ts",
+    "reporter:test:integration:ai": "npm run reporter:build && node tests/integration/ai/run.mjs",
+    "reporter:test:integration:ai:live": "npm run reporter:build && playwright test --config=tests/integration/ai/live.config.ts",
+    "reporter:bench": "npm run reporter:build && node tests/bench/run.mjs",
+    "reporter:bench:micro": "vitest bench --run",
+    "test": "npm run reporter:test",
+    "prepublishOnly": "npm run reporter:build"
+  },
+  "files": [
+    "dist/",
+    "templates/"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "@playwright/test": "^1.61.1"
+  },
+  "dependencies": {
+    "form-data": "^4.0.0"
+  },
+  "devDependencies": {
+    "@piwitests/core": "*",
+    "@piwitests/picker-dom": "*",
+    "tsup": "^8.5.0"
+  }
+}

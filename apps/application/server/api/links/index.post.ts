@@ -1,0 +1,77 @@
+import { requireProjectAccess, resolveLinkEntityProjectId } from '../../utils/project-access';
+import { getDatabase } from '../../database';
+import { entityLinks } from '../../database/schema';
+import { eq } from 'drizzle-orm';
+import { createLink } from '#shared/handlers/links';
+import { z } from 'zod';
+import { unfurlUrl } from '../../utils/unfurl';
+
+defineRouteMeta({
+  openAPI: {
+    tags: ['Links'],
+    summary: 'Create an entity link',
+    description:
+      'Attach an external URL to a run, test-case run, or test case. Provider is auto-detected from the URL.',
+    'x-required-roles': ['administrator', 'reporter'],
+  },
+});
+
+const createLinkSchema = z.object({
+  entityType: z.enum(['test_run', 'test_runs_case', 'test_case']),
+  entityId: z.number().int().positive(),
+  url: z.string().url('Must be a valid URL'),
+  title: z.string().max(200).nullable().optional(),
+});
+
+export default eventHandler(async (event) => {
+  const body = await readBody(event);
+  const validation = createLinkSchema.safeParse(body);
+
+  if (!validation.success) {
+    throw apiError({
+      statusCode: 400,
+      message: 'Invalid request body',
+      data: validation.error.issues,
+    });
+  }
+
+  const { entityType, entityId, url, title } = validation.data;
+  const db = await getDatabase();
+
+  const projectId = await resolveLinkEntityProjectId(db, entityType, entityId);
+  if (!projectId) throw apiError({ statusCode: 404, message: 'Entity not found' });
+  await requireProjectAccess(event, projectId);
+
+  let result: { link: any };
+  try {
+    result = await createLink(db, { entityType, entityId, url, title });
+  } catch (err) {
+    throw apiError({
+      statusCode: 404,
+      message: err instanceof Error ? err.message : 'Failed to create link',
+    });
+  }
+
+  const inserted = result.link;
+  if (!inserted) {
+    throw apiError({ statusCode: 500, message: 'Failed to create link' });
+  }
+
+  // Best-effort unfurl (server-only enrichment) — tries rich provider first, falls back to OpenGraph
+  const { title: fetchedTitle, statusText, statusColor } = await unfurlUrl(url, db);
+  if (fetchedTitle || statusText) {
+    await db
+      .update(entityLinks)
+      .set({
+        title: fetchedTitle ?? inserted.title,
+        statusText: statusText ?? null,
+        statusColor: statusColor ?? null,
+        unfurledAt: new Date(),
+      })
+      .where(eq(entityLinks.id, inserted.id));
+    const updated = await db.select().from(entityLinks).where(eq(entityLinks.id, inserted.id));
+    return { success: true, link: updated[0] };
+  }
+
+  return { success: true, link: inserted };
+});

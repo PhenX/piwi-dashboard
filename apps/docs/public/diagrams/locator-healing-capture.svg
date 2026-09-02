@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 400" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#667085"/>
+    </marker>
+    <marker id="arrAccent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#4353ff"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="920" height="400" rx="12" fill="#fcfcfd" stroke="#e4e7ec"/>
+  <text x="24" y="36" font-size="16" font-weight="700" fill="#101828">Capture — while the test runs</text>
+  <text x="24" y="56" font-size="12.5" fill="#475467">Every time a locator proves it resolves, its element is recorded — off the test's critical path.</text>
+
+  <!-- Test code -->
+  <rect x="24" y="84" width="264" height="128" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <rect x="24" y="84" width="264" height="30" rx="8" fill="#f2f4f7"/>
+  <rect x="24" y="106" width="264" height="8" fill="#f2f4f7"/>
+  <text x="40" y="104" font-size="13" font-weight="600" fill="#344054">Test code</text>
+  <text x="40" y="138" font-size="12" font-family="ui-monospace, monospace" fill="#344054">await pay.click()</text>
+  <text x="40" y="156" font-size="11" fill="#667085">successful action</text>
+  <text x="40" y="180" font-size="12" font-family="ui-monospace, monospace" fill="#344054">await expect(email)</text>
+  <text x="76" y="196" font-size="12" font-family="ui-monospace, monospace" fill="#344054">.toBeVisible()</text>
+  <text x="222" y="196" font-size="11" fill="#667085">passing</text>
+  <line x1="288" y1="148" x2="336" y2="148" stroke="#4353ff" stroke-width="1.6" marker-end="url(#arrAccent)"/>
+  <text x="312" y="140" font-size="11" fill="#4353ff" text-anchor="middle">passes</text>
+
+  <!-- Proxy -->
+  <rect x="338" y="106" width="176" height="84" rx="8" fill="#eef1ff" stroke="#c7ceff"/>
+  <text x="426" y="134" font-size="13" font-weight="600" fill="#2a3aa8" text-anchor="middle">Capture proxy</text>
+  <text x="426" y="152" font-size="11.5" fill="#3f4b9e" text-anchor="middle">wraps locator methods +</text>
+  <text x="426" y="167" font-size="11.5" fill="#3f4b9e" text-anchor="middle">expect()'s assertion funnel</text>
+  <line x1="514" y1="148" x2="562" y2="148" stroke="#4353ff" stroke-width="1.6" marker-end="url(#arrAccent)"/>
+
+  <!-- Probe -->
+  <rect x="564" y="84" width="332" height="128" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <rect x="564" y="84" width="332" height="30" rx="8" fill="#f2f4f7"/>
+  <rect x="564" y="106" width="332" height="8" fill="#f2f4f7"/>
+  <text x="580" y="104" font-size="13" font-weight="600" fill="#344054">In-page element probe — bounded 500 ms</text>
+  <text x="580" y="136" font-size="12" fill="#475467">• attributes + accessible name (values never read)</text>
+  <text x="580" y="155" font-size="12" fill="#475467">• uniqueness counts for testid / id / name / classes</text>
+  <text x="580" y="174" font-size="12" fill="#475467">• stable-ancestor anchors + same-role position</text>
+  <text x="580" y="199" font-size="11" fill="#98652b">fire-and-forget · assertions probe once per call site</text>
+
+  <!-- Alternatives -->
+  <line x1="730" y1="212" x2="730" y2="248" stroke="#667085" stroke-width="1.4" marker-end="url(#arr)"/>
+  <rect x="564" y="250" width="332" height="118" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <rect x="564" y="250" width="332" height="30" rx="8" fill="#f2f4f7"/>
+  <rect x="564" y="272" width="332" height="8" fill="#f2f4f7"/>
+  <text x="580" y="270" font-size="13" font-weight="600" fill="#344054">Ranked alternative locators</text>
+  <text x="580" y="301" font-size="11" font-family="ui-monospace, monospace" fill="#344054">getByTestId('pay')</text>
+  <text x="880" y="301" font-size="12" fill="#027a48" text-anchor="end" font-weight="600">100</text>
+  <text x="580" y="320" font-size="11" font-family="ui-monospace, monospace" fill="#344054">getByRole('button', { name: 'Pay' })</text>
+  <text x="880" y="320" font-size="12" fill="#027a48" text-anchor="end" font-weight="600">90</text>
+  <text x="580" y="339" font-size="11" font-family="ui-monospace, monospace" fill="#344054">locator('#form').getByRole('button')</text>
+  <text x="880" y="339" font-size="12" fill="#4353ff" text-anchor="end" font-weight="600">64</text>
+  <text x="580" y="358" font-size="11" font-family="ui-monospace, monospace" fill="#344054">locator('.pay-btn')</text>
+  <text x="880" y="358" font-size="12" fill="#b54708" text-anchor="end" font-weight="600">40</text>
+
+  <!-- DB -->
+  <line x1="562" y1="309" x2="416" y2="309" stroke="#667085" stroke-width="1.4" marker-end="url(#arr)"/>
+  <path d="M 168 272 a 120 16 0 0 0 240 0 v 64 a 120 16 0 0 1 -240 0 z" fill="#ffffff" stroke="#d0d5dd"/>
+  <ellipse cx="288" cy="272" rx="120" ry="16" fill="#f2f4f7" stroke="#d0d5dd"/>
+  <text x="288" y="308" font-size="13" font-weight="600" fill="#344054" text-anchor="middle">locator_snapshots</text>
+  <text x="288" y="326" font-size="11.5" fill="#667085" text-anchor="middle">one row per (test case, call site)</text>
+  <text x="288" y="341" font-size="11.5" fill="#667085" text-anchor="middle">upserted every run — latest wins</text>
+</svg>

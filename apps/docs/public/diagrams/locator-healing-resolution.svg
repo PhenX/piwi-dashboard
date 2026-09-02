@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 664" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <defs>
+    <marker id="rArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#667085"/>
+    </marker>
+    <marker id="rArrAccent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#4353ff"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="920" height="664" rx="12" fill="#fcfcfd" stroke="#e4e7ec"/>
+  <text x="24" y="36" font-size="16" font-weight="700" fill="#101828">Healing — when a locator fails</text>
+  <text x="24" y="56" font-size="12.5" fill="#475467">The lookup works from the stored error text and prior captures — it never needs your source code.</text>
+
+  <!-- Input -->
+  <rect x="24" y="84" width="270" height="112" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <rect x="24" y="84" width="270" height="30" rx="8" fill="#f2f4f7"/>
+  <rect x="24" y="106" width="270" height="8" fill="#f2f4f7"/>
+  <text x="40" y="104" font-size="13" font-weight="600" fill="#344054">Failing execution's error</text>
+  <text x="40" y="136" font-size="12" fill="#475467">parsed into:</text>
+  <text x="40" y="155" font-size="12" fill="#344054">• the locator (chain leaf)  →  signature</text>
+  <text x="40" y="174" font-size="12" fill="#344054">• the call site (first app stack frame)</text>
+  <line x1="159" y1="196" x2="159" y2="222" stroke="#4353ff" stroke-width="1.6" marker-end="url(#rArrAccent)"/>
+
+  <!-- Ladder -->
+  <text x="24" y="242" font-size="12" font-weight="700" fill="#667085" letter-spacing="0.4">STORED-HISTORY LADDER · FIRST HIT WINS</text>
+  <rect x="24" y="252" width="270" height="58" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <text x="40" y="275" font-size="12.5" font-weight="600" fill="#344054">1 · Prior run — exact call site</text>
+  <text x="40" y="293" font-size="11.5" fill="#667085">file:line:col, then file:line</text>
+
+  <rect x="24" y="322" width="270" height="58" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <text x="40" y="345" font-size="12.5" font-weight="600" fill="#344054">2 · Fingerprint — locator signature</text>
+  <text x="40" y="363" font-size="11.5" fill="#667085">method + string literals; survives line shifts</text>
+
+  <rect x="24" y="392" width="270" height="58" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <text x="40" y="415" font-size="12.5" font-weight="600" fill="#344054">3 · Cross-test — same signature</text>
+  <text x="40" y="433" font-size="11.5" fill="#667085">captured by another test; freshest wins</text>
+
+  <rect x="24" y="478" width="270" height="58" rx="8" fill="#ffffff" stroke="#98a2b3" stroke-dasharray="5 4"/>
+  <text x="40" y="501" font-size="12.5" font-weight="600" fill="#475467">4 · ARIA fallback — no history at all</text>
+  <text x="40" y="519" font-size="11.5" fill="#667085">candidates read off the failing page only</text>
+
+  <!-- Rung arrows to stored snapshot -->
+  <line x1="294" y1="281" x2="348" y2="290" stroke="#667085" stroke-width="1.4" marker-end="url(#rArr)"/>
+  <line x1="294" y1="351" x2="348" y2="322" stroke="#667085" stroke-width="1.4" marker-end="url(#rArr)"/>
+  <line x1="294" y1="421" x2="348" y2="345" stroke="#667085" stroke-width="1.4" marker-end="url(#rArr)"/>
+
+  <!-- Stored snapshot -->
+  <rect x="350" y="252" width="222" height="112" rx="8" fill="#eef1ff" stroke="#c7ceff"/>
+  <text x="461" y="278" font-size="13" font-weight="600" fill="#2a3aa8" text-anchor="middle">Stored snapshot</text>
+  <text x="461" y="298" font-size="11.5" fill="#3f4b9e" text-anchor="middle">last known-good element +</text>
+  <text x="461" y="313" font-size="11.5" fill="#3f4b9e" text-anchor="middle">pre-ranked alternatives</text>
+  <text x="461" y="333" font-size="11.5" fill="#3f4b9e" text-anchor="middle">identity: role · name · level ·</text>
+  <text x="461" y="348" font-size="11.5" fill="#3f4b9e" text-anchor="middle">same-role position</text>
+  <line x1="461" y1="364" x2="461" y2="392" stroke="#4353ff" stroke-width="1.6" marker-end="url(#rArrAccent)"/>
+
+  <!-- Element-match check -->
+  <rect x="350" y="394" width="222" height="96" rx="8" fill="#ffffff" stroke="#d0d5dd"/>
+  <text x="461" y="420" font-size="13" font-weight="600" fill="#344054" text-anchor="middle">Element-match check</text>
+  <text x="461" y="440" font-size="11.5" fill="#667085" text-anchor="middle">is the captured element still on the</text>
+  <text x="461" y="455" font-size="11.5" fill="#667085" text-anchor="middle">failing page's ARIA snapshot —</text>
+  <text x="461" y="470" font-size="11.5" fill="#667085" text-anchor="middle">unchanged, renamed, or gone?</text>
+
+  <!-- Branches -->
+  <line x1="572" y1="410" x2="616" y2="286" stroke="#667085" stroke-width="1.4" marker-end="url(#rArr)"/>
+  <rect x="618" y="252" width="278" height="88" rx="8" fill="#f8f9fc" stroke="#d0d5dd"/>
+  <text x="634" y="276" font-size="12.5" font-weight="700" fill="#475467">Unchanged → likely flaky</text>
+  <text x="634" y="295" font-size="11.5" fill="#667085">The element is still there under the same name.</text>
+  <text x="634" y="310" font-size="11.5" fill="#667085">Full alternative list kept — recommending the</text>
+  <text x="634" y="325" font-size="11.5" fill="#667085">original locator is correct here.</text>
+
+  <line x1="572" y1="442" x2="616" y2="404" stroke="#027a48" stroke-width="1.4" marker-end="url(#rArr)"/>
+  <rect x="618" y="360" width="278" height="88" rx="8" fill="#ecfdf3" stroke="#abefc6"/>
+  <text x="634" y="384" font-size="12.5" font-weight="700" fill="#027a48">Renamed / moved → fresh locators</text>
+  <text x="634" y="403" font-size="11.5" fill="#1c7a4d">Same role + best name overlap (or the only</text>
+  <text x="634" y="418" font-size="11.5" fill="#1c7a4d">candidate, or the stored position): new locators</text>
+  <text x="634" y="433" font-size="11.5" fill="#1c7a4d">are generated for what the element became.</text>
+
+  <line x1="572" y1="474" x2="616" y2="500" stroke="#b54708" stroke-width="1.4" marker-end="url(#rArr)"/>
+  <rect x="618" y="468" width="278" height="88" rx="8" fill="#fdf3e3" stroke="#f5dcae"/>
+  <text x="634" y="492" font-size="12.5" font-weight="700" fill="#98652b">Provably gone → stale gating</text>
+  <text x="634" y="511" font-size="11.5" fill="#98652b">Name-based alternatives (incl. the failing</text>
+  <text x="634" y="526" font-size="11.5" fill="#98652b">locator) can't become the recommendation;</text>
+  <text x="634" y="541" font-size="11.5" fill="#98652b">failing-page candidates appear alongside.</text>
+
+  <!-- Output -->
+  <line x1="159" y1="536" x2="159" y2="600" stroke="#98a2b3" stroke-width="1.4" stroke-dasharray="5 4"/>
+  <line x1="159" y1="600" x2="348" y2="614" stroke="#98a2b3" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#rArr)"/>
+  <line x1="757" y1="556" x2="670" y2="600" stroke="#667085" stroke-width="1.4" marker-end="url(#rArr)"/>
+
+  <rect x="350" y="580" width="320" height="68" rx="8" fill="#ffffff" stroke="#4353ff" stroke-width="1.4"/>
+  <text x="510" y="606" font-size="13" font-weight="700" fill="#2a3aa8" text-anchor="middle">Alternative locators panel</text>
+  <text x="510" y="624" font-size="11.5" fill="#3f4b9e" text-anchor="middle">ranked list · one recommended fix · source badge</text>
+  <text x="510" y="639" font-size="11.5" fill="#3f4b9e" text-anchor="middle">"healed in run #N" once the fix passes</text>
+</svg>

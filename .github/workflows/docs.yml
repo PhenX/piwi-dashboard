@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'docs/**'
-      - 'application/**'
+      - 'apps/docs/**'
+      - 'apps/application/**'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -27,21 +27,21 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: ./docs/package-lock.json
+          cache-dependency-path: ./apps/docs/package-lock.json
 
       - name: Install docs dependencies
-        working-directory: ./docs
+        working-directory: ./apps/docs
         run: npm ci
 
       - name: Build docs with VitePress
-        working-directory: ./docs
+        working-directory: ./apps/docs
         run: npm run docs:build
 
       # VitePress generates its own 404.html from the theme, overwriting the
-      # file VitePress copied from docs/public/.  Explicitly replace it so
+      # file VitePress copied from apps/docs/public/.  Explicitly replace it so
       # GitHub Pages serves our lightweight SPA redirect script instead.
       - name: Override 404.html with SPA redirect
-        run: cp docs/public/404.html docs/.vitepress/dist/404.html
+        run: cp apps/docs/public/404.html apps/docs/.vitepress/dist/404.html
 
       # ── Build Nuxt demo (SPA, deployed at /demo/) ─────────────────────────
       - name: Setup Node (demo)
@@ -56,20 +56,20 @@ jobs:
         run: npm ci
 
       - name: Generate demo seed data
-        working-directory: ./application
+        working-directory: ./apps/application
         run: npm run app:seed:demo
         env:
           PIWI_DEMO_MODE: 'true'
 
       - name: Generate static demo site
-        working-directory: ./application
+        working-directory: ./apps/application
         run: npm run app:generate:demo
         env:
           PIWI_DEMO_MODE: 'true'
 
       # ── Combine into a single deploy directory ────────────────────────────
       - name: Copy demo into docs output at /demo/
-        run: cp -r application/.output/public docs/.vitepress/dist/demo
+        run: cp -r apps/application/.output/public apps/docs/.vitepress/dist/demo
 
       # ── Deploy to piwitests.github.io (org-level Pages) ───────────────────
       - name: Deploy to piwitests.github.io
@@ -78,6 +78,6 @@ jobs:
           personal_token: ${{ secrets.GH_PAGES_TOKEN }}
           external_repository: piwitests/piwitests.github.io
           publish_branch: main
-          publish_dir: docs/.vitepress/dist
+          publish_dir: apps/docs/.vitepress/dist
           user_name: 'piwitests-bot'
           user_email: 'bot@piwitests.github.io'

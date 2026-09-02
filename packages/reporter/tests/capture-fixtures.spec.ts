@@ -1,0 +1,961 @@
+import { describe, it, expect, vi } from 'vitest';
+import type { Locator } from '@playwright/test';
+import {
+  ariaSnapshotBestEffort,
+  piwiFixtures,
+  probeElementAttrs,
+  CAPTURED_ATTRS_ARG,
+} from '../src/internal/capture/capture-fixtures.js';
+import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from '../src/internal/capture/attachments.js';
+import type { LocatorSnapshot } from '../src/internal/capture/locator-healing.js';
+
+/**
+ * Call the probe with the real shared role maps (CAPTURED_ATTRS_ARG) and just
+ * the per-test `keep` list — mirrors how the fixtures invoke it in production,
+ * so the tests exercise the same single-source-of-truth maps.
+ */
+const probe = (el: unknown, keep: string[] = []) => probeElementAttrs(el, { ...CAPTURED_ATTRS_ARG, keep });
+
+/** A minimal fake Locator exposing only what ariaSnapshotBestEffort touches. */
+function fakeLocator(ariaSnapshot?: (opts?: unknown) => Promise<string>): Locator {
+  return { ariaSnapshot } as unknown as Locator;
+}
+
+/**
+ * A minimal fake DOM element exposing only what probeElementAttrs touches:
+ * getAttribute, direct properties, getBoundingClientRect, ownerDocument
+ * (CSS.escape + querySelectorAll), tagName, textContent, labels.
+ */
+function fakeElement(opts: {
+  tagName?: string;
+  attrs?: Record<string, string>;
+  props?: Record<string, unknown>;
+  rect?: { x: number; y: number; width: number; height: number };
+  textContent?: string;
+  labelCount?: number;
+  /** Maps a CSS selector to the number of matches querySelectorAll should report. */
+  selectorMatches?: Record<string, number>;
+  /** Throw instead of returning a count for a given selector (simulates an invalid selector). */
+  throwingSelectors?: Set<string>;
+  /** Make ownerDocument access itself throw, to exercise the outer best-effort catch. */
+  brokenDocument?: boolean;
+}): unknown {
+  const {
+    tagName = 'div',
+    attrs = {},
+    props = {},
+    rect = { x: 0, y: 0, width: 10, height: 10 },
+    textContent = '',
+    labelCount = 0,
+    selectorMatches = {},
+    throwingSelectors = new Set<string>(),
+  } = opts;
+
+  const querySelectorAll = (sel: string) => {
+    if (throwingSelectors.has(sel)) throw new Error(`invalid selector: ${sel}`);
+    return { length: selectorMatches[sel] ?? 0 };
+  };
+
+  return {
+    tagName: tagName.toUpperCase(), // real DOM tagName is uppercase; probe lowercases it
+    getAttribute: (key: string) => (key in attrs ? attrs[key] : null),
+    ...props,
+    getBoundingClientRect: () => rect,
+    textContent,
+    // A real `labels` is an indexable NodeList of elements, not just a count —
+    // `includeLabelText` reads the first one's text off it.
+    labels: labelCount > 0 ? Array.from({ length: labelCount }, (_, i) => ({ textContent: `Label ${i}` })) : null,
+    ownerDocument: opts.brokenDocument
+      ? undefined
+      : {
+          defaultView: { CSS: { escape: (s: string) => s } },
+          querySelectorAll,
+        },
+  };
+}
+
+describe('ariaSnapshotBestEffort', () => {
+  it('returns null when the installed Playwright predates locator.ariaSnapshot (< 1.49)', async () => {
+    const locator = fakeLocator(undefined);
+    expect(await ariaSnapshotBestEffort(locator)).toBeNull();
+  });
+
+  it('calls ariaSnapshot with mode: "ai" first and returns its result (>= 1.59)', async () => {
+    const ariaSnapshot = vi.fn().mockResolvedValue('- button "Submit"');
+    const locator = fakeLocator(ariaSnapshot);
+    const result = await ariaSnapshotBestEffort(locator, 500);
+    expect(result).toBe('- button "Submit"');
+    expect(ariaSnapshot).toHaveBeenCalledTimes(1);
+    expect(ariaSnapshot).toHaveBeenCalledWith({ timeout: 500, mode: 'ai' });
+  });
+
+  it('omits the timeout key entirely when none is given', async () => {
+    const ariaSnapshot = vi.fn().mockResolvedValue('- text');
+    const locator = fakeLocator(ariaSnapshot);
+    await ariaSnapshotBestEffort(locator);
+    expect(ariaSnapshot).toHaveBeenCalledWith({ mode: 'ai' });
+  });
+
+  it('falls back to { ref: true } when mode: "ai" rejects (1.52)', async () => {
+    const ariaSnapshot = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('mode not supported'))
+      .mockResolvedValueOnce('- ref-annotated snapshot');
+    const locator = fakeLocator(ariaSnapshot);
+    const result = await ariaSnapshotBestEffort(locator, 250);
+    expect(result).toBe('- ref-annotated snapshot');
+    expect(ariaSnapshot).toHaveBeenNthCalledWith(1, { timeout: 250, mode: 'ai' });
+    expect(ariaSnapshot).toHaveBeenNthCalledWith(2, { timeout: 250, ref: true });
+  });
+
+  it('returns null (never throws) when both attempts reject', async () => {
+    const ariaSnapshot = vi.fn().mockRejectedValue(new Error('nope'));
+    const locator = fakeLocator(ariaSnapshot);
+    await expect(ariaSnapshotBestEffort(locator)).resolves.toBeNull();
+    expect(ariaSnapshot).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('probeElementAttrs', () => {
+  it('captures tagName (lowercased), attribute values, and geometry center', () => {
+    const el = fakeElement({
+      tagName: 'BUTTON',
+      attrs: { type: 'submit' },
+      rect: { x: 10, y: 20, width: 100, height: 50 },
+    });
+    const out = probe(el, ['type']);
+    expect(out.tagName).toBe('button');
+    expect(out.attributes).toEqual({ type: 'submit' });
+    expect(out.center).toEqual({ x: 60, y: 45 });
+  });
+
+  it('falls back to a direct property when getAttribute returns null', () => {
+    const el = fakeElement({ props: { value: 'a direct prop, not an attribute' } });
+    const out = probe(el, ['value']);
+    expect(out.attributes.value).toBe('a direct prop, not an attribute');
+  });
+
+  it('truncates attribute values to 200 chars and non-string values are stringified', () => {
+    const el = fakeElement({ props: { 'aria-level': 3 }, attrs: { title: 'x'.repeat(250) } });
+    const out = probe(el, ['title', 'aria-level']);
+    expect(out.attributes.title).toHaveLength(200);
+    expect(out.attributes['aria-level']).toBe('3');
+  });
+
+  it('records null for an attribute that is absent entirely', () => {
+    const el = fakeElement({});
+    const out = probe(el, ['data-missing']);
+    expect(out.attributes['data-missing']).toBeNull();
+  });
+
+  it('collapses whitespace and truncates textContent to 80 chars', () => {
+    const el = fakeElement({ textContent: `line one\n\n   line   two   ${'z'.repeat(100)}` });
+    const out = probe(el, []);
+    expect(out.textContent).not.toContain('\n');
+    expect(out.textContent.length).toBeLessThanOrEqual(80);
+    expect(out.textContent.startsWith('line one line two')).toBe(true);
+  });
+
+  it('sets hasLabel true only when the element has associated <label>s', () => {
+    expect(probe(fakeElement({ labelCount: 1 }), []).hasLabel).toBe(true);
+    expect(probe(fakeElement({ labelCount: 0 }), []).hasLabel).toBe(false);
+  });
+
+  it('computes selectorCounts for data-testid, id, name, and each class', () => {
+    const el = fakeElement({
+      attrs: { 'data-testid': 'save-btn', id: 'save', name: 'saveField', class: 'btn primary' },
+      selectorMatches: {
+        '[data-testid="save-btn"]': 1,
+        '#save': 1,
+        '[name="saveField"]': 2, // ambiguous — a real form field named the same on the page
+        '.btn': 3,
+        '.primary': 1,
+      },
+    });
+    const out = probe(el, ['data-testid', 'id', 'name', 'class']);
+    expect(out.selectorCounts.testId).toBe(1);
+    expect(out.selectorCounts.id).toBe(1);
+    expect(out.selectorCounts.name).toBe(2);
+    expect(out.selectorCounts.classes).toEqual({ btn: 3, primary: 1 });
+  });
+
+  it('omits a selectorCounts key entirely when the element has no such attribute', () => {
+    const el = fakeElement({});
+    const out = probe(el, []);
+    expect(out.selectorCounts).toEqual({});
+  });
+
+  it('ignores a selector that throws (invalid CSS) rather than failing the whole probe', () => {
+    const el = fakeElement({
+      attrs: { id: 'weird:id' },
+      throwingSelectors: new Set(['#weird:id']),
+    });
+    const out = probe(el, ['id']);
+    expect(out.selectorCounts.id).toBeUndefined();
+    expect(out.tagName).toBe('div'); // the rest of the probe still completed
+  });
+
+  it('never fails the whole probe when ownerDocument access itself throws', () => {
+    const el = fakeElement({ attrs: { id: 'x' }, brokenDocument: true });
+    const out = probe(el, ['id']);
+    expect(out.selectorCounts).toEqual({});
+    expect(out.tagName).toBe('div');
+  });
+
+  it('caps the class list probed to the first 10 classes', () => {
+    const classes = Array.from({ length: 15 }, (_, i) => `c${i}`);
+    const el = fakeElement({
+      attrs: { class: classes.join(' ') },
+      selectorMatches: Object.fromEntries(classes.map((c) => [`.${c}`, 1])),
+    });
+    const out = probe(el, ['class']);
+    expect(Object.keys(out.selectorCounts.classes ?? {})).toHaveLength(10);
+  });
+});
+
+describe('per-call-site capture dedupe', () => {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  /** Probe result for a plain `<button>Save</button>`. */
+  const savedButton = {
+    tagName: 'button',
+    attributes: { 'data-testid': 'save' },
+    textContent: 'Save',
+    center: { x: 1, y: 1 },
+    hasLabel: false,
+    selectorCounts: {},
+  };
+
+  /**
+   * Drive `actions` through the real fixtures against a fake page, reporting
+   * what the capture path asked the browser for and what it attached.
+   */
+  async function runCapture(
+    evaluate: (fn: unknown, arg?: unknown) => Promise<unknown>,
+    actions: (
+      page: { getByTestId: (id: string) => { click: () => Promise<void> } },
+      emit: (event: string) => void,
+    ) => Promise<void>,
+  ) {
+    let ariaSnapshots = 0;
+    const fakeLocator = {
+      click: async () => {},
+      evaluate,
+      ariaSnapshot: async () => {
+        ariaSnapshots++;
+        return '- button "Save"';
+      },
+    };
+    const locatorFactory = () => fakeLocator;
+    const listeners = new Map<string, Array<() => void>>();
+    const fakePage = {
+      getByRole: locatorFactory,
+      getByTestId: locatorFactory,
+      getByText: locatorFactory,
+      getByLabel: locatorFactory,
+      getByPlaceholder: locatorFactory,
+      getByAltText: locatorFactory,
+      getByTitle: locatorFactory,
+      locator: locatorFactory,
+      on: (event: string, handler: () => void) => {
+        const existing = listeners.get(event) ?? [];
+        existing.push(handler);
+        listeners.set(event, existing);
+      },
+      evaluate: async () => null,
+    };
+    const emit = (event: string) => (listeners.get(event) ?? []).forEach((handler) => handler());
+
+    const attached: LocatorSnapshot[] = [];
+    const testInfo = {
+      status: 'passed',
+      attach: vi.fn(async (name: string, body: { body: Buffer }) => {
+        if (name === ATTACHMENT_NAMES.locators) attached.push(...JSON.parse(String(body.body)));
+      }),
+      annotations: [],
+    };
+
+    const pageFixture = piwiFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
+      (args: object, use: () => Promise<void>, info: unknown) => Promise<void>,
+    ];
+
+    await captureFixture({}, () => pageFixture({ page: fakePage }, (page) => actions(page as never, emit)), testInfo);
+    return { attached, ariaSnapshots };
+  }
+
+  it('probes a call site once however many times that line runs', async () => {
+    let probes = 0;
+    const { attached } = await runCapture(
+      async () => {
+        probes++;
+        return savedButton;
+      },
+      async (page) => {
+        for (let i = 0; i < 5; i++) await page.getByTestId('save').click();
+      },
+    );
+
+    // Five actions, one source line — and `dedupeSnapshotsByLocation` would
+    // have discarded four of five captures anyway.
+    expect(probes).toBe(1);
+    expect(attached).toHaveLength(1);
+    expect(attached[0]!.element?.accessibleName).toBe('Save');
+  });
+
+  it('skips the ARIA snapshot when the probed attributes settle the name', async () => {
+    const { attached, ariaSnapshots } = await runCapture(
+      async () => savedButton,
+      async (page) => {
+        await page.getByTestId('save').click();
+      },
+    );
+
+    // A button with text and no aria-label/aria-labelledby is named by its
+    // content, so the second round trip cannot change the answer.
+    expect(ariaSnapshots).toBe(0);
+    expect(attached[0]!.element?.accessibleName).toBe('Save');
+  });
+
+  it('still asks the browser when only it can settle the name', async () => {
+    const { ariaSnapshots } = await runCapture(
+      async () => ({ ...savedButton, attributes: { 'aria-labelledby': 'heading-1' } }),
+      async (page) => {
+        await page.getByTestId('save').click();
+      },
+    );
+
+    expect(ariaSnapshots).toBe(1);
+  });
+
+  it('releases a call site whose probe failed so a later run of that line retries', async () => {
+    let probes = 0;
+    const { attached } = await runCapture(
+      async () => {
+        probes++;
+        if (probes === 1) throw new Error('element detached');
+        return savedButton;
+      },
+      async (page) => {
+        for (let i = 0; i < 2; i++) {
+          await page.getByTestId('save').click();
+          // Let the failed probe settle before the line runs again.
+          await sleep(20);
+        }
+      },
+    );
+
+    expect(probes).toBe(2);
+    expect(attached).toHaveLength(1);
+    expect(attached[0]!.element?.textContent).toBe('Save');
+  });
+});
+
+describe('seeded in-page probe', () => {
+  const savedButton = {
+    tagName: 'button',
+    attributes: { 'data-testid': 'save' },
+    textContent: 'Save',
+    center: { x: 1, y: 1 },
+    hasLabel: false,
+    selectorCounts: {},
+  };
+
+  /**
+   * The two ways capture can reach the probe are told apart by the argument:
+   * the stub is handed the global's name (a string), while the fallback ships
+   * `probeElementAttrs` itself with the full `ProbeArg` object.
+   */
+  const isStubCall = (arg: unknown) => typeof arg === 'string';
+
+  /** Fake context that records what the fixtures seeded into it. */
+  function fakeContext() {
+    const initScripts: string[] = [];
+    return {
+      scripts: initScripts,
+      context: {
+        addInitScript: async (script: { content: string }) => {
+          initScripts.push(script.content);
+        },
+        newPage: async () => ({}),
+        close: async () => {},
+        on: () => {},
+      },
+    };
+  }
+
+  it('seeds the probe into the context so captures ship a stub instead of the source', async () => {
+    const calls: Array<'stub' | 'source'> = [];
+    const { scripts, context } = fakeContext();
+    const fakeLocator = {
+      click: async () => {},
+      evaluate: async (_fn: unknown, arg?: unknown) => {
+        calls.push(isStubCall(arg) ? 'stub' : 'source');
+        return savedButton;
+      },
+    };
+    const factory = () => fakeLocator;
+    const fakePage = {
+      getByRole: factory,
+      getByTestId: factory,
+      getByText: factory,
+      getByLabel: factory,
+      getByPlaceholder: factory,
+      getByAltText: factory,
+      getByTitle: factory,
+      locator: factory,
+      on: () => {},
+      context: () => context,
+      evaluate: async () => null,
+    };
+
+    const pageFixture = piwiFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
+      (args: object, use: () => Promise<void>, info: unknown) => Promise<void>,
+    ];
+
+    await captureFixture(
+      {},
+      () =>
+        pageFixture({ page: fakePage }, async (page) => {
+          await (page.getByTestId('save') as unknown as { click: () => Promise<void> }).click();
+        }),
+      { status: 'passed', attach: async () => {}, annotations: [] },
+    );
+
+    // The seeded script carries the probe and its argument, so the per-capture
+    // call needs neither.
+    expect(scripts).toHaveLength(1);
+    expect(scripts[0]).toContain('__piwiProbeElement');
+    expect(scripts[0]).toContain('roleSources');
+    expect(calls).toEqual(['stub']);
+  });
+
+  it('ships the probe source when the page has no seeded probe, and stops re-trying it', async () => {
+    const calls: Array<'stub' | 'source'> = [];
+    const fakeLocator = {
+      click: async () => {},
+      // A page the init script never reached: the stub finds no global and
+      // reports null rather than throwing.
+      evaluate: async (_fn: unknown, arg?: unknown) => {
+        if (isStubCall(arg)) {
+          calls.push('stub');
+          return null;
+        }
+        calls.push('source');
+        return savedButton;
+      },
+    };
+    const factory = () => fakeLocator;
+    const listeners = new Map<string, Array<() => void>>();
+    const fakePage = {
+      getByRole: factory,
+      getByTestId: factory,
+      getByText: factory,
+      getByLabel: factory,
+      getByPlaceholder: factory,
+      getByAltText: factory,
+      getByTitle: factory,
+      locator: factory,
+      on: (event: string, handler: () => void) => {
+        listeners.set(event, [...(listeners.get(event) ?? []), handler]);
+      },
+      evaluate: async () => null,
+    };
+    const emit = (event: string) => (listeners.get(event) ?? []).forEach((h) => h());
+
+    const attached: LocatorSnapshot[] = [];
+    const testInfo = {
+      status: 'passed',
+      attach: vi.fn(async (name: string, body: { body: Buffer }) => {
+        if (name === ATTACHMENT_NAMES.locators) attached.push(...JSON.parse(String(body.body)));
+      }),
+      annotations: [],
+    };
+
+    const pageFixture = piwiFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
+      (args: object, use: () => Promise<void>, info: unknown) => Promise<void>,
+    ];
+
+    const click = async (page: typeof fakePage) =>
+      await (page.getByTestId('save') as unknown as { click: () => Promise<void> }).click();
+
+    await captureFixture(
+      {},
+      () =>
+        pageFixture({ page: fakePage }, async (page) => {
+          // Separate lines, so the per-call-site dedupe does not hide the
+          // second capture.
+          await click(page);
+          await new Promise((r) => setTimeout(r, 10));
+          await (page.getByTestId('other') as unknown as { click: () => Promise<void> }).click();
+          await new Promise((r) => setTimeout(r, 10));
+          // A navigation seeds the next document, so the fast path is worth
+          // another try.
+          emit('framenavigated');
+          await (page.getByTestId('third') as unknown as { click: () => Promise<void> }).click();
+          await new Promise((r) => setTimeout(r, 10));
+        }),
+      testInfo,
+    );
+
+    // First capture discovers the miss and falls back; the second skips
+    // straight to the source; the navigation re-arms the stub.
+    expect(calls).toEqual(['stub', 'source', 'source', 'stub', 'source']);
+    expect(attached.every((snapshot) => snapshot.element !== null)).toBe(true);
+  });
+});
+
+describe('locator capture teardown race', () => {
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  it('keeps a probe rejection after the capture deadline from becoming an unhandled rejection', async () => {
+    // The element probe (locator.evaluate) never settles during the test and
+    // rejects only after teardown — simulating a page that closes while the
+    // probe is still in flight. The 500ms capture deadline wins the race; the
+    // probe's late rejection must be observed, or Playwright would fail
+    // whichever test is running when it surfaces as an unhandled rejection.
+    let rejectProbe: ((reason: Error) => void) | undefined;
+    const fakeLocator = {
+      click: async () => {},
+      evaluate: () =>
+        new Promise((_, reject) => {
+          rejectProbe = reject;
+        }),
+    };
+    const locatorFactory = () => fakeLocator;
+    const fakePage = {
+      getByRole: locatorFactory,
+      getByTestId: locatorFactory,
+      getByText: locatorFactory,
+      getByLabel: locatorFactory,
+      getByPlaceholder: locatorFactory,
+      getByAltText: locatorFactory,
+      getByTitle: locatorFactory,
+      locator: locatorFactory,
+      on: () => {},
+      evaluate: async () => null, // web-vitals read at teardown
+    };
+    const testInfo = { status: 'passed', attach: vi.fn(async () => {}), annotations: [] };
+
+    const pageFixture = piwiFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
+      (args: object, use: () => Promise<void>, testInfo: unknown) => Promise<void>,
+    ];
+
+    const unhandled: unknown[] = [];
+    const priorListeners = process.listeners('unhandledRejection');
+    process.removeAllListeners('unhandledRejection');
+    process.on('unhandledRejection', (reason) => unhandled.push(reason));
+
+    try {
+      await captureFixture(
+        {},
+        () =>
+          pageFixture({ page: fakePage }, async (page) => {
+            await (page.getByTestId('save') as unknown as { click: () => Promise<void> }).click();
+            // Let the 500ms probe deadline win the race before the test ends.
+            await sleep(600);
+          }),
+        testInfo,
+      );
+
+      // The page "closes" after teardown; the in-flight probe now rejects.
+      rejectProbe?.(new Error('page closed at teardown'));
+      await sleep(20);
+
+      expect(unhandled).toEqual([]);
+      // The action was still captured (as a placeholder snapshot) and attached.
+      expect(testInfo.attach).toHaveBeenCalledWith(ATTACHMENT_NAMES.locators, expect.anything());
+    } finally {
+      process.removeAllListeners('unhandledRejection');
+      for (const listener of priorListeners) process.on('unhandledRejection', listener);
+    }
+  });
+});
+
+/**
+ * Structural-probe fakes: role-source scans need index access over real
+ * node lists, and ancestors need a parentElement chain — richer than the
+ * `{ length }` stubs above.
+ */
+function fakeDomNode(tagName: string, attrs: Record<string, string> = {}): any {
+  return {
+    tagName: tagName.toUpperCase(),
+    getAttribute: (k: string) => (k in attrs ? attrs[k] : null),
+    parentElement: null as any,
+    // Scoped role-source scan inside an anchor; tests assign the contents.
+    scopedNodes: [] as any[],
+    querySelectorAll(_sel: string) {
+      return this.scopedNodes;
+    },
+    // Used to look for a heading that names a repeated container.
+    querySelector(_sel: string) {
+      return null;
+    },
+  };
+}
+
+function fakeStructuralElement(opts: {
+  tagName: string;
+  attrs?: Record<string, string>;
+  /** Nodes returned for the document-wide role-source scan (should include the element itself). */
+  roleNodes?: any[];
+  /** Match counts for plain count selectors (testid/id uniqueness probes). */
+  countMatches?: Record<string, number>;
+  parent?: any;
+}): any {
+  const { tagName, attrs = {}, roleNodes = [], countMatches = {} } = opts;
+  const el = fakeDomNode(tagName, attrs);
+  el.parentElement = opts.parent ?? null;
+  el.getBoundingClientRect = () => ({ x: 0, y: 0, width: 10, height: 10 });
+  el.textContent = '';
+  el.labels = null;
+  el.ownerDocument = {
+    defaultView: { CSS: { escape: (s: string) => s } },
+    querySelectorAll: (sel: string) =>
+      sel.startsWith('[role],') ? roleNodes : Array.from({ length: countMatches[sel] ?? 0 }),
+  };
+  return el;
+}
+
+describe('probeElementAttrs — structural probe (rolePosition + ancestors)', () => {
+  it('records the position among same-role elements, document-wide', () => {
+    const other = fakeDomNode('input', { type: 'text' });
+    const el = fakeStructuralElement({ tagName: 'input', attrs: { type: 'email' } });
+    el.ownerDocument.querySelectorAll = (sel: string) => (sel.startsWith('[role],') ? [other, el] : []);
+    const probed = probe(el, ['type']);
+    expect(probed.rolePosition).toEqual({ role: 'textbox', count: 2, index: 1 });
+  });
+
+  it('counts same-level headings separately (levelCount)', () => {
+    const h1 = fakeDomNode('h1');
+    const h2a = fakeDomNode('h2');
+    const h2b = fakeDomNode('h2');
+    const el = fakeStructuralElement({ tagName: 'h1' });
+    el.ownerDocument.querySelectorAll = (sel: string) => (sel.startsWith('[role],') ? [el, h2a, h1, h2b] : []);
+    const probed = probe(el, []);
+    expect(probed.rolePosition).toEqual({ role: 'heading', count: 4, index: 0, levelCount: 2 });
+  });
+
+  it('collects anchor-worthy ancestors with scoped and document-wide counts', () => {
+    const plainDiv = fakeDomNode('div');
+    const form = fakeDomNode('form', { 'data-testid': 'signup-form', id: 'signup' });
+    plainDiv.parentElement = form;
+    const el = fakeStructuralElement({
+      tagName: 'input',
+      attrs: { type: 'email' },
+      parent: plainDiv,
+      countMatches: { '[data-testid="signup-form"]': 1, '#signup': 1 },
+    });
+    el.ownerDocument.querySelectorAll = (sel: string) =>
+      sel.startsWith('[role],')
+        ? [form, el]
+        : Array.from({ length: ({ '[data-testid="signup-form"]': 1, '#signup': 1 })[sel] ?? 0 });
+    form.scopedNodes = [el];
+    const probed = probe(el, ['type']);
+    // The plain div is not anchor-worthy; the form is, at depth 2.
+    expect(probed.ancestors).toEqual([
+      {
+        tag: 'form',
+        depth: 2,
+        testId: 'signup-form',
+        id: 'signup',
+        role: null,
+        ariaLabel: null,
+        scopedRoleCount: 1,
+        testIdCount: 1,
+        idCount: 1,
+        roleCount: 1,
+      },
+    ]);
+  });
+
+  it('stops at body and caps the number of collected anchors', () => {
+    // el → 5 anchor-worthy divs (ids) → body → html; only 4 nearest collected.
+    let parent: any = fakeDomNode('body');
+    const chain: any[] = [];
+    for (let i = 5; i >= 1; i--) {
+      const anc = fakeDomNode('div', { id: `panel${i}` });
+      anc.parentElement = parent;
+      parent = anc;
+      chain.unshift(anc);
+    }
+    const el = fakeStructuralElement({ tagName: 'button', parent });
+    el.ownerDocument.querySelectorAll = (sel: string) => (sel.startsWith('[role],') ? [el] : []);
+    const probed = probe(el, []);
+    expect(probed.ancestors.map((a: any) => a.id)).toEqual(['panel1', 'panel2', 'panel3', 'panel4']);
+  });
+
+  it('yields no structural data for a role-less element', () => {
+    const el = fakeStructuralElement({ tagName: 'div', parent: fakeDomNode('form', { id: 'f' }) });
+    const probed = probe(el, []);
+    expect(probed.rolePosition).toBeNull();
+    expect(probed.ancestors).toEqual([]);
+  });
+
+  it('drops the position when the element is missing from the scan', () => {
+    const stranger = fakeDomNode('input');
+    const el = fakeStructuralElement({ tagName: 'input', roleNodes: [stranger] });
+    const probed = probe(el, []);
+    expect(probed.rolePosition).toBeNull();
+  });
+
+  it('survives a broken document without failing the capture', () => {
+    const el = fakeStructuralElement({ tagName: 'input' });
+    el.ownerDocument = undefined;
+    const probed = probe(el, []);
+    expect(probed.rolePosition).toBeNull();
+    expect(probed.ancestors).toEqual([]);
+    expect(probed.tagName).toBe('input');
+  });
+});
+
+describe('_expect assertion capture', () => {
+  // What the in-page probe would report for the asserted element. A role-less
+  // <div> keeps the capture path off the ARIA-snapshot branch, so the fake
+  // locator only needs `evaluate`.
+  const FAKE_ATTRS = {
+    tagName: 'div',
+    attributes: {},
+    textContent: 'Save changes',
+    center: { x: 10, y: 20 },
+    hasLabel: false,
+    selectorCounts: {},
+    rolePosition: null,
+    ancestors: [],
+  };
+
+  interface HarnessTestInfo {
+    status: string;
+    attach: ReturnType<typeof vi.fn>;
+    annotations: Array<{ type: string; description?: string }>;
+  }
+
+  /**
+   * Drive the real fixtures with a fake page whose locator factories all
+   * return `fakeLocator` — the same wiring as the teardown-race test above.
+   * The test body plays the role of Playwright's matcher layer by calling
+   * `locator._expect(expression, options)` directly on the wrapped locator.
+   */
+  async function runCaptureTest(opts: {
+    fakeLocator: Record<string, unknown>;
+    body: (page: Record<string, (...args: unknown[]) => unknown>) => Promise<void>;
+    finalStatus?: string;
+    rootAria?: string;
+  }): Promise<{ testInfo: HarnessTestInfo; snapshots: LocatorSnapshot[] | null }> {
+    const factory = () => opts.fakeLocator;
+    // flushSink reads page.locator(':root') for the failure-time ARIA snapshot.
+    const rootLocator = { ariaSnapshot: async () => opts.rootAria ?? null };
+    const fakePage = {
+      getByRole: factory,
+      getByTestId: factory,
+      getByText: factory,
+      getByLabel: factory,
+      getByPlaceholder: factory,
+      getByAltText: factory,
+      getByTitle: factory,
+      locator: (sel: string) => (sel === ':root' ? rootLocator : opts.fakeLocator),
+      on: () => {},
+      evaluate: async () => null,
+    };
+    const testInfo: HarnessTestInfo = { status: 'passed', attach: vi.fn(async () => {}), annotations: [] };
+
+    const pageFixture = piwiFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
+      (args: object, use: () => Promise<void>, testInfo: unknown) => Promise<void>,
+    ];
+
+    await captureFixture(
+      {},
+      () =>
+        pageFixture({ page: fakePage }, async (page) => {
+          await opts.body(page as unknown as Record<string, (...args: unknown[]) => unknown>);
+          if (opts.finalStatus) testInfo.status = opts.finalStatus;
+        }),
+      testInfo,
+    );
+
+    const call = testInfo.attach.mock.calls.find((c) => c[0] === ATTACHMENT_NAMES.locators);
+    const snapshots = call ? (JSON.parse((call[1] as { body: Buffer }).body.toString()) as LocatorSnapshot[]) : null;
+    return { testInfo, snapshots };
+  }
+
+  it('captures the element when a positive presence assertion passes', async () => {
+    const result = { matches: true, received: undefined };
+    const fakeLocator = {
+      _expect: vi.fn(async () => result),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+    let returned: unknown;
+
+    const { snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByTestId!('save') as { _expect: (...args: unknown[]) => Promise<unknown> };
+        returned = await loc._expect('to.be.visible', { isNot: false, timeout: 5000 });
+      },
+    });
+
+    // The assertion outcome is passed through untouched (same object).
+    expect(returned).toBe(result);
+    expect(fakeLocator._expect).toHaveBeenCalledExactlyOnceWith('to.be.visible', { isNot: false, timeout: 5000 });
+
+    expect(snapshots).not.toBeNull();
+    expect(snapshots).toHaveLength(1);
+    const snap = snapshots![0]!;
+    expect(snap.used).toEqual({ method: 'getByTestId', args: ['save'], raw: 'getByTestId(["save"])' });
+    // The call site is this spec file — the same first-user-frame the failing
+    // assertion's error stack would carry, so the exact-location rung matches.
+    expect(snap.location).toMatch(/tests\/capture-fixtures\.spec\.ts:\d+:\d+$/);
+    expect(snap.element).not.toBeNull();
+    expect(snap.element!.tagName).toBe('div');
+    expect(snap.element!.textContent).toBe('Save changes');
+    expect(snap.alternatives.map((a) => a.locator)).toContain("getByText('Save changes')");
+  });
+
+  it('skips negated assertions — a passing .not proves nothing resolvable', async () => {
+    const fakeLocator = {
+      _expect: vi.fn(async () => ({ matches: false })),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    const { snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByText!('gone') as { _expect: (...args: unknown[]) => Promise<unknown> };
+        await loc._expect('to.be.visible', { isNot: true, timeout: 100 });
+      },
+    });
+
+    expect(snapshots).toBeNull();
+    expect(fakeLocator.evaluate).not.toHaveBeenCalled();
+  });
+
+  it('skips absence, multi-element, and page-level expressions even when they pass', async () => {
+    const fakeLocator = {
+      _expect: vi.fn(async () => ({ matches: true })),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    const { snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.locator!('.rows') as { _expect: (...args: unknown[]) => Promise<unknown> };
+        for (const expression of ['to.be.hidden', 'to.have.count', 'to.have.text.array', 'to.have.title']) {
+          await loc._expect(expression, { isNot: false });
+        }
+      },
+    });
+
+    expect(snapshots).toBeNull();
+    expect(fakeLocator.evaluate).not.toHaveBeenCalled();
+  });
+
+  it('probes a repeated call site only once but attaches its snapshot', async () => {
+    const fakeLocator = {
+      _expect: vi.fn(async () => ({ matches: true })),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    const { snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByRole!('button', { name: 'Save' }) as {
+          _expect: (...args: unknown[]) => Promise<unknown>;
+        };
+        for (let i = 0; i < 3; i++) {
+          await loc._expect('to.be.visible', { isNot: false });
+        }
+      },
+    });
+
+    expect(fakeLocator._expect).toHaveBeenCalledTimes(3);
+    expect(fakeLocator.evaluate).toHaveBeenCalledTimes(1);
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots![0]!.element).not.toBeNull();
+  });
+
+  it('records a failed presence assertion for the fresh-locator suggestion', async () => {
+    const fakeLocator = {
+      _expect: vi.fn(async () => ({ matches: false, received: 'hidden' })),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    const { testInfo, snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByText!('Save') as { _expect: (...args: unknown[]) => Promise<unknown> };
+        await loc._expect('to.be.visible', { isNot: false, timeout: 100 });
+      },
+      finalStatus: 'failed',
+      rootAria: '- button "Save changes"',
+    });
+
+    // No element was captured (the assertion missed), but the call site is
+    // still marked exercised via its placeholder…
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots![0]!.element).toBeNull();
+    expect(fakeLocator.evaluate).not.toHaveBeenCalled();
+
+    // …and the miss fed the failed-locator signal: teardown suggested a fresh
+    // locator for the renamed element on the failing page.
+    const suggestion = testInfo.annotations.find((a) => a.type === LOCATOR_SUGGESTION_ANNOTATION);
+    expect(suggestion).toBeDefined();
+    expect(suggestion!.description).toContain("getByText('Save')");
+    expect(suggestion!.description).toContain('Save changes');
+  });
+
+  it('degrades to no capture when the result carries no matches flag', async () => {
+    const fakeLocator = {
+      _expect: vi.fn(async () => ({})),
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    const { testInfo, snapshots } = await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByTestId!('save') as { _expect: (...args: unknown[]) => Promise<unknown> };
+        await loc._expect('to.be.visible', { isNot: false });
+      },
+    });
+
+    // Placeholder only: the location counts as exercised, no element claim,
+    // no failed-locator record.
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots![0]!.element).toBeNull();
+    expect(fakeLocator.evaluate).not.toHaveBeenCalled();
+    expect(testInfo.annotations).toEqual([]);
+  });
+
+  it('leaves the property untouched when the installed Playwright has no _expect', async () => {
+    const fakeLocator = {
+      click: async () => {},
+      evaluate: vi.fn(async () => FAKE_ATTRS),
+    };
+
+    await runCaptureTest({
+      fakeLocator,
+      body: async (page) => {
+        const loc = page.getByTestId!('save') as { _expect?: unknown };
+        expect(loc._expect).toBeUndefined();
+      },
+    });
+  });
+});
