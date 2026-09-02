@@ -101,6 +101,7 @@ From `apps/application/`:
 | `npm run app:generate:demo` / `app:check:demo` | Build the demo SPA / verify every server route has a demo handler |
 | `npm run app:check:demo:runtime` | Drive the **built** demo from its real `/demo/` sub-path in a browser (run `app:generate:demo` first) |
 | `npm run app:screens -- <scene>` | Capture a feature screenshot — `app:screens:docs` for every committed docs illustration, `app:screens:check` to verify they all still have a scene |
+| `npm run app:screens -- --route <path> [--expand] [--height N]` | Screenshot any page without registering a scene — boots and seeds its own server; the `run-app` skill (`.claude/skills/run-app/SKILL.md`) is the full recipe for running and driving the app |
 | `npm run app:generate:deploy` | Regenerate the one-click deploy manifests (`render.yaml`, `fly.toml`, `deploy/`) |
 | `node scripts/db-query.mjs "<sql>" [--json]` | Query the local SQLite DB directly |
 
