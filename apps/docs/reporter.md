@@ -312,6 +312,8 @@ When a locator later fails, the server resolves replacements through a ladder, m
 4. **Cross-test** — the same locator was captured by *another* test in the project (useful when the failing test has no capture history of its own for that locator — e.g. it fails on its very first run, or the history predates assertion capture); the freshest snapshot is reused.
 5. **ARIA fallback** — no prior snapshot exists; limited suggestions are derived from the failure-time ARIA snapshot (no HTML attributes).
 
+The ladder only runs for a **resolution failure** — the call log shows the locator never resolved (`waiting for <locator>` with no later `locator resolved to …` line), matched nothing (`resolved to 0 elements`), or matched several elements (a strict-mode violation). When the locator *did* resolve and the action or assertion failed afterwards (`locator resolved to 51 elements`, `element is not enabled`, a hidden element), or when the error is a navigation failure (`page.goto`, `net::ERR_*`), the panel shows one line — *The locator resolved; this is not a locator problem* — instead of a ranked menu, and no "Locator fix" signal appears on the run page. Rewriting a locator that already found its element would be a harmful edit.
+
 When a stored snapshot is found but the element's captured accessible name is provably gone from the failing page (and no rename match was confident), the panel flags the list: name-based alternatives — including the failing locator itself — are kept visible but excluded from the recommendation, and candidates parsed from the failing page are shown alongside. This prevents the panel from "recommending" the very locator that just broke after a label or title change.
 
 <figure>

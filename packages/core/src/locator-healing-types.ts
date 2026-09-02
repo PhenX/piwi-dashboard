@@ -217,6 +217,15 @@ export interface LocatorEdit {
  * and the dashboard panel all import this.
  */
 export interface LocatorHealingResult {
+  /**
+   * Whether a replacement locator can address this failure at all. False when
+   * the locator resolved and the action or assertion failed afterwards, when the
+   * error is a navigation failure, or when the error names no locator — the
+   * alternative lists are then empty and `reason` says why in one sentence.
+   */
+  applicable?: boolean;
+  /** One sentence explaining an `applicable: false` result; null otherwise. */
+  reason?: string | null;
   failingLocator: { method: string; args: Record<string, unknown> } | null;
   fromPriorSuccess: RankedLocator[] | null;
   /**

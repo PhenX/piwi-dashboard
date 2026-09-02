@@ -1274,7 +1274,11 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     const id = numericParam(params.executionId, 'executionId');
     if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
     const h = await getLocatorHealing(db, id);
-    if (!h || h.source === 'none') return null;
+    if (!h) return null;
+    // Healing does not apply (the locator resolved, a navigation failed, no
+    // locator in the error): say why, so an agent does not rewrite the selector.
+    if (h.applicable === false) return dropNulls({ executionId: id, applicable: false, reason: h.reason });
+    if (h.source === 'none') return null;
     const rankedList = (arr: any[] | null | undefined) =>
       arr && arr.length
         ? arr.slice(0, 8).map((a: any) => dropNulls({ locator: a.locator, method: a.method, score: a.score }))

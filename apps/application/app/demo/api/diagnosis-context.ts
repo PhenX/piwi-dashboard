@@ -38,6 +38,7 @@ import {
 import type { DrizzleDB } from '#shared/handlers/db';
 import { DIAGNOSIS_SECTIONS } from '#shared/diagnosis-sections';
 import { getLocatorHealing } from '~~/server/utils/locator-healing';
+import { healingNotApplicableMarkdown } from '#shared/locator-resolution';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
 import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
@@ -491,7 +492,15 @@ async function locatorHealingMd(
   repId: number,
 ): Promise<{ md: string | null; coverage: DiagnosisContextCoverage['locatorHealing'] }> {
   const healing = await getLocatorHealing(db, repId);
-  if (!healing || healing.source === 'none') return { md: null, coverage: null };
+  if (!healing) return { md: null, coverage: null };
+  const notApplicable = healingNotApplicableMarkdown(healing);
+  if (notApplicable) {
+    return {
+      md: healing.failingLocator ? notApplicable : null,
+      coverage: healing.failingLocator ? { source: healing.source, alternativesCount: 0 } : null,
+    };
+  }
+  if (healing.source === 'none') return { md: null, coverage: null };
   const alts = healing.recommendation?.recommended ? [healing.recommendation.recommended] : [];
   const list = healing.fromPriorSuccess ?? healing.fromAriaSnapshot ?? healing.fromElementMatch ?? alts;
   if (!list.length) return { md: null, coverage: null };

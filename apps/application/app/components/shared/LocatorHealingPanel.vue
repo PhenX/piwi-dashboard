@@ -595,6 +595,24 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
     </UAlert>
   </component>
 
+  <!-- Healing does not apply: the locator resolved (or the failure is a
+       navigation error, or names no locator). One line, no ranked menu. -->
+  <component
+    :is="cardComponent"
+    v-else-if="!pending && !error && healing?.applicable === false"
+    v-bind="cardBind"
+    data-shot="alternative-locators"
+    icon="i-lucide-bandage"
+    title="Alternative locators"
+    subtitle="Not a locator problem"
+    help="locator-healing"
+  >
+    <template v-if="storageKey" #folded>
+      <span>{{ healing.reason }}</span>
+    </template>
+    <p class="text-sm text-gray-600 dark:text-gray-400">{{ healing.reason }}</p>
+  </component>
+
   <!-- No data -->
   <component
     :is="cardComponent"

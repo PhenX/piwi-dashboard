@@ -398,7 +398,7 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'get_locator_healing',
     description:
-      'Ranked alternative locators for a failing test-run-case: the failing locator, the recommended durable fix, and the full alternative lists (from prior success, element match, and ARIA snapshot). Includes `location` (file:line:col), the failing `sourceLine`, and a ready-to-apply `edit` — the rewritten line plus a unified diff `git apply` accepts. Use when fixing a broken selector.',
+      'Ranked alternative locators for a failing test-run-case: the failing locator, the recommended durable fix, and the full alternative lists (from prior success, element match, and ARIA snapshot). Includes `location` (file:line:col), the failing `sourceLine`, and a ready-to-apply `edit` — the rewritten line plus a unified diff `git apply` accepts. Returns `{ applicable: false, reason }` when the locator resolved and the failure came after (or the error is a navigation error) — do not rewrite the selector then. Use when fixing a broken selector.',
     inputSchema: {
       type: 'object',
       properties: { executionId: { type: 'number', description: 'Test run case ID (executionId)' } },

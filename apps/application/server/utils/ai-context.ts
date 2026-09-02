@@ -44,6 +44,7 @@ import { getTraceDomSnapshot } from './dom-snapshot';
 import { renderAppStateMarkdown, type PageStateLike } from '#shared/page-state';
 import { getLastPassPageState } from '#shared/handlers/test-cases';
 import { getLocatorHealing } from './locator-healing';
+import { healingNotApplicableMarkdown } from '#shared/locator-resolution';
 import { getEnvironmentDiff } from './environment-diff';
 import { renderEnvironmentDiffMarkdown } from '#shared/environment-diff';
 import { selectCaseScreenshots } from './case-screenshots';
@@ -1446,6 +1447,16 @@ async function locatorHealingSection(
 
   const healing = await getLocatorHealing(db, rep.id);
   const alternatives = healing.fromElementMatch ?? healing.fromPriorSuccess ?? healing.fromAriaSnapshot ?? [];
+
+  // The gate rejected healing (the locator resolved, a navigation failed, no
+  // locator): tell the model so, rather than leaving it to guess a selector.
+  const notApplicable = healingNotApplicableMarkdown(healing);
+  if (notApplicable) {
+    return {
+      section: healing.failingLocator ? notApplicable : null,
+      coverage: healing.failingLocator ? { source: healing.source, alternativesCount: 0 } : null,
+    };
+  }
 
   if (alternatives.length === 0) {
     // No alternatives — only report coverage when we actually recognized a

@@ -630,7 +630,7 @@ export async function getFailureGroups(db: DrizzleDB, runId: number) {
     for (const { clusterId, repId } of reps) {
       const h = healingMap.get(repId);
       const rec = h?.recommendation?.recommended;
-      if (h && h.source !== 'none' && rec) {
+      if (h && h.applicable !== false && h.source !== 'none' && rec) {
         healingByCluster.set(clusterId, {
           recommended: rec.locator,
           source: h.source,
