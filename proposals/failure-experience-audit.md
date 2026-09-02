@@ -316,7 +316,9 @@ Fold A–C into a single page shape used by both the execution and the cluster: 
 
 ## 7. A prioritized plan
 
-### Quick wins (days each, mostly one file)
+### Quick wins (days each, mostly one file) — shipped 2026-09-02
+
+All fourteen landed in PRs #428 (docs), #429 (reporter and alerts), #430 (UI) and #431 (server analysis), plus four extras the sessions added on the way: ANSI-colored error text where raw escape codes leaked, a navbar that no longer repeats the breadcrumb, a `/test-runs/:id/locate` route that resolves an execution from its file, title and retry, and the deterministic cluster name applied everywhere the signature used to be shown.
 
 1. Show the failure screenshot expanded by default; fold console/network instead (`CollapsibleSectionCard` default or an explicit `default-folded="false"` on `case-evidence`).
 2. Gate the healing panel and the "Locator fix" signal on a *resolution* failure: `0 matches`, strict-mode violation, or `waiting for <locator>` without a later `locator resolved to` (`resolveHealingForCase`, `FailureGroups.vue`).
