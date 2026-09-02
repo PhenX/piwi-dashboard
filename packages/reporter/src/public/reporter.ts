@@ -491,27 +491,32 @@ export class PiwiDashboardReporter {
     });
     this.materializeUnrunTests(unrunReason);
 
-    await this.submitter.submit(
-      {
-        options: this.options,
-        testCases: this.testCases,
-        startTime: this.startTime,
-        playwrightVersion: this.playwrightVersion,
-        reporterVersion: this.reporterVersion,
-        totalTests: this.totalTests,
-        passedTests: this.passedTests,
-        failedTests: this.failedTests,
-        skippedTests: this.skippedTests,
-        timedOutTests: this.timedOutTests,
-        didNotRunTests: this.didNotRunTests,
-        metadata: this.metadata,
-        instanceId: this.instanceId,
-        shardInfo: this.shardInfo,
-        setupSteps: this.setupSteps,
-        isFullRun: this.isFullRun,
-        filterDetails: this.filterDetails,
-      },
-      result,
-    );
+    try {
+      await this.submitter.submit(
+        {
+          options: this.options,
+          testCases: this.testCases,
+          startTime: this.startTime,
+          playwrightVersion: this.playwrightVersion,
+          reporterVersion: this.reporterVersion,
+          totalTests: this.totalTests,
+          passedTests: this.passedTests,
+          failedTests: this.failedTests,
+          skippedTests: this.skippedTests,
+          timedOutTests: this.timedOutTests,
+          didNotRunTests: this.didNotRunTests,
+          metadata: this.metadata,
+          instanceId: this.instanceId,
+          shardInfo: this.shardInfo,
+          setupSteps: this.setupSteps,
+          isFullRun: this.isFullRun,
+          filterDetails: this.filterDetails,
+        },
+        result,
+      );
+    } finally {
+      // Body-only attachments were staged as temp files for the uploads above.
+      this.fileHandler.cleanupBodyAttachments();
+    }
   }
 }

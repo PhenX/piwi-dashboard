@@ -85,7 +85,7 @@ export { expect } from '@playwright/test'
 
 These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).
 
-Any attachments Playwright records — including **videos** (`video: 'retain-on-failure'`) and screenshots — are uploaded automatically and shown as first-class evidence on the test-case and failure-cluster pages, alongside traces. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
+Any attachments Playwright records — including **videos** (`video: 'retain-on-failure'`) and screenshots — are uploaded automatically and shown as first-class evidence on the test-case and failure-cluster pages, alongside traces. That includes what a test attaches itself: both `testInfo.attach('payload', { path })` and the inline form `testInfo.attach('payload', { body: JSON.stringify(data), contentType: 'application/json' })` reach the dashboard (an inline body is staged as a temp file under the OS temp directory for the upload and removed when the run ends). One attachment above 500 MB — the dashboard's default upload ceiling — is skipped with a warning naming it rather than failing the upload. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
 
 ## Configuration options
 
