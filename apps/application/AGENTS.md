@@ -438,6 +438,11 @@ apply the cursor in memory on the same axis as the emitted cursor, or paging loo
 
 ## Running the app locally to verify a change
 
+The step-by-step recipe, the seeded routes worth opening and the pitfalls live in the `run-app` skill
+(`.claude/skills/run-app/SKILL.md`) — read it first. The short form: `npm run app:screens -- --route <path> --expand
+--height 2400` screenshots any page against a throwaway server it boots and seeds itself, and `npm run app:seed:dev`
+followed by `npm run app:dev:bg` gives you a server on port 3000 to iterate against.
+
 When you need to see a change working — a UI tweak, a flow, a screenshot — run a **plain (non-demo) dev server backed by
 a dev DB seeded from the demo data**:
 
@@ -449,8 +454,11 @@ npm run app:seed:dev                             # 3. load sample data (server m
 NUXT_IGNORE_LOCK=1 npx nuxt dev --port 3002      # 4. plain dev server, auth disabled by default
 ```
 
-`app:seed:dev` is idempotent (`INSERT OR IGNORE`); to refresh stale rows wipe `.data` and repeat from step 2. Drive the
-app with Playwright — `scripts/take-demo-screenshots.mjs` is a working harness.
+`app:seed:dev` creates and migrates a missing or empty dev DB itself, so step 2 is only needed when you want a clean
+schema by hand; it is idempotent (`INSERT OR IGNORE`), and to refresh stale rows wipe `.data` and re-run it. Drive the
+app with Playwright — `scripts/take-feature-screenshots.mjs` (`--route`, `--url`) is the working harness, and its
+`settlePage` is the wait strategy to copy: the run and execution pages hold an SSE stream open, so a bare
+`networkidle` never resolves, and the page scrolls inside a panel, so `fullPage` captures a single viewport.
 
 **Caveats that cost real debugging time:**
 
