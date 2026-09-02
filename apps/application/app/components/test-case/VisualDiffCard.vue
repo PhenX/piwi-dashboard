@@ -29,6 +29,8 @@ interface VisualDiffResponse {
     baselineRunId: number;
     failingPath: string;
     baselinePath: string;
+    /** Set when the baseline came from another environment than the failing run. */
+    baselineNote?: string | null;
   };
 }
 
@@ -103,7 +105,11 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
       <span>{{ foldedText }}</span>
     </template>
     <template #subtitle>
-      <span>vs visual baseline (run #{{ diff.baselineRunId }})</span>
+      <span
+        >vs visual baseline (run #{{ diff.baselineRunId }}){{
+          diff.baselineNote ? ` · ${diff.baselineNote}` : ''
+        }}</span
+      >
     </template>
     <template #actions>
       <UBadge :color="ratioColor" variant="subtle" size="sm" class="font-mono tabular-nums">

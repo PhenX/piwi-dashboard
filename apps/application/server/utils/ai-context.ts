@@ -2726,7 +2726,8 @@ export async function buildDiagnosisContext(
         const mismatchNote = d.dimensionMismatch
           ? '\n- ⚠️ The screenshots have different dimensions (viewport change?) — compared on a padded union canvas, so the ratio is inflated and unreliable.'
           : '';
-        const md = `## Visual Diff vs Last Pass\nPixel comparison of the failing screenshot against the same test's last passing screenshot (run #${d.baselineRunId}):\n- Changed pixels: ${d.changedPixels} of ${d.width * d.height} (${pct}%)${mismatchNote}\n- The diff overlay (red = changed pixels) is attached as image "visual-diff".`;
+        const baselineNote = d.baselineNote ? ` — ${d.baselineNote}` : '';
+        const md = `## Visual Diff vs Last Pass\nPixel comparison of the failing screenshot against the same test's last passing screenshot (run #${d.baselineRunId}${baselineNote}):\n- Changed pixels: ${d.changedPixels} of ${d.width * d.height} (${pct}%)${mismatchNote}\n- The diff overlay (red = changed pixels) is attached as image "visual-diff".`;
         push(section('visualDiff', 'Visual Diff vs Last Pass', md));
         coverage = {
           ...coverage,

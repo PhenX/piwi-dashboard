@@ -97,6 +97,13 @@ chosen to be branch-aware: the most recent passing run **on the same branch**, f
 and to any branch only when neither exists. A run whose branch is unknown compares against the most
 recent passing run in the project, as before.
 
+The environment and visual diffs compare one execution against the same test's last passing execution
+on the same browser, and put the run's **environment label** first: a `development` failure is diffed
+against the last passing `development` run, then the same branch, then whatever is most recent. When no
+passing run from the same environment exists, the card says which environment the baseline came from
+("compared with a production run; no passing development run of this test exists") and leaves the
+environment label out of the diff. The regression signals stored on a run stay branch-aware only.
+
 The **default branch** is resolved per project: an explicit setting in **project settings**, else the
 repository's default branch read from the SCM provider, else `main`.
 

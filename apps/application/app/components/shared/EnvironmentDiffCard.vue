@@ -19,7 +19,9 @@ const props = defineProps<{
 
 interface EnvironmentDiffResponse {
   status: 'ok' | 'no-baseline' | 'not-found';
-  baseline?: { runId: number; executionId: number; startTime: number | null };
+  baseline?: { runId: number; executionId: number; startTime: number | null; environment?: string | null };
+  /** Set when the baseline came from another environment than the failing run. */
+  baselineNote?: string | null;
   entries?: EnvironmentDiffEntry[];
 }
 
@@ -42,7 +44,8 @@ const baselineNote = computed(() => {
   const b = diff.value?.baseline;
   if (!b) return '';
   const when = b.startTime ? ` · ${formatRelativeTime(new Date(b.startTime))}` : '';
-  return `vs last passing run of this test (run #${b.runId}${when})`;
+  const note = diff.value?.baselineNote ? ` · ${diff.value.baselineNote}` : '';
+  return `vs last passing run of this test (run #${b.runId}${when})${note}`;
 });
 
 const foldedText = computed(() => {

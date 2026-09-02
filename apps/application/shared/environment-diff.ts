@@ -114,11 +114,13 @@ export function buildEnvironmentSnapshot(source: EnvironmentSnapshotSource): Rec
 export function renderEnvironmentDiffMarkdown(result: {
   status: string;
   baseline?: { runId: number } | null;
+  baselineNote?: string | null;
   entries?: EnvironmentDiffEntry[];
 }): string | null {
   if (result.status !== 'ok' || !result.baseline) return null;
   const entries = result.entries ?? [];
-  const header = `## Environment Diff vs Last Pass\nFailing execution's environment compared to the same test's most recent passing execution (run #${result.baseline.runId}):`;
+  const note = result.baselineNote ? ` — ${result.baselineNote}` : '';
+  const header = `## Environment Diff vs Last Pass\nFailing execution's environment compared to the same test's most recent passing execution (run #${result.baseline.runId}${note}):`;
   if (entries.length === 0) {
     return `${header}\n- No differences — the environment is identical to the last pass, so environment drift is unlikely to explain this failure.`;
   }
