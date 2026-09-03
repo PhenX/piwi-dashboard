@@ -19,7 +19,7 @@ test.describe.serial('Live case file uploads', () => {
 
   const traceContent = Buffer.from('Mock Playwright live trace data');
   const traceHash = createHash('sha256').update(traceContent).digest('hex');
-  const screenshotContent = Buffer.from('PNG mock screenshot bytes');
+  const videoContent = Buffer.from('WebM mock video bytes');
 
   const caseWithFiles = {
     title: 'live test with files',
@@ -67,11 +67,11 @@ test.describe.serial('Live case file uploads', () => {
           mimeType: 'application/zip',
           buffer: traceContent,
         },
-        attach_meta: JSON.stringify([{ name: 'screenshot', contentType: 'image/png', originalName: 'failure.png' }]),
+        attach_meta: JSON.stringify([{ name: 'video', contentType: 'video/webm', originalName: 'failure.webm' }]),
         attach_file: {
-          name: 'failure.png',
-          mimeType: 'image/png',
-          buffer: screenshotContent,
+          name: 'failure.webm',
+          mimeType: 'video/webm',
+          buffer: videoContent,
         },
       },
     });
@@ -95,14 +95,27 @@ test.describe.serial('Live case file uploads', () => {
     const caseResponse = await request.get(`/api/test-run-cases/${caseWithFilesId}`);
     expect(caseResponse.ok()).toBeTruthy();
     const caseData = await caseResponse.json();
-    expect(caseData.attachments.length).toBe(1);
-    expect(caseData.attachments[0].name).toBe('screenshot');
-    expect(caseData.attachments[0].contentType).toBe('image/png');
+    expect(caseData.attachments).toHaveLength(1);
+    expect(caseData.attachments[0]).toMatchObject({ name: 'video', contentType: 'video/webm' });
 
     // The run is still running — live uploads must not require finish
     const runResponse = await request.get(`/api/test-runs/${runId}`);
     const runData = await runResponse.json();
     expect(runData.status).toBe('running');
+  });
+
+  test('serves video attachments inline with their video MIME type', async ({ request }) => {
+    const caseResponse = await request.get(`/api/test-run-cases/${caseWithFilesId}`);
+    expect(caseResponse.ok()).toBeTruthy();
+    const caseData = await caseResponse.json();
+    const video = caseData.attachments.find((attachment: { name: string }) => attachment.name === 'video');
+
+    expect(video).toBeDefined();
+    const fileResponse = await request.get(`/api/files/${video.path}`);
+
+    expect(fileResponse.ok()).toBeTruthy();
+    expect(fileResponse.headers()['content-type']).toContain('video/webm');
+    expect(fileResponse.headers()['content-disposition']).toBe('inline');
   });
 
   test('repeated upload for the same case is idempotent', async ({ request }) => {
@@ -116,11 +129,11 @@ test.describe.serial('Live case file uploads', () => {
           mimeType: 'application/zip',
           buffer: traceContent,
         },
-        attach_meta: JSON.stringify([{ name: 'screenshot', contentType: 'image/png', originalName: 'failure.png' }]),
+        attach_meta: JSON.stringify([{ name: 'video', contentType: 'video/webm', originalName: 'failure.webm' }]),
         attach_file: {
-          name: 'failure.png',
-          mimeType: 'image/png',
-          buffer: screenshotContent,
+          name: 'failure.webm',
+          mimeType: 'video/webm',
+          buffer: videoContent,
         },
       },
     });

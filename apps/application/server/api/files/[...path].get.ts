@@ -167,6 +167,10 @@ export default eventHandler(async (event) => {
     'image/gif',
     'image/svg+xml',
     'image/webp',
+    'video/webm',
+    'video/mp4',
+    'video/ogg',
+    'video/quicktime',
     'font/woff2',
     'font/ttf',
   ]);
@@ -185,6 +189,10 @@ export default eventHandler(async (event) => {
     if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
     if (ext === '.gif') return 'image/gif';
     if (ext === '.webp') return 'image/webp';
+    if (ext === '.webm') return 'video/webm';
+    if (ext === '.mp4') return 'video/mp4';
+    if (ext === '.ogg' || ext === '.ogv') return 'video/ogg';
+    if (ext === '.mov') return 'video/quicktime';
     if (ext === '.svg') return 'image/svg+xml';
     if (ext === '.woff' || ext === '.woff2') return 'font/woff2';
     if (ext === '.ttf') return 'font/ttf';
