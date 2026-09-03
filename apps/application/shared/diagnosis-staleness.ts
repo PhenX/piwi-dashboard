@@ -8,6 +8,31 @@
  * was triaged resolved) describes a failure that is no longer happening, so it is
  * never stale.
  */
+import { sha256Hex } from '#shared/utils/hash';
+
+/**
+ * Sections whose content is derived from the diagnosis itself rather than the
+ * failure's evidence. Excluding them from the staleness hash stops a diagnosis
+ * from marking itself stale the moment it lands (its own result becomes the
+ * "prior assessment" the next context would carry).
+ */
+const SELF_REFERENTIAL_SECTIONS = new Set(['priorDiagnosis']);
+
+/** Canonical evidence projection of a built context, for the staleness hash. */
+export function contextStalenessInput(sections: Array<{ id: string; markdown?: string | null }>): string {
+  return sections
+    .filter((s) => !SELF_REFERENTIAL_SECTIONS.has(s.id) && s.markdown)
+    .map((s) => `${s.id}\n${s.markdown}`)
+    .join('\n\n');
+}
+
+/**
+ * Hash of the evidence a diagnosis was (or would be) grounded in — the value
+ * stored on the diagnosis and recomputed on the context preview to detect drift.
+ */
+export function contextStalenessHash(sections: Array<{ id: string; markdown?: string | null }>): Promise<string> {
+  return sha256Hex(contextStalenessInput(sections));
+}
 
 export interface StalenessInput {
   /** Hash stored on the diagnosis when it ran (`failure_diagnoses.context_sha`). */

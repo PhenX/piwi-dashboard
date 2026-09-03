@@ -31,7 +31,7 @@ import { getDemoDb } from '../db.client';
 import { getLocatorHealing, saveLocatorPick } from '~~/server/utils/locator-healing';
 import { buildFixPlan } from '~~/server/utils/fix-plan';
 import { fixPlanToMarkdown } from '#shared/fix-plan-markdown';
-import { sha256Hex } from '#shared/utils/hash';
+import { contextStalenessHash } from '#shared/diagnosis-staleness';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
 import { apiExportTestRunCase, apiExportFailureCluster } from './export';
@@ -700,7 +700,7 @@ const routes: RouteEntry[] = [
       const format = query?.get('format');
       if (format === 'prompt') return getClusterContextPrompt(db, +m[1]!, query);
       const clusterCtx = await getClusterContext(db, +m[1]!, query);
-      const contextSha = await sha256Hex(clusterCtx.text);
+      const contextSha = await contextStalenessHash(clusterCtx.sections);
       // Default format mirrors the server: a plain context/coverage/scmChanges
       // envelope; `?format=json` returns the full structured shape.
       if (format === 'json') return { ...clusterCtx, contextSha };
