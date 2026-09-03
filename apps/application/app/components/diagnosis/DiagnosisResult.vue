@@ -9,6 +9,18 @@ const props = defineProps<{
   diagnosis: FailureDiagnosis | null;
   /** The cluster's lastSeenRunId — for staleness detection */
   lastSeenRunId?: number;
+  /**
+   * Whether this diagnosis is still stale — computed by the parent (current
+   * context hash differs from the stored one AND the cluster is still failing).
+   */
+  stale?: boolean;
+  /** What changed to make it stale, for the banner wording. */
+  staleReason?: 'occurrences' | 'evidence' | null;
+  /**
+   * Render a historical version: no feedback controls, no staleness banner. The
+   * feedback endpoint keys on the live diagnosis id, not a version.
+   */
+  readOnly?: boolean;
 }>();
 
 const { copy, copied } = useCopy();
@@ -91,11 +103,18 @@ async function saveFeedbackNote() {
 
 const isStale = computed(() => {
   const d = props.diagnosis;
-  if (!d || d.status !== 'completed') return false;
-  const runId = props.lastSeenRunId;
-  if (runId == null) return false;
-  return new Date(d.updatedAt).getTime() < Date.now() - 5 * 60 * 1000;
+  if (props.readOnly || !d || d.status !== 'completed') return false;
+  return props.stale === true;
 });
+
+/** Banner wording — says what changed when the parent could tell. */
+const staleDescription = computed(() =>
+  props.staleReason === 'occurrences'
+    ? 'The cluster has failed again since this diagnosis. Re-run it to account for the new occurrences.'
+    : props.staleReason === 'evidence'
+      ? 'The evidence sent to the model has changed since this diagnosis. Re-run it to diagnose the current failure.'
+      : 'The failure has changed since this diagnosis was made. Consider re-running it.',
+);
 
 function diagnosisMarkdown(): string {
   if (!props.diagnosis || props.diagnosis.status !== 'completed') return '';
@@ -420,7 +439,7 @@ const cachedTokens = computed<number>(() => pipeline.value.reduce((acc, s) => ac
       color="warning"
       icon="i-lucide-clock"
       title="Diagnosis may be stale"
-      description="New evidence may have appeared since this diagnosis was made. Consider re-running."
+      :description="staleDescription"
     />
 
     <div
@@ -703,7 +722,7 @@ const cachedTokens = computed<number>(() => pipeline.value.reduce((acc, s) => ac
       </ul>
 
       <div class="flex items-start justify-between gap-3 pt-1 border-t border-default">
-        <div class="flex items-start gap-2">
+        <div v-if="!readOnly" class="flex items-start gap-2">
           <div class="flex items-center gap-1 shrink-0 pt-0.5">
             <UButton
               :icon="localFeedback === 'up' ? 'i-lucide-thumbs-up' : 'i-lucide-thumbs-up'"

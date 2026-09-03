@@ -22,6 +22,7 @@ import { reconcileNewClusters } from './cluster-reconcile';
 import { nameNewClusters } from './cluster-naming';
 import { RESEARCH_SYSTEM_PROMPT, RESEARCH_JSON_SCHEMA, parseResearchJson, formatResearchBlock } from './ai-research';
 import { buildDiagnosisVersionValues } from '#shared/handlers/diagnosis-versions';
+import { contextStalenessHash } from '#shared/diagnosis-staleness';
 import { emitNotification } from './notifications/emit';
 import type { DbClient } from '../database';
 
@@ -357,11 +358,17 @@ async function persistCompletedDiagnosis(
   const { diagnosis, ctx, pipeline, model, t0 } = args;
   const sumTokens = (k: 'inputTokens' | 'outputTokens') => pipeline.reduce((acc, s) => acc + (s[k] ?? 0), 0) || null;
 
+  // Hash the evidence the model was shown (its own prior-assessment section
+  // excluded, so a diagnosis never marks itself stale), so staleness can later ask
+  // "has the evidence changed since this diagnosis?" by re-hashing the current one.
+  const contextSha = await contextStalenessHash(ctx.sections);
+
   const updated = await db
     .update(failureDiagnoses)
     .set({
       status: 'completed',
       model,
+      contextSha,
       category: diagnosis.category,
       confidence: diagnosis.confidence,
       summary: diagnosis.summary,

@@ -22,65 +22,13 @@ import { getLocatorHealingBatch } from './locator-healing';
 import { validatePatch, type PatchValidation } from '#shared/patch';
 import { parseCallsiteLocation } from '#shared/callsite-location';
 import { buildRetryCommand } from '#shared/retry-command';
-import type { LocatorEdit } from '#shared/locator-healing.types';
+import type { FixPlan, FixPlanEdit } from '#shared/fix-plan.types';
 import type { DrizzleDB } from '#shared/handlers/db';
+
+export type { FixPlan, FixPlanEdit } from '#shared/fix-plan.types';
 
 /** Executions inspected for locator suggestions — enough to cover a cluster. */
 const MAX_HEALED_CASES = 5;
-
-export interface FixPlanEdit {
-  filePath: string;
-  /** 1-based line the failing locator sits on, when the trace identified it. */
-  line: number | null;
-  /** The line as captured, so an agent can match before rewriting. */
-  currentLine: string | null;
-  /** The locator that broke. */
-  failingLocator: string | null;
-  /** The ranked replacement to use instead. */
-  suggestedLocator: string | null;
-  /** Stability score of the suggestion, 0-100. */
-  score: number | null;
-  /**
-   * The ranked replacement as a ready-to-apply edit: the failing line rewritten,
-   * plus a git-applyable unified diff. Null when there is no captured source line
-   * to rewrite. Deterministic locator-line rewrite only — never model output.
-   */
-  edit: LocatorEdit | null;
-  executionId: number;
-}
-
-export interface FixPlan {
-  cluster: {
-    id: number;
-    title: string | null;
-    signature: string;
-    errorType: string | null;
-    status: string;
-    occurrences: number;
-    /** Set when a previous fix landed and later broke again. */
-    fixVerification: string | null;
-  };
-  diagnosis: {
-    category: string | null;
-    confidence: string | null;
-    rootCause: string | null;
-    summary: string | null;
-    /** Unified diff proposed by the model. */
-    patch: string | null;
-    /** Whether that patch still applies to the current source. */
-    patchValidation: PatchValidation | null;
-  } | null;
-  /** Concrete locator rewrites, one per failing call site. */
-  edits: FixPlanEdit[];
-  failingTests: Array<{ testCaseId: number; title: string; filePath: string; executionId: number }>;
-  ownership: { owner: string | null; source: string | null };
-  verify: {
-    /** Playwright invocation that runs exactly the affected tests. */
-    command: string;
-    /** What happens on the dashboard when it passes. */
-    expectation: string;
-  };
-}
 
 /** Shell-quote a title for `-g`, since test titles routinely contain spaces. */
 function quote(value: string): string {

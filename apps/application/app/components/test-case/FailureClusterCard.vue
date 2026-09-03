@@ -108,16 +108,28 @@ const confidenceColor = (c?: string | null): 'success' | 'warning' | 'neutral' =
         “{{ cluster.triageNote }}”
       </p>
 
-      <UButton
-        :to="`/failure-clusters/${cluster.id}`"
-        size="sm"
-        color="primary"
-        variant="solid"
-        block
-        trailing-icon="i-lucide-arrow-right"
-      >
-        Open cluster investigation
-      </UButton>
+      <div class="space-y-2">
+        <UButton
+          :to="`/failure-clusters/${cluster.id}`"
+          size="sm"
+          color="primary"
+          variant="solid"
+          block
+          trailing-icon="i-lucide-arrow-right"
+        >
+          Open cluster investigation
+        </UButton>
+        <UButton
+          :to="`/failure-clusters/${cluster.id}#fix-plan`"
+          size="sm"
+          color="neutral"
+          variant="outline"
+          block
+          icon="i-lucide-wrench"
+        >
+          Open fix plan
+        </UButton>
+      </div>
     </div>
   </SectionCard>
 </template>

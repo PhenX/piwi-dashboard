@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import type { FailureDiagnosis } from '~~/server/database/schema';
 import { extractCitedSectionIds } from '#shared/diagnosis-sections';
+import { isDiagnosisStale, stalenessReason } from '#shared/diagnosis-staleness';
 import type { DiagnoseImage } from '~/composables/useClusterDiagnosis';
 import { formatRelativeTime } from '~/utils';
 
 const props = defineProps<{
   clusterId?: number;
   lastSeenRunId?: number;
+  /** Cluster triage status — feeds the "still failing" side of staleness. */
+  clusterStatus?: string;
+  /** Fix-verification verdict, when a fix has landed. */
+  fixVerification?: string | null;
+  /** When the cluster last failed — distinguishes "new occurrences" from "evidence changed". */
+  lastSeenAt?: string | Date | null;
   affectedTestCases?: Array<{
     testCaseId: number;
     title: string;
@@ -20,6 +27,7 @@ const {
   diagnosis,
   posting,
   contextText,
+  currentContextSha,
   contextSections,
   tokenEstimate,
   imageTokenEstimate,
@@ -180,6 +188,47 @@ function showResult() {
     !isStreaming() && diagnosis.value && (diagnosis.value.status === 'completed' || diagnosis.value.status === 'failed')
   );
 }
+
+// ── Staleness ─────────────────────────────────────────────────────────────────
+const stalenessInput = computed(() => ({
+  storedContextSha: diagnosis.value?.contextSha,
+  currentContextSha: currentContextSha.value,
+  fixVerification: props.fixVerification,
+  status: props.clusterStatus,
+}));
+
+const diagnosisStale = computed(
+  () => diagnosis.value?.status === 'completed' && isDiagnosisStale(stalenessInput.value),
+);
+
+const staleReason = computed<'occurrences' | 'evidence' | null>(() =>
+  stalenessReason({
+    ...stalenessInput.value,
+    diagnosedAt: diagnosis.value?.updatedAt ? new Date(diagnosis.value.updatedAt).getTime() : null,
+    lastSeenAt: props.lastSeenAt ? new Date(props.lastSeenAt).getTime() : null,
+  }),
+);
+
+// ── History ───────────────────────────────────────────────────────────────────
+const showHistory = ref(false);
+const versionCount = ref(0);
+
+async function fetchVersionCount() {
+  if (!props.clusterId) return;
+  try {
+    const res = await $fetch<{ items: unknown[] }>(`/api/failure-clusters/${props.clusterId}/diagnoses`);
+    versionCount.value = res.items.length;
+  } catch {
+    versionCount.value = 0;
+  }
+}
+
+onMounted(fetchVersionCount);
+// A completed re-diagnose snapshots the prior version — refresh the count.
+watch(
+  () => diagnosis.value?.updatedAt,
+  () => fetchVersionCount(),
+);
 </script>
 
 <template>
@@ -198,6 +247,17 @@ function showResult() {
           </span>
         </div>
         <div class="flex items-center gap-1.5">
+          <UButton
+            v-if="versionCount > 0"
+            icon="i-lucide-history"
+            size="xs"
+            color="neutral"
+            variant="outline"
+            title="View previous diagnosis versions"
+            @click="showHistory = true"
+          >
+            History ({{ versionCount }})
+          </UButton>
           <CopyAiPromptButton :context-endpoint="`/api/failure-clusters/${clusterId}/context`" />
           <UButton
             :icon="showAiContext ? 'i-lucide-eye-off' : 'i-lucide-eye'"
@@ -479,6 +539,8 @@ function showResult() {
         v-if="showResult()"
         :diagnosis="diagnosis"
         :last-seen-run-id="lastSeenRunId"
+        :stale="diagnosisStale"
+        :stale-reason="staleReason"
         @view-section="onViewSection"
         @prefill-context="onPrefillContext"
       />
@@ -513,5 +575,13 @@ function showResult() {
         Query this cluster from your AI agent via the MCP server
       </NuxtLink>
     </div>
+
+    <DiagnosisHistorySlideover
+      v-if="clusterId"
+      :open="showHistory"
+      :cluster-id="clusterId"
+      :current-diagnosis="diagnosis"
+      @update:open="showHistory = $event"
+    />
   </div>
 </template>

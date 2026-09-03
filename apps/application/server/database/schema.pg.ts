@@ -394,6 +394,8 @@ export const failureDiagnosisVersions = pgTable(
     outputTokens: integer('output_tokens'),
     durationMs: integer('duration_ms'),
     contextSha: text('context_sha'),
+    feedback: text('feedback'), // 'up', 'down' — captured as of the snapshot
+    feedbackNote: text('feedback_note'),
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),

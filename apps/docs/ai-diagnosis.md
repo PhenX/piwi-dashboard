@@ -249,21 +249,46 @@ When the failure is a broken locator, the context includes an **Alternative Loca
 
 This evidence is generated from the locator snapshots recorded by the [capture fixtures](./capture-fixtures) while tests run — make sure your specs import `test` from a fixtures file that extends `piwiFixtures`. Capture is gated by the default-on `captureLocators` reporter option. The same data drives the standalone **Alternative locators** panel on the [execution](./evidence#one-execution-diagnosis-first) and cluster pages.
 
-## Fix plans for coding agents
+## Fix plans
 
-Everything above is assembled into one answer at `GET /api/failure-clusters/:id/fix-plan`, and as the `get_fix_plan`
-[MCP tool](./mcp): the diagnosis and its validated patch, the ranked locator replacement with the exact file and line to
-edit, the failing tests, the owning team, and the command that verifies the work.
+Everything above is assembled into one answer — the diagnosis and its validated patch, the ranked locator replacement
+with the exact file and line to edit, the failing tests, the owning team, and the command that verifies the work. The
+same plan is reachable three ways:
+
+- **On the cluster page** — the **Fix plan** card is the first thing in the left column: the diagnosis summary and its
+  patch (copy, `git apply`, download), each locator edit as a before → after with a one-line diff, links to the failing
+  executions, the owner and its source, and the verify command with the **Re-run in CI** button when that is configured.
+  **Copy as Markdown** hands you the whole plan for a ticket.
+- **As Markdown** — `GET /api/failure-clusters/:id/fix-plan?format=markdown` returns the same rendering as plain text, so
+  an export or a script can drop it straight into an issue.
+- **For agents** — the `get_fix_plan` [MCP tool](./mcp) returns the structured plan, so a coding agent gets in one call
+  what a person reads on the card.
 
 The last part is what makes it a loop rather than a lookup. The plan states which Playwright command runs exactly the
-affected tests, and that Piwi will record the fix once they pass — so an agent can confirm its own work instead of
-leaving a human to decide whether it landed.
+affected tests, and that Piwi will record the fix once they pass — so an agent (or a person) can confirm the work instead
+of leaving someone to decide whether it landed.
 
 Every section degrades on its own. A cluster with no AI diagnosis still returns its failing tests, its locator
 suggestions and its verification command, so the plan is useful without an AI provider configured at all.
 
 Worth stating plainly: none of this leaves your machine. The dashboard is yours, the model is whichever one you
 configured (including a local one), and the patch was validated against your own source before you saw it.
+
+## Diagnosis history
+
+Every re-diagnose snapshots the previous result before overwriting it, so a cluster keeps up to 50 prior versions. The
+**History** control in the diagnosis panel header opens a slide-over listing every version newest-first — when it ran,
+the model, category, confidence, feedback and token cost — with the current diagnosis on top. Selecting one renders it
+read-only, with a one-line summary of what changed since it (category, confidence, root cause, patch status). It is how
+you see whether a re-run actually moved the verdict, and why.
+
+### When a diagnosis is stale
+
+A completed diagnosis is flagged **may be stale** only when the failure has genuinely moved on: the hash of the current
+evidence differs from the hash stored when the diagnosis ran **and** the cluster is still failing. A cluster whose fix is
+verified, or one that has stopped failing or been triaged as resolved, never shows the banner — the diagnosis describes a
+failure that is no longer happening. When Piwi can tell why the evidence changed, the banner says so: new occurrences
+since the diagnosis, versus a change in the evidence itself.
 
 ## Custom instructions
 

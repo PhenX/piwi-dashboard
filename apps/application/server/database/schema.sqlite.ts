@@ -360,6 +360,8 @@ export const failureDiagnosisVersions = sqliteTable(
     outputTokens: integer('output_tokens'),
     durationMs: integer('duration_ms'),
     contextSha: text('context_sha'),
+    feedback: text('feedback'), // 'up', 'down' — captured as of the snapshot
+    feedbackNote: text('feedback_note'),
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),

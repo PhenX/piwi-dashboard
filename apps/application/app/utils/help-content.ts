@@ -383,6 +383,11 @@ export const HELP_TOPICS = {
     text: 'Recorded when a run turns this cluster green — every test it covers ran and passed, in a full suite or a filtered re-run of just those tests: when the fix landed, how long the cluster stayed open, and whether the change matched the diagnosed files. If the failure comes back, the cluster is marked as regressed rather than quietly reopened.',
     doc: 'ai-diagnosis#did-the-fix-work',
   },
+  'cluster.fix-plan': {
+    title: 'Fix plan',
+    text: 'Everything needed to repair this cluster in one place — the diagnosis and its validated patch, the concrete locator edits, the failing tests, the owner, and the command that verifies the fix. Copy it as Markdown for a ticket, or let an agent fetch the same plan via the get_fix_plan MCP tool.',
+    doc: 'ai-diagnosis#fix-plans',
+  },
   'cluster.evidence': {
     title: 'Test evidence',
     text: 'The concrete artifacts behind this cluster — screenshots, signals and traces from affected tests — gathered for review and AI diagnosis.',
