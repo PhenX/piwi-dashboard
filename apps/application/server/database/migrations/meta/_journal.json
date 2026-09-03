@@ -400,6 +400,13 @@
       "when": 1788450734532,
       "tag": "0056_blushing_captain_cross",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1788460812809,
+      "tag": "0057_modern_thaddeus_ross",
+      "breakpoints": true
     }
   ]
 }

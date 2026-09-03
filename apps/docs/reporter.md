@@ -40,6 +40,32 @@ export default defineConfig({
 
 The `use` block is Playwright's, not Piwi's: `trace`, `screenshot` and `video` decide what Playwright records, and the reporter uploads whatever exists. Leave `screenshot` at its default (`'off'`) and the failure evidence has no screenshot to show.
 
+When you install via [`wrapConfig`](#installing-via-wrapconfig) (what `init` does), the reporter fills in `screenshot: 'only-on-failure'` and `trace: 'retain-on-failure'` for you whenever the top-level `use` leaves them unset — the trace alone gives the dashboard the DOM snapshot, full call stack, full network with bodies and the visual diff without the capture fixtures. Any value you set yourself (including `'off'`) is kept, per-project `use` blocks are never touched, and the reporter logs one line at the start of the run naming what it defaulted. Opt out with `defaultCapture: false` or `PIWI_DEFAULT_CAPTURE=false` to let Playwright's own defaults stand.
+
+## Installing via wrapConfig
+
+`wrapConfig` wraps your whole Playwright config in one call: it injects the reporter, chains Piwi's [global setup](#global-setup-phase), and defaults the failure-evidence capture options. It is what `npx @piwitests/reporter init` writes for you.
+
+```typescript
+import { defineConfig } from '@playwright/test'
+import { wrapConfig } from '@piwitests/reporter'
+
+export default defineConfig(
+  wrapConfig(
+    {
+      testDir: './tests',
+      // no `screenshot` / `trace` needed — wrapConfig fills them in
+    },
+    { serverUrl: 'http://localhost:3000', projectName: 'my-project' },
+  ),
+)
+```
+
+The first argument is your Playwright config; the second is the [Piwi options](#configuration-options). On top of injecting the reporter, `wrapConfig`:
+
+- Sets `screenshot: 'only-on-failure'` and `trace: 'retain-on-failure'` on the **top-level** `use` block when each is unset. A value you set yourself is kept — including `'off'` — and per-project `use` blocks are left alone. These two options unlock the DOM snapshot, full call stack, full network with bodies and the visual diff **without** the capture fixtures. Opt out with `defaultCapture: false` (or `PIWI_DEFAULT_CAPTURE=false`); the reporter logs one line at the start of the run naming whatever it defaulted.
+- Forwards the CI-gate option `failOnFlakyTests` into Playwright's native config so a flaky-only run exits non-zero locally.
+
 <a id="performance-metrics-web-vitals"></a>
 
 ## Capture fixtures
@@ -88,7 +114,7 @@ export { expect } from '@playwright/test'
 
 These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).
 
-Any attachments Playwright records — including **screenshots** (`screenshot: 'only-on-failure'`) and **videos** (`video: 'retain-on-failure'`) — are uploaded automatically and shown as first-class evidence on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, alongside traces. That includes what a test attaches itself: both `testInfo.attach('payload', { path })` and the inline form `testInfo.attach('payload', { body: JSON.stringify(data), contentType: 'application/json' })` reach the dashboard (an inline body is staged as a temp file under the OS temp directory for the upload and removed when the run ends). One attachment above 500 MB — the dashboard's default upload ceiling — is skipped with a warning naming it rather than failing the upload. Screenshots are the evidence most pages on this site count on, and Playwright records none unless the option is set. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
+Any attachments Playwright records — including **screenshots** (`screenshot: 'only-on-failure'`) and **videos** (`video: 'retain-on-failure'`) — are uploaded automatically and shown as first-class evidence on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, alongside traces. That includes what a test attaches itself: both `testInfo.attach('payload', { path })` and the inline form `testInfo.attach('payload', { body: JSON.stringify(data), contentType: 'application/json' })` reach the dashboard (an inline body is staged as a temp file under the OS temp directory for the upload and removed when the run ends). One attachment above 500 MB — the dashboard's default upload ceiling — is skipped with a warning naming it rather than failing the upload. Screenshots are the evidence most pages on this site count on, and Playwright records none unless the option is set — which is why [`wrapConfig`](#installing-via-wrapconfig) defaults `screenshot: 'only-on-failure'` and `trace: 'retain-on-failure'` for you. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
 
 ## Configuration options
 
@@ -118,6 +144,7 @@ Any attachments Playwright records — including **screenshots** (`screenshot: '
 | `captureLocators`           | boolean  | `true`                    | Capture element snapshots from successful actions and passing assertions — these power [locator healing](#locator-healing). Auto-disabled when `collectPerformanceMetrics` is `false` |
 | `capturePageState`          | boolean  | `true`                    | Record the page's state at test end: URL, history state, storage **key names** and value *lengths*, cookie names and flags. Values are never captured. Auto-disabled when `collectPerformanceMetrics` is `false` |
 | `captureServerTraces`       | boolean  | `true`                    | Read server-side spans from the `X-Piwi-Trace` response header emitted by a Piwi [instrumentation plugin](./backend-logs), and show them next to the network request. Free when no instrumentation is present. Auto-disabled when `collectPerformanceMetrics` is `false` |
+| `defaultCapture`            | boolean  | `true`                    | When installed via [`wrapConfig`](#installing-via-wrapconfig), default the top-level `use.screenshot` to `'only-on-failure'` and `use.trace` to `'retain-on-failure'` when unset, so failure evidence is captured without the fixtures. Explicit values (including `'off'`) and per-project `use` blocks are untouched. Set `false` to opt out |
 | `inspectOnFailure`          | boolean  | `false`                   | Open Piwi's own inspector overlay on the failing page after a local headed failure — inspect any element and pick a locator for it (see [Inspect the failing page live](#inspect-the-failing-page-live-local-runs)). Never activates under CI |
 | `pickLocatorOnFailure`      | boolean  | `false`                   | Open Piwi's locator picker on the failing page after a local headed locator failure (see [Pick a replacement locator](#pick-a-replacement-locator-on-the-failing-page-local-runs)). Never activates under CI |
 | `username`                  | string   | —                         | Username for dashboard login (use `apiKey` instead when possible)                           |
@@ -151,6 +178,7 @@ The options in the table below can also be set via a `PIWI_*` environment variab
 | `PIWI_CAPTURE_LOCATORS`         | `captureLocators`       | `true`/`false`  |
 | `PIWI_CAPTURE_PAGE_STATE`       | `capturePageState`      | `true`/`false`  |
 | `PIWI_CAPTURE_SERVER_TRACES`    | `captureServerTraces`   | `true`/`false`  |
+| `PIWI_DEFAULT_CAPTURE`          | `defaultCapture`        | `true`/`false`  |
 | `PIWI_OUTPUT_FILE`              | `outputFile`            | string (path)   |
 | `PIWI_INSPECT_ON_FAIL`          | `inspectOnFailure`      | `true`/`false`  |
 | `PIWI_PICK_LOCATOR_ON_FAIL`     | `pickLocatorOnFailure`  | `true`/`false`  |

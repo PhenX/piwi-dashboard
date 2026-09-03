@@ -499,7 +499,7 @@ function nonNegative(value: number | undefined): number | undefined {
   return typeof value === 'number' && value >= 0 ? value : undefined;
 }
 
-function inferResourceType(mimeType: string | undefined): string | undefined {
+export function inferResourceType(mimeType: string | undefined): string | undefined {
   if (!mimeType) return undefined;
   if (mimeType.includes('html')) return 'document';
   if (mimeType.includes('json')) return 'fetch';

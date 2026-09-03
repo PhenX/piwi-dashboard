@@ -468,6 +468,7 @@ export const testRunsCases = pgTable(
     pageState: jsonb('page_state'), // URL/history/storage-keys/cookie-flags at test end (values never captured)
     aiUsage: jsonb('ai_usage'), // { entries: string[], intents?: {template,locator,kind}[] } — replayed AI-step artifacts + their prompts
     consoleLogs: jsonb('console_logs'), // Array of { type, text, timestamp, location } console entries
+    evidenceSources: jsonb('evidence_sources'), // { console?, network?, aria?: 'trace' } — marks evidence recovered from the trace when the capture fixtures were absent
     // Legacy inline payload columns: still readable on old rows, no longer
     // written — new rows store these payloads content-addressed in
     // case_payloads and reference them via the *PayloadId columns below.

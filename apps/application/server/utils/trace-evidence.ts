@@ -124,6 +124,23 @@ function resourceNameCandidates(requested: string, knownNames: Iterable<string>)
   return [...new Set(candidates)];
 }
 
+/** The parsed event stream and raw network snapshots of a stored trace, for deriving fallback evidence. */
+export interface TraceEvidenceStreams {
+  parsed: ParsedTraceData | null;
+  network: TraceResourceSnapshot[];
+}
+
+/**
+ * Load a stored trace and return just its event stream and network snapshots —
+ * the two inputs the fallback derivation reads to recover console entries and
+ * the request list when the capture fixtures were absent.
+ */
+export async function loadTraceEvidenceStreams(blobPath: string): Promise<TraceEvidenceStreams | null> {
+  const bundle = await loadTraceBundle(blobPath);
+  if (!bundle) return null;
+  return { parsed: bundle.parsed, network: bundle.network };
+}
+
 /** Full call stack of the failing action, with embedded source when the trace carries it. */
 export async function getTraceCallStackFromBlob(
   blobPath: string,

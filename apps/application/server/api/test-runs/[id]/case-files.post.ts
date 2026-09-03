@@ -6,6 +6,7 @@ import { parseLocation } from '../../../utils/parse-location';
 import { validateAndReviveRun } from '../../../utils/revive-run';
 import { readShardTokensFromMeta } from '../../../utils/shard-tokens';
 import { upsertTraceBlob, findTraceBlob } from '../../../utils/trace-blobs';
+import { deriveTraceEvidence } from '../../../utils/trace-fallback-evidence';
 import { getStorage } from '../../../storage';
 import { joinSuitePath } from '#shared/utils/suites';
 import { sanitizeFilename } from '../../../utils/sanitize-filename';
@@ -277,6 +278,17 @@ export default eventHandler(async (event) => {
       } catch (error) {
         console.error(`[CaseFiles] Failed to store attachment for case #${runCase.id}: ${error}`);
       }
+    }
+  }
+
+  // With a trace now linked, recover any evidence the capture fixtures would
+  // have provided (console, network, ARIA) so a fixture-less project still gets
+  // most of the failure evidence. Idempotent and best-effort.
+  if ((storedTraces > 0 || hasTrace) && (storedTraces > 0 || storedAttachments > 0)) {
+    try {
+      await deriveTraceEvidence(db, runCase.id);
+    } catch (error) {
+      console.error(`[CaseFiles] Failed to derive trace evidence for case #${runCase.id}: ${error}`);
     }
   }
 

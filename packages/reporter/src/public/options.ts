@@ -78,6 +78,18 @@ export interface PiwiDashboardOptions {
    * `false`. Can also be forced off with `PIWI_CAPTURE_SERVER_TRACES=false`.
    */
   captureServerTraces?: boolean;
+  /**
+   * When installed via `wrapConfig`, default Playwright's own `screenshot` and
+   * `trace` options on the top-level `use` block so a failing test keeps a
+   * screenshot (`'only-on-failure'`) and a trace (`'retain-on-failure'`) even
+   * without the capture fixtures — the trace alone unlocks the DOM snapshot,
+   * full call stack, full network with bodies and the visual diff. Only fills
+   * options the config leaves unset; an explicit value (including `'off'`) and
+   * per-project `use` blocks are never touched. Defaults to `true`. Set to
+   * `false` (or `PIWI_DEFAULT_CAPTURE=false`) to opt out and let Playwright's
+   * own defaults stand.
+   */
+  defaultCapture?: boolean;
 
   // ── Local debugging aids (headed runs only, never under CI) ────────────────
   /**

@@ -14,6 +14,7 @@ import { renderAnsi } from '~/utils';
 import type { NavbarAction } from '~/components/shared/NavbarActions.vue';
 import type { HelpTopicKey } from '~/utils/help-content';
 import { condenseErrorText } from '#shared/error-fingerprint';
+import { resolveEvidenceState, type EvidenceCardId, type EvidenceState } from '#shared/evidence-state';
 import type { FailureVerdict } from '#shared/failure-verdict';
 import type { FailureCluesResult } from '#shared/handlers/test-cases';
 import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator';
@@ -106,6 +107,73 @@ const aiIntents = computed<AiStepIntent[] | null>(() => {
 
 const networkRequests = computed<NetworkRequest[]>(() => {
   return (testCase.value?.networkRequests as unknown as NetworkRequest[] | null) ?? [];
+});
+
+/** Which evidence kinds were recovered from the trace (the fixtures were absent). */
+const evidenceSources = computed(
+  () => (testCase.value?.evidenceSources as { console?: 'trace'; network?: 'trace'; aria?: 'trace' } | null) ?? null,
+);
+
+/** Any network request carrying Piwi backend logs or spans. */
+const hasBackendLogs = computed(() =>
+  networkRequests.value.some(
+    (r) =>
+      (Array.isArray(r.serverLogs) && r.serverLogs.length > 0) ||
+      (Array.isArray(r.serverTraces) && r.serverTraces.length > 0),
+  ),
+);
+
+/**
+ * Whether Piwi's capture fixtures ran for this execution: any fixture-produced
+ * field is present that was not itself recovered from the trace. A spec that
+ * still imports `test` from `@playwright/test` has none, so its empty cards read
+ * "not captured" while a fixture-using neighbor's read "nothing happened".
+ */
+const fixturesActive = computed(() => {
+  const tc = testCase.value;
+  if (!tc) return false;
+  const src = evidenceSources.value ?? {};
+  return (
+    (Array.isArray((tc as any).consoleLogs) && (tc as any).consoleLogs.length > 0 && src.console !== 'trace') ||
+    (networkRequests.value.length > 0 && src.network !== 'trace') ||
+    (Boolean(tc.ariaSnapshot) && src.aria !== 'trace') ||
+    Boolean((tc as any).pageState) ||
+    Boolean(tc.webVitals) ||
+    Boolean(tc.aiUsage)
+  );
+});
+
+/** Resolved three-state (or present) status for every evidence card. */
+const evidenceStates = computed<Record<EvidenceCardId, EvidenceState>>(() => {
+  const tc = testCase.value;
+  const src = evidenceSources.value ?? {};
+  const active = fixturesActive.value;
+  const mk = (hasData: boolean, traced?: boolean) => ({
+    hasData,
+    source: traced ? ('trace' as const) : ('fixture' as const),
+    fixturesActive: active,
+  });
+  return {
+    console: resolveEvidenceState('console', mk(Boolean((tc as any)?.consoleLogs?.length), src.console === 'trace')),
+    network: resolveEvidenceState(
+      'network',
+      mk(networkRequests.value.length > 0 || hasTrace.value, src.network === 'trace'),
+    ),
+    appState: resolveEvidenceState('appState', mk(Boolean((tc as any)?.pageState))),
+    ariaSnapshot: resolveEvidenceState('ariaSnapshot', mk(Boolean(tc?.ariaSnapshot), src.aria === 'trace')),
+    backendLogs: resolveEvidenceState('backendLogs', mk(hasBackendLogs.value)),
+    webVitals: resolveEvidenceState('webVitals', mk(Boolean(webVitals.value))),
+  };
+});
+
+/** Whether a present card's data came from the trace — drives the "derived from the trace" chip. */
+const evidenceDerived = computed(() => {
+  const derived = (st: EvidenceState) => st.state === 'present' && st.derivedFromTrace;
+  return {
+    console: derived(evidenceStates.value.console),
+    network: derived(evidenceStates.value.network),
+    ariaSnapshot: derived(evidenceStates.value.ariaSnapshot),
+  };
 });
 
 const historicalTiming = computed(() => {
@@ -772,6 +840,15 @@ provide(clusterSectionLocatorKey, {
                   ref="consoleCard"
                   storage-key="case-console"
                   :entries="(testCase as any)?.consoleLogs ?? []"
+                  :derived-from-trace="evidenceDerived.console"
+                />
+                <EvidenceCardEmpty
+                  v-else
+                  storage-key="case-console"
+                  icon="i-lucide-terminal"
+                  title="Console"
+                  help="case.console"
+                  :state="evidenceStates.console"
                 />
 
                 <!-- Network requests + backend logs; full trace network when available -->
@@ -783,6 +860,15 @@ provide(clusterSectionLocatorKey, {
                   :run-id="testCase?.testRun?.id ?? null"
                   :test-runs-case-id="Number(testCaseId)"
                   :has-trace="hasTrace"
+                  :derived-from-trace="evidenceDerived.network"
+                />
+                <EvidenceCardEmpty
+                  v-else
+                  storage-key="case-network"
+                  icon="i-lucide-arrow-left-right"
+                  title="Network"
+                  help="case.network"
+                  :state="evidenceStates.network"
                 />
 
                 <!-- App state at test end -->
@@ -791,6 +877,14 @@ provide(clusterSectionLocatorKey, {
                   ref="pageStateCard"
                   storage-key="case-page-state"
                   :page-state="(testCase as any).pageState"
+                />
+                <EvidenceCardEmpty
+                  v-else
+                  storage-key="case-page-state"
+                  icon="i-lucide-database"
+                  title="App state at test end"
+                  help="page-state"
+                  :state="evidenceStates.appState"
                 />
 
                 <!-- ARIA snapshot captured at failure time -->
@@ -802,11 +896,20 @@ provide(clusterSectionLocatorKey, {
                   title="ARIA snapshot"
                   help="case.aria"
                 >
+                  <template v-if="evidenceDerived.ariaSnapshot" #actions><TraceDerivedChip /></template>
                   <template #folded>Accessibility tree captured at the moment of failure</template>
                   <div class="max-h-96 overflow-y-auto">
                     <MarkdownPreview :text="'```yaml\n' + testCase.ariaSnapshot + '\n```'" />
                   </div>
                 </CollapsibleSectionCard>
+                <EvidenceCardEmpty
+                  v-else
+                  storage-key="case-aria"
+                  icon="i-lucide-scan-text"
+                  title="ARIA snapshot"
+                  help="case.aria"
+                  :state="evidenceStates.ariaSnapshot"
+                />
 
                 <!-- Failure-time HTML extracted from the uploaded trace -->
                 <DomSnapshotCard
@@ -956,12 +1059,29 @@ provide(clusterSectionLocatorKey, {
             <TestCaseAttachmentsCard :attachments="(testCase as any)?.attachments ?? []" />
             <PageStateCard
               v-if="(testCase as any)?.pageState"
-              storage-key="case-page-state"
+              storage-key="case-page-state-artifacts"
               :page-state="(testCase as any).pageState"
+            />
+            <EvidenceCardEmpty
+              v-else
+              storage-key="case-page-state-artifacts"
+              icon="i-lucide-database"
+              title="App state at test end"
+              help="page-state"
+              :state="evidenceStates.appState"
             />
             <TestCaseConsoleCard
               v-if="(testCase as any)?.consoleLogs?.length"
               :entries="(testCase as any)?.consoleLogs ?? []"
+              :derived-from-trace="evidenceDerived.console"
+            />
+            <EvidenceCardEmpty
+              v-else
+              storage-key="case-console-artifacts"
+              icon="i-lucide-terminal"
+              title="Console"
+              help="case.console"
+              :state="evidenceStates.console"
             />
             <TestCaseNetworkRequests
               v-if="networkRequests.length > 0 || hasTrace"
@@ -969,21 +1089,15 @@ provide(clusterSectionLocatorKey, {
               :run-id="testCase?.testRun?.id ?? null"
               :test-runs-case-id="Number(testCaseId)"
               :has-trace="hasTrace"
+              :derived-from-trace="evidenceDerived.network"
             />
-
-            <EmptyState
-              v-if="
-                !(traceData as any[])?.length &&
-                !(testCase as any)?.attachments?.length &&
-                !(testCase as any)?.consoleLogs?.length &&
-                !networkRequests.length
-              "
-              :icon="runIsActive ? 'i-lucide-loader-circle' : 'i-lucide-inbox'"
-              :text="
-                runIsActive
-                  ? 'Run in progress — traces and attachments appear here as soon as they are uploaded.'
-                  : 'No traces, console logs, or network requests captured for this test case.'
-              "
+            <EvidenceCardEmpty
+              v-else
+              storage-key="case-network-artifacts"
+              icon="i-lucide-arrow-left-right"
+              title="Network"
+              help="case.network"
+              :state="evidenceStates.network"
             />
           </div>
         </template>
@@ -1035,6 +1149,7 @@ provide(clusterSectionLocatorKey, {
 
             <SectionCard
               v-if="webVitals"
+              id="webvitals-card"
               icon="i-lucide-gauge"
               title="Browser performance (Web Vitals)"
               help="case.web-vitals"
@@ -1169,13 +1284,13 @@ provide(clusterSectionLocatorKey, {
                 </div>
               </div>
             </SectionCard>
-
-            <FeatureUnavailable
-              v-if="performanceHints.length === 0 && !webVitals"
+            <EvidenceCardEmpty
+              v-else
+              storage-key="case-web-vitals"
               icon="i-lucide-gauge"
-              title="No performance hints or Web Vitals for this execution"
-              text="Web Vitals and step timing come from the Piwi capture fixtures — extend your Playwright test with piwiFixtures to collect them."
-              doc="capture-fixtures"
+              title="Browser performance (Web Vitals)"
+              help="case.web-vitals"
+              :state="evidenceStates.webVitals"
             />
           </div>
         </template>
