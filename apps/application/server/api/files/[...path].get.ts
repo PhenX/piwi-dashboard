@@ -171,6 +171,7 @@ export default eventHandler(async (event) => {
     'video/mp4',
     'video/ogg',
     'video/quicktime',
+    'video/x-msvideo',
     'font/woff2',
     'font/ttf',
   ]);
@@ -193,6 +194,7 @@ export default eventHandler(async (event) => {
     if (ext === '.mp4') return 'video/mp4';
     if (ext === '.ogg' || ext === '.ogv') return 'video/ogg';
     if (ext === '.mov') return 'video/quicktime';
+    if (ext === '.avi') return 'video/x-msvideo';
     if (ext === '.svg') return 'image/svg+xml';
     if (ext === '.woff' || ext === '.woff2') return 'font/woff2';
     if (ext === '.ttf') return 'font/ttf';
