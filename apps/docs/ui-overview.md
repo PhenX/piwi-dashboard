@@ -50,7 +50,9 @@ The checklist is deliberately evidence-based rather than config-based, so it ans
 
 ## Home
 
-A quick health check across all projects: **stats cards** (projects, runs, active/passing projects, flaky count, slowest project), a **test-results trend chart** (pass/fail/skip/flaky over time), **recent projects**, and a getting-started snippet for teams that haven't wired up the reporter yet.
+A quick health check across all projects: a **stat strip** whose every number is a link (projects, failing now, flaky, average pass rate, runs today), an **Open failures** card, a **Project health** table (per-project run-history bars and a tendency badge), and **recent activity**. New instances show a getting-started wizard instead until the first run arrives.
+
+**Open failures** lists the failure clusters still open across the projects you can see, newest first by when they were last seen — each row shows the cluster name, its project, the number of affected tests, its age, the owner when known, its triage status and any pinned known-issue link. The row opens the cluster; reporters and admins can triage without leaving Home: `j` / `k` move the selection, `o` opens it, `r` resolves and `i` ignores.
 
 ## Analytics
 

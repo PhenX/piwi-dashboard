@@ -71,6 +71,7 @@ export const PROJECT = {
   GZIP_TEST: 'gzip-test-project',
   HEARTBEAT_TEST: 'heartbeat-test',
   HISTORY: 'history-test',
+  HOME_OPEN_FAILURES: 'home-open-failures-test',
   IMPORT_BLOB: 'import-blob-test',
   IMPORT_BLOB_UI: 'import-blob-ui-test',
   IMPORT_TRACE: 'import-trace-test',

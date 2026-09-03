@@ -133,8 +133,8 @@ test.describe('Dashboard UI Tests', () => {
   test('should navigate using sidebar', async ({ page }) => {
     await page.goto('/');
 
-    // Click on Projects in sidebar
-    await page.getByRole('link', { name: 'Projects' }).click();
+    // Click on Projects in sidebar (Home's stat strip also links to /projects)
+    await page.locator('#dashboard-sidebar-default').getByRole('link', { name: 'Projects' }).click();
 
     // Check navigation
     await page.waitForURL('/projects');
