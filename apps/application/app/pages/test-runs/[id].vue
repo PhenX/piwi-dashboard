@@ -24,17 +24,10 @@ const latestRunId = computed(() => latestRunInfo.value?.id ?? testRun.value?.pro
 const latestRunStatus = computed(() => latestRunInfo.value?.status ?? testRun.value?.project?.latestRunStatus ?? null);
 const isLatestRunActive = computed(() => latestRunStatus.value === 'running' || latestRunStatus.value === 'finalizing');
 
-const navbarTitle = computed(() => {
-  // The page heading must name this specific run — the breadcrumb and the
-  // URL carry the project identity.
-  const project = testRun.value?.project?.label || testRun.value?.project?.name;
-  return project ? `Run #${runId} — ${project}` : `Run #${runId}`;
-});
-
 useHead(
   computed(() => {
-    // Match the on-page heading: prefer the project's display label so a
-    // labeled project reads the same in the tab title and the navbar.
+    // The tab title names the run and its project (display label first); on
+    // the page the breadcrumb carries the project.
     const project = testRun.value?.project?.label || testRun.value?.project?.name;
     return {
       title: `Test run #${runId}${project ? ` — ${project}` : ''} — Piwi Dashboard`,
@@ -667,7 +660,8 @@ function handleSelectCluster(clusterId: number) {
 <template>
   <UDashboardPanel id="test-run-detail">
     <template #header>
-      <UDashboardNavbar :title="navbarTitle">
+      <!-- The breadcrumb's current crumb is the page title; a navbar title would repeat it. -->
+      <UDashboardNavbar>
         <template #leading>
           <UDashboardSidebarCollapse />
           <BreadcrumbNav
@@ -791,7 +785,11 @@ function handleSelectCluster(clusterId: number) {
         </template>
 
         <template #tab-failure-groups>
-          <FailureGroups :refresh-key="runRefreshKey" @select-cluster="handleSelectCluster" />
+          <FailureGroups
+            :refresh-key="runRefreshKey"
+            :test-cases="testRun?.testCases ?? []"
+            @select-cluster="handleSelectCluster"
+          />
         </template>
 
         <template #tab-regression>

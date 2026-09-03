@@ -14,6 +14,7 @@ interface Cluster {
   id: number;
   signature: string;
   status: string;
+  triageNote: string | null;
   fixLandedRunId: number | null;
   fixCommit: string | null;
   timeToResolutionMs: number | null;
@@ -123,8 +124,15 @@ test.describe.serial('Fix verification', () => {
     expect(fixed.timeToResolutionMs).toBeGreaterThan(0);
   });
 
-  test('a fix that does not hold is marked regressed', async ({ request }) => {
-    await submitRun(request, [{ title: 'checkout pays', status: 'failed', error: failingError() }], {
+  test('a fix that does not hold is marked regressed and reopens a resolved cluster', async ({ request }) => {
+    // Someone closed the triage on the strength of the recorded fix.
+    const fixed = (await clusters(request, projectId)).find((c) => c.fixLandedRunId != null)!;
+    const patched = await request.patch(`/api/failure-clusters/${fixed.id}/status`, {
+      data: { status: 'resolved', triageNote: 'Closed after the fix landed' },
+    });
+    expect(patched.ok()).toBeTruthy();
+
+    const runId = await submitRun(request, [{ title: 'checkout pays', status: 'failed', error: failingError() }], {
       commit: 'ccccccc1',
     });
 
@@ -132,10 +140,17 @@ test.describe.serial('Fix verification', () => {
       .poll(async () => (await clusters(request, projectId)).find((c) => c.fixVerification === 'regressed')?.id, {
         timeout: 15_000,
       })
-      .toBeTruthy();
+      .toBe(fixed.id);
+
+    // The runs contradicted the person's "resolved", so the status goes back
+    // to open with the reason on record — and the note they wrote survives.
+    const regressed = (await clusters(request, projectId)).find((c) => c.id === fixed.id)!;
+    expect(regressed.status).toBe('open');
+    expect(regressed.triageNote).toContain('Closed after the fix landed');
+    expect(regressed.triageNote).toContain(`Reopened automatically: regressed in run #${runId}`);
   });
 
-  test('a partial run never records a fix', async ({ request }) => {
+  test('a partial run that misses an affected test never records a fix', async ({ request }) => {
     // The cluster is failing again after the regression above. A filtered run
     // that happens to exclude the failing test must not be read as a fix: a
     // test that did not execute has not been shown to pass.
@@ -172,6 +187,31 @@ test.describe.serial('Fix verification', () => {
     // Asserted separately so a failure says whether the row or the badge is
     // missing — the table loads client-side, after the page itself is ready.
     await expect(row).toBeVisible({ timeout: 15_000 });
-    await expect(row.getByText('Regressed')).toBeVisible();
+    await expect(row.getByText('Regressed', { exact: true })).toBeVisible();
+  });
+
+  // The natural loop — fix the code, re-run just the broken test, watch it go
+  // green — must close the cluster. A filtered run is trusted exactly when it
+  // covered the whole cluster, which this one does. Runs last so it does not
+  // disturb the regressed-state assertions above.
+  test('a filtered run covering every affected test records the fix', async ({ request }) => {
+    const before = (await clusters(request, projectId)).find((c) => c.fixVerification === 'regressed')!;
+
+    const runId = await submitRun(request, [{ title: 'checkout pays', status: 'passed' }], {
+      commit: 'eeeeeee1',
+      isFullRun: false,
+    });
+
+    await expect
+      .poll(async () => (await clusters(request, projectId)).find((c) => c.id === before.id)?.fixLandedRunId, {
+        timeout: 15_000,
+      })
+      .toBe(runId);
+
+    const fixed = (await clusters(request, projectId)).find((c) => c.id === before.id)!;
+    expect(fixed.fixCommit).toBe('eeeeeee1');
+    // No SCM is reachable in this test, so "stopped failing" is the honest
+    // verdict — but the filtered run was enough to record it.
+    expect(fixed.fixVerification).toBe('stopped-failing');
   });
 });

@@ -5,7 +5,7 @@
  * note. Used on both the cluster detail page and the test-case detail page.
  */
 
-import { recommendLocatorFix } from '#shared/locator-healing';
+import { recommendLocatorFix, locatorExpression } from '#shared/locator-healing';
 import type { RankedLocator, LocatorFixRecommendation, LocatorHealingResult } from '#shared/locator-healing.types';
 import type { AiStepIntent, TraceInfo } from '~~/types/api';
 import SectionCard from './SectionCard.vue';
@@ -142,15 +142,16 @@ const sourceClass = computed(() => {
   }
 });
 
+/** The failing locator as Playwright source, the same form every alternative renders in. */
 const failingLocatorText = computed(() => {
   const f = healing.value?.failingLocator;
-  return f ? `${f.method}(${JSON.stringify(f.args)})` : '';
+  return f ? locatorExpression(f.method, f.args) : '';
 });
 
 /**
- * Quote/whitespace/bracket-insensitive form so the failing locator (JSON-ish
- * rendering) can be compared against an AI-step intent locator (Playwright
- * source style) — both collapse to `getbyrole(textbox,name:email)`.
+ * Quote/whitespace/bracket-insensitive form so the failing locator can be
+ * compared against an AI-step intent locator regardless of quoting or spacing
+ * — both collapse to `getbyrole(textbox,name:email)`.
  */
 function normalizeLocator(text: string): string {
   return text.toLowerCase().replace(/[\s'"`{}[\]]/g, '');
@@ -287,12 +288,17 @@ const showAllAlternatives = ref(false);
 const visibleAlternatives = computed<RankedLocator[]>(() =>
   showAllAlternatives.value ? alternatives.value : alternatives.value.slice(0, ALT_PREVIEW),
 );
+
+// Forward the fold/scroll so a clue or AI citation to `locatorHealing` can reveal it.
+const cardRef = ref<{ reveal?: () => void } | null>(null);
+defineExpose({ reveal: () => cardRef.value?.reveal?.() });
 </script>
 
 <template>
   <component
     :is="cardComponent"
     v-if="!pending && !error && hasData"
+    ref="cardRef"
     v-bind="cardBind"
     data-shot="alternative-locators"
     icon="i-lucide-bandage"
@@ -403,7 +409,7 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
     <div v-if="healing?.failingLocator" class="bg-elevated rounded p-2 mb-3 border border-red-200 dark:border-red-800">
       <div class="flex items-center gap-2">
         <UIcon name="i-lucide-x-circle" class="size-4 text-red-500 shrink-0" />
-        <code class="text-xs font-mono text-red-600 dark:text-red-400 flex-1 truncate">{{ failingLocatorText }}</code>
+        <LocatorCode :locator="failingLocatorText" truncate class="text-xs flex-1 min-w-0" />
         <UButton
           size="xs"
           variant="ghost"
@@ -593,6 +599,24 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
         for full alternatives including data-testid and CSS selectors.
       </template>
     </UAlert>
+  </component>
+
+  <!-- Healing does not apply: the locator resolved (or the failure is a
+       navigation error, or names no locator). One line, no ranked menu. -->
+  <component
+    :is="cardComponent"
+    v-else-if="!pending && !error && healing?.applicable === false"
+    v-bind="cardBind"
+    data-shot="alternative-locators"
+    icon="i-lucide-bandage"
+    title="Alternative locators"
+    subtitle="Not a locator problem"
+    help="locator-healing"
+  >
+    <template v-if="storageKey" #folded>
+      <span>{{ healing.reason }}</span>
+    </template>
+    <p class="text-sm text-gray-600 dark:text-gray-400">{{ healing.reason }}</p>
   </component>
 
   <!-- No data -->

@@ -9,6 +9,7 @@
 import { and, eq, ne, notInArray, sql, inArray } from 'drizzle-orm';
 import { locatorSnapshots, testCases, testRunsCases, type LocatorSnapshotRow } from '../database/schema';
 import { extractLeafSelector } from '#shared/error-fingerprint';
+import { classifyLocatorResolution } from '#shared/locator-resolution';
 import {
   locatorSignatureFromExpression,
   locatorExpressionMethod,
@@ -422,7 +423,7 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
     .where(eq(testRunsCases.id, testRunsCaseId));
 
   const row = rows[0] ? await inlineCasePayloads(db, rows[0]) : undefined;
-  if (!row?.error) return buildHealingResult(null, null, null, 'none');
+  if (!row?.error) return notApplicableResult(null, null);
 
   const testCaseId = row.testCaseId;
 
@@ -461,11 +462,28 @@ export interface HealingCaseInput {
   filePath?: string | null;
 }
 
+/** An empty result for a failure healing cannot address, with the one-line reason. */
+function notApplicableResult(
+  failingLocator: LocatorHealingResult['failingLocator'],
+  reason: string | null,
+): LocatorHealingResult {
+  return {
+    ...buildHealingResult(failingLocator, null, null, 'none'),
+    applicable: false,
+    reason: reason ?? classifyLocatorResolution(null).reason,
+  };
+}
+
 /**
  * Resolve locator healing for one failing case from its pre-loaded snapshots.
  * The single-case and batch entry points share this one ladder; the DB-touching
  * cross-test lookup is injected as `findCrossTest` (null to skip it) so the core
- * stays directly unit-testable:
+ * stays directly unit-testable.
+ *
+ * The ladder only runs for a resolution failure (`classifyLocatorResolution`):
+ * a locator that resolved and then failed its action or assertion, a navigation
+ * error, or an error naming no locator returns `applicable: false` with a
+ * reason and no alternatives — the ARIA fallback included.
  *
  * 1. Call-site location — exact `file:line:col`, then `file:line` (tolerates a
  *    column drift). Disambiguates repeated identical locators by where they run.
@@ -481,7 +499,7 @@ export async function resolveHealingForCase(
   snaps: LocatorSnapshotRow[],
   findCrossTest: ((sig: string, method: string | null) => Promise<LocatorSnapshotRow | null>) | null,
 ): Promise<LocatorHealingResult> {
-  if (!input.error) return buildHealingResult(null, null, null, 'none');
+  if (!input.error) return notApplicableResult(null, null);
   const error = input.error;
   const aria = input.ariaSnapshot ?? null;
 
@@ -491,6 +509,10 @@ export async function resolveHealingForCase(
   const selector = extractLeafSelector(error);
   const parsed = selector ? parseLocatorExpression(selector) : null;
   const failingLocator = parsed ? { method: parsed.method, args: parsed.args } : null;
+
+  const verdict = classifyLocatorResolution(error);
+  if (!verdict.applicable) return notApplicableResult(failingLocator, verdict.reason);
+
   const location = extractErrorLocation(error);
   const sourceLine = parseFailingSourceLine(input.testSource, location);
   // Computed up front so healed detection (below) can compare against it in
@@ -499,6 +521,8 @@ export async function resolveHealingForCase(
   const method = selector ? locatorExpressionMethod(selector) : null;
 
   const finish = async (r: LocatorHealingResult): Promise<LocatorHealingResult> => {
+    r.applicable = true;
+    r.reason = null;
     r.location = location;
     r.sourceLine = sourceLine;
     r.edit = buildHealEdit({

@@ -28,6 +28,8 @@ interface NotificationEventData {
   totalTests?: number;
   branch?: string;
   signature?: string;
+  title?: string | null;
+  verification?: string;
   clusterId?: number;
   summary?: string | null;
   rootCause?: string | null;
@@ -63,7 +65,17 @@ function renderBody(data: NotificationEventData): string {
     }
     case 'cluster.new':
       lines.push(`${data.projectName ?? `Project #${data.projectId}`}: new failure cluster`);
-      if (data.signature) lines.push(data.signature);
+      if (data.title || data.signature) lines.push(data.title || data.signature || '');
+      break;
+    case 'cluster.fixed':
+      lines.push(
+        `${data.projectName ?? `Project #${data.projectId}`}: ${data.verification === 'diagnosis-verified' ? 'diagnosis verified' : 'cluster stopped failing'}`,
+      );
+      if (data.title || data.signature) lines.push(data.title || data.signature || '');
+      break;
+    case 'cluster.regressed':
+      lines.push(`${data.projectName ?? `Project #${data.projectId}`}: a fixed cluster is failing again`);
+      if (data.title || data.signature) lines.push(data.title || data.signature || '');
       break;
     case 'diagnosis.completed':
     case 'diagnosis-completed':

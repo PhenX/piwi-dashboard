@@ -260,7 +260,7 @@ const SERVER_LOGS_ERROR = [
 ];
 
 function buildNetworkRequests(opts: { slow?: boolean; paymentError?: boolean } = {}): Array<Record<string, unknown>> {
-  return [
+  return withStartTimes([
     {
       method: 'GET',
       url: 'https://shop.example.com/api/cart',
@@ -321,7 +321,21 @@ function buildNetworkRequests(opts: { slow?: boolean; paymentError?: boolean } =
             resourceType: 'fetch',
           },
         ]),
-  ];
+  ]);
+}
+
+/**
+ * Stamp sequential start times onto simulated requests, the way the fixtures
+ * record `request.timing().startTime`: each one starts shortly after the
+ * previous one finished.
+ */
+function withStartTimes(requests: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  let startTime = Date.now();
+  return requests.map((req) => {
+    const stamped = { ...req, startTime };
+    startTime += Number(req.duration ?? 0) + vary(40);
+    return stamped;
+  });
 }
 
 function buildWebVitals(slow = false): Record<string, unknown> {
@@ -720,10 +734,10 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
           (o) => ({ ...o }),
         );
         const base = buildNetworkRequests();
-        tests[i]!.networkRequests = [
+        tests[i]!.networkRequests = withStartTimes([
           ...base.filter((r) => !netOverrides.some((o) => o.method === r.method && o.url === r.url)),
           ...netOverrides,
-        ];
+        ]);
       }
       // One test fails with a new error signature — a brand-new cluster
       tests[2]!.attempts = [

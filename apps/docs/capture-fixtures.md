@@ -52,14 +52,14 @@ That's the entire setup — there is nothing to start, wrap, or await inside you
 
 | Data | Captured | Powers |
 |------|----------|--------|
-| **Network requests** — method, URL, status, duration, content type. Only API/document traffic (fetch, XHR, document); static assets are skipped | per request | *Slow API endpoints* table on the [run page](./ui-overview#test-run-detail) with `/api/users/:id`-style route normalization; [backend log correlation](./backend-logs) via the `X-Piwi-Logs` response header |
-| **Console entries** — `warning`, `error`, and `assert` messages with source location (`console.log` noise is not collected) | as they happen | Console card on the [test case page](./evidence#one-execution-diagnosis-first); [AI diagnosis](./ai-diagnosis) evidence |
+| **Network requests** — method, URL, status, duration, start time, content type. Only API/document traffic (fetch, XHR, document); static assets are skipped | per request | *Slow API endpoints* table on the [run page](./ui-overview#test-run-detail) with `/api/users/:id`-style route normalization; [backend log correlation](./backend-logs) via the `X-Piwi-Logs` response header; the [failure timeline](./evidence#one-execution-diagnosis-first) (start time places each request, backend logs by their own timestamp) |
+| **Console entries** — `warning`, `error`, and `assert` messages with source location and a timestamp (`console.log` noise is not collected) | as they happen | Console card on the [execution page](./evidence#one-execution-diagnosis-first); the [failure timeline](./evidence#one-execution-diagnosis-first) (placed by their timestamp); [AI diagnosis](./ai-diagnosis) evidence |
 | **Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint, plus LCP, CLS and INP (Chromium-only) | at test teardown | Web vitals card with color-coded thresholds; [performance trends](./flaky-tests#performance) |
-| **ARIA snapshot** of the final page state | on failure | Failure evidence on the test-case and cluster pages; [AI diagnosis](./ai-diagnosis) context |
+| **ARIA snapshot** of the final page state | on failure | Failure evidence on the [execution](./evidence#one-execution-diagnosis-first) and cluster pages; [AI diagnosis](./ai-diagnosis) context |
 | **Locator snapshots** — element attributes, stable-ancestor anchors, and same-role position, plus ranked alternative locators (including rename-proof ancestor-scoped and name-free ones) for each element a test proves resolvable, stamped with the call site | after each successful action and each passing web-first assertion (`toBeVisible()`, `toHaveText()`, …) | [Locator healing](./reporter#locator-healing); when a failing name-based locator (`getByRole`, `getByText`, `getByLabel`, …) matches nothing, a fresh suggestion is attached to the test as a Playwright annotation |
 
 ::: tip Test source is captured without any fixture
-On a failure the reporter also reads the **call stack's in-project source** — the line that actually threw plus the callers above it (helpers, page objects), each as a small line-numbered snippet with the failing line marked. It needs no fixture (it comes from the stack trace plus the local source files) and renders as the **Test source** call stack on the [test-case](./evidence#one-execution-diagnosis-first) and cluster pages. `node_modules`/Playwright frames are skipped.
+On a failure the reporter also reads the **call stack's in-project source** — the line that actually threw plus the callers above it (helpers, page objects), each as a small line-numbered snippet with the failing line marked. It needs no fixture (it comes from the stack trace plus the local source files) and renders as the **Test source** call stack on the [execution](./evidence#one-execution-diagnosis-first) and cluster pages. `node_modules`/Playwright frames are skipped.
 :::
 
 ## With and without the fixtures
@@ -139,6 +139,7 @@ Capture is designed to never fail or noticeably slow down a test:
 - **Data missing for some specs only** — those specs import `test` from `@playwright/test` instead of your fixtures file. Capture is per-`test`-object; the import is the switch.
 - **No fixture data at all** — check that `collectPerformanceMetrics` is not `false`, and that tests navigate to a real page (`about:blank`-only tests produce no Web Vitals).
 - **ARIA snapshot or locator healing missing** — same root causes as above; also check `captureLocators` / `PIWI_CAPTURE_LOCATORS`.
+- **An evidence card says "not captured"** — that project has never had the fixtures active. Open the in-app `/setup` capability checklist (each empty card links to it) to see which capabilities are live and what to switch on; a card that instead reads *nothing happened* means the fixtures ran and this execution simply produced nothing. With an uploaded trace, the console, network and ARIA cards are recovered from the trace even without the fixtures and marked *derived from the trace*.
 
 ## Try it
 

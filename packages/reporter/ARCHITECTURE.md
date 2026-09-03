@@ -81,7 +81,7 @@ src/
     files/      file-handler, compression
     capture/    capture-fixtures, locator-healing, attachments   ← runs in the worker
     config/     env (PIWI_* ↔ options)
-    support/    logger, limiter, ci, ci-output, run-url, instance-id,
+    support/    logger, limiter, ci, ci-output, failure-links, run-url, instance-id,
                 cli-filters, setup-file, source-snippet, worker-index, errors,
                 selection-client, selection-env
   types/

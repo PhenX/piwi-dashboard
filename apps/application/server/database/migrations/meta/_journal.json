@@ -379,6 +379,34 @@
       "when": 1786729137251,
       "tag": "0053_damp_dark_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "6",
+      "when": 1788322663506,
+      "tag": "0054_stale_zzzax",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "6",
+      "when": 1788426039796,
+      "tag": "0055_massive_rogue",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "6",
+      "when": 1788450734532,
+      "tag": "0056_blushing_captain_cross",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1788460812809,
+      "tag": "0057_modern_thaddeus_ross",
+      "breakpoints": true
     }
   ]
 }

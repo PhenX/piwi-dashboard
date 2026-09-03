@@ -12,7 +12,15 @@ import {
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-waits';
 import { inlineCasePayloads } from '../../server/utils/case-payloads';
+import { buildFailureVerdict } from '../failure-verdict';
+import { buildFailureTimeline, type FailureTimeline, type TimelineCallsite } from '../failure-timeline';
+import { buildFailureClues, type FailureClue } from '../failure-clues';
+import { parsePlaywrightError } from '../error-parse';
+import { getLocatorHealing } from '../../server/utils/locator-healing';
+import { getEnvironmentDiff } from '../../server/utils/environment-diff';
+import type { PageStateLike } from '../page-state';
 import type { TestStepEvent } from '../types';
+import type { RunMetadata } from '../../server/utils/run-json-types';
 
 import type { DrizzleDB } from './db';
 
@@ -84,6 +92,8 @@ export async function getTestCase(db: DrizzleDB, id: number) {
       .selectDistinct({
         id: failureClusters.id,
         signature: failureClusters.signature,
+        title: failureClusters.title,
+        selector: failureClusters.selector,
         errorType: failureClusters.errorType,
         status: failureClusters.status,
         occurrences: failureClusters.occurrences,
@@ -157,6 +167,26 @@ export async function getTestRunCase(
 
   // Large evidence payloads are content-addressed; legacy rows keep them inline.
   const evidence = await inlineCasePayloads(db, trc);
+
+  // Every attempt is its own execution row (unique on run + test case + retries
+  // + browser), so each stored attempt maps to the sibling row that holds it.
+  const siblingRows = await db
+    .select({ id: testRunsCases.id, retries: testRunsCases.retries })
+    .from(testRunsCases)
+    .where(
+      and(
+        eq(testRunsCases.testRunId, trc.testRunId),
+        eq(testRunsCases.testCaseId, trc.testCaseId),
+        trc.browserName ? eq(testRunsCases.browserName, trc.browserName) : sql`${testRunsCases.browserName} IS NULL`,
+      ),
+    );
+  const executionByRetry = new Map(siblingRows.map((r: any) => [r.retries ?? 0, r.id as number]));
+  const attempts = Array.isArray(trc.attempts)
+    ? (trc.attempts as Array<{ retry: number }>).map((a) => ({
+        ...a,
+        executionId: executionByRetry.get(a.retry) ?? null,
+      }))
+    : null;
 
   const [[testCase], [testRun], reportList, attachmentList] = await Promise.all([
     db
@@ -235,6 +265,7 @@ export async function getTestRunCase(
       failureCluster = {
         id: cluster.id,
         signature: cluster.signature,
+        title: cluster.title,
         errorType: cluster.errorType,
         selector: cluster.selector,
         status: cluster.status ?? 'open',
@@ -260,6 +291,7 @@ export async function getTestRunCase(
     url: nr.url,
     status: nr.status,
     duration: nr.duration,
+    startTime: nr.startTime ?? undefined,
     resourceType: nr.resourceType,
     contentType: nr.contentType,
     serverLogs: nr.serverLogs,
@@ -331,6 +363,28 @@ export async function getTestRunCase(
 
   const { streamToken: _streamToken, ...testRunPublic } = testRun ?? {};
 
+  // The one-line verdict on a failing execution — headline, why, since when,
+  // cluster and owner — built from what is already loaded above. The owner
+  // here is the test's own annotation; the server route layers CODEOWNERS on.
+  const scm = ((testRun?.metadata as RunMetadata | null)?.scm ?? null) as {
+    commit?: string | null;
+    branch?: string | null;
+    author?: string | null;
+    commitMessage?: string | null;
+  } | null;
+  const verdict = buildFailureVerdict({
+    error: trc.error,
+    steps: trc.steps,
+    status: trc.status,
+    retries: trc.retries,
+    isNewRegression: trc.isNewRegression,
+    isNewFlaky: trc.isNewFlaky,
+    runId: trc.testRunId,
+    scm,
+    cluster: failureCluster ? { ...failureCluster, sampleError: null, filePath: testCase?.filePath ?? null } : null,
+    owner: testCase?.owner ?? null,
+  });
+
   return {
     id: trc.id,
     testCaseId: trc.testCaseId,
@@ -342,7 +396,7 @@ export async function getTestRunCase(
     duration: trc.duration,
     error: trc.error,
     retries: trc.retries,
-    attempts: trc.attempts ?? null,
+    attempts,
     steps: trc.steps,
     testSource: evidence.testSource,
     testSourceFrames: evidence.testSourceFrames,
@@ -364,6 +418,7 @@ export async function getTestRunCase(
     aiUsage: trc.aiUsage,
     consoleLogs: trc.consoleLogs,
     ariaSnapshot: evidence.ariaSnapshot,
+    evidenceSources: trc.evidenceSources,
     workerIndex: trc.workerIndex,
     shardIndex: trc.shardIndex,
     browser: trc.browser,
@@ -374,6 +429,7 @@ export async function getTestRunCase(
     blockedByCase,
     blockedTests,
     failureCluster,
+    verdict,
     testRun: testRun ? { ...testRunPublic, project, reports: reportList } : testRun,
     attachments: attachmentList,
     links: linksForCaseRun,
@@ -404,6 +460,199 @@ export async function getLastPassPageState(
     .orderBy(desc(testRuns.startTime), desc(testRunsCases.id))
     .limit(1);
   return rows[0]?.pageState ?? null;
+}
+
+/**
+ * The failure timeline for one execution: its steps, console entries, network
+ * requests and backend log entries placed on a single clock around the moment
+ * of failure, with each action attributed to the method or `test.step` it was
+ * called from. Loads the same rows the execution detail reads and hands them to
+ * the pure `buildFailureTimeline`; shared by the REST endpoint and the demo
+ * mirror. Returns an empty timeline when the execution does not exist.
+ *
+ * Callers may pass `traceCallsites` (parsed from the stored trace, server-side)
+ * to attach function names and the caller chain to each action; without them,
+ * call sites come from the reporter's own `location` (file and line only).
+ *
+ * The stored trace records action times on a monotonic clock the execution's
+ * epoch timestamps cannot be mixed with, so no trace anchor is fed here —
+ * `failureAt` comes from the failed step (or `startedAt + duration`), and the
+ * card links out to the trace viewer instead.
+ */
+export async function getFailureTimeline(
+  db: DrizzleDB,
+  id: number,
+  opts: { traceCallsites?: TimelineCallsite[] | null } = {},
+): Promise<FailureTimeline> {
+  const [trc] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
+  if (!trc) return buildFailureTimeline({});
+
+  const [networkRequestRows, [testCase]] = await Promise.all([
+    db.select().from(networkRequests).where(eq(networkRequests.testRunsCaseId, id)),
+    db.select({ filePath: testCases.filePath }).from(testCases).where(eq(testCases.id, trc.testCaseId)),
+  ]);
+
+  return buildFailureTimeline({
+    startedAt: trc.startedAt,
+    duration: trc.duration,
+    timeout: trc.timeout,
+    status: trc.status,
+    steps: trc.steps,
+    stepEvents: trc.stepEvents,
+    consoleLogs: trc.consoleLogs,
+    specFile: testCase?.filePath ?? null,
+    traceCallsites: opts.traceCallsites ?? null,
+    networkRequests: networkRequestRows.map((nr) => ({
+      method: nr.method,
+      url: nr.url,
+      status: nr.status,
+      duration: nr.duration,
+      startTime: nr.startTime ?? undefined,
+      serverLogs: nr.serverLogs,
+      serverTraces: nr.serverTraces,
+    })),
+  });
+}
+
+/** What the clue engine returns for one execution, plus the failure anchor the UI needs. */
+export interface FailureCluesResult {
+  clues: FailureClue[];
+  /** The moment of failure, in ms relative to the timeline origin — the `t+0` the card counts back from. */
+  failureAt: number | null;
+}
+
+/**
+ * The deterministic clues for one failing execution: a rule-based correlation
+ * pass over the same rows the execution detail already reads — the parsed
+ * error, the timeline, network requests, the ARIA snapshot, locator healing,
+ * app state, the environment diff, the run's sibling and same-worker
+ * executions, and the cluster's fix history. Loads them once and hands them to
+ * the pure `buildFailureClues`; shared by the REST endpoint, the demo mirror,
+ * the AI-context builder and the MCP tools. Returns an empty list when the
+ * execution does not exist.
+ *
+ * `slowRequestMs` lets the server pass the configured slow-request threshold;
+ * without it the engine uses its 1500 ms default.
+ */
+export async function getFailureClues(
+  db: DrizzleDB,
+  id: number,
+  opts: { slowRequestMs?: number | null } = {},
+): Promise<FailureCluesResult> {
+  const [trc] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
+  if (!trc) return { clues: [], failureAt: null };
+
+  const evidence = await inlineCasePayloads(db, trc);
+
+  const [networkRequestRows, [testCase]] = await Promise.all([
+    db.select().from(networkRequests).where(eq(networkRequests.testRunsCaseId, id)),
+    db.select({ filePath: testCases.filePath }).from(testCases).where(eq(testCases.id, trc.testCaseId)),
+  ]);
+
+  const networkForClues = networkRequestRows.map((nr) => ({
+    method: nr.method,
+    url: nr.url,
+    status: nr.status,
+    duration: nr.duration,
+    startTime: nr.startTime ?? undefined,
+    serverLogs: (nr.serverLogs ?? null) as Array<{
+      level?: string | null;
+      message?: string | null;
+      timestamp?: number | null;
+    }> | null,
+  }));
+
+  const timeline = buildFailureTimeline({
+    startedAt: trc.startedAt,
+    duration: trc.duration,
+    timeout: trc.timeout,
+    status: trc.status,
+    steps: trc.steps,
+    stepEvents: trc.stepEvents,
+    consoleLogs: trc.consoleLogs,
+    specFile: testCase?.filePath ?? null,
+    networkRequests: networkForClues,
+  });
+
+  // Run-level facts and the two derived analyses the engine cites, loaded in
+  // parallel. Healing and the environment diff resolve their own baselines.
+  const [healing, environmentDiff, browserPeers, workerExecutions, clusterFix] = await Promise.all([
+    getLocatorHealing(db, id).catch(() => null),
+    getEnvironmentDiff(db, id).catch(() => null),
+    db
+      .select({
+        browserName: testRunsCases.browserName,
+        status: testRunsCases.status,
+      })
+      .from(testRunsCases)
+      .where(and(eq(testRunsCases.testRunId, trc.testRunId), eq(testRunsCases.testCaseId, trc.testCaseId))),
+    trc.workerIndex != null
+      ? db
+          .select({
+            id: testRunsCases.id,
+            testCaseId: testRunsCases.testCaseId,
+            title: testCases.title,
+            status: testRunsCases.status,
+            startedAt: testRunsCases.startedAt,
+          })
+          .from(testRunsCases)
+          .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+          .where(and(eq(testRunsCases.testRunId, trc.testRunId), eq(testRunsCases.workerIndex, trc.workerIndex)))
+      : Promise.resolve(
+          [] as Array<{
+            id: number;
+            testCaseId: number;
+            title: string | null;
+            status: string;
+            startedAt: number | null;
+          }>,
+        ),
+    trc.failureClusterId
+      ? db
+          .select({
+            fixCommit: failureClusters.fixCommit,
+            fixLandedRunId: failureClusters.fixLandedRunId,
+            fixVerification: failureClusters.fixVerification,
+          })
+          .from(failureClusters)
+          .where(eq(failureClusters.id, trc.failureClusterId))
+          .then((r: any[]) => r[0] ?? null)
+      : Promise.resolve(null),
+  ]);
+
+  const clues = buildFailureClues({
+    execution: {
+      id: trc.id,
+      testCaseId: trc.testCaseId,
+      status: trc.status,
+      duration: trc.duration,
+      browserName: trc.browserName,
+      startedAt: startedAtMs(trc.startedAt),
+    },
+    parsedError: trc.error ? parsePlaywrightError(trc.error) : null,
+    timeline,
+    healing,
+    ariaSnapshot: evidence.ariaSnapshot ?? null,
+    appState: (trc.pageState as PageStateLike | null) ?? null,
+    environmentDiff,
+    networkRequests: networkForClues,
+    consoleLogs:
+      (trc.consoleLogs as Array<{ type?: string | null; text?: string | null; timestamp?: number | null }> | null) ??
+      [],
+    browserPeers,
+    workerExecutions: workerExecutions.map((w) => ({ ...w, startedAt: startedAtMs(w.startedAt) })),
+    cluster: clusterFix,
+    timeout: trc.timeout ?? null,
+    slowRequestMs: opts.slowRequestMs ?? null,
+  });
+
+  return { clues, failureAt: timeline.failureAt };
+}
+
+/** Coerce a stored `startedAt` (epoch ms number or Date) to epoch ms. */
+function startedAtMs(value: unknown): number | null {
+  if (value instanceof Date) return value.getTime();
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 export async function getTestRunCaseTraces(db: DrizzleDB, id: number) {

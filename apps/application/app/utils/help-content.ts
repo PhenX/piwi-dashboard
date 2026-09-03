@@ -191,6 +191,11 @@ export const HELP_TOPICS = {
     text: 'A read-only Git host token lets diagnosis pull the actual commit diffs behind a failure for SCM-grounded analysis. Stored encrypted.',
     doc: 'ai-diagnosis#scm-grounded-context',
   },
+  'project.ci-rerun': {
+    title: 'CI re-run',
+    text: 'Lets a reporter or admin re-run a cluster’s affected tests in CI straight from its page — a workflow_dispatch on GitHub, a pipeline on GitLab, a custom pipeline on Bitbucket — passing the retry arguments through the input/variable you name. Uses the project’s SCM token (which needs write scope) and is off until you fill in your provider’s block.',
+    doc: 'ci#re-run-from-the-dashboard',
+  },
   'project.local-folder': {
     title: 'Linked local folder',
     text: 'The checkout on this machine that produces this project’s runs. Linking it enables running tests from the app and opening files in your IDE. The link is stored on this machine only — never on the server.',
@@ -253,6 +258,16 @@ export const HELP_TOPICS = {
     text: 'Everything you need to understand and fix this failure in one place — the error, a verdict on what kind of failure it is, the captured evidence, and an AI diagnosis.',
     doc: 'evidence#one-execution-diagnosis-first',
   },
+  'case.headline': {
+    title: 'Failure headline',
+    text: 'What broke, in one sentence built from the Playwright error itself: the locator, the last state its call log reported, the expected and received values, the timeout. The chips say why (new regression, passed on retry), since when and on which commit, how many other tests in the run share the cause, and who owns the test. The raw error is right below, verbatim.',
+    doc: 'evidence#one-execution-diagnosis-first',
+  },
+  'case.clues': {
+    title: 'Clues',
+    text: 'Deterministic findings a set of rules correlate from the evidence already captured — a request that failed just before the click, a console error naming the failing element, a renamed element, the page ending on a login route, the previous test on this worker failing. No model runs; each clue is ranked by strength and cites the evidence section it came from, so a click jumps straight to it. The same clues are fed to the AI diagnosis as evidence to confirm or refute.',
+    doc: 'evidence#clues',
+  },
   'case.verdict': {
     title: 'Failure verdict',
     text: 'An at-a-glance read on this failure: whether it newly regressed or is flaky, how many times it retried, and how long the test has been failing.',
@@ -286,6 +301,11 @@ export const HELP_TOPICS = {
     text: 'Each step Playwright ran, with its duration. A failed step is highlighted with its error, and slow steps are color-coded.',
     doc: 'evidence#one-execution-diagnosis-first',
   },
+  'case.timeline': {
+    title: 'Failure timeline',
+    text: 'One time axis that places this execution’s steps, console entries, network requests and backend log entries on the same clock, with a marker at the moment of failure. The default view is the window around the failed step (10s before, 2s after); switch to “Whole test” to see everything. The list below reads it chronologically — click a line to jump to that step, console entry or request. When a run’s reporter recorded no step start times, positions are estimated from durations and the card says so.',
+    doc: 'evidence#one-execution-diagnosis-first',
+  },
   'case.wasted-time': {
     title: 'Wasted time',
     text: 'Time spent in fixed waits (waitForTimeout and matching patterns) that could usually be replaced with a web-first assertion.',
@@ -298,7 +318,7 @@ export const HELP_TOPICS = {
   },
   'case.web-vitals': {
     title: 'Web Vitals',
-    text: 'Core Web Vitals (LCP, CLS, etc.) captured during the test, measuring real loading and responsiveness of the page under test.',
+    text: 'Core Web Vitals (LCP, CLS, etc.) captured during the test, measuring real loading and responsiveness of the page under test. When empty, the card says which of three things it means: not captured (add the capture fixtures), captured but nothing recorded, or not applicable (Web Vitals need a Chromium browser).',
     doc: 'capture-fixtures',
   },
   'case.traces': {
@@ -308,22 +328,22 @@ export const HELP_TOPICS = {
   },
   'case.console': {
     title: 'Console output',
-    text: 'Browser console messages logged while this test ran — often the first clue for a JavaScript error behind a failure.',
+    text: 'Browser console messages logged while this test ran — often the first clue for a JavaScript error behind a failure. An empty card says which of three things it means: not captured (add the capture fixtures — links to /setup), captured but the page logged nothing, or not applicable. When a trace but no fixtures were present, the entries are recovered from the trace and marked "derived from the trace".',
     doc: 'capture-fixtures',
   },
   'case.network': {
     title: 'Network requests',
-    text: 'HTTP requests the page made during the test, with timing and status — useful for spotting failed or slow calls. When the execution has a trace, the Full trace view shows every request (all resource types) with headers, timing phases, a waterfall and capped body previews; sensitive header values are masked.',
+    text: 'HTTP requests the page made during the test, with timing and status — useful for spotting failed or slow calls. When the execution has a trace, the Full trace view shows every request (all resource types) with headers, timing phases, a waterfall and capped body previews; sensitive header values are masked. An empty card distinguishes not captured (add the capture fixtures) from captured-but-nothing-happened; with a trace and no fixtures the list is recovered from the trace and marked "derived from the trace".',
     doc: 'evidence#trace-powered-deep-views',
   },
   'case.backend-logs': {
     title: 'Backend server logs',
-    text: 'Server-side warnings and errors captured during the test, correlated with this execution via a Piwi backend integration.',
+    text: 'Server-side warnings and errors captured during the test, correlated with this execution via a Piwi backend integration. When empty, the card says whether the capture fixtures are missing or the app under test has no Piwi backend integration (backend logs are "not applicable" without one).',
     doc: 'backend-logs',
   },
   'case.aria': {
     title: 'ARIA snapshot',
-    text: 'A snapshot of the accessibility tree at the moment of failure — what assistive tech saw, and useful grounding for AI diagnosis.',
+    text: 'A snapshot of the accessibility tree at the moment of failure — what assistive tech saw, and useful grounding for AI diagnosis. An empty card says whether it was not captured (add the capture fixtures) or captured with nothing to snapshot; with a trace and no fixtures it is recovered from the trace\'s error context and marked "derived from the trace".',
     doc: 'ai-diagnosis#what-a-diagnosis-contains',
   },
 
@@ -360,8 +380,13 @@ export const HELP_TOPICS = {
   },
   'cluster.resolution': {
     title: 'Resolution',
-    text: 'Recorded when a full run turns this cluster green: when the fix landed, how long the cluster stayed open, and whether the change matched the diagnosed files. If the failure comes back, the cluster is marked as regressed rather than quietly reopened.',
+    text: 'Recorded when a run turns this cluster green — every test it covers ran and passed, in a full suite or a filtered re-run of just those tests: when the fix landed, how long the cluster stayed open, and whether the change matched the diagnosed files. If the failure comes back, the cluster is marked as regressed rather than quietly reopened.',
     doc: 'ai-diagnosis#did-the-fix-work',
+  },
+  'cluster.fix-plan': {
+    title: 'Fix plan',
+    text: 'Everything needed to repair this cluster in one place — the diagnosis and its validated patch, the concrete locator edits, the failing tests, the owner, and the command that verifies the fix. Copy it as Markdown for a ticket, or let an agent fetch the same plan via the get_fix_plan MCP tool.',
+    doc: 'ai-diagnosis#fix-plans',
   },
   'cluster.evidence': {
     title: 'Test evidence',
@@ -671,13 +696,13 @@ export const HELP_TOPICS = {
   // ── Environment diff ────────────────────────────────────────────────────
   'environment-diff': {
     title: 'Environment diff',
-    text: 'Compares this execution’s environment (Playwright version, browser config, locale, viewport, CI provider, …) against the same test’s last passing run on the same browser. Only changed keys are shown — an empty diff rules out environment drift as the cause.',
+    text: 'Compares this execution’s environment (Playwright version, browser config, locale, viewport, CI provider, …) against the same test’s last passing run on the same browser — from the same environment when one exists, then the same branch, then the most recent; the subtitle says when the baseline had to come from another environment. Only changed keys are shown — an empty diff rules out environment drift as the cause.',
   },
 
   // ── Visual diff ──────────────────────────────────────────────────────────
   'visual-diff': {
     title: 'Visual diff',
-    text: 'Pixel-compares the failing screenshot against the same test’s last passing screenshot (same browser). Red pixels in the overlay mark what changed. When the two screenshots have different dimensions the ratio is flagged as unreliable.',
+    text: 'Pixel-compares the failing screenshot against the same test’s last passing screenshot (same browser, preferring the same environment and then the same branch). Red pixels in the overlay mark what changed. When the two screenshots have different dimensions the ratio is flagged as unreliable.',
   },
 
   // ── DOM snapshot ─────────────────────────────────────────────────────────

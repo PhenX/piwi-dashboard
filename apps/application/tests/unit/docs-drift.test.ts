@@ -32,12 +32,23 @@ describe('positioning line', () => {
 });
 
 describe('documented counts', () => {
-  test('every page claiming an MCP tool count states the real one', () => {
-    const claim = new RegExp(`\\b${MCP_TOOL_DEFS.length}\\b tools`);
-    for (const relative of ['apps/docs/mcp.md', 'apps/docs/comparison.md', 'ROADMAP.md']) {
-      const stated = read(relative).match(/\b(\d+) tools\b/);
-      if (!stated) continue;
-      expect(read(relative), `${relative} says "${stated[0]}", there are ${MCP_TOOL_DEFS.length}`).toMatch(claim);
+  // Every page on the docs site (the generated configuration.md included,
+  // when built) plus the repository-level pages that repeat the number.
+  const docsPages = (function walk(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) return [];
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return walk(path);
+      return entry.name.endsWith('.md') ? [relative(repoRoot, path)] : [];
+    });
+  })(join(repoRoot, 'apps/docs'));
+  const COUNT_SURFACES = [...docsPages, 'README.md', 'ROADMAP.md', 'DOCKER_HUB.md'];
+
+  test.each(COUNT_SURFACES)('%s states the real MCP tool count, if it states one', (relative) => {
+    for (const [claim, stated] of read(relative).matchAll(/\b(\d+) tools\b/g)) {
+      expect(Number(stated), `${relative} says "${claim}", there are ${MCP_TOOL_DEFS.length}`).toBe(
+        MCP_TOOL_DEFS.length,
+      );
     }
   });
 

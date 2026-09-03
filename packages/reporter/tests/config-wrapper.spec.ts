@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { wrapConfig } from '../src/public/config-wrapper.js';
+import { PIWI_DEFAULTED_CAPTURE_ENV } from '../src/internal/config/env.js';
 
 describe('wrapConfig', () => {
   it('preserves other config properties', () => {
@@ -101,5 +102,69 @@ describe('wrapConfig', () => {
     expect(entry).toBeTruthy();
     expect(entry[1]?.projectName).toBe('my-project');
     expect(entry[1]?.serverUrl).toBe('http://localhost:3000');
+  });
+});
+
+describe('wrapConfig capture defaults', () => {
+  afterEach(() => {
+    delete process.env.PIWI_DEFAULT_CAPTURE;
+    delete process.env[PIWI_DEFAULTED_CAPTURE_ENV];
+  });
+
+  it('defaults screenshot and trace on the top-level use when both are unset', () => {
+    const config = wrapConfig({ testDir: './tests', use: { headless: true } });
+    expect(config.use?.screenshot).toBe('only-on-failure');
+    expect(config.use?.trace).toBe('retain-on-failure');
+    // The original use option is preserved.
+    expect(config.use?.headless).toBe(true);
+    expect(process.env[PIWI_DEFAULTED_CAPTURE_ENV]).toBe('screenshot,trace');
+  });
+
+  it('defaults trace but keeps an explicit screenshot (only fills the unset one)', () => {
+    const config = wrapConfig({ use: { screenshot: 'on' } });
+    expect(config.use?.screenshot).toBe('on');
+    expect(config.use?.trace).toBe('retain-on-failure');
+    expect(process.env[PIWI_DEFAULTED_CAPTURE_ENV]).toBe('trace');
+  });
+
+  it("leaves an explicit 'off' untouched and defaults nothing else it already has", () => {
+    const config = wrapConfig({ use: { screenshot: 'off', trace: 'off' } });
+    expect(config.use?.screenshot).toBe('off');
+    expect(config.use?.trace).toBe('off');
+    expect(process.env[PIWI_DEFAULTED_CAPTURE_ENV]).toBeUndefined();
+  });
+
+  it('applies defaults even when the config has no use block', () => {
+    const config = wrapConfig({ testDir: './tests' });
+    expect(config.use?.screenshot).toBe('only-on-failure');
+    expect(config.use?.trace).toBe('retain-on-failure');
+  });
+
+  it('never touches per-project use blocks', () => {
+    const config = wrapConfig({
+      projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+    });
+    expect((config.projects as any[])[0].use).toEqual({ browserName: 'chromium' });
+    expect((config.projects as any[])[0].use.trace).toBeUndefined();
+    // The top-level use still gets the defaults.
+    expect(config.use?.trace).toBe('retain-on-failure');
+  });
+
+  it('opts out with defaultCapture: false', () => {
+    const config = wrapConfig({ use: { headless: true } }, { defaultCapture: false });
+    expect(config.use?.screenshot).toBeUndefined();
+    expect(config.use?.trace).toBeUndefined();
+    expect(process.env[PIWI_DEFAULTED_CAPTURE_ENV]).toBeUndefined();
+  });
+
+  it('opts out with PIWI_DEFAULT_CAPTURE=false', () => {
+    process.env.PIWI_DEFAULT_CAPTURE = 'false';
+    const config = wrapConfig({ use: { headless: true } });
+    expect(config.use?.screenshot).toBeUndefined();
+    expect(config.use?.trace).toBeUndefined();
+
+    // An explicit option overrides the env var.
+    const on = wrapConfig({ use: { headless: true } }, { defaultCapture: true });
+    expect(on.use?.trace).toBe('retain-on-failure');
   });
 });

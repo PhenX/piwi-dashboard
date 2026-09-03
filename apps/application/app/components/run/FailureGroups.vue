@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { describeCluster, clusterSignatureLine } from '#shared/describe-cluster';
 import type { TableColumn } from '@nuxt/ui';
-import type { FailureGroup } from '~~/types/api';
-import { buildRetryCommand } from '~/utils/retry-command';
+import type { FailureGroup, TestCaseResult } from '~~/types/api';
 
 const emit = defineEmits<{
   selectCluster: [clusterId: number];
@@ -10,6 +10,8 @@ const emit = defineEmits<{
 const props = defineProps<{
   /** Increments when the run finishes so this tab can refetch. */
   refreshKey?: number;
+  /** The run's execution rows — the retry command is built from these, same as the summary's. */
+  testCases: TestCaseResult[];
 }>();
 
 const route = useRoute();
@@ -34,28 +36,12 @@ watch(
 );
 
 const diagnosisClusterId = ref<number | null>(null);
-const { copy, copied } = useCopy();
-
-const allFailedCases = computed(() => {
-  if (!groups.value) return [];
-  return groups.value.flatMap((g) =>
-    g.cases
-      .filter((c) => !c.passedOnRetry)
-      .map((c) => ({
-        filePath: c.filePath,
-        title: c.title,
-        line: null,
-        projectName: null,
-      })),
-  );
-});
-
-const retryCommand = computed(() => buildRetryCommand(allFailedCases.value));
-
-function copyRetryCommand() {
-  const cmd = retryCommand.value;
-  if (cmd) copy(cmd, { toast: 'Retry command copied' });
-}
+const {
+  failedCases,
+  copyCommand: copyRetryCommand,
+  copied,
+  title: retryTitle,
+} = useRunRetryCommand(() => props.testCases);
 
 const columns: TableColumn<FailureGroup>[] = [
   { accessorKey: 'signature', header: createSortHeader<FailureGroup>('Signature') },
@@ -86,12 +72,12 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
           <HelpHint topic="cluster.concept" />
         </p>
         <UButton
-          v-if="allFailedCases.length > 0"
+          v-if="failedCases.length > 0"
           size="xs"
           variant="outline"
           color="neutral"
           :icon="copied ? 'i-lucide-check' : 'i-lucide-play'"
-          :title="copied ? 'Copied!' : copyPreview(retryCommand)"
+          :title="retryTitle"
           @click="copyRetryCommand()"
         >
           Copy retry command
@@ -107,11 +93,13 @@ const totalCases = computed(() => groups.value?.reduce((sum, g) => sum + g.caseC
 
             <template #signature-cell="{ row }">
               <div class="min-w-0 space-y-0.5">
+                <span class="text-sm block truncate" :title="row.original.signature">{{
+                  describeCluster({ ...row.original, filePath: row.original.cases[0]?.filePath })
+                }}</span>
                 <span
-                  class="text-sm block truncate"
-                  :class="row.original.title ? '' : 'font-mono'"
-                  :title="row.original.signature"
-                  >{{ row.original.title || row.original.signature }}</span
+                  v-if="clusterSignatureLine({ ...row.original, filePath: row.original.cases[0]?.filePath })"
+                  class="text-xs text-gray-500 font-mono truncate block"
+                  >{{ row.original.signature }}</span
                 >
                 <span v-if="row.original.selector" class="text-xs text-gray-500 truncate block">
                   Locator: <code class="font-mono">{{ row.original.selector }}</code>

@@ -52,6 +52,7 @@ export const projects = pgTable(
     diagnosisInstructions: text('diagnosis_instructions'),
     scmToken: text('scm_token'), // Per-project SCM token for GitHub/GitLab/Bitbucket API access
     defaultBranch: text('default_branch'), // Repository default branch; null = resolve from SCM provider, else 'main'
+    ciRerun: jsonb('ci_rerun'), // CiRerunSettings — provider-specific "re-run from the dashboard" target (off by default)
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -253,6 +254,7 @@ export const failureClusters = pgTable(
     fixCommit: text('fix_commit'), // commit of that run, when the reporter recorded one
     timeToResolutionMs: integer('time_to_resolution_ms'), // first seen → fix landed
     fixVerification: text('fix_verification'), // 'stopped-failing' | 'diagnosis-verified' | 'regressed'
+    lastRerunDispatch: jsonb('last_rerun_dispatch'), // ClusterRerunDispatch — most recent "Re-run in CI" dispatch
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -392,6 +394,8 @@ export const failureDiagnosisVersions = pgTable(
     outputTokens: integer('output_tokens'),
     durationMs: integer('duration_ms'),
     contextSha: text('context_sha'),
+    feedback: text('feedback'), // 'up', 'down' — captured as of the snapshot
+    feedbackNote: text('feedback_note'),
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -464,6 +468,7 @@ export const testRunsCases = pgTable(
     pageState: jsonb('page_state'), // URL/history/storage-keys/cookie-flags at test end (values never captured)
     aiUsage: jsonb('ai_usage'), // { entries: string[], intents?: {template,locator,kind}[] } — replayed AI-step artifacts + their prompts
     consoleLogs: jsonb('console_logs'), // Array of { type, text, timestamp, location } console entries
+    evidenceSources: jsonb('evidence_sources'), // { console?, network?, aria?: 'trace' } — marks evidence recovered from the trace when the capture fixtures were absent
     // Legacy inline payload columns: still readable on old rows, no longer
     // written — new rows store these payloads content-addressed in
     // case_payloads and reference them via the *PayloadId columns below.
@@ -561,6 +566,7 @@ export const networkRequests = pgTable(
     normalizedUrl: text('normalized_url'),
     status: integer('status').notNull(),
     duration: integer('duration'),
+    startTime: bigint('start_time', { mode: 'number' }), // Request start, Unix timestamp in ms (exceeds 32-bit int range)
     resourceType: text('resource_type'),
     contentType: text('content_type'),
     serverLogs: jsonb('server_logs'),

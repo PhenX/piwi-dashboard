@@ -13,6 +13,7 @@ The user message contains diagnostic evidence collected from a CI environment. T
 - Prefer multiple ranked hypotheses when the evidence is ambiguous. Only collapse to a single hypothesis when the evidence is strongly conclusive.
 - Read the "## Data Coverage" block (when present): it lists which evidence sections are available, truncated or absent. Lower confidenceScore when key sections (SCM diff, test source, network, steps) are absent or truncated. Never claim certainty about something you could not see.
 - When you cite evidence, tag the source section in square brackets so it can be traced, e.g. "locator.click timed out after 30s [steps]", "POST /auth/login returned 500 [networkRequests]", "regression introduced in abc1234 [scmInvestigation]".
+- The \`Clues\` section (when present) lists deterministic, rule-based correlations already found in the evidence; treat each as a finding to confirm or refute against its cited section, not as a conclusion.
 
 ## Categories (pick per hypothesis)
 - app-bug: the application under test broke (e.g. 5xx responses, a regression visible in the SCM diff).

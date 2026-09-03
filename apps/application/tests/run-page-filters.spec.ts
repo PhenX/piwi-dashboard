@@ -80,12 +80,18 @@ test.describe.serial('Run page test-case filters', () => {
     await expect(visibleTitles(page).nth(2)).toHaveText('cart shows items');
     await expect(visibleTitles(page).nth(3)).toHaveText('homepage loads');
 
-    // One-line error text under each failed title (visible copy only — the
-    // mobile card below `md` duplicates the same DOM)
+    // The one-line headline under each failed title, with the raw error as its
+    // tooltip (visible copy only — the mobile card below `md` duplicates the same DOM)
+    const loginHeadline = page
+      .getByText("getByTestId('login-button') was not found on the page — click timed out after 30 s")
+      .filter({ visible: true });
+    await expect(loginHeadline).toBeVisible();
+    await expect(loginHeadline).toHaveAttribute('title', /TimeoutError: locator\.click: Timeout 30000ms exceeded\./);
     await expect(
-      page.getByText('TimeoutError: locator.click: Timeout 30000ms exceeded.').filter({ visible: true }),
+      page
+        .getByText('Expected text "3 items", got "0 items" — getByTestId(\'cart-total\') toHaveText')
+        .filter({ visible: true }),
     ).toBeVisible();
-    await expect(page.getByText(/cart-total/).filter({ visible: true })).toBeVisible();
 
     // A cluster badge on every failing row links to the cluster page
     const clusterLinks = page.locator('a[href^="/failure-clusters/"]:visible');

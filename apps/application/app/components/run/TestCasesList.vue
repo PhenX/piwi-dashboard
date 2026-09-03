@@ -435,6 +435,7 @@ defineExpose({ scrollToCase });
       :live-steps="liveSteps"
       :project-key="projectKey"
       :project-name="projectName"
+      :cluster-names="clusterNames"
       class="flex-1 min-h-0"
     />
 
@@ -565,13 +566,13 @@ defineExpose({ scrollToCase });
                       <BrowserBadge :browser="item.browser" size="sm" class="mt-0.5" />
                     </div>
 
-                    <p
+                    <FailureHeadline
                       v-if="isFailedStatus(item.status) && item.error"
-                      class="pl-6 text-xs text-rose-600 dark:text-rose-400 truncate"
-                      :title="item.error"
-                    >
-                      {{ item.error }}
-                    </p>
+                      :error="item.error"
+                      :steps="item.steps"
+                      truncate
+                      class="pl-6 text-xs text-gray-600 dark:text-gray-400"
+                    />
 
                     <OpenInIdeLink
                       v-if="item.location"
@@ -665,13 +666,13 @@ defineExpose({ scrollToCase });
                           </UBadge>
                         </NuxtLink>
                       </div>
-                      <p
+                      <FailureHeadline
                         v-if="isFailedStatus(item.status) && item.error"
-                        class="text-xs text-rose-600 dark:text-rose-400 truncate"
-                        :title="item.error"
-                      >
-                        {{ item.error }}
-                      </p>
+                        :error="item.error"
+                        :steps="item.steps"
+                        truncate
+                        class="text-xs text-gray-600 dark:text-gray-400"
+                      />
                       <OpenInIdeLink
                         v-if="item.location"
                         :location="item.location"

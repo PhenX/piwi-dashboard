@@ -43,6 +43,11 @@ const row = (over: Partial<HealCandidateRow> = {}): HealCandidateRow => ({
 });
 
 describe('selectHealEdits', () => {
+  test('never opens a PR for a result the resolution gate rejected', () => {
+    const h = healing({ applicable: false, reason: 'The locator resolved; this is not a locator problem.' });
+    expect(selectHealEdits([row()], new Map([[1, h]]), { minScore: 80 })).toEqual([]);
+  });
+
   test('accepts a high-score prior-run edit', () => {
     const edits = selectHealEdits([row()], new Map([[1, healing()]]), { minScore: 80 });
     expect(edits).toHaveLength(1);

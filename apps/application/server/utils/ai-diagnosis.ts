@@ -14,6 +14,7 @@ import type { AiConfig } from '~~/types/api';
 import { callAiProvider, resolveAiConfig, streamAiProvider, DEFAULT_ANTHROPIC_MODEL } from './ai-provider';
 import type { AiAttachedImage, StreamChunk, StreamResult } from './ai-provider';
 import { buildDiagnosisContext } from './ai-context';
+import { getFailureClues } from '#shared/handlers/test-cases';
 import { resolveContextLimits } from './ai-context-limits';
 import { downscaleImages } from './ai-images';
 import { buildDiagnosisSystemPrompt } from './ai-system-prompt';
@@ -21,6 +22,7 @@ import { reconcileNewClusters } from './cluster-reconcile';
 import { nameNewClusters } from './cluster-naming';
 import { RESEARCH_SYSTEM_PROMPT, RESEARCH_JSON_SCHEMA, parseResearchJson, formatResearchBlock } from './ai-research';
 import { buildDiagnosisVersionValues } from '#shared/handlers/diagnosis-versions';
+import { contextStalenessHash } from '#shared/diagnosis-staleness';
 import { emitNotification } from './notifications/emit';
 import type { DbClient } from '../database';
 
@@ -70,6 +72,7 @@ const CORE_RESEARCH_SECTIONS = new Set([
   'clusterSummary',
   'sampleError',
   'executionError',
+  'clues',
   'runContext',
   'recurrenceFlakiness',
   'retryProgression',
@@ -355,11 +358,17 @@ async function persistCompletedDiagnosis(
   const { diagnosis, ctx, pipeline, model, t0 } = args;
   const sumTokens = (k: 'inputTokens' | 'outputTokens') => pipeline.reduce((acc, s) => acc + (s[k] ?? 0), 0) || null;
 
+  // Hash the evidence the model was shown (its own prior-assessment section
+  // excluded, so a diagnosis never marks itself stale), so staleness can later ask
+  // "has the evidence changed since this diagnosis?" by re-hashing the current one.
+  const contextSha = await contextStalenessHash(ctx.sections);
+
   const updated = await db
     .update(failureDiagnoses)
     .set({
       status: 'completed',
       model,
+      contextSha,
       category: diagnosis.category,
       confidence: diagnosis.confidence,
       summary: diagnosis.summary,
@@ -576,6 +585,52 @@ export async function streamClusterDiagnosis(
   }
 }
 
+/** Priority by top-clue strength — lower is diagnosed first (no clue is weakest). */
+const CLUE_STRENGTH_PRIORITY: Record<string, number> = { none: 0, weak: 1, medium: 2, strong: 3 };
+
+/**
+ * Order the auto-diagnose candidates so the budget lands on the failures that
+ * need the model most: weakest top clue first (a failure with no deterministic
+ * clue is the one worth spending tokens on), then the newest cluster. Capped to
+ * the budget. The chosen order is logged at debug level.
+ */
+async function orderClustersByWeakestClue(
+  db: DbClient,
+  candidates: FailureCluster[],
+  runId: number,
+): Promise<FailureCluster[]> {
+  const limits = await resolveContextLimits(db);
+  const ranked = await Promise.all(
+    candidates.map(async (cluster) => {
+      // The representative failing execution: the latest one in the cluster,
+      // matching how the diagnosis context picks its representative.
+      const [rep] = await db
+        .select({ id: testRunsCases.id })
+        .from(testRunsCases)
+        .where(eq(testRunsCases.failureClusterId, cluster.id))
+        .orderBy(desc(testRunsCases.id))
+        .limit(1);
+      let strength = 'none';
+      if (rep) {
+        const { clues } = await getFailureClues(db, rep.id, { slowRequestMs: limits.slowRequestMs }).catch(() => ({
+          clues: [],
+        }));
+        strength = clues[0]?.strength ?? 'none';
+      }
+      return { cluster, strength, priority: CLUE_STRENGTH_PRIORITY[strength] ?? 0 };
+    }),
+  );
+
+  ranked.sort((a, b) => a.priority - b.priority || b.cluster.firstSeenRunId - a.cluster.firstSeenRunId);
+  const chosen = ranked.slice(0, autoDiagnoseBudget());
+  console.debug(
+    `[ai-diagnosis] auto-diagnose order for run ${runId}: ${
+      chosen.map((c) => `#${c.cluster.id} (${c.strength} clue)`).join(', ') || 'none'
+    }`,
+  );
+  return chosen.map((c) => c.cluster);
+}
+
 export async function autoDiagnoseRun(db: DbClient, projectId: number, runId: number): Promise<void> {
   const config = await resolveAiConfig(db);
 
@@ -608,8 +663,12 @@ export async function autoDiagnoseRun(db: DbClient, projectId: number, runId: nu
 
   // Diagnose every cluster that surfaced in THIS run (not only clusters first seen
   // in it) that doesn't already have a fresh diagnosis, so a known cluster that
-  // regresses after going undiagnosed is still picked up. Newest-first, capped by a
-  // configurable budget (default 3) so a run with many clusters can't run away on cost.
+  // regresses after going undiagnosed is still picked up. The budget is spent
+  // where it buys the most: candidates are ordered by their representative
+  // failing execution's top clue — the failures with no deterministic clue (the
+  // ones the model has to reason about from scratch) come first, then the
+  // weakest clues, and only then failures a strong clue already explains — with
+  // the newest cluster breaking ties. Capped by a configurable budget (default 3).
   const clusterIdRows = await db
     .selectDistinct({ id: testRunsCases.failureClusterId })
     .from(testRunsCases)
@@ -617,12 +676,13 @@ export async function autoDiagnoseRun(db: DbClient, projectId: number, runId: nu
   const clusterIds = clusterIdRows.map((r) => r.id).filter((id): id is number => id != null);
   if (clusterIds.length === 0) return;
 
-  const clusters = await db
+  const candidates = await db
     .select()
     .from(failureClusters)
     .where(and(eq(failureClusters.projectId, projectId), inArray(failureClusters.id, clusterIds)))
-    .orderBy(desc(failureClusters.firstSeenRunId))
-    .limit(autoDiagnoseBudget());
+    .orderBy(desc(failureClusters.firstSeenRunId));
+
+  const clusters = await orderClustersByWeakestClue(db, candidates, runId);
 
   for (const cluster of clusters) {
     try {

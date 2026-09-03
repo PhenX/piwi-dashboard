@@ -18,6 +18,8 @@ const props = defineProps<{
   projectKey?: string | number | null;
   projectName?: string | null;
   storageKey: string;
+  /** Whether the card starts folded on first visit (no stored cookie). */
+  defaultFolded?: boolean;
 }>();
 
 const { data: stack, pending: stackPending } = useTraceCallStack(
@@ -58,6 +60,7 @@ defineExpose({ reveal: () => card.value?.reveal() });
   <CollapsibleSectionCard
     ref="card"
     :storage-key="storageKey"
+    :default-folded="defaultFolded"
     icon="i-lucide-code"
     :count="count"
     title="Test source"

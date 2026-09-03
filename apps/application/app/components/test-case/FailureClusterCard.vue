@@ -7,10 +7,13 @@
  * (evidence across every affected test, what changed, AI diagnosis) lives.
  */
 import { clusterErrorTypeColor } from '~/utils';
+import { describeCluster, clusterSignatureLine } from '#shared/describe-cluster';
 
 export interface FailureClusterCardCluster {
   id: number;
   signature: string;
+  title?: string | null;
+  selector?: string | null;
   errorType?: string | null;
   status?: string | null;
   triageNote?: string | null;
@@ -30,8 +33,6 @@ export interface FailureClusterCardCluster {
 const props = defineProps<{
   cluster: FailureClusterCardCluster;
 }>();
-
-const otherFailingCount = computed(() => Math.max(0, props.cluster.sameRunCaseCount - 1));
 
 const aiVerdict = computed(() => {
   const d = props.cluster.diagnosis;
@@ -68,16 +69,17 @@ const confidenceColor = (c?: string | null): 'success' | 'warning' | 'neutral' =
             {{ cluster.occurrences ?? 0 }} occurrence{{ (cluster.occurrences ?? 0) === 1 ? '' : 's' }}
           </span>
         </div>
-        <p class="font-mono text-xs text-gray-600 dark:text-gray-400 break-all line-clamp-2" :title="cluster.signature">
+        <p class="text-sm font-medium break-words" :title="cluster.signature">{{ describeCluster(cluster) }}</p>
+        <p
+          v-if="clusterSignatureLine(cluster)"
+          class="font-mono text-xs text-gray-600 dark:text-gray-400 break-all line-clamp-2"
+        >
           {{ cluster.signature }}
         </p>
       </div>
 
-      <!-- Scope: siblings in this run + new/known -->
+      <!-- New or known; the headline card above names the same-run siblings -->
       <p class="text-xs text-gray-500 dark:text-gray-400">
-        <template v-if="otherFailingCount > 0">
-          Matches {{ otherFailingCount }} other failing {{ otherFailingCount === 1 ? 'test' : 'tests' }} in this run.
-        </template>
         <template v-if="!cluster.isNew">
           Known failure — first seen in
           <NuxtLink :to="`/test-runs/${cluster.firstSeenRunId}`" class="text-primary hover:underline">
@@ -106,16 +108,28 @@ const confidenceColor = (c?: string | null): 'success' | 'warning' | 'neutral' =
         “{{ cluster.triageNote }}”
       </p>
 
-      <UButton
-        :to="`/failure-clusters/${cluster.id}`"
-        size="sm"
-        color="primary"
-        variant="solid"
-        block
-        trailing-icon="i-lucide-arrow-right"
-      >
-        Open cluster investigation
-      </UButton>
+      <div class="space-y-2">
+        <UButton
+          :to="`/failure-clusters/${cluster.id}`"
+          size="sm"
+          color="primary"
+          variant="solid"
+          block
+          trailing-icon="i-lucide-arrow-right"
+        >
+          Open cluster investigation
+        </UButton>
+        <UButton
+          :to="`/failure-clusters/${cluster.id}#fix-plan`"
+          size="sm"
+          color="neutral"
+          variant="outline"
+          block
+          icon="i-lucide-wrench"
+        >
+          Open fix plan
+        </UButton>
+      </div>
     </div>
   </SectionCard>
 </template>

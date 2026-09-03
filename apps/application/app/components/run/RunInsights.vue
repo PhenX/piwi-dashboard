@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { describeCluster } from '#shared/describe-cluster';
 const props = defineProps<{
   testRunId: number;
   runStatus: string;
@@ -39,7 +40,13 @@ interface RunInsightsData {
   workerImbalance: Array<{ workerIndex: number; count: number }>;
   workerImbalanceWarning: string | null;
   flakyOnRetry: Array<{ executionId: number; title: string; filePath: string; retries: number }>;
-  clusterNew: Array<{ clusterId: number; signature: string }>;
+  clusterNew: Array<{
+    clusterId: number;
+    signature: string;
+    title?: string | null;
+    errorType?: string | null;
+    selector?: string | null;
+  }>;
 }
 
 const passRateDeltaColor = computed(() => {
@@ -412,7 +419,7 @@ function formatMs(ms: number | null | undefined): string {
           :to="`/failure-clusters/${c.clusterId}`"
           class="flex items-center gap-2 text-sm text-primary hover:underline"
         >
-          <span class="truncate">{{ c.signature }}</span>
+          <span class="truncate" :title="c.signature">{{ describeCluster(c) }}</span>
         </NuxtLink>
       </div>
     </SectionCard>

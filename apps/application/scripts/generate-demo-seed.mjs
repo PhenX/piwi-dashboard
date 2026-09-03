@@ -399,6 +399,10 @@ const RUN_GREPS = {
 // simulator), so the Workers timeline shows dense rows instead of large gaps.
 const SEED_WORKER_COUNT = 4;
 const SEED_WORKER_GAP_MS = 200;
+/** How long after a test starts its first captured request fires. */
+const SEED_FIRST_REQUEST_OFFSET_MS = 120;
+/** Idle time between one captured request finishing and the next starting. */
+const SEED_REQUEST_GAP_MS = 35;
 
 /**
  * Build realistic `step_events` for a seeded case: before/after hooks, the
@@ -439,14 +443,20 @@ function buildSeedStepEvents(caseStartMs, caseDuration, location, waitHeavy) {
   return { stepEvents: events, wastedMs };
 }
 
-/** Scale a project's themed step titles to a case duration. */
-function buildSteps(proj, caseDuration) {
+/**
+ * Scale a project's themed step titles to a case duration, laying each step's
+ * absolute `startTime` end-to-end from `caseStartMs` so the failure timeline
+ * places them on a real clock rather than estimating from durations.
+ */
+function buildSteps(proj, caseDuration, caseStartMs) {
   const total = proj.stepTitles.reduce((s, st) => s + st.weight, 0);
-  return proj.stepTitles.map((st) => ({
-    title: st.title,
-    duration: Math.round((st.weight / total) * caseDuration),
-    category: st.category,
-  }));
+  let cursor = caseStartMs;
+  return proj.stepTitles.map((st) => {
+    const duration = Math.round((st.weight / total) * caseDuration);
+    const startTime = cursor;
+    cursor += duration;
+    return { title: st.title, duration, category: st.category, startTime };
+  });
 }
 
 /** Themed network requests for one case (jittered durations; story overrides on failures). */
@@ -762,7 +772,14 @@ for (const proj of DEMO_PROJECTS) {
         }
       }
 
-      const steps = buildSteps(proj, caseDuration);
+      const steps = buildSteps(proj, caseDuration, caseStartMs);
+      // Mark the last step of a failing case as the failed one, so the timeline
+      // anchors its window and failure marker on a captured step boundary.
+      if (isFailedCase && steps.length > 0) {
+        const lastStep = steps[steps.length - 1];
+        lastStep.failed = true;
+        lastStep.error = { message: (storyEntry.failingCase.error ?? '').split('\n')[0] || 'Test failed' };
+      }
       const slowestStep = steps.reduce((a, b) => (a.duration > b.duration ? a : b));
 
       // Test annotations — failures link to their cluster, the designated slow
@@ -876,7 +893,12 @@ for (const proj of DEMO_PROJECTS) {
       workerCursorMs[workerIndex] += caseDuration + SEED_WORKER_GAP_MS;
 
       if (!isDidNotRunCase) {
+        // Requests fire one after another from shortly after the test starts,
+        // so the execution page can order them by start time.
+        let requestStartMs = caseStartMs + SEED_FIRST_REQUEST_OFFSET_MS;
         for (const req of buildNetwork(proj, storyEntry)) {
+          const startTime = requestStartMs;
+          requestStartMs += (req.duration ?? 0) + SEED_REQUEST_GAP_MS;
           NETWORK_REQUESTS.push({
             id: nrId++,
             test_runs_case_id: trcIdVal,
@@ -886,6 +908,7 @@ for (const proj of DEMO_PROJECTS) {
             normalized_url: seedNormalizeUrl(req.url),
             status: req.status,
             duration: req.duration ?? null,
+            start_time: startTime,
             resource_type: req.resourceType ?? null,
             content_type: req.contentType ?? (req.resourceType === 'document' ? 'text/html' : 'application/json'),
             server_logs: req.serverLogs ?? null,
@@ -2590,6 +2613,7 @@ const REBASE_SQL = [
   '',
   '-- Millisecond timestamp columns',
   `UPDATE test_runs_cases SET started_at = started_at + ${D_MS}, created_at = created_at + ${D_MS};`,
+  `UPDATE network_requests SET start_time = start_time + ${D_MS};`,
   `UPDATE project_assignments SET created_at = created_at + ${D_MS};`,
   `UPDATE entity_links SET created_at = created_at + ${D_MS}, updated_at = updated_at + ${D_MS};`,
   `UPDATE locator_snapshots SET last_seen_at = last_seen_at + ${D_MS};`,

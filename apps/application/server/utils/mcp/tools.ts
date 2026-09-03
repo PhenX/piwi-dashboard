@@ -12,7 +12,13 @@ import { FAILED_STATUS_KEYS } from '#shared/utils/test-counts';
 import { buildFixPlan } from '../fix-plan';
 import { enrichFixPlanOwnership } from '../scm/ownership';
 import { getNetworkRequests, getFailureGroups } from '#shared/handlers/test-runs';
-import { getTestCase, getTestRunCaseTraces, getTestCaseStabilityTrend } from '#shared/handlers/test-cases';
+import {
+  getTestCase,
+  getTestRunCaseTraces,
+  getTestCaseStabilityTrend,
+  getFailureClues,
+  type FailureCluesResult,
+} from '#shared/handlers/test-cases';
 import {
   getFailureCluster,
   getClusterDiagnosis,
@@ -38,6 +44,7 @@ import {
 import { projects, testRuns, testRunsCases, testCases, failureClusters, failureDiagnoses } from '../../database/schema';
 import { buildDiagnosisContext, buildClusterDiagnosisContext } from '../ai-context';
 import { stripAnsi } from '#shared/error-fingerprint';
+import { caseHeadline } from '#shared/failure-verdict';
 import { MCP_TOOL_DEFS } from '#shared/mcp-tools';
 import type {
   McpToolDef,
@@ -101,6 +108,18 @@ function compactBrowser(browser: unknown): string | null {
   const b = browser as BrowserConfig | null;
   if (!b) return null;
   return [b.projectName, b.browserName].filter(Boolean).join('/') || null;
+}
+
+/** Project the deterministic clues into the compact shape MCP tools return. */
+function compactClues(result: FailureCluesResult) {
+  if (result.clues.length === 0) return null;
+  return result.clues.map((clue) => ({
+    rule: clue.rule,
+    strength: clue.strength,
+    title: clue.title,
+    detail: clue.detail,
+    citations: clue.citations.map((c) => c.section),
+  }));
 }
 
 /**
@@ -527,6 +546,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         status: r.status,
         duration: r.duration,
         retries: r.retries || null,
+        headline: caseHeadline(r)?.headline ?? null,
         error: trunc(r.error, 400),
         clusterId: r.clusterId || null,
         runId: r.runId,
@@ -1029,6 +1049,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
     const evidence = want('aria') || want('source') ? await inlineCasePayloads(db, row) : row;
 
+    // Deterministic clues ride alongside the error unless the caller opts out.
+    const clues = want('clues') ? await getFailureClues(db, id).catch(() => null) : null;
+
     return dropNulls({
       executionId: row.id,
       testCaseId: row.testCaseId,
@@ -1037,7 +1060,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       status: row.status,
       duration: row.duration,
       retries: row.retries || null,
+      headline: caseHeadline(row)?.headline ?? null,
       error: row.error, // full, untruncated
+      clues: clues ? compactClues(clues) : null,
       clusterId: row.failureClusterId || null,
       line: row.line || null,
       column: row.column || null,
@@ -1274,7 +1299,11 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
     const id = numericParam(params.executionId, 'executionId');
     if ((await checkEntityScope(db, ctx, id, resolveTestRunCaseProjectId)) === 'not-found') return null;
     const h = await getLocatorHealing(db, id);
-    if (!h || h.source === 'none') return null;
+    if (!h) return null;
+    // Healing does not apply (the locator resolved, a navigation failed, no
+    // locator in the error): say why, so an agent does not rewrite the selector.
+    if (h.applicable === false) return dropNulls({ executionId: id, applicable: false, reason: h.reason });
+    if (h.source === 'none') return null;
     const rankedList = (arr: any[] | null | undefined) =>
       arr && arr.length
         ? arr.slice(0, 8).map((a: any) => dropNulls({ locator: a.locator, method: a.method, score: a.score }))
@@ -1622,7 +1651,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       .from(testCases)
       .where(eq(testCases.id, row.testCaseId));
 
-    const [healing, screenshotRows, diagContext] = await Promise.all([
+    const [healing, screenshotRows, diagContext, cluesResult] = await Promise.all([
       getLocatorHealing(db, id).catch(() => null),
       selectCaseScreenshots(db, id),
       row.failureClusterId
@@ -1633,6 +1662,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
             skipScm: true,
           }).catch(() => null)
         : Promise.resolve(null),
+      getFailureClues(db, id).catch(() => null),
     ]);
 
     const rec = healing && healing.source !== 'none' ? healing.recommendation?.recommended : null;
@@ -1643,7 +1673,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       title: tc?.title || null,
       filePath: tc?.filePath || null,
       status: row.status,
+      headline: caseHeadline(row)?.headline ?? null,
       error: trunc(row.error, 1500),
+      clues: cluesResult ? compactClues(cluesResult) : null,
       clusterId: row.failureClusterId || null,
       slowestStep: row.slowestStep || null,
       steps: row.steps,

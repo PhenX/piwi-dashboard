@@ -25,6 +25,8 @@ Manage both from **Settings → Notifications**, and subscribe to a single proje
 | `run.failed` | A run completes with failures |
 | `run.failed.default_branch` | A run fails on the repository's default branch |
 | `cluster.new` | A new failure cluster appears |
+| `cluster.fixed` | A run passes every test a cluster covers — the fix landed (a filtered re-run of just those tests counts). The payload's `verification` says whether the diagnosis was corroborated (`diagnosis-verified`) or the tests merely stopped failing, and `resolved` whether the triage status was closed automatically |
+| `cluster.regressed` | A cluster with a recorded fix fails again; `reopened` says whether a *resolved* cluster was set back to open |
 | `flakiness.spike` | A completed run contains flaky tests — use the flakiness-threshold filter to only hear about rates above N% |
 | `perf.regression` | A run is at least 20% slower than the median of the previous five completed runs on the same branch — raise the bar per subscription with the regression-% filter |
 | `diagnosis.completed` | An AI diagnosis finishes (requires an AI provider) |
@@ -68,7 +70,8 @@ The body is `{ "event": "run.failed", "payload": { … }, "timestamp": "…" }`.
       {
         "title": "applies discount code",
         "filePath": "tests/checkout.spec.ts",
-        "errorExcerpt": "TimeoutError: locator.click: Timeout 30000ms exceeded",
+        "headline": "getByRole('button', { name: 'Pay' }) never became enabled — click timed out after 30 s",
+        "errorExcerpt": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nlocator resolved to <button disabled>Pay</button>",
         "testCaseId": 815,
         "executionId": 9001
       }
@@ -78,7 +81,27 @@ The body is `{ "event": "run.failed", "payload": { … }, "timestamp": "…" }`.
 }
 ```
 
-`cluster.new` payloads similarly carry `sampleErrorExcerpt` and `affectedCases`. These fields are **additive** — existing consumers keep working, but if you re-serialize the payload to re-check the HMAC, sign the exact bytes you received.
+`headline` is the one-line explanation the dashboard builds from the Playwright error — the locator, the
+last state its call log reported, the expected and received values, the timeout (see
+[Failure evidence](./evidence#one-execution-diagnosis-first)); it is absent when the case carries no error.
+`errorExcerpt` is the error's message head — the lines before Playwright's call log and the stack trace,
+at most five, capped at 300 characters. When that head is only a bare timeout line, the last
+`waiting for …` / `locator resolved to …` line of the call log is appended so the excerpt says what
+Playwright was waiting on. Slack and email messages lead with the headline, quote the same excerpt, and link each failure to its
+execution (`/test-run-cases/<executionId>`), falling back to the test's history page when a payload
+carries no execution id. The [pull-request comment](./ci#pull-request-feedback) quotes failures the same
+way.
+
+`cluster.new` payloads similarly carry `sampleErrorExcerpt` (cut the same way) and `affectedCases`; `cluster.fixed` and `cluster.regressed` carry the cluster's `signature`, `title`, the `runId` that decided the verdict and, for a fix, the `commit` and `timeToResolutionMs`. These fields are **additive** — existing consumers keep working, but if you re-serialize the payload to re-check the HMAC, sign the exact bytes you received.
+
+### Reaching the person who fixed it
+
+When an [SCM token](./ci#pull-request-feedback) is configured, `cluster.fixed` and `cluster.regressed` resolve the fixing commit's author through the provider and add a `fixAuthor` object — `{ name, email }` — to the payload (`cluster.regressed` uses the author of the fix that did not hold). On top of the normal subscription routing, the event is then delivered to that person directly:
+
+- **Email**, through the same outbox, when SMTP is configured **and** the commit's email belongs to a registered Piwi user. The mail goes to that user's account email, never to the raw commit address, so a fix by an outside contributor never becomes a mail to a stranger.
+- **A browser notification** for that user, delivered even when they have no matching subscription.
+
+`fixAuthor` is absent when no token is configured, the host exposes no email, or the lookup fails — the fix outcome then reaches people through subscriptions only.
 
 ### Global channels & subscriptions
 
@@ -117,4 +140,4 @@ Send a test email from **Settings → Notifications** to confirm delivery.
 - [CI & sharding](./ci) — the alternative: pull the run URL into your pipeline instead
 - [Authentication](./authentication) — per-user channels and subscriptions
 - [Configuration reference](./configuration) — all environment variables
-- [AI diagnosis & failure clustering](./ai-diagnosis) — what triggers `cluster.new` and `diagnosis.completed`
+- [AI diagnosis & failure clustering](./ai-diagnosis) — what triggers `cluster.new`, `cluster.fixed`, `cluster.regressed` and `diagnosis.completed`

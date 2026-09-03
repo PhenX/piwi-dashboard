@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
-import { renderEventSubject, notificationTargetPath } from '#shared/notification-events';
+import { renderEventSubject, notificationTargetPath, failureTargetPath } from '#shared/notification-events';
 import type {
   NotificationEvent,
   NotificationPayload,
@@ -173,6 +173,12 @@ export function renderTestEmail(to: string): { html: string; text: string } {
   return { html, text };
 }
 
+/** Where a failing test links to: its execution, else its history, else the run. */
+function failureUrl(failure: TopFailure, runUrl: string): string {
+  const path = failureTargetPath(failure);
+  return path ? `${siteUrl()}${path}` : runUrl;
+}
+
 export function renderRunNotificationEmail(opts: {
   projectName: string;
   runId: number;
@@ -191,23 +197,27 @@ export function renderRunNotificationEmail(opts: {
   if (failures.length > 0) {
     const rows = failures
       .map((f) => {
-        const caseUrl = f.testCaseId ? `${siteUrl()}/test-cases/${f.testCaseId}` : url;
+        const caseUrl = failureUrl(f, url);
         const title = escapeHtml(f.title);
         const titleHtml = `<a href="${caseUrl}" style="color:#18181b;font-weight:600;text-decoration:none;">${title}</a>`;
         const loc = f.filePath ? `<div style="color:#a1a1aa;font-size:12px;">${escapeHtml(f.filePath)}</div>` : '';
+        const headline = f.headline
+          ? `<div style="margin-top:4px;color:#18181b;font-size:14px;">${escapeHtml(f.headline)}</div>`
+          : '';
         const excerpt = f.errorExcerpt
           ? `<pre style="margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;color:#52525b;background:#fafafa;padding:8px;border-radius:4px;">${escapeHtml(f.errorExcerpt)}</pre>`
           : '';
-        return `<li style="margin-bottom:12px;list-style:none;">${titleHtml}${loc}${excerpt}</li>`;
+        return `<li style="margin-bottom:12px;list-style:none;">${titleHtml}${loc}${headline}${excerpt}</li>`;
       })
       .join('');
     failuresHtml = `<ul style="margin:0 0 24px;padding:0;">${rows}</ul>`;
     failuresText = failures
       .map((f) => {
-        const caseUrl = f.testCaseId ? `${siteUrl()}/test-cases/${f.testCaseId}` : url;
+        const caseUrl = failureUrl(f, url);
         const loc = f.filePath ? ` (${f.filePath})` : '';
+        const headline = f.headline ? `\n  ${f.headline}` : '';
         const excerpt = f.errorExcerpt ? `\n    ${f.errorExcerpt.replace(/\n/g, '\n    ')}` : '';
-        return `- ${f.title}${loc}\n  ${caseUrl}${excerpt}`;
+        return `- ${f.title}${loc}${headline}\n  ${caseUrl}${excerpt}`;
       })
       .join('\n');
   }
@@ -235,6 +245,8 @@ export function renderNewClusterEmail(opts: {
   projectName: string;
   clusterId: number;
   signature: string;
+  /** Display name shown above the signature when it adds something. */
+  title?: string | null;
   sampleErrorExcerpt?: string;
   affectedCases?: number;
 }): {
@@ -252,12 +264,13 @@ export function renderNewClusterEmail(opts: {
   const body = `
     <h2 style="margin:0 0 8px;font-size:20px;color:#18181b;">New failure cluster</h2>
     <p style="margin:0 0 24px;color:#52525b;font-size:14px;">${escapeHtml(opts.projectName)}</p>
+    ${opts.title && opts.title !== opts.signature ? `<p style="margin:0 0 8px;font-size:15px;font-weight:600;color:#18181b;">${escapeHtml(opts.title)}</p>` : ''}
     <p style="margin:0 0 16px;font-family:monospace;font-size:13px;background:#f4f4f5;padding:12px;border-radius:6px;overflow:auto;">${escapeHtml(opts.signature)}</p>
     ${affected}
     ${excerpt}
     <a href="${url}" style="display:inline-block;background:#18181b;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;">View cluster</a>`;
   const { html } = emailLayout(`New failure cluster — ${opts.projectName}`, body);
-  const text = `New failure cluster in ${opts.projectName}${opts.affectedCases ? ` (${opts.affectedCases} affected)` : ''}\n\n${opts.signature}${opts.sampleErrorExcerpt ? `\n\n${opts.sampleErrorExcerpt}` : ''}\n\nView: ${url}`;
+  const text = `New failure cluster in ${opts.projectName}${opts.affectedCases ? ` (${opts.affectedCases} affected)` : ''}\n\n${opts.title && opts.title !== opts.signature ? `${opts.title}\n` : ''}${opts.signature}${opts.sampleErrorExcerpt ? `\n\n${opts.sampleErrorExcerpt}` : ''}\n\nView: ${url}`;
   return { html, text };
 }
 

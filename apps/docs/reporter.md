@@ -32,10 +32,39 @@ export default defineConfig({
   ],
   use: {
     trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
 })
 ```
+
+The `use` block is Playwright's, not Piwi's: `trace`, `screenshot` and `video` decide what Playwright records, and the reporter uploads whatever exists. Leave `screenshot` at its default (`'off'`) and the failure evidence has no screenshot to show.
+
+When you install via [`wrapConfig`](#installing-via-wrapconfig) (what `init` does), the reporter fills in `screenshot: 'only-on-failure'` and `trace: 'retain-on-failure'` for you whenever the top-level `use` leaves them unset — the trace alone gives the dashboard the DOM snapshot, full call stack, full network with bodies and the visual diff without the capture fixtures. Any value you set yourself (including `'off'`) is kept, per-project `use` blocks are never touched, and the reporter logs one line at the start of the run naming what it defaulted. Opt out with `defaultCapture: false` or `PIWI_DEFAULT_CAPTURE=false` to let Playwright's own defaults stand.
+
+## Installing via wrapConfig
+
+`wrapConfig` wraps your whole Playwright config in one call: it injects the reporter, chains Piwi's [global setup](#global-setup-phase), and defaults the failure-evidence capture options. It is what `npx @piwitests/reporter init` writes for you.
+
+```typescript
+import { defineConfig } from '@playwright/test'
+import { wrapConfig } from '@piwitests/reporter'
+
+export default defineConfig(
+  wrapConfig(
+    {
+      testDir: './tests',
+      // no `screenshot` / `trace` needed — wrapConfig fills them in
+    },
+    { serverUrl: 'http://localhost:3000', projectName: 'my-project' },
+  ),
+)
+```
+
+The first argument is your Playwright config; the second is the [Piwi options](#configuration-options). On top of injecting the reporter, `wrapConfig`:
+
+- Sets `screenshot: 'only-on-failure'` and `trace: 'retain-on-failure'` on the **top-level** `use` block when each is unset. A value you set yourself is kept — including `'off'` — and per-project `use` blocks are left alone. These two options unlock the DOM snapshot, full call stack, full network with bodies and the visual diff **without** the capture fixtures. Opt out with `defaultCapture: false` (or `PIWI_DEFAULT_CAPTURE=false`); the reporter logs one line at the start of the run naming whatever it defaulted.
+- Forwards the CI-gate option `failOnFlakyTests` into Playwright's native config so a flaky-only run exits non-zero locally.
 
 <a id="performance-metrics-web-vitals"></a>
 
@@ -78,14 +107,14 @@ export { expect } from '@playwright/test'
 ### What gets captured
 
 - **Network requests** — method, URL, status code, duration, resource type. Aggregated on the dashboard into a *Slow API endpoints* table grouped by `METHOD + normalized route` (e.g. `/api/users/:id`).
-- **Console entries** — `warning`, `error`, and `assert` messages with their source location, shown on the test case page and included in the AI diagnosis evidence.
+- **Console entries** — `warning`, `error`, and `assert` messages with their source location, shown on the [execution page](./evidence#one-execution-diagnosis-first) and included in the AI diagnosis evidence.
 - **Browser Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint, plus Core Web Vitals (LCP, CLS, INP) — displayed with color-coded thresholds. LCP/CLS/INP come from buffered `PerformanceObserver` entries and are Chromium-only; INP needs at least one interaction, so it is often `n/a` in short tests.
-- **ARIA snapshot** — Captured automatically on failed/timed-out tests via `page.locator(':root').ariaSnapshot()`. Included in both the debug prompt (`/test-cases/:id`) and the cluster AI diagnosis context.
+- **ARIA snapshot** — Captured automatically on failed/timed-out tests via `page.locator(':root').ariaSnapshot()`. Included in the **Copy AI context** bundle on the [execution page](./evidence#one-execution-diagnosis-first)'s Diagnosis tab (`/test-run-cases/:id`) and in the cluster AI diagnosis context.
 - **Locator snapshots** — For each element a test proves resolvable — every successful action (click, fill, etc.) *and* every passing web-first assertion (`expect(locator).toBeVisible()`, `toHaveText()`, …) — the fixtures record the element's attributes and a ranked list of alternative locators, stamped with the call site. These power [locator healing](#locator-healing) when a locator later breaks. Gated by `captureLocators` (default on).
 
 These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).
 
-Any attachments Playwright records — including **videos** (`video: 'retain-on-failure'`) and screenshots — are uploaded automatically and shown as first-class evidence on the test-case and failure-cluster pages, alongside traces. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
+Any attachments Playwright records — including **screenshots** (`screenshot: 'only-on-failure'`) and **videos** (`video: 'retain-on-failure'`) — are uploaded automatically and shown as first-class evidence on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, alongside traces. That includes what a test attaches itself: both `testInfo.attach('payload', { path })` and the inline form `testInfo.attach('payload', { body: JSON.stringify(data), contentType: 'application/json' })` reach the dashboard (an inline body is staged as a temp file under the OS temp directory for the upload and removed when the run ends). One attachment above 500 MB — the dashboard's default upload ceiling — is skipped with a warning naming it rather than failing the upload. Screenshots are the evidence most pages on this site count on, and Playwright records none unless the option is set — which is why [`wrapConfig`](#installing-via-wrapconfig) defaults `screenshot: 'only-on-failure'` and `trace: 'retain-on-failure'` for you. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
 
 ## Configuration options
 
@@ -115,6 +144,7 @@ Any attachments Playwright records — including **videos** (`video: 'retain-on-
 | `captureLocators`           | boolean  | `true`                    | Capture element snapshots from successful actions and passing assertions — these power [locator healing](#locator-healing). Auto-disabled when `collectPerformanceMetrics` is `false` |
 | `capturePageState`          | boolean  | `true`                    | Record the page's state at test end: URL, history state, storage **key names** and value *lengths*, cookie names and flags. Values are never captured. Auto-disabled when `collectPerformanceMetrics` is `false` |
 | `captureServerTraces`       | boolean  | `true`                    | Read server-side spans from the `X-Piwi-Trace` response header emitted by a Piwi [instrumentation plugin](./backend-logs), and show them next to the network request. Free when no instrumentation is present. Auto-disabled when `collectPerformanceMetrics` is `false` |
+| `defaultCapture`            | boolean  | `true`                    | When installed via [`wrapConfig`](#installing-via-wrapconfig), default the top-level `use.screenshot` to `'only-on-failure'` and `use.trace` to `'retain-on-failure'` when unset, so failure evidence is captured without the fixtures. Explicit values (including `'off'`) and per-project `use` blocks are untouched. Set `false` to opt out |
 | `inspectOnFailure`          | boolean  | `false`                   | Open Piwi's own inspector overlay on the failing page after a local headed failure — inspect any element and pick a locator for it (see [Inspect the failing page live](#inspect-the-failing-page-live-local-runs)). Never activates under CI |
 | `pickLocatorOnFailure`      | boolean  | `false`                   | Open Piwi's locator picker on the failing page after a local headed locator failure (see [Pick a replacement locator](#pick-a-replacement-locator-on-the-failing-page-local-runs)). Never activates under CI |
 | `username`                  | string   | —                         | Username for dashboard login (use `apiKey` instead when possible)                           |
@@ -148,6 +178,7 @@ The options in the table below can also be set via a `PIWI_*` environment variab
 | `PIWI_CAPTURE_LOCATORS`         | `captureLocators`       | `true`/`false`  |
 | `PIWI_CAPTURE_PAGE_STATE`       | `capturePageState`      | `true`/`false`  |
 | `PIWI_CAPTURE_SERVER_TRACES`    | `captureServerTraces`   | `true`/`false`  |
+| `PIWI_DEFAULT_CAPTURE`          | `defaultCapture`        | `true`/`false`  |
 | `PIWI_OUTPUT_FILE`              | `outputFile`            | string (path)   |
 | `PIWI_INSPECT_ON_FAIL`          | `inspectOnFailure`      | `true`/`false`  |
 | `PIWI_PICK_LOCATOR_ON_FAIL`     | `pickLocatorOnFailure`  | `true`/`false`  |
@@ -186,10 +217,11 @@ By default, the reporter streams test results to the dashboard in real-time as t
 
 1. When tests start, the reporter creates a run on the server with `running` status
 2. As each test completes, results are sent in batches to the server
-3. With `liveFileUploads` (the default), each test's trace and attachments are uploaded right after the test finishes, so they are viewable on the test case page while the run is still in progress
+3. With `liveFileUploads` (the default), each test's trace and attachments are uploaded right after the test finishes, so they are viewable on the [execution page](./evidence#one-execution-diagnosis-first) while the run is still in progress
 4. The dashboard UI shows a live progress bar and test results as they arrive
 5. While a test runs, the steps it is executing (Playwright `pw:api` actions, `pw:expect` assertions, and hook/fixture steps) stream to the run page as they happen — each running test's row shows the step it is on right now. The polling attempts of `pw:assert` steps are deliberately not streamed; the persisted step events on a completed test still carry everything
-6. When tests finish, the reporter finalizes the run with the overall status
+6. When a test's final attempt fails, the reporter prints `[Piwi Dashboard] ✗ <title> — <headline> → <url>` right away — the headline is the same one-line explanation the dashboard shows (`getByLabel('Email address') was not found on the page — fill timed out after 10 s`), and the link opens that execution on the dashboard, so you can start reading the failure while the rest of the suite is still running. In batch mode the same lines print after the upload
+7. When tests finish, the reporter finalizes the run with the overall status and prints `View run: <url>` (see [CI → Getting the run URL back out](./ci#getting-the-run-url-back-out-of-ci) for the step outputs and job summary that go with it)
 
 ### Disabling streaming
 
@@ -312,6 +344,8 @@ When a locator later fails, the server resolves replacements through a ladder, m
 4. **Cross-test** — the same locator was captured by *another* test in the project (useful when the failing test has no capture history of its own for that locator — e.g. it fails on its very first run, or the history predates assertion capture); the freshest snapshot is reused.
 5. **ARIA fallback** — no prior snapshot exists; limited suggestions are derived from the failure-time ARIA snapshot (no HTML attributes).
 
+The ladder only runs for a **resolution failure** — the call log shows the locator never resolved (`waiting for <locator>` with no later `locator resolved to …` line), matched nothing (`resolved to 0 elements`), or matched several elements (a strict-mode violation). When the locator *did* resolve and the action or assertion failed afterwards (`locator resolved to 51 elements`, `element is not enabled`, a hidden element), or when the error is a navigation failure (`page.goto`, `net::ERR_*`), the panel shows one line — *The locator resolved; this is not a locator problem* — instead of a ranked menu, and no "Locator fix" signal appears on the run page. Rewriting a locator that already found its element would be a harmful edit.
+
 When a stored snapshot is found but the element's captured accessible name is provably gone from the failing page (and no rename match was confident), the panel flags the list: name-based alternatives — including the failing locator itself — are kept visible but excluded from the recommendation, and candidates parsed from the failing page are shown alongside. This prevents the panel from "recommending" the very locator that just broke after a label or title change.
 
 <figure>
@@ -319,7 +353,7 @@ When a stored snapshot is found but the element's captured accessible name is pr
   <figcaption>Healing runs from the failure's own error text: stored history is matched by call site, then signature, then across tests — and every hit is sanity-checked against the failing page before anything is recommended.</figcaption>
 </figure>
 
-The result is shown as an **Alternative locators** panel on the test-case and failure-cluster pages, and folded into the AI diagnosis context so the model recommends a grounded fix (see [AI diagnosis](./ai-diagnosis#locator-healing)). A single **recommended fix** is highlighted — it keeps your original locator *style* where that style is stable enough (a minimal, idiomatic edit), and escalates to the sturdiest alternative (or advises adding a `data-testid`) only when the original style has nothing stable to fall back on.
+The result is shown as an **Alternative locators** panel on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, and folded into the AI diagnosis context so the model recommends a grounded fix (see [AI diagnosis](./ai-diagnosis#locator-healing)). A single **recommended fix** is highlighted — it keeps your original locator *style* where that style is stable enough (a minimal, idiomatic edit), and escalates to the sturdiest alternative (or advises adding a `data-testid`) only when the original style has nothing stable to fall back on.
 
 <figure>
   <img src="/screenshots/locator-healing.png" alt="Alternative locators panel showing ranked replacement locators with stability scores and a recommended fix">
@@ -549,6 +583,7 @@ Uploaded traces open in the dashboard's **built-in, self-hosted trace viewer** �
 
 - Make sure an HTML reporter is configured: `['html', { outputFolder: 'playwright-report' }]`
 - Make sure traces are enabled: `use: { trace: 'retain-on-failure' }`
+- Make sure screenshots are enabled: `use: { screenshot: 'only-on-failure' }` — Playwright's default is `'off'`, so an unset option means no screenshot to upload
 - Check the dashboard server is running and accessible at `serverUrl`
 
 ### Fixture data not appearing (network, Web Vitals, console, ARIA snapshot, locator healing)

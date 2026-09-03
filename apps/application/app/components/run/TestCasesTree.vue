@@ -13,7 +13,15 @@ const props = defineProps<{
   /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
   projectKey?: string | number | null;
   projectName?: string | null;
+  /** Failure-cluster id → display name, for the cluster badges on failing rows. */
+  clusterNames?: Record<number, string> | null;
 }>();
+
+// A failing row always identifies its cluster from `failureClusterId` alone —
+// a name the page has not resolved yet falls back to the id, never to no badge.
+function clusterLabel(id: number): string {
+  return props.clusterNames?.[id] ?? `Cluster #${id}`;
+}
 
 const suiteLookup = computed(() => {
   const map = new Map<string, { mode: string; annotations: Array<{ type: string; description?: string }> }>();
@@ -326,6 +334,15 @@ const flatRows = computed<FlatRow[]>(() => {
             :max-tags="3"
             class="shrink-0"
           />
+          <NuxtLink
+            v-if="row.test.failureClusterId"
+            :to="`/failure-clusters/${row.test.failureClusterId}`"
+            class="shrink-0"
+          >
+            <UBadge color="info" variant="subtle" size="xs" class="max-w-44">
+              <span class="truncate">{{ clusterLabel(row.test.failureClusterId) }}</span>
+            </UBadge>
+          </NuxtLink>
           <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto">
             <template v-if="row.test.status === 'running'">
               <TestRowLiveStep
@@ -358,6 +375,14 @@ const flatRows = computed<FlatRow[]>(() => {
               <DurationValue :ms="row.test.wastedTimeMs" unit-class="opacity-60" no-title />
             </span>
           </div>
+          <!-- The one-line headline under a failing row, the same as the flat list shows -->
+          <FailureHeadline
+            v-if="isFailedStatus(row.test.status) && row.test.error"
+            :error="row.test.error"
+            :steps="row.test.steps"
+            truncate
+            class="basis-full pl-6 text-xs text-gray-600 dark:text-gray-400"
+          />
         </div>
       </template>
 

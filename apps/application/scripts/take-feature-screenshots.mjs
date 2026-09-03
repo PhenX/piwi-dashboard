@@ -14,10 +14,18 @@
  *   node scripts/take-feature-screenshots.mjs --url http://localhost:3002
  *   node scripts/take-feature-screenshots.mjs --freeze-now 2026-08-02T09:00:00Z
  *   node scripts/take-feature-screenshots.mjs <scene> --out ../docs/public/screenshots
+ *   node scripts/take-feature-screenshots.mjs --route /test-run-cases/37 --expand --height 2400
  *
  * Without --url the script boots its own dev server on port 3050 and tears it
  * down at the end; a missing dev DB is created and seeded first. With --url it
  * drives the server you point it at.
+ *
+ * `--route <path>` captures one page without registering a scene — the way to
+ * look at any screen while verifying a change. It gets the same server, the
+ * same hydration and settle waits, and writes `.screens/route-<slug>.png`.
+ * `--expand` unfolds every collapsed section first; `--width` and `--height`
+ * size the viewport (the dashboard scrolls inside a panel, so a taller viewport
+ * is how more of a page gets into one image); `--name` picks the file stem.
  *
  * Every scene declares a `mode`: `web` (the default) captures the dashboard as
  * a browser serves it, `desktop` captures the Tauri shell — the server runs
@@ -506,6 +514,28 @@ const SCENES = [
     pad: 12,
   },
 
+  // ── Failure headline (report artifacts) ──────────────────────────────────
+  {
+    name: 'failure-headline',
+    description: 'Failing execution, Diagnosis tab: the one-line headline card above the raw error',
+    tags: ['desktop'],
+    // Execution 37 is clustered with a sibling in its run, so the facts row
+    // carries the cluster link next to the why and since-when chips.
+    route: '/test-run-cases/37?tab=diagnosis',
+    viewport: { width: 1280, height: 900 },
+    of: '[data-shot="failure-headline"]',
+    pad: 12,
+  },
+  {
+    name: 'failure-headline-mobile',
+    description: 'The same headline card at phone width',
+    tags: ['desktop'],
+    route: '/test-run-cases/37?tab=diagnosis',
+    viewport: { width: 375, height: 812 },
+    of: '[data-shot="failure-headline"]',
+    pad: 8,
+  },
+
   // ── Desktop shell (report artifacts) ──────────────────────────────────────
   {
     name: 'desktop-nav',
@@ -992,7 +1022,20 @@ function checkDocsImages() {
 }
 
 function parseArgs(argv) {
-  const flags = { scenes: [], tag: null, url: null, out: null, freezeNow: null, list: false, check: false };
+  const flags = {
+    scenes: [],
+    tag: null,
+    url: null,
+    out: null,
+    freezeNow: null,
+    list: false,
+    check: false,
+    route: null,
+    width: null,
+    height: null,
+    expand: false,
+    name: null,
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--list') flags.list = true;
@@ -1001,10 +1044,41 @@ function parseArgs(argv) {
     else if (arg === '--url') flags.url = argv[++i];
     else if (arg === '--out') flags.out = resolve(process.cwd(), argv[++i]);
     else if (arg === '--freeze-now') flags.freezeNow = argv[++i];
+    else if (arg === '--route') flags.route = argv[++i];
+    else if (arg === '--width') flags.width = Number(argv[++i]);
+    else if (arg === '--height') flags.height = Number(argv[++i]);
+    else if (arg === '--expand') flags.expand = true;
+    else if (arg === '--name') flags.name = argv[++i];
     else if (arg.startsWith('--')) throw new Error(`unknown flag: ${arg}`);
     else flags.scenes.push(arg);
   }
   return flags;
+}
+
+/**
+ * The one-off scene behind `--route`: one page, captured like a registered
+ * scene but never listed and never checked against the docs images.
+ */
+function adHocScene(flags) {
+  if (!flags.route.startsWith('/')) throw new Error(`--route needs an absolute path, got "${flags.route}"`);
+  for (const [flag, value] of [
+    ['--width', flags.width],
+    ['--height', flags.height],
+  ]) {
+    if (value != null && !(Number.isInteger(value) && value > 0)) throw new Error(`${flag} needs a positive integer`);
+  }
+  const slug =
+    flags.route
+      .replace(/^\//, '')
+      .replace(/[^a-z0-9]+/gi, '-')
+      .replace(/^-|-$/g, '') || 'home';
+  return {
+    name: flags.name ?? `route-${slug}`,
+    route: flags.route,
+    viewport: { width: flags.width ?? DEFAULT_VIEWPORT.width, height: flags.height ?? DEFAULT_VIEWPORT.height },
+    expandAll: flags.expand,
+    out: 'screens',
+  };
 }
 
 function selectScenes(flags) {
@@ -1065,6 +1139,21 @@ async function captureScene(browser, scene, { base, outDir, freezeNow }) {
       .locator(`${selector} [role="button"][aria-expanded="true"]`)
       .first()
       .waitFor({ state: 'visible', timeout: 10_000 });
+    await settle();
+  };
+
+  /**
+   * Unfold every collapsed section on the page. Each click shrinks the set of
+   * folded toggles (and may reveal new ones), so the first match is clicked
+   * until none is left, with a ceiling so a toggle that never flips cannot
+   * loop forever.
+   */
+  const expandAll = async () => {
+    const folded = page.locator('main [role="button"][aria-expanded="false"]');
+    for (let i = 0; i < 40 && (await folded.count()) > 0; i++) {
+      await folded.first().click();
+      await page.waitForTimeout(100);
+    }
     await settle();
   };
 
@@ -1165,6 +1254,7 @@ async function captureScene(browser, scene, { base, outDir, freezeNow }) {
     if (scene.prepare) await scene.prepare({ base, request: context.request });
     await goto(scene.route ?? '/');
     for (const selector of scene.expand ?? []) await expand(selector);
+    if (scene.expandAll) await expandAll();
     if (scene.run) {
       await scene.run({ page, base, shoot, goto, settle, openTab, expand, annotate, clear });
     }
@@ -1194,7 +1284,7 @@ async function main() {
     return;
   }
 
-  const scenes = selectScenes(flags);
+  const scenes = flags.route ? [adHocScene(flags)] : selectScenes(flags);
   const freezeNow = flags.freezeNow ? new Date(flags.freezeNow) : null;
   if (freezeNow && Number.isNaN(freezeNow.getTime())) {
     throw new Error(`--freeze-now needs an ISO timestamp, got "${flags.freezeNow}"`);

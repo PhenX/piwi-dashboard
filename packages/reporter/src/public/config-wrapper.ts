@@ -1,10 +1,54 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import type { PlaywrightTestConfig } from '@playwright/test';
-import { applyOptionsToEnv, readBool, PIWI_ENV_KEYS } from '../internal/config/env.js';
+import { applyOptionsToEnv, readBool, PIWI_ENV_KEYS, PIWI_DEFAULTED_CAPTURE_ENV } from '../internal/config/env.js';
 import type { PiwiDashboardOptions } from './options.js';
 
 const PIWI_MODULE = '@piwitests/reporter';
+
+/**
+ * Playwright `use` options `wrapConfig` fills in for failure evidence when the
+ * config leaves them unset (see `defaultCapture`). A trace and a failure-time
+ * screenshot are what the dashboard derives the DOM snapshot, full stack, full
+ * network and visual diff from without the capture fixtures.
+ */
+export const CAPTURE_DEFAULTS = {
+  screenshot: 'only-on-failure',
+  trace: 'retain-on-failure',
+} as const;
+
+type CaptureUse = NonNullable<PlaywrightTestConfig['use']>;
+
+/**
+ * Fill the top-level `use` block's `screenshot` / `trace` with the capture
+ * defaults when unset, recording which keys were filled in the
+ * `PIWI_DEFAULTED_CAPTURE` marker so the reporter can log them once in
+ * `onBegin`. An explicit value (including `'off'`) is left untouched, and
+ * per-project `use` blocks are never considered. Returns the `use` block to put
+ * on the wrapped config — the original reference when nothing changed.
+ */
+function applyCaptureDefaults(
+  use: CaptureUse | undefined,
+  piwiOptions: PiwiDashboardOptions | undefined,
+): CaptureUse | undefined {
+  delete process.env[PIWI_DEFAULTED_CAPTURE_ENV];
+
+  const enabled = piwiOptions?.defaultCapture ?? readBool(process.env[PIWI_ENV_KEYS.defaultCapture]) ?? true;
+  if (!enabled) return use;
+
+  const next = { ...use } as CaptureUse;
+  const defaulted: string[] = [];
+  for (const key of ['screenshot', 'trace'] as const) {
+    if ((use as Record<string, unknown> | undefined)?.[key] === undefined) {
+      (next as Record<string, unknown>)[key] = CAPTURE_DEFAULTS[key];
+      defaulted.push(key);
+    }
+  }
+  if (defaulted.length === 0) return use;
+
+  process.env[PIWI_DEFAULTED_CAPTURE_ENV] = defaulted.join(',');
+  return next;
+}
 
 function isPiwiReporterEntry(entry: unknown): boolean {
   if (typeof entry === 'string') return entry.toLowerCase().includes('piwi');
@@ -54,6 +98,11 @@ function resolveSetupModule(): string {
  * supported set — `serverUrl`, `projectName`, `verbose`, `apiKey`,
  * `username`, `password`, `environment`, `label`, `runLabel`).
  *
+ * The top-level `use` block's `screenshot` and `trace` are defaulted to
+ * `'only-on-failure'` / `'retain-on-failure'` when unset so failure evidence is
+ * captured without the fixtures; an explicit value (including `'off'`) is kept.
+ * Opt out with `defaultCapture: false` (or `PIWI_DEFAULT_CAPTURE=false`).
+ *
  * @param config      The user's Playwright config.
  * @param piwiOptions Optional Piwi Dashboard options (serverUrl, projectName, …).
  */
@@ -75,10 +124,16 @@ export function wrapConfig<T extends PlaywrightTestConfig>(config: T, piwiOption
   const failOnFlaky = piwiOptions?.failOnFlakyTests ?? readBool(process.env[PIWI_ENV_KEYS.failOnFlakyTests]);
   if (failOnFlaky === true) forwarded.failOnFlakyTests = true;
 
+  // Default the Playwright capture options that unlock trace-derived evidence
+  // without the fixtures. `use` is only overridden when a default was actually
+  // applied, so an unchanged config keeps its original reference.
+  const use = applyCaptureDefaults(config.use, piwiOptions);
+
   return {
     ...config,
     ...forwarded,
     reporter: injectReporter(config.reporter, piwiOptions),
     globalSetup: globalSetupModules.length === 1 ? globalSetupModules[0] : globalSetupModules,
+    ...(use === config.use ? {} : { use }),
   } as T;
 }

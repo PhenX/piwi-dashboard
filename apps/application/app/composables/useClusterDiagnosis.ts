@@ -31,6 +31,8 @@ export interface ClusterDiagnosisStore {
 
   // Shared context (single fetch, used by both panels)
   contextText: Ref<string | null>;
+  /** SHA-256 of the current context text — compared with a diagnosis's stored hash for staleness. */
+  currentContextSha: Ref<string | null>;
   contextSections: Ref<ContextSection[]>;
   tokenEstimate: Ref<number>;
   imageTokenEstimate: Ref<number>;
@@ -57,6 +59,7 @@ function createClusterDiagnosisStore(clusterId: number): ClusterDiagnosisStore {
   const baseCommitIsPinned = computed(() => !!savedBaseCommit.value);
 
   const contextText = ref<string | null>(null);
+  const currentContextSha = ref<string | null>(null);
   const contextSections = ref<ContextSection[]>([]);
   const tokenEstimate = ref(0);
   const imageTokenEstimate = ref(0);
@@ -80,6 +83,7 @@ function createClusterDiagnosisStore(clusterId: number): ClusterDiagnosisStore {
 
   interface ContextJsonResponse {
     text: string;
+    contextSha?: string;
     sections: ContextSection[];
     tokenEstimate: number;
     imageTokenEstimate?: number;
@@ -94,6 +98,7 @@ function createClusterDiagnosisStore(clusterId: number): ClusterDiagnosisStore {
         query: { ...buildContextQuery(), format: 'json' },
       });
       contextText.value = res.text;
+      currentContextSha.value = res.contextSha ?? null;
       contextSections.value = res.sections;
       tokenEstimate.value = res.tokenEstimate;
       imageTokenEstimate.value = res.imageTokenEstimate ?? 0;
@@ -101,6 +106,7 @@ function createClusterDiagnosisStore(clusterId: number): ClusterDiagnosisStore {
       scmChanges.value = res.scmChanges ?? null;
     } catch {
       contextText.value = '(failed to load context)';
+      currentContextSha.value = null;
       contextSections.value = [];
       tokenEstimate.value = 0;
       imageTokenEstimate.value = 0;
@@ -241,6 +247,7 @@ function createClusterDiagnosisStore(clusterId: number): ClusterDiagnosisStore {
     autoSelectedCommits,
     baseCommitIsPinned,
     contextText,
+    currentContextSha,
     contextSections,
     tokenEstimate,
     imageTokenEstimate,

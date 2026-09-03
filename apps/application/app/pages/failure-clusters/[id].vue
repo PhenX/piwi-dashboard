@@ -1,11 +1,15 @@
 <script setup lang="ts">
+import { describeCluster } from '#shared/describe-cluster';
 import type { FailureClusterDetail } from '~~/types/api';
+import type { FixPlan } from '#shared/fix-plan.types';
 import { renderAnsi } from '~/utils';
 import { stripAnsi } from '~/utils/text-format';
 import { buildRetryCommand } from '~/utils/retry-command';
 
 const route = useRoute();
 const clusterId = parseInt(String(route.params.id));
+// Share links need the server; the public demo has no share-link routes.
+const isDemoMode = Boolean(useRuntimeConfig().public.demoMode);
 
 // Provide shared diagnosis/investigation state (consumed by ClusterInvestigation
 // and ClusterDiagnosis). Must run before the top-level await below so provide()
@@ -15,7 +19,15 @@ const clusterDiagnosis = provideClusterDiagnosis(clusterId);
 
 const { data: cluster, refresh } = await useFetch<FailureClusterDetail>(`/api/failure-clusters/${clusterId}`);
 
-useHead(computed(() => ({ title: `${cluster.value?.signature ?? 'Failure cluster'} — Piwi Dashboard` })));
+// The fix plan — the one artifact bundling diagnosis, edits, failing tests, owner
+// and the verify command. Same endpoint the `get_fix_plan` MCP tool returns.
+const { data: fixPlan } = await useFetch<FixPlan>(`/api/failure-clusters/${clusterId}/fix-plan`);
+
+useHead(
+  computed(() => ({
+    title: `${cluster.value ? describeCluster({ ...cluster.value, filePath: cluster.value.affectedTestCases?.[0]?.filePath ?? null }) : 'Failure cluster'} — Piwi Dashboard`,
+  })),
+);
 
 // Triage
 const triageStatus = ref(cluster.value?.status ?? 'open');
@@ -84,8 +96,10 @@ function copyCluster() {
       ? `AI diagnosis (${c.diagnosis.category ?? 'unknown'}, ${c.diagnosis.confidence ?? '?'} confidence): ${c.diagnosis.summary}`
       : null;
 
+  const name = describeCluster({ ...c, filePath: c.affectedTestCases?.[0]?.filePath ?? null });
   const plain = [
-    `❌ Failure cluster: ${c.signature}`,
+    `❌ Failure cluster: ${name}`,
+    ...(name !== c.signature ? [`Signature: ${c.signature}`] : []),
     meta,
     '',
     ...(c.sampleError ? ['Sample error:', stripAnsi(c.sampleError), ''] : []),
@@ -94,7 +108,8 @@ function copyCluster() {
   ].join('\n');
 
   const html = [
-    `<p><strong>❌ Failure cluster</strong>: <code>${esc(c.signature)}</code></p>`,
+    `<p><strong>❌ Failure cluster</strong>: ${esc(name)}</p>`,
+    name !== c.signature ? `<p><code>${esc(c.signature)}</code></p>` : '',
     `<p><em>${esc(meta)}</em></p>`,
     c.sampleError ? `<p><strong>Sample error:</strong></p><pre>${renderAnsi(c.sampleError)}</pre>` : '',
     aiSummary
@@ -131,8 +146,52 @@ const affectedRetryCases = computed(() =>
 const retryCommand = computed(() => buildRetryCommand(affectedRetryCases.value));
 const { copy: copyRetry, copied: retryCopied } = useCopy();
 
+// CI re-run — availability (for the button state) and the last dispatch.
+interface RerunInfo {
+  available: boolean;
+  reason: string | null;
+  provider: string | null;
+  enabled: boolean;
+  hasToken: boolean;
+  lastDispatch: { provider: string; url: string; args: string; at: number; byName: string | null } | null;
+}
+const { data: rerunInfo, refresh: refreshRerun } = await useFetch<RerunInfo>(
+  `/api/failure-clusters/${clusterId}/rerun`,
+);
+const rerunToast = useToast();
+const rerunning = ref(false);
+async function triggerRerun() {
+  rerunning.value = true;
+  try {
+    const res = await $fetch<{ ok: boolean; message?: string; dispatch?: { url: string } }>(
+      `/api/failure-clusters/${clusterId}/rerun`,
+      { method: 'POST' },
+    );
+    if (res.ok && res.dispatch) {
+      rerunToast.add({
+        title: 'CI re-run dispatched',
+        description: 'The affected tests are re-running.',
+        color: 'success',
+      });
+      await refreshRerun();
+    } else {
+      rerunToast.add({
+        title: 'CI re-run not started',
+        description: res.message ?? 'Not available.',
+        color: 'warning',
+      });
+    }
+  } catch (e: unknown) {
+    const message = (e as { data?: { message?: string }; message?: string })?.data?.message ?? 'Dispatch failed.';
+    rerunToast.add({ title: 'CI re-run failed', description: message, color: 'error' });
+  } finally {
+    rerunning.value = false;
+  }
+}
+
 // Reveal-on-citation: a diagnosis evidence citation (right column) can unfold and
 // scroll to the matching left-column section. Refs point at the foldable cards.
+const fixPlanSection = ref<{ reveal: () => void } | null>(null);
 const errorSection = ref<{ reveal: () => void } | null>(null);
 const evidenceSection = ref<{ reveal: () => void } | null>(null);
 const scmSection = ref<{ reveal: () => void } | null>(null);
@@ -141,6 +200,7 @@ const visualDiffSection = ref<{ reveal: () => void } | null>(null);
 const domSnapshotSection = ref<{ reveal: () => void } | null>(null);
 
 const sectionToCard: Record<string, () => { reveal: () => void } | null> = {
+  fixPlan: () => fixPlanSection.value,
   sampleError: () => errorSection.value,
   executionError: () => errorSection.value,
   environmentDiff: () => envDiffSection.value,
@@ -169,6 +229,11 @@ provide(clusterSectionLocatorKey, {
   open: (id: string) => sectionToCard[id]?.()?.reveal(),
 });
 
+// Deep link from the execution page's "Open fix plan" — unfold and scroll to it.
+onMounted(() => {
+  if (route.hash === '#fix-plan') nextTick(() => fixPlanSection.value?.reveal());
+});
+
 // Breadcrumbs
 const breadcrumbItems = computed(() => [
   { label: 'Home', icon: 'i-lucide-house', to: '/' },
@@ -194,7 +259,10 @@ const breadcrumbItems = computed(() => [
           <BreadcrumbNav :items="breadcrumbItems" />
         </template>
         <template #right>
-          <ShareLinksModal v-if="cluster" :endpoint="`/api/failure-clusters/${cluster.id}/share-links`" />
+          <ShareLinksModal
+            v-if="cluster && !isDemoMode"
+            :endpoint="`/api/failure-clusters/${cluster.id}/share-links`"
+          />
           <ExportMenu
             v-if="cluster"
             :endpoint="`/api/failure-clusters/${cluster.id}/export`"
@@ -235,6 +303,18 @@ const breadcrumbItems = computed(() => [
           <!-- Left: error + test evidence + SCM investigation. Sections fold to a
                single header with a peek so the whole failure reads at a glance. -->
           <div class="space-y-4 xl:overflow-y-auto">
+            <!-- Fix plan: diagnosis + edits + failing tests + owner + verify, in one card -->
+            <FixPlanCard
+              v-if="fixPlan"
+              ref="fixPlanSection"
+              :plan="fixPlan"
+              :project-key="cluster.project?.id"
+              :project-name="cluster.project?.name"
+              :rerun-info="rerunInfo"
+              :rerunning="rerunning"
+              @rerun="triggerRerun"
+            />
+
             <!-- Error message -->
             <CollapsibleSectionCard
               v-if="cluster.sampleError"
@@ -326,6 +406,25 @@ const breadcrumbItems = computed(() => [
                 >
                   Copy retry command
                 </UButton>
+                <UTooltip
+                  :text="
+                    rerunInfo?.available
+                      ? 'Re-run the affected tests in CI'
+                      : (rerunInfo?.reason ?? 'CI re-run is unavailable')
+                  "
+                >
+                  <UButton
+                    size="xs"
+                    variant="outline"
+                    color="neutral"
+                    icon="i-lucide-refresh-cw"
+                    :disabled="!rerunInfo?.available"
+                    :loading="rerunning"
+                    @click="triggerRerun"
+                  >
+                    Re-run in CI
+                  </UButton>
+                </UTooltip>
                 <DesktopRunLocallyButton
                   :project-id="cluster.project?.id"
                   :project-label="cluster.project?.name"
@@ -345,6 +444,23 @@ const breadcrumbItems = computed(() => [
                   </UButton>
                 </UTooltip>
               </template>
+              <p
+                v-if="rerunInfo?.lastDispatch"
+                class="mb-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted"
+              >
+                <UIcon name="i-lucide-refresh-cw" class="size-3.5" />
+                <span>Last re-run {{ formatRelativeTime(rerunInfo.lastDispatch.at) }}</span>
+                <span v-if="rerunInfo.lastDispatch.byName">by {{ rerunInfo.lastDispatch.byName }}</span>
+                <span aria-hidden="true">·</span>
+                <a
+                  :href="rerunInfo.lastDispatch.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1 text-primary hover:underline"
+                >
+                  view run <UIcon name="i-lucide-external-link" class="size-3" />
+                </a>
+              </p>
               <ClusterTestEvidence
                 :affected-test-cases="cluster.affectedTestCases"
                 :project-key="cluster.project?.id"
@@ -375,13 +491,20 @@ const breadcrumbItems = computed(() => [
             <DiagnosisPanel
               :cluster-id="clusterId"
               :last-seen-run-id="cluster?.lastSeenRunId"
+              :cluster-status="cluster?.status"
+              :fix-verification="cluster?.fixVerification"
+              :last-seen-at="cluster?.lastSeenAt"
               :affected-test-cases="cluster?.affectedTestCases ?? []"
             />
           </div>
         </div>
       </div>
 
-      <div v-else class="flex items-center justify-center h-64 text-gray-500">Cluster not found.</div>
+      <ErrorState v-else text="Cluster not found." icon="i-lucide-search-x" class="h-64">
+        <template #action>
+          <UButton to="/projects" size="xs" color="neutral" variant="outline">Back to projects</UButton>
+        </template>
+      </ErrorState>
     </template>
   </UDashboardPanel>
 

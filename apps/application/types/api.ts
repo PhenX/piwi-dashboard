@@ -305,6 +305,8 @@ export interface ProjectDetails {
   diagnosisInstructions?: string | null;
   hasScmToken: boolean;
   defaultBranch?: string | null;
+  /** Provider-specific "re-run from the dashboard" config (secrets excluded). */
+  ciRerun?: import('#shared/ci-rerun').CiRerunSettings | null;
   color?: string | null;
   tags?: TagInfo[];
 }
@@ -670,6 +672,10 @@ export interface EndpointSummary {
   minDuration: number;
   p90Duration: number;
   errorRate: number;
+  /** Earliest request start in the group (Unix epoch ms) — null when no capture carried a start time. */
+  firstStartTime: number | null;
+  /** Latest request start in the group (Unix epoch ms) — null when no capture carried a start time. */
+  lastStartTime: number | null;
   testCases: string[];
 }
 
@@ -701,6 +707,19 @@ export interface AiStepIntent {
 /**
  * Test case result (for a specific test run)
  */
+/**
+ * One attempt of a test within a run. Every attempt is its own execution row;
+ * `executionId` is that sibling row's id (null when the row is not stored,
+ * e.g. rows recorded before attempts were kept).
+ */
+export interface AttemptOutcome {
+  retry: number;
+  status: string;
+  duration: number;
+  startedAt: number | null;
+  executionId?: number | null;
+}
+
 export interface TestCaseResult {
   /** The execution id (a test_runs_cases row): this test case run within this run. */
   executionId: number;
@@ -722,8 +741,8 @@ export interface TestCaseResult {
   testSourceFrames?: TestSourceFrame[] | null;
   failureClusterId?: number | null;
   retries?: number | null;
-  /** Per-attempt outcomes `{ retry, status, duration, startedAt }`, oldest first. */
-  attempts?: Array<{ retry: number; status: string; duration: number; startedAt: number | null }> | null;
+  /** Per-attempt outcomes, oldest first. */
+  attempts?: AttemptOutcome[] | null;
   steps?: PerformanceStep[] | null;
   stepEvents?: TestStepEvent[] | null;
   slowestStep?: string | null;
@@ -1082,8 +1101,8 @@ export interface TestCaseHistoryPoint {
   duration: number | null;
   error: string | null;
   retries: number | null;
-  /** Per-attempt outcomes `{ retry, status, duration, startedAt }`, oldest first. */
-  attempts?: Array<{ retry: number; status: string; duration: number; startedAt: number | null }> | null;
+  /** Per-attempt outcomes, oldest first. */
+  attempts?: AttemptOutcome[] | null;
   startTime: string | Date;
   runStatus: string;
 }

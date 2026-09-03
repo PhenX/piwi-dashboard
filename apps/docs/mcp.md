@@ -45,12 +45,12 @@ The server exposes 45 tools — mostly read-only, plus a few write/triage tools 
 | `get_test_stability_trend` | Flaky/pass rate and duration over time for one test — "is it getting flakier?" |
 | `get_slow_tests` / `get_performance_trend` | Slowest tests and run-duration/p90 time series |
 | `get_spec_health` | Per-spec-file pass rate, flaky rate, and failures — find unhealthy areas |
-| `get_test_run_case` | One execution record with full (untruncated) error, steps, console, web vitals, ARIA snapshot (use `include` to select blobs) |
+| `get_test_run_case` | One execution record with full (untruncated) error, steps, console, web vitals, ARIA snapshot, and its deterministic [clues](./evidence#clues) (use `include` to select blobs) |
 | `get_test_case_context` | Execution-scoped AI evidence for a single failure (steps, console, network, SCM diff) |
 | `get_locator_healing` | Ranked alternative locators for a failing case — the recommended durable fix plus full alternatives |
 | `list_case_traces` | Playwright trace files for an execution, with download paths |
 | `get_case_screenshots` | Screenshots for an execution — metadata by default, or base64 image data on request |
-| `explain_failure` | **One-call evidence bundle** for a failure: error + steps + console + locator fix + diagnosis context |
+| `explain_failure` | **One-call evidence bundle** for a failure: one-line headline + error + steps + console + deterministic [clues](./evidence#clues) + locator fix + diagnosis context |
 | `list_links` | External links (Jira/PR/issue) attached to a run, execution, or test case |
 
 **Test selections** *([named, data-driven test subsets](./test-selection))*

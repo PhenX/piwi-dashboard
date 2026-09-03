@@ -4,10 +4,12 @@ import {
   buildPrComment,
   DEFAULT_PR_FEEDBACK,
   PR_COMMENT_MARKER,
+  PR_EXCERPT_MAX,
   resolvePrFeedbackSettings,
   type PrFailureEntry,
   type PrSummaryInput,
 } from '#shared/pr-feedback';
+import { errorExcerpt } from '#shared/notification-events';
 
 function entry(overrides: Partial<PrFailureEntry> = {}): PrFailureEntry {
   return {
@@ -139,6 +141,28 @@ describe('buildPrComment', () => {
     expect(body).toContain('a \\| b');
   });
 
+  test('quotes a timeout with where Playwright was waiting, the way notifications do', () => {
+    const raw = `TimeoutError: locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for getByRole('button', { name: 'Pay' })
+  - locator resolved to <button disabled>Pay</button>
+
+    at tests/checkout.spec.ts:12:40`;
+    const excerpt = errorExcerpt(raw, PR_EXCERPT_MAX)!;
+    const body = buildPrComment(summary({ failedTests: 1, newRegressions: [entry({ errorExcerpt: excerpt })] }));
+    expect(body).toContain(
+      'TimeoutError: locator.click: Timeout 30000ms exceeded. locator resolved to <button disabled>Pay</button>',
+    );
+    expect(body).not.toContain('Call log');
+    expect(body).not.toContain('checkout.spec.ts:12:40');
+  });
+
+  test('keeps a pull-request excerpt within its own cap', () => {
+    const excerpt = errorExcerpt(`Error: ${'x'.repeat(500)}`, PR_EXCERPT_MAX)!;
+    expect(excerpt.length).toBe(PR_EXCERPT_MAX + 1);
+    expect(excerpt.endsWith('…')).toBe(true);
+  });
+
   test('flattens a multi-line error excerpt onto one line', () => {
     const body = buildPrComment(
       summary({ failedTests: 1, newRegressions: [entry({ errorExcerpt: 'line one\nline two' })] }),
@@ -251,5 +275,34 @@ describe('buildCommitStatus', () => {
   test('caps the description at what GitHub accepts', () => {
     const status = buildCommitStatus(summary({ projectName: 'x'.repeat(500) }), 'piwi/tests');
     expect(status.description.length).toBeLessThanOrEqual(140);
+  });
+});
+
+describe('buildPrComment — failure headline', () => {
+  test('leads each failure with its headline in bold, markdown-escaped, before the raw excerpt', () => {
+    const body = buildPrComment(
+      summary({
+        failedTests: 1,
+        newRegressions: [
+          entry({
+            headline: "Expected 26 rows, found 51 — getByRole('row') toHaveCount",
+            errorExcerpt: 'Error: expect(locator).toHaveCount(expected) failed',
+          }),
+        ],
+      }),
+    );
+    const headlineAt = body.indexOf("  **Expected 26 rows, found 51 — getByRole('row') toHaveCount**");
+    const excerptAt = body.indexOf('  ```\n  Error: expect(locator).toHaveCount(expected) failed\n  ```');
+    expect(headlineAt).toBeGreaterThan(-1);
+    expect(excerptAt).toBeGreaterThan(headlineAt);
+  });
+
+  test('escapes markdown inside a headline and omits the line without one', () => {
+    const escaped = buildPrComment(
+      summary({ failedTests: 1, newRegressions: [entry({ headline: 'Expected `a_b`, got *c* — toBe' })] }),
+    );
+    expect(escaped).toContain('**Expected \\`a\\_b\\`, got \\*c\\* — toBe**');
+    const plain = buildPrComment(summary({ failedTests: 1, newRegressions: [entry({ headline: null })] }));
+    expect(plain).not.toContain('**Expected');
   });
 });

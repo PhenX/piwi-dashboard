@@ -13,8 +13,10 @@ import { getPerformanceHints } from '~/utils/performance-hints';
 import { renderAnsi } from '~/utils';
 import type { NavbarAction } from '~/components/shared/NavbarActions.vue';
 import type { HelpTopicKey } from '~/utils/help-content';
-import { buildRetryCommand } from '~/utils/retry-command';
 import { condenseErrorText } from '#shared/error-fingerprint';
+import { resolveEvidenceState, type EvidenceCardId, type EvidenceState } from '#shared/evidence-state';
+import type { FailureVerdict } from '#shared/failure-verdict';
+import type { FailureCluesResult } from '#shared/handlers/test-cases';
 import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator';
 
 const route = useRoute();
@@ -34,6 +36,15 @@ const { data: historyData } = await useAsyncData(
   },
   { default: (): TestCaseHistoryPoint[] => [], watch: [() => testCase.value?.testCaseId] },
 );
+
+// The deterministic clues for this execution: fed to the headline (top clue as
+// one line) and the CluesCard, and shared with the AI diagnosis as evidence.
+const { data: cluesData } = await useFetch<FailureCluesResult>(`/api/test-run-cases/${testCaseId}/clues`, {
+  default: (): FailureCluesResult => ({ clues: [], failureAt: null }),
+});
+const clues = computed(() => cluesData.value?.clues ?? []);
+const cluesFailureAt = computed(() => cluesData.value?.failureAt ?? null);
+const topClue = computed(() => clues.value[0] ?? null);
 
 const { data: traceData, refresh: refreshTraces } = await useFetch(`/api/test-run-cases/${testCaseId}/traces`, {
   // The endpoint returns `{ items: [...] }` — without the unwrap, `hasTrace`
@@ -98,6 +109,73 @@ const networkRequests = computed<NetworkRequest[]>(() => {
   return (testCase.value?.networkRequests as unknown as NetworkRequest[] | null) ?? [];
 });
 
+/** Which evidence kinds were recovered from the trace (the fixtures were absent). */
+const evidenceSources = computed(
+  () => (testCase.value?.evidenceSources as { console?: 'trace'; network?: 'trace'; aria?: 'trace' } | null) ?? null,
+);
+
+/** Any network request carrying Piwi backend logs or spans. */
+const hasBackendLogs = computed(() =>
+  networkRequests.value.some(
+    (r) =>
+      (Array.isArray(r.serverLogs) && r.serverLogs.length > 0) ||
+      (Array.isArray(r.serverTraces) && r.serverTraces.length > 0),
+  ),
+);
+
+/**
+ * Whether Piwi's capture fixtures ran for this execution: any fixture-produced
+ * field is present that was not itself recovered from the trace. A spec that
+ * still imports `test` from `@playwright/test` has none, so its empty cards read
+ * "not captured" while a fixture-using neighbor's read "nothing happened".
+ */
+const fixturesActive = computed(() => {
+  const tc = testCase.value;
+  if (!tc) return false;
+  const src = evidenceSources.value ?? {};
+  return (
+    (Array.isArray((tc as any).consoleLogs) && (tc as any).consoleLogs.length > 0 && src.console !== 'trace') ||
+    (networkRequests.value.length > 0 && src.network !== 'trace') ||
+    (Boolean(tc.ariaSnapshot) && src.aria !== 'trace') ||
+    Boolean((tc as any).pageState) ||
+    Boolean(tc.webVitals) ||
+    Boolean(tc.aiUsage)
+  );
+});
+
+/** Resolved three-state (or present) status for every evidence card. */
+const evidenceStates = computed<Record<EvidenceCardId, EvidenceState>>(() => {
+  const tc = testCase.value;
+  const src = evidenceSources.value ?? {};
+  const active = fixturesActive.value;
+  const mk = (hasData: boolean, traced?: boolean) => ({
+    hasData,
+    source: traced ? ('trace' as const) : ('fixture' as const),
+    fixturesActive: active,
+  });
+  return {
+    console: resolveEvidenceState('console', mk(Boolean((tc as any)?.consoleLogs?.length), src.console === 'trace')),
+    network: resolveEvidenceState(
+      'network',
+      mk(networkRequests.value.length > 0 || hasTrace.value, src.network === 'trace'),
+    ),
+    appState: resolveEvidenceState('appState', mk(Boolean((tc as any)?.pageState))),
+    ariaSnapshot: resolveEvidenceState('ariaSnapshot', mk(Boolean(tc?.ariaSnapshot), src.aria === 'trace')),
+    backendLogs: resolveEvidenceState('backendLogs', mk(hasBackendLogs.value)),
+    webVitals: resolveEvidenceState('webVitals', mk(Boolean(webVitals.value))),
+  };
+});
+
+/** Whether a present card's data came from the trace — drives the "derived from the trace" chip. */
+const evidenceDerived = computed(() => {
+  const derived = (st: EvidenceState) => st.state === 'present' && st.derivedFromTrace;
+  return {
+    console: derived(evidenceStates.value.console),
+    network: derived(evidenceStates.value.network),
+    ariaSnapshot: derived(evidenceStates.value.ariaSnapshot),
+  };
+});
+
 const historicalTiming = computed(() => {
   if (!historyData.value || historyData.value.length < 2 || !testCase.value?.duration) return null;
   const previous = historyData.value.filter((h) => h.duration !== null && h.id !== testCase.value?.id);
@@ -125,10 +203,15 @@ const ciInfo = computed(() => {
   return m.ci as { provider?: string; buildNumber?: string; buildUrl?: string; workflow?: string };
 });
 
+/** The one-line verdict on a failing execution, built server-side from the stored error and signals. */
+const verdict = computed(() => (testCase.value as { verdict?: FailureVerdict | null } | null)?.verdict ?? null);
+
 const failureCluster = computed(() => {
   return (testCase.value?.failureCluster ?? null) as {
     id: number;
     signature: string;
+    title: string | null;
+    selector: string | null;
     errorType: string | null;
     status: string | null;
     triageNote: string | null;
@@ -358,6 +441,8 @@ function stepBarColorClass(duration: number): string {
 const environment = computed(() => testCase.value?.testRun?.environment);
 
 // ── Retry command ─────────────────────────────────────────────────────────
+// The summary card owns the copy and run-locally controls (as the run page's
+// summary does); the navbar keeps only the page-level actions.
 const retryCases = computed(() => [
   {
     filePath: testCase.value?.filePath ?? '',
@@ -366,17 +451,8 @@ const retryCases = computed(() => [
     projectName: (testCase.value?.browser as { projectName?: string } | null)?.projectName ?? null,
   },
 ]);
-const retryCommand = computed(() => buildRetryCommand(retryCases.value));
-const { copy: copyRetry, copied: retryCopied } = useCopy();
 
 const navbarActions = computed<NavbarAction[]>(() => [
-  {
-    label: retryCopied.value ? 'Copied' : 'Copy retry command',
-    icon: retryCopied.value ? 'i-lucide-check' : 'i-lucide-clipboard',
-    variant: 'outline',
-    title: retryCopied.value ? 'Copied!' : copyPreview(retryCommand.value),
-    onClick: () => copyRetry(retryCommand.value, { toast: 'Retry command copied' }),
-  },
   { label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() },
 ]);
 
@@ -471,15 +547,16 @@ function copyFailure() {
 // Lets an AI-diagnosis evidence citation (in TestCaseAiCard → DiagnosisResult)
 // unfold and scroll to the matching evidence section on this page.
 const errorEl = ref<HTMLElement | null>(null);
-const consoleEl = ref<HTMLElement | null>(null);
-const networkEl = ref<HTMLElement | null>(null);
 const testSourceCard = ref<{ reveal: () => void } | null>(null);
-const networkCard = ref<{ showTraceMode: () => void } | null>(null);
+const consoleCard = ref<{ reveal: () => void } | null>(null);
+const networkCard = ref<{ showTraceMode: () => void; reveal: () => void } | null>(null);
 const evidenceCard = ref<{ reveal: () => void } | null>(null);
 const envDiffCard = ref<{ reveal: () => void } | null>(null);
 const visualDiffCard = ref<{ reveal: () => void } | null>(null);
 const domSnapshotCard = ref<{ reveal: () => void } | null>(null);
 const ariaCard = ref<{ reveal: () => void } | null>(null);
+const pageStateCard = ref<{ reveal: () => void } | null>(null);
+const locatorHealingCard = ref<{ reveal: () => void } | null>(null);
 
 function scrollToEl(el: HTMLElement | null) {
   el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -497,13 +574,16 @@ const sectionToAction: Record<string, () => void> = {
   screenshots: () => evidenceCard.value?.reveal(),
   tracePointers: () => evidenceCard.value?.reveal(),
   artifacts: () => evidenceCard.value?.reveal(),
-  console: () => scrollToEl(consoleEl.value),
-  networkRequests: () => scrollToEl(networkEl.value),
-  serverTraces: () => scrollToEl(networkEl.value),
+  console: () => consoleCard.value?.reveal(),
+  networkRequests: () => networkCard.value?.reveal(),
+  serverTraces: () => networkCard.value?.reveal(),
+  serverLogs: () => networkCard.value?.reveal(),
+  appState: () => pageStateCard.value?.reveal(),
+  locatorHealing: () => locatorHealingCard.value?.reveal(),
   traceCallStack: () => testSourceCard.value?.reveal(),
   traceNetwork: () => {
     networkCard.value?.showTraceMode();
-    scrollToEl(networkEl.value);
+    networkCard.value?.reveal();
   },
   steps: () => {
     activeTab.value = 'steps';
@@ -512,6 +592,12 @@ const sectionToAction: Record<string, () => void> = {
     activeTab.value = 'steps';
   },
 };
+
+// The lazily fetched cards report whether they rendered anything (no baseline,
+// no screenshot or no trace leaves them empty), so their chips follow the card.
+const envDiffAvailable = ref(false);
+const visualDiffAvailable = ref(false);
+const domSnapshotAvailable = ref(false);
 
 // The jump-chip row under the error — the same section map the AI citations
 // use, so the funnel has a map even when no AI is configured. Each chip is
@@ -524,9 +610,9 @@ const sectionChips = computed(() =>
       label: 'Test source',
       available: Boolean(testCase.value?.testSourceFrames?.length || testCase.value?.testSource || hasTrace.value),
     },
-    { id: 'environmentDiff', label: 'Environment diff', available: Boolean(testCase.value?.testRun?.id) },
-    { id: 'visualDiff', label: 'Visual diff', available: Boolean(testCase.value?.testRun?.id) },
-    { id: 'domSnapshot', label: 'DOM snapshot', available: Boolean(testCase.value?.testRun?.id) },
+    { id: 'environmentDiff', label: 'Environment diff', available: envDiffAvailable.value },
+    { id: 'visualDiff', label: 'Visual diff', available: visualDiffAvailable.value },
+    { id: 'domSnapshot', label: 'DOM snapshot', available: domSnapshotAvailable.value },
     { id: 'ariaSnapshot', label: 'ARIA snapshot', available: Boolean(testCase.value?.ariaSnapshot) },
     { id: 'screenshots', label: 'Screenshots', available: true },
     { id: 'console', label: 'Console', available: Boolean((testCase.value as any)?.consoleLogs?.length) },
@@ -544,7 +630,8 @@ provide(clusterSectionLocatorKey, {
 <template>
   <UDashboardPanel id="test-run-case-detail">
     <template #header>
-      <UDashboardNavbar :title="testCase?.title ?? `Execution #${testCaseId}`">
+      <!-- The breadcrumb's current crumb is the page title; a navbar title would repeat it. -->
+      <UDashboardNavbar>
         <template #leading>
           <UDashboardSidebarCollapse />
           <BreadcrumbNav
@@ -560,13 +647,7 @@ provide(clusterSectionLocatorKey, {
                   ]
                 : [{ label: 'Project' }]),
               ...(testCase?.testRun?.id
-                ? [
-                    {
-                      label:
-                        `Run #${testCase.testRun.id}` + (testCase.testRun.label ? ` — ${testCase.testRun.label}` : ''),
-                      to: `/test-runs/${testCase.testRun.id}`,
-                    },
-                  ]
+                ? [{ label: `Run #${testCase.testRun.id}`, to: `/test-runs/${testCase.testRun.id}` }]
                 : [{ label: 'Test run' }]),
               { label: testCase?.title || `Execution #${testCaseId}` },
             ]"
@@ -579,21 +660,19 @@ provide(clusterSectionLocatorKey, {
               :to="`/test-cases/${testCase.testCaseId}`"
               class="text-xs text-gray-500 hover:text-primary mr-2 flex items-center gap-1 shrink-0"
               title="View test case history"
+              aria-label="Test case history"
             >
               <UIcon name="i-lucide-trending-up" class="size-3.5" />
-              <span class="hidden sm:inline">Test case</span>
+              <span class="hidden xl:inline">Test case</span>
             </NuxtLink>
-            <ShareLinksModal v-if="testCase" :endpoint="`/api/test-run-cases/${testCase.id}/share-links`" />
+            <ShareLinksModal
+              v-if="testCase && !isDemoMode"
+              :endpoint="`/api/test-run-cases/${testCase.id}/share-links`"
+            />
             <ExportMenu
               v-if="testCase"
               :endpoint="`/api/test-run-cases/${testCase.id}/export`"
               :base-name="`piwi-execution-${testCase.id}`"
-              class="mr-2"
-            />
-            <DesktopRunLocallyButton
-              :project-id="testCase?.testRun?.project?.id"
-              :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
-              :cases="retryCases"
               class="mr-2"
             />
             <NavbarActions :actions="navbarActions" />
@@ -616,13 +695,18 @@ provide(clusterSectionLocatorKey, {
             :stable-links="(testCase as any)?.stableLinks ?? null"
             :project-key="testCase?.testRun?.project?.id"
             :project-name="testCase?.testRun?.project?.name"
+            :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
+            :retry-cases="retryCases"
             @refresh="refresh()"
           />
+          <!-- Why this execution never ran, and what blocked it — the whole story
+               for a did-not-run case, so it stays pinned. The downstream tests a
+               failure blocked are a consequence, not the summary, so they move
+               into the Diagnosis tab below. -->
           <DidNotRunCard
             :status="testCase?.status"
             :reason="(testCase as any)?.didNotRunReason ?? null"
             :blocked-by-case="(testCase as any)?.blockedByCase ?? null"
-            :blocked-tests="(testCase as any)?.blockedTests ?? null"
             class="mt-4"
           />
         </template>
@@ -630,7 +714,12 @@ provide(clusterSectionLocatorKey, {
         <!-- ── Diagnosis (failing cases) ────────────────────────────────── -->
         <template #tab-diagnosis>
           <div class="space-y-4">
-            <!-- The error itself, first — it's what you open this tab for -->
+            <!-- What broke, in one line — the raw error follows verbatim -->
+            <TestCaseHeadlineCard v-if="verdict" :verdict="verdict" :top-clue="topClue" />
+
+            <!-- Deterministic, ranked clues correlated from the captured evidence -->
+            <CluesCard :clues="clues" :failure-at="cluesFailureAt" />
+
             <div ref="errorEl" class="scroll-mt-4">
               <SectionCard v-if="testCase?.error" icon="i-lucide-circle-x" icon-class="text-red-500" title="Error">
                 <template #actions>
@@ -652,6 +741,14 @@ provide(clusterSectionLocatorKey, {
               </SectionCard>
             </div>
 
+            <!-- One time axis: steps, console, network and backend logs correlated -->
+            <FailureTimelineCard
+              :test-runs-case-id="Number(testCaseId)"
+              :has-trace="hasTrace"
+              :project-key="testCase?.testRun?.project?.id"
+              :project-name="testCase?.testRun?.project?.name"
+            />
+
             <!-- Two columns: evidence funnel (left) + verdict/cluster/AI rail (right) -->
             <div class="flex flex-wrap gap-1.5">
               <UButton
@@ -665,8 +762,8 @@ provide(clusterSectionLocatorKey, {
               />
             </div>
             <div class="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4">
-              <!-- Right rail (DOM-first so it follows the error on mobile) -->
-              <div class="space-y-4 lg:order-2">
+              <!-- Right rail (DOM-first so it follows the error below the xl split) -->
+              <div class="space-y-4 xl:order-2">
                 <TestCaseVerdictCard
                   :test-case="(testCase as any) ?? null"
                   :history="historyData"
@@ -675,16 +772,20 @@ provide(clusterSectionLocatorKey, {
 
                 <FailureClusterCard v-if="failureCluster" :cluster="failureCluster" />
 
+                <!-- The downstream tests this failure blocked from running -->
+                <DidNotRunCard :blocked-tests="(testCase as any)?.blockedTests ?? null" />
+
                 <TestCaseAiCard :test-runs-case-id="Number(testCaseId)" />
               </div>
 
               <!-- Left column: evidence funnel -->
-              <div class="space-y-4 lg:order-1 min-w-0">
+              <div class="space-y-4 xl:order-1 min-w-0">
                 <!-- Test source: the failing line and its callers; full trace call stack when available -->
                 <TestSourceCard
                   v-if="testCase?.testSourceFrames?.length || testCase?.testSource || hasTrace"
                   ref="testSourceCard"
                   storage-key="case-test-source"
+                  :default-folded="false"
                   :frames="testCase?.testSourceFrames ?? null"
                   :test-source="testCase?.testSource ?? null"
                   :run-id="testCase?.testRun?.id ?? null"
@@ -698,6 +799,7 @@ provide(clusterSectionLocatorKey, {
                 <TestCaseEvidenceCard
                   ref="evidenceCard"
                   storage-key="case-evidence"
+                  :default-folded="false"
                   :attachments="(testCase as any)?.attachments ?? []"
                   :traces="(traceData as any[]) ?? []"
                 />
@@ -705,6 +807,7 @@ provide(clusterSectionLocatorKey, {
                 <!-- Alternative locators for a broken locator -->
                 <LocatorHealingPanel
                   v-if="testCase?.testRun?.id"
+                  ref="locatorHealingCard"
                   storage-key="case-locators"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
@@ -718,6 +821,7 @@ provide(clusterSectionLocatorKey, {
                   storage-key="case-env-diff"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
+                  @available="envDiffAvailable = $event"
                 />
 
                 <!-- What changed visually since the last pass -->
@@ -727,29 +831,60 @@ provide(clusterSectionLocatorKey, {
                   storage-key="case-visual-diff"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
+                  @available="visualDiffAvailable = $event"
                 />
 
                 <!-- Console output -->
-                <div v-if="(testCase as any)?.consoleLogs?.length" ref="consoleEl" class="scroll-mt-4">
-                  <TestCaseConsoleCard :entries="(testCase as any)?.consoleLogs ?? []" />
-                </div>
+                <TestCaseConsoleCard
+                  v-if="(testCase as any)?.consoleLogs?.length"
+                  ref="consoleCard"
+                  storage-key="case-console"
+                  :entries="(testCase as any)?.consoleLogs ?? []"
+                  :derived-from-trace="evidenceDerived.console"
+                />
+                <EvidenceCardEmpty
+                  v-else
+                  storage-key="case-console"
+                  icon="i-lucide-terminal"
+                  title="Console"
+                  help="case.console"
+                  :state="evidenceStates.console"
+                />
 
                 <!-- Network requests + backend logs; full trace network when available -->
-                <div v-if="networkRequests.length > 0 || hasTrace" ref="networkEl" class="scroll-mt-4">
-                  <TestCaseNetworkRequests
-                    ref="networkCard"
-                    :requests="networkRequests"
-                    :run-id="testCase?.testRun?.id ?? null"
-                    :test-runs-case-id="Number(testCaseId)"
-                    :has-trace="hasTrace"
-                  />
-                </div>
+                <TestCaseNetworkRequests
+                  v-if="networkRequests.length > 0 || hasTrace"
+                  ref="networkCard"
+                  storage-key="case-network"
+                  :requests="networkRequests"
+                  :run-id="testCase?.testRun?.id ?? null"
+                  :test-runs-case-id="Number(testCaseId)"
+                  :has-trace="hasTrace"
+                  :derived-from-trace="evidenceDerived.network"
+                />
+                <EvidenceCardEmpty
+                  v-else
+                  storage-key="case-network"
+                  icon="i-lucide-arrow-left-right"
+                  title="Network"
+                  help="case.network"
+                  :state="evidenceStates.network"
+                />
 
                 <!-- App state at test end -->
                 <PageStateCard
                   v-if="(testCase as any)?.pageState"
+                  ref="pageStateCard"
                   storage-key="case-page-state"
                   :page-state="(testCase as any).pageState"
+                />
+                <EvidenceCardEmpty
+                  v-else
+                  storage-key="case-page-state"
+                  icon="i-lucide-database"
+                  title="App state at test end"
+                  help="page-state"
+                  :state="evidenceStates.appState"
                 />
 
                 <!-- ARIA snapshot captured at failure time -->
@@ -761,11 +896,20 @@ provide(clusterSectionLocatorKey, {
                   title="ARIA snapshot"
                   help="case.aria"
                 >
+                  <template v-if="evidenceDerived.ariaSnapshot" #actions><TraceDerivedChip /></template>
                   <template #folded>Accessibility tree captured at the moment of failure</template>
                   <div class="max-h-96 overflow-y-auto">
                     <MarkdownPreview :text="'```yaml\n' + testCase.ariaSnapshot + '\n```'" />
                   </div>
                 </CollapsibleSectionCard>
+                <EvidenceCardEmpty
+                  v-else
+                  storage-key="case-aria"
+                  icon="i-lucide-scan-text"
+                  title="ARIA snapshot"
+                  help="case.aria"
+                  :state="evidenceStates.ariaSnapshot"
+                />
 
                 <!-- Failure-time HTML extracted from the uploaded trace -->
                 <DomSnapshotCard
@@ -774,6 +918,7 @@ provide(clusterSectionLocatorKey, {
                   storage-key="case-dom-snapshot"
                   :run-id="testCase.testRun.id"
                   :test-runs-case-id="Number(testCaseId)"
+                  @available="domSnapshotAvailable = $event"
                 />
               </div>
             </div>
@@ -862,12 +1007,12 @@ provide(clusterSectionLocatorKey, {
                         slowest
                       </UBadge>
                     </div>
-                    <p
+                    <ErrorText
                       v-if="row.original.failed && row.original.error?.message"
-                      class="text-xs text-red-500 mt-1 whitespace-pre-wrap break-words font-mono"
-                    >
-                      {{ row.original.error.message }}
-                    </p>
+                      mode="block"
+                      :text="row.original.error.message"
+                      class="mt-1"
+                    />
                     <OpenInIdeLink
                       v-if="row.original.location"
                       :location="row.original.location"
@@ -914,12 +1059,29 @@ provide(clusterSectionLocatorKey, {
             <TestCaseAttachmentsCard :attachments="(testCase as any)?.attachments ?? []" />
             <PageStateCard
               v-if="(testCase as any)?.pageState"
-              storage-key="case-page-state"
+              storage-key="case-page-state-artifacts"
               :page-state="(testCase as any).pageState"
+            />
+            <EvidenceCardEmpty
+              v-else
+              storage-key="case-page-state-artifacts"
+              icon="i-lucide-database"
+              title="App state at test end"
+              help="page-state"
+              :state="evidenceStates.appState"
             />
             <TestCaseConsoleCard
               v-if="(testCase as any)?.consoleLogs?.length"
               :entries="(testCase as any)?.consoleLogs ?? []"
+              :derived-from-trace="evidenceDerived.console"
+            />
+            <EvidenceCardEmpty
+              v-else
+              storage-key="case-console-artifacts"
+              icon="i-lucide-terminal"
+              title="Console"
+              help="case.console"
+              :state="evidenceStates.console"
             />
             <TestCaseNetworkRequests
               v-if="networkRequests.length > 0 || hasTrace"
@@ -927,21 +1089,15 @@ provide(clusterSectionLocatorKey, {
               :run-id="testCase?.testRun?.id ?? null"
               :test-runs-case-id="Number(testCaseId)"
               :has-trace="hasTrace"
+              :derived-from-trace="evidenceDerived.network"
             />
-
-            <EmptyState
-              v-if="
-                !(traceData as any[])?.length &&
-                !(testCase as any)?.attachments?.length &&
-                !(testCase as any)?.consoleLogs?.length &&
-                !networkRequests.length
-              "
-              :icon="runIsActive ? 'i-lucide-loader-circle' : 'i-lucide-inbox'"
-              :text="
-                runIsActive
-                  ? 'Run in progress — traces and attachments appear here as soon as they are uploaded.'
-                  : 'No traces, console logs, or network requests captured for this test case.'
-              "
+            <EvidenceCardEmpty
+              v-else
+              storage-key="case-network-artifacts"
+              icon="i-lucide-arrow-left-right"
+              title="Network"
+              help="case.network"
+              :state="evidenceStates.network"
             />
           </div>
         </template>
@@ -993,6 +1149,7 @@ provide(clusterSectionLocatorKey, {
 
             <SectionCard
               v-if="webVitals"
+              id="webvitals-card"
               icon="i-lucide-gauge"
               title="Browser performance (Web Vitals)"
               help="case.web-vitals"
@@ -1127,13 +1284,13 @@ provide(clusterSectionLocatorKey, {
                 </div>
               </div>
             </SectionCard>
-
-            <FeatureUnavailable
-              v-if="performanceHints.length === 0 && !webVitals"
+            <EvidenceCardEmpty
+              v-else
+              storage-key="case-web-vitals"
               icon="i-lucide-gauge"
-              title="No performance hints or Web Vitals for this execution"
-              text="Web Vitals and step timing come from the Piwi capture fixtures — extend your Playwright test with piwiFixtures to collect them."
-              doc="capture-fixtures"
+              title="Browser performance (Web Vitals)"
+              help="case.web-vitals"
+              :state="evidenceStates.webVitals"
             />
           </div>
         </template>
@@ -1193,15 +1350,7 @@ provide(clusterSectionLocatorKey, {
                     </NuxtLink>
                   </template>
                   <template #error-cell="{ row }">
-                    <span
-                      v-if="row.original.error"
-                      class="text-red-600 text-xs truncate max-w-xs block"
-                      :title="row.original.error"
-                    >
-                      {{
-                        row.original.error.length > 80 ? `${row.original.error.substring(0, 80)}…` : row.original.error
-                      }}
-                    </span>
+                    <ErrorText v-if="row.original.error" :text="row.original.error" class="max-w-xs" />
                   </template>
                 </UTable>
               </TableScroller>

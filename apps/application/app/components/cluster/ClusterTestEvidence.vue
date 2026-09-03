@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TraceInfo, AttachmentInfo, TestSourceFrame, TraceCallStackResponse } from '~~/types/api';
 import { isImageFile, isVideoFile } from '~/utils/text-format';
+import { resolveEvidenceState, type EvidenceCardId, type EvidenceState } from '#shared/evidence-state';
 
 interface AffectedCase {
   testCaseId: number;
@@ -20,6 +21,9 @@ interface TestCaseDetail {
   testSource?: string | null;
   testSourceFrames?: TestSourceFrame[] | null;
   pageState?: import('~~/types/api').PageState | null;
+  evidenceSources?: { console?: 'trace'; network?: 'trace'; aria?: 'trace' } | null;
+  webVitals?: unknown;
+  aiUsage?: unknown;
   attachments: AttachmentInfo[];
   testRun?: { id: number } | null;
 }
@@ -158,6 +162,50 @@ const evidenceChips = computed(() => {
     { icon: 'i-lucide-accessibility', label: 'ARIA', count: d.ariaSnapshot ? 1 : 0 },
   ].filter((c) => c.count > 0);
 });
+
+/** Whether the capture fixtures ran for the selected case (any non-trace fixture field present). */
+const fixturesActive = computed(() => {
+  const d = caseDetail.value;
+  if (!d) return false;
+  const src = d.evidenceSources ?? {};
+  return (
+    (Array.isArray(d.consoleLogs) && d.consoleLogs.length > 0 && src.console !== 'trace') ||
+    (Array.isArray(d.networkRequests) && d.networkRequests.length > 0 && src.network !== 'trace') ||
+    (Boolean(d.ariaSnapshot) && src.aria !== 'trace') ||
+    Boolean(d.pageState) ||
+    Boolean(d.webVitals) ||
+    Boolean(d.aiUsage)
+  );
+});
+
+/**
+ * The evidence cards that hold no data for the selected case, each resolved to
+ * its three-state reason — so a blank panel says why, the same as the execution
+ * page.
+ */
+const emptyEvidence = computed(() => {
+  const d = caseDetail.value;
+  if (!d) return [] as Array<{ id: EvidenceCardId; title: string; icon: string; state: EvidenceState }>;
+  const active = fixturesActive.value;
+  const has = {
+    console: Array.isArray(d.consoleLogs) && d.consoleLogs.length > 0,
+    network: Array.isArray(d.networkRequests) && d.networkRequests.length > 0,
+    appState: Boolean(d.pageState),
+    ariaSnapshot: Boolean(d.ariaSnapshot),
+  };
+  const meta: Array<{ id: EvidenceCardId; title: string; icon: string }> = [
+    { id: 'console', title: 'Console', icon: 'i-lucide-terminal' },
+    { id: 'network', title: 'Network', icon: 'i-lucide-arrow-left-right' },
+    { id: 'appState', title: 'App state', icon: 'i-lucide-database' },
+    { id: 'ariaSnapshot', title: 'ARIA snapshot', icon: 'i-lucide-accessibility' },
+  ];
+  return meta
+    .filter((m) => !has[m.id as keyof typeof has])
+    .map((m) => ({
+      ...m,
+      state: resolveEvidenceState(m.id, { hasData: false, fixturesActive: active }),
+    }));
+});
 </script>
 
 <template>
@@ -243,9 +291,7 @@ const evidenceChips = computed(() => {
         <div class="divide-y divide-default">
           <div v-for="(step, idx) in failingSteps" :key="idx" class="px-3 py-2 space-y-0.5">
             <p class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ idx + 1 }}. {{ step.title }}</p>
-            <p v-if="step.error?.message" class="text-xs font-mono text-red-500 whitespace-pre-wrap break-all">
-              {{ step.error.message }}
-            </p>
+            <ErrorText v-if="step.error?.message" mode="block" :text="step.error.message" />
           </div>
         </div>
       </TestEvidenceSection>
@@ -318,6 +364,16 @@ const evidenceChips = computed(() => {
       >
         <PageStateCard :page-state="caseDetail.pageState" plain />
       </TestEvidenceSection>
+
+      <!-- Evidence that holds nothing: say which of the three states it is in -->
+      <div v-if="emptyEvidence.length" class="rounded-lg border border-default divide-y divide-default">
+        <div v-for="card in emptyEvidence" :key="card.id" class="px-3 py-2">
+          <div class="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <UIcon :name="card.icon" class="size-3.5" />{{ card.title }}
+          </div>
+          <EvidenceEmptyState :state="card.state" compact />
+        </div>
+      </div>
     </template>
   </div>
 </template>

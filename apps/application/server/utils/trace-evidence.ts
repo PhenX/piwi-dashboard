@@ -11,12 +11,14 @@ import { getStorage } from '../storage';
 import { parseZip, type ZipEntry } from './trace-zip';
 import { parseTraceTexts, traceFileRank, type ParsedTraceData } from './trace-events';
 import {
+  buildActionCallsites,
   buildTraceBodyPreview,
   buildTraceCallStack,
   buildTraceNetwork,
   matchNetworkBodySha1,
   parseNetworkTexts,
   parseStacksTexts,
+  type ActionCallsite,
   type TraceResourceReader,
   type TraceResourceSnapshot,
   type TraceStacksIndex,
@@ -122,6 +124,23 @@ function resourceNameCandidates(requested: string, knownNames: Iterable<string>)
   return [...new Set(candidates)];
 }
 
+/** The parsed event stream and raw network snapshots of a stored trace, for deriving fallback evidence. */
+export interface TraceEvidenceStreams {
+  parsed: ParsedTraceData | null;
+  network: TraceResourceSnapshot[];
+}
+
+/**
+ * Load a stored trace and return just its event stream and network snapshots —
+ * the two inputs the fallback derivation reads to recover console entries and
+ * the request list when the capture fixtures were absent.
+ */
+export async function loadTraceEvidenceStreams(blobPath: string): Promise<TraceEvidenceStreams | null> {
+  const bundle = await loadTraceBundle(blobPath);
+  if (!bundle) return null;
+  return { parsed: bundle.parsed, network: bundle.network };
+}
+
 /** Full call stack of the failing action, with embedded source when the trace carries it. */
 export async function getTraceCallStackFromBlob(
   blobPath: string,
@@ -130,6 +149,16 @@ export async function getTraceCallStackFromBlob(
   const bundle = await loadTraceBundle(blobPath);
   if (!bundle || !bundle.parsed) return { status: 'no-trace' };
   return buildTraceCallStack(bundle.parsed, bundle.stacks, bundle.readResource, { knownTestFilePath });
+}
+
+/** Per-action call sites (lightweight display frames) for the failure timeline. */
+export async function getTraceActionCallsitesFromBlob(
+  blobPath: string,
+  knownTestFilePath: string | null,
+): Promise<ActionCallsite[]> {
+  const bundle = await loadTraceBundle(blobPath);
+  if (!bundle || !bundle.parsed) return [];
+  return buildActionCallsites(bundle.parsed, bundle.stacks, { knownTestFilePath });
 }
 
 /** Full network activity from the trace's HAR-like stream. */

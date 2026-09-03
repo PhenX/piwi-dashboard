@@ -1,6 +1,7 @@
 import { getTestRunCase } from '#shared/handlers/test-cases';
 import { requireResolvedProjectAccess, requireRouteId, resolveTestRunCaseProjectId } from '../../utils/project-access';
 import { resolveWastedSettings } from '../../utils/wasted-settings';
+import { resolveOwners } from '../../utils/scm/ownership';
 
 defineRouteMeta({
   openAPI: {
@@ -15,7 +16,7 @@ defineRouteMeta({
 
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'test run case ID');
-  const { db } = await requireResolvedProjectAccess(event, id, resolveTestRunCaseProjectId, 'Test run case');
+  const { db, projectId } = await requireResolvedProjectAccess(event, id, resolveTestRunCaseProjectId, 'Test run case');
 
   // Only custom patterns force a recompute; with the defaults the stored
   // wasted_time_ms is served as-is.
@@ -26,6 +27,15 @@ export default eventHandler(async (event) => {
       statusCode: 404,
       message: 'Test run case not found',
     });
+  }
+
+  // A test with no `piwi:owner` annotation still has an owner when the
+  // repository's CODEOWNERS names one for its spec file.
+  if (result.verdict && !result.verdict.owner && result.filePath) {
+    const test = { filePath: result.filePath as string, owner: null };
+    const resolved = await resolveOwners(db, projectId, [test]).catch(() => new Map());
+    const owner = resolved.get(test)?.owner;
+    if (owner) result.verdict.owner = { name: owner, source: 'codeowners' };
   }
 
   return result;

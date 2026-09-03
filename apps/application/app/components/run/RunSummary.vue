@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { TestRunDetails, ReportInfo } from '~~/types/api';
 import type { RetryMode } from '~/utils/retry-command';
-import { buildRetryCommand } from '~/utils/retry-command';
 
 const props = defineProps<{
   testRun: TestRunDetails;
@@ -38,45 +37,19 @@ const showStorage = computed(() => !!(storageStats.value?.totalFiles || props.fi
 const primaryReport = computed(() => props.allReports[0] ?? null);
 
 const { copy, copied } = useCopy();
-const retryMode = ref<RetryMode>('file-line');
-const retryCopied = ref(false);
+const {
+  mode: retryMode,
+  failedCases,
+  copyCommand: copyRetryCommand,
+  copied: retryCopied,
+  title: retryTitle,
+} = useRunRetryCommand(() => props.testRun?.testCases);
 
 // Inside the desktop shell the run-locally split button covers copying the
 // command ("Copy as command"), so the copy-only Retry button stays web-only.
 const desktopBridge = ref(false);
 onMounted(() => {
   desktopBridge.value = !!tauriCore();
-});
-
-const failedCases = computed(() => {
-  if (!props.testRun?.testCases) return [];
-  return props.testRun.testCases
-    .filter((tc) => tc.status === 'failed' || tc.status === 'timedout')
-    .map((tc) => ({
-      filePath: (tc.filePath || tc.location?.split(':')[0]) ?? '',
-      title: tc.title,
-      line: tc.location ? parseInt(tc.location.split(':')[1] ?? '', 10) || null : null,
-      projectName: (tc.browser as { projectName?: string } | null)?.projectName || null,
-    }));
-});
-
-function buildRetry() {
-  return buildRetryCommand(failedCases.value, { mode: retryMode.value });
-}
-
-async function copyRetryCommand() {
-  const cmd = buildRetry();
-  if (!cmd) return;
-  retryCopied.value = true;
-  await copy(cmd, { toast: 'Retry command copied' });
-  setTimeout(() => {
-    retryCopied.value = false;
-  }, 2000);
-}
-
-const retryTitle = computed(() => {
-  if (retryCopied.value) return 'Copied!';
-  return copyPreview(buildRetry());
 });
 
 function buildRunSummary() {

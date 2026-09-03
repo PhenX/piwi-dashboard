@@ -69,7 +69,9 @@ the same run. So is each browser in a project matrix.
 
 This is the object at `/test-run-cases/:id` — the error, steps, trace, screenshots, console, network,
 Web Vitals, and (for a failure) the diagnosis view. When the docs say *execution* or *test-run case*,
-this is what they mean; when they say *test case*, they mean the identity above it.
+this is what they mean; when they say *test case*, they mean the identity above it. The run page's
+list still calls executions *cases* in a few labels (the counter, the search box, the title column) —
+same object, older name.
 
 The distinction matters in practice: "this test is flaky" is a statement about a **test case**, and
 "here is the stack trace" is a statement about one **execution**.
@@ -82,7 +84,7 @@ with its dynamic arguments masked. That hash is the **error fingerprint**.
 
 Every failed execution sharing a fingerprint joins one **failure cluster**. Fifty red tests caused by
 one broken endpoint become one cluster you triage once, with a status (open / resolved / ignored) and
-a note.
+a note. API routes and a few components say *failure groups* for the same thing.
 
 Fingerprints deliberately **ignore the failing stack frame**, so the same root cause reached from six
 different spec files stays one cluster. Full detail:
@@ -96,6 +98,13 @@ chosen to be branch-aware: the most recent passing run **on the same branch**, f
 **default branch** (what a fresh pull-request branch forked from) when the branch has no history yet,
 and to any branch only when neither exists. A run whose branch is unknown compares against the most
 recent passing run in the project, as before.
+
+The environment and visual diffs compare one execution against the same test's last passing execution
+on the same browser, and put the run's **environment label** first: a `development` failure is diffed
+against the last passing `development` run, then the same branch, then whatever is most recent. When no
+passing run from the same environment exists, the card says which environment the baseline came from
+("compared with a production run; no passing development run of this test exists") and leaves the
+environment label out of the diff. The regression signals stored on a run stay branch-aware only.
 
 The **default branch** is resolved per project: an explicit setting in **project settings**, else the
 repository's default branch read from the SCM provider, else `main`.

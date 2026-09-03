@@ -123,17 +123,7 @@ export async function buildTraceCallStack(
   // under that root gets a repo-relative display path and counts as
   // in-project (dependency dirs excepted).
   const known = normalizeSlashes(options.knownTestFilePath ?? '').replace(/^\.\//, '');
-  let root: string | null = null;
-  if (known) {
-    for (const file of stacks.files) {
-      const norm = normalizeSlashes(file);
-      if (norm === known) break; // already relative — nothing to strip
-      if (norm.endsWith(`/${known}`)) {
-        root = norm.slice(0, norm.length - known.length);
-        break;
-      }
-    }
-  }
+  const root = deriveProjectRoot(stacks.files, known);
 
   // Read each distinct file's embedded source once.
   const sourceByFile = new Map<string, string[] | null>();
@@ -148,19 +138,7 @@ export async function buildTraceCallStack(
   for (const [fileIdx, line, column, functionName] of kept) {
     const absPath = stacks.files[fileIdx];
     if (absPath === undefined) continue;
-    const norm = normalizeSlashes(absPath);
-    let display: string;
-    let inProject: boolean;
-    if (root && norm.startsWith(root)) {
-      display = norm.slice(root.length);
-      inProject = !display.includes('node_modules/');
-    } else if (norm === known && known) {
-      display = norm;
-      inProject = true;
-    } else {
-      display = shortenPath(norm);
-      inProject = !norm.includes('node_modules/') && !root;
-    }
+    const { file: display, inProject, absFile } = displayPathOf(absPath, root, known);
 
     const allLines = sourceByFile.get(absPath) ?? null;
     let source: TraceStackFrame['source'] = null;
@@ -172,7 +150,7 @@ export async function buildTraceCallStack(
 
     frames.push({
       file: display,
-      absFile: norm === display ? undefined : norm,
+      absFile,
       line,
       column,
       functionName,
@@ -189,6 +167,84 @@ export async function buildTraceCallStack(
     apiName: action.apiName,
     errorMessage: action.error?.message?.slice(0, 500),
   };
+}
+
+/**
+ * The runner-side project root: the prefix of a stack file path that, stripped,
+ * leaves the reporter's project-relative spec path. Null when the paths are
+ * already relative or the spec file is not among them.
+ */
+function deriveProjectRoot(files: string[], known: string): string | null {
+  if (!known) return null;
+  for (const file of files) {
+    const norm = normalizeSlashes(file);
+    if (norm === known) return null; // already relative — nothing to strip
+    if (norm.endsWith(`/${known}`)) return norm.slice(0, norm.length - known.length);
+  }
+  return null;
+}
+
+/** A stack file's repo-relative display path and whether it counts as in-project. */
+function displayPathOf(
+  absPath: string,
+  root: string | null,
+  known: string,
+): { file: string; inProject: boolean; absFile: string | undefined } {
+  const norm = normalizeSlashes(absPath);
+  let display: string;
+  let inProject: boolean;
+  if (root && norm.startsWith(root)) {
+    display = norm.slice(root.length);
+    inProject = !display.includes('node_modules/');
+  } else if (norm === known && known) {
+    display = norm;
+    inProject = true;
+  } else {
+    display = shortenPath(norm);
+    inProject = !norm.includes('node_modules/') && !root;
+  }
+  return { file: display, inProject, absFile: norm === display ? undefined : norm };
+}
+
+/** One trace action's call site: the innermost in-project frame plus every frame. */
+export interface ActionCallsite {
+  /** `file:line` of the innermost in-project frame — matches the reporter's step location. */
+  location: string;
+  frames: Array<{ file: string; line: number; function: string | null; inProject: boolean }>;
+}
+
+/**
+ * The call stack of every action that has one, as lightweight display frames
+ * (no source windows), for correlating steps with the code that called them on
+ * the failure timeline. Reads only the stacks index already parsed from the
+ * trace — no extra ZIP access. The `location` is the innermost in-project
+ * frame's `file:line`, which is what the reporter records as a step's call site.
+ */
+export function buildActionCallsites(
+  parsed: ParsedTraceData | null,
+  stacks: TraceStacksIndex | null,
+  options: { knownTestFilePath?: string | null } = {},
+): ActionCallsite[] {
+  if (!parsed || !stacks || stacks.byCallId.size === 0) return [];
+  const known = normalizeSlashes(options.knownTestFilePath ?? '').replace(/^\.\//, '');
+  const root = deriveProjectRoot(stacks.files, known);
+
+  const result: ActionCallsite[] = [];
+  for (const action of parsed.actions) {
+    const raw = stacks.byCallId.get(action.callId);
+    if (!raw?.length) continue;
+    const frames: ActionCallsite['frames'] = [];
+    for (const [fileIdx, line, , functionName] of raw) {
+      const absPath = stacks.files[fileIdx];
+      if (absPath === undefined) continue;
+      const { file, inProject } = displayPathOf(absPath, root, known);
+      frames.push({ file, line, function: functionName ?? null, inProject });
+    }
+    if (frames.length === 0) continue;
+    const anchor = frames.find((f) => f.inProject) ?? frames[0]!;
+    result.push({ location: `${anchor.file}:${anchor.line}`, frames });
+  }
+  return result;
 }
 
 /** The failing action's stack, else the nearest preceding action that has one. */
@@ -443,7 +499,7 @@ function nonNegative(value: number | undefined): number | undefined {
   return typeof value === 'number' && value >= 0 ? value : undefined;
 }
 
-function inferResourceType(mimeType: string | undefined): string | undefined {
+export function inferResourceType(mimeType: string | undefined): string | undefined {
   if (!mimeType) return undefined;
   if (mimeType.includes('html')) return 'document';
   if (mimeType.includes('json')) return 'fetch';

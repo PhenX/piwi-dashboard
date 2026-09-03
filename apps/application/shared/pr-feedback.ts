@@ -59,7 +59,9 @@ export function resolvePrFeedbackSettings(input?: Partial<PrFeedbackSettings> | 
 export interface PrFailureEntry {
   title: string;
   filePath: string;
-  /** First line of the error, already trimmed for display. */
+  /** The one-line failure headline, plain text; leads the entry when set. */
+  headline?: string | null;
+  /** The error's message head, already trimmed for display. */
   errorExcerpt: string | null;
   executionId: number;
   /** Set when the failure joined a cluster, so the comment can link the cause. */
@@ -119,10 +121,17 @@ export interface PrSummaryInput {
 // ── Rendering ────────────────────────────────────────────────────────────────
 
 const MAX_LISTED = 5;
+/** Max characters of an error excerpt quoted in the pull-request comment. */
+export const PR_EXCERPT_MAX = 200;
 
 /** Escape the characters that would break out of a markdown table cell. */
 function escapeCell(text: string): string {
   return text.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim();
+}
+
+/** Escape inline markdown so a headline's locator quotes and underscores render literally. */
+function escapeInline(text: string): string {
+  return escapeCell(text).replace(/([\\`*_[\]<>])/g, '\\$1');
 }
 
 function formatDuration(ms: number | null): string {
@@ -159,6 +168,7 @@ function renderFailureList(entries: PrFailureEntry[], runUrl: string): string {
     if (entry.owner) parts.push(`_owner: ${escapeCell(entry.owner)}_`);
     if (entry.tags?.length) parts.push(entry.tags.map((tag) => `\`@${escapeCell(tag)}\``).join(' '));
     let line = parts.join(' · ');
+    if (entry.headline) line += `\n  **${escapeInline(entry.headline)}**`;
     if (entry.errorExcerpt) line += `\n  \`\`\`\n  ${escapeCell(entry.errorExcerpt)}\n  \`\`\``;
     if (entry.healPrNumber) {
       const pr = entry.healPrUrl ? `[#${entry.healPrNumber}](${entry.healPrUrl})` : `#${entry.healPrNumber}`;

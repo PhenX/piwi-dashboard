@@ -18,6 +18,7 @@ export const DIAGNOSIS_SECTIONS: DiagnosisSectionMeta[] = [
   { id: 'sampleError', label: 'Raw error message', short: 'Error' },
   { id: 'representativeExecution', label: 'Representative execution overview', short: 'Execution' },
   { id: 'executionError', label: 'Representative execution error', short: 'Error' },
+  { id: 'clues', label: 'Deterministic clues (rule-based correlations)', short: 'Clues' },
   { id: 'runContext', label: 'Run context (partial run, parallelism, flaky class)', short: 'Run context' },
   { id: 'testAnnotations', label: 'Test annotations (@fixme/@flaky …)', short: 'Annotations' },
   { id: 'affectedTests', label: 'Affected tests', short: 'Tests' },

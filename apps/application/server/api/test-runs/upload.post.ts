@@ -13,6 +13,7 @@ import { tmpdir } from 'os';
 import { rm, mkdir, readdir } from 'fs/promises';
 import { parseLocation } from '../../utils/parse-location';
 import { persistRunCases, type RunCaseInput } from '../../utils/persist-run-cases';
+import { deriveTraceEvidence } from '../../utils/trace-fallback-evidence';
 import { postRunPrFeedbackInBackground } from '../../utils/scm/pr-feedback';
 import { maybeEnqueueHealActionInBackground } from '../../utils/heal/policy';
 import { sanitizeMetadata } from '../../utils/sanitize';
@@ -531,6 +532,9 @@ export default eventHandler(async (event) => {
     // determined the blob already exists); those still need a files record pointing at
     // the existing blob path.
     const allTraceIndices = new Set([...traceFiles.keys(), ...traceHashes.keys()]);
+    // Execution rows that got a trace this upload — evidence is derived from
+    // them once all files are stored.
+    const tracedCaseIds: number[] = [];
     if (insertedRunCases.length > 0 && allTraceIndices.size > 0) {
       for (const index of allTraceIndices) {
         if (index < 0 || index >= insertedRunCases.length) continue;
@@ -581,6 +585,7 @@ export default eventHandler(async (event) => {
             size,
             blobId,
           });
+          tracedCaseIds.push(testRunsCaseId);
         } catch (error) {
           console.error(`[Upload] Failed to store trace for case #${testRunsCaseId}: ${error}`);
         }
@@ -619,6 +624,17 @@ export default eventHandler(async (event) => {
             console.error(`[Upload] Failed to store attachment for case #${testRunsCaseId}: ${error}`);
           }
         }
+      }
+    }
+
+    // With traces and attachments stored, recover the evidence the capture
+    // fixtures would have provided (console, network, ARIA) for any execution
+    // that got a trace but no fixture data. Idempotent and best-effort.
+    for (const tracedCaseId of tracedCaseIds) {
+      try {
+        await deriveTraceEvidence(db, tracedCaseId);
+      } catch (error) {
+        console.error(`[Upload] Failed to derive trace evidence for case #${tracedCaseId}: ${error}`);
       }
     }
   }

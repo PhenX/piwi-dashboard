@@ -135,9 +135,24 @@ After results land, the reporter surfaces the dashboard run URL wherever a pipel
 a later step (a Slack post, a deploy gate, a PR comment) doesn't have to scrape stdout. All of it is
 best-effort — a failure in any channel is logged and never fails your run.
 
-**Always** — a `View run: <url>` line in the log.
+**Always** — one line per failed test, printed the moment its final attempt fails, then a
+`View run: <url>` line once the run lands:
 
-**GitHub Actions (automatic)** — step outputs, a job-summary link, and a `::notice::` annotation:
+```
+[Piwi Dashboard] ✗ applies the discount code — getByRole('button', { name: 'Pay' }) never became enabled — click timed out after 30 s → https://piwi.example.com/test-runs/42/locate?file=tests%2Fcheckout.spec.ts&title=applies%20the%20discount%20code&retry=1&browser=chromium
+[Piwi Dashboard] View run: https://piwi.example.com/test-runs/42
+```
+
+The part between the title and the link is the failure **headline** — the one-line explanation the dashboard builds from the Playwright error (see [Failure evidence](./evidence#one-execution-diagnosis-first)). The GitHub job summary lists the same headline next to each failed test.
+
+The per-test link resolves to the failing execution's page (`/test-run-cases/:id`) and works in
+streaming and batch mode alike — it is built from what the reporter knows at that moment (run id,
+spec file, title, retry and Playwright project), so it prints while the run is still going. A link to a
+test the dashboard cannot find (results pruned by retention, an upload that never landed) renders a
+readable "not found" page instead of an error.
+
+**GitHub Actions (automatic)** — step outputs, a job summary listing the failed tests with their links
+(20 at most, the rest counted as "+N more"), and a `::notice::` annotation:
 
 ```yaml
 - run: npx playwright test
@@ -148,10 +163,11 @@ best-effort — a failure in any channel is logged and never fails your run.
   if: always()
 ```
 
-Available outputs: `piwi_run_url`, `piwi_run_id`, `piwi_run_status`, `piwi_project_id`.
+Available outputs: `piwi_run_url`, `piwi_run_id`, `piwi_run_status`, `piwi_failed_count`, `piwi_project_id`.
 
 **GitLab CI (automatic)** — a dotenv report (`piwi.env` by default, override with `PIWI_DOTENV_FILE`)
-carrying `PIWI_RUN_URL`, `PIWI_RUN_ID`, `PIWI_RUN_STATUS`, `PIWI_PROJECT_ID` and `PIWI_CI_BUILD_URL`.
+carrying `PIWI_RUN_URL`, `PIWI_RUN_ID`, `PIWI_RUN_STATUS`, `PIWI_FAILED_COUNT`, `PIWI_PROJECT_ID` and
+`PIWI_CI_BUILD_URL`.
 Declare it so later jobs inherit the variables:
 
 ```yaml
@@ -169,8 +185,11 @@ e2e:
 - run: npx playwright test
   env:
     PIWI_OUTPUT_FILE: piwi-run.json
-- run: cat piwi-run.json   # { runUrl, runId, projectId, projectName, status, ciBuildUrl }
+- run: cat piwi-run.json   # { runUrl, runId, projectId, projectName, status, ciBuildUrl, failedCount, failures }
 ```
+
+`failures` lists every test whose final attempt failed as `{ title, file, retry, browser, url }`, with
+`url` the same per-test link the log prints.
 
 ## Pull-request feedback
 
@@ -214,6 +233,50 @@ implementation yet.
 Piwi only ever edits a comment it wrote itself (identified by a hidden marker), so a human comment is never overwritten.
 Everything here is best-effort: the run is already stored by the time it runs, and a missing token or an unreachable
 host is logged rather than failing your pipeline.
+
+## Re-run from the dashboard
+
+Once a cluster is fixed, the fastest way to prove it is to re-run exactly the affected tests — and a
+[filtered run that passes them all now closes the cluster](./ai-diagnosis#did-the-fix-work). The cluster page can
+trigger that run in CI for you: **Re-run in CI**, next to *Copy retry command*, dispatches a workflow / pipeline with
+the cluster's retry arguments (`file:line` specs, `--project` when they share one) and links to the run it started. The
+last dispatch — when, by whom, and a link — shows under the Test evidence header.
+
+It is **off by default** and configured per project on the project's edit page, under **CI re-run**. Turn it on and
+fill in the block for your provider:
+
+| Provider | Target you configure | How it is dispatched | Token scope |
+|---|---|---|---|
+| **GitHub** | Workflow file name (e.g. `e2e.yml`), a ref, and the `workflow_dispatch` input that receives the arguments | `POST /actions/workflows/{workflow}/dispatches` with `ref` + `inputs` | `actions:write` (a classic PAT's `workflow` scope) |
+| **GitLab** | A ref and the pipeline variable name that receives the arguments | `POST /projects/{id}/pipeline` with `ref` + `variables` | `api` |
+| **Bitbucket** | The `custom:` pipeline name and the variable name that receives the arguments | `POST /pipelines/` with a custom pipeline target + `variables` | `pipeline:write` |
+
+The dispatch uses the project's [SCM token](#what-it-needs) (the same one PR feedback and auto-heal use), so that token
+needs the write scope above — broader than the read-only token diagnosis needs. The button is disabled with an
+explanatory tooltip when the feature is off, no target is configured for the repository's provider, or no token is set.
+
+Your workflow has to actually consume the value. A minimal GitHub example that forwards the input to Playwright:
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      args:
+        description: Playwright arguments
+        required: false
+        default: ''
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npx playwright test ${{ inputs.args }}
+```
+
+On GitLab, read the variable in your test job (`npx playwright test $PW_ARGS`); on Bitbucket, reference it the same way
+inside the `custom:` pipeline you named. GitHub's `workflow_dispatch` returns no run id, so the link goes to the
+workflow's runs page filtered to the branch; GitLab and Bitbucket link straight to the pipeline.
 
 ## Blocking a merge
 
@@ -280,6 +343,10 @@ network, or a missing API key against an instance with authentication enabled.
 
 **Traces are missing.** Traces have to be recorded before they can be uploaded — set
 `use: { trace: 'retain-on-failure' }` (or `'on-first-retry'`) in your Playwright config.
+
+**Screenshots are missing.** Same cause: Playwright's `screenshot` option defaults to `'off'`, so
+nothing is recorded for the reporter to upload. Set `use: { screenshot: 'only-on-failure' }` (or
+`'on'`) in your Playwright config; the reporter needs no option of its own.
 
 **A run is stuck as `interrupted`.** A live reporter heartbeats every ~15s; when a run goes quiet for
 two minutes — a cancelled job, an OOM-killed runner, a dropped network — the server marks it

@@ -1,9 +1,14 @@
+---
+title: Auto-heal PRs
+lang: en-US
+---
+
 # Auto-heal PRs
 
 When a locator breaks on your default branch and Piwi has high-confidence evidence for the replacement, it can open the
 fix pull request itself: a branch, a one-line locator edit per broken call site, and a body that shows the change, the
 score, where the replacement came from, and the command that verifies it. The CI gate runs on the PR like any other,
-and [fix verification](/ai-diagnosis) records the cluster as fixed once the tests pass.
+and [fix verification](./ai-diagnosis#did-the-fix-work) records the cluster as fixed once the tests pass.
 
 It is **off by default**, and even once on it acts only on projects you list. Writing to your repository is the
 strongest thing the dashboard does, so the posture is conservative by design.
@@ -23,7 +28,7 @@ strongest thing the dashboard does, so the posture is conservative by design.
 ## Requirements
 
 - **`PIWI_SITE_URL`** must be set, so the links in the PR body resolve.
-- An **SCM token with write scope**, resolved the same way as [PR feedback](/ci): a per-project token, falling back
+- An **SCM token with write scope**, resolved the same way as [PR feedback](./ci#pull-request-feedback): a per-project token, falling back
   to the global one. It needs:
   - **GitHub** — `repo` (classic), or a fine-grained token with `contents: write` + `pull_requests: write`.
   - **GitLab** — `api`.

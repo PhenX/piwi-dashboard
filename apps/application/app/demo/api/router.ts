@@ -30,6 +30,8 @@ import {
 import { getDemoDb } from '../db.client';
 import { getLocatorHealing, saveLocatorPick } from '~~/server/utils/locator-healing';
 import { buildFixPlan } from '~~/server/utils/fix-plan';
+import { fixPlanToMarkdown } from '#shared/fix-plan-markdown';
+import { contextStalenessHash } from '#shared/diagnosis-staleness';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
 import { apiExportTestRunCase, apiExportFailureCluster } from './export';
@@ -93,6 +95,8 @@ import {
   getTestCaseHistory,
   getTestRunCaseTraces,
   getTestCaseStabilityTrend,
+  getFailureTimeline,
+  getFailureClues,
 } from '#shared/handlers/test-cases';
 import {
   getFailureCluster,
@@ -696,10 +700,11 @@ const routes: RouteEntry[] = [
       const format = query?.get('format');
       if (format === 'prompt') return getClusterContextPrompt(db, +m[1]!, query);
       const clusterCtx = await getClusterContext(db, +m[1]!, query);
+      const contextSha = await contextStalenessHash(clusterCtx.sections);
       // Default format mirrors the server: a plain context/coverage/scmChanges
       // envelope; `?format=json` returns the full structured shape.
-      if (format === 'json') return clusterCtx;
-      return { context: clusterCtx.text, coverage: clusterCtx.coverage, scmChanges: clusterCtx.scmChanges };
+      if (format === 'json') return { ...clusterCtx, contextSha };
+      return { context: clusterCtx.text, contextSha, coverage: clusterCtx.coverage, scmChanges: clusterCtx.scmChanges };
     },
   },
   {
@@ -742,9 +747,36 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/diagnoses$/,
+    handler: async (m, _b, q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      const full = (q as URLSearchParams | undefined)?.get('full') === '1';
+      return { items: await listClusterDiagnosisVersions(await getDemoDb(), +m[1]!, { full }) };
+    },
+  },
+  {
+    method: 'GET',
+    // CI re-run availability — always off in the browser demo (no server, token
+    // or CI to dispatch to), so the button renders disabled with a clear reason.
+    pattern: /^\/api\/failure-clusters\/(\d+)\/rerun$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
-      return { items: await listClusterDiagnosisVersions(await getDemoDb(), +m[1]!) };
+      return {
+        available: false,
+        reason: 'CI re-run is not available in the demo.',
+        provider: null,
+        enabled: false,
+        hasToken: false,
+        lastDispatch: null,
+      };
+    },
+  },
+  {
+    method: 'POST',
+    // No-op dispatch: the demo has no CI to trigger.
+    pattern: /^\/api\/failure-clusters\/(\d+)\/rerun$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return { ok: false, demo: true, message: 'CI re-run is not available in the demo.' };
     },
   },
   {
@@ -897,6 +929,22 @@ const routes: RouteEntry[] = [
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'execution', +m[1]!);
       return getEnvironmentDiff(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/timeline$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getFailureTimeline(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/clues$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getFailureClues(await getDemoDb(), +m[1]!);
     },
   },
   {
@@ -1091,9 +1139,12 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)\/fix-plan$/,
-    handler: async (m, _b, _q, ctx) => {
+    handler: async (m, _b, q, ctx) => {
       await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
-      return buildFixPlan(await getDemoDb(), +m[1]!);
+      const plan = await buildFixPlan(await getDemoDb(), +m[1]!);
+      const format = (q as URLSearchParams | undefined)?.get('format');
+      if (format === 'markdown' && plan) return fixPlanToMarkdown(plan);
+      return plan;
     },
   },
 
