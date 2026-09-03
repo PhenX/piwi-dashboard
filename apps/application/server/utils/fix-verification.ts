@@ -121,10 +121,12 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
   const [run] = await db.select().from(testRuns).where(eq(testRuns.id, runId));
   if (!run) return [];
 
-  // A partial run proves nothing: a test that did not execute has not been
-  // shown to pass, and treating silence as success would close clusters that
-  // are still broken.
-  if (run.isFullRun === 0) return [];
+  // A partial run can still verify a cluster — but only by the same rule a full
+  // run is held to below: every test the cluster covers ran in this run and
+  // passed. A `--grep` that re-ran exactly the affected tests then closes the
+  // cluster; one that skipped even one of them still does not, because a test
+  // that did not execute has not been shown to pass. There is no separate
+  // `isFullRun` gate: the per-cluster check is the honest one either way.
 
   const meta = (run.metadata as RunMetadata | null) ?? null;
   const currentCommit = meta?.scm?.commit ?? null;

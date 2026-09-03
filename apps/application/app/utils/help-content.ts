@@ -375,7 +375,7 @@ export const HELP_TOPICS = {
   },
   'cluster.resolution': {
     title: 'Resolution',
-    text: 'Recorded when a full run turns this cluster green: when the fix landed, how long the cluster stayed open, and whether the change matched the diagnosed files. If the failure comes back, the cluster is marked as regressed rather than quietly reopened.',
+    text: 'Recorded when a run turns this cluster green — every test it covers ran and passed, in a full suite or a filtered re-run of just those tests: when the fix landed, how long the cluster stayed open, and whether the change matched the diagnosed files. If the failure comes back, the cluster is marked as regressed rather than quietly reopened.',
     doc: 'ai-diagnosis#did-the-fix-work',
   },
   'cluster.evidence': {
