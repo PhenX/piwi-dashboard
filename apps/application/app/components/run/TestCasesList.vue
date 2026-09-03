@@ -19,10 +19,16 @@ const props = defineProps<{
   failureClusterFilter?: number | null;
   /** Failure-cluster id → display name, for the cluster badges on failing rows. */
   clusterNames?: Record<number, string> | null;
+  /** Stable test-case ids currently quarantined — marks the matching rows. */
+  quarantinedCaseIds?: Set<number> | null;
   /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
   projectKey?: string | number | null;
   projectName?: string | null;
 }>();
+
+function isQuarantined(tc: TestCaseResult): boolean {
+  return Boolean(props.quarantinedCaseIds?.has(tc.testCaseId));
+}
 
 // Filter state is owned by the parent page so it survives tab switches.
 const testCaseSearch = defineModel<string>('search', { default: '' });
@@ -436,6 +442,7 @@ defineExpose({ scrollToCase });
       :project-key="projectKey"
       :project-name="projectName"
       :cluster-names="clusterNames"
+      :quarantined-case-ids="quarantinedCaseIds"
       class="flex-1 min-h-0"
     />
 
@@ -563,6 +570,7 @@ defineExpose({ scrollToCase });
                           <span class="truncate">{{ clusterLabel(item.failureClusterId) }}</span>
                         </UBadge>
                       </NuxtLink>
+                      <QuarantinedChip v-if="isQuarantined(item)" />
                       <BrowserBadge :browser="item.browser" size="sm" class="mt-0.5" />
                     </div>
 
@@ -665,6 +673,7 @@ defineExpose({ scrollToCase });
                             <span class="truncate">{{ clusterLabel(item.failureClusterId) }}</span>
                           </UBadge>
                         </NuxtLink>
+                        <QuarantinedChip v-if="isQuarantined(item)" />
                       </div>
                       <FailureHeadline
                         v-if="isFailedStatus(item.status) && item.error"

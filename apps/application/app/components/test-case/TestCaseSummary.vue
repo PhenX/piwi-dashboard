@@ -34,6 +34,8 @@ const props = defineProps<{
   projectLabel?: string;
   /** The execution as a retry target — powers the copy and run-locally controls. */
   retryCases?: RetryCase[];
+  /** Whether the stable test case is currently quarantined — marks the row. */
+  quarantined?: boolean;
 }>();
 
 defineEmits<{
@@ -117,6 +119,7 @@ function attemptLink(a: AttemptOutcome): string | null {
     <template #folded>
       <StatusChip :status="testCase?.status ?? ''" size="sm" />
       <span class="text-sm font-semibold truncate min-w-0">{{ testCase?.title }}</span>
+      <QuarantinedChip v-if="quarantined" class="max-sm:hidden" />
       <div class="flex items-center gap-3 ml-auto max-sm:hidden">
         <span class="text-xs text-gray-500 tabular-nums whitespace-nowrap">
           Dur:
@@ -170,6 +173,7 @@ function attemptLink(a: AttemptOutcome): string | null {
                   @{{ ann.type }}
                 </UBadge>
                 <TestMetaBadges :tags="testCase?.tags" :meta="testCase?.testMeta" />
+                <QuarantinedChip v-if="quarantined" />
               </div>
               <p class="text-xs text-gray-500 mt-0.5 flex items-center gap-x-2 gap-y-0.5 flex-wrap">
                 <!-- The failing frame beats the test() declaration: 0-click IDE

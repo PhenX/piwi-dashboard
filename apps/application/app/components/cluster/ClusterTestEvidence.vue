@@ -9,6 +9,7 @@ interface AffectedCase {
   filePath: string;
   runCount: number;
   recentTestRunsCaseId: number;
+  quarantined: boolean;
 }
 
 interface TestCaseDetail {
@@ -34,6 +35,26 @@ const props = defineProps<{
   projectKey?: string | number | null;
   projectName?: string | null;
 }>();
+
+const emit = defineEmits<{ 'quarantine-changed': [] }>();
+
+// Quarantine the selected test right from its evidence, reporter/admin only.
+const { canWrite } = useAuth();
+const { quarantineOne, releaseOne } = useQuarantine(() => props.projectKey ?? null);
+const quarantineBusy = ref<number | null>(null);
+
+async function toggleQuarantine(tc: AffectedCase) {
+  if (quarantineBusy.value != null) return;
+  quarantineBusy.value = tc.testCaseId;
+  try {
+    const ok = tc.quarantined
+      ? await releaseOne(tc.testCaseId)
+      : await quarantineOne(tc.testCaseId, `Quarantined from cluster`);
+    if (ok) emit('quarantine-changed');
+  } finally {
+    quarantineBusy.value = null;
+  }
+}
 
 const selectedId = ref(props.affectedTestCases[0]?.recentTestRunsCaseId ?? null);
 const selectedCase = computed(() => props.affectedTestCases.find((c) => c.recentTestRunsCaseId === selectedId.value));
@@ -224,6 +245,12 @@ const emptyEvidence = computed(() => {
         :title="tc.title"
         @click="selectedId = tc.recentTestRunsCaseId"
       >
+        <UIcon
+          v-if="tc.quarantined"
+          name="i-lucide-shield-alert"
+          class="size-3 text-amber-500 mr-1 align-middle"
+          title="Quarantined"
+        />
         {{ tc.title.split(' › ').pop() }}
         <span v-if="tc.runCount > 1" class="opacity-60 ml-1">{{ tc.runCount }}×</span>
       </button>
@@ -232,7 +259,10 @@ const emptyEvidence = computed(() => {
     <!-- Selected case header: title, file location, link to the execution -->
     <div v-if="selectedCase" class="flex items-start justify-between gap-2 flex-wrap">
       <div class="min-w-0">
-        <p class="text-sm font-medium break-words">{{ selectedCase.title }}</p>
+        <div class="flex items-center gap-2 flex-wrap">
+          <p class="text-sm font-medium break-words">{{ selectedCase.title }}</p>
+          <QuarantinedChip v-if="selectedCase.quarantined" />
+        </div>
         <OpenInIdeLink
           :file-path="selectedCase.filePath"
           :project-key="projectKey"
@@ -240,15 +270,33 @@ const emptyEvidence = computed(() => {
           class="text-xs text-gray-400"
         />
       </div>
-      <UButton
-        :to="`/test-run-cases/${selectedCase.recentTestRunsCaseId}`"
-        size="xs"
-        variant="outline"
-        color="neutral"
-        trailing-icon="i-lucide-arrow-right"
-      >
-        Open execution
-      </UButton>
+      <div class="flex items-center gap-2 shrink-0">
+        <UButton
+          v-if="canWrite"
+          size="xs"
+          variant="outline"
+          :color="selectedCase.quarantined ? 'warning' : 'neutral'"
+          :icon="selectedCase.quarantined ? 'i-lucide-shield-check' : 'i-lucide-shield-alert'"
+          :loading="quarantineBusy === selectedCase.testCaseId"
+          :title="
+            selectedCase.quarantined
+              ? 'Release this test from quarantine'
+              : 'Exclude this test from the CI gate while it keeps running'
+          "
+          @click="toggleQuarantine(selectedCase)"
+        >
+          {{ selectedCase.quarantined ? 'Release' : 'Quarantine' }}
+        </UButton>
+        <UButton
+          :to="`/test-run-cases/${selectedCase.recentTestRunsCaseId}`"
+          size="xs"
+          variant="outline"
+          color="neutral"
+          trailing-icon="i-lucide-arrow-right"
+        >
+          Open execution
+        </UButton>
+      </div>
     </div>
 
     <div v-if="loading" class="flex items-center justify-center py-10">

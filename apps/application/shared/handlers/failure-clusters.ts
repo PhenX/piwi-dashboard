@@ -10,6 +10,7 @@ import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 
 import type { DrizzleDB } from './db';
 import { recomputeClusterOccurrences } from './failure-cluster-ops';
+import { getQuarantinedCaseIds } from './quarantine';
 
 const VALID_STATUSES = ['open', 'resolved', 'ignored'];
 
@@ -56,6 +57,10 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
       .limit(50),
   ]);
 
+  // Which affected tests are currently quarantined — drives the "Quarantined"
+  // chip and the per-test / "Quarantine all affected" actions on the page.
+  const quarantinedIds = await getQuarantinedCaseIds(db, cluster.projectId);
+
   return {
     ...cluster,
     affectedTests: Number(countRow?.affectedTests ?? 0),
@@ -71,7 +76,11 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
         }
       : null,
     project: project ?? null,
-    affectedTestCases: affectedTestCases.map((t: any) => ({ ...t, runCount: Number(t.runCount) })),
+    affectedTestCases: affectedTestCases.map((t: any) => ({
+      ...t,
+      runCount: Number(t.runCount),
+      quarantined: quarantinedIds.has(t.testCaseId),
+    })),
   };
 }
 

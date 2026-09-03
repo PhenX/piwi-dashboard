@@ -11,6 +11,9 @@ const clusterId = parseInt(String(route.params.id));
 // Share links need the server; the public demo has no share-link routes.
 const isDemoMode = Boolean(useRuntimeConfig().public.demoMode);
 
+// Quarantine actions on the cluster are reporter/admin only, matching the endpoint.
+const { canWrite } = useAuth();
+
 // Provide shared diagnosis/investigation state (consumed by ClusterInvestigation
 // and ClusterDiagnosis). Must run before the top-level await below so provide()
 // and lifecycle hooks register against the active setup instance. Keep the store
@@ -432,6 +435,13 @@ const breadcrumbItems = computed(() => [
                   label="Run affected locally"
                   :preset-options="{ mode: 'grep' }"
                 />
+                <QuarantineAllButton
+                  v-if="canWrite"
+                  :project-id="cluster.project?.id"
+                  :cases="cluster.affectedTestCases ?? []"
+                  :reason="`Quarantined from cluster #${cluster.id}`"
+                  @changed="refresh"
+                />
                 <UTooltip text="Unlink incorrectly clustered test cases from this group">
                   <UButton
                     size="xs"
@@ -465,6 +475,7 @@ const breadcrumbItems = computed(() => [
                 :affected-test-cases="cluster.affectedTestCases"
                 :project-key="cluster.project?.id"
                 :project-name="cluster.project?.name"
+                @quarantine-changed="refresh"
               />
             </CollapsibleSectionCard>
 

@@ -15,6 +15,8 @@ const props = defineProps<{
   projectName?: string | null;
   /** Failure-cluster id → display name, for the cluster badges on failing rows. */
   clusterNames?: Record<number, string> | null;
+  /** Stable test-case ids currently quarantined — marks the matching rows. */
+  quarantinedCaseIds?: Set<number> | null;
 }>();
 
 // A failing row always identifies its cluster from `failureClusterId` alone —
@@ -343,6 +345,7 @@ const flatRows = computed<FlatRow[]>(() => {
               <span class="truncate">{{ clusterLabel(row.test.failureClusterId) }}</span>
             </UBadge>
           </NuxtLink>
+          <QuarantinedChip v-if="quarantinedCaseIds?.has(row.test.testCaseId)" />
           <div class="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto">
             <template v-if="row.test.status === 'running'">
               <TestRowLiveStep

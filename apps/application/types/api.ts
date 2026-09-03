@@ -875,6 +875,7 @@ export interface FailureClusterDetail extends ClusterResolutionFields {
     filePath: string;
     runCount: number;
     recentTestRunsCaseId: number;
+    quarantined: boolean;
   }>;
 }
 
