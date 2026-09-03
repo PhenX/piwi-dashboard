@@ -100,6 +100,7 @@ import {
 } from '#shared/handlers/test-cases';
 import {
   getFailureCluster,
+  getOpenFailureClusters,
   patchClusterStatus,
   patchClusterBaseCommit,
   extractClusterCases,
@@ -639,6 +640,14 @@ const routes: RouteEntry[] = [
   },
 
   // Failure clusters
+  {
+    method: 'GET',
+    pattern: /^\/api\/failure-clusters$/,
+    handler: async (_m, _b, q, ctx) => {
+      const limit = Math.min(200, Math.max(1, Number(q?.get('limit')) || 50));
+      return { items: await getOpenFailureClusters(await getDemoDb(), ctx?.scope, limit) };
+    },
+  },
   {
     method: 'GET',
     pattern: /^\/api\/failure-clusters\/(\d+)$/,
