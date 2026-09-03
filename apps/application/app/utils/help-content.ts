@@ -258,6 +258,11 @@ export const HELP_TOPICS = {
     text: 'What broke, in one sentence built from the Playwright error itself: the locator, the last state its call log reported, the expected and received values, the timeout. The chips say why (new regression, passed on retry), since when and on which commit, how many other tests in the run share the cause, and who owns the test. The raw error is right below, verbatim.',
     doc: 'evidence#one-execution-diagnosis-first',
   },
+  'case.clues': {
+    title: 'Clues',
+    text: 'Deterministic findings a set of rules correlate from the evidence already captured — a request that failed just before the click, a console error naming the failing element, a renamed element, the page ending on a login route, the previous test on this worker failing. No model runs; each clue is ranked by strength and cites the evidence section it came from, so a click jumps straight to it. The same clues are fed to the AI diagnosis as evidence to confirm or refute.',
+    doc: 'evidence#clues',
+  },
   'case.verdict': {
     title: 'Failure verdict',
     text: 'An at-a-glance read on this failure: whether it newly regressed or is flaky, how many times it retried, and how long the test has been failing.',

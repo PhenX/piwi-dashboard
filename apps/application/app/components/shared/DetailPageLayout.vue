@@ -91,8 +91,11 @@ const activeTabHelp = computed(() => props.tabItems.find((t) => t.value === acti
         class="w-full sm:hidden"
       />
       <!-- Desktop strip: the same UDashboardToolbar + UNavigationMenu the
-           Settings header uses, so page tabs look identical everywhere. -->
-      <UDashboardToolbar class="hidden sm:block p-1">
+           Settings header uses, so page tabs look identical everywhere. The
+           toolbar must stay a flex row (`sm:flex`, not `sm:block`) so the nav
+           (`flex-1`) and the active tab's inline HelpHint (`shrink-0`) sit on
+           one line — a block row lets the hint wrap under the strip on Blink. -->
+      <UDashboardToolbar class="hidden sm:flex p-1">
         <UNavigationMenu
           :items="navItems"
           highlight

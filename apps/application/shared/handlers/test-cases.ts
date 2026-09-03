@@ -14,6 +14,11 @@ import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-w
 import { inlineCasePayloads } from '../../server/utils/case-payloads';
 import { buildFailureVerdict } from '../failure-verdict';
 import { buildFailureTimeline, type FailureTimeline, type TimelineCallsite } from '../failure-timeline';
+import { buildFailureClues, type FailureClue } from '../failure-clues';
+import { parsePlaywrightError } from '../error-parse';
+import { getLocatorHealing } from '../../server/utils/locator-healing';
+import { getEnvironmentDiff } from '../../server/utils/environment-diff';
+import type { PageStateLike } from '../page-state';
 import type { TestStepEvent } from '../types';
 import type { RunMetadata } from '../../server/utils/run-json-types';
 
@@ -506,6 +511,147 @@ export async function getFailureTimeline(
       serverTraces: nr.serverTraces,
     })),
   });
+}
+
+/** What the clue engine returns for one execution, plus the failure anchor the UI needs. */
+export interface FailureCluesResult {
+  clues: FailureClue[];
+  /** The moment of failure, in ms relative to the timeline origin — the `t+0` the card counts back from. */
+  failureAt: number | null;
+}
+
+/**
+ * The deterministic clues for one failing execution: a rule-based correlation
+ * pass over the same rows the execution detail already reads — the parsed
+ * error, the timeline, network requests, the ARIA snapshot, locator healing,
+ * app state, the environment diff, the run's sibling and same-worker
+ * executions, and the cluster's fix history. Loads them once and hands them to
+ * the pure `buildFailureClues`; shared by the REST endpoint, the demo mirror,
+ * the AI-context builder and the MCP tools. Returns an empty list when the
+ * execution does not exist.
+ *
+ * `slowRequestMs` lets the server pass the configured slow-request threshold;
+ * without it the engine uses its 1500 ms default.
+ */
+export async function getFailureClues(
+  db: DrizzleDB,
+  id: number,
+  opts: { slowRequestMs?: number | null } = {},
+): Promise<FailureCluesResult> {
+  const [trc] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
+  if (!trc) return { clues: [], failureAt: null };
+
+  const evidence = await inlineCasePayloads(db, trc);
+
+  const [networkRequestRows, [testCase]] = await Promise.all([
+    db.select().from(networkRequests).where(eq(networkRequests.testRunsCaseId, id)),
+    db.select({ filePath: testCases.filePath }).from(testCases).where(eq(testCases.id, trc.testCaseId)),
+  ]);
+
+  const networkForClues = networkRequestRows.map((nr) => ({
+    method: nr.method,
+    url: nr.url,
+    status: nr.status,
+    duration: nr.duration,
+    startTime: nr.startTime ?? undefined,
+    serverLogs: (nr.serverLogs ?? null) as Array<{
+      level?: string | null;
+      message?: string | null;
+      timestamp?: number | null;
+    }> | null,
+  }));
+
+  const timeline = buildFailureTimeline({
+    startedAt: trc.startedAt,
+    duration: trc.duration,
+    timeout: trc.timeout,
+    status: trc.status,
+    steps: trc.steps,
+    stepEvents: trc.stepEvents,
+    consoleLogs: trc.consoleLogs,
+    specFile: testCase?.filePath ?? null,
+    networkRequests: networkForClues,
+  });
+
+  // Run-level facts and the two derived analyses the engine cites, loaded in
+  // parallel. Healing and the environment diff resolve their own baselines.
+  const [healing, environmentDiff, browserPeers, workerExecutions, clusterFix] = await Promise.all([
+    getLocatorHealing(db, id).catch(() => null),
+    getEnvironmentDiff(db, id).catch(() => null),
+    db
+      .select({
+        browserName: testRunsCases.browserName,
+        status: testRunsCases.status,
+      })
+      .from(testRunsCases)
+      .where(and(eq(testRunsCases.testRunId, trc.testRunId), eq(testRunsCases.testCaseId, trc.testCaseId))),
+    trc.workerIndex != null
+      ? db
+          .select({
+            id: testRunsCases.id,
+            testCaseId: testRunsCases.testCaseId,
+            title: testCases.title,
+            status: testRunsCases.status,
+            startedAt: testRunsCases.startedAt,
+          })
+          .from(testRunsCases)
+          .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+          .where(and(eq(testRunsCases.testRunId, trc.testRunId), eq(testRunsCases.workerIndex, trc.workerIndex)))
+      : Promise.resolve(
+          [] as Array<{
+            id: number;
+            testCaseId: number;
+            title: string | null;
+            status: string;
+            startedAt: number | null;
+          }>,
+        ),
+    trc.failureClusterId
+      ? db
+          .select({
+            fixCommit: failureClusters.fixCommit,
+            fixLandedRunId: failureClusters.fixLandedRunId,
+            fixVerification: failureClusters.fixVerification,
+          })
+          .from(failureClusters)
+          .where(eq(failureClusters.id, trc.failureClusterId))
+          .then((r: any[]) => r[0] ?? null)
+      : Promise.resolve(null),
+  ]);
+
+  const clues = buildFailureClues({
+    execution: {
+      id: trc.id,
+      testCaseId: trc.testCaseId,
+      status: trc.status,
+      duration: trc.duration,
+      browserName: trc.browserName,
+      startedAt: startedAtMs(trc.startedAt),
+    },
+    parsedError: trc.error ? parsePlaywrightError(trc.error) : null,
+    timeline,
+    healing,
+    ariaSnapshot: evidence.ariaSnapshot ?? null,
+    appState: (trc.pageState as PageStateLike | null) ?? null,
+    environmentDiff,
+    networkRequests: networkForClues,
+    consoleLogs:
+      (trc.consoleLogs as Array<{ type?: string | null; text?: string | null; timestamp?: number | null }> | null) ??
+      [],
+    browserPeers,
+    workerExecutions: workerExecutions.map((w) => ({ ...w, startedAt: startedAtMs(w.startedAt) })),
+    cluster: clusterFix,
+    timeout: trc.timeout ?? null,
+    slowRequestMs: opts.slowRequestMs ?? null,
+  });
+
+  return { clues, failureAt: timeline.failureAt };
+}
+
+/** Coerce a stored `startedAt` (epoch ms number or Date) to epoch ms. */
+function startedAtMs(value: unknown): number | null {
+  if (value instanceof Date) return value.getTime();
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 export async function getTestRunCaseTraces(db: DrizzleDB, id: number) {

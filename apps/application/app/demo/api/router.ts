@@ -94,6 +94,7 @@ import {
   getTestRunCaseTraces,
   getTestCaseStabilityTrend,
   getFailureTimeline,
+  getFailureClues,
 } from '#shared/handlers/test-cases';
 import {
   getFailureCluster,
@@ -906,6 +907,14 @@ const routes: RouteEntry[] = [
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'execution', +m[1]!);
       return getFailureTimeline(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/clues$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getFailureClues(await getDemoDb(), +m[1]!);
     },
   },
   {

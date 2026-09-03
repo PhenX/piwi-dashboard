@@ -12,7 +12,13 @@ import { FAILED_STATUS_KEYS } from '#shared/utils/test-counts';
 import { buildFixPlan } from '../fix-plan';
 import { enrichFixPlanOwnership } from '../scm/ownership';
 import { getNetworkRequests, getFailureGroups } from '#shared/handlers/test-runs';
-import { getTestCase, getTestRunCaseTraces, getTestCaseStabilityTrend } from '#shared/handlers/test-cases';
+import {
+  getTestCase,
+  getTestRunCaseTraces,
+  getTestCaseStabilityTrend,
+  getFailureClues,
+  type FailureCluesResult,
+} from '#shared/handlers/test-cases';
 import {
   getFailureCluster,
   getClusterDiagnosis,
@@ -102,6 +108,18 @@ function compactBrowser(browser: unknown): string | null {
   const b = browser as BrowserConfig | null;
   if (!b) return null;
   return [b.projectName, b.browserName].filter(Boolean).join('/') || null;
+}
+
+/** Project the deterministic clues into the compact shape MCP tools return. */
+function compactClues(result: FailureCluesResult) {
+  if (result.clues.length === 0) return null;
+  return result.clues.map((clue) => ({
+    rule: clue.rule,
+    strength: clue.strength,
+    title: clue.title,
+    detail: clue.detail,
+    citations: clue.citations.map((c) => c.section),
+  }));
 }
 
 /**
@@ -1031,6 +1049,9 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
     const evidence = want('aria') || want('source') ? await inlineCasePayloads(db, row) : row;
 
+    // Deterministic clues ride alongside the error unless the caller opts out.
+    const clues = want('clues') ? await getFailureClues(db, id).catch(() => null) : null;
+
     return dropNulls({
       executionId: row.id,
       testCaseId: row.testCaseId,
@@ -1041,6 +1062,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       retries: row.retries || null,
       headline: caseHeadline(row)?.headline ?? null,
       error: row.error, // full, untruncated
+      clues: clues ? compactClues(clues) : null,
       clusterId: row.failureClusterId || null,
       line: row.line || null,
       column: row.column || null,
@@ -1629,7 +1651,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       .from(testCases)
       .where(eq(testCases.id, row.testCaseId));
 
-    const [healing, screenshotRows, diagContext] = await Promise.all([
+    const [healing, screenshotRows, diagContext, cluesResult] = await Promise.all([
       getLocatorHealing(db, id).catch(() => null),
       selectCaseScreenshots(db, id),
       row.failureClusterId
@@ -1640,6 +1662,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
             skipScm: true,
           }).catch(() => null)
         : Promise.resolve(null),
+      getFailureClues(db, id).catch(() => null),
     ]);
 
     const rec = healing && healing.source !== 'none' ? healing.recommendation?.recommended : null;
@@ -1652,6 +1675,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       status: row.status,
       headline: caseHeadline(row)?.headline ?? null,
       error: trunc(row.error, 1500),
+      clues: cluesResult ? compactClues(cluesResult) : null,
       clusterId: row.failureClusterId || null,
       slowestStep: row.slowestStep || null,
       steps: row.steps,

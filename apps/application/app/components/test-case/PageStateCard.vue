@@ -41,10 +41,14 @@ const foldedText = computed(() => {
   ];
   return bits.join(' · ');
 });
+
+// Forward the fold/scroll so a clue or AI citation to `appState` can reveal it.
+const cardRef = ref<{ reveal?: () => void } | null>(null);
+defineExpose({ reveal: () => cardRef.value?.reveal?.() });
 </script>
 
 <template>
-  <component :is="cardComponent" v-bind="cardBind">
+  <component :is="cardComponent" ref="cardRef" v-bind="cardBind">
     <template v-if="storageKey && !plain" #folded>
       <span>{{ foldedText }}</span>
     </template>

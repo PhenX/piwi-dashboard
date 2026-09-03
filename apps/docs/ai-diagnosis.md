@@ -101,6 +101,8 @@ Configure a provider via **Settings → AI**, or with environment variables (env
 | `PIWI_AI_RESEARCH_MODEL` / `_PROVIDER` / `_BASE_URL` / `_API_KEY` | Optional **research** model for two-stage diagnosis; provider/base URL/key default to the main ones |
 | `PIWI_AI_EMBEDDING_PROVIDER` / `_MODEL` / `_BASE_URL` / `_API_KEY` | Optional **embedding** model for semantic failure clustering (OpenAI-compatible only — Anthropic has no embeddings API) |
 
+When a run finishes and `PIWI_AI_AUTO_DIAGNOSE` is on, the `PIWI_AI_AUTO_DIAGNOSE_MAX` budget is spent where it buys the most. The run's clusters are ordered by their representative failing execution's top [clue](./evidence#clues): a cluster whose failure carries **no deterministic clue** — the one the model has to reason about from scratch — goes first, then the ones with only a weak clue, and only then a failure a strong clue already explains, with the newest cluster breaking ties. So the budget lands on the failures that most need a model, not simply the three newest.
+
 `GET /api/ai/status` reports whether AI is configured (without ever exposing the key); the UI uses it to show or hide AI actions.
 
 ### Streaming diagnosis
