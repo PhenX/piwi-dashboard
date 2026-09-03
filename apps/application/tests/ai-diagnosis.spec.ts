@@ -360,6 +360,22 @@ test.describe.serial('AI diagnosis endpoints', () => {
     expect(body.diagnosis!.category).toBe('app-bug');
   });
 
+  test('a completed diagnosis stores a context hash matching the current context, so it is not stale', async ({
+    request,
+  }) => {
+    expect(clusterId).toBeTruthy();
+
+    const diagRes = await request.get(`/api/failure-clusters/${clusterId}/diagnosis`);
+    const { diagnosis } = (await diagRes.json()) as { diagnosis: { contextSha: string | null } | null };
+    expect(diagnosis!.contextSha).toBeTruthy();
+
+    // The context preview exposes the same hash. Equal hashes mean the evidence has
+    // not moved on since the diagnosis — the banner rule says: not stale.
+    const ctxRes = await request.get(`/api/failure-clusters/${clusterId}/context?format=json`);
+    const ctx = (await ctxRes.json()) as { contextSha: string };
+    expect(ctx.contextSha).toBe(diagnosis!.contextSha);
+  });
+
   test('POST /api/failure-clusters/:id/diagnose returns 409 for existing completed (no force)', async ({ request }) => {
     expect(clusterId).toBeTruthy();
 
@@ -379,6 +395,25 @@ test.describe.serial('AI diagnosis endpoints', () => {
     const diagnosis = await res.json();
     expect(diagnosis.status).toBe('completed');
     expect(diagnosis.category).toBe('app-bug');
+  });
+
+  test('GET /api/failure-clusters/:id/diagnoses returns snapshotted history, full=1 carries details', async ({
+    request,
+  }) => {
+    expect(clusterId).toBeTruthy();
+
+    // The force re-diagnose above snapshotted the prior version.
+    const lightRes = await request.get(`/api/failure-clusters/${clusterId}/diagnoses`);
+    expect(lightRes.ok()).toBeTruthy();
+    const light = (await lightRes.json()) as { items: Array<{ id: number; details?: unknown }> };
+    expect(light.items.length).toBeGreaterThanOrEqual(1);
+    // The light list omits details to stay small.
+    expect(light.items[0]!.details).toBeUndefined();
+
+    const fullRes = await request.get(`/api/failure-clusters/${clusterId}/diagnoses?full=1`);
+    expect(fullRes.ok()).toBeTruthy();
+    const full = (await fullRes.json()) as { items: Array<{ details?: unknown }> };
+    expect(full.items[0]!.details).toBeTruthy();
   });
 
   test('failure-groups endpoint includes diagnosis compact for clustered groups', async ({ request }) => {
