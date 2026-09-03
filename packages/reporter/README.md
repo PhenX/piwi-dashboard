@@ -34,10 +34,10 @@ import { wrapConfig } from '@piwitests/reporter'
 
 export default wrapConfig(
   defineConfig({
-    use: {
-      trace: 'retain-on-failure',
-      screenshot: 'only-on-failure',
-    },
+    // `use.screenshot` / `use.trace` are optional here — wrapConfig defaults
+    // them to 'only-on-failure' / 'retain-on-failure' when unset so failure
+    // evidence is captured without the fixtures. Set them yourself (including
+    // 'off') to override, or pass `defaultCapture: false` to opt out.
   }),
   {
     serverUrl: 'http://localhost:3000',
@@ -106,6 +106,7 @@ export default defineConfig({
 | `collectScmInfo`            | boolean  | `true`                    | Auto-collect git commit, branch, author                                |
 | `collectCiInfo`             | boolean  | `true`                    | Auto-collect CI environment info                                       |
 | `collectPerformanceMetrics` | boolean  | `true`                    | Collect step timings, network requests and web vitals from the fixture |
+| `defaultCapture`            | boolean  | `true`                    | Via `wrapConfig`, default `use.screenshot`/`use.trace` when unset so failure evidence is captured without the fixtures (explicit values and per-project `use` untouched). Set `false` to opt out |
 | `outputFile`                | string   | —                         | Write a JSON file with the run URL/id/status so CI can consume it (see below) |
 | `apiKey`                    | string   | —                         | API key for authentication (preferred for CI)                          |
 | `username`                  | string   | —                         | Username for dashboard login (use `apiKey` instead when possible)      |

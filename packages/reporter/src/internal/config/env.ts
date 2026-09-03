@@ -16,6 +16,7 @@ const DEFAULTS: PiwiDashboardOptions = {
   captureLocators: true,
   capturePageState: true,
   captureServerTraces: true,
+  defaultCapture: true,
   streaming: true,
   streamingBatchSize: 5,
   streamingBatchDelay: 2000,
@@ -52,6 +53,7 @@ export const PIWI_ENV_KEYS = {
   captureLocators: 'PIWI_CAPTURE_LOCATORS',
   capturePageState: 'PIWI_CAPTURE_PAGE_STATE',
   captureServerTraces: 'PIWI_CAPTURE_SERVER_TRACES',
+  defaultCapture: 'PIWI_DEFAULT_CAPTURE',
   inspectOnFailure: 'PIWI_INSPECT_ON_FAIL',
   pickLocatorOnFailure: 'PIWI_PICK_LOCATOR_ON_FAIL',
   outputFile: 'PIWI_OUTPUT_FILE',
@@ -71,6 +73,15 @@ export const PIWI_ENV_KEYS = {
  * the lookup off `defaultDesktopConfigPath()`.
  */
 export const PIWI_DESKTOP_CONFIG_ENV = 'PIWI_DESKTOP_CONFIG';
+
+/**
+ * Marker `wrapConfig` writes when it fills in Playwright's `screenshot` / `trace`
+ * options (see `defaultCapture`), carrying the comma-separated list of option
+ * names it defaulted. Not part of `PIWI_ENV_KEYS` because it maps to no option —
+ * the reporter reads it once in `onBegin` to log a single line naming the
+ * defaults it applied.
+ */
+export const PIWI_DEFAULTED_CAPTURE_ENV = 'PIWI_DEFAULTED_CAPTURE';
 
 /**
  * Env vars `piwi run` sets on the Playwright child process so the reporter can
@@ -129,6 +140,7 @@ const ENV_FALLBACK_SPECS: ReadonlyArray<{
   { option: 'captureLocators', env: PIWI_ENV_KEYS.captureLocators, kind: 'bool' },
   { option: 'capturePageState', env: PIWI_ENV_KEYS.capturePageState, kind: 'bool' },
   { option: 'captureServerTraces', env: PIWI_ENV_KEYS.captureServerTraces, kind: 'bool' },
+  { option: 'defaultCapture', env: PIWI_ENV_KEYS.defaultCapture, kind: 'bool' },
   { option: 'inspectOnFailure', env: PIWI_ENV_KEYS.inspectOnFailure, kind: 'bool' },
   { option: 'pickLocatorOnFailure', env: PIWI_ENV_KEYS.pickLocatorOnFailure, kind: 'bool' },
   { option: 'outputFile', env: PIWI_ENV_KEYS.outputFile, kind: 'string' },

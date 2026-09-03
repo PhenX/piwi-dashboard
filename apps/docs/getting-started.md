@@ -141,7 +141,7 @@ export default defineConfig({
 })
 ```
 
-Both `use` options are Playwright's own: `trace` records the trace the dashboard's deep views read, and `screenshot` records the failure screenshot shown as evidence. Neither is on by default in Playwright, so without them a failing test uploads its error and steps but no trace or screenshot.
+Both `use` options are Playwright's own: `trace` records the trace the dashboard's deep views read, and `screenshot` records the failure screenshot shown as evidence. Neither is on by default in Playwright, so without them a failing test uploads its error and steps but no trace or screenshot. The [fast path](#fast-path-one-command) wraps your config with [`wrapConfig`](./reporter#installing-via-wrapconfig), which fills in both of these for you when they are unset — so if you set them by hand here you are matching what `init` would have done. Opt out of the auto-defaults with `defaultCapture: false`.
 
 Run your tests and results will appear in the dashboard:
 
