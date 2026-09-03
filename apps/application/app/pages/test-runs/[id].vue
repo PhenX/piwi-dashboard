@@ -22,12 +22,12 @@ useRunStream(refreshLatestRun);
 
 // Which of this project's tests are quarantined — marks the matching rows in the
 // executions list. `candidates=false` skips the heavier flaky-analysis proposal.
-const { data: quarantineData } = projectId
+const { data: quarantineData, refresh: refreshQuarantine } = projectId
   ? await useFetch<{ entries: Array<{ testCaseId: number }> }>(
       `/api/projects/${projectId}/quarantine?candidates=false`,
       { key: `run-quarantine-${projectId}` },
     )
-  : { data: ref<{ entries: Array<{ testCaseId: number }> } | null>(null) };
+  : { data: ref<{ entries: Array<{ testCaseId: number }> } | null>(null), refresh: async () => {} };
 const quarantinedCaseIds = computed(() => new Set((quarantineData.value?.entries ?? []).map((e) => e.testCaseId)));
 
 const latestRunId = computed(() => latestRunInfo.value?.id ?? testRun.value?.project?.latestRunId ?? null);
@@ -783,6 +783,7 @@ function handleSelectCluster(clusterId: number) {
             :project-key="testRun?.projectId"
             :project-name="testRun?.project?.name"
             class="flex-1 min-h-0"
+            @quarantine-changed="refreshQuarantine"
           />
         </template>
 
