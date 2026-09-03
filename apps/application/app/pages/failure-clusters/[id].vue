@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { describeCluster } from '#shared/describe-cluster';
 import type { FailureClusterDetail } from '~~/types/api';
+import type { FixPlan } from '#shared/fix-plan.types';
 import { renderAnsi } from '~/utils';
 import { stripAnsi } from '~/utils/text-format';
 import { buildRetryCommand } from '~/utils/retry-command';
@@ -17,6 +18,10 @@ const isDemoMode = Boolean(useRuntimeConfig().public.demoMode);
 const clusterDiagnosis = provideClusterDiagnosis(clusterId);
 
 const { data: cluster, refresh } = await useFetch<FailureClusterDetail>(`/api/failure-clusters/${clusterId}`);
+
+// The fix plan — the one artifact bundling diagnosis, edits, failing tests, owner
+// and the verify command. Same endpoint the `get_fix_plan` MCP tool returns.
+const { data: fixPlan } = await useFetch<FixPlan>(`/api/failure-clusters/${clusterId}/fix-plan`);
 
 useHead(
   computed(() => ({
@@ -186,6 +191,7 @@ async function triggerRerun() {
 
 // Reveal-on-citation: a diagnosis evidence citation (right column) can unfold and
 // scroll to the matching left-column section. Refs point at the foldable cards.
+const fixPlanSection = ref<{ reveal: () => void } | null>(null);
 const errorSection = ref<{ reveal: () => void } | null>(null);
 const evidenceSection = ref<{ reveal: () => void } | null>(null);
 const scmSection = ref<{ reveal: () => void } | null>(null);
@@ -194,6 +200,7 @@ const visualDiffSection = ref<{ reveal: () => void } | null>(null);
 const domSnapshotSection = ref<{ reveal: () => void } | null>(null);
 
 const sectionToCard: Record<string, () => { reveal: () => void } | null> = {
+  fixPlan: () => fixPlanSection.value,
   sampleError: () => errorSection.value,
   executionError: () => errorSection.value,
   environmentDiff: () => envDiffSection.value,
@@ -220,6 +227,11 @@ const sectionToCard: Record<string, () => { reveal: () => void } | null> = {
 provide(clusterSectionLocatorKey, {
   canLocate: (id: string) => id in sectionToCard,
   open: (id: string) => sectionToCard[id]?.()?.reveal(),
+});
+
+// Deep link from the execution page's "Open fix plan" — unfold and scroll to it.
+onMounted(() => {
+  if (route.hash === '#fix-plan') nextTick(() => fixPlanSection.value?.reveal());
 });
 
 // Breadcrumbs
@@ -291,6 +303,18 @@ const breadcrumbItems = computed(() => [
           <!-- Left: error + test evidence + SCM investigation. Sections fold to a
                single header with a peek so the whole failure reads at a glance. -->
           <div class="space-y-4 xl:overflow-y-auto">
+            <!-- Fix plan: diagnosis + edits + failing tests + owner + verify, in one card -->
+            <FixPlanCard
+              v-if="fixPlan"
+              ref="fixPlanSection"
+              :plan="fixPlan"
+              :project-key="cluster.project?.id"
+              :project-name="cluster.project?.name"
+              :rerun-info="rerunInfo"
+              :rerunning="rerunning"
+              @rerun="triggerRerun"
+            />
+
             <!-- Error message -->
             <CollapsibleSectionCard
               v-if="cluster.sampleError"
@@ -467,6 +491,9 @@ const breadcrumbItems = computed(() => [
             <DiagnosisPanel
               :cluster-id="clusterId"
               :last-seen-run-id="cluster?.lastSeenRunId"
+              :cluster-status="cluster?.status"
+              :fix-verification="cluster?.fixVerification"
+              :last-seen-at="cluster?.lastSeenAt"
               :affected-test-cases="cluster?.affectedTestCases ?? []"
             />
           </div>
