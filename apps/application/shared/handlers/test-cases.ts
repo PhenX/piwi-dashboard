@@ -418,6 +418,7 @@ export async function getTestRunCase(
     aiUsage: trc.aiUsage,
     consoleLogs: trc.consoleLogs,
     ariaSnapshot: evidence.ariaSnapshot,
+    evidenceSources: trc.evidenceSources,
     workerIndex: trc.workerIndex,
     shardIndex: trc.shardIndex,
     browser: trc.browser,

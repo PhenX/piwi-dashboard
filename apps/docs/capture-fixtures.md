@@ -139,6 +139,7 @@ Capture is designed to never fail or noticeably slow down a test:
 - **Data missing for some specs only** — those specs import `test` from `@playwright/test` instead of your fixtures file. Capture is per-`test`-object; the import is the switch.
 - **No fixture data at all** — check that `collectPerformanceMetrics` is not `false`, and that tests navigate to a real page (`about:blank`-only tests produce no Web Vitals).
 - **ARIA snapshot or locator healing missing** — same root causes as above; also check `captureLocators` / `PIWI_CAPTURE_LOCATORS`.
+- **An evidence card says "not captured"** — that project has never had the fixtures active. Open the in-app `/setup` capability checklist (each empty card links to it) to see which capabilities are live and what to switch on; a card that instead reads *nothing happened* means the fixtures ran and this execution simply produced nothing. With an uploaded trace, the console, network and ARIA cards are recovered from the trace even without the fixtures and marked *derived from the trace*.
 
 ## Try it
 

@@ -13,6 +13,8 @@ const props = defineProps<{
   storageKey?: string;
   /** Whether the card starts folded on first visit (no stored cookie). */
   defaultFolded?: boolean;
+  /** Mark the request list as recovered from the trace (the capture fixtures were absent). */
+  derivedFromTrace?: boolean;
 }>();
 
 const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
@@ -285,6 +287,7 @@ function rowAccent(r: DecoratedRequest): string {
     <template v-if="storageKey" #folded>{{ peek }}</template>
     <template #actions>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <TraceDerivedChip v-if="derivedFromTrace" />
         <template v-if="view === 'captured'">
           <div v-if="totals.errorLogs > 0 || totals.warnLogs > 0" class="flex items-center gap-2 text-xs">
             <span v-if="totals.errorLogs > 0" class="flex items-center gap-1 text-red-600 dark:text-red-400">

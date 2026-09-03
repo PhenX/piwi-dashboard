@@ -14,6 +14,7 @@ import type { FailureCluster } from '../database/schema';
 import type { DiagnosisContextCoverage } from '~~/types/api';
 import { condenseErrorText, maskVolatile, stripAnsi } from '#shared/error-fingerprint';
 import { DIAGNOSIS_SECTIONS } from '#shared/diagnosis-sections';
+import { evidenceAbsenceReason } from '#shared/evidence-state';
 import { durationStats } from '#shared/utils/stats';
 import { computeRegressionContext } from './regression-context';
 import { normalizeGitUrl } from './scm/git-url';
@@ -376,6 +377,7 @@ async function loadExecutionRow(db: DbClient, where: SQL) {
       webVitals: testRunsCases.webVitals,
       pageState: testRunsCases.pageState,
       aiUsage: testRunsCases.aiUsage,
+      evidenceSources: testRunsCases.evidenceSources,
       testAnnotations: testRunsCases.testAnnotations,
       workerIndex: testRunsCases.workerIndex,
       shardIndex: testRunsCases.shardIndex,
@@ -2835,17 +2837,32 @@ export async function buildDiagnosisContext(
       ? `SCM diff fetch failed: ${scmError}`
       : 'no SCM diff available — check repository URL in project settings or configure a SCM token';
   }
+  // The capture fixtures were active for this execution when any fixture-produced
+  // field is present that was not itself recovered from the trace. The humans'
+  // empty cards read the same signal via `resolveEvidenceState`, so the model and
+  // the reader get the same reason for a blank section.
+  const evidenceSrc = (rep?.evidenceSources as { console?: string; network?: string; aria?: string } | null) ?? {};
+  const fixturesActive =
+    (sectionIds.has('console') && evidenceSrc.console !== 'trace') ||
+    (sectionIds.has('networkRequests') && evidenceSrc.network !== 'trace') ||
+    sectionIds.has('appState') ||
+    sectionIds.has('webVitals') ||
+    (Boolean(rep?.ariaSnapshot) && evidenceSrc.aria !== 'trace') ||
+    Boolean(rep?.aiUsage);
   if (!sectionIds.has('console')) {
-    absentReasons.console =
-      'no console entries captured — collectPerformanceMetrics may be disabled in reporter options';
+    absentReasons.console = evidenceAbsenceReason('console', { hasData: false, fixturesActive })!;
   }
   if (!sectionIds.has('networkRequests')) {
-    absentReasons.networkRequests =
-      'no network data captured — collectPerformanceMetrics may be disabled in reporter options';
+    absentReasons.networkRequests = evidenceAbsenceReason('network', { hasData: false, fixturesActive })!;
   }
   if (!sectionIds.has('serverTraces')) {
-    absentReasons.serverTraces =
-      'no server-side spans captured — install a Piwi backend integration to emit the X-Piwi-Trace header';
+    absentReasons.serverTraces = evidenceAbsenceReason('backendLogs', { hasData: false, fixturesActive })!;
+  }
+  if (!sectionIds.has('serverLogs')) {
+    absentReasons.serverLogs = evidenceAbsenceReason('backendLogs', { hasData: false, fixturesActive })!;
+  }
+  if (!sectionIds.has('webVitals')) {
+    absentReasons.webVitals = evidenceAbsenceReason('webVitals', { hasData: false, fixturesActive })!;
   }
   if (!sectionIds.has('environmentDiff')) {
     absentReasons.environmentDiff = 'no passing baseline execution recorded for this test to compare against';
@@ -2859,7 +2876,7 @@ export async function buildDiagnosisContext(
       'no DOM snapshot — requires an uploaded trace containing frame snapshots (enable trace recording and uploadTraces)';
   }
   if (!sectionIds.has('appState')) {
-    absentReasons.appState = 'no page state captured — capturePageState may be disabled or the reporter predates it';
+    absentReasons.appState = evidenceAbsenceReason('appState', { hasData: false, fixturesActive })!;
   }
 
   const coverageBlock = buildCoverageBlock(contextSections, {

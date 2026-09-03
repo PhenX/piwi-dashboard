@@ -20,6 +20,8 @@ const props = defineProps<{
   storageKey?: string;
   /** Whether the card starts folded on first visit (no stored cookie). */
   defaultFolded?: boolean;
+  /** Mark the entries as recovered from the trace (the capture fixtures were absent). */
+  derivedFromTrace?: boolean;
 }>();
 
 const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
@@ -80,6 +82,7 @@ function consoleTypeIcon(type: string): string {
     :count="entries.length"
     help="case.console"
   >
+    <template v-if="derivedFromTrace" #actions><TraceDerivedChip /></template>
     <template v-if="storageKey" #folded>{{ peek }}</template>
     <div class="space-y-1 max-h-80 overflow-y-auto">
       <div

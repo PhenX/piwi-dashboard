@@ -318,7 +318,7 @@ export const HELP_TOPICS = {
   },
   'case.web-vitals': {
     title: 'Web Vitals',
-    text: 'Core Web Vitals (LCP, CLS, etc.) captured during the test, measuring real loading and responsiveness of the page under test.',
+    text: 'Core Web Vitals (LCP, CLS, etc.) captured during the test, measuring real loading and responsiveness of the page under test. When empty, the card says which of three things it means: not captured (add the capture fixtures), captured but nothing recorded, or not applicable (Web Vitals need a Chromium browser).',
     doc: 'capture-fixtures',
   },
   'case.traces': {
@@ -328,22 +328,22 @@ export const HELP_TOPICS = {
   },
   'case.console': {
     title: 'Console output',
-    text: 'Browser console messages logged while this test ran — often the first clue for a JavaScript error behind a failure.',
+    text: 'Browser console messages logged while this test ran — often the first clue for a JavaScript error behind a failure. An empty card says which of three things it means: not captured (add the capture fixtures — links to /setup), captured but the page logged nothing, or not applicable. When a trace but no fixtures were present, the entries are recovered from the trace and marked "derived from the trace".',
     doc: 'capture-fixtures',
   },
   'case.network': {
     title: 'Network requests',
-    text: 'HTTP requests the page made during the test, with timing and status — useful for spotting failed or slow calls. When the execution has a trace, the Full trace view shows every request (all resource types) with headers, timing phases, a waterfall and capped body previews; sensitive header values are masked.',
+    text: 'HTTP requests the page made during the test, with timing and status — useful for spotting failed or slow calls. When the execution has a trace, the Full trace view shows every request (all resource types) with headers, timing phases, a waterfall and capped body previews; sensitive header values are masked. An empty card distinguishes not captured (add the capture fixtures) from captured-but-nothing-happened; with a trace and no fixtures the list is recovered from the trace and marked "derived from the trace".',
     doc: 'evidence#trace-powered-deep-views',
   },
   'case.backend-logs': {
     title: 'Backend server logs',
-    text: 'Server-side warnings and errors captured during the test, correlated with this execution via a Piwi backend integration.',
+    text: 'Server-side warnings and errors captured during the test, correlated with this execution via a Piwi backend integration. When empty, the card says whether the capture fixtures are missing or the app under test has no Piwi backend integration (backend logs are "not applicable" without one).',
     doc: 'backend-logs',
   },
   'case.aria': {
     title: 'ARIA snapshot',
-    text: 'A snapshot of the accessibility tree at the moment of failure — what assistive tech saw, and useful grounding for AI diagnosis.',
+    text: 'A snapshot of the accessibility tree at the moment of failure — what assistive tech saw, and useful grounding for AI diagnosis. An empty card says whether it was not captured (add the capture fixtures) or captured with nothing to snapshot; with a trace and no fixtures it is recovered from the trace\'s error context and marked "derived from the trace".',
     doc: 'ai-diagnosis#what-a-diagnosis-contains',
   },
 
