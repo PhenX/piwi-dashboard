@@ -262,6 +262,13 @@ const breadcrumbItems = computed(() => [
           <BreadcrumbNav :items="breadcrumbItems" />
         </template>
         <template #right>
+          <QuarantineAllButton
+            v-if="cluster && canWrite"
+            :project-id="cluster.project?.id"
+            :cases="cluster.affectedTestCases ?? []"
+            :reason="`Quarantined from cluster #${cluster.id}`"
+            @changed="refresh"
+          />
           <ShareLinksModal
             v-if="cluster && !isDemoMode"
             :endpoint="`/api/failure-clusters/${cluster.id}/share-links`"
@@ -436,13 +443,6 @@ const breadcrumbItems = computed(() => [
                   :cases="affectedRetryCases"
                   label="Run affected locally"
                   :preset-options="{ mode: 'grep' }"
-                />
-                <QuarantineAllButton
-                  v-if="canWrite"
-                  :project-id="cluster.project?.id"
-                  :cases="cluster.affectedTestCases ?? []"
-                  :reason="`Quarantined from cluster #${cluster.id}`"
-                  @changed="refresh"
                 />
                 <UTooltip text="Unlink incorrectly clustered test cases from this group">
                   <UButton
