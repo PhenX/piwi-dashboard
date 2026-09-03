@@ -316,7 +316,9 @@ Fold A–C into a single page shape used by both the execution and the cluster: 
 
 ## 7. A prioritized plan
 
-### Quick wins (days each, mostly one file) — shipped 2026-09-02
+**Delivery status (2026-09-03).** Shipped and merged to `main`: all fourteen quick wins, **A** verdict headline (#432), **B** failure timeline with call context (#433), **C** clue engine (#435), **G** loop-closing + partial-run verification (#438), the fix-plan page and diagnosis history (#439), **I** evidence without setup (#440), plus agent tooling — the `run-app` skill and `app:screens --route` (#434). In progress: quarantine / owner / issue-link actions with bulk triage (`claude/audit-triage-actions`). Not started: the cluster exemplar refresh, and big bets **D**, **E**, **F**, **J**, **K**, **L**. Each list below is marked ✅ shipped / 🔄 in progress / ⬜ not started.
+
+### Quick wins (days each, mostly one file) — ✅ shipped 2026-09-02
 
 All fourteen landed in PRs #428 (docs), #429 (reporter and alerts), #430 (UI) and #431 (server analysis), plus four extras the sessions added on the way: ANSI-colored error text where raw escape codes leaked, a navbar that no longer repeats the breadcrumb, a `/test-runs/:id/locate` route that resolves an execution from its file, title and retry, and the deterministic cluster name applied everywhere the signature used to be shown.
 
@@ -337,23 +339,23 @@ All fourteen landed in PRs #428 (docs), #429 (reporter and alerts), #430 (UI) an
 
 ### Medium (a few weeks, one feature each)
 
-- **A** the structured error parser + verdict headline, reused by the run list, alerts, PR comments and the CLI.
-- **B** the failure timeline (needs 4 above).
-- **G** the loop-closing rules and the partial-run verification change.
-- **I** `wrapConfig` defaults, trace-derived fallbacks, three-state empty cards linking to `/setup`.
-- Fix-plan page + diagnosis history UI (both endpoints exist).
-- Quarantine / owner / link-to-issue actions on the execution and cluster pages; a multi-select on the run's executions with bulk triage.
-- Cluster exemplar refresh (`sampleError` from the latest occurrence, keep the original for re-fingerprinting).
+- ✅ **A** the structured error parser + verdict headline, reused by the run list, alerts, PR comments and the CLI. *(#432)*
+- ✅ **B** the failure timeline (needs 4 above), with per-action call context. *(#433)*
+- ✅ **G** the loop-closing rules and the partial-run verification change — plus fix-author notification and re-run from the cluster page. *(#438)*
+- ✅ **I** `wrapConfig` defaults, trace-derived fallbacks, three-state empty cards linking to `/setup`. *(#440)*
+- ✅ Fix-plan page + diagnosis history UI (both endpoints existed); real staleness via a written context hash. *(#439)*
+- 🔄 Quarantine / owner / link-to-issue actions on the execution and cluster pages; a multi-select on the run's executions with bulk triage. *(`claude/audit-triage-actions`)*
+- ⬜ Cluster exemplar refresh (`sampleError` from the latest occurrence, keep the original for re-fingerprinting).
 
 ### Big bets (a quarter each)
 
-- **C** the clue engine, with clues fed into the diagnosis prompt as a first-class section and used to prioritize the auto-diagnose budget.
-- **D** the failure inbox as the home page.
-- **E** attempt diffing for flaky tests, feeding the root-cause classifier.
-- **F** reproduction bundle + generated bisect.
-- **J** sampled green ARIA snapshots + structural page diff.
-- **K** resolved-cluster memory.
-- **L** the unified investigation layout.
+- ✅ **C** the clue engine, with clues fed into the diagnosis prompt as a first-class section and used to prioritize the auto-diagnose budget. *(#435)*
+- ⬜ **D** the failure inbox as the home page.
+- ⬜ **E** attempt diffing for flaky tests, feeding the root-cause classifier.
+- ⬜ **F** reproduction bundle + generated bisect.
+- ⬜ **J** sampled green ARIA snapshots + structural page diff.
+- ⬜ **K** resolved-cluster memory.
+- ⬜ **L** the unified investigation layout.
 
 ---
 
