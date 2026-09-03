@@ -295,9 +295,11 @@ const breadcrumbItems = computed(() => [
             :triage-note="triageNote"
             :triage-saving="triageSaving"
             :triage-changed="triageChanged"
+            :can-write="canWrite"
             @update:triage-status="triageStatus = $event"
             @update:triage-note="triageNote = $event"
             @save-triage="saveTriage"
+            @links-updated="refresh"
           />
         </div>
 

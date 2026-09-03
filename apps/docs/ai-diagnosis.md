@@ -28,6 +28,12 @@ Failed test cases that share the same **error fingerprint** are grouped into a c
 
 Clustering is always on and requires no configuration. When the normalization algorithm is improved, existing clusters are migrated in place (re-fingerprinted from a stored sample error), so triage status, notes, and diagnoses survive the change. AI diagnosis is opt-in.
 
+### Triage: owner and known issue
+
+The cluster page's triage rail names an **owner** — who answers for these tests. It comes from a `piwi:owner` annotation on the test when one exists, otherwise from the repository's [CODEOWNERS](./concepts#tags-ownership) matched against the spec's file path (the source is labeled so you can tell which). The owner links to every test that owner is responsible for, and when it is derived from CODEOWNERS a one-line hint shows how to override it per test.
+
+The same rail pins a **known issue** — the Jira ticket, GitHub issue or PR that tracks the cluster. It is an entity link (`failure_cluster` type), so the provider and key are detected from the URL and unfurled; the key travels with the cluster wherever it is listed, so a triaged cluster shows what is already being done about it. Reporter or admin role is required to pin or remove one. Read the same links over MCP with [`list_links`](./mcp) (`entityType: 'failure_cluster'`).
+
 ### Semantic merging (optional)
 
 If an **embedding** model role is configured (Settings → AI), Piwi adds a semantic layer on top of the deterministic fingerprint. After a run, the clusters first seen in it are embedded and compared (cosine similarity) against the project's other open clusters; near-duplicates above `PIWI_CLUSTER_SIMILARITY_THRESHOLD` (default `0.92`) are merged into the longest-lived cluster. This catches failures that are the same root cause but phrased differently enough to dodge the fingerprint. Merges record a fingerprint alias so future occurrences attach to the survivor instead of re-forking. With no embedding role configured, clustering stays purely deterministic.

@@ -124,7 +124,15 @@ import {
   approveMergeSuggestion,
   rejectMergeSuggestion,
 } from '#shared/handlers/cluster-merge-suggestions';
-import { listLinks, createLink, patchLink, deleteLink, refreshLinkMeta } from '#shared/handlers/links';
+import {
+  listLinks,
+  createLink,
+  patchLink,
+  deleteLink,
+  refreshLinkMeta,
+  LINK_ENTITY_TYPES,
+  type LinkEntityType,
+} from '#shared/handlers/links';
 import {
   getTestRun,
   getRecentTestRuns,
@@ -1441,10 +1449,10 @@ const routes: RouteEntry[] = [
     handler: async (_, __, q) => {
       const entityType = q?.get('entityType') ?? '';
       const entityId = parseInt(q?.get('entityId') ?? '0', 10);
-      if (!['test_run', 'test_runs_case', 'test_case'].includes(entityType) || !entityId) {
+      if (!(LINK_ENTITY_TYPES as readonly string[]).includes(entityType) || !entityId) {
         throw demoHttpError(400, 'Invalid entityType or entityId');
       }
-      return { items: (await listLinks(await getDemoDb(), entityType, entityId)).links };
+      return { items: (await listLinks(await getDemoDb(), entityType as LinkEntityType, entityId)).links };
     },
   },
   {

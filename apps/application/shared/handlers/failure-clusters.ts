@@ -5,6 +5,7 @@
   testRunsCases,
   testCases,
   projects,
+  entityLinks,
 } from '../../server/database/schema';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 
@@ -46,13 +47,14 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
         testCaseId: testCases.id,
         title: testCases.title,
         filePath: testCases.filePath,
+        owner: testCases.owner,
         runCount: sql<number>`count(${testRunsCases.id})`,
         recentTestRunsCaseId: sql<number>`max(${testRunsCases.id})`,
       })
       .from(testRunsCases)
       .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
       .where(eq(testRunsCases.failureClusterId, clusterId))
-      .groupBy(testCases.id, testCases.title, testCases.filePath)
+      .groupBy(testCases.id, testCases.title, testCases.filePath, testCases.owner)
       .orderBy(desc(sql`count(${testRunsCases.id})`))
       .limit(50),
   ]);
@@ -60,6 +62,17 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
   // Which affected tests are currently quarantined — drives the "Quarantined"
   // chip and the per-test / "Quarantine all affected" actions on the page.
   const quarantinedIds = await getQuarantinedCaseIds(db, cluster.projectId);
+
+  // Known-issue links pinned to this cluster (Jira / GitHub issue, etc.).
+  const links = await db.select().from(entityLinks).where(eq(entityLinks.failureClusterId, clusterId));
+
+  // The cluster's owner from the representative test's `piwi:owner` annotation
+  // (the most-affected test wins). The server route layers CODEOWNERS on top when
+  // no annotation exists, the same as the execution page's verdict owner.
+  const annotationOwner = (affectedTestCases[0] as { owner?: string | null } | undefined)?.owner ?? null;
+  const owner = annotationOwner
+    ? { name: annotationOwner, source: 'annotation' as const }
+    : (null as { name: string; source: 'annotation' | 'codeowners' } | null);
 
   return {
     ...cluster,
@@ -77,10 +90,15 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
       : null,
     project: project ?? null,
     affectedTestCases: affectedTestCases.map((t: any) => ({
-      ...t,
+      testCaseId: t.testCaseId,
+      title: t.title,
+      filePath: t.filePath,
       runCount: Number(t.runCount),
+      recentTestRunsCaseId: t.recentTestRunsCaseId,
       quarantined: quarantinedIds.has(t.testCaseId),
     })),
+    links,
+    owner,
   };
 }
 

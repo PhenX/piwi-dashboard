@@ -28,7 +28,7 @@ import {
 import { computeRunInsights } from '#shared/handlers/run-insights';
 import { searchProjectsTestRunsCases } from '#shared/handlers/search';
 import { listTags } from '#shared/handlers/tags';
-import { listLinks } from '#shared/handlers/links';
+import { listLinks, type LinkEntityType } from '#shared/handlers/links';
 import { getAdminStats } from '#shared/handlers/admin';
 import { createTestFunction } from '#shared/handlers/test-functions';
 import { createTestFunctionSchema } from '#shared/test-function-schemas';
@@ -1403,10 +1403,14 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
           ? resolveTestRunCaseProjectId
           : entityType === 'test_case'
             ? resolveCaseProjectId
-            : null;
-    if (!resolver) throw new Error('entityType must be test_run, test_runs_case, or test_case');
+            : entityType === 'failure_cluster'
+              ? resolveClusterProjectId
+              : null;
+    if (!resolver) {
+      throw new Error('entityType must be test_run, test_runs_case, test_case, or failure_cluster');
+    }
     if ((await checkEntityScope(db, ctx, entityId, resolver)) === 'not-found') return null;
-    const { links } = await listLinks(db, entityType, entityId);
+    const { links } = await listLinks(db, entityType as LinkEntityType, entityId);
     return {
       links: links.map((l: any) =>
         dropNulls({

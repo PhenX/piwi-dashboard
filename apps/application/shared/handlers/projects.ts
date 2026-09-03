@@ -9,6 +9,7 @@ import {
   failureClusters,
   failureDiagnoses,
   casePayloads,
+  entityLinks,
 } from '../../server/database/schema';
 import { asc, desc, eq, exists, sql, and, or, inArray, gte, lte, isNull, isNotNull, count } from 'drizzle-orm';
 import { jsonArrayContainsAll, parseTagFilter } from '../utils/tag-filter';
@@ -1153,6 +1154,26 @@ export async function getProjectFailureClusters(db: DrizzleDB, projectId: number
       : [];
   const diagnosisById = new Map(diagnosisRows.map((d: any) => [d.clusterId, d]));
 
+  // A pinned known-issue link per cluster (newest wins), carried into the list as
+  // a compact chip so a triaged cluster shows what is already tracking it.
+  const linkRows: any[] = await db
+    .select({
+      clusterId: entityLinks.failureClusterId,
+      id: entityLinks.id,
+      url: entityLinks.url,
+      provider: entityLinks.provider,
+      key: entityLinks.key,
+    })
+    .from(entityLinks)
+    .where(inArray(entityLinks.failureClusterId, clusterIds))
+    .orderBy(desc(entityLinks.id));
+  const issueByCluster = new Map<number, { url: string; provider: string; key: string | null }>();
+  for (const row of linkRows) {
+    if (row.clusterId != null && !issueByCluster.has(row.clusterId)) {
+      issueByCluster.set(row.clusterId, { url: row.url, provider: row.provider, key: row.key ?? null });
+    }
+  }
+
   return clusters.map((c: any) => {
     const runData = runDataById.get(c.lastSeenRunId) as { status: string; startTime: Date } | undefined;
     return {
@@ -1161,6 +1182,7 @@ export async function getProjectFailureClusters(db: DrizzleDB, projectId: number
       lastSeenRunStatus: runData?.status ?? null,
       lastSeenAt: runData?.startTime ?? null,
       diagnosis: diagnosisById.get(c.id) ?? null,
+      issueLink: issueByCluster.get(c.id) ?? null,
     };
   });
 }

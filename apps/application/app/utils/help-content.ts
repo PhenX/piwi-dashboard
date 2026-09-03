@@ -378,6 +378,14 @@ export const HELP_TOPICS = {
   'cluster.triage': {
     text: 'Track a cluster’s state: set its status, add triage notes, or extract a subset of failures into a separate cluster.',
   },
+  'cluster.owner': {
+    title: 'Owner',
+    text: 'Who answers for this cluster’s tests. Taken from a `piwi:owner` annotation on the test when present, otherwise derived from the repository’s CODEOWNERS for the spec’s file path. The link filters this project’s test cases to that owner.',
+  },
+  'cluster.known-issue': {
+    title: 'Known issue',
+    text: 'Pin the Jira ticket, GitHub issue or PR that tracks this cluster. The link’s key travels with the cluster wherever it is listed, so a triaged cluster shows what is already being done about it.',
+  },
   'cluster.resolution': {
     title: 'Resolution',
     text: 'Recorded when a run turns this cluster green — every test it covers ran and passed, in a full suite or a filtered re-run of just those tests: when the fix landed, how long the cluster stayed open, and whether the change matched the diagnosed files. If the failure comes back, the cluster is marked as regressed rather than quietly reopened.',

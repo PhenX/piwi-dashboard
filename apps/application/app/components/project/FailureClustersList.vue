@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { describeCluster, clusterSignatureLine } from '#shared/describe-cluster';
+import { getProviderIcon } from '#shared/link-detect';
 import type { TableColumn } from '@nuxt/ui';
 import type { ProjectFailureCluster } from '~~/types/api';
 
@@ -67,13 +68,29 @@ const columns: TableColumn<ProjectFailureCluster>[] = [
 
         <template #signature-cell="{ row }">
           <div class="min-w-0 space-y-0.5">
-            <NuxtLink
-              :to="`/failure-clusters/${row.original.id}`"
-              class="text-sm text-primary hover:underline truncate block"
-              :title="row.original.signature"
-            >
-              {{ describeCluster(row.original) }}
-            </NuxtLink>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <NuxtLink
+                :to="`/failure-clusters/${row.original.id}`"
+                class="text-sm text-primary hover:underline truncate"
+                :title="row.original.signature"
+              >
+                {{ describeCluster(row.original) }}
+              </NuxtLink>
+              <a
+                v-if="row.original.issueLink"
+                :href="row.original.issueLink.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="shrink-0"
+                :title="`Known issue: ${row.original.issueLink.key ?? row.original.issueLink.url}`"
+                @click.stop
+              >
+                <UBadge color="neutral" variant="subtle" size="xs" class="gap-1">
+                  <UIcon :name="getProviderIcon(row.original.issueLink.provider as any)" class="size-3" />
+                  {{ row.original.issueLink.key ?? 'Issue' }}
+                </UBadge>
+              </a>
+            </div>
             <p v-if="clusterSignatureLine(row.original)" class="text-xs text-gray-500 font-mono truncate">
               {{ row.original.signature }}
             </p>
