@@ -76,6 +76,10 @@ When an execution has an uploaded trace, two evidence blocks go deeper — no co
 
 Executions without a trace keep the reporter-captured baseline — the blocks simply hint at what a trace would add. Traces recorded without embedded sources still show the full frame list.
 
+### Recovered from the trace without the fixtures
+
+A project that installed only the reporter — no [capture fixtures](./capture-fixtures) — still gets most of the failure evidence, because the trace carries it. When a reported execution has an uploaded trace but no fixture data, the dashboard recovers three things at ingest and stores them in the same place the fixtures would: the **console** entries (`warning`/`error`/`assert`), the **network requests** (method, URL, status, duration, start time — restricted to the API and document requests the fixtures keep, and including the failed and aborted requests the fixtures never captured), and the failure-time **ARIA snapshot** when Playwright wrote an `error-context` alongside the trace. Cards showing this data carry a **derived from the trace** chip. Fixture-captured data is never replaced, and each kind is recovered only when it is otherwise missing. This is on by default with [`wrapConfig`](./reporter#installing-via-wrapconfig), which records the trace for you.
+
 ## Trace viewer
 
 Every trace shows a **View trace** button that opens the full Playwright trace viewer — the same UI as `npx playwright show-trace`, with the DOM snapshot timeline, action log, network, console, and source.
