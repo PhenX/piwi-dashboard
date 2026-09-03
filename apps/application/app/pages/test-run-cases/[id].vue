@@ -631,11 +631,14 @@ provide(clusterSectionLocatorKey, {
             :retry-cases="retryCases"
             @refresh="refresh()"
           />
+          <!-- Why this execution never ran, and what blocked it — the whole story
+               for a did-not-run case, so it stays pinned. The downstream tests a
+               failure blocked are a consequence, not the summary, so they move
+               into the Diagnosis tab below. -->
           <DidNotRunCard
             :status="testCase?.status"
             :reason="(testCase as any)?.didNotRunReason ?? null"
             :blocked-by-case="(testCase as any)?.blockedByCase ?? null"
-            :blocked-tests="(testCase as any)?.blockedTests ?? null"
             class="mt-4"
           />
         </template>
@@ -700,6 +703,9 @@ provide(clusterSectionLocatorKey, {
                 />
 
                 <FailureClusterCard v-if="failureCluster" :cluster="failureCluster" />
+
+                <!-- The downstream tests this failure blocked from running -->
+                <DidNotRunCard :blocked-tests="(testCase as any)?.blockedTests ?? null" />
 
                 <TestCaseAiCard :test-runs-case-id="Number(testCaseId)" />
               </div>
