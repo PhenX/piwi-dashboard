@@ -123,8 +123,13 @@ test.describe('Failure cluster page layout', () => {
     await expect(tab2).toBeVisible();
 
     // Switching tab updates the case header (file path) and the link target.
+    // Scope to the Test evidence card — the fix plan card above it also names the
+    // affected specs, so an unscoped match could land on that copy instead.
     await tab2.click();
-    await expect(page.getByText('tests/checkout.spec.ts').first()).toBeVisible();
+    const evidenceCard = page
+      .locator('div.scroll-mt-4')
+      .filter({ has: page.getByRole('heading', { name: 'Test evidence' }) });
+    await expect(evidenceCard.getByText('tests/checkout.spec.ts').first()).toBeVisible();
 
     const link = page.getByRole('link', { name: 'Open execution' }).first();
     await expect(link).toHaveAttribute('href', /\/test-run-cases\/\d+/);
