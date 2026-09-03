@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { describeCluster, clusterSignatureLine } from '#shared/describe-cluster';
+import { getProviderIcon } from '#shared/link-detect';
 import type { TableColumn } from '@nuxt/ui';
 import type { ProjectFailureCluster } from '~~/types/api';
 
@@ -8,7 +9,11 @@ const props = defineProps<{
 }>();
 
 const statusFilter = ref<string | undefined>(undefined);
-const { data: clusters, pending: loading } = await useFetch(
+const {
+  data: clusters,
+  pending: loading,
+  refresh,
+} = await useFetch(
   () => {
     const params = new URLSearchParams();
     if (statusFilter.value) params.set('status', statusFilter.value);
@@ -25,7 +30,71 @@ const { data: clusters, pending: loading } = await useFetch(
 
 const resolutionOf = (cluster: ProjectFailureCluster) => fixVerificationBadge(cluster.fixVerification);
 
-const columns: TableColumn<ProjectFailureCluster>[] = [
+// ── Bulk status ─────────────────────────────────────────────────────────────
+// Multi-select the clusters and set them all to one status at once, so a
+// project's backlog doesn't have to be triaged a row at a time.
+const toast = useToast();
+const { canWrite } = useAuth();
+const selectedIds = ref<Set<number>>(new Set());
+const rows = computed(() => clusters.value ?? []);
+const selectedCount = computed(() => selectedIds.value.size);
+const allSelected = computed(() => rows.value.length > 0 && rows.value.every((c) => selectedIds.value.has(c.id)));
+const someSelected = computed(() => selectedIds.value.size > 0 && !allSelected.value);
+const bulkBusy = ref(false);
+
+function toggleRow(id: number) {
+  const next = new Set(selectedIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selectedIds.value = next;
+}
+function toggleAll() {
+  selectedIds.value = allSelected.value ? new Set() : new Set(rows.value.map((c) => c.id));
+}
+function clearSelection() {
+  selectedIds.value = new Set();
+}
+// Drop selections that scroll out when the status filter changes.
+watch(clusters, () => {
+  const present = new Set(rows.value.map((c) => c.id));
+  const filtered = new Set([...selectedIds.value].filter((id) => present.has(id)));
+  if (filtered.size !== selectedIds.value.size) selectedIds.value = filtered;
+});
+
+async function setStatus(status: 'open' | 'resolved' | 'ignored') {
+  const ids = [...selectedIds.value];
+  if (ids.length === 0) return;
+  bulkBusy.value = true;
+  let succeeded = 0;
+  let failed = 0;
+  try {
+    for (const id of ids) {
+      try {
+        await $fetch(`/api/failure-clusters/${id}/status`, { method: 'PATCH', body: { status } });
+        succeeded++;
+      } catch {
+        failed++;
+      }
+    }
+    const label = `${succeeded} cluster${succeeded === 1 ? '' : 's'} set to ${status}`;
+    if (failed === 0) toast.add({ title: label, color: 'success' });
+    else
+      toast.add({
+        title: label,
+        description: `${failed} could not be updated.`,
+        color: succeeded > 0 ? 'warning' : 'error',
+      });
+    if (succeeded > 0) {
+      clearSelection();
+      await refresh();
+    }
+  } finally {
+    bulkBusy.value = false;
+  }
+}
+
+const columns = computed<TableColumn<ProjectFailureCluster>[]>(() => [
+  ...(canWrite.value ? [{ id: 'select', header: '' } as TableColumn<ProjectFailureCluster>] : []),
   { accessorKey: 'signature', header: createSortHeader<ProjectFailureCluster>('Signature') },
   { accessorKey: 'errorType', header: createSortHeader<ProjectFailureCluster>('Type') },
   { accessorKey: 'status', header: createSortHeader<ProjectFailureCluster>('Status') },
@@ -34,7 +103,7 @@ const columns: TableColumn<ProjectFailureCluster>[] = [
   { accessorKey: 'diagnosis', header: 'AI' },
   { accessorKey: 'lastSeenAt', header: createSortHeader<ProjectFailureCluster>('Last seen') },
   { id: 'actions', header: 'Actions' },
-];
+]);
 </script>
 
 <template>
@@ -59,21 +128,86 @@ const columns: TableColumn<ProjectFailureCluster>[] = [
       </div>
     </template>
 
+    <!-- Bulk status bar — appears once clusters are selected. -->
+    <div
+      v-if="canWrite && selectedCount > 0"
+      class="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2"
+    >
+      <span class="text-sm font-medium" aria-live="polite"> {{ selectedCount }} selected </span>
+      <div class="flex flex-wrap items-center gap-2 ml-auto">
+        <UDropdownMenu
+          :items="[
+            { label: 'Open', onSelect: () => setStatus('open') },
+            { label: 'Resolved', onSelect: () => setStatus('resolved') },
+            { label: 'Ignored', onSelect: () => setStatus('ignored') },
+          ]"
+        >
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-triangle-alert"
+            trailing-icon="i-lucide-chevron-down"
+            :loading="bulkBusy"
+          >
+            Set status…
+          </UButton>
+        </UDropdownMenu>
+        <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" @click="clearSelection">Clear</UButton>
+      </div>
+    </div>
+
     <TableScroller min-width="48rem" :bleed="false">
       <UTable :data="clusters ?? []" :columns="columns" :loading="loading">
+        <template #select-header>
+          <input
+            type="checkbox"
+            class="size-4 cursor-pointer accent-primary focus-visible:ring-2 focus-visible:ring-primary rounded"
+            :checked="allSelected"
+            :indeterminate.prop="someSelected"
+            :aria-label="allSelected ? 'Deselect all clusters' : 'Select all clusters'"
+            @change="toggleAll"
+          />
+        </template>
+        <template #select-cell="{ row }">
+          <input
+            type="checkbox"
+            class="size-4 cursor-pointer accent-primary focus-visible:ring-2 focus-visible:ring-primary rounded"
+            :checked="selectedIds.has(row.original.id)"
+            :aria-label="`Select cluster ${describeCluster(row.original)}`"
+            @change="toggleRow(row.original.id)"
+          />
+        </template>
+
         <template #actions-header>
           <div class="text-right">Actions</div>
         </template>
 
         <template #signature-cell="{ row }">
           <div class="min-w-0 space-y-0.5">
-            <NuxtLink
-              :to="`/failure-clusters/${row.original.id}`"
-              class="text-sm text-primary hover:underline truncate block"
-              :title="row.original.signature"
-            >
-              {{ describeCluster(row.original) }}
-            </NuxtLink>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <NuxtLink
+                :to="`/failure-clusters/${row.original.id}`"
+                class="text-sm text-primary hover:underline truncate"
+                :title="row.original.signature"
+              >
+                {{ describeCluster(row.original) }}
+              </NuxtLink>
+              <a
+                v-if="row.original.issueLink"
+                :href="row.original.issueLink.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="shrink-0"
+                :title="`Known issue: ${row.original.issueLink.key ?? row.original.issueLink.url}`"
+                @click.stop
+              >
+                <UBadge color="neutral" variant="subtle" size="xs" class="gap-1">
+                  <UIcon :name="getProviderIcon(row.original.issueLink.provider as any)" class="size-3" />
+                  {{ row.original.issueLink.key ?? 'Issue' }}
+                </UBadge>
+              </a>
+            </div>
             <p v-if="clusterSignatureLine(row.original)" class="text-xs text-gray-500 font-mono truncate">
               {{ row.original.signature }}
             </p>

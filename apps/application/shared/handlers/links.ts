@@ -1,24 +1,59 @@
-import { entityLinks, testRuns, testRunsCases, testCases } from '../../server/database/schema';
+import { entityLinks, testRuns, testRunsCases, testCases, failureClusters } from '../../server/database/schema';
 import { eq } from 'drizzle-orm';
 import { detectProvider, extractKey } from '../link-detect';
 
 import type { DrizzleDB } from './db';
 
-export async function listLinks(db: DrizzleDB, entityType: string, entityId: number) {
-  const fkColumn =
-    entityType === 'test_run'
-      ? entityLinks.testRunId
-      : entityType === 'test_runs_case'
-        ? entityLinks.testRunsCaseId
-        : entityLinks.testCaseId;
-  const links = await db.select().from(entityLinks).where(eq(fkColumn, entityId));
+/** The entities an external link can be pinned to. */
+export type LinkEntityType = 'test_run' | 'test_runs_case' | 'test_case' | 'failure_cluster';
+
+export const LINK_ENTITY_TYPES: readonly LinkEntityType[] = [
+  'test_run',
+  'test_runs_case',
+  'test_case',
+  'failure_cluster',
+];
+
+/** The `entity_links` FK column that holds an id of the given entity type. */
+function fkColumnFor(entityType: LinkEntityType) {
+  switch (entityType) {
+    case 'test_run':
+      return entityLinks.testRunId;
+    case 'test_runs_case':
+      return entityLinks.testRunsCaseId;
+    case 'failure_cluster':
+      return entityLinks.failureClusterId;
+    default:
+      return entityLinks.testCaseId;
+  }
+}
+
+/** The `entity_links` insert field name for the given entity type. */
+function fkFieldFor(entityType: LinkEntityType, entityId: number): Record<string, number> {
+  switch (entityType) {
+    case 'test_run':
+      return { testRunId: entityId };
+    case 'test_runs_case':
+      return { testRunsCaseId: entityId };
+    case 'failure_cluster':
+      return { failureClusterId: entityId };
+    default:
+      return { testCaseId: entityId };
+  }
+}
+
+export async function listLinks(db: DrizzleDB, entityType: LinkEntityType, entityId: number) {
+  const links = await db
+    .select()
+    .from(entityLinks)
+    .where(eq(fkColumnFor(entityType), entityId));
   return { links };
 }
 
 export async function createLink(
   db: DrizzleDB,
   data: {
-    entityType: 'test_run' | 'test_runs_case' | 'test_case';
+    entityType: LinkEntityType;
     entityId: number;
     url: string;
     title?: string | null;
@@ -33,6 +68,12 @@ export async function createLink(
   } else if (entityType === 'test_runs_case') {
     const row = await db.select({ id: testRunsCases.id }).from(testRunsCases).where(eq(testRunsCases.id, entityId));
     exists = row.length > 0;
+  } else if (entityType === 'failure_cluster') {
+    const row = await db
+      .select({ id: failureClusters.id })
+      .from(failureClusters)
+      .where(eq(failureClusters.id, entityId));
+    exists = row.length > 0;
   } else {
     const row = await db.select({ id: testCases.id }).from(testCases).where(eq(testCases.id, entityId));
     exists = row.length > 0;
@@ -41,16 +82,10 @@ export async function createLink(
 
   const provider = detectProvider(url);
   const key = extractKey(url, provider);
-  const fkColumn =
-    entityType === 'test_run'
-      ? { testRunId: entityId }
-      : entityType === 'test_runs_case'
-        ? { testRunsCaseId: entityId }
-        : { testCaseId: entityId };
 
   const result = await db
     .insert(entityLinks)
-    .values({ ...fkColumn, url, provider, key, title: title ?? null })
+    .values({ ...fkFieldFor(entityType, entityId), url, provider, key, title: title ?? null })
     .returning();
   return { success: true, link: result[0] ?? null };
 }

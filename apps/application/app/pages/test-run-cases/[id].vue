@@ -452,9 +452,54 @@ const retryCases = computed(() => [
   },
 ]);
 
-const navbarActions = computed<NavbarAction[]>(() => [
-  { label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() },
-]);
+// ── Quarantine ──────────────────────────────────────────────────────────────
+// A quarantined test keeps running and reporting; it is only dropped from the
+// CI gate's verdict. The action lives here, on the failure, rather than only on
+// the project's Quarantine tab. Reporter/admin only, matching the endpoint.
+const { canWrite } = useAuth();
+const { quarantineOne, releaseOne } = useQuarantine(() => testCase.value?.testRun?.project?.id ?? null);
+const quarantined = computed(() => Boolean((testCase.value as { quarantined?: boolean } | null)?.quarantined));
+const quarantineBusy = ref(false);
+
+async function toggleQuarantine() {
+  const stableId = testCase.value?.testCaseId;
+  if (!stableId || quarantineBusy.value) return;
+  quarantineBusy.value = true;
+  try {
+    const ok = quarantined.value
+      ? await releaseOne(stableId)
+      : await quarantineOne(stableId, 'Quarantined from execution');
+    if (ok) await refresh();
+  } finally {
+    quarantineBusy.value = false;
+  }
+}
+
+const navbarActions = computed<NavbarAction[]>(() => {
+  const actions: NavbarAction[] = [];
+  if (canWrite.value && testCase.value?.testCaseId) {
+    actions.push(
+      quarantined.value
+        ? {
+            label: 'Release from quarantine',
+            icon: 'i-lucide-shield-check',
+            color: 'warning',
+            loading: quarantineBusy.value,
+            onClick: toggleQuarantine,
+          }
+        : {
+            label: 'Quarantine this test',
+            icon: 'i-lucide-shield-alert',
+            color: 'warning',
+            title: 'Exclude this test from the CI gate while it keeps running and reporting',
+            loading: quarantineBusy.value,
+            onClick: toggleQuarantine,
+          },
+    );
+  }
+  actions.push({ label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() });
+  return actions;
+});
 
 // ── Live streaming ──────────────────────────────────────────────────────────
 const isDemoMode = Boolean(useRuntimeConfig().public.demoMode);
@@ -697,6 +742,7 @@ provide(clusterSectionLocatorKey, {
             :project-name="testCase?.testRun?.project?.name"
             :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
             :retry-cases="retryCases"
+            :quarantined="quarantined"
             @refresh="refresh()"
           />
           <!-- Why this execution never ran, and what blocked it — the whole story

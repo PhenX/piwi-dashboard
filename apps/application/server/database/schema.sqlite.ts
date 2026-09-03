@@ -626,6 +626,7 @@ export const entityLinks = sqliteTable(
     testRunId: integer('test_run_id').references(() => testRuns.id, { onDelete: 'cascade' }),
     testRunsCaseId: integer('test_runs_case_id').references(() => testRunsCases.id, { onDelete: 'cascade' }),
     testCaseId: integer('test_case_id').references(() => testCases.id, { onDelete: 'cascade' }),
+    failureClusterId: integer('failure_cluster_id').references(() => failureClusters.id, { onDelete: 'cascade' }),
 
     url: text('url').notNull(),
 
@@ -654,6 +655,7 @@ export const entityLinks = sqliteTable(
     runIdx: index('idx_entity_links_run').on(t.testRunId),
     caseRunIdx: index('idx_entity_links_case_run').on(t.testRunsCaseId),
     caseIdx: index('idx_entity_links_case').on(t.testCaseId),
+    clusterIdx: index('idx_entity_links_cluster').on(t.failureClusterId),
     createdByIdx: index('idx_entity_links_created_by').on(t.createdBy),
   }),
 );

@@ -407,6 +407,13 @@
       "when": 1788460812809,
       "tag": "0057_modern_thaddeus_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "6",
+      "when": 1788465677319,
+      "tag": "0058_lowly_electro",
+      "breakpoints": true
     }
   ]
 }

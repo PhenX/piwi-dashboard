@@ -429,13 +429,13 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'list_links',
     description:
-      'List external entity links (Jira, GitHub PR/issue, etc.) attached to a run, test-run-case, or test case, with provider and unfurled status.',
+      'List external entity links (Jira, GitHub PR/issue, etc.) attached to a run, test-run-case, test case, or failure cluster, with provider and unfurled status.',
     inputSchema: {
       type: 'object',
       properties: {
         entityType: {
           type: 'string',
-          enum: ['test_run', 'test_runs_case', 'test_case'],
+          enum: ['test_run', 'test_runs_case', 'test_case', 'failure_cluster'],
           description: 'Which entity the links are attached to',
         },
         entityId: { type: 'number', description: 'The entity ID matching entityType' },

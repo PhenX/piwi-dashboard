@@ -875,7 +875,12 @@ export interface FailureClusterDetail extends ClusterResolutionFields {
     filePath: string;
     runCount: number;
     recentTestRunsCaseId: number;
+    quarantined: boolean;
   }>;
+  /** Known-issue links pinned to this cluster (Jira / GitHub issue, etc.). */
+  links: EntityLinkInfo[];
+  /** Effective owner of the cluster's tests: `piwi:owner` annotation or CODEOWNERS. */
+  owner: { name: string; source: 'annotation' | 'codeowners' } | null;
 }
 
 /**
@@ -898,6 +903,8 @@ export interface ProjectFailureCluster extends ClusterResolutionFields {
   lastSeenRunStatus: string | null;
   lastSeenAt: string | Date | null;
   diagnosis: DiagnosisCompact | null;
+  /** The pinned known-issue link (newest), shown as a chip. */
+  issueLink: { url: string; provider: string; key: string | null } | null;
 }
 
 /**

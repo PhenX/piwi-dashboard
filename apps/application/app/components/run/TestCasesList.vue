@@ -19,10 +19,18 @@ const props = defineProps<{
   failureClusterFilter?: number | null;
   /** Failure-cluster id → display name, for the cluster badges on failing rows. */
   clusterNames?: Record<number, string> | null;
+  /** Stable test-case ids currently quarantined — marks the matching rows. */
+  quarantinedCaseIds?: Set<number> | null;
   /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
   projectKey?: string | number | null;
   projectName?: string | null;
 }>();
+
+const emit = defineEmits<{ 'quarantine-changed': [] }>();
+
+function isQuarantined(tc: TestCaseResult): boolean {
+  return Boolean(props.quarantinedCaseIds?.has(tc.testCaseId));
+}
 
 // Filter state is owned by the parent page so it survives tab switches.
 const testCaseSearch = defineModel<string>('search', { default: '' });
@@ -184,6 +192,134 @@ const hasWastedTime = computed(() => props.testCases.some((tc) => (tc.wastedTime
 // "Completed" must not count rows still running.
 const finishedCount = computed(() => props.testCases.filter((tc) => tc.status !== 'running').length);
 
+// ── Bulk triage ─────────────────────────────────────────────────────────────
+// A run full of red doesn't have to be triaged one row at a time. The failing
+// rows get checkboxes (flat view only, and only when there are failures) and a
+// bulk bar quarantines the selection or sets the status of the clusters they
+// belong to. Rows are keyed by executionId; testCaseId / failureClusterId are
+// derived from the selection when an action runs.
+const toast = useToast();
+const { canWrite } = useAuth();
+const { quarantineMany } = useQuarantine(() => props.projectKey ?? null);
+
+const selectionEnabled = computed(() => canWrite.value && !effectiveTreeView.value && failedCount.value > 0);
+const selectedIds = ref<Set<number>>(new Set());
+const selectedRows = computed(() => sortedTestCases.value.filter((tc) => selectedIds.value.has(tc.executionId)));
+const selectedCount = computed(() => selectedRows.value.length);
+
+/** The failing rows currently on screen — the pool the header checkbox toggles. */
+const selectableRows = computed(() => sortedTestCases.value.filter((tc) => isFailedStatus(tc.status)));
+const allSelectableSelected = computed(
+  () => selectableRows.value.length > 0 && selectableRows.value.every((tc) => selectedIds.value.has(tc.executionId)),
+);
+const someSelectableSelected = computed(
+  () => selectableRows.value.some((tc) => selectedIds.value.has(tc.executionId)) && !allSelectableSelected.value,
+);
+
+function toggleRow(tc: TestCaseResult) {
+  const next = new Set(selectedIds.value);
+  if (next.has(tc.executionId)) next.delete(tc.executionId);
+  else next.add(tc.executionId);
+  selectedIds.value = next;
+}
+
+function toggleAll() {
+  if (allSelectableSelected.value) {
+    selectedIds.value = new Set();
+  } else {
+    selectedIds.value = new Set(selectableRows.value.map((tc) => tc.executionId));
+  }
+}
+
+function clearSelection() {
+  selectedIds.value = new Set();
+}
+
+// Selection is over failing rows only, so a filter/sort change or new live rows
+// must drop any id that is no longer selectable.
+watch([sortedTestCases, selectionEnabled], () => {
+  if (!selectionEnabled.value) {
+    if (selectedIds.value.size > 0) selectedIds.value = new Set();
+    return;
+  }
+  const stillSelectable = new Set(selectableRows.value.map((tc) => tc.executionId));
+  const filtered = new Set([...selectedIds.value].filter((id) => stillSelectable.has(id)));
+  if (filtered.size !== selectedIds.value.size) selectedIds.value = filtered;
+});
+
+const selectedTestCaseIds = computed(() => [...new Set(selectedRows.value.map((tc) => tc.testCaseId))]);
+const selectedClusterIds = computed(() => {
+  const ids = selectedRows.value.map((tc) => tc.failureClusterId).filter((id): id is number => id != null);
+  return [...new Set(ids)];
+});
+/** Whether every selected row belongs to a cluster — gates the cluster-status action. */
+const allSelectedInCluster = computed(
+  () => selectedCount.value > 0 && selectedRows.value.every((tc) => tc.failureClusterId != null),
+);
+
+const bulkBusy = ref(false);
+const quarantineConfirmOpen = ref(false);
+
+async function runBulkQuarantine() {
+  const ids = selectedTestCaseIds.value;
+  if (ids.length === 0) return;
+  bulkBusy.value = true;
+  try {
+    const { succeeded, failed } = await quarantineMany(ids, () => 'Quarantined from run');
+    if (failed === 0) {
+      toast.add({ title: `Quarantined ${succeeded} test${succeeded === 1 ? '' : 's'}`, color: 'success' });
+    } else {
+      toast.add({
+        title: `Quarantined ${succeeded} of ${ids.length}`,
+        description: `${failed} could not be quarantined.`,
+        color: succeeded > 0 ? 'warning' : 'error',
+      });
+    }
+    if (succeeded > 0) {
+      emit('quarantine-changed');
+      clearSelection();
+    }
+  } finally {
+    bulkBusy.value = false;
+    quarantineConfirmOpen.value = false;
+  }
+}
+
+async function setClusterStatus(status: 'open' | 'resolved' | 'ignored') {
+  const clusterIds = selectedClusterIds.value;
+  if (clusterIds.length === 0) return;
+  bulkBusy.value = true;
+  let succeeded = 0;
+  let failed = 0;
+  try {
+    for (const clusterId of clusterIds) {
+      try {
+        await $fetch(`/api/failure-clusters/${clusterId}/status`, { method: 'PATCH', body: { status } });
+        succeeded++;
+      } catch {
+        failed++;
+      }
+    }
+    const label = `${succeeded} cluster${succeeded === 1 ? '' : 's'} set to ${status}`;
+    if (failed === 0) toast.add({ title: label, color: 'success' });
+    else
+      toast.add({
+        title: label,
+        description: `${failed} could not be updated.`,
+        color: succeeded > 0 ? 'warning' : 'error',
+      });
+    if (succeeded > 0) clearSelection();
+  } finally {
+    bulkBusy.value = false;
+  }
+}
+
+const QUARANTINE_CONFIRM_THRESHOLD = 3;
+function onBulkQuarantine() {
+  if (selectedTestCaseIds.value.length > QUARANTINE_CONFIRM_THRESHOLD) quarantineConfirmOpen.value = true;
+  else runBulkQuarantine();
+}
+
 // Column layout — one grid template shared by the header and every row so the
 // columns stay aligned. Keep the cell order in the template in sync with this.
 // An `icon` header keeps an icon-only column (browser) from overflowing a label
@@ -232,8 +368,15 @@ const mobileSortKey = computed({
   },
 });
 
-const gridTemplate = computed(() => columns.value.map((c) => c.width).join(' '));
-const gridMinWidth = computed(() => (hasWastedTime.value ? '47.5rem' : '41.5rem'));
+// A leading select column is added to the grid when bulk selection is active.
+const SELECT_COL_WIDTH = '2.5rem';
+const gridTemplate = computed(() =>
+  [...(selectionEnabled.value ? [SELECT_COL_WIDTH] : []), ...columns.value.map((c) => c.width)].join(' '),
+);
+const gridMinWidth = computed(() => {
+  const base = hasWastedTime.value ? 47.5 : 41.5;
+  return `${selectionEnabled.value ? base + 2.5 : base}rem`;
+});
 
 // The cluster filter narrows rows but must not force-expand the tree or
 // disable Collapse-all — those belong to the user, whatever the filter is.
@@ -436,11 +579,52 @@ defineExpose({ scrollToCase });
       :project-key="projectKey"
       :project-name="projectName"
       :cluster-names="clusterNames"
+      :quarantined-case-ids="quarantinedCaseIds"
       class="flex-1 min-h-0"
     />
 
     <!-- Flat, virtualized table view -->
     <template v-else-if="!effectiveTreeView">
+      <!-- Bulk triage bar — appears once failing rows are selected. -->
+      <div
+        v-if="selectionEnabled && selectedCount > 0"
+        class="mb-3 shrink-0 flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2"
+      >
+        <span class="text-sm font-medium" aria-live="polite"> {{ selectedCount }} selected </span>
+        <div class="flex flex-wrap items-center gap-2 ml-auto">
+          <UButton
+            size="xs"
+            color="warning"
+            variant="soft"
+            icon="i-lucide-shield-alert"
+            :loading="bulkBusy"
+            @click="onBulkQuarantine"
+          >
+            Quarantine selected
+          </UButton>
+          <UDropdownMenu
+            v-if="allSelectedInCluster"
+            :items="[
+              { label: 'Open', onSelect: () => setClusterStatus('open') },
+              { label: 'Resolved', onSelect: () => setClusterStatus('resolved') },
+              { label: 'Ignored', onSelect: () => setClusterStatus('ignored') },
+            ]"
+          >
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-triangle-alert"
+              trailing-icon="i-lucide-chevron-down"
+              :loading="bulkBusy"
+            >
+              Set cluster status…
+            </UButton>
+          </UDropdownMenu>
+          <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" @click="clearSelection"> Clear </UButton>
+        </div>
+      </div>
+
       <div
         v-if="sortedTestCases.length > 0"
         class="flex-1 min-h-0 md:overflow-x-auto overflow-y-hidden rounded-lg border border-default bg-default"
@@ -463,6 +647,16 @@ defineExpose({ scrollToCase });
             role="row"
             :style="{ gridTemplateColumns: gridTemplate }"
           >
+            <div v-if="selectionEnabled" role="columnheader" class="flex items-center justify-center px-2 py-2">
+              <input
+                type="checkbox"
+                class="size-4 cursor-pointer accent-primary focus-visible:ring-2 focus-visible:ring-primary rounded"
+                :checked="allSelectableSelected"
+                :indeterminate.prop="someSelectableSelected"
+                :aria-label="allSelectableSelected ? 'Deselect all failing tests' : 'Select all failing tests'"
+                @change="toggleAll"
+              />
+            </div>
             <template v-for="col in columns" :key="col.key">
               <button
                 v-if="col.sortable"
@@ -533,6 +727,14 @@ defineExpose({ scrollToCase });
                     "
                   >
                     <div class="flex items-start gap-2">
+                      <input
+                        v-if="selectionEnabled && isFailedStatus(item.status)"
+                        type="checkbox"
+                        class="size-4 shrink-0 mt-0.5 cursor-pointer accent-primary focus-visible:ring-2 focus-visible:ring-primary rounded"
+                        :checked="selectedIds.has(item.executionId)"
+                        :aria-label="`Select ${item.title}`"
+                        @change="toggleRow(item)"
+                      />
                       <span
                         class="size-4 shrink-0 mt-0.5"
                         role="img"
@@ -563,6 +765,7 @@ defineExpose({ scrollToCase });
                           <span class="truncate">{{ clusterLabel(item.failureClusterId) }}</span>
                         </UBadge>
                       </NuxtLink>
+                      <QuarantinedChip v-if="isQuarantined(item)" />
                       <BrowserBadge :browser="item.browser" size="sm" class="mt-0.5" />
                     </div>
 
@@ -630,6 +833,18 @@ defineExpose({ scrollToCase });
                     role="row"
                     :style="{ gridTemplateColumns: gridTemplate }"
                   >
+                    <!-- select — failing rows only -->
+                    <div v-if="selectionEnabled" class="flex items-center justify-center px-2 py-2" role="cell">
+                      <input
+                        v-if="isFailedStatus(item.status)"
+                        type="checkbox"
+                        class="size-4 cursor-pointer accent-primary focus-visible:ring-2 focus-visible:ring-primary rounded"
+                        :checked="selectedIds.has(item.executionId)"
+                        :aria-label="`Select ${item.title}`"
+                        @change="toggleRow(item)"
+                      />
+                    </div>
+
                     <!-- browser -->
                     <div class="px-3 py-2 flex items-center min-w-0" role="cell">
                       <BrowserBadge :browser="item.browser" />
@@ -665,6 +880,7 @@ defineExpose({ scrollToCase });
                             <span class="truncate">{{ clusterLabel(item.failureClusterId) }}</span>
                           </UBadge>
                         </NuxtLink>
+                        <QuarantinedChip v-if="isQuarantined(item)" />
                       </div>
                       <FailureHeadline
                         v-if="isFailedStatus(item.status) && item.error"
@@ -765,5 +981,25 @@ defineExpose({ scrollToCase });
         />
       </EmptyState>
     </template>
+
+    <!-- Confirm quarantining a larger selection. -->
+    <UModal v-model:open="quarantineConfirmOpen" title="Quarantine selected tests">
+      <template #body>
+        <p class="text-sm text-muted">
+          This quarantines {{ selectedTestCaseIds.length }} tests. Each keeps running and reporting but is excluded from
+          the CI gate's verdict until released.
+        </p>
+      </template>
+      <template #footer>
+        <div class="flex items-center gap-3 w-full justify-end">
+          <UButton color="neutral" variant="ghost" :disabled="bulkBusy" @click="quarantineConfirmOpen = false">
+            Cancel
+          </UButton>
+          <UButton color="warning" :loading="bulkBusy" @click="runBulkQuarantine">
+            Quarantine {{ selectedTestCaseIds.length }}
+          </UButton>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

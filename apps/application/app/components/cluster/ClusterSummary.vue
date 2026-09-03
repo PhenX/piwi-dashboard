@@ -8,12 +8,15 @@ const props = defineProps<{
   triageNote: string;
   triageSaving: boolean;
   triageChanged: boolean;
+  /** Reporter/admin — whether the known-issue links can be edited. */
+  canWrite?: boolean;
 }>();
 
 const emit = defineEmits<{
   'update:triageStatus': [value: string];
   'update:triageNote': [value: string];
   'save-triage': [];
+  'links-updated': [];
 }>();
 
 // Null until a fix lands, which is what hides the whole resolution block on the
@@ -199,6 +202,27 @@ const triageStatusOptions = [
                 Save
               </UButton>
             </div>
+          </div>
+        </div>
+
+        <!-- Owner + the known-issue link: who to hand this to, and what is already
+             being done about it. -->
+        <div class="mt-3 pt-3 border-t border-default space-y-3">
+          <ClusterOwnerLine :owner="cluster.owner" :project-id="cluster.project?.id ?? null" />
+
+          <div class="space-y-1">
+            <div class="flex items-center gap-1.5 text-xs">
+              <UIcon name="i-lucide-link" class="size-3.5 shrink-0 text-gray-400" />
+              <span class="text-gray-500">Known issue</span>
+              <HelpHint topic="cluster.known-issue" />
+            </div>
+            <EntityLinks
+              entity-type="failure_cluster"
+              :entity-id="cluster.id"
+              :links="cluster.links"
+              :readonly="!canWrite"
+              @updated="emit('links-updated')"
+            />
           </div>
         </div>
       </SectionCard>

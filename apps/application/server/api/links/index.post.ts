@@ -11,13 +11,13 @@ defineRouteMeta({
     tags: ['Links'],
     summary: 'Create an entity link',
     description:
-      'Attach an external URL to a run, test-case run, or test case. Provider is auto-detected from the URL.',
+      'Attach an external URL to a run, test-case run, test case, or failure cluster. Provider is auto-detected from the URL.',
     'x-required-roles': ['administrator', 'reporter'],
   },
 });
 
 const createLinkSchema = z.object({
-  entityType: z.enum(['test_run', 'test_runs_case', 'test_case']),
+  entityType: z.enum(['test_run', 'test_runs_case', 'test_case', 'failure_cluster']),
   entityId: z.number().int().positive(),
   url: z.string().url('Must be a valid URL'),
   title: z.string().max(200).nullable().optional(),
