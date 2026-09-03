@@ -1,6 +1,7 @@
 import { ScmProvider, truncatePatch, MAX_SCM_FILES, MAX_FILE_BYTES, FETCH_TIMEOUT_MS } from './ScmProvider';
 import type {
   ScmCommitDetail,
+  ScmCommitAuthor,
   ScmChanges,
   ScmFileContent,
   ScmPullRequest,
@@ -24,6 +25,8 @@ const fetchCommitDiffCache = new TtlCache<ScmChanges>(10 * 60 * 1000);
 const fetchFileCache = new TtlCache<ScmFileContent | null>(30 * 60 * 1000);
 const fetchTreeCache = new TtlCache<string[]>(10 * 60 * 1000);
 const defaultBranchCache = new TtlCache<string | null>(30 * 60 * 1000);
+// Author is immutable per SHA, so cache it (incl. negative lookups) for longer.
+const commitAuthorCache = new TtlCache<ScmCommitAuthor | null>(30 * 60 * 1000);
 
 export class GitHubProvider extends ScmProvider {
   readonly provider = 'github' as const;
@@ -147,6 +150,32 @@ export class GitHubProvider extends ScmProvider {
     };
     fetchCommitDiffCache.set(key, result);
     return result;
+  }
+
+  async getCommitAuthor(sha: string): Promise<ScmCommitAuthor | null> {
+    if (!sha) return null;
+    const key = `${this.keyPrefix}:author:${this.repoPath}:${sha}`;
+    const hit = commitAuthorCache.get(key);
+    if (hit !== undefined) return hit;
+
+    try {
+      const res = await fetch(`https://api.github.com/repos/${this.repoPath}/commits/${sha}`, {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        commitAuthorCache.set(key, null);
+        return null;
+      }
+      const data = (await res.json()) as { commit?: { author?: { name?: string; email?: string } } };
+      const name = data.commit?.author?.name?.trim() ?? '';
+      const email = data.commit?.author?.email?.trim() ?? '';
+      const result = email ? { name: name || email, email } : null;
+      commitAuthorCache.set(key, result);
+      return result;
+    } catch {
+      return null;
+    }
   }
 
   async fetchFileAtRef(path: string, ref: string): Promise<ScmFileContent | null> {

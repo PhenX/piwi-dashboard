@@ -26,6 +26,12 @@ export interface ScmCommitDetail {
   date: string;
 }
 
+/** The name and email a commit records for its author. */
+export interface ScmCommitAuthor {
+  name: string;
+  email: string;
+}
+
 export interface ScmChanges {
   commits: ScmCommit[];
   files: ChangedFile[];
@@ -121,6 +127,13 @@ export abstract class ScmProvider {
   abstract listCommits(limit?: number, branch?: string): Promise<ScmCommitDetail[]>;
   abstract fetchChanges(fromSha: string, toSha: string): Promise<ScmChanges | null>;
   abstract fetchCommitDiff(sha: string): Promise<ScmChanges | null>;
+  /**
+   * The author (name + email) a commit records, or null when the commit cannot
+   * be read or the host does not expose an email. Best-effort like the other
+   * read lookups — a token-less or failing fetch returns null — and content is
+   * immutable per SHA, so implementations cache aggressively.
+   */
+  abstract getCommitAuthor(sha: string): Promise<ScmCommitAuthor | null>;
   abstract probeError(branch?: string): Promise<string | null>;
   /**
    * Full content of a single file at a ref (commit SHA / branch). Returns null

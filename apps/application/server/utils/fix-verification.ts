@@ -32,7 +32,9 @@ import { failureClusters, failureDiagnoses, projects, testRuns, testRunsCases } 
 import { createScmProvider } from './scm';
 import { normalizeGitUrl } from './scm/git-url';
 import { emitNotification } from './notifications/emit';
+import { notifyFixAuthor } from './notifications/fix-author';
 import { parseUnifiedDiff, stripAbPrefix } from '#shared/patch';
+import type { FixAuthor, NotificationEvent, NotificationPayload } from '#shared/notification-events';
 import type { RunMetadata } from './run-json-types';
 import type { DbClient } from '../database';
 
@@ -114,6 +116,38 @@ async function changeTouchedFiles(
 }
 
 /**
+ * The author (name + email) of a commit, via the SCM provider when a token
+ * resolves one. Best-effort: no repo, no commit, no provider, or a failed
+ * lookup all yield undefined, and the notification then carries no author.
+ */
+async function resolveFixAuthor(
+  db: DbClient,
+  projectId: number,
+  repositoryUrl: string | null,
+  sha: string | null,
+): Promise<FixAuthor | undefined> {
+  if (!repositoryUrl || !sha) return undefined;
+  try {
+    const provider = await createScmProvider(repositoryUrl, db, projectId);
+    if (!provider) return undefined;
+    const author = await provider.getCommitAuthor(sha);
+    return author ? { name: author.name, email: author.email } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Emit a cluster.fixed / cluster.regressed event, delivering it to the fix
+ * author directly (email + targeted browser notification) on top of the normal
+ * subscription routing.
+ */
+async function emitClusterOutcome(db: DbClient, event: NotificationEvent, payload: NotificationPayload): Promise<void> {
+  const { targetUserId } = await notifyFixAuthor(db, event, payload);
+  await emitNotification(db, event, payload, targetUserId != null ? { targetUserId } : undefined);
+}
+
+/**
  * Record fixes and regressions for one finished run. Returns the fixes that
  * landed, so the pull-request comment can report them.
  */
@@ -167,6 +201,7 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
         status: failureClusters.status,
         triageNote: failureClusters.triageNote,
         fixLandedRunId: failureClusters.fixLandedRunId,
+        fixCommit: failureClusters.fixCommit,
       })
       .from(failureClusters)
       .where(
@@ -195,7 +230,9 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
         })
         .where(eq(failureClusters.id, cluster.id));
 
-      await emitNotification(db, 'cluster.regressed', {
+      // The regression reaches the author of the fix that did not hold.
+      const fixAuthor = await resolveFixAuthor(db, run.projectId, repositoryUrl, cluster.fixCommit);
+      await emitClusterOutcome(db, 'cluster.regressed', {
         clusterId: cluster.id,
         projectId: run.projectId,
         projectName,
@@ -204,6 +241,7 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
         runId,
         fixLandedRunId: cluster.fixLandedRunId,
         reopened,
+        fixAuthor,
       });
     }
   }
@@ -330,7 +368,9 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
       testCount: clusterCases.size,
     });
 
-    await emitNotification(db, 'cluster.fixed', {
+    // The fix reaches the person whose commit landed it.
+    const fixAuthor = await resolveFixAuthor(db, run.projectId, repositoryUrl, currentCommit);
+    await emitClusterOutcome(db, 'cluster.fixed', {
       clusterId: cluster.id,
       projectId: run.projectId,
       projectName,
@@ -342,6 +382,7 @@ export async function verifyClusterFixes(db: DbClient, runId: number): Promise<V
       timeToResolutionMs,
       testCount: clusterCases.size,
       resolved,
+      fixAuthor,
     });
   }
 

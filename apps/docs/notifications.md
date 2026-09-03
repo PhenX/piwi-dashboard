@@ -25,7 +25,7 @@ Manage both from **Settings → Notifications**, and subscribe to a single proje
 | `run.failed` | A run completes with failures |
 | `run.failed.default_branch` | A run fails on the repository's default branch |
 | `cluster.new` | A new failure cluster appears |
-| `cluster.fixed` | A full run passes every test a cluster covers — the fix landed. The payload's `verification` says whether the diagnosis was corroborated (`diagnosis-verified`) or the tests merely stopped failing, and `resolved` whether the triage status was closed automatically |
+| `cluster.fixed` | A run passes every test a cluster covers — the fix landed (a filtered re-run of just those tests counts). The payload's `verification` says whether the diagnosis was corroborated (`diagnosis-verified`) or the tests merely stopped failing, and `resolved` whether the triage status was closed automatically |
 | `cluster.regressed` | A cluster with a recorded fix fails again; `reopened` says whether a *resolved* cluster was set back to open |
 | `flakiness.spike` | A completed run contains flaky tests — use the flakiness-threshold filter to only hear about rates above N% |
 | `perf.regression` | A run is at least 20% slower than the median of the previous five completed runs on the same branch — raise the bar per subscription with the regression-% filter |
@@ -93,6 +93,15 @@ carries no execution id. The [pull-request comment](./ci#pull-request-feedback) 
 way.
 
 `cluster.new` payloads similarly carry `sampleErrorExcerpt` (cut the same way) and `affectedCases`; `cluster.fixed` and `cluster.regressed` carry the cluster's `signature`, `title`, the `runId` that decided the verdict and, for a fix, the `commit` and `timeToResolutionMs`. These fields are **additive** — existing consumers keep working, but if you re-serialize the payload to re-check the HMAC, sign the exact bytes you received.
+
+### Reaching the person who fixed it
+
+When an [SCM token](./ci#pull-request-feedback) is configured, `cluster.fixed` and `cluster.regressed` resolve the fixing commit's author through the provider and add a `fixAuthor` object — `{ name, email }` — to the payload (`cluster.regressed` uses the author of the fix that did not hold). On top of the normal subscription routing, the event is then delivered to that person directly:
+
+- **Email**, through the same outbox, when SMTP is configured **and** the commit's email belongs to a registered Piwi user. The mail goes to that user's account email, never to the raw commit address, so a fix by an outside contributor never becomes a mail to a stranger.
+- **A browser notification** for that user, delivered even when they have no matching subscription.
+
+`fixAuthor` is absent when no token is configured, the host exposes no email, or the lookup fails — the fix outcome then reaches people through subscriptions only.
 
 ### Global channels & subscriptions
 

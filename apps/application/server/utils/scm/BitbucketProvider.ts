@@ -8,6 +8,7 @@ import {
 } from './ScmProvider';
 import type {
   ScmCommitDetail,
+  ScmCommitAuthor,
   ScmChanges,
   ScmFileContent,
   ScmPullRequest,
@@ -27,6 +28,20 @@ const listCommitsCache = new TtlCache<ScmCommitDetail[]>(3 * 60 * 1000);
 const fetchChangesCache = new TtlCache<ScmChanges>(10 * 60 * 1000);
 const fetchFileCache = new TtlCache<ScmFileContent | null>(30 * 60 * 1000);
 const defaultBranchCache = new TtlCache<string | null>(30 * 60 * 1000);
+// Author is immutable per SHA, so cache it (incl. negative lookups) for longer.
+const commitAuthorCache = new TtlCache<ScmCommitAuthor | null>(30 * 60 * 1000);
+
+/** Split Bitbucket's `author.raw` ("Ada Lovelace <ada@example.com>") into name + email. */
+function parseAuthorRaw(raw: string): ScmCommitAuthor | null {
+  const match = raw.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  if (match) {
+    const email = match[2]!.trim();
+    return email ? { name: match[1]!.trim() || email, email } : null;
+  }
+  // No angle brackets: a bare email is still usable, anything else is not.
+  const bare = raw.trim();
+  return /^[^\s@]+@[^\s@]+$/.test(bare) ? { name: bare, email: bare } : null;
+}
 
 function parsePatchesByFile(rawDiff: string): Map<string, string> {
   const result = new Map<string, string>();
@@ -167,6 +182,30 @@ export class BitbucketProvider extends ScmProvider {
 
   async fetchCommitDiff(sha: string): Promise<ScmChanges | null> {
     return this.fetchChanges(`${sha}~1`, sha);
+  }
+
+  async getCommitAuthor(sha: string): Promise<ScmCommitAuthor | null> {
+    if (!sha) return null;
+    const key = `${this.keyPrefix}:author:${this.workspace}/${this.repoSlug}:${sha}`;
+    const hit = commitAuthorCache.get(key);
+    if (hit !== undefined) return hit;
+
+    try {
+      const res = await fetch(`${this.base}/commit/${encodeURIComponent(sha)}`, {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        commitAuthorCache.set(key, null);
+        return null;
+      }
+      const data = (await res.json()) as { author?: { raw?: string } };
+      const result = data.author?.raw ? parseAuthorRaw(data.author.raw) : null;
+      commitAuthorCache.set(key, result);
+      return result;
+    } catch {
+      return null;
+    }
   }
 
   async fetchFileAtRef(path: string, ref: string): Promise<ScmFileContent | null> {
