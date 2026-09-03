@@ -40,7 +40,7 @@ const peek = computed(() => {
 </script>
 
 <template>
-  <CollapsibleSectionCard :icon="icon" :title="title" :help="help" :storage-key="storageKey" default-folded>
+  <CollapsibleSectionCard :icon="icon" :title="title" :help="help" :storage-key="storageKey" :default-folded="false">
     <template #folded>{{ peek }}</template>
     <EvidenceEmptyState :state="state" :doc="doc" compact />
   </CollapsibleSectionCard>
