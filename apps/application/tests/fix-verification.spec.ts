@@ -150,7 +150,7 @@ test.describe.serial('Fix verification', () => {
     expect(regressed.triageNote).toContain(`Reopened automatically: regressed in run #${runId}`);
   });
 
-  test('a partial run never records a fix', async ({ request }) => {
+  test('a partial run that misses an affected test never records a fix', async ({ request }) => {
     // The cluster is failing again after the regression above. A filtered run
     // that happens to exclude the failing test must not be read as a fix: a
     // test that did not execute has not been shown to pass.
@@ -188,5 +188,30 @@ test.describe.serial('Fix verification', () => {
     // missing — the table loads client-side, after the page itself is ready.
     await expect(row).toBeVisible({ timeout: 15_000 });
     await expect(row.getByText('Regressed', { exact: true })).toBeVisible();
+  });
+
+  // The natural loop — fix the code, re-run just the broken test, watch it go
+  // green — must close the cluster. A filtered run is trusted exactly when it
+  // covered the whole cluster, which this one does. Runs last so it does not
+  // disturb the regressed-state assertions above.
+  test('a filtered run covering every affected test records the fix', async ({ request }) => {
+    const before = (await clusters(request, projectId)).find((c) => c.fixVerification === 'regressed')!;
+
+    const runId = await submitRun(request, [{ title: 'checkout pays', status: 'passed' }], {
+      commit: 'eeeeeee1',
+      isFullRun: false,
+    });
+
+    await expect
+      .poll(async () => (await clusters(request, projectId)).find((c) => c.id === before.id)?.fixLandedRunId, {
+        timeout: 15_000,
+      })
+      .toBe(runId);
+
+    const fixed = (await clusters(request, projectId)).find((c) => c.id === before.id)!;
+    expect(fixed.fixCommit).toBe('eeeeeee1');
+    // No SCM is reachable in this test, so "stopped failing" is the honest
+    // verdict — but the filtered run was enough to record it.
+    expect(fixed.fixVerification).toBe('stopped-failing');
   });
 });

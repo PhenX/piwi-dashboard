@@ -305,13 +305,14 @@ export async function updateProject(
     diagnosisInstructions?: string | null;
     scmToken?: string | null;
     defaultBranch?: string | null;
+    ciRerun?: unknown;
     tagIds?: number[];
   },
 ) {
   const projectResults: any[] = await db.select().from(projects).where(eq(projects.id, id));
   if (!projectResults[0]) throw new Error('Project not found');
 
-  const { label, description, diagnosisInstructions, scmToken, defaultBranch, tagIds: dataTagIds } = data;
+  const { label, description, diagnosisInstructions, scmToken, defaultBranch, ciRerun, tagIds: dataTagIds } = data;
 
   // Update project
   await db
@@ -322,6 +323,7 @@ export async function updateProject(
       diagnosisInstructions: diagnosisInstructions ?? undefined,
       scmToken: scmToken !== undefined ? scmToken : undefined,
       defaultBranch: defaultBranch !== undefined ? defaultBranch : undefined,
+      ciRerun: ciRerun !== undefined ? (ciRerun as any) : undefined,
       updatedAt: new Date(),
     })
     .where(eq(projects.id, id));

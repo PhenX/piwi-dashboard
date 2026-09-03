@@ -750,6 +750,32 @@ const routes: RouteEntry[] = [
     },
   },
   {
+    method: 'GET',
+    // CI re-run availability — always off in the browser demo (no server, token
+    // or CI to dispatch to), so the button renders disabled with a clear reason.
+    pattern: /^\/api\/failure-clusters\/(\d+)\/rerun$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return {
+        available: false,
+        reason: 'CI re-run is not available in the demo.',
+        provider: null,
+        enabled: false,
+        hasToken: false,
+        lastDispatch: null,
+      };
+    },
+  },
+  {
+    method: 'POST',
+    // No-op dispatch: the demo has no CI to trigger.
+    pattern: /^\/api\/failure-clusters\/(\d+)\/rerun$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      return { ok: false, demo: true, message: 'CI re-run is not available in the demo.' };
+    },
+  },
+  {
     method: 'PATCH',
     pattern: /^\/api\/failure-diagnoses\/(\d+)\/feedback$/,
     handler: async (m, body, _q, ctx) => {

@@ -191,6 +191,11 @@ export const HELP_TOPICS = {
     text: 'A read-only Git host token lets diagnosis pull the actual commit diffs behind a failure for SCM-grounded analysis. Stored encrypted.',
     doc: 'ai-diagnosis#scm-grounded-context',
   },
+  'project.ci-rerun': {
+    title: 'CI re-run',
+    text: 'Lets a reporter or admin re-run a cluster’s affected tests in CI straight from its page — a workflow_dispatch on GitHub, a pipeline on GitLab, a custom pipeline on Bitbucket — passing the retry arguments through the input/variable you name. Uses the project’s SCM token (which needs write scope) and is off until you fill in your provider’s block.',
+    doc: 'ci#re-run-from-the-dashboard',
+  },
   'project.local-folder': {
     title: 'Linked local folder',
     text: 'The checkout on this machine that produces this project’s runs. Linking it enables running tests from the app and opening files in your IDE. The link is stored on this machine only — never on the server.',
@@ -375,7 +380,7 @@ export const HELP_TOPICS = {
   },
   'cluster.resolution': {
     title: 'Resolution',
-    text: 'Recorded when a full run turns this cluster green: when the fix landed, how long the cluster stayed open, and whether the change matched the diagnosed files. If the failure comes back, the cluster is marked as regressed rather than quietly reopened.',
+    text: 'Recorded when a run turns this cluster green — every test it covers ran and passed, in a full suite or a filtered re-run of just those tests: when the fix landed, how long the cluster stayed open, and whether the change matched the diagnosed files. If the failure comes back, the cluster is marked as regressed rather than quietly reopened.',
     doc: 'ai-diagnosis#did-the-fix-work',
   },
   'cluster.evidence': {

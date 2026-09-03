@@ -305,6 +305,8 @@ export interface ProjectDetails {
   diagnosisInstructions?: string | null;
   hasScmToken: boolean;
   defaultBranch?: string | null;
+  /** Provider-specific "re-run from the dashboard" config (secrets excluded). */
+  ciRerun?: import('#shared/ci-rerun').CiRerunSettings | null;
   color?: string | null;
   tags?: TagInfo[];
 }

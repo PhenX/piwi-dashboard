@@ -47,7 +47,7 @@ Embedding-based reconciliation runs after every finished run whenever an embeddi
 
 ## Did the fix work?
 
-A cluster used to go quiet and stay open forever — nothing ever confirmed it was actually fixed. Now every full run
+A cluster used to go quiet and stay open forever — nothing ever confirmed it was actually fixed. Now every run
 answers that.
 
 When a run executes every test a cluster covers and they all pass, Piwi records the fix: the run, the commit, and how
@@ -67,10 +67,11 @@ both, and that disagreement is the point.
 
 Two rules keep the verdict honest:
 
-- **Partial runs are ignored.** A test that didn't execute hasn't been shown to pass, so a `--grep`-filtered run never
-  closes a cluster.
 - **Every affected test must pass**, not just some — a cluster is one root cause, and half of it passing means it isn't
-  fixed.
+  fixed. A test that didn't execute hasn't been shown to pass, so it counts against the cluster just as a failure would.
+- **A filtered run can close a cluster** as long as it covered the whole cluster. Re-running exactly the affected tests
+  with `--grep` and seeing them all pass is enough; a run that skipped even one of them is not, whether it was filtered
+  or a full run that happened to miss it.
 
 The verdict moves the triage status only when the evidence is strong enough to stand in for a person: *Diagnosis
 verified* sets an **open** cluster to **resolved**, and *Regressed* sets a **resolved** cluster back to **open**. Each

@@ -52,6 +52,7 @@ export const projects = pgTable(
     diagnosisInstructions: text('diagnosis_instructions'),
     scmToken: text('scm_token'), // Per-project SCM token for GitHub/GitLab/Bitbucket API access
     defaultBranch: text('default_branch'), // Repository default branch; null = resolve from SCM provider, else 'main'
+    ciRerun: jsonb('ci_rerun'), // CiRerunSettings — provider-specific "re-run from the dashboard" target (off by default)
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -253,6 +254,7 @@ export const failureClusters = pgTable(
     fixCommit: text('fix_commit'), // commit of that run, when the reporter recorded one
     timeToResolutionMs: integer('time_to_resolution_ms'), // first seen → fix landed
     fixVerification: text('fix_verification'), // 'stopped-failing' | 'diagnosis-verified' | 'regressed'
+    lastRerunDispatch: jsonb('last_rerun_dispatch'), // ClusterRerunDispatch — most recent "Re-run in CI" dispatch
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),

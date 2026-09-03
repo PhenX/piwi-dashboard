@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireProjectAccess, requireRouteId } from '../../utils/project-access';
 import { updateProject } from '#shared/handlers/projects';
 import { encryptSecret, getEncryptionKey } from '../../utils/crypto';
+import { resolveCiRerunSettings, type CiRerunSettings } from '#shared/ci-rerun';
 
 defineRouteMeta({
   openAPI: {
@@ -15,12 +16,20 @@ defineRouteMeta({
   },
 });
 
+const ciRerunSchema = z.object({
+  enabled: z.boolean().optional(),
+  github: z.object({ workflow: z.string(), ref: z.string(), inputName: z.string() }).partial().optional(),
+  gitlab: z.object({ ref: z.string(), variableName: z.string() }).partial().optional(),
+  bitbucket: z.object({ pipeline: z.string(), variableName: z.string() }).partial().optional(),
+});
+
 const updateProjectSchema = z.object({
   label: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   diagnosisInstructions: z.string().optional().nullable(),
   scmToken: z.string().optional().nullable(),
   defaultBranch: z.string().optional().nullable(),
+  ciRerun: ciRerunSchema.optional().nullable(),
   tagIds: z.array(z.number()).optional(),
 });
 
@@ -44,11 +53,19 @@ export default eventHandler(async (event) => {
     });
   }
 
-  const { label, description, diagnosisInstructions, scmToken, defaultBranch, tagIds } = validation.data;
+  const { label, description, diagnosisInstructions, scmToken, defaultBranch, ciRerun, tagIds } = validation.data;
 
   // Encrypt SCM token before persisting; null/empty clears the stored value
   const encryptedScmToken =
     scmToken != null && scmToken.trim() ? encryptSecret(scmToken.trim(), getEncryptionKey()) : scmToken;
+
+  // Normalize the CI re-run config (drops empty targets); null clears it.
+  const resolvedCiRerun =
+    ciRerun === undefined
+      ? undefined
+      : ciRerun === null
+        ? null
+        : resolveCiRerunSettings(ciRerun as Partial<CiRerunSettings>);
 
   try {
     return await updateProject(db, id, {
@@ -57,6 +74,7 @@ export default eventHandler(async (event) => {
       diagnosisInstructions,
       scmToken: encryptedScmToken,
       defaultBranch: defaultBranch != null ? defaultBranch.trim() || null : defaultBranch,
+      ciRerun: resolvedCiRerun,
       tagIds,
     });
   } catch (e: any) {

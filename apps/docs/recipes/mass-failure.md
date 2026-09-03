@@ -52,7 +52,8 @@ conversation over.
 
 When a later run executes every test a cluster covers and they all pass, Piwi records the fix — the run,
 the commit, and how long the cluster was open — with three separate verdicts, because they aren't the
-same claim:
+same claim. The run doesn't have to be a full one: re-running just the affected tests and seeing them all
+pass closes the cluster too.
 
 | Verdict | Means |
 |---|---|

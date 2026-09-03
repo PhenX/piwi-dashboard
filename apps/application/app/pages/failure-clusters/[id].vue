@@ -141,6 +141,49 @@ const affectedRetryCases = computed(() =>
 const retryCommand = computed(() => buildRetryCommand(affectedRetryCases.value));
 const { copy: copyRetry, copied: retryCopied } = useCopy();
 
+// CI re-run — availability (for the button state) and the last dispatch.
+interface RerunInfo {
+  available: boolean;
+  reason: string | null;
+  provider: string | null;
+  enabled: boolean;
+  hasToken: boolean;
+  lastDispatch: { provider: string; url: string; args: string; at: number; byName: string | null } | null;
+}
+const { data: rerunInfo, refresh: refreshRerun } = await useFetch<RerunInfo>(
+  `/api/failure-clusters/${clusterId}/rerun`,
+);
+const rerunToast = useToast();
+const rerunning = ref(false);
+async function triggerRerun() {
+  rerunning.value = true;
+  try {
+    const res = await $fetch<{ ok: boolean; message?: string; dispatch?: { url: string } }>(
+      `/api/failure-clusters/${clusterId}/rerun`,
+      { method: 'POST' },
+    );
+    if (res.ok && res.dispatch) {
+      rerunToast.add({
+        title: 'CI re-run dispatched',
+        description: 'The affected tests are re-running.',
+        color: 'success',
+      });
+      await refreshRerun();
+    } else {
+      rerunToast.add({
+        title: 'CI re-run not started',
+        description: res.message ?? 'Not available.',
+        color: 'warning',
+      });
+    }
+  } catch (e: unknown) {
+    const message = (e as { data?: { message?: string }; message?: string })?.data?.message ?? 'Dispatch failed.';
+    rerunToast.add({ title: 'CI re-run failed', description: message, color: 'error' });
+  } finally {
+    rerunning.value = false;
+  }
+}
+
 // Reveal-on-citation: a diagnosis evidence citation (right column) can unfold and
 // scroll to the matching left-column section. Refs point at the foldable cards.
 const errorSection = ref<{ reveal: () => void } | null>(null);
@@ -339,6 +382,25 @@ const breadcrumbItems = computed(() => [
                 >
                   Copy retry command
                 </UButton>
+                <UTooltip
+                  :text="
+                    rerunInfo?.available
+                      ? 'Re-run the affected tests in CI'
+                      : (rerunInfo?.reason ?? 'CI re-run is unavailable')
+                  "
+                >
+                  <UButton
+                    size="xs"
+                    variant="outline"
+                    color="neutral"
+                    icon="i-lucide-refresh-cw"
+                    :disabled="!rerunInfo?.available"
+                    :loading="rerunning"
+                    @click="triggerRerun"
+                  >
+                    Re-run in CI
+                  </UButton>
+                </UTooltip>
                 <DesktopRunLocallyButton
                   :project-id="cluster.project?.id"
                   :project-label="cluster.project?.name"
@@ -358,6 +420,23 @@ const breadcrumbItems = computed(() => [
                   </UButton>
                 </UTooltip>
               </template>
+              <p
+                v-if="rerunInfo?.lastDispatch"
+                class="mb-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted"
+              >
+                <UIcon name="i-lucide-refresh-cw" class="size-3.5" />
+                <span>Last re-run {{ formatRelativeTime(rerunInfo.lastDispatch.at) }}</span>
+                <span v-if="rerunInfo.lastDispatch.byName">by {{ rerunInfo.lastDispatch.byName }}</span>
+                <span aria-hidden="true">·</span>
+                <a
+                  :href="rerunInfo.lastDispatch.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1 text-primary hover:underline"
+                >
+                  view run <UIcon name="i-lucide-external-link" class="size-3" />
+                </a>
+              </p>
               <ClusterTestEvidence
                 :affected-test-cases="cluster.affectedTestCases"
                 :project-key="cluster.project?.id"

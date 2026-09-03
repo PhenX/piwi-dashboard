@@ -234,6 +234,50 @@ Piwi only ever edits a comment it wrote itself (identified by a hidden marker), 
 Everything here is best-effort: the run is already stored by the time it runs, and a missing token or an unreachable
 host is logged rather than failing your pipeline.
 
+## Re-run from the dashboard
+
+Once a cluster is fixed, the fastest way to prove it is to re-run exactly the affected tests — and a
+[filtered run that passes them all now closes the cluster](./ai-diagnosis#did-the-fix-work). The cluster page can
+trigger that run in CI for you: **Re-run in CI**, next to *Copy retry command*, dispatches a workflow / pipeline with
+the cluster's retry arguments (`file:line` specs, `--project` when they share one) and links to the run it started. The
+last dispatch — when, by whom, and a link — shows under the Test evidence header.
+
+It is **off by default** and configured per project on the project's edit page, under **CI re-run**. Turn it on and
+fill in the block for your provider:
+
+| Provider | Target you configure | How it is dispatched | Token scope |
+|---|---|---|---|
+| **GitHub** | Workflow file name (e.g. `e2e.yml`), a ref, and the `workflow_dispatch` input that receives the arguments | `POST /actions/workflows/{workflow}/dispatches` with `ref` + `inputs` | `actions:write` (a classic PAT's `workflow` scope) |
+| **GitLab** | A ref and the pipeline variable name that receives the arguments | `POST /projects/{id}/pipeline` with `ref` + `variables` | `api` |
+| **Bitbucket** | The `custom:` pipeline name and the variable name that receives the arguments | `POST /pipelines/` with a custom pipeline target + `variables` | `pipeline:write` |
+
+The dispatch uses the project's [SCM token](#what-it-needs) (the same one PR feedback and auto-heal use), so that token
+needs the write scope above — broader than the read-only token diagnosis needs. The button is disabled with an
+explanatory tooltip when the feature is off, no target is configured for the repository's provider, or no token is set.
+
+Your workflow has to actually consume the value. A minimal GitHub example that forwards the input to Playwright:
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      args:
+        description: Playwright arguments
+        required: false
+        default: ''
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npx playwright test ${{ inputs.args }}
+```
+
+On GitLab, read the variable in your test job (`npx playwright test $PW_ARGS`); on Bitbucket, reference it the same way
+inside the `custom:` pipeline you named. GitHub's `workflow_dispatch` returns no run id, so the link goes to the
+workflow's runs page filtered to the branch; GitLab and Bitbucket link straight to the pipeline.
+
 ## Blocking a merge
 
 `npx playwright test` exits non-zero when anything failed. That is the only question it can answer. A merge policy

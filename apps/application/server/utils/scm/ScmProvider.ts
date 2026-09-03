@@ -4,6 +4,7 @@ import {
   parseCodeowners,
   type CompiledCodeowners,
 } from '@piwitests/core/codeowners';
+import type { CiRerunSettings } from '#shared/ci-rerun';
 
 export interface ChangedFile {
   filename: string;
@@ -24,6 +25,12 @@ export interface ScmCommitDetail {
   message: string;
   author: string;
   date: string;
+}
+
+/** The name and email a commit records for its author. */
+export interface ScmCommitAuthor {
+  name: string;
+  email: string;
 }
 
 export interface ScmChanges {
@@ -121,6 +128,13 @@ export abstract class ScmProvider {
   abstract listCommits(limit?: number, branch?: string): Promise<ScmCommitDetail[]>;
   abstract fetchChanges(fromSha: string, toSha: string): Promise<ScmChanges | null>;
   abstract fetchCommitDiff(sha: string): Promise<ScmChanges | null>;
+  /**
+   * The author (name + email) a commit records, or null when the commit cannot
+   * be read or the host does not expose an email. Best-effort like the other
+   * read lookups — a token-less or failing fetch returns null — and content is
+   * immutable per SHA, so implementations cache aggressively.
+   */
+  abstract getCommitAuthor(sha: string): Promise<ScmCommitAuthor | null>;
   abstract probeError(branch?: string): Promise<string | null>;
   /**
    * Full content of a single file at a ref (commit SHA / branch). Returns null
@@ -201,6 +215,22 @@ export abstract class ScmProvider {
   /** Open a pull/merge request; returns its number + URL. Throws on failure. */
   async createPullRequest(_input: CreatePullRequestInput): Promise<ScmPullRequest> {
     throw new Error(`${this.provider} does not support opening pull requests`);
+  }
+
+  // ── CI re-run (workflow / pipeline dispatch) ───────────────────────────────
+  //
+  // Like the auto-heal write methods, this THROWS on failure with the provider's
+  // own message so the route can surface exactly what went wrong; the caller
+  // has already checked the feature is enabled and a target is configured.
+
+  /**
+   * Dispatch a CI re-run of the given Playwright arguments, using this
+   * provider's target in `settings`. Returns the runs/pipeline URL to watch.
+   * Throws when the provider is unsupported, has no configured target, or the
+   * dispatch request fails.
+   */
+  async dispatchRerun(_settings: CiRerunSettings, _playwrightArgs: string): Promise<{ url: string }> {
+    throw new Error(`${this.provider} does not support CI re-run`);
   }
 
   /**

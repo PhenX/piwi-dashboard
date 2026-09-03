@@ -207,7 +207,7 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
     verify: {
       command: `${fileCmd || 'npx playwright test'}${grep}`,
       expectation:
-        'Run the full suite afterwards. When every test in this cluster passes in one full run, Piwi records the fix — with the commit and how long the cluster was open — and the cluster stops being reported as open.',
+        'Re-run the affected tests, or the whole suite. When every test in this cluster passes in one run, full or filtered, Piwi records the fix — with the commit and how long the cluster was open — and the cluster stops being reported as open.',
     },
   };
 }
