@@ -454,7 +454,7 @@ PR-sized steps, each shippable alone, each with acceptance criteria that a scree
 
 ### Phase 0 — prerequisites (days)
 
-1. Merge `claude/audit-triage-actions` (quarantine, owner, known issue, bulk triage) — this plan places those controls; it must not fork them.
+1. ✅ Merged to `main` on 2026-09-03 (PR #441): the quarantine action on the execution navbar, *Quarantine all affected*, the owner and known-issue controls on the cluster page, and bulk triage on the run list now exist. PRs 1, 3 and 5 relocate them to the places this plan defines — never duplicate them.
 2. Baseline scenes: `execution-before`, `cluster-before`, `run-before`, `project-before` at 1280 × 800 and 390 px, so the *In numbers* table can be re-measured after each phase.
 3. Vocabulary helpers: `formatStatusLabel` renders *Timed out*; every triage and fix-verification render goes through the existing helpers; a unit test greps the app for the retired words (*failure group* as a label, *Alternative locators*, *Regression status*, *Resolution*, *AI verdict*, *test case* as a column header).
 
