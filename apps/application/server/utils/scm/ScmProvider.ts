@@ -4,6 +4,7 @@ import {
   parseCodeowners,
   type CompiledCodeowners,
 } from '@piwitests/core/codeowners';
+import type { CiRerunSettings } from '#shared/ci-rerun';
 
 export interface ChangedFile {
   filename: string;
@@ -214,6 +215,22 @@ export abstract class ScmProvider {
   /** Open a pull/merge request; returns its number + URL. Throws on failure. */
   async createPullRequest(_input: CreatePullRequestInput): Promise<ScmPullRequest> {
     throw new Error(`${this.provider} does not support opening pull requests`);
+  }
+
+  // ── CI re-run (workflow / pipeline dispatch) ───────────────────────────────
+  //
+  // Like the auto-heal write methods, this THROWS on failure with the provider's
+  // own message so the route can surface exactly what went wrong; the caller
+  // has already checked the feature is enabled and a target is configured.
+
+  /**
+   * Dispatch a CI re-run of the given Playwright arguments, using this
+   * provider's target in `settings`. Returns the runs/pipeline URL to watch.
+   * Throws when the provider is unsupported, has no configured target, or the
+   * dispatch request fails.
+   */
+  async dispatchRerun(_settings: CiRerunSettings, _playwrightArgs: string): Promise<{ url: string }> {
+    throw new Error(`${this.provider} does not support CI re-run`);
   }
 
   /**

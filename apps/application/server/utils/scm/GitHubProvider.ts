@@ -10,6 +10,7 @@ import type {
   CreatePullRequestInput,
 } from './ScmProvider';
 import { TtlCache } from './cache';
+import type { CiRerunSettings } from '#shared/ci-rerun';
 
 /** Turn a non-2xx GitHub response into an Error carrying the API's own message. */
 async function githubError(res: Response, action: string): Promise<Error> {
@@ -441,5 +442,29 @@ export class GitHubProvider extends ScmProvider {
     const pr = (await res.json()) as { number?: number; html_url?: string };
     if (!pr.number) throw new Error('GitHub pull request response had no number');
     return { number: pr.number, url: pr.html_url ?? `https://github.com/${this.repoPath}/pull/${pr.number}` };
+  }
+
+  // ── CI re-run ──────────────────────────────────────────────────────────────
+
+  override async dispatchRerun(settings: CiRerunSettings, playwrightArgs: string): Promise<{ url: string }> {
+    const target = settings.github;
+    if (!target) throw new Error('No GitHub workflow configured for CI re-run');
+
+    const res = await fetch(
+      `https://api.github.com/repos/${this.repoPath}/actions/workflows/${encodeURIComponent(target.workflow)}/dispatches`,
+      {
+        method: 'POST',
+        headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: target.ref, inputs: { [target.inputName]: playwrightArgs } }),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      },
+    );
+    if (!res.ok) throw await githubError(res, 'dispatch workflow');
+
+    // workflow_dispatch answers 204 with no run id, so link to the workflow's
+    // runs page filtered to the branch instead of a specific run.
+    const runs = new URL(`https://github.com/${this.repoPath}/actions/workflows/${target.workflow}`);
+    runs.searchParams.set('query', `branch:${target.ref}`);
+    return { url: runs.toString() };
   }
 }

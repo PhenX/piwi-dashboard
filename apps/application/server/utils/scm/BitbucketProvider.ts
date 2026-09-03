@@ -16,6 +16,7 @@ import type {
   CreatePullRequestInput,
 } from './ScmProvider';
 import { TtlCache } from './cache';
+import type { CiRerunSettings } from '#shared/ci-rerun';
 
 /** Turn a non-2xx Bitbucket response into an Error carrying the API's own message. */
 async function bitbucketError(res: Response, action: string): Promise<Error> {
@@ -365,5 +366,37 @@ export class BitbucketProvider extends ScmProvider {
       number: pr.id,
       url: pr.links?.html?.href ?? `https://bitbucket.org/${this.workspace}/${this.repoSlug}/pull-requests/${pr.id}`,
     };
+  }
+
+  // ── CI re-run ──────────────────────────────────────────────────────────────
+
+  override async dispatchRerun(settings: CiRerunSettings, playwrightArgs: string): Promise<{ url: string }> {
+    const target = settings.bitbucket;
+    if (!target) throw new Error('No Bitbucket pipeline configured for CI re-run');
+
+    // A custom pipeline still runs against a branch; the config names only the
+    // pipeline, so use the repository's default branch as the ref.
+    const branch = (await this.getDefaultBranch()) || 'main';
+    const res = await fetch(`${this.base}/pipelines/`, {
+      method: 'POST',
+      headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        target: {
+          type: 'pipeline_ref_target',
+          ref_type: 'branch',
+          ref_name: branch,
+          selector: { type: 'custom', pattern: target.pipeline },
+        },
+        variables: [{ key: target.variableName, value: playwrightArgs }],
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) throw await bitbucketError(res, 'trigger pipeline');
+    const pipeline = (await res.json()) as { build_number?: number; links?: { self?: { href?: string } } };
+    const url =
+      pipeline.build_number != null
+        ? `https://bitbucket.org/${this.workspace}/${this.repoSlug}/pipelines/results/${pipeline.build_number}`
+        : (pipeline.links?.self?.href ?? `https://bitbucket.org/${this.workspace}/${this.repoSlug}/pipelines`);
+    return { url };
   }
 }

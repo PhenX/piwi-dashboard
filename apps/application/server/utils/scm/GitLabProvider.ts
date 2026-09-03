@@ -10,6 +10,7 @@ import type {
   CreatePullRequestInput,
 } from './ScmProvider';
 import { TtlCache } from './cache';
+import type { CiRerunSettings } from '#shared/ci-rerun';
 
 /** Turn a non-2xx GitLab response into an Error carrying the API's own message. */
 async function gitlabError(res: Response, action: string): Promise<Error> {
@@ -436,5 +437,26 @@ export class GitLabProvider extends ScmProvider {
       number: mr.iid,
       url: mr.web_url ?? `https://${this.hostname}/${this.repoPath}/-/merge_requests/${mr.iid}`,
     };
+  }
+
+  // ── CI re-run ──────────────────────────────────────────────────────────────
+
+  override async dispatchRerun(settings: CiRerunSettings, playwrightArgs: string): Promise<{ url: string }> {
+    const target = settings.gitlab;
+    if (!target) throw new Error('No GitLab pipeline configured for CI re-run');
+
+    const res = await fetch(`https://${this.hostname}/api/v4/projects/${this.projectPath()}/pipeline`, {
+      method: 'POST',
+      headers: { ...this.makeHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ref: target.ref,
+        variables: [{ key: target.variableName, value: playwrightArgs }],
+      }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) throw await gitlabError(res, 'trigger pipeline');
+    const pipeline = (await res.json()) as { id?: number; web_url?: string };
+    const url = pipeline.web_url ?? `https://${this.hostname}/${this.repoPath}/-/pipelines/${pipeline.id ?? ''}`;
+    return { url };
   }
 }

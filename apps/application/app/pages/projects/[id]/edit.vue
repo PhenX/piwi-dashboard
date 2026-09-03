@@ -18,12 +18,35 @@ const allTags = computed(() => tagsData.value?.items || []);
 
 const hasToken = computed(() => Boolean(project.value?.hasScmToken));
 
+const storedCiRerun = (project.value?.ciRerun ?? null) as {
+  enabled?: boolean;
+  github?: { workflow?: string; ref?: string; inputName?: string };
+  gitlab?: { ref?: string; variableName?: string };
+  bitbucket?: { pipeline?: string; variableName?: string };
+} | null;
+
 const state = ref({
   label: project.value?.label || '',
   description: project.value?.description || '',
   diagnosisInstructions: project.value?.diagnosisInstructions || '',
   scmToken: '',
   defaultBranch: project.value?.defaultBranch || '',
+  ciRerun: {
+    enabled: storedCiRerun?.enabled ?? false,
+    github: {
+      workflow: storedCiRerun?.github?.workflow ?? '',
+      ref: storedCiRerun?.github?.ref ?? '',
+      inputName: storedCiRerun?.github?.inputName ?? '',
+    },
+    gitlab: {
+      ref: storedCiRerun?.gitlab?.ref ?? '',
+      variableName: storedCiRerun?.gitlab?.variableName ?? '',
+    },
+    bitbucket: {
+      pipeline: storedCiRerun?.bitbucket?.pipeline ?? '',
+      variableName: storedCiRerun?.bitbucket?.variableName ?? '',
+    },
+  },
 });
 
 const selectedTags = ref<TagInfo[]>(project.value?.tags || []);
@@ -50,6 +73,7 @@ async function onSubmit() {
         diagnosisInstructions: state.value.diagnosisInstructions || null,
         scmToken: state.value.scmToken || null,
         defaultBranch: state.value.defaultBranch || null,
+        ciRerun: state.value.ciRerun,
         tagIds: selectedTags.value.map((t) => t.id),
       },
     });
@@ -118,6 +142,7 @@ function onCancel() {
               v-model:diagnosisInstructions="state.diagnosisInstructions"
               v-model:scmToken="state.scmToken"
               v-model:defaultBranch="state.defaultBranch"
+              v-model:ciRerun="state.ciRerun"
               v-model:tags="selectedTags"
               :all-tags="allTags"
               @tag-created="refreshTags()"
