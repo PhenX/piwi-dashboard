@@ -291,6 +291,11 @@ export const HELP_TOPICS = {
     text: 'Each step Playwright ran, with its duration. A failed step is highlighted with its error, and slow steps are color-coded.',
     doc: 'evidence#one-execution-diagnosis-first',
   },
+  'case.timeline': {
+    title: 'Failure timeline',
+    text: 'One time axis that places this execution’s steps, console entries, network requests and backend log entries on the same clock, with a marker at the moment of failure. The default view is the window around the failed step (10s before, 2s after); switch to “Whole test” to see everything. The list below reads it chronologically — click a line to jump to that step, console entry or request. When a run’s reporter recorded no step start times, positions are estimated from durations and the card says so.',
+    doc: 'evidence#one-execution-diagnosis-first',
+  },
   'case.wasted-time': {
     title: 'Wasted time',
     text: 'Time spent in fixed waits (waitForTimeout and matching patterns) that could usually be replaced with a web-first assertion.',

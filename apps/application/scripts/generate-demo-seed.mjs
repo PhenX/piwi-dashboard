@@ -443,14 +443,20 @@ function buildSeedStepEvents(caseStartMs, caseDuration, location, waitHeavy) {
   return { stepEvents: events, wastedMs };
 }
 
-/** Scale a project's themed step titles to a case duration. */
-function buildSteps(proj, caseDuration) {
+/**
+ * Scale a project's themed step titles to a case duration, laying each step's
+ * absolute `startTime` end-to-end from `caseStartMs` so the failure timeline
+ * places them on a real clock rather than estimating from durations.
+ */
+function buildSteps(proj, caseDuration, caseStartMs) {
   const total = proj.stepTitles.reduce((s, st) => s + st.weight, 0);
-  return proj.stepTitles.map((st) => ({
-    title: st.title,
-    duration: Math.round((st.weight / total) * caseDuration),
-    category: st.category,
-  }));
+  let cursor = caseStartMs;
+  return proj.stepTitles.map((st) => {
+    const duration = Math.round((st.weight / total) * caseDuration);
+    const startTime = cursor;
+    cursor += duration;
+    return { title: st.title, duration, category: st.category, startTime };
+  });
 }
 
 /** Themed network requests for one case (jittered durations; story overrides on failures). */
@@ -766,7 +772,14 @@ for (const proj of DEMO_PROJECTS) {
         }
       }
 
-      const steps = buildSteps(proj, caseDuration);
+      const steps = buildSteps(proj, caseDuration, caseStartMs);
+      // Mark the last step of a failing case as the failed one, so the timeline
+      // anchors its window and failure marker on a captured step boundary.
+      if (isFailedCase && steps.length > 0) {
+        const lastStep = steps[steps.length - 1];
+        lastStep.failed = true;
+        lastStep.error = { message: (storyEntry.failingCase.error ?? '').split('\n')[0] || 'Test failed' };
+      }
       const slowestStep = steps.reduce((a, b) => (a.duration > b.duration ? a : b));
 
       // Test annotations — failures link to their cluster, the designated slow

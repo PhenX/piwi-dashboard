@@ -13,6 +13,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-waits';
 import { inlineCasePayloads } from '../../server/utils/case-payloads';
 import { buildFailureVerdict } from '../failure-verdict';
+import { buildFailureTimeline, type FailureTimeline, type TimelineCallsite } from '../failure-timeline';
 import type { TestStepEvent } from '../types';
 import type { RunMetadata } from '../../server/utils/run-json-types';
 
@@ -453,6 +454,58 @@ export async function getLastPassPageState(
     .orderBy(desc(testRuns.startTime), desc(testRunsCases.id))
     .limit(1);
   return rows[0]?.pageState ?? null;
+}
+
+/**
+ * The failure timeline for one execution: its steps, console entries, network
+ * requests and backend log entries placed on a single clock around the moment
+ * of failure, with each action attributed to the method or `test.step` it was
+ * called from. Loads the same rows the execution detail reads and hands them to
+ * the pure `buildFailureTimeline`; shared by the REST endpoint and the demo
+ * mirror. Returns an empty timeline when the execution does not exist.
+ *
+ * Callers may pass `traceCallsites` (parsed from the stored trace, server-side)
+ * to attach function names and the caller chain to each action; without them,
+ * call sites come from the reporter's own `location` (file and line only).
+ *
+ * The stored trace records action times on a monotonic clock the execution's
+ * epoch timestamps cannot be mixed with, so no trace anchor is fed here —
+ * `failureAt` comes from the failed step (or `startedAt + duration`), and the
+ * card links out to the trace viewer instead.
+ */
+export async function getFailureTimeline(
+  db: DrizzleDB,
+  id: number,
+  opts: { traceCallsites?: TimelineCallsite[] | null } = {},
+): Promise<FailureTimeline> {
+  const [trc] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
+  if (!trc) return buildFailureTimeline({});
+
+  const [networkRequestRows, [testCase]] = await Promise.all([
+    db.select().from(networkRequests).where(eq(networkRequests.testRunsCaseId, id)),
+    db.select({ filePath: testCases.filePath }).from(testCases).where(eq(testCases.id, trc.testCaseId)),
+  ]);
+
+  return buildFailureTimeline({
+    startedAt: trc.startedAt,
+    duration: trc.duration,
+    timeout: trc.timeout,
+    status: trc.status,
+    steps: trc.steps,
+    stepEvents: trc.stepEvents,
+    consoleLogs: trc.consoleLogs,
+    specFile: testCase?.filePath ?? null,
+    traceCallsites: opts.traceCallsites ?? null,
+    networkRequests: networkRequestRows.map((nr) => ({
+      method: nr.method,
+      url: nr.url,
+      status: nr.status,
+      duration: nr.duration,
+      startTime: nr.startTime ?? undefined,
+      serverLogs: nr.serverLogs,
+      serverTraces: nr.serverTraces,
+    })),
+  });
 }
 
 export async function getTestRunCaseTraces(db: DrizzleDB, id: number) {
