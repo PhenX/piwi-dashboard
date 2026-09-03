@@ -2,6 +2,8 @@
 
 **Status:** audit, no code changes · **Scope:** everything Piwi does with the data of a failing run — what the reporter captures, what the server keeps and analyzes, how the dashboard shows it, and what it hands back to fix the failure · **Date:** 2026-09-01
 
+**UI follow-up:** [`ui-simplification.md`](ui-simplification.md) designs big bet **L** (one investigation page with a fixed reading order) for every screen around tests, places the in-progress triage actions, and reserves the spots where **D**, **E**, **F**, **J** and **K** land.
+
 This document is written for the maintainers. It is deliberately blunt: the product already does more than any Playwright dashboard I know of, and that is exactly why the remaining gaps matter — a user who has installed the reporter, the fixtures, an SCM token and an LLM expects the red run to be *explained*, not just *documented*.
 
 Every finding carries a file reference. Findings marked **(seen)** were observed first-hand on a seeded instance (`npm run app:seed:dev`, dev server, Chromium at 1440 px) and not only in the code.
@@ -355,7 +357,7 @@ All fourteen landed in PRs #428 (docs), #429 (reporter and alerts), #430 (UI) an
 - ⬜ **F** reproduction bundle + generated bisect.
 - ⬜ **J** sampled green ARIA snapshots + structural page diff.
 - ⬜ **K** resolved-cluster memory.
-- ⬜ **L** the unified investigation layout.
+- ⬜ **L** the unified investigation layout — designed page by page in [`ui-simplification.md`](ui-simplification.md).
 
 ---
 
