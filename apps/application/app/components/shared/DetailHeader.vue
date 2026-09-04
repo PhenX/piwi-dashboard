@@ -77,5 +77,10 @@ defineProps<{
 
     <!-- An optional row under the facts line (the cluster page's triage control). -->
     <div v-if="$slots.below"><slot name="below" /></div>
+
+    <!-- Optional third line: a count bar (the run variant fills it). -->
+    <div v-if="$slots['count-bar']">
+      <slot name="count-bar" />
+    </div>
   </div>
 </template>

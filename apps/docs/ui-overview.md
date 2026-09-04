@@ -93,19 +93,37 @@ Project **import** (`/projects/:id/import`, admins only) backfills runs recorded
 
 ## Test run detail
 
-A deep dive into a single run. The **summary header** shows status, duration, test counts, duration metrics (avg/P90), and metadata cards (CI/environment, source control, tags). While a run is still `running`, a **live progress bar** and streaming results appear in real time, and each still-running row in the test-case list shows the **step its worker is on right now**, inline under the test title. **Reports** buttons open or download the attached HTML reports (Playwright, Monocart).
+A deep dive into a single run. The **header** shows status, `Run #N`, the run label and marker on the first
+line with the primary action (**Copy retry command** on a red run, the **HTML report** on a green one), then
+one facts line — started, duration, branch, commit, author, environment, CI build — with a **Details** popover
+holding the rest (shards, Playwright and Piwi versions, avg/P90 durations, wasted time, storage and every
+report, tags, links, custom data). Below it, **one count bar** carries the numbers on its segments
+(*N passed · N failed · N passed on retry · N skipped · N didn't run*, zero segments hidden); clicking a
+segment filters the Tests tab and switches to it. While a run is still `running`, a **live progress bar** and
+streaming results appear in real time, and each still-running row shows the **step its worker is on right now**,
+inline under the test title.
 
 The right panel is tabbed:
 
-- **Test cases** — every test with browser icon, status, duration, location, errors, annotations, and traces; searchable, filterable by status/browser, and grouped by suite hierarchy (describe blocks).
-- **Insights** — what changed versus the last passing baseline: new regressions, recurring failures, fixed tests, new flaky tests, performance changes, worker imbalance, and new clusters. See [Run insights](./flaky-tests#run-insights).
-- **Failure groups** — failures grouped by error fingerprint, each with flaky/worker-correlation signals and actions to filter the list, trigger AI diagnosis, or open the cluster. See [AI diagnosis & clustering](./ai-diagnosis).
-- **Regression** *(shown when a baseline exists)* — the regression delta for this run at a glance.
-- **Timeline** — a horizontal per-worker timeline of test execution, with a span-type filter to isolate test phases (setup, actual test, wasted waits, teardown); click a bar to jump to that test case.
+- **Tests** — every execution as one row (status, title, exceptional badges with a `+N` overflow, the failure
+  headline and source path, duration, browser, retries, wasted time and its cluster). **Group by** *Cluster*
+  (the default on a red run — each group header names the cluster, its test count and triage status, with an
+  *Open cluster* link, and passing tests fold into a collapsed *Passed* group), *File* (with per-file tallies),
+  *File + Describe* (the file nested by its describe blocks) or *None*. Search matches the title, path **and**
+  error text; filter by status, browser, new regressions and
+  newly flaky. Select failing rows for bulk triage (quarantine, or set the cluster status) in any grouping.
+- **Insights** — what changed versus the last passing baseline: new regressions, recurring failures, fixed
+  tests, new flaky tests, performance changes, worker imbalance, and new clusters. See
+  [Run insights](./flaky-tests#run-insights).
+- **Since last pass** *(shown when a baseline exists)* — the regression delta for this run at a glance.
+- **Timeline** — a horizontal per-worker timeline of test execution, with a span-type filter to isolate test
+  phases (setup, actual test, wasted waits, teardown); click a bar to jump to that test.
 - **Compare** — pick a baseline run for a side-by-side delta (improved / regressed / unchanged).
-- **Slow endpoints** — network requests grouped by method + normalized route, with avg/p90/max duration and error rate. Requires the [capture fixtures](./capture-fixtures).
+- **Slow endpoints** — network requests grouped by method + normalized route, with avg/p90/max duration and
+  error rate. Requires the [capture fixtures](./capture-fixtures).
 
-Administrators can **delete** the entire run and its files from the header.
+Administrators can **delete** the entire run and its files from the header's More menu, which also copies a
+run summary and refreshes.
 
 ## Test case detail
 

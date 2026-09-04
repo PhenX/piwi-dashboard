@@ -91,7 +91,7 @@ test.describe('Dashboard UI Tests', () => {
     }).toPass({ timeout: 30000 });
 
     // Check test run details are displayed
-    await expect(page.locator('h2').first()).toContainText('Run #');
+    await expect(page.getByRole('heading', { name: /Run #/ })).toBeVisible();
   });
 
   test('should switch between tabs on test run detail page', async ({ page }) => {
@@ -108,7 +108,7 @@ test.describe('Dashboard UI Tests', () => {
     }).toPass({ timeout: 30000 });
     await waitForHydration(page);
 
-    await expect(page.getByRole('columnheader', { name: 'Test case' }).first()).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Group tests by' })).toBeVisible();
 
     await page.getByRole('button', { name: /^Timeline/ }).click();
     await page.getByRole('button', { name: /^Compare$/ }).click();
@@ -219,12 +219,10 @@ test.describe('Dashboard UI Tests', () => {
     await page.goto(`/test-runs/${runId}`);
     await waitForHydration(page);
 
-    // Delete button should be visible in the navbar
-    const deleteButton = page.getByRole('button', { name: 'Delete', exact: true });
-    await expect(deleteButton).toBeVisible();
-
-    // Click it — confirmation modal should appear
-    await deleteButton.click();
+    // Delete lives in the navbar's More menu; opening it and choosing Delete run
+    // brings up the confirmation modal.
+    await page.getByRole('button', { name: 'More actions' }).click();
+    await page.getByRole('menuitem', { name: 'Delete run' }).click();
     await expect(page.getByText('Delete test run', { exact: true })).toBeVisible({ timeout: 10000 });
 
     // Close the modal
@@ -232,7 +230,7 @@ test.describe('Dashboard UI Tests', () => {
     await expect(page.getByText('Delete test run', { exact: true })).not.toBeVisible();
   });
 
-  test('run metadata renders every fact group in the summary meta strip', async ({ page, request }) => {
+  test('run metadata renders in the facts line and the Details popover', async ({ page, request }) => {
     // Submit a run with CI, SCM, tags and environment so every fact group renders
     const submitRes = await retryPost(request, '/api/test-runs/submit', {
       data: {
@@ -268,26 +266,21 @@ test.describe('Dashboard UI Tests', () => {
     await page.goto(`/test-runs/${runId}`);
     await waitForHydration(page);
 
-    // Each MetaStripGroup carries its label as a title attribute
-    const ciGroup = page.locator('[role="group"][aria-label="CI & environment"]');
-    await expect(ciGroup).toBeVisible();
-    await expect(ciGroup).toContainText('staging');
-    await expect(ciGroup).toContainText('GitHub Actions');
-    await expect(ciGroup).toContainText('Build #42');
+    // The facts line carries environment, branch, commit and the CI build link.
+    await expect(page.getByText('staging', { exact: true })).toBeVisible();
+    await expect(page.getByText('main', { exact: true })).toBeVisible();
+    await expect(page.getByText('abc123de')).toBeVisible();
+    await expect(page.getByText('Build #42')).toBeVisible();
 
-    const sourceGroup = page.locator('[role="group"][aria-label="Source"]');
-    await expect(sourceGroup).toContainText('main');
-    await expect(sourceGroup).toContainText('abc123de');
-
-    const tagsGroup = page.locator('[role="group"][aria-label="Tags"]');
-    await expect(tagsGroup).toContainText('smoke');
-    await expect(tagsGroup).toContainText('regression');
+    // Tags live in the Details popover.
+    await page.getByRole('button', { name: 'Details' }).click();
+    await expect(page.getByText('smoke', { exact: true })).toBeVisible();
+    await expect(page.getByText('regression', { exact: true })).toBeVisible();
   });
 
-  test('tooling versions render in the meta strip without CI metadata', async ({ page, request }) => {
+  test('tooling versions render in the Details popover without CI metadata', async ({ page, request }) => {
     // A run with no ci/environment but with Playwright/reporter versions still
-    // gets a versions fact group — a regression guard: the old layout once
-    // dropped the versions from the block count and broke the row.
+    // shows them in the Details popover.
     const submitRes = await retryPost(request, '/api/test-runs/submit', {
       data: {
         projectName: PROJECT.BLOCK_LAYOUT_VERSIONS,
@@ -312,102 +305,12 @@ test.describe('Dashboard UI Tests', () => {
     await page.goto(`/test-runs/${runId}`);
     await waitForHydration(page);
 
-    const versionsGroup = page.locator('[role="group"][aria-label="Tooling versions"]');
-    await expect(versionsGroup).toBeVisible();
-    await expect(versionsGroup).toContainText('Playwright v1.51.0');
-    await expect(versionsGroup).toContainText('Piwi v0.7.0');
-
-    await expect(page.locator('[role="group"][aria-label="Source"]')).toContainText('main');
-    await expect(page.locator('[role="group"][aria-label="Tags"]')).toContainText('smoke');
-  });
-});
-
-test.describe('Foldable Summary', () => {
-  // The run this test owns. `fullyParallel` spreads the block over several
-  // workers, each seeding the same project, so "the newest run of
-  // PROJECT.SUMMARY_FOLD" can belong to another worker's test — take the id the
-  // submit returned instead.
-  let runId = 0;
-
-  test.beforeEach(async ({ page, request }) => {
-    const submitRes = await retryPost(request, '/api/test-runs/submit', {
-      data: {
-        projectName: PROJECT.SUMMARY_FOLD,
-        status: 'passed',
-        startTime: new Date().toISOString(),
-        duration: 90000,
-        totalTests: 5,
-        passedTests: 5,
-        failedTests: 0,
-        skippedTests: 0,
-        testCases: [
-          {
-            title: 'fold test case',
-            status: 'passed',
-            duration: 1000,
-            location: 'tests/fold.spec.ts:1:1',
-            retries: 0,
-            steps: [{ title: 'page.goto(url)', duration: 500, category: 'navigation' }],
-            slowestStep: 'page.goto(url)',
-            slowestStepDuration: 500,
-            wastedTimeMs: 0,
-          },
-        ],
-      },
-      timeout: 20000,
-    });
-    runId = (await submitRes.json()).runId;
-    await page.context().clearCookies();
-  });
-
-  test('should start expanded on test run detail page', async ({ page }) => {
-    await page.goto(`/test-runs/${runId}`);
-    await page.waitForURL(/\/test-runs\/\d+/);
-
-    await expect(page.getByTitle('Collapse summary')).toBeVisible();
-    await expect(page.locator('h2').filter({ hasText: /Run #/ })).toBeVisible();
-  });
-
-  test('should collapse and expand test run summary', async ({ page }) => {
-    await page.goto(`/test-runs/${runId}`);
-    await page.waitForURL(/\/test-runs\/\d+/);
-    await waitForHydration(page);
-
-    await expect(page.getByTitle('Collapse summary')).toBeVisible();
-
-    await page.getByTitle('Collapse summary').click({ force: true });
-    await expect(page.locator('h2').filter({ hasText: /Run #/ })).not.toBeVisible();
-    await expect(page.locator('span:has-text("T:")').first()).toBeVisible();
-
-    await page.locator('span:has-text("T:")').first().click({ force: true });
-    await expect(page.getByTitle('Collapse summary')).toBeVisible();
-  });
-
-  test('should show key info in folded state', async ({ page }) => {
-    await page.goto(`/test-runs/${runId}`);
-    await page.waitForURL(/\/test-runs\/\d+/);
-    await waitForHydration(page);
-
-    await page.getByTitle('Collapse summary').click({ force: true });
-
-    await expect(page.locator('span:has-text("T:")').first()).toBeVisible();
-    await expect(page.locator('span:has-text("P:")').first()).toBeVisible();
-    await expect(page.locator('span:has-text("F:")').first()).toBeVisible();
-    await expect(page.locator('span:has-text("S:")').first()).toBeVisible();
-  });
-
-  test('should persist fold state across navigation', async ({ page }) => {
-    await page.goto(`/test-runs/${runId}`);
-    await page.waitForURL(/\/test-runs\/\d+/);
-    await waitForHydration(page);
-
-    await expect(page.getByTitle('Collapse summary')).toBeVisible({ timeout: 10000 });
-    await page.getByTitle('Collapse summary').click({ force: true });
-    await expect(page.locator('h2').filter({ hasText: /Run #/ })).not.toBeVisible();
-
-    await page.reload();
-    await expect(page.locator('h2').filter({ hasText: /Run #/ })).not.toBeVisible();
-    await expect(page.locator('span:has-text("T:")').first()).toBeVisible();
+    // Branch is on the facts line; versions and tags are in the Details popover.
+    await expect(page.getByText('main', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Details' }).click();
+    await expect(page.getByText('Playwright v1.51.0')).toBeVisible();
+    await expect(page.getByText('Piwi v0.7.0')).toBeVisible();
+    await expect(page.getByText('smoke', { exact: true })).toBeVisible();
   });
 });
 
@@ -450,8 +353,8 @@ test.describe('Run Label', () => {
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
-    // Expanded summary should have the + label button
-    const addLabelBtn = page.locator('h2').getByTitle('Add a label');
+    // The header carries the + label button beside the title.
+    const addLabelBtn = page.getByTitle('Add a label');
     await expect(addLabelBtn).toBeVisible();
     await expect(addLabelBtn).toHaveText('+ label');
   });
@@ -461,8 +364,8 @@ test.describe('Run Label', () => {
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
-    await page.locator('h2').getByTitle('Add a label').click();
-    const input = page.locator('h2').getByPlaceholder('Add a label...');
+    await page.getByTitle('Add a label').click();
+    const input = page.getByPlaceholder('Add a label...');
     await expect(input).toBeVisible();
     await expect(input).toBeFocused();
   });
@@ -472,13 +375,13 @@ test.describe('Run Label', () => {
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
-    await page.locator('h2').getByTitle('Add a label').click();
-    const input = page.locator('h2').getByPlaceholder('Add a label...');
+    await page.getByTitle('Add a label').click();
+    const input = page.getByPlaceholder('Add a label...');
     await input.fill('v1.0');
     await input.press('Enter');
 
-    // Label should now be displayed
-    await expect(page.locator('h2')).toContainText('— v1.0');
+    // The label now renders as an editable button beside the title.
+    await expect(page.getByRole('button', { name: 'v1.0' })).toBeVisible();
   });
 
   test('label persists after page reload', async ({ page }) => {
@@ -486,14 +389,14 @@ test.describe('Run Label', () => {
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
-    await page.locator('h2').getByTitle('Add a label').click();
-    const input = page.locator('h2').getByPlaceholder('Add a label...');
+    await page.getByTitle('Add a label').click();
+    const input = page.getByPlaceholder('Add a label...');
     await input.fill('persistent-label');
     await input.press('Enter');
-    await expect(page.locator('h2')).toContainText('— persistent-label');
+    await expect(page.getByRole('button', { name: 'persistent-label' })).toBeVisible();
 
     await page.reload();
-    await expect(page.locator('h2')).toContainText('— persistent-label');
+    await expect(page.getByRole('button', { name: 'persistent-label' })).toBeVisible();
   });
 
   test('clicking label text re-enters edit mode', async ({ page, request }) => {
@@ -506,11 +409,12 @@ test.describe('Run Label', () => {
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
-    await expect(page.locator('h2')).toContainText('— edit-me');
+    const labelBtn = page.getByRole('button', { name: 'edit-me' });
+    await expect(labelBtn).toBeVisible();
 
     // Click the label text to start editing
-    await page.locator('h2').locator('span', { hasText: '— edit-me' }).click();
-    const input = page.locator('h2').getByPlaceholder('Add a label...');
+    await labelBtn.click();
+    const input = page.getByPlaceholder('Add a label...');
     await expect(input).toBeVisible();
     await expect(input).toHaveValue('edit-me');
   });
@@ -520,13 +424,13 @@ test.describe('Run Label', () => {
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
-    await page.locator('h2').getByTitle('Add a label').click();
-    const input = page.locator('h2').getByPlaceholder('Add a label...');
+    await page.getByTitle('Add a label').click();
+    const input = page.getByPlaceholder('Add a label...');
     await input.fill('cancel-this');
     await input.press('Escape');
 
     // Label should not appear (no save was triggered)
-    await expect(page.locator('h2').getByTitle('Add a label')).toBeVisible();
+    await expect(page.getByTitle('Add a label')).toBeVisible();
   });
 
   test('saving an empty label clears it', async ({ page, request }) => {
@@ -540,8 +444,8 @@ test.describe('Run Label', () => {
     await waitForHydration(page);
 
     // Click the label
-    await page.locator('h2').locator('span', { hasText: '— will-be-cleared' }).click();
-    const input = page.locator('h2').getByPlaceholder('Add a label...');
+    await page.getByRole('button', { name: 'will-be-cleared' }).click();
+    const input = page.getByPlaceholder('Add a label...');
     await expect(input).toHaveValue('will-be-cleared');
 
     // Clear and save
@@ -550,7 +454,7 @@ test.describe('Run Label', () => {
     await waitForHydration(page);
 
     // + label button should return
-    await expect(page.locator('h2').getByTitle('Add a label')).toBeVisible();
+    await expect(page.getByTitle('Add a label')).toBeVisible();
   });
 
   test('label appears in breadcrumb on test run page', async ({ page, request }) => {
@@ -562,9 +466,9 @@ test.describe('Run Label', () => {
     await page.waitForURL(/\/test-runs\/\d+/);
     await waitForHydration(page);
 
-    // Wait for the summary and breadcrumb to render
-    await expect(page.locator('h2')).toContainText('Run #');
-    await expect(page.locator('h2')).toContainText('— breadcrumb-label');
+    // The header shows the label beside the title, and the breadcrumb repeats it.
+    await expect(page.getByRole('heading', { name: /Run #/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'breadcrumb-label' })).toBeVisible();
     await expect(page.getByText('breadcrumb-label').first()).toBeVisible();
   });
 });
