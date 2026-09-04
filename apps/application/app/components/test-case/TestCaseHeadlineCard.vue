@@ -6,6 +6,9 @@
  * other tests in the run (with its triage status), and who owns the test. The
  * raw error is a *Show raw error* disclosure at the bottom of the card: the
  * first error line is the label, verbatim ANSI-rendered output on expand.
+ *
+ * The facts row is a `#facts` slot so another surface (the cluster or run
+ * header) can supply its own; `provenance` prints a line under the headline.
  */
 import { renderAnsi } from '~/utils';
 import { condenseErrorText } from '#shared/error-fingerprint';
@@ -21,6 +24,8 @@ const props = defineProps<{
   clusterTriageStatus?: string | null;
   /** The raw error, verbatim — revealed by the *Show raw error* disclosure. */
   error?: string | null;
+  /** A provenance label rendered under the headline (e.g. "first occurrence, run #70"). */
+  provenance?: string | null;
 }>();
 
 const emit = defineEmits<{ copyFailure: [] }>();
@@ -112,6 +117,7 @@ defineExpose({
           <p v-if="verdict.detail" class="font-mono text-xs text-muted truncate" :title="verdict.detail">
             {{ verdict.detail }}
           </p>
+          <p v-if="provenance" class="text-xs text-dimmed">{{ provenance }}</p>
 
           <!-- The strongest deterministic clue, in one line — the Other clues card lists the rest. -->
           <div v-if="topClue" class="space-y-1">
@@ -141,63 +147,65 @@ defineExpose({
           </div>
 
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted">
-            <UBadge
-              v-if="why"
-              :color="why.color"
-              variant="subtle"
-              size="sm"
-              :title="why.title"
-              class="inline-flex items-center gap-1"
-            >
-              <UIcon :name="why.icon" class="size-3 shrink-0" />
-              {{ why.label }}
-            </UBadge>
+            <slot name="facts">
+              <UBadge
+                v-if="why"
+                :color="why.color"
+                variant="subtle"
+                size="sm"
+                :title="why.title"
+                class="inline-flex items-center gap-1"
+              >
+                <UIcon :name="why.icon" class="size-3 shrink-0" />
+                {{ why.label }}
+              </UBadge>
 
-            <span v-if="since.isFirstFailure" class="inline-flex items-center gap-1">
-              <UIcon name="i-lucide-sparkle" class="size-3.5 shrink-0" />
-              First failure in this run
-            </span>
-            <span v-else class="inline-flex items-center gap-1">
-              <UIcon name="i-lucide-history" class="size-3.5 shrink-0" />
-              Failing since
-              <NuxtLink :to="`/test-runs/${since.firstFailingRunId}`" class="text-primary hover:underline">
-                run #{{ since.firstFailingRunId }}
+              <span v-if="since.isFirstFailure" class="inline-flex items-center gap-1">
+                <UIcon name="i-lucide-sparkle" class="size-3.5 shrink-0" />
+                First failure in this run
+              </span>
+              <span v-else class="inline-flex items-center gap-1">
+                <UIcon name="i-lucide-history" class="size-3.5 shrink-0" />
+                Failing since
+                <NuxtLink :to="`/test-runs/${since.firstFailingRunId}`" class="text-primary hover:underline">
+                  run #{{ since.firstFailingRunId }}
+                </NuxtLink>
+                <ClientOnly>
+                  <span v-if="since.firstFailingAt">({{ formatRelativeTime(since.firstFailingAt) }})</span>
+                </ClientOnly>
+              </span>
+
+              <span v-if="since.commit" class="inline-flex items-center gap-1 min-w-0" :title="commitTitle">
+                <UIcon name="i-lucide-git-commit-horizontal" class="size-3.5 shrink-0" />
+                <code class="font-mono text-xs">{{ since.commit.shortSha }}</code>
+                <span v-if="since.commit.author" class="truncate">by {{ since.commit.author }}</span>
+              </span>
+
+              <NuxtLink
+                v-if="verdict.cluster && verdict.cluster.otherTestsInRun > 0"
+                :to="`/failure-clusters/${verdict.cluster.id}`"
+                class="inline-flex items-center gap-1 text-primary hover:underline min-w-0"
+                :title="verdict.cluster.name"
+              >
+                <UIcon name="i-lucide-layers" class="size-3.5 shrink-0" />
+                <span class="truncate"
+                  >Same failure in {{ verdict.cluster.otherTestsInRun }} other
+                  {{ verdict.cluster.otherTestsInRun === 1 ? 'test' : 'tests' }} in this run</span
+                >
+                <span v-if="clusterTriageStatus" class="text-muted shrink-0"
+                  >({{ formatTriageStatus(clusterTriageStatus) }})</span
+                >
               </NuxtLink>
-              <ClientOnly>
-                <span v-if="since.firstFailingAt">({{ formatRelativeTime(since.firstFailingAt) }})</span>
-              </ClientOnly>
-            </span>
 
-            <span v-if="since.commit" class="inline-flex items-center gap-1 min-w-0" :title="commitTitle">
-              <UIcon name="i-lucide-git-commit-horizontal" class="size-3.5 shrink-0" />
-              <code class="font-mono text-xs">{{ since.commit.shortSha }}</code>
-              <span v-if="since.commit.author" class="truncate">by {{ since.commit.author }}</span>
-            </span>
-
-            <NuxtLink
-              v-if="verdict.cluster && verdict.cluster.otherTestsInRun > 0"
-              :to="`/failure-clusters/${verdict.cluster.id}`"
-              class="inline-flex items-center gap-1 text-primary hover:underline min-w-0"
-              :title="verdict.cluster.name"
-            >
-              <UIcon name="i-lucide-layers" class="size-3.5 shrink-0" />
-              <span class="truncate"
-                >Same failure in {{ verdict.cluster.otherTestsInRun }} other
-                {{ verdict.cluster.otherTestsInRun === 1 ? 'test' : 'tests' }} in this run</span
+              <span
+                v-if="verdict.owner"
+                class="inline-flex items-center gap-1"
+                :title="`Owner from ${verdict.owner.source}`"
               >
-              <span v-if="clusterTriageStatus" class="text-muted shrink-0"
-                >({{ formatTriageStatus(clusterTriageStatus) }})</span
-              >
-            </NuxtLink>
-
-            <span
-              v-if="verdict.owner"
-              class="inline-flex items-center gap-1"
-              :title="`Owner from ${verdict.owner.source}`"
-            >
-              <UIcon name="i-lucide-user-round" class="size-3.5 shrink-0" />
-              Owner: <span class="text-highlighted">{{ verdict.owner.name }}</span>
-            </span>
+                <UIcon name="i-lucide-user-round" class="size-3.5 shrink-0" />
+                Owner: <span class="text-highlighted">{{ verdict.owner.name }}</span>
+              </span>
+            </slot>
           </div>
 
           <!-- Show raw error: collapsed by default, the first error line as its label. -->

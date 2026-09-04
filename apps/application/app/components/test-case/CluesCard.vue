@@ -1,10 +1,9 @@
 <script setup lang="ts">
 /**
- * The other clues: the deterministic, rule-based findings for one failing
- * execution ranked strongest first, minus the first one — the headline prints
- * the strongest clue, so this card lists the rest. Each clue carries a strength
- * chip, its `t-N s` before the failure when it is anchored in time, and citation
- * chips that reveal the evidence section backing it — the same section-locator
+ * The clues card: the deterministic, rule-based findings for one failing
+ * execution, ranked strongest first. Each clue carries a strength chip, its
+ * `t-N s` before the failure when it is anchored in time, and citation chips
+ * that reveal the evidence section backing it — the same section-locator
  * mechanism the AI citations use, so a clue doubles as a jump into the funnel.
  *
  * Pure presentation: the clues arrive pre-built from `/clues` (the deterministic
@@ -19,6 +18,8 @@ const props = defineProps<{
   clues: FailureClue[];
   /** The moment of failure in ms relative to the timeline origin — anchors `t-N s`. */
   failureAt?: number | null;
+  /** Card heading — the cluster page renders the non-leading clues as "Other clues". */
+  title?: string;
 }>();
 
 const locator = useClusterSectionLocator();
@@ -40,24 +41,21 @@ function leadLabel(clue: FailureClue): string | null {
 function citationLabel(section: string): string {
   return DIAGNOSIS_SECTION_SHORT[section] ?? section;
 }
-
-/** The headline prints the strongest clue, so this card lists the rest. */
-const otherClues = computed(() => props.clues.slice(1));
 </script>
 
 <template>
   <SectionCard
-    v-if="otherClues.length"
+    v-if="clues.length"
     icon="i-lucide-search-check"
     icon-class="text-primary"
-    title="Other clues"
-    :count="otherClues.length"
+    :title="title ?? 'Clues'"
+    :count="clues.length"
     help="case.clues"
     data-shot="failure-clues"
   >
     <ul class="space-y-2.5">
       <li
-        v-for="clue in otherClues"
+        v-for="clue in clues"
         :key="clue.id"
         class="flex flex-col gap-1 rounded-md border border-default p-2.5 sm:flex-row sm:items-start sm:gap-3"
       >

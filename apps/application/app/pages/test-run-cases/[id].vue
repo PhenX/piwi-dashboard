@@ -37,6 +37,8 @@ const clues = computed(() => cluesData.value?.clues ?? []);
 const cluesFailureAt = computed(() => cluesData.value?.failureAt ?? null);
 const topClue = computed(() => clues.value[0] ?? null);
 const topClueSection = computed(() => topClue.value?.citations?.[0]?.section ?? null);
+// The headline prints the strongest clue, so the Other clues card lists the rest.
+const otherClues = computed(() => clues.value.slice(1));
 
 const { data: traceData, refresh: refreshTraces } = await useFetch(`/api/test-run-cases/${testCaseId}/traces`, {
   transform: (r: { items: TraceInfo[] }) => r.items,
@@ -723,7 +725,7 @@ provide(clusterSectionLocatorKey, {
         />
 
         <!-- The clues after the strongest one — the headline prints the first -->
-        <CluesCard :clues="clues" :failure-at="cluesFailureAt" />
+        <CluesCard :clues="otherClues" :failure-at="cluesFailureAt" title="Other clues" />
 
         <!-- ── Evidence ───────────────────────────────────────────────── -->
         <EvidenceTabs

@@ -42,6 +42,10 @@ context before it's sent, and you can cap its size. See
 - **The API reference.** `/docs` is rendered in-app from your instance's own OpenAPI spec, with no
   third-party CDN, so it works offline.
 - **Screenshots, videos, HTML reports.** Stored on your disk or your S3 bucket, served by your instance.
+- **HTML report execution.** Reports run with scripts enabled inside a CSP sandbox with a unique opaque origin. Piwi
+  provides the report with an in-memory Web Storage facade so Playwright's settings UI works; it is discarded with the
+  report document and cannot read the dashboard's cookies or local storage. Uploaded reports remain untrusted active
+  content.
 - **Your IDE mapping.** The [Open in IDE](./ide-integration) workspace root lives in your browser's
   local storage, because the source is on your machine, not the server's. It is never sent to the
   dashboard.

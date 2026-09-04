@@ -237,12 +237,14 @@ const SCENES = [
   },
   {
     name: 'ai-diagnosis',
-    description: 'Failure cluster page: the AI diagnosis beside the error and evidence (dark)',
+    description: 'Failure cluster page: the AI diagnosis card at the foot of the cluster page (dark)',
     tags: ['docs'],
     out: 'docs',
     // Cluster 10 ships a stored, "diagnosis-verified" diagnosis in the demo seed.
     route: '/failure-clusters/10',
-    viewport: { width: 1600, height: 1240 },
+    viewport: { width: 1600, height: 1600 },
+    of: '[data-shot="cluster-diagnosis"]',
+    pad: 12,
     colorScheme: 'dark',
     // The panel hides a stored diagnosis until AI reports configured. Run this
     // scene with the server's AI env vars set (PIWI_AI_PROVIDER / PIWI_AI_API_KEY
@@ -298,13 +300,14 @@ const SCENES = [
   },
   {
     name: 'failure-clusters',
-    description: 'Failure clusters tab grouping failures by normalized error signature',
+    description: 'Run page Tests tab grouped by failure cluster, failures first',
     tags: ['docs'],
     out: 'docs',
-    route: '/projects/1?tab=failure-clusters',
-    // The cluster table needs ~1850px before it stops scrolling sideways, and a
-    // clipped table hides the occurrence counts the page is about.
-    viewport: { width: 2200, height: 1000 },
+    // The run's Tests tab opens grouped by cluster on a red run; each group
+    // header names the cluster and its triage status, with the failing rows
+    // beneath and the passing tests folded away.
+    route: '/test-runs/2',
+    viewport: { width: 1280, height: 1000 },
     of: '[data-shot="failure-clusters"]',
     pad: 12,
   },

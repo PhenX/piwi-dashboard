@@ -56,6 +56,11 @@ export const HELP_TOPICS = {
     text: 'Wire the Piwi reporter into your Playwright config to start sending results here. The wizard generates the snippet for you.',
     doc: 'getting-started#using-the-piwi-dashboard-reporter',
   },
+  'home.open-failures': {
+    title: 'Open failures',
+    text: 'Failure clusters still open across your projects, newest first. Open one to investigate, or triage from the keyboard: j / k move, o opens, r resolves, i ignores.',
+    doc: 'ui-overview#home',
+  },
 
   // ── Analytics ─────────────────────────────────────────────────────────
   'analytics.insights': {
@@ -204,8 +209,8 @@ export const HELP_TOPICS = {
 
   // ── Test run detail ───────────────────────────────────────────────────
   'run.summary': {
-    title: 'Run summary',
-    text: 'Headline outcome of this run — overall status, test counts and total duration.',
+    title: 'Run header',
+    text: 'The run at a glance — status, the label and marker, one facts line (started, duration, branch, environment, CI build) with a Details popover for the rest, and one count bar whose segments filter the Tests tab.',
     doc: 'ui-overview#test-run-detail',
   },
   'run.partial': {
@@ -233,8 +238,8 @@ export const HELP_TOPICS = {
     text: 'Extra context attached to the run: tags for grouping, links to external issues, and any custom key/value data your reporter sent.',
   },
   'run.test-cases': {
-    title: 'Test cases',
-    text: 'Per-test results for this run. Filter by status, or by the NEW (new regression) and FLAKY signal badges.',
+    title: 'Tests',
+    text: 'Every execution in this run. Group by cluster, file, file and describe block, or none; search title, path and error text; filter by status, browser, new regressions and newly flaky.',
     doc: 'ui-overview#test-run-detail',
   },
   'run.insights': {
@@ -366,8 +371,8 @@ export const HELP_TOPICS = {
     title: 'Known issue',
     text: 'Pin the Jira ticket, GitHub issue or PR that tracks this cluster. The link’s key travels with the cluster wherever it is listed, so a triaged cluster shows what is already being done about it.',
   },
-  'cluster.resolution': {
-    title: 'Resolution',
+  'cluster.fix-verification': {
+    title: 'Fix verification',
     text: 'Recorded when a run turns this cluster green — every test it covers ran and passed, in a full suite or a filtered re-run of just those tests: when the fix landed, how long the cluster stayed open, and whether the change matched the diagnosed files. If the failure comes back, the cluster is marked as regressed rather than quietly reopened.',
     doc: 'ai-diagnosis#did-the-fix-work',
   },
