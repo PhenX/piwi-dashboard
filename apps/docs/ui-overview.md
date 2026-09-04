@@ -112,15 +112,14 @@ The right panel is tabbed:
   *File + Describe* (the file nested by its describe blocks) or *None*. Search matches the title, path **and**
   error text; filter by status, browser, new regressions and
   newly flaky. Select failing rows for bulk triage (quarantine, or set the cluster status) in any grouping.
-- **Insights** — what changed versus the last passing baseline: new regressions, recurring failures, fixed
-  tests, new flaky tests, performance changes, worker imbalance, and new clusters. See
-  [Run insights](./flaky-tests#run-insights).
-- **Since last pass** *(shown when a baseline exists)* — the regression delta for this run at a glance.
-- **Timeline** — a horizontal per-worker timeline of test execution, with a span-type filter to isolate test
-  phases (setup, actual test, wasted waits, teardown); click a bar to jump to that test.
-- **Compare** — pick a baseline run for a side-by-side delta (improved / regressed / unchanged).
-- **Slow endpoints** — network requests grouped by method + normalized route, with avg/p90/max duration and
-  error rate. Requires the [capture fixtures](./capture-fixtures).
+- **Changes** — what differs against **one baseline** (the last passing run on the same branch by default, or the
+  run you pick — deep-linkable as `?baseline=<runId>`): new failures, fixed, still failing, newly flaky / passed on
+  retry, the slower / faster tests, the commits landed since the baseline, and the environment fields that moved. The
+  "new failures" count is computed once against that baseline. Disabled until the run finishes. See
+  [Changes](./flaky-tests#changes).
+- **Timeline** — a horizontal per-worker timeline of test execution, with a *Show hooks and waits* toggle to reveal
+  setup, hook, fixture and wasted-wait spans; click a bar to jump to that test. Beneath it, the **slowest tests** and
+  the **worker distribution** for the run.
 
 Administrators can **delete** the entire run and its files from the header's More menu, which also copies a
 run summary and refreshes.

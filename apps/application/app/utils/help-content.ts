@@ -242,15 +242,10 @@ export const HELP_TOPICS = {
     text: 'Every execution in this run. Group by cluster, file, file and describe block, or none; search title, path and error text; filter by status, browser, new regressions and newly flaky.',
     doc: 'ui-overview#test-run-detail',
   },
-  'run.insights': {
-    title: 'Run insights',
-    text: 'Automatic highlights for this run — newly failing, flaky and slow tests — surfaced so you don’t have to hunt for them.',
-    doc: 'flaky-tests#run-insights',
-  },
-  'run.regression': {
-    title: 'Since last pass',
-    text: 'Compares this run against the most recent passing run of the project — the commits introduced since and the tests that changed between the two.',
-    doc: 'flaky-tests#regression-signals',
+  'run.changes': {
+    title: 'Changes',
+    text: 'What differs between this run and one baseline — the last passing run on the same branch by default, or the run you pick. The tests that started or stopped failing, the ones that got slower or faster, the commits landed since the baseline, and the environment fields that moved. New failures are counted once against that baseline.',
+    doc: 'flaky-tests#changes',
   },
   'run.timeline': {
     title: 'Workers timeline',
