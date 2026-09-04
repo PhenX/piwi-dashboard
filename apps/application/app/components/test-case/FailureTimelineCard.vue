@@ -25,6 +25,8 @@ const props = defineProps<{
   /** Piwi project id/name — passed to the open-in-IDE links for call sites. */
   projectKey?: string | number | null;
   projectName?: string | null;
+  /** Drop the card frame and padding — render a plain heading row over the body. */
+  embedded?: boolean;
 }>();
 
 const { data } = await useFetch<FailureTimeline>(`/api/test-run-cases/${props.testRunsCaseId}/timeline`);
@@ -268,7 +270,13 @@ function onViewTrace() {
 </script>
 
 <template>
-  <SectionCard v-if="data && placedCount >= 2" icon="i-lucide-activity" title="Failure timeline" help="case.timeline">
+  <SectionCard
+    v-if="data && placedCount >= 2"
+    :embedded="embedded"
+    icon="i-lucide-activity"
+    title="Failure timeline"
+    help="case.timeline"
+  >
     <template #actions>
       <ChartLegend :items="legendItems" class="mr-1" />
       <UButton
@@ -302,7 +310,7 @@ function onViewTrace() {
       </div>
 
       <!-- SVG axis -->
-      <div ref="wrapper" class="w-full">
+      <div ref="wrapper" :class="embedded ? '-mx-3 sm:-mx-4' : 'w-full'">
         <svg v-if="plotWidth > 0" :width="svgWidth" :height="svgHeight" class="block">
           <!-- Default-window shade (only meaningful in whole-test view) -->
           <rect

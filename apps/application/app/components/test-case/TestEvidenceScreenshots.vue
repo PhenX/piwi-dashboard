@@ -4,6 +4,8 @@ import { isImageFile } from '~/utils/text-format';
 
 const props = defineProps<{
   attachments: AttachmentInfo[];
+  /** Drop the bordered frame — render a plain heading row over the thumbnails. */
+  embedded?: boolean;
 }>();
 
 const config = useRuntimeConfig();
@@ -31,8 +33,9 @@ const currentIndex = ref<number | null>(null);
     label="Screenshots"
     :count="images.length"
     :collapsible="false"
+    :embedded="embedded"
   >
-    <div class="grid grid-cols-2 gap-2 p-2 bg-gray-50 dark:bg-gray-900">
+    <div class="grid grid-cols-2 gap-2" :class="embedded ? '-mx-3 sm:-mx-4' : 'p-2 bg-gray-50 dark:bg-gray-900'">
       <div
         v-for="(img, idx) in images"
         :key="img.src"
