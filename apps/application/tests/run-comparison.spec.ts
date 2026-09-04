@@ -167,22 +167,15 @@ test.describe.serial('Run Comparison', () => {
     await page.waitForURL(new RegExp(`/projects/${projectId}\\?tab=runs`));
   });
 
-  test('run detail page shows comparison section', async ({ page }) => {
-    await page.goto(`/test-runs/${run2Id}`);
+  test('run detail Changes tab compares against a baseline', async ({ page }) => {
+    await page.goto(`/test-runs/${run2Id}?tab=changes`);
     await waitForHydration(page);
 
-    // Switch to the Compare tab
-    await page
-      .getByRole('button', { name: /^Compare$/ })
-      .first()
-      .click();
+    // The Changes tab reads run 2 against one baseline (run 1, the last passing run).
+    await expect(page.getByText('Compared with')).toBeVisible({ timeout: 15000 });
 
-    // Use "Compare with previous run" button
-    await page.getByRole('button', { name: 'Compare with previous run' }).click();
-
-    // Should show comparison data
-    await expect(page.getByText('Duration changes', { exact: true })).toBeVisible({ timeout: 15000 });
-    // The comparison table has a "Test case" column header
-    await expect(page.getByText('Test case').first()).toBeVisible();
+    // "dashboard loads" passed in run 1 and failed in run 2, so it is a new failure.
+    await expect(page.getByText('New failures')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('dashboard loads')).toBeVisible();
   });
 });

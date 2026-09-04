@@ -273,19 +273,14 @@ const SCENES = [
     },
   },
   {
-    name: 'run-insights',
-    description: 'Run Insights tab: pass-rate delta, new regressions and new flaky tests',
+    name: 'run-changes',
+    description: 'Run Changes tab: one baseline, new failures, fixed, slower/faster and commits since',
     tags: ['docs'],
     out: 'docs',
-    route: '/test-runs/2?tab=insights',
+    route: '/test-runs/2?tab=changes',
     viewport: { width: 1280, height: 1560 },
-    of: '[data-shot="run-insights"]',
+    of: '[data-shot="run-changes"]',
     pad: 12,
-    annotate: [
-      { type: 'box', target: '[data-shot="run-summary"]', label: 'vs the last passing run' },
-      { type: 'step', target: '[data-shot="pass-rate"]', n: 1, corner: 'tl' },
-      { type: 'step', target: '[data-shot="new-regressions"]', n: 2, corner: 'tl' },
-    ],
   },
   {
     name: 'performance-trends',

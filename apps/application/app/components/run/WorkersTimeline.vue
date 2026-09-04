@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import type { TestCaseResult, SetupStepEvent } from '~~/types/api';
-import { useTimelineModel, type TimelineItem, type TimelineItemKind } from '~/composables/useTimelineModel';
+import { useTimelineModel, type TimelineItem } from '~/composables/useTimelineModel';
 import { useTimelineViewport } from '~/composables/useTimelineViewport';
 
 const props = defineProps<{
@@ -44,33 +44,14 @@ const testCount = computed(() => timelineData.value.filter((d) => d.kind === 'te
 const hookCount = computed(() => timelineData.value.filter((d) => d.kind !== 'test' && d.kind !== 'wait').length);
 const waitCount = computed(() => timelineData.value.filter((d) => d.kind === 'wait').length);
 
-// Span kinds the timeline can draw, toggled from the header dropdown. Only the
-// kinds actually present in the run are offered.
-const SPAN_KIND_ORDER: TimelineItemKind[] = ['test', 'setup', 'hook', 'fixture', 'wait'];
-const SPAN_KIND_LABELS: Record<TimelineItemKind, string> = {
-  test: 'Tests',
-  setup: 'Setup (beforeAll/afterAll)',
-  hook: 'Hooks',
-  fixture: 'Fixtures',
-  wait: 'Wasted waits',
-};
-
-// Stores only the kinds explicitly hidden; everything defaults to visible.
-const hiddenKinds = ref<Partial<Record<TimelineItemKind, boolean>>>({});
-const visibleItems = computed(() => timelineData.value.filter((item) => !hiddenKinds.value[item.kind]));
-
-const spanTypeItems = computed(() => {
-  const present = new Set(timelineData.value.map((item) => item.kind));
-  return SPAN_KIND_ORDER.filter((k) => present.has(k)).map((k) => ({
-    key: k,
-    label: SPAN_KIND_LABELS[k],
-    checked: !hiddenKinds.value[k],
-  }));
-});
-
-function toggleSpanKind(key: string, visible: boolean) {
-  hiddenKinds.value = { ...hiddenKinds.value, [key]: !visible };
-}
+// One toggle folds every non-test span (setup, hooks, fixtures, wasted waits)
+// in and out; tests are always drawn. The toggle only appears when the run has
+// such spans to show.
+const showHooksAndWaits = ref(false);
+const hasNonTestSpans = computed(() => timelineData.value.some((item) => item.kind !== 'test'));
+const visibleItems = computed(() =>
+  showHooksAndWaits.value ? timelineData.value : timelineData.value.filter((item) => item.kind === 'test'),
+);
 
 // Tooltip state — driven by hover events from the bars.
 const hoveredItem = ref<TimelineItem | null>(null);
@@ -107,9 +88,10 @@ function onBarLeave() {
       :test-count="testCount"
       :hook-count="hookCount"
       :wait-count="waitCount"
-      :span-types="spanTypeItems"
+      :has-non-test-spans="hasNonTestSpans"
+      :show-hooks-and-waits="showHooksAndWaits"
       :live="live"
-      @toggle-span="toggleSpanKind"
+      @toggle-hooks-and-waits="showHooksAndWaits = $event"
       @reset="resetView"
     />
 

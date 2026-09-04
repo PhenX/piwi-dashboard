@@ -30,8 +30,8 @@ export { extractLeafSelector, extractMessageHead, extractSelector, extractTopFra
 /**
  * Bump when the normalization algorithm changes. The version is part of the
  * hashed input, so old and new fingerprints can never collide silently.
- * Existing clusters are migrated in place by re-fingerprinting their stored
- * `sampleError` on startup (see shared/handlers/failure-cluster-recluster.ts),
+ * Existing clusters are migrated in place by re-fingerprinting their immutable
+ * `fingerprintSample` on startup (see shared/handlers/failure-cluster-recluster.ts),
  * so triage status, notes and diagnoses survive an algorithm change.
  */
 export const FINGERPRINT_VERSION = 3;

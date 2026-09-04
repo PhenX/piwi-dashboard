@@ -160,7 +160,7 @@ test.describe('Mobile responsiveness', () => {
         await page.goto(`/test-runs/${runId}`);
         await waitForHydration(page);
 
-        const tabLabels = [/Tests/, /Insights/, /Since last pass/, /Timeline/, /Compare/, /Slow endpoints/];
+        const tabLabels = [/Tests/, /Changes/, /Timeline/];
 
         for (const label of tabLabels) {
           if (viewport.width < 640) {
