@@ -66,7 +66,7 @@ test.describe.serial('Project test-cases catalog', () => {
     await page.goto(`/projects/${projectId}/test-cases`);
     await waitForHydration(page);
 
-    await page.getByRole('textbox', { name: 'Search test cases' }).fill('checkout');
+    await page.getByRole('textbox', { name: 'Search tests' }).fill('checkout');
     // The query is debounced and refetched server-side; web-first assertions retry.
     await expect(page.getByRole('link', { name: 'checkout works' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'login works' })).toHaveCount(0);
