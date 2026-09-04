@@ -17,6 +17,7 @@ import { buildFailureVerdict } from '../failure-verdict';
 import { buildFailureTimeline, type FailureTimeline, type TimelineCallsite } from '../failure-timeline';
 import { buildFailureClues, type FailureClue } from '../failure-clues';
 import { parsePlaywrightError } from '../error-parse';
+import { diffAttempts, type AttemptDiffEntry, type AttemptEvidence } from '../attempt-diff';
 import { getLocatorHealing } from '../../server/utils/locator-healing';
 import { getEnvironmentDiff } from '../../server/utils/environment-diff';
 import type { PageStateLike } from '../page-state';
@@ -664,6 +665,138 @@ export async function getFailureClues(
 function startedAtMs(value: unknown): number | null {
   if (value instanceof Date) return value.getTime();
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** A per-attempt summary for the compared pair. */
+export interface AttemptDiffSummary {
+  executionId: number;
+  retry: number;
+  status: string;
+  duration: number | null;
+}
+
+export interface AttemptDiffResult {
+  /** True only when a failing attempt and a passing attempt could be paired. */
+  applicable: boolean;
+  /** Why a diff could not be produced. */
+  reason?: 'not-found' | 'single-attempt' | 'no-pair';
+  /** The failing attempt of the pair. */
+  failing?: AttemptDiffSummary;
+  /** The passing attempt of the pair. */
+  passing?: AttemptDiffSummary;
+  /** Which attempt the opened execution is, so the UI can mark "this one". */
+  currentExecutionId?: number;
+  /** The ordered differences; empty when not applicable. */
+  differences: AttemptDiffEntry[];
+}
+
+function isFailingStatus(status: string | null | undefined): boolean {
+  return status === 'failed' || status === 'timedOut' || status === 'timedout';
+}
+
+/** Load one attempt's evidence from its execution row and network rows. */
+async function loadAttemptEvidence(
+  db: DrizzleDB,
+  row: {
+    id: number;
+    error: string | null;
+    steps: unknown;
+    consoleLogs: unknown;
+    pageState: unknown;
+    duration: number | null;
+  },
+): Promise<AttemptEvidence> {
+  const [evidence, networkRequestRows] = await Promise.all([
+    inlineCasePayloads(db, row as any),
+    db.select().from(networkRequests).where(eq(networkRequests.testRunsCaseId, row.id)),
+  ]);
+  return {
+    error: row.error,
+    parsedError: row.error ? parsePlaywrightError(row.error) : null,
+    steps: (row.steps as AttemptEvidence['steps']) ?? null,
+    networkRequests: networkRequestRows.map((nr) => ({
+      method: nr.method,
+      url: nr.url,
+      status: nr.status,
+      duration: nr.duration,
+      resourceType: nr.resourceType,
+    })),
+    consoleLogs: (row.consoleLogs as AttemptEvidence['consoleLogs']) ?? null,
+    pageState: (row.pageState as AttemptEvidence['pageState']) ?? null,
+    ariaSnapshot: evidence.ariaSnapshot ?? null,
+    duration: row.duration ?? null,
+  };
+}
+
+/**
+ * Diff the failing and passing attempts of one flaky execution. Resolves this
+ * execution's sibling attempts (same run, test case and browser), pairs the
+ * failing attempt with the passing one — the failing attempt this id belongs to
+ * against the first later attempt that passed, or, when this id is the passing
+ * one, the last prior failing attempt — loads both rows' evidence through the
+ * same helpers the execution detail reads, and hands them to the pure
+ * `diffAttempts`. Returns `applicable: false` when there is only one attempt or
+ * no failing/passing pair exists. Shared by the REST endpoint and the demo
+ * mirror. Never 404s: "not applicable" is a valid answer.
+ */
+export async function getAttemptDiff(db: DrizzleDB, id: number): Promise<AttemptDiffResult> {
+  const [current] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
+  if (!current) return { applicable: false, reason: 'not-found', differences: [] };
+
+  const siblings = await db
+    .select()
+    .from(testRunsCases)
+    .where(
+      and(
+        eq(testRunsCases.testRunId, current.testRunId),
+        eq(testRunsCases.testCaseId, current.testCaseId),
+        current.browserName
+          ? eq(testRunsCases.browserName, current.browserName)
+          : sql`${testRunsCases.browserName} IS NULL`,
+      ),
+    );
+  siblings.sort((a: any, b: any) => (a.retries ?? 0) - (b.retries ?? 0));
+
+  if (siblings.length < 2) return { applicable: false, reason: 'single-attempt', differences: [] };
+
+  const currentRetry = current.retries ?? 0;
+  let failingRow: (typeof siblings)[number] | undefined;
+  let passingRow: (typeof siblings)[number] | undefined;
+
+  if (isFailingStatus(current.status)) {
+    failingRow = current;
+    // The first later attempt that passed.
+    passingRow = siblings.find((s: any) => (s.retries ?? 0) > currentRetry && s.status === 'passed');
+  } else if (current.status === 'passed') {
+    passingRow = current;
+    // The last prior attempt that failed.
+    failingRow = [...siblings].reverse().find((s: any) => (s.retries ?? 0) < currentRetry && isFailingStatus(s.status));
+  }
+
+  if (!failingRow || !passingRow)
+    return { applicable: false, reason: 'no-pair', differences: [], currentExecutionId: id };
+
+  const [failingEvidence, passingEvidence] = await Promise.all([
+    loadAttemptEvidence(db, failingRow),
+    loadAttemptEvidence(db, passingRow),
+  ]);
+
+  const differences = diffAttempts(failingEvidence, passingEvidence);
+
+  const summarize = (row: (typeof siblings)[number]): AttemptDiffSummary => ({
+    executionId: row.id,
+    retry: row.retries ?? 0,
+    status: row.status,
+    duration: row.duration ?? null,
+  });
+
+  return {
+    applicable: true,
+    failing: summarize(failingRow),
+    passing: summarize(passingRow),
+    currentExecutionId: id,
+    differences,
+  };
 }
 
 export async function getTestRunCaseTraces(db: DrizzleDB, id: number) {
