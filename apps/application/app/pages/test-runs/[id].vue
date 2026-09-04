@@ -273,9 +273,8 @@ function flushPendingEvents() {
       liveSteps.value = {};
       disconnectStream();
       refresh();
-      // Nudge child tabs (Insights, Slow endpoints, Regression context) to
-      // refetch — they keep their own useFetch state and would otherwise show
-      // stale/partial data from before the run finalized.
+      // Nudge the Changes tab to refetch — it keeps its own fetch state and
+      // would otherwise show stale/partial data from before the run finalized.
       runRefreshKey.value++;
       pollForReports();
     }
@@ -539,18 +538,6 @@ watch(runRefreshKey, () => {
   if (showFailureTabs.value) fetchClusterMeta();
 });
 
-// Endpoints count: seeded from the run payload (so the tab never shows a bare
-// label), then kept live by the Slow endpoints tab's emit. The payload value
-// also changes on refresh (live finish, manual Refresh), so follow it too.
-const endpointsCount = ref(testRun.value?.networkRequestCount ?? 0);
-
-watch(
-  () => testRun.value?.networkRequestCount,
-  (count) => {
-    if (count != null) endpointsCount.value = count;
-  },
-);
-
 const uniqueWorkerCount = computed(() => {
   const cases = isLive.value ? displayTestCases.value : testRun.value?.testCases;
   if (!cases || cases.length === 0) return 0;
@@ -569,18 +556,12 @@ const tabItems = computed(() => [
     slot: 'test-cases',
   },
   {
-    label: 'Insights',
-    icon: 'i-lucide-sparkles',
-    value: 'insights',
-    slot: 'insights',
-  },
-  {
-    label: 'Since last pass',
-    icon: 'i-lucide-git-pull-request-arrow',
-    value: 'regression',
-    slot: 'regression',
-    disabled: !showFailureTabs.value,
-    disabledReason: 'no failing tests in this run',
+    label: 'Changes',
+    icon: 'i-lucide-git-compare-arrows',
+    value: 'changes',
+    slot: 'changes',
+    disabled: isLive.value,
+    disabledReason: isLive.value ? 'available once the run finishes' : undefined,
   },
   {
     label: `Timeline${uniqueWorkerCount.value > 0 ? ` (${uniqueWorkerCount.value})` : ''}`,
@@ -588,18 +569,10 @@ const tabItems = computed(() => [
     value: 'workers',
     slot: 'workers',
   },
-  { label: 'Compare', icon: 'i-lucide-git-compare-arrows', value: 'compare', slot: 'compare' },
-  {
-    label: `Slow endpoints${endpointsCount.value > 0 ? ` (${endpointsCount.value})` : ''}`,
-    icon: 'i-lucide-network',
-    value: 'endpoints',
-    slot: 'endpoints',
-  },
 ]);
 
 const tabPanelClass: Record<string, string> = {
   'test-cases': 'overflow-hidden flex flex-col',
-  endpoints: 'overflow-hidden flex flex-col',
 };
 
 // The former Failure clusters tab is now the Tests tab's cluster grouping;
@@ -618,8 +591,27 @@ if (route.query.tab === 'failure-groups') {
   }
 }
 
+// The former Insights, Since last pass and Compare tabs are one Changes tab;
+// the former Slow endpoints tab moved to the project page. Redirect their
+// deep-links so shared URLs and older links still land somewhere sensible.
+const LEGACY_TAB_REDIRECTS: Record<string, string> = {
+  insights: 'changes',
+  regression: 'changes',
+  compare: 'changes',
+  endpoints: 'test-cases',
+};
+if (typeof route.query.tab === 'string' && LEGACY_TAB_REDIRECTS[route.query.tab]) {
+  const target = LEGACY_TAB_REDIRECTS[route.query.tab]!;
+  activeTab.value = target;
+  if (import.meta.client) {
+    onMounted(() => {
+      router.replace({ query: { ...route.query, tab: target } });
+    });
+  }
+}
+
 // Deep-link the active tab via ?tab= so run views can be shared and cross-page
-// links land on the right tab. Failure-only tabs are disabled on a green run,
+// links land on the right tab. The Changes tab is disabled while a run is live,
 // so validate against the currently *enabled* tabs.
 const runTabValues = computed(() => tabItems.value.filter((t) => !t.disabled).map((t) => t.value));
 if (typeof route.query.tab === 'string' && runTabValues.value.includes(route.query.tab)) {
@@ -760,40 +752,35 @@ const moreMenuItems = computed(() => {
           />
         </template>
 
-        <template #tab-insights>
-          <RunInsights
-            :test-run-id="Number(runId)"
-            :run-status="testRun?.status ?? ''"
+        <template #tab-changes>
+          <ChangesView
+            :test-run="testRun"
+            :test-cases="displayTestCases"
+            :cluster-meta="clusterMeta"
+            :project-key="testRun?.projectId"
+            :project-name="testRun?.project?.name"
             :refresh-key="runRefreshKey"
-            class="flex-1 min-h-0 p-4"
           />
-        </template>
-
-        <template #tab-regression>
-          <RegressionContext :refresh-key="runRefreshKey" />
         </template>
 
         <template #tab-workers>
-          <WorkersTimeline
-            :test-cases="throttledTestCases"
-            :setup-steps="testRun?.setupSteps ?? null"
-            :shard-total="testRun?.shardTotal ?? null"
-            :live="isLive"
-            :wasted-patterns="testRun?.wastedWaitPatterns ?? null"
-            @select-test-case="handleSelectTestCase"
-          />
-        </template>
-
-        <template #tab-compare>
-          <RunCompare :test-run="testRun" />
-        </template>
-
-        <template #tab-endpoints>
-          <SlowEndpoints
-            :refresh-key="runRefreshKey"
-            class="flex-1 min-h-0"
-            @endpoints-count="endpointsCount = $event"
-          />
+          <div class="space-y-6 p-1">
+            <WorkersTimeline
+              :test-cases="isLive ? throttledTestCases : displayTestCases"
+              :setup-steps="testRun?.setupSteps ?? null"
+              :shard-total="testRun?.shardTotal ?? null"
+              :live="isLive"
+              :wasted-patterns="testRun?.wastedWaitPatterns ?? null"
+              @select-test-case="handleSelectTestCase"
+            />
+            <RunTimelineExtras
+              v-if="!isLive"
+              :test-cases="displayTestCases"
+              :cluster-meta="clusterMeta"
+              :project-key="testRun?.projectId"
+              :project-name="testRun?.project?.name"
+            />
+          </div>
         </template>
       </DetailPageLayout>
     </template>
