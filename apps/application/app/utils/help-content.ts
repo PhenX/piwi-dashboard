@@ -31,21 +31,6 @@ export interface HelpTopic {
 
 export const HELP_TOPICS = {
   // ── Home ──────────────────────────────────────────────────────────────
-  'home.flaky': {
-    title: 'Flaky tests',
-    text: 'Tests that pass and fail without code changes. This counts how many were detected across your projects recently.',
-    doc: 'flaky-tests#flaky-test-detection',
-  },
-  'home.trend-bars': {
-    title: 'Run history bars',
-    text: 'One bar per full run (up to 20), oldest left → newest right. Green = pass, red = fail, amber = passed with flaky tests, gray = skipped/unknown. Click a bar to open that run.',
-    doc: 'ui-overview#home',
-  },
-  'home.tendency': {
-    title: 'Tendency',
-    text: 'Derived from the last 5 full runs. Failing = latest run failed; flaky = pass/fail mixed or flaky tests seen in the window; passing = all recent runs green.',
-    doc: 'ui-overview#home',
-  },
   'home.project-health': {
     title: 'Project health',
     text: 'Every project at a glance — run history bars and a tendency badge so you can immediately see which project needs attention. Only full runs count.',
@@ -125,11 +110,6 @@ export const HELP_TOPICS = {
   },
 
   // ── Project detail ────────────────────────────────────────────────────
-  'project.run-scope': {
-    title: 'Full vs partial runs',
-    text: 'A partial run executed only a subset of the suite (a shard, a retry, or a filtered selection). Trends use full runs so partial results don’t skew the numbers.',
-    doc: 'ui-overview#test-run-detail',
-  },
   'project.runs-trend': {
     title: 'Run trend',
     text: 'One stacked bar per run — failed anchored at the bottom, passed on top — following the filters above. A growing red base marks where things broke; hover a bar for the counts, click it to open the run.',
@@ -176,11 +156,6 @@ export const HELP_TOPICS = {
     text: 'Environment, branch and full-runs-only scope every list on the page — the runs table, the trend chart, the flaky analysis and performance. The choice is remembered per project.',
     doc: 'ui-overview#project-detail',
   },
-  'project.failures': {
-    title: 'Failures',
-    text: 'One place for everything broken: the failure clusters (executions that failed the same way), the flaky tests, and the quarantine list. Switch between them with the control at the top.',
-    doc: 'flaky-tests#flaky-test-detection',
-  },
   'project.test-cases': {
     title: 'Tests',
     text: 'Every distinct test in the project with its executed-only pass rate, result breakdown and average duration across runs. Search by title or file, filter by status, and group by spec file to see each file’s health. Tests not run within the selected age window are hidden by default (last 30 days) — pick "All time" to see obsolete ones. Click a test to see its full history.',
@@ -213,11 +188,6 @@ export const HELP_TOPICS = {
   },
 
   // ── Test run detail ───────────────────────────────────────────────────
-  'run.summary': {
-    title: 'Run header',
-    text: 'The run at a glance — status, the label and marker, one facts line (started, duration, branch, environment, CI build) with a Details popover for the rest, and one count bar whose segments filter the Tests tab.',
-    doc: 'ui-overview#test-run-detail',
-  },
   'run.partial': {
     title: 'Partial run',
     text: 'This run covered only part of the suite (a shard, retry or filtered selection), so its totals aren’t a full picture.',
@@ -227,11 +197,6 @@ export const HELP_TOPICS = {
     title: 'Live run',
     text: 'This run is still streaming results in real time. Results and counts update as each test finishes.',
     doc: 'reporter#live-streaming',
-  },
-  'run.ci-env': {
-    title: 'CI & environment',
-    text: 'Where this run executed — CI provider, pipeline and machine details — collected automatically by the reporter.',
-    doc: 'reporter#automatic-metadata-collection',
   },
   'run.reports': {
     title: 'Storage & reports',
@@ -291,25 +256,10 @@ export const HELP_TOPICS = {
     text: 'One time axis that places this execution’s steps, console entries, network requests and backend log entries on the same clock, with a marker at the moment of failure. The default view is the window around the failed step (10s before, 2s after); switch to “Whole test” to see everything. The list below reads it chronologically — click a line to jump to that step, console entry or request. When a run’s reporter recorded no step start times, positions are estimated from durations and the card says so.',
     doc: 'evidence#one-execution-diagnosis-first',
   },
-  'case.wasted-time': {
-    title: 'Wasted time',
-    text: 'Time spent in fixed waits (waitForTimeout and matching patterns) that could usually be replaced with a web-first assertion.',
-    doc: 'flaky-tests#performance',
-  },
-  'case.ai': {
-    title: 'AI diagnosis for this execution',
-    text: 'Diagnose just this failing execution, or copy the full evidence context to paste into your own AI assistant.',
-    doc: 'ai-diagnosis#diagnosing-one-execution',
-  },
   'case.web-vitals': {
     title: 'Web Vitals',
     text: 'Core Web Vitals (LCP, CLS, etc.) captured during the test, measuring real loading and responsiveness of the page under test. When empty, the card says which of three things it means: not captured (add the capture fixtures), captured but nothing recorded, or not applicable (Web Vitals need a Chromium browser).',
     doc: 'capture-fixtures',
-  },
-  'case.traces': {
-    title: 'Traces',
-    text: 'Playwright trace files for this execution. "View trace" opens them in the dashboard\'s own trace viewer — the trace stays on your server, it is never sent to a third party.',
-    doc: 'evidence#trace-viewer',
   },
   'case.console': {
     title: 'Console output',
@@ -320,11 +270,6 @@ export const HELP_TOPICS = {
     title: 'Network requests',
     text: 'HTTP requests the page made during the test, with timing and status — useful for spotting failed or slow calls. When the execution has a trace, the Full trace view shows every request (all resource types) with headers, timing phases, a waterfall and capped body previews; sensitive header values are masked. An empty card distinguishes not captured (add the capture fixtures) from captured-but-nothing-happened; with a trace and no fixtures the list is recovered from the trace and marked "derived from the trace".',
     doc: 'evidence#trace-powered-deep-views',
-  },
-  'case.backend-logs': {
-    title: 'Backend server logs',
-    text: 'Server-side warnings and errors captured during the test, correlated with this execution via a Piwi backend integration. When empty, the card says whether the capture fixtures are missing or the app under test has no Piwi backend integration (backend logs are "not applicable" without one).',
-    doc: 'backend-logs',
   },
   'case.aria': {
     title: 'ARIA snapshot',
@@ -343,11 +288,6 @@ export const HELP_TOPICS = {
   'cluster.concept': {
     title: 'Failure clusters',
     text: 'Failures with the same error fingerprint are grouped into one cluster, so a single root cause shows up once instead of N times.',
-    doc: 'ai-diagnosis#failure-clustering',
-  },
-  'cluster.new-vs-known': {
-    title: 'New vs known failure',
-    text: 'Whether this failure matches an existing cluster (a known issue) or opened a new one — a fresh signature worth a closer look.',
     doc: 'ai-diagnosis#failure-clustering',
   },
   'cluster.triage': {
@@ -440,10 +380,6 @@ export const HELP_TOPICS = {
   },
 
   // ── Settings ──────────────────────────────────────────────────────────
-  'settings.general': {
-    title: 'General settings',
-    text: 'Central place for account, users, AI diagnosis, notifications, storage and tags. Settings that can be overridden by environment variables show a lock badge naming the variable.',
-  },
   'settings.storage-stats': {
     title: 'Storage statistics',
     text: 'How much disk your reports, traces and attachments use, broken down so you can see what to clean up.',
