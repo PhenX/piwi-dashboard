@@ -130,12 +130,20 @@ test.describe('Failure cluster page layout', () => {
     await expect(page.getByRole('heading', { name: 'What changed' })).toBeVisible();
   });
 
-  test('moving tests to a new cluster is reachable from the More menu', async ({ page }) => {
+  test('selecting an affected test offers "Move to a new cluster"', async ({ page }) => {
     await page.goto(`/failure-clusters/${clusterId}`);
     await waitForHydration(page);
 
-    await page.getByRole('button', { name: 'More actions' }).click();
-    await page.getByRole('menuitem', { name: /Move tests to a new cluster/ }).click();
-    await expect(page.getByText('Extract test cases')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Affected tests/ })).toBeVisible();
+
+    // Selecting a row reveals the bulk bar; the move action opens its confirm dialog.
+    await page
+      .getByRole('checkbox', { name: /^Select / })
+      .first()
+      .check();
+    const move = page.getByRole('button', { name: 'Move to a new cluster' });
+    await expect(move).toBeVisible();
+    await move.click();
+    await expect(page.getByRole('button', { name: /Move \d+ test/ })).toBeVisible();
   });
 });
