@@ -161,25 +161,30 @@ export const HELP_TOPICS = {
     text: 'The tests taking the most time, ranked. Optimizing the top entries shortens your overall run the fastest.',
     doc: 'flaky-tests#performance',
   },
-  'project.run-compare': {
-    title: 'Run comparison',
-    text: 'Diff two runs to see which tests changed status or duration between them — handy for confirming a fix or spotting a regression.',
-    doc: 'ui-overview#test-run-detail',
+  'project.slow-endpoints': {
+    title: 'Slow endpoints',
+    text: 'Backend routes exercised during a run, aggregated per route and ranked by time. Needs the Piwi capture fixtures. Pick a run to inspect its endpoint timings.',
+    doc: 'flaky-tests#performance',
   },
-  'project.test-cases': {
-    title: 'Test cases',
-    text: 'Every distinct test in the project with its executed-only pass rate, result breakdown and average duration across runs. Search by title or file, filter by status, and switch to a per-spec tree. Cases not run within the selected age window are hidden by default (last 30 days) — pick "All time" to see obsolete ones. Click a test to see its full history.',
+  'project.status-line': {
+    title: 'Project status',
+    text: 'The project’s condition at a glance: the latest run and its age, the pass rate over the last 20 runs, and the open clusters, flaky and quarantined counts. Each figure links to the tab that holds it.',
     doc: 'ui-overview#project-detail',
   },
-  'project.compare': {
-    title: 'Compare runs',
-    text: 'Pick two runs to see a side-by-side summary and a per-test status diff between them.',
-    doc: 'ui-overview#test-run-detail',
+  'project.filters': {
+    title: 'Filters',
+    text: 'Environment, branch and full-runs-only scope every list on the page — the runs table, the trend chart, the flaky analysis and performance. The choice is remembered per project.',
+    doc: 'ui-overview#project-detail',
   },
-  'project.spec-health': {
-    title: 'Spec health',
-    text: 'A heatmap grouped by spec file: pass rate, flaky rate and average time per spec, so you can find the riskiest files at a glance.',
-    doc: 'flaky-tests#spec-health-heatmap',
+  'project.failures': {
+    title: 'Failures',
+    text: 'One place for everything broken: the failure clusters (executions that failed the same way), the flaky tests, and the quarantine list. Switch between them with the control at the top.',
+    doc: 'flaky-tests#flaky-test-detection',
+  },
+  'project.test-cases': {
+    title: 'Tests',
+    text: 'Every distinct test in the project with its executed-only pass rate, result breakdown and average duration across runs. Search by title or file, filter by status, and group by spec file to see each file’s health. Tests not run within the selected age window are hidden by default (last 30 days) — pick "All time" to see obsolete ones. Click a test to see its full history.',
+    doc: 'ui-overview#project-detail',
   },
   'project.members': {
     title: 'Project access',
