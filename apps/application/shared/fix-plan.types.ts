@@ -8,6 +8,7 @@
  */
 import type { PatchValidation } from '#shared/patch';
 import type { LocatorEdit } from '#shared/locator-healing.types';
+import type { ReproRecipe, BisectResult } from '#shared/reproduce';
 
 export interface FixPlanEdit {
   filePath: string;
@@ -61,4 +62,8 @@ export interface FixPlan {
     /** What happens on the dashboard when it passes. */
     expectation: string;
   };
+  /** Copy-paste steps to reproduce the failure locally (checkout, install, run). */
+  reproduce: ReproRecipe;
+  /** A generated `git bisect` between the last green and the failing commit, or why it is unavailable. */
+  bisect: BisectResult;
 }
