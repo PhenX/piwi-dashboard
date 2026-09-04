@@ -34,6 +34,7 @@ Below the header the reading order is the same every time: the **headline**, the
 - **Clues** — the strongest [deterministic clue](#clues) in one line right on the headline (*"GET /api/quote returned 504, 1.1 s before the failure"*), with an **Other clues** card below listing the rest, each with a strength chip, its `t-N s` before the failure, and citation chips that switch to the evidence tab it came from and scroll to it.
 - **Evidence** — one card with content-level tabs; each tab shows a count or a dot when it holds data and is dimmed when empty, and a dimmed tab still opens to say why (not captured / nothing happened / not applicable). The card opens on the tab the strongest clue cites, else the **Timeline** when it can place two or more items, else **Screen** — and a clue or diagnosis citation switches tabs for you:
   - **Timeline** — one time axis that places the **steps**, **console** entries, **network** requests and their **backend logs** on the same clock and marks the **moment of failure**, so "console (1) / network (3)" become *what the app was doing when the test gave up*. Below the axis, the same items read as one chronological list — `t-1.1s · GET /api/quote → 504 (1500 ms)`, `t+0 · click getByRole('button', { name: 'Pay' }) failed` — grouped by the method (or `test.step`) they were called from, each file:line opening in your editor; two views, **Around the failure** and **Whole test**, the latter followed by the full **step table** (category, duration, share of the test). Web Vitals and screenshots carry no capture time, so they are listed as not-yet-placed rather than guessed at.
+  - **Attempts** — shown when a test ran more than once (it failed then passed on retry): every attempt with its status and duration, and below them [what differed](#attempts) between the failing attempt and the one that passed.
   - **Screen** — the failure screenshot, the **visual diff** against the last green run, video, the failure-time **ARIA snapshot**, the reconstructed **DOM snapshot** with pick-a-locator, and the trace and attachments.
   - **Source** — the **test source** as a call stack (the line that actually threw plus the callers above it, so a failure inside a helper is visible), deepening [with a trace](#trace-powered-deep-views) into the complete stack with real source.
   - **Network** — the **network requests** with inline [backend logs](./backend-logs) and a [Full trace](#trace-powered-deep-views) network view. **Console** — the console output. **State** — the **app state** at test end and the **environment diff** against the last green run. **Performance** — performance hints, Web Vitals, the slowest step and wasted time.
@@ -58,6 +59,20 @@ A **clue** is a deterministic, rule-based finding correlated from the evidence a
 - **Fixed before** *(weak)* — this cluster recorded a fix that has since regressed.
 
 The card is hidden when no rule fires, and the ranked list is capped at eight clues.
+
+### Attempts
+
+When a test failed and then passed on retry, the **Attempts** tab compares the failing attempt against the one that passed — the flakiness fingerprint, computed from evidence Piwi already stores for each attempt. It lists every attempt (its status and duration, with the one you opened marked), then **what differed**, most-diagnostic first:
+
+- the **error** that was present on the failing attempt and gone on the pass;
+- a **request** that failed (5xx or no response) on one attempt but not the other;
+- a **console** error or warning logged on only one attempt;
+- a **step** that errored, or ran much slower, on one attempt;
+- a **duration** delta between the two attempts;
+- a **page-state or URL** difference — where the page ended, and which storage keys or cookies each attempt held;
+- an **ARIA structural** difference at the landmark/heading level.
+
+Each difference is labeled by the attempt it sits on (*only on the failing attempt* / *only on the passing attempt* / *changed*) and carries a chip that switches to the evidence tab it came from. That same delta feeds the [root-cause classifier](./flaky-tests#root-cause-classification): a request that failed on the failing attempt and recovered on the pass is strong evidence the flakiness is a network problem.
 
 **A passing execution shows the same page** with the evidence card's **Timeline** tab selected; its traces, attachments, console and network are in the same tabs a failing execution uses.
 

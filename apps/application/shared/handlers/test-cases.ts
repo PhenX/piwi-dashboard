@@ -669,10 +669,18 @@ function startedAtMs(value: unknown): number | null {
 
 /** A per-attempt summary for the compared pair. */
 export interface AttemptDiffSummary {
-  executionId: number;
+  /** The sibling execution row for this attempt, or null when it was not stored separately. */
+  executionId: number | null;
   retry: number;
   status: string;
   duration: number | null;
+}
+
+/** One attempt's recorded outcome, as stored in the row's `attempts` JSON. */
+interface AttemptMeta {
+  retry: number;
+  status: string;
+  duration?: number | null;
 }
 
 export interface AttemptDiffResult {
@@ -729,21 +737,26 @@ async function loadAttemptEvidence(
 }
 
 /**
- * Diff the failing and passing attempts of one flaky execution. Resolves this
- * execution's sibling attempts (same run, test case and browser), pairs the
- * failing attempt with the passing one — the failing attempt this id belongs to
- * against the first later attempt that passed, or, when this id is the passing
- * one, the last prior failing attempt — loads both rows' evidence through the
- * same helpers the execution detail reads, and hands them to the pure
- * `diffAttempts`. Returns `applicable: false` when there is only one attempt or
- * no failing/passing pair exists. Shared by the REST endpoint and the demo
- * mirror. Never 404s: "not applicable" is a valid answer.
+ * Diff the failing and passing attempts of one flaky execution. The per-attempt
+ * outcomes come from the row's `attempts` JSON (recorded on every attempt row);
+ * a real reporter run also stores each attempt as its own execution row, so its
+ * full evidence — error, network, console, page state, ARIA — is loaded through
+ * the same helpers the execution detail reads. When only the final attempt was
+ * stored (the demo/dev seed collapses retries), the missing attempt contributes
+ * just its recorded duration, so a timing difference still shows.
+ *
+ * Pairs the failing attempt with the passing one — the failing attempt this id
+ * belongs to against the first later attempt that passed, or, when this id is
+ * the passing one, the last prior failing attempt — and hands the pair to the
+ * pure `diffAttempts`. Returns `applicable: false` when there is only one
+ * attempt or no failing/passing pair exists. Shared by the REST endpoint and
+ * the demo mirror. Never 404s: "not applicable" is a valid answer.
  */
 export async function getAttemptDiff(db: DrizzleDB, id: number): Promise<AttemptDiffResult> {
   const [current] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
   if (!current) return { applicable: false, reason: 'not-found', differences: [] };
 
-  const siblings = await db
+  const siblingRows = await db
     .select()
     .from(testRunsCases)
     .where(
@@ -755,45 +768,52 @@ export async function getAttemptDiff(db: DrizzleDB, id: number): Promise<Attempt
           : sql`${testRunsCases.browserName} IS NULL`,
       ),
     );
-  siblings.sort((a: any, b: any) => (a.retries ?? 0) - (b.retries ?? 0));
+  const rowByRetry = new Map<number, (typeof siblingRows)[number]>(siblingRows.map((r: any) => [r.retries ?? 0, r]));
 
-  if (siblings.length < 2) return { applicable: false, reason: 'single-attempt', differences: [] };
+  // The recorded attempt outcomes; every attempt row carries the full sequence.
+  const attemptsMeta: AttemptMeta[] = (Array.isArray(current.attempts) ? (current.attempts as AttemptMeta[]) : [])
+    .slice()
+    .sort((a, b) => (a.retry ?? 0) - (b.retry ?? 0));
+
+  if (attemptsMeta.length < 2)
+    return { applicable: false, reason: 'single-attempt', differences: [], currentExecutionId: id };
 
   const currentRetry = current.retries ?? 0;
-  let failingRow: (typeof siblings)[number] | undefined;
-  let passingRow: (typeof siblings)[number] | undefined;
+  let failing: AttemptMeta | undefined;
+  let passing: AttemptMeta | undefined;
 
   if (isFailingStatus(current.status)) {
-    failingRow = current;
-    // The first later attempt that passed.
-    passingRow = siblings.find((s: any) => (s.retries ?? 0) > currentRetry && s.status === 'passed');
+    failing = attemptsMeta.find((a) => a.retry === currentRetry) ?? { retry: currentRetry, status: current.status };
+    passing = attemptsMeta.find((a) => a.retry > currentRetry && a.status === 'passed');
   } else if (current.status === 'passed') {
-    passingRow = current;
-    // The last prior attempt that failed.
-    failingRow = [...siblings].reverse().find((s: any) => (s.retries ?? 0) < currentRetry && isFailingStatus(s.status));
+    passing = attemptsMeta.find((a) => a.retry === currentRetry) ?? { retry: currentRetry, status: current.status };
+    failing = [...attemptsMeta].reverse().find((a) => a.retry < currentRetry && isFailingStatus(a.status));
   }
 
-  if (!failingRow || !passingRow)
-    return { applicable: false, reason: 'no-pair', differences: [], currentExecutionId: id };
+  if (!failing || !passing) return { applicable: false, reason: 'no-pair', differences: [], currentExecutionId: id };
 
-  const [failingEvidence, passingEvidence] = await Promise.all([
-    loadAttemptEvidence(db, failingRow),
-    loadAttemptEvidence(db, passingRow),
-  ]);
+  const evidenceFor = async (attempt: AttemptMeta): Promise<AttemptEvidence> => {
+    const row = rowByRetry.get(attempt.retry);
+    if (row) return loadAttemptEvidence(db, row);
+    // The attempt was not stored as its own row — only its recorded duration is known.
+    return { error: null, duration: attempt.duration ?? null };
+  };
+
+  const [failingEvidence, passingEvidence] = await Promise.all([evidenceFor(failing), evidenceFor(passing)]);
 
   const differences = diffAttempts(failingEvidence, passingEvidence);
 
-  const summarize = (row: (typeof siblings)[number]): AttemptDiffSummary => ({
-    executionId: row.id,
-    retry: row.retries ?? 0,
-    status: row.status,
-    duration: row.duration ?? null,
+  const summarize = (attempt: AttemptMeta): AttemptDiffSummary => ({
+    executionId: rowByRetry.get(attempt.retry)?.id ?? null,
+    retry: attempt.retry,
+    status: attempt.status,
+    duration: attempt.duration ?? rowByRetry.get(attempt.retry)?.duration ?? null,
   });
 
   return {
     applicable: true,
-    failing: summarize(failingRow),
-    passing: summarize(passingRow),
+    failing: summarize(failing),
+    passing: summarize(passing),
     currentExecutionId: id,
     differences,
   };
