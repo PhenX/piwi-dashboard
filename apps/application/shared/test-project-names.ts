@@ -70,6 +70,7 @@ export const PROJECT = {
   GZIP_SERVE: 'gzip-serve-test-project',
   GZIP_TEST: 'gzip-test-project',
   HEARTBEAT_TEST: 'heartbeat-test',
+  HTML_REPORT_SANDBOX: 'html-report-sandbox-test',
   HISTORY: 'history-test',
   IMPORT_BLOB: 'import-blob-test',
   IMPORT_BLOB_UI: 'import-blob-ui-test',
