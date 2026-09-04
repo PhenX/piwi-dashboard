@@ -407,7 +407,7 @@ export const HELP_TOPICS = {
     doc: 'ai-diagnosis#context-limits-and-token-cost',
   },
   'cluster.result': {
-    title: 'Diagnosis result',
+    title: 'Diagnosis',
     text: 'The AI’s proposed root cause, fix and confidence. Treat it as a lead to verify, not proof — confirm against the evidence before acting.',
     doc: 'ai-diagnosis#what-a-diagnosis-contains',
   },
@@ -675,7 +675,7 @@ export const HELP_TOPICS = {
 
   // ── Locator healing ────────────────────────────────────────────────────
   'locator-healing': {
-    title: 'Alternative locators',
+    title: 'Locator fix',
     text: 'When a locator breaks after a UI change, Piwi suggests pre-captured alternatives from the last passing run — or from another test in the project that uses the same locator. Each alternative is ranked by stability score — prefer data-testid (100) over CSS classes (10–40). The recommended fix shows the exact one-line edit for the failing test, with a "Copy fix prompt" for an AI coding agent. A "Your pick" badge marks a replacement you confirmed on the failing page: "Pick from snapshot" opens the failure-time DOM and lets you click the intended element, and "Pick from trace" opens the failure trace in the trace viewer, whose Pick locator tool works on the recorded page snapshots.',
     doc: 'reporter#locator-healing',
   },

@@ -254,14 +254,14 @@ defineExpose({ refresh });
 </script>
 
 <template>
-  <SectionCard title="Test cases" icon="i-lucide-flask-conical" :count="data?.total" help="project.test-cases">
+  <SectionCard title="Tests" icon="i-lucide-flask-conical" :count="data?.total" help="project.test-cases">
     <template #actions>
       <UButton
         icon="i-lucide-refresh-cw"
         size="sm"
         color="neutral"
         variant="ghost"
-        aria-label="Refresh test cases"
+        aria-label="Refresh tests"
         :loading="status === 'pending' && !!data"
         @click="() => refresh()"
       />
@@ -313,7 +313,7 @@ defineExpose({ refresh });
         icon="i-lucide-search"
         size="sm"
         class="min-w-48 max-sm:flex-1"
-        aria-label="Search test cases"
+        aria-label="Search tests"
       />
       <UInput
         v-model="tagsInput"
