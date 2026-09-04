@@ -10,8 +10,11 @@
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 
 import type { DrizzleDB } from './db';
+import type { OpenFailureCluster } from '../../types/api';
 import { recomputeClusterOccurrences } from './failure-cluster-ops';
 import { getQuarantinedCaseIds } from './quarantine';
+
+type ProjectScope = 'all' | Set<number>;
 
 const VALID_STATUSES = ['open', 'resolved', 'ignored'];
 
@@ -205,4 +208,146 @@ export async function extractClusterCases(
   }
 
   return { success: true, extractedCount: testCaseIds.length, remainingOccurrences };
+}
+
+/**
+ * Open failure clusters across every project the caller can see, newest first
+ * by last seen — the Home "Open failures" card. Each row carries what the card
+ * shows: the fields `describeCluster` names a cluster from, the owning project,
+ * the affected-test count, when it was last seen, the annotation owner when one
+ * exists (the most-affected test wins, mirroring `getFailureCluster`) and the
+ * pinned known-issue link when one is set.
+ */
+export async function getOpenFailureClusters(
+  db: DrizzleDB,
+  scope: ProjectScope = 'all',
+  limit = 50,
+): Promise<OpenFailureCluster[]> {
+  const allowed = scope === 'all' ? 'all' : [...scope];
+  if (allowed !== 'all' && allowed.length === 0) return [];
+
+  const where =
+    allowed === 'all'
+      ? eq(failureClusters.status, 'open')
+      : and(eq(failureClusters.status, 'open'), inArray(failureClusters.projectId, allowed));
+
+  const clusters: any[] = await db
+    .select({
+      id: failureClusters.id,
+      projectId: failureClusters.projectId,
+      title: failureClusters.title,
+      signature: failureClusters.signature,
+      errorType: failureClusters.errorType,
+      selector: failureClusters.selector,
+      sampleError: failureClusters.sampleError,
+      status: failureClusters.status,
+      lastSeenRunId: failureClusters.lastSeenRunId,
+      occurrences: failureClusters.occurrences,
+    })
+    .from(failureClusters)
+    .where(where)
+    .orderBy(desc(failureClusters.lastSeenRunId))
+    .limit(Math.min(200, Math.max(1, limit)));
+
+  if (clusters.length === 0) return [];
+
+  const clusterIds: number[] = clusters.map((c) => c.id);
+  const projectIds: number[] = [...new Set(clusters.map((c) => c.projectId))];
+  const lastSeenRunIds: number[] = [...new Set(clusters.map((c) => c.lastSeenRunId))];
+
+  const [projectRows, counts, lastSeenRuns, ownerRows, linkRows] = await Promise.all([
+    db
+      .select({ id: projects.id, name: projects.name, label: projects.label })
+      .from(projects)
+      .where(inArray(projects.id, projectIds)),
+
+    db
+      .select({
+        clusterId: testRunsCases.failureClusterId,
+        affectedTests: sql<number>`count(distinct ${testRunsCases.testCaseId})`,
+      })
+      .from(testRunsCases)
+      .where(inArray(testRunsCases.failureClusterId, clusterIds))
+      .groupBy(testRunsCases.failureClusterId),
+
+    db
+      .select({ id: testRuns.id, status: testRuns.status, startTime: testRuns.startTime })
+      .from(testRuns)
+      .where(inArray(testRuns.id, lastSeenRunIds)),
+
+    // One row per (cluster, test): the most-affected test names the cluster when
+    // the sample error has no frame and supplies the `piwi:owner` annotation.
+    db
+      .select({
+        clusterId: testRunsCases.failureClusterId,
+        filePath: testCases.filePath,
+        owner: testCases.owner,
+        runCount: sql<number>`count(${testRunsCases.id})`,
+      })
+      .from(testRunsCases)
+      .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+      .where(inArray(testRunsCases.failureClusterId, clusterIds))
+      .groupBy(testRunsCases.failureClusterId, testCases.id, testCases.filePath, testCases.owner),
+
+    db
+      .select({
+        clusterId: entityLinks.failureClusterId,
+        url: entityLinks.url,
+        provider: entityLinks.provider,
+        key: entityLinks.key,
+      })
+      .from(entityLinks)
+      .where(inArray(entityLinks.failureClusterId, clusterIds))
+      .orderBy(desc(entityLinks.id)),
+  ]);
+
+  const projectById = new Map(projectRows.map((p: any) => [p.id, p]));
+  const affectedById = new Map(counts.map((c: any) => [c.clusterId, Number(c.affectedTests)]));
+  const runById = new Map(lastSeenRuns.map((r: any) => [r.id, { status: r.status, startTime: r.startTime }]));
+
+  // Keep the most-affected test per cluster for the name fallback and owner.
+  const repByCluster = new Map<number, { filePath: string | null; owner: string | null; runCount: number }>();
+  for (const row of ownerRows as any[]) {
+    const prev = repByCluster.get(row.clusterId);
+    if (!prev || Number(row.runCount) > prev.runCount) {
+      repByCluster.set(row.clusterId, {
+        filePath: row.filePath ?? null,
+        owner: row.owner ?? null,
+        runCount: Number(row.runCount),
+      });
+    }
+  }
+
+  // Newest known-issue link wins (rows come back id-descending).
+  const issueByCluster = new Map<number, { url: string; provider: string; key: string | null }>();
+  for (const row of linkRows as any[]) {
+    if (row.clusterId != null && !issueByCluster.has(row.clusterId)) {
+      issueByCluster.set(row.clusterId, { url: row.url, provider: row.provider, key: row.key ?? null });
+    }
+  }
+
+  return clusters.map((c): OpenFailureCluster => {
+    const project = projectById.get(c.projectId);
+    const run = runById.get(c.lastSeenRunId) as { status: string; startTime: Date } | undefined;
+    const rep = repByCluster.get(c.id);
+    return {
+      id: c.id,
+      projectId: c.projectId,
+      projectName: project?.name ?? `Project ${c.projectId}`,
+      projectLabel: project?.label ?? null,
+      title: c.title ?? null,
+      signature: c.signature,
+      errorType: c.errorType ?? null,
+      selector: c.selector ?? null,
+      sampleError: c.sampleError ?? null,
+      filePath: rep?.filePath ?? null,
+      status: c.status,
+      affectedTests: affectedById.get(c.id) ?? 0,
+      occurrences: c.occurrences ?? 0,
+      lastSeenAt: run?.startTime ?? null,
+      lastSeenRunStatus: run?.status ?? null,
+      owner: rep?.owner ? { name: rep.owner, source: 'annotation' } : null,
+      issueLink: issueByCluster.get(c.id) ?? null,
+    };
+  });
 }

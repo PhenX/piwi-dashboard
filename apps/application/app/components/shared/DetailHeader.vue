@@ -18,7 +18,8 @@ interface HeaderBadge {
 }
 
 defineProps<{
-  status: string;
+  /** The execution status chip; omitted on pages whose object has no run status (a cluster). */
+  status?: string;
   title: string;
   /** Exceptional badges only: regression, passed on retry, newly flaky, marks. */
   badges?: HeaderBadge[];
@@ -29,7 +30,7 @@ defineProps<{
   <div class="rounded-lg border border-default bg-default p-3 sm:p-4 space-y-2">
     <!-- Line 1: status, title, exceptional badges, primary action -->
     <div class="flex items-start gap-2.5">
-      <StatusChip :status="status" class="mt-0.5 shrink-0" />
+      <StatusChip v-if="status" :status="status" class="mt-0.5 shrink-0" />
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2 flex-wrap">
           <h1 class="text-base sm:text-lg font-bold min-w-0 break-words">{{ title }}</h1>
@@ -73,6 +74,9 @@ defineProps<{
         </template>
       </UPopover>
     </div>
+
+    <!-- An optional row under the facts line (the cluster page's triage control). -->
+    <div v-if="$slots.below"><slot name="below" /></div>
 
     <!-- Optional third line: a count bar (the run variant fills it). -->
     <div v-if="$slots['count-bar']">

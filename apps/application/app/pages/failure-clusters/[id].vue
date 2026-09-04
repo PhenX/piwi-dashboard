@@ -1,84 +1,135 @@
 <script setup lang="ts">
-import { describeCluster } from '#shared/describe-cluster';
-import type { FailureClusterDetail } from '~~/types/api';
+import { describeCluster, clusterSignatureLine } from '#shared/describe-cluster';
+import { caseHeadline, type FailureVerdict } from '#shared/failure-verdict';
+import { parsePlaywrightError } from '#shared/error-parse';
+import type { FailureCluesResult } from '#shared/handlers/test-cases';
+import type { FailureClusterDetail, TraceInfo } from '~~/types/api';
 import type { FixPlan } from '#shared/fix-plan.types';
 import { renderAnsi } from '~/utils';
 import { stripAnsi } from '~/utils/text-format';
 import { buildRetryCommand } from '~/utils/retry-command';
+import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator';
+import { EVIDENCE_SECTION_TAB } from '~/utils/evidence-sections';
 
 const route = useRoute();
 const clusterId = parseInt(String(route.params.id));
 // Share links need the server; the public demo has no share-link routes.
 const isDemoMode = Boolean(useRuntimeConfig().public.demoMode);
 
-// Quarantine actions on the cluster are reporter/admin only, matching the endpoint.
+// Quarantine/triage actions on the cluster are reporter/admin only, matching the endpoint.
 const { canWrite } = useAuth();
 
 // Provide shared diagnosis/investigation state (consumed by ClusterInvestigation
-// and ClusterDiagnosis). Must run before the top-level await below so provide()
-// and lifecycle hooks register against the active setup instance. Keep the store
-// so the page can read coverage directly (a component can't inject its own provide).
-const clusterDiagnosis = provideClusterDiagnosis(clusterId);
+// and DiagnosisPanel). Must run before the top-level await below so provide()
+// and lifecycle hooks register against the active setup instance.
+provideClusterDiagnosis(clusterId);
 
-const { data: cluster, refresh } = await useFetch<FailureClusterDetail>(`/api/failure-clusters/${clusterId}`);
+const { data: cluster, refresh: refreshCluster } = await useFetch<FailureClusterDetail>(
+  `/api/failure-clusters/${clusterId}`,
+);
 
 // The fix plan — the one artifact bundling diagnosis, edits, failing tests, owner
 // and the verify command. Same endpoint the `get_fix_plan` MCP tool returns.
 const { data: fixPlan } = await useFetch<FixPlan>(`/api/failure-clusters/${clusterId}/fix-plan`);
 
-useHead(
-  computed(() => ({
-    title: `${cluster.value ? describeCluster({ ...cluster.value, filePath: cluster.value.affectedTestCases?.[0]?.filePath ?? null }) : 'Failure cluster'} — Piwi Dashboard`,
-  })),
-);
+const describable = computed(() => ({
+  ...(cluster.value as FailureClusterDetail),
+  filePath: cluster.value?.affectedTestCases?.[0]?.filePath ?? null,
+}));
+const clusterName = computed(() => (cluster.value ? describeCluster(describable.value) : 'Failure cluster'));
+const signatureLine = computed(() => (cluster.value ? clusterSignatureLine(describable.value) : null));
 
-// Triage
-const triageStatus = ref(cluster.value?.status ?? 'open');
-const triageNote = ref(cluster.value?.triageNote ?? '');
-const triageSaving = ref(false);
+useHead(computed(() => ({ title: `${clusterName.value} — Piwi Dashboard` })));
 
-watch(
-  () => cluster.value?.status,
-  (v) => {
-    if (v) triageStatus.value = v;
-  },
+// ── Selected affected execution ─────────────────────────────────────────────
+// The evidence and the clues are shown for one affected test at a time; the
+// default is the most-affected case's latest execution (the representative the
+// cluster handler orders first).
+const affectedCases = computed(() => cluster.value?.affectedTestCases ?? []);
+const selectedCaseId = ref<number | undefined>(affectedCases.value[0]?.testCaseId);
+watch(affectedCases, (list) => {
+  if (!list.some((c) => c.testCaseId === selectedCaseId.value)) selectedCaseId.value = list[0]?.testCaseId;
+});
+const selectedCase = computed(
+  () => affectedCases.value.find((c) => c.testCaseId === selectedCaseId.value) ?? affectedCases.value[0] ?? null,
 );
-watch(
-  () => cluster.value?.triageNote,
-  (v) => {
-    triageNote.value = v ?? '';
-  },
-);
+const selectedExecId = computed(() => selectedCase.value?.recentTestRunsCaseId ?? null);
 
-const triageChanged = computed(
+const { data: execution } = await useAsyncData<Record<string, unknown> | null>(
+  'cluster-selected-exec',
   () =>
-    triageStatus.value !== (cluster.value?.status ?? 'open') ||
-    triageNote.value.trim() !== (cluster.value?.triageNote ?? ''),
+    selectedExecId.value
+      ? $fetch<Record<string, unknown>>(`/api/test-run-cases/${selectedExecId.value}`)
+      : Promise.resolve(null),
+  { watch: [selectedExecId] },
+);
+const { data: execTraces } = await useAsyncData<TraceInfo[]>(
+  'cluster-selected-traces',
+  () =>
+    selectedExecId.value
+      ? $fetch<{ items: TraceInfo[] }>(`/api/test-run-cases/${selectedExecId.value}/traces`).then((r) => r.items)
+      : Promise.resolve([]),
+  { default: (): TraceInfo[] => [], watch: [selectedExecId] },
+);
+const { data: cluesData } = await useAsyncData<FailureCluesResult>(
+  'cluster-selected-clues',
+  () =>
+    selectedExecId.value
+      ? $fetch<FailureCluesResult>(`/api/test-run-cases/${selectedExecId.value}/clues`)
+      : Promise.resolve({ clues: [], failureAt: null }),
+  { default: (): FailureCluesResult => ({ clues: [], failureAt: null }), watch: [selectedExecId] },
 );
 
-async function saveTriage() {
-  triageSaving.value = true;
-  try {
-    await $fetch(`/api/failure-clusters/${clusterId}/status`, {
-      method: 'PATCH',
-      body: { status: triageStatus.value, triageNote: triageNote.value.trim() || null },
-    });
-    refresh();
-  } finally {
-    triageSaving.value = false;
-  }
+const clues = computed(() => cluesData.value?.clues ?? []);
+const cluesFailureAt = computed(() => cluesData.value?.failureAt ?? null);
+const topClue = computed(() => clues.value[0] ?? null);
+const topClueSection = computed(() => topClue.value?.citations?.[0]?.section ?? null);
+const otherClues = computed(() => clues.value.slice(1));
+const hasTrace = computed(() => (execTraces.value?.length ?? 0) > 0);
+const selectedRunId = computed(() => (execution.value as { testRun?: { id?: number } } | null)?.testRun?.id ?? null);
+
+// ── Headline built from the cluster's stored sample error ────────────────────
+// The exemplar-refresh (a sample error from the latest occurrence) has not
+// shipped, so the headline reflects the first occurrence and is labelled as such.
+const clusterVerdict = computed<FailureVerdict | null>(() => {
+  const c = cluster.value;
+  if (!c?.sampleError) return null;
+  const desc = caseHeadline({ error: c.sampleError, steps: null });
+  if (!desc) return null;
+  const parsed = parsePlaywrightError(c.sampleError);
+  return {
+    ...desc,
+    kind: parsed.kind,
+    locator: parsed.locator,
+    isLocatorResolutionFailure: parsed.isLocatorResolutionFailure,
+    why: null,
+    since: {
+      firstFailingRunId: c.firstSeenRunId,
+      firstFailingAt: c.firstSeenAt,
+      isFirstFailure: false,
+      commit: null,
+    },
+    cluster: null,
+    owner: c.owner,
+  };
+});
+const headlineProvenance = computed(() =>
+  cluster.value ? `first occurrence, run #${cluster.value.firstSeenRunId}` : null,
+);
+
+// The newest known-issue link, shown compactly on the facts line.
+const knownIssue = computed(() => cluster.value?.links?.[0] ?? null);
+
+// ── Show raw error disclosure ────────────────────────────────────────────────
+const rawErrorEl = ref<HTMLElement | null>(null);
+const rawErrorOpen = ref(false);
+function revealRawError() {
+  rawErrorOpen.value = true;
+  nextTick(() => rawErrorEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
 }
 
-// Extract cases modal
-const extractModalOpen = ref(false);
-
-function onExtracted() {
-  extractModalOpen.value = false;
-  refresh();
-}
-
-const { copyRich, copied: clusterCopied } = useCopyRich();
-
+// ── Copy summary ─────────────────────────────────────────────────────────────
+const { copyRich } = useCopyRich();
 function copyCluster() {
   const c = cluster.value;
   if (!c) return;
@@ -89,7 +140,7 @@ function copyCluster() {
     c.errorType,
     `${c.occurrences} occurrence${c.occurrences === 1 ? '' : 's'}`,
     `${c.affectedTests} test${c.affectedTests === 1 ? '' : 's'} affected`,
-    c.status !== 'open' ? c.status : null,
+    c.status !== 'open' ? formatTriageStatus(c.status) : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -99,10 +150,9 @@ function copyCluster() {
       ? `AI diagnosis (${c.diagnosis.category ?? 'unknown'}, ${c.diagnosis.confidence ?? '?'} confidence): ${c.diagnosis.summary}`
       : null;
 
-  const name = describeCluster({ ...c, filePath: c.affectedTestCases?.[0]?.filePath ?? null });
   const plain = [
-    `❌ Failure cluster: ${name}`,
-    ...(name !== c.signature ? [`Signature: ${c.signature}`] : []),
+    `❌ Failure cluster: ${clusterName.value}`,
+    ...(clusterName.value !== c.signature ? [`Signature: ${c.signature}`] : []),
     meta,
     '',
     ...(c.sampleError ? ['Sample error:', stripAnsi(c.sampleError), ''] : []),
@@ -111,8 +161,8 @@ function copyCluster() {
   ].join('\n');
 
   const html = [
-    `<p><strong>❌ Failure cluster</strong>: ${esc(name)}</p>`,
-    name !== c.signature ? `<p><code>${esc(c.signature)}</code></p>` : '',
+    `<p><strong>❌ Failure cluster</strong>: ${esc(clusterName.value)}</p>`,
+    clusterName.value !== c.signature ? `<p><code>${esc(c.signature)}</code></p>` : '',
     `<p><em>${esc(meta)}</em></p>`,
     c.sampleError ? `<p><strong>Sample error:</strong></p><pre>${renderAnsi(c.sampleError)}</pre>` : '',
     aiSummary
@@ -124,20 +174,7 @@ function copyCluster() {
   copyRich(plain, html, { toast: 'Failure cluster copied' });
 }
 
-// Left-column section peeks (shown while the section is folded)
-const errorPeek = computed(() => {
-  const raw = cluster.value?.sampleError;
-  if (!raw) return '';
-  return (
-    stripAnsi(raw)
-      .split('\n')
-      .find((l) => l.trim()) ?? ''
-  );
-});
-
-const { scmStatus } = useScmStatusSummary(clusterDiagnosis.coverage);
-
-// Retry command for the test-evidence header (built from all affected cases).
+// ── Retry command / CI re-run (header primary action) ────────────────────────
 const affectedRetryCases = computed(() =>
   (cluster.value?.affectedTestCases ?? []).map((tc) => ({
     filePath: tc.filePath,
@@ -149,7 +186,6 @@ const affectedRetryCases = computed(() =>
 const retryCommand = computed(() => buildRetryCommand(affectedRetryCases.value));
 const { copy: copyRetry, copied: retryCopied } = useCopy();
 
-// CI re-run — availability (for the button state) and the last dispatch.
 interface RerunInfo {
   available: boolean;
   reason: string | null;
@@ -192,44 +228,68 @@ async function triggerRerun() {
   }
 }
 
-// Reveal-on-citation: a diagnosis evidence citation (right column) can unfold and
-// scroll to the matching left-column section. Refs point at the foldable cards.
+function refresh() {
+  refreshCluster();
+  refreshRerun();
+}
+
+// ── Bulk actions (More menu) ─────────────────────────────────────────────────
+const extractModalOpen = ref(false);
+function onExtracted() {
+  extractModalOpen.value = false;
+  refresh();
+}
+
+const quarantineAll = ref<{ trigger: () => void } | null>(null);
+const pendingQuarantine = computed(() => affectedCases.value.filter((c) => !c.quarantined));
+
+const moreMenuItems = computed(() => {
+  const items: { label: string; icon: string; color?: 'warning'; onSelect: () => void }[] = [];
+  if (canWrite.value && pendingQuarantine.value.length > 0)
+    items.push({
+      label: 'Quarantine all affected tests',
+      icon: 'i-lucide-shield-alert',
+      color: 'warning',
+      onSelect: () => quarantineAll.value?.trigger(),
+    });
+  items.push({
+    label: 'Move tests to a new cluster…',
+    icon: 'i-lucide-arrow-up-from-line',
+    onSelect: () => (extractModalOpen.value = true),
+  });
+  if (rerunInfo.value?.available && retryCommand.value)
+    items.push({
+      label: 'Copy retry command',
+      icon: 'i-lucide-clipboard',
+      onSelect: () => copyRetry(retryCommand.value, { toast: 'Retry command copied' }),
+    });
+  items.push({ label: 'Copy summary', icon: 'i-lucide-clipboard-list', onSelect: copyCluster });
+  items.push({ label: 'Refresh', icon: 'i-lucide-refresh-cw', onSelect: refresh });
+  return items;
+});
+
+// ── Section locator ──────────────────────────────────────────────────────────
+// A clue or diagnosis citation reveals the evidence it came from: the evidence
+// tabs handle the tabbed sections, the fix plan and the raw error scroll in place.
 const fixPlanSection = ref<{ reveal: () => void } | null>(null);
-const errorSection = ref<{ reveal: () => void } | null>(null);
-const evidenceSection = ref<{ reveal: () => void } | null>(null);
-const scmSection = ref<{ reveal: () => void } | null>(null);
-const envDiffSection = ref<{ reveal: () => void } | null>(null);
-const visualDiffSection = ref<{ reveal: () => void } | null>(null);
-const domSnapshotSection = ref<{ reveal: () => void } | null>(null);
+const scmEl = ref<HTMLElement | null>(null);
+const evidenceTabs = ref<{ revealSection: (id: string) => boolean } | null>(null);
 
-const sectionToCard: Record<string, () => { reveal: () => void } | null> = {
-  fixPlan: () => fixPlanSection.value,
-  sampleError: () => errorSection.value,
-  executionError: () => errorSection.value,
-  environmentDiff: () => envDiffSection.value,
-  visualDiff: () => visualDiffSection.value,
-  domSnapshot: () => domSnapshotSection.value,
-  scmInvestigation: () => scmSection.value,
-  selectedCommits: () => scmSection.value,
-  topSuspectedCommit: () => scmSection.value,
-  failingAction: () => scmSection.value,
-  affectedTests: () => evidenceSection.value,
-  testSource: () => evidenceSection.value,
-  sourceFiles: () => evidenceSection.value,
-  steps: () => evidenceSection.value,
-  failingSteps: () => evidenceSection.value,
-  console: () => evidenceSection.value,
-  networkRequests: () => evidenceSection.value,
-  serverTraces: () => evidenceSection.value,
-  ariaSnapshot: () => evidenceSection.value,
-  screenshots: () => evidenceSection.value,
-  tracePointers: () => evidenceSection.value,
-  artifacts: () => evidenceSection.value,
+const pageSections: Record<string, () => void> = {
+  fixPlan: () => fixPlanSection.value?.reveal(),
+  sampleError: revealRawError,
+  executionError: revealRawError,
+  scmInvestigation: () => scmEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+  selectedCommits: () => scmEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+  topSuspectedCommit: () => scmEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+  failingAction: () => scmEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
 };
-
 provide(clusterSectionLocatorKey, {
-  canLocate: (id: string) => id in sectionToCard,
-  open: (id: string) => sectionToCard[id]?.()?.reveal(),
+  canLocate: (id: string) => id in pageSections || id in EVIDENCE_SECTION_TAB,
+  open: (id: string) => {
+    if (id in pageSections) pageSections[id]!();
+    else evidenceTabs.value?.revealSection(id);
+  },
 });
 
 // Deep link from the execution page's "Open fix plan" — unfold and scroll to it.
@@ -262,13 +322,6 @@ const breadcrumbItems = computed(() => [
           <BreadcrumbNav :items="breadcrumbItems" />
         </template>
         <template #right>
-          <QuarantineAllButton
-            v-if="cluster && canWrite"
-            :project-id="cluster.project?.id"
-            :cases="cluster.affectedTestCases ?? []"
-            :reason="`Quarantined from cluster #${cluster.id}`"
-            @changed="refresh"
-          />
           <ShareLinksModal
             v-if="cluster && !isDemoMode"
             :endpoint="`/api/failure-clusters/${cluster.id}/share-links`"
@@ -278,238 +331,252 @@ const breadcrumbItems = computed(() => [
             :endpoint="`/api/failure-clusters/${cluster.id}/export`"
             :base-name="`piwi-cluster-${cluster.id}`"
           />
-          <UTooltip v-if="cluster" :text="clusterCopied ? 'Copied!' : 'Copy failure cluster'">
-            <UButton
-              size="sm"
-              variant="ghost"
-              color="neutral"
-              :icon="clusterCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
-              @click="copyCluster"
-            />
-          </UTooltip>
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <!-- Below xl the whole panel scrolls as one document; at xl+ the two columns scroll independently. -->
-      <div v-if="cluster" class="flex flex-col h-full min-h-0 max-xl:overflow-y-auto xl:overflow-hidden">
-        <!-- Summary -->
-        <div class="border-b border-default shrink-0">
-          <ClusterSummary
-            :cluster="cluster"
-            :triage-status="triageStatus"
-            :triage-note="triageNote"
-            :triage-saving="triageSaving"
-            :triage-changed="triageChanged"
-            :can-write="canWrite"
-            @update:triage-status="triageStatus = $event"
-            @update:triage-note="triageNote = $event"
-            @save-triage="saveTriage"
-            @links-updated="refresh"
+      <div v-if="cluster" class="flex flex-col gap-4 p-4 max-w-6xl mx-auto w-full">
+        <!-- ── Header ─────────────────────────────────────────────────── -->
+        <DetailHeader :title="clusterName">
+          <template #primary>
+            <UButton
+              v-if="rerunInfo?.available"
+              size="xs"
+              color="primary"
+              variant="subtle"
+              icon="i-lucide-refresh-cw"
+              :loading="rerunning"
+              :title="rerunInfo?.reason ?? 'Re-run the affected tests in CI'"
+              @click="triggerRerun"
+            >
+              <span class="hidden sm:inline">Re-run in CI</span>
+            </UButton>
+            <UButton
+              v-else-if="retryCommand"
+              size="xs"
+              color="warning"
+              variant="subtle"
+              :icon="retryCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
+              :title="retryCopied ? 'Copied!' : copyPreview(retryCommand)"
+              aria-label="Copy retry command"
+              @click="copyRetry(retryCommand, { toast: 'Retry command copied' })"
+            >
+              <span class="hidden sm:inline">Copy retry command</span>
+            </UButton>
+          </template>
+
+          <template #menu>
+            <UDropdownMenu :items="moreMenuItems">
+              <UButton
+                size="sm"
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-ellipsis-vertical"
+                aria-label="More actions"
+                title="More actions"
+              />
+            </UDropdownMenu>
+          </template>
+
+          <template #facts>
+            <UBadge
+              v-if="cluster.errorType"
+              :color="clusterErrorTypeColor(cluster.errorType)"
+              variant="subtle"
+              size="sm"
+            >
+              {{ cluster.errorType }}
+            </UBadge>
+            <span class="tabular-nums"
+              >{{ cluster.occurrences }} occurrence{{ cluster.occurrences === 1 ? '' : 's' }}</span
+            >
+            <span class="tabular-nums"
+              >{{ cluster.affectedTests }} {{ cluster.affectedTests === 1 ? 'test' : 'tests' }}</span
+            >
+            <span class="inline-flex items-center gap-1">
+              first seen
+              <NuxtLink :to="`/test-runs/${cluster.firstSeenRunId}`" class="text-primary hover:underline">
+                run #{{ cluster.firstSeenRunId }}
+              </NuxtLink>
+              <ClientOnly>
+                <span v-if="cluster.firstSeenAt" class="text-dimmed"
+                  >({{ formatRelativeTime(cluster.firstSeenAt) }})</span
+                >
+              </ClientOnly>
+            </span>
+            <span class="inline-flex items-center gap-1">
+              last seen
+              <NuxtLink :to="`/test-runs/${cluster.lastSeenRunId}`" class="text-primary hover:underline">
+                run #{{ cluster.lastSeenRunId }}
+              </NuxtLink>
+              <ClientOnly>
+                <span v-if="cluster.lastSeenAt" class="text-dimmed"
+                  >({{ formatRelativeTime(cluster.lastSeenAt) }})</span
+                >
+              </ClientOnly>
+            </span>
+            <span
+              v-if="cluster.owner"
+              class="inline-flex items-center gap-1"
+              :title="`Owner from ${cluster.owner.source}`"
+            >
+              <UIcon name="i-lucide-user-round" class="size-3.5 shrink-0" />
+              {{ cluster.owner.name }}
+            </span>
+            <a
+              v-if="knownIssue"
+              :href="knownIssue.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 text-primary hover:underline"
+              :title="knownIssue.title ?? knownIssue.url"
+            >
+              <UIcon name="i-lucide-link" class="size-3.5 shrink-0" />
+              {{ knownIssue.key || knownIssue.provider }}
+            </a>
+          </template>
+
+          <template #details>
+            <div class="space-y-1">
+              <p class="text-xs font-medium text-muted uppercase tracking-wide">Owner</p>
+              <ClusterOwnerLine :owner="cluster.owner" :project-id="cluster.project?.id ?? null" />
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center gap-1.5 text-xs">
+                <UIcon name="i-lucide-link" class="size-3.5 shrink-0 text-gray-400" />
+                <span class="text-muted uppercase tracking-wide font-medium">Known issue</span>
+                <HelpHint topic="cluster.known-issue" />
+              </div>
+              <EntityLinks
+                entity-type="failure_cluster"
+                :entity-id="cluster.id"
+                :links="cluster.links"
+                :readonly="!canWrite"
+                @updated="refresh"
+              />
+            </div>
+          </template>
+
+          <template #below>
+            <TriageControl :cluster="cluster" :can-write="canWrite" @saved="refresh" />
+          </template>
+        </DetailHeader>
+
+        <!-- ── What broke, in one line ────────────────────────────────── -->
+        <template v-if="clusterVerdict">
+          <TestCaseHeadlineCard :verdict="clusterVerdict" :top-clue="topClue" :provenance="headlineProvenance">
+            <!-- The cluster's identity facts live in the header facts line above;
+                 the headline stays the explanation, so its own fact row is empty. -->
+            <template #facts><span class="hidden" /></template>
+          </TestCaseHeadlineCard>
+        </template>
+        <UCard v-else>
+          <h2 class="text-lg font-semibold text-highlighted">{{ clusterName }}</h2>
+          <p v-if="headlineProvenance" class="text-xs text-dimmed mt-1">{{ headlineProvenance }}</p>
+        </UCard>
+
+        <!-- Show raw error: the verbatim sample error and the signature -->
+        <div ref="rawErrorEl" class="scroll-mt-4">
+          <UButton
+            variant="link"
+            color="neutral"
+            size="xs"
+            :icon="rawErrorOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+            @click="rawErrorOpen = !rawErrorOpen"
+          >
+            Show raw error
+          </UButton>
+          <div v-if="rawErrorOpen" class="mt-2 space-y-2">
+            <div
+              v-if="cluster.sampleError"
+              class="text-xs font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto rounded bg-red-50 dark:bg-red-950/20 p-3"
+              v-html="renderAnsi(cluster.sampleError)"
+            />
+            <p v-if="signatureLine" class="font-mono text-xs break-all text-muted">{{ signatureLine }}</p>
+          </div>
+        </div>
+
+        <!-- Deterministic clues beyond the strongest (which sits in the headline) -->
+        <CluesCard v-if="otherClues.length" :clues="otherClues" :failure-at="cluesFailureAt" title="Other clues" />
+
+        <!-- ── Evidence ───────────────────────────────────────────────── -->
+        <div v-if="selectedExecId" class="space-y-2">
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+            <span class="text-muted">from:</span>
+            <USelect
+              v-if="affectedCases.length > 1"
+              v-model="selectedCaseId"
+              :items="affectedCases.map((c) => ({ label: c.title, value: c.testCaseId }))"
+              size="sm"
+              class="min-w-0 max-w-xs"
+              aria-label="Affected test"
+            />
+            <span v-else class="font-medium text-highlighted truncate">{{ selectedCase?.title }}</span>
+            <span v-if="selectedRunId" class="text-muted">·</span>
+            <NuxtLink
+              v-if="selectedRunId"
+              :to="`/test-runs/${selectedRunId}`"
+              class="text-primary hover:underline tabular-nums"
+            >
+              run #{{ selectedRunId }}
+            </NuxtLink>
+            <span class="text-muted">·</span>
+            <NuxtLink
+              :to="`/test-run-cases/${selectedExecId}`"
+              class="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              Open execution <UIcon name="i-lucide-arrow-right" class="size-3.5" />
+            </NuxtLink>
+          </div>
+          <EvidenceTabs
+            v-if="execution"
+            ref="evidenceTabs"
+            :test-case="execution"
+            :traces="execTraces ?? []"
+            :has-trace="hasTrace"
+            :default-section="topClueSection"
+            help="cluster.evidence"
           />
         </div>
 
-        <!-- Body: two columns — left is wider (investigation heavy) -->
-        <div class="grid grid-cols-1 xl:grid-cols-[3fr_2fr] gap-4 p-1 xl:flex-1 xl:min-h-0 xl:overflow-hidden">
-          <!-- Left: error + test evidence + SCM investigation. Sections fold to a
-               single header with a peek so the whole failure reads at a glance. -->
-          <div class="space-y-4 xl:overflow-y-auto">
-            <!-- Fix plan: diagnosis + edits + failing tests + owner + verify, in one card -->
-            <FixPlanCard
-              v-if="fixPlan"
-              ref="fixPlanSection"
-              :plan="fixPlan"
-              :project-key="cluster.project?.id"
-              :project-name="cluster.project?.name"
-              :rerun-info="rerunInfo"
-              :rerunning="rerunning"
-              @rerun="triggerRerun"
-            />
+        <!-- ── Locator fix ────────────────────────────────────────────── -->
+        <LocatorHealingPanel
+          v-if="affectedCases.length && affectedCases[0]?.recentTestRunsCaseId"
+          :run-id="cluster.lastSeenRunId"
+          :test-runs-case-id="affectedCases[0].recentTestRunsCaseId"
+          :affected-count="affectedCases.length"
+        />
 
-            <!-- Error message -->
-            <CollapsibleSectionCard
-              v-if="cluster.sampleError"
-              ref="errorSection"
-              storage-key="cluster-error"
-              icon="i-lucide-circle-x"
-              icon-class="text-red-500"
-              title="Error message"
-            >
-              <template #folded>
-                <span class="font-mono text-xs">{{ errorPeek }}</span>
-              </template>
-              <!-- eslint-disable-next-line vue/no-v-html -->
-              <div
-                class="text-xs font-mono overflow-x-auto whitespace-pre-wrap"
-                v-html="renderAnsi(cluster.sampleError)"
-              />
-            </CollapsibleSectionCard>
+        <!-- ── What to do (PR 4 folds these into one Fix block) ───────── -->
+        <FixPlanCard
+          v-if="fixPlan"
+          ref="fixPlanSection"
+          :plan="fixPlan"
+          :project-key="cluster.project?.id"
+          :project-name="cluster.project?.name"
+          :rerun-info="rerunInfo"
+          :rerunning="rerunning"
+          @rerun="triggerRerun"
+        />
 
-            <!-- Locator healing: alternative suggestions for the failing locator -->
-            <LocatorHealingPanel
-              v-if="cluster.affectedTestCases?.length && cluster.affectedTestCases[0]?.recentTestRunsCaseId"
-              ref="locatorSection"
-              storage-key="cluster-locators"
-              :run-id="cluster.lastSeenRunId"
-              :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
-              :affected-count="cluster.affectedTestCases.length"
-            />
+        <!-- What changed: baseline picker + commit diff -->
+        <div ref="scmEl" class="scroll-mt-4">
+          <SectionCard icon="i-lucide-git-compare-arrows" title="What changed" help="cluster.scm">
+            <ClusterInvestigation />
+          </SectionCard>
+        </div>
 
-            <!-- Environment drift since the last pass of the representative case -->
-            <EnvironmentDiffCard
-              v-if="cluster.affectedTestCases?.length && cluster.affectedTestCases[0]?.recentTestRunsCaseId"
-              ref="envDiffSection"
-              storage-key="cluster-env-diff"
-              :run-id="cluster.lastSeenRunId"
-              :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
-            />
-
-            <!-- Visual drift: failing screenshot pixel-diffed against the last pass -->
-            <VisualDiffCard
-              v-if="cluster.affectedTestCases?.length && cluster.affectedTestCases[0]?.recentTestRunsCaseId"
-              ref="visualDiffSection"
-              storage-key="cluster-visual-diff"
-              :run-id="cluster.lastSeenRunId"
-              :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
-            />
-
-            <!-- Failure-time HTML extracted from the uploaded trace -->
-            <DomSnapshotCard
-              v-if="cluster.affectedTestCases?.length && cluster.affectedTestCases[0]?.recentTestRunsCaseId"
-              ref="domSnapshotSection"
-              storage-key="cluster-dom-snapshot"
-              :run-id="cluster.lastSeenRunId"
-              :test-runs-case-id="cluster.affectedTestCases[0].recentTestRunsCaseId"
-            />
-
-            <!-- Test evidence: source, screenshots, traces, steps, aria, signals -->
-            <CollapsibleSectionCard
-              v-if="cluster.affectedTestCases?.length"
-              ref="evidenceSection"
-              storage-key="cluster-evidence"
-              icon="i-lucide-flask-conical"
-              title="Test evidence"
-              help="cluster.evidence"
-            >
-              <template #folded>
-                {{ cluster.affectedTests }} {{ cluster.affectedTests === 1 ? 'test' : 'tests' }} ·
-                {{ cluster.occurrences }} occurrence{{ cluster.occurrences === 1 ? '' : 's' }} ·
-                <OpenInIdeLink
-                  v-if="cluster.affectedTestCases[0]?.filePath"
-                  :file-path="cluster.affectedTestCases[0].filePath"
-                  :project-key="cluster.project?.id"
-                  :project-name="cluster.project?.name"
-                  class="text-xs"
-                />
-              </template>
-              <template #actions>
-                <UBadge color="neutral" variant="subtle" size="sm">
-                  {{ cluster.affectedTestCases.length }}
-                  {{ cluster.affectedTestCases.length === 1 ? 'test' : 'tests' }}
-                </UBadge>
-                <UButton
-                  size="xs"
-                  variant="outline"
-                  color="neutral"
-                  :icon="retryCopied ? 'i-lucide-check' : 'i-lucide-play'"
-                  :title="retryCopied ? 'Copied!' : copyPreview(retryCommand)"
-                  @click="copyRetry(retryCommand, { toast: 'Retry command copied' })"
-                >
-                  Copy retry command
-                </UButton>
-                <UTooltip
-                  :text="
-                    rerunInfo?.available
-                      ? 'Re-run the affected tests in CI'
-                      : (rerunInfo?.reason ?? 'CI re-run is unavailable')
-                  "
-                >
-                  <UButton
-                    size="xs"
-                    variant="outline"
-                    color="neutral"
-                    icon="i-lucide-refresh-cw"
-                    :disabled="!rerunInfo?.available"
-                    :loading="rerunning"
-                    @click="triggerRerun"
-                  >
-                    Re-run in CI
-                  </UButton>
-                </UTooltip>
-                <DesktopRunLocallyButton
-                  :project-id="cluster.project?.id"
-                  :project-label="cluster.project?.name"
-                  :cases="affectedRetryCases"
-                  label="Run affected locally"
-                  :preset-options="{ mode: 'grep' }"
-                />
-                <UTooltip text="Unlink incorrectly clustered test cases from this group">
-                  <UButton
-                    size="xs"
-                    color="warning"
-                    variant="outline"
-                    icon="i-lucide-arrow-up-from-line"
-                    @click="extractModalOpen = true"
-                  >
-                    Extract
-                  </UButton>
-                </UTooltip>
-              </template>
-              <p
-                v-if="rerunInfo?.lastDispatch"
-                class="mb-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted"
-              >
-                <UIcon name="i-lucide-refresh-cw" class="size-3.5" />
-                <span>Last re-run {{ formatRelativeTime(rerunInfo.lastDispatch.at) }}</span>
-                <span v-if="rerunInfo.lastDispatch.byName">by {{ rerunInfo.lastDispatch.byName }}</span>
-                <span aria-hidden="true">·</span>
-                <a
-                  :href="rerunInfo.lastDispatch.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex items-center gap-1 text-primary hover:underline"
-                >
-                  view run <UIcon name="i-lucide-external-link" class="size-3" />
-                </a>
-              </p>
-              <ClusterTestEvidence
-                :affected-test-cases="cluster.affectedTestCases"
-                :project-key="cluster.project?.id"
-                :project-name="cluster.project?.name"
-                @quarantine-changed="refresh"
-              />
-            </CollapsibleSectionCard>
-
-            <!-- SCM investigation: baseline picker + commit diff -->
-            <CollapsibleSectionCard
-              ref="scmSection"
-              storage-key="cluster-scm"
-              icon="i-lucide-git-compare-arrows"
-              title="What changed"
-              help="cluster.scm"
-            >
-              <template #folded>
-                <span class="inline-flex items-center gap-1.5">
-                  <UIcon :name="scmStatus.icon" class="size-3.5 shrink-0" :class="scmStatus.color" />
-                  <span :class="scmStatus.color">{{ scmStatus.text }}</span>
-                </span>
-              </template>
-              <ClusterInvestigation />
-            </CollapsibleSectionCard>
-          </div>
-
-          <!-- Right: diagnosis -->
-          <div class="xl:overflow-y-auto">
-            <DiagnosisPanel
-              :cluster-id="clusterId"
-              :last-seen-run-id="cluster?.lastSeenRunId"
-              :cluster-status="cluster?.status"
-              :fix-verification="cluster?.fixVerification"
-              :last-seen-at="cluster?.lastSeenAt"
-              :affected-test-cases="cluster?.affectedTestCases ?? []"
-            />
-          </div>
+        <!-- ── Diagnosis (full width; renders whether or not a provider is set) ── -->
+        <div data-shot="cluster-diagnosis">
+          <DiagnosisPanel
+            :cluster-id="clusterId"
+            :last-seen-run-id="cluster.lastSeenRunId"
+            :cluster-status="cluster.status"
+            :fix-verification="cluster.fixVerification"
+            :last-seen-at="cluster.lastSeenAt"
+            :affected-test-cases="cluster.affectedTestCases ?? []"
+          />
         </div>
       </div>
 
@@ -521,6 +588,16 @@ const breadcrumbItems = computed(() => [
     </template>
   </UDashboardPanel>
 
+  <!-- Bulk actions triggered from the More menu. -->
+  <QuarantineAllButton
+    v-if="cluster && canWrite"
+    ref="quarantineAll"
+    hide-trigger
+    :project-id="cluster.project?.id"
+    :cases="cluster.affectedTestCases ?? []"
+    :reason="`Quarantined from cluster #${cluster.id}`"
+    @changed="refresh"
+  />
   <ClusterExtractCasesModal
     v-if="cluster"
     :open="extractModalOpen"

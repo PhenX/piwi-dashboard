@@ -403,6 +403,8 @@ interface OpenAiAttempt {
   strictFormat: boolean;
   /** Send `opts.images` as `image_url` parts. */
   withImages: boolean;
+  /** Parameter name accepted by the OpenAI-compatible provider for the output limit. */
+  completionTokenParameter: 'max_tokens' | 'max_completion_tokens';
 }
 
 /**
@@ -424,7 +426,7 @@ function buildOpenAiBody(config: ResolvedAiRole, opts: AiCallOptions, attempt: O
 
   return {
     model: config.model,
-    max_tokens: opts.maxTokens ?? 8192,
+    [attempt.completionTokenParameter]: opts.maxTokens ?? 8192,
     temperature: 0,
     ...(responseFormat ? { response_format: responseFormat } : {}),
     messages: [
@@ -437,6 +439,15 @@ function buildOpenAiBody(config: ResolvedAiRole, opts: AiCallOptions, attempt: O
 /** A rejection from a text-only model handed `image_url` parts. */
 function rejectsImages(status: number, body: string): boolean {
   return status === 400 && /image|vision/i.test(body);
+}
+
+function rejectsMaxTokens(status: number, body: string, attempt: OpenAiAttempt): boolean {
+  return (
+    status === 400 &&
+    attempt.completionTokenParameter === 'max_tokens' &&
+    /max_tokens/i.test(body) &&
+    /max_completion_tokens/i.test(body)
+  );
 }
 
 /**
@@ -452,21 +463,39 @@ async function postOpenAiWithFallbacks(
   opts: AiCallOptions,
   model: string,
 ): Promise<{ res: Response; errorBody: string }> {
-  const attempt: OpenAiAttempt = { strictFormat: true, withImages: true };
-  let res = await send(attempt);
-  let errorBody = res.ok ? '' : await res.text().catch(() => '');
+  const attempt: OpenAiAttempt = {
+    strictFormat: true,
+    withImages: true,
+    completionTokenParameter: 'max_tokens',
+  };
+  const sendAttempt = async (): Promise<{ res: Response; errorBody: string }> => {
+    const res = await send(attempt);
+    return { res, errorBody: res.ok ? '' : await res.text().catch(() => '') };
+  };
 
-  if (!res.ok && opts.images?.length && rejectsImages(res.status, errorBody)) {
-    console.warn(`[ai-provider] ${model} rejected the attached image(s) — retrying text-only`);
-    attempt.withImages = false;
-    res = await send(attempt);
-    errorBody = res.ok ? '' : await res.text().catch(() => '');
-  }
+  let { res, errorBody } = await sendAttempt();
+  for (let retry = 0; retry < 3 && !res.ok; retry++) {
+    let retryWithUpdatedAttempt = false;
 
-  if (!res.ok && res.status === 400 && opts.jsonSchema && attempt.strictFormat) {
-    attempt.strictFormat = false;
-    res = await send(attempt);
-    errorBody = res.ok ? '' : await res.text().catch(() => '');
+    if (opts.images?.length && attempt.withImages && rejectsImages(res.status, errorBody)) {
+      console.warn(`[ai-provider] ${model} rejected the attached image(s) — retrying text-only`);
+      attempt.withImages = false;
+      retryWithUpdatedAttempt = true;
+    }
+
+    if (!retryWithUpdatedAttempt && rejectsMaxTokens(res.status, errorBody, attempt)) {
+      console.warn(`[ai-provider] ${model} requires max_completion_tokens — retrying with that parameter`);
+      attempt.completionTokenParameter = 'max_completion_tokens';
+      retryWithUpdatedAttempt = true;
+    }
+
+    if (!retryWithUpdatedAttempt && res.status === 400 && opts.jsonSchema && attempt.strictFormat) {
+      attempt.strictFormat = false;
+      retryWithUpdatedAttempt = true;
+    }
+
+    if (!retryWithUpdatedAttempt) break;
+    ({ res, errorBody } = await sendAttempt());
   }
 
   return { res, errorBody };

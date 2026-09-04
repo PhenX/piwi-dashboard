@@ -15,6 +15,8 @@ const props = defineProps<{
   cases: QuarantinableCase[];
   /** Reason stored on each quarantine entry. */
   reason: string;
+  /** Render only the confirmation modal; the action is invoked via `trigger()`. */
+  hideTrigger?: boolean;
 }>();
 
 const emit = defineEmits<{ changed: [] }>();
@@ -54,14 +56,18 @@ async function run() {
 }
 
 function onClick() {
+  if (pending.value.length === 0) return;
   if (pending.value.length > CONFIRM_THRESHOLD) confirmOpen.value = true;
   else run();
 }
+
+defineExpose({ trigger: onClick });
 </script>
 
 <template>
   <div v-if="pending.length > 0" class="inline-flex">
     <UButton
+      v-if="!hideTrigger"
       size="xs"
       variant="outline"
       color="warning"

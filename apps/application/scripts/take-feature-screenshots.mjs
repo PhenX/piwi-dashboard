@@ -236,12 +236,14 @@ const SCENES = [
   },
   {
     name: 'ai-diagnosis',
-    description: 'Failure cluster page: the AI diagnosis beside the error and evidence (dark)',
+    description: 'Failure cluster page: the AI diagnosis card at the foot of the cluster page (dark)',
     tags: ['docs'],
     out: 'docs',
     // Cluster 10 ships a stored, "diagnosis-verified" diagnosis in the demo seed.
     route: '/failure-clusters/10',
-    viewport: { width: 1600, height: 1240 },
+    viewport: { width: 1600, height: 1600 },
+    of: '[data-shot="cluster-diagnosis"]',
+    pad: 12,
     colorScheme: 'dark',
     // The panel hides a stored diagnosis until AI reports configured. Run this
     // scene with the server's AI env vars set (PIWI_AI_PROVIDER / PIWI_AI_API_KEY
