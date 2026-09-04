@@ -8,7 +8,7 @@
  */
 import type { HelpTopicKey } from '~/utils/help-content';
 
-export type FixSectionKey = 'locator-fix' | 'fix-plan' | 'diagnosis' | 'verify' | 'blocked';
+export type FixSectionKey = 'locator-fix' | 'fix-plan' | 'diagnosis' | 'verify' | 'reproduce' | 'blocked';
 
 const props = defineProps<{
   /** Which sections have content; the card renders them in its canonical order. */
@@ -21,6 +21,7 @@ const LABELS: Record<FixSectionKey, string> = {
   'fix-plan': 'Fix plan',
   diagnosis: 'Diagnosis',
   verify: 'Verify',
+  reproduce: 'Reproduce',
   blocked: 'Blocked by this failure',
 };
 

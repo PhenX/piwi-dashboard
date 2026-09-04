@@ -10,9 +10,10 @@
  * plain reason, so a demo with no SCM metadata still renders the recipe.
  */
 import { and, desc, eq, lt } from 'drizzle-orm';
-import { testRuns } from '../../server/database/schema';
+import { testCases, testRuns, testRunsCases } from '../../server/database/schema';
 import { buildBisectScript, buildReproRecipe, type BisectResult, type ReproRecipe } from '#shared/reproduce';
-import type { RetryCase } from '#shared/retry-command';
+import { buildRetryCommand, type RetryCase } from '#shared/retry-command';
+import type { BrowserConfig } from '#shared/types';
 import type { DrizzleDB } from './db';
 
 export interface ReproduceContext {
@@ -75,6 +76,39 @@ export async function computeReproduceContext(db: DrizzleDB, input: ReproduceInp
   const bisect = buildBisectScript({ good: lastGreenCommit, bad: commit, verifyCommand: input.verifyCommand });
 
   return { reproduce, bisect };
+}
+
+/**
+ * The reproduction recipe and bisect for a single execution — the version the
+ * execution page's Fix card renders. Returns null when the execution is gone.
+ */
+export async function buildExecutionReproduce(db: DrizzleDB, executionId: number): Promise<ReproduceContext | null> {
+  const [row] = await db
+    .select({
+      testRunId: testRunsCases.testRunId,
+      line: testRunsCases.line,
+      browser: testRunsCases.browser,
+      title: testCases.title,
+      filePath: testCases.filePath,
+    })
+    .from(testRunsCases)
+    .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+    .where(eq(testRunsCases.id, executionId));
+
+  if (!row) return null;
+
+  const browser = row.browser as BrowserConfig | null;
+  const cases: RetryCase[] = [
+    { filePath: row.filePath, title: row.title, line: row.line, projectName: browser?.projectName ?? null },
+  ];
+  const verifyCommand = buildRetryCommand(cases, { mode: 'file-line' }) || 'npx playwright test';
+
+  return computeReproduceContext(db, {
+    runId: row.testRunId,
+    cases,
+    browserName: browser?.browserName ?? null,
+    verifyCommand,
+  });
 }
 
 /**
