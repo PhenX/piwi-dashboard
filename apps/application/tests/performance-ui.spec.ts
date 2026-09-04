@@ -108,8 +108,10 @@ test.describe('Performance UI Tests', () => {
     const runId = projectData.testRuns[0].id;
 
     await page.goto(`/test-runs/${runId}`);
+    await waitForHydration(page);
 
-    // Should show avg and p90 test duration
+    // Avg and P90 test duration live in the header's Details popover.
+    await page.getByRole('button', { name: 'Details' }).click();
     await expect(page.getByText('Avg', { exact: true })).toBeVisible();
     await expect(page.getByText('P90', { exact: true })).toBeVisible();
   });
