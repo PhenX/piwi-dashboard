@@ -1,24 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, watch, ref, onMounted, onUnmounted } from 'vue';
-import type { TestCaseResult, SuiteInfo } from '~~/types/api';
-import type { LiveStepsByWorker } from '~/utils/live-steps';
+import { computed, nextTick, watch, ref, onUnmounted } from 'vue';
+import type { TestCaseResult } from '~~/types/api';
+import type { LiveStepInfo, LiveStepsByWorker } from '~/utils/live-steps';
 
-const { treeView, setTreeView } = useTreeViewCookie('test-cases');
+/** Cluster id → its display name and triage status, for the row chip and the
+ *  cluster group header. Supplied by the page from the failure-groups payload. */
+type ClusterMeta = Record<number, { name: string; status: string | null }>;
 
-// Transient flat-view override for scrollToCase: reveals the row without
-// persisting the switch in the tree-view cookie (which lasts a year).
-const flatViewOverride = ref(false);
-const effectiveTreeView = computed(() => treeView.value && !flatViewOverride.value);
+type GroupBy = 'cluster' | 'file' | 'none';
 
 const props = defineProps<{
   testCases: TestCaseResult[];
-  suites: SuiteInfo[];
   isLive: boolean;
   /** Worker index → current step, rendered inline on the matching running rows. */
   liveSteps?: LiveStepsByWorker | null;
-  failureClusterFilter?: number | null;
-  /** Failure-cluster id → display name, for the cluster badges on failing rows. */
-  clusterNames?: Record<number, string> | null;
+  clusterMeta?: ClusterMeta | null;
   /** Stable test-case ids currently quarantined — marks the matching rows. */
   quarantinedCaseIds?: Set<number> | null;
   /** Piwi project id + name, threaded so the IDE opener can resolve a workspace root. */
@@ -32,6 +28,14 @@ function isQuarantined(tc: TestCaseResult): boolean {
   return Boolean(props.quarantinedCaseIds?.has(tc.testCaseId));
 }
 
+function clusterName(id: number): string {
+  return props.clusterMeta?.[id]?.name ?? `Cluster #${id}`;
+}
+
+function liveStep(tc: TestCaseResult): LiveStepInfo | null {
+  return liveStepForCase(props.liveSteps, tc);
+}
+
 // Filter state is owned by the parent page so it survives tab switches.
 const testCaseSearch = defineModel<string>('search', { default: '' });
 const activeStatuses = defineModel<string[]>('activeStatuses', { default: () => [] });
@@ -43,18 +47,15 @@ const showNewFlakyOnly = ref(false);
 const STATUS_OPTIONS = [
   { label: 'Passed', value: 'passed', color: 'green' },
   { label: 'Failed', value: 'failed', color: 'red' },
+  { label: 'Passed on retry', value: 'flaky', color: 'orange' },
   { label: 'Skipped', value: 'skipped', color: 'gray' },
   { label: "Didn't run", value: 'didnotrun', color: 'amber' },
-  { label: 'Flaky', value: 'flaky', color: 'orange' },
 ] as const;
 
 function toggleStatus(value: string) {
-  const idx = activeStatuses.value.indexOf(value);
-  if (idx >= 0) {
-    activeStatuses.value = activeStatuses.value.filter((s) => s !== value);
-  } else {
-    activeStatuses.value = [...activeStatuses.value, value];
-  }
+  activeStatuses.value = activeStatuses.value.includes(value)
+    ? activeStatuses.value.filter((s) => s !== value)
+    : [...activeStatuses.value, value];
 }
 
 const testCaseBrowserOptions = computed(() => {
@@ -64,43 +65,19 @@ const testCaseBrowserOptions = computed(() => {
     if (name) browsers.add(name);
   }
   const items = [{ label: 'All browsers', value: 'all' }];
-  for (const b of [...browsers].sort()) {
-    items.push({ label: b, value: b });
-  }
+  for (const b of [...browsers].sort()) items.push({ label: b, value: b });
   return items;
 });
 
-/** Tooltip for a status cell: a did-not-run row explains *why* it never ran. */
-function statusHint(tc: TestCaseResult): string {
-  if (tc.status === 'didnotrun') return formatDidNotRunReason(tc.didNotRunReason);
-  return formatStatusLabel(tc.status);
-}
-
-/** The live step to show on a running row (worker-matched, see the helper). */
-function liveStep(tc: TestCaseResult) {
-  return liveStepForCase(props.liveSteps, tc);
-}
-
-// A failing row always identifies its cluster from `failureClusterId` alone —
-// the display name is a nicety, so a missing/failed names request falls back to
-// the cluster id rather than hiding the badge.
-function clusterLabel(id: number): string {
-  return props.clusterNames?.[id] ?? `Cluster #${id}`;
-}
-
 function matchesStatus(tc: TestCaseResult, filter: string): boolean {
   if (filter === 'failed') return isFailedStatus(tc.status);
-  // "Flaky" means passed only after a retry — a subset of passed. Retried
-  // tests that failed every attempt are failures, not flaky.
+  // "Passed on retry" means passed only after a retry — a subset of passed.
   if (filter === 'flaky') return tc.status === 'passed' && (tc.retries ?? 0) > 0;
   return tc.status === filter;
 }
 
 const filteredTestCases = computed<TestCaseResult[]>(() => {
   let cases = props.testCases;
-  if (props.failureClusterFilter != null) {
-    cases = cases.filter((tc) => tc.failureClusterId === props.failureClusterFilter);
-  }
   if (activeStatuses.value.length > 0) {
     cases = cases.filter((tc) => activeStatuses.value.some((s) => matchesStatus(tc, s)));
   }
@@ -108,50 +85,44 @@ const filteredTestCases = computed<TestCaseResult[]>(() => {
     cases = cases.filter((tc) => tc.browser?.projectName === testCaseBrowserFilter.value);
   }
   if (testCaseSearch.value) {
+    // Search matches the title, the path AND the error text, so a failure is
+    // findable by what broke, not only by which test broke.
     const query = testCaseSearch.value.toLowerCase();
     cases = cases.filter(
-      (tc) => tc.title.toLowerCase().includes(query) || (tc.location && tc.location.toLowerCase().includes(query)),
+      (tc) =>
+        tc.title.toLowerCase().includes(query) ||
+        tc.location?.toLowerCase().includes(query) ||
+        tc.error?.toLowerCase().includes(query),
     );
   }
-  if (showNewRegressionsOnly.value) {
-    cases = cases.filter((tc) => tc.isNewRegression);
-  }
-  if (showNewFlakyOnly.value) {
-    cases = cases.filter((tc) => tc.isNewFlaky);
-  }
+  if (showNewRegressionsOnly.value) cases = cases.filter((tc) => tc.isNewRegression);
+  if (showNewFlakyOnly.value) cases = cases.filter((tc) => tc.isNewFlaky);
   return cases;
 });
 
-// Client-side sort (the old UTable sorting, re-implemented for the virtualized list).
-const sortKey = ref<string | null>(null);
+// ── Sort (inside each group) ────────────────────────────────────────────────
+const SORT_NATURAL = 'natural';
+const sortKey = ref<string>(SORT_NATURAL);
 const sortDir = ref<'asc' | 'desc'>('asc');
 
-function toggleSort(key: string) {
-  if (sortKey.value !== key) {
-    sortKey.value = key;
-    sortDir.value = 'asc';
-  } else if (sortDir.value === 'asc') {
-    sortDir.value = 'desc';
-  } else {
-    // Third click clears the sort → natural (insertion) order.
-    sortKey.value = null;
-  }
-}
+const failedCount = computed(() => props.testCases.filter((tc) => isFailedStatus(tc.status)).length);
 
-function sortIcon(key: string): string {
-  if (sortKey.value !== key) return 'i-lucide-chevrons-up-down';
-  return sortDir.value === 'asc' ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down';
-}
+const sortOptions = computed(() => [
+  { label: failedCount.value > 0 ? 'Failures first' : 'Run order', value: SORT_NATURAL },
+  { label: 'Title', value: 'title' },
+  { label: 'Status', value: 'status' },
+  { label: 'Duration', value: 'duration' },
+  { label: 'Worker', value: 'workerIndex' },
+  { label: 'Retries', value: 'retries' },
+  { label: 'Wasted', value: 'wastedTimeMs' },
+]);
 
 function sortValue(tc: TestCaseResult, key: string): string | number {
   switch (key) {
-    case 'browser':
-      return tc.browser?.projectName ?? '';
     case 'title':
       return tc.title ?? '';
     case 'status':
-      // Timeouts sort beside failures, matching the filter and the badge.
-      return isFailedStatus(tc.status ?? '') ? 'failed' : (tc.status ?? '');
+      return isFailedStatus(tc.status) ? 'failed' : (tc.status ?? '');
     case 'duration':
       return tc.duration ?? 0;
     case 'workerIndex':
@@ -165,50 +136,210 @@ function sortValue(tc: TestCaseResult, key: string): string | number {
   }
 }
 
-// A run with failures shows them first by default: the landing view's first
-// job is answering "why did it fail". Stable, so insertion order is kept
-// within each group.
-const failedCount = computed(() => props.testCases.filter((tc) => isFailedStatus(tc.status)).length);
-
-const sortedTestCases = computed<TestCaseResult[]>(() => {
-  const cases = filteredTestCases.value;
-  const key = sortKey.value;
-  if (!key) {
+function sortCases(cases: TestCaseResult[]): TestCaseResult[] {
+  if (sortKey.value === SORT_NATURAL) {
     if (failedCount.value === 0) return cases;
     return [...cases].sort((a, b) => failureFirstCompare(a.status, b.status));
   }
   const dir = sortDir.value === 'asc' ? 1 : -1;
-  // Copy first — never sort the props array in place.
   return [...cases].sort((a, b) => {
-    const va = sortValue(a, key);
-    const vb = sortValue(b, key);
+    const va = sortValue(a, sortKey.value);
+    const vb = sortValue(b, sortKey.value);
     if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
     return String(va).localeCompare(String(vb)) * dir;
   });
+}
+
+// ── Grouping ────────────────────────────────────────────────────────────────
+const { raw: storedGroup, set: setGroup } = useGroupByCookie('run-tests', ['cluster', 'file', 'none']);
+const groupBy = computed<GroupBy>({
+  // A red run opens on the cluster grouping; a green run has no clusters, so it
+  // opens flat. A saved choice always wins.
+  get: () => (storedGroup.value as GroupBy | null) ?? (failedCount.value > 0 ? 'cluster' : 'none'),
+  set: (v) => setGroup(v),
+});
+const groupByItems = [
+  { label: 'Cluster', value: 'cluster' },
+  { label: 'File', value: 'file' },
+  { label: 'None', value: 'none' },
+];
+
+// The quiet buckets (passed, skipped, didn't run) start collapsed; every other
+// group starts open. A user click flips a group from its default; a filter
+// forces everything open so a match is never hidden behind a collapsed header.
+const DEFAULT_COLLAPSED_BUCKETS = new Set(['bucket:passed', 'bucket:skipped', 'bucket:didnotrun']);
+const userToggled = ref(new Set<string>());
+const hasFilter = computed(
+  () =>
+    testCaseSearch.value !== '' ||
+    activeStatuses.value.length > 0 ||
+    testCaseBrowserFilter.value !== 'all' ||
+    showNewRegressionsOnly.value ||
+    showNewFlakyOnly.value,
+);
+function defaultOpen(key: string): boolean {
+  return !DEFAULT_COLLAPSED_BUCKETS.has(key);
+}
+function isOpen(key: string): boolean {
+  if (hasFilter.value) return true;
+  return userToggled.value.has(key) ? !defaultOpen(key) : defaultOpen(key);
+}
+function toggleGroup(key: string) {
+  const next = new Set(userToggled.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  userToggled.value = next;
+}
+
+interface GroupHeaderItem {
+  kind: 'group';
+  key: string;
+  label: string;
+  count: number;
+  icon?: string;
+  triageStatus?: string | null;
+  clusterId?: number | null;
+  stats?: { passed: number; failed: number; skipped: number; didnotrun: number; running: number } | null;
+  filePath?: string | null;
+}
+interface TestItem {
+  kind: 'test';
+  key: string;
+  tc: TestCaseResult;
+}
+type Row = GroupHeaderItem | TestItem;
+
+function computeStats(cases: TestCaseResult[]) {
+  const s = { passed: 0, failed: 0, skipped: 0, didnotrun: 0, running: 0 };
+  for (const tc of cases) {
+    if (isFailedStatus(tc.status)) s.failed++;
+    else if (tc.status === 'passed') s.passed++;
+    else if (tc.status === 'skipped') s.skipped++;
+    else if (tc.status === 'didnotrun') s.didnotrun++;
+    else if (tc.status === 'running') s.running++;
+  }
+  return s;
+}
+
+/** The remainder buckets (non-failing) shown as their own groups; the quiet
+ *  ones start collapsed (see `DEFAULT_COLLAPSED_BUCKETS`). */
+const REMAINDER_BUCKETS: Array<{ key: string; label: string; match: (tc: TestCaseResult) => boolean }> = [
+  { key: 'running', label: 'Running', match: (tc) => tc.status === 'running' },
+  { key: 'passed', label: 'Passed', match: (tc) => tc.status === 'passed' },
+  { key: 'skipped', label: 'Skipped', match: (tc) => tc.status === 'skipped' },
+  { key: 'didnotrun', label: "Didn't run", match: (tc) => tc.status === 'didnotrun' },
+];
+
+const rows = computed<Row[]>(() => {
+  const cases = filteredTestCases.value;
+
+  if (groupBy.value === 'none') {
+    return sortCases(cases).map((tc) => ({ kind: 'test', key: `t${tc.executionId}`, tc }) as TestItem);
+  }
+
+  const out: Row[] = [];
+
+  if (groupBy.value === 'file') {
+    const byFile = new Map<string, TestCaseResult[]>();
+    for (const tc of cases) {
+      const fp = tc.filePath ?? 'unknown';
+      if (!byFile.has(fp)) byFile.set(fp, []);
+      byFile.get(fp)!.push(tc);
+    }
+    for (const [filePath, fileCases] of [...byFile.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      const key = `file:${filePath}`;
+      out.push({
+        kind: 'group',
+        key,
+        label: filePath,
+        count: fileCases.length,
+        icon: 'i-lucide-file-code-2',
+        filePath,
+        stats: computeStats(fileCases),
+      });
+      if (isOpen(key)) for (const tc of sortCases(fileCases)) out.push({ kind: 'test', key: `t${tc.executionId}`, tc });
+    }
+    return out;
+  }
+
+  // Cluster grouping: failing clustered tests first (largest cluster first),
+  // then ungrouped failures, then the non-failing remainder as collapsed groups.
+  const failing = cases.filter((tc) => isFailedStatus(tc.status));
+  const byCluster = new Map<number, TestCaseResult[]>();
+  const ungrouped: TestCaseResult[] = [];
+  for (const tc of failing) {
+    if (tc.failureClusterId != null) {
+      if (!byCluster.has(tc.failureClusterId)) byCluster.set(tc.failureClusterId, []);
+      byCluster.get(tc.failureClusterId)!.push(tc);
+    } else {
+      ungrouped.push(tc);
+    }
+  }
+  const clusterGroups = [...byCluster.entries()].sort(([, a], [, b]) => b.length - a.length);
+  for (const [clusterId, clusterCases] of clusterGroups) {
+    const key = `cluster:${clusterId}`;
+    out.push({
+      kind: 'group',
+      key,
+      label: clusterName(clusterId),
+      count: clusterCases.length,
+      icon: 'i-lucide-layers',
+      clusterId,
+      triageStatus: props.clusterMeta?.[clusterId]?.status ?? null,
+    });
+    if (isOpen(key))
+      for (const tc of sortCases(clusterCases)) out.push({ kind: 'test', key: `t${tc.executionId}`, tc });
+  }
+  if (ungrouped.length > 0) {
+    const key = 'cluster:none';
+    out.push({ kind: 'group', key, label: 'Ungrouped failures', count: ungrouped.length, icon: 'i-lucide-circle-x' });
+    if (isOpen(key)) for (const tc of sortCases(ungrouped)) out.push({ kind: 'test', key: `t${tc.executionId}`, tc });
+  }
+  for (const bucket of REMAINDER_BUCKETS) {
+    const bucketCases = cases.filter(bucket.match);
+    if (bucketCases.length === 0) continue;
+    const key = `bucket:${bucket.key}`;
+    out.push({ kind: 'group', key, label: bucket.label, count: bucketCases.length });
+    if (isOpen(key)) for (const tc of sortCases(bucketCases)) out.push({ kind: 'test', key: `t${tc.executionId}`, tc });
+  }
+  return out;
 });
 
-const hasWastedTime = computed(() => props.testCases.some((tc) => (tc.wastedTimeMs ?? 0) > 0));
+// Which group each execution sits in, so a jump from the timeline can open the
+// right group even when it is collapsed (derived from the data, not the visible
+// rows, so a hidden row is still locatable).
+const groupKeyByExecution = computed(() => {
+  const map = new Map<number, string>();
+  if (groupBy.value === 'none') return map;
+  for (const tc of filteredTestCases.value) {
+    if (groupBy.value === 'file') {
+      map.set(tc.executionId, `file:${tc.filePath ?? 'unknown'}`);
+      continue;
+    }
+    if (isFailedStatus(tc.status)) {
+      map.set(tc.executionId, tc.failureClusterId != null ? `cluster:${tc.failureClusterId}` : 'cluster:none');
+    } else {
+      const bucket = REMAINDER_BUCKETS.find((b) => b.match(tc));
+      if (bucket) map.set(tc.executionId, `bucket:${bucket.key}`);
+    }
+  }
+  return map;
+});
 
-// "Completed" must not count rows still running.
 const finishedCount = computed(() => props.testCases.filter((tc) => tc.status !== 'running').length);
+const visibleTestCount = computed(() => rows.value.filter((r) => r.kind === 'test').length);
 
-// ── Bulk triage ─────────────────────────────────────────────────────────────
-// A run full of red doesn't have to be triaged one row at a time. The failing
-// rows get checkboxes (flat view only, and only when there are failures) and a
-// bulk bar quarantines the selection or sets the status of the clusters they
-// belong to. Rows are keyed by executionId; testCaseId / failureClusterId are
-// derived from the selection when an action runs.
+// ── Bulk triage (works in every grouping) ────────────────────────────────────
 const toast = useToast();
 const { canWrite } = useAuth();
 const { quarantineMany } = useQuarantine(() => props.projectKey ?? null);
 
-const selectionEnabled = computed(() => canWrite.value && !effectiveTreeView.value && failedCount.value > 0);
+const selectionEnabled = computed(() => canWrite.value && failedCount.value > 0);
 const selectedIds = ref<Set<number>>(new Set());
-const selectedRows = computed(() => sortedTestCases.value.filter((tc) => selectedIds.value.has(tc.executionId)));
-const selectedCount = computed(() => selectedRows.value.length);
 
-/** The failing rows currently on screen — the pool the header checkbox toggles. */
-const selectableRows = computed(() => sortedTestCases.value.filter((tc) => isFailedStatus(tc.status)));
+const selectableRows = computed(() => filteredTestCases.value.filter((tc) => isFailedStatus(tc.status)));
+const selectedRows = computed(() => selectableRows.value.filter((tc) => selectedIds.value.has(tc.executionId)));
+const selectedCount = computed(() => selectedRows.value.length);
 const allSelectableSelected = computed(
   () => selectableRows.value.length > 0 && selectableRows.value.every((tc) => selectedIds.value.has(tc.executionId)),
 );
@@ -222,22 +353,17 @@ function toggleRow(tc: TestCaseResult) {
   else next.add(tc.executionId);
   selectedIds.value = next;
 }
-
 function toggleAll() {
-  if (allSelectableSelected.value) {
-    selectedIds.value = new Set();
-  } else {
-    selectedIds.value = new Set(selectableRows.value.map((tc) => tc.executionId));
-  }
+  selectedIds.value = allSelectableSelected.value
+    ? new Set()
+    : new Set(selectableRows.value.map((tc) => tc.executionId));
 }
-
 function clearSelection() {
   selectedIds.value = new Set();
 }
 
-// Selection is over failing rows only, so a filter/sort change or new live rows
-// must drop any id that is no longer selectable.
-watch([sortedTestCases, selectionEnabled], () => {
+// Drop ids no longer selectable when the filter/data changes.
+watch([selectableRows, selectionEnabled], () => {
   if (!selectionEnabled.value) {
     if (selectedIds.value.size > 0) selectedIds.value = new Set();
     return;
@@ -248,11 +374,9 @@ watch([sortedTestCases, selectionEnabled], () => {
 });
 
 const selectedTestCaseIds = computed(() => [...new Set(selectedRows.value.map((tc) => tc.testCaseId))]);
-const selectedClusterIds = computed(() => {
-  const ids = selectedRows.value.map((tc) => tc.failureClusterId).filter((id): id is number => id != null);
-  return [...new Set(ids)];
-});
-/** Whether every selected row belongs to a cluster — gates the cluster-status action. */
+const selectedClusterIds = computed(() => [
+  ...new Set(selectedRows.value.map((tc) => tc.failureClusterId).filter((id): id is number => id != null)),
+]);
 const allSelectedInCluster = computed(
   () => selectedCount.value > 0 && selectedRows.value.every((tc) => tc.failureClusterId != null),
 );
@@ -320,71 +444,7 @@ function onBulkQuarantine() {
   else runBulkQuarantine();
 }
 
-// Column layout — one grid template shared by the header and every row so the
-// columns stay aligned. Keep the cell order in the template in sync with this.
-// An `icon` header keeps an icon-only column (browser) from overflowing a label
-// into its neighbor while staying sortable.
-type Column = {
-  key: string;
-  label: string;
-  sortable: boolean;
-  width: string;
-  align: 'left' | 'right';
-  icon?: string;
-};
-
-const columns = computed<Column[]>(() => {
-  const cols: Column[] = [
-    { key: 'browser', label: 'Browser', sortable: true, width: '3.25rem', align: 'left', icon: 'i-lucide-monitor' },
-    { key: 'title', label: 'Test case', sortable: true, width: 'minmax(12rem, 3fr)', align: 'left' },
-    { key: 'status', label: 'Status', sortable: true, width: '6rem', align: 'left' },
-    { key: 'duration', label: 'Duration', sortable: true, width: '7rem', align: 'left' },
-    { key: 'workerIndex', label: 'Worker', sortable: true, width: '6rem', align: 'left' },
-    { key: 'retries', label: 'Retries', sortable: true, width: '6.5rem', align: 'left' },
-  ];
-  if (hasWastedTime.value) {
-    cols.push({ key: 'wastedTimeMs', label: 'Wasted', sortable: true, width: '6rem', align: 'left' });
-  }
-  return cols;
-});
-
-/**
- * Sort picker for the card layout below `md`, which has no column headers to
- * click. `NATURAL_ORDER` stands in for "no sort key" — a `USelect` item may not
- * carry an empty string, which the select reserves for clearing itself.
- */
-const NATURAL_ORDER = 'natural';
-
-const sortOptions = computed(() => [
-  { label: failedCount.value > 0 ? 'Failures first' : 'Run order', value: NATURAL_ORDER },
-  ...columns.value.map((c) => ({ label: c.label, value: c.key })),
-]);
-
-const mobileSortKey = computed({
-  get: () => sortKey.value ?? NATURAL_ORDER,
-  set: (value: string) => {
-    sortKey.value = value === NATURAL_ORDER ? null : value;
-    if (value !== NATURAL_ORDER) sortDir.value = 'asc';
-  },
-});
-
-// A leading select column is added to the grid when bulk selection is active.
-const SELECT_COL_WIDTH = '2.5rem';
-const gridTemplate = computed(() =>
-  [...(selectionEnabled.value ? [SELECT_COL_WIDTH] : []), ...columns.value.map((c) => c.width)].join(' '),
-);
-const gridMinWidth = computed(() => {
-  const base = hasWastedTime.value ? 47.5 : 41.5;
-  return `${selectionEnabled.value ? base + 2.5 : base}rem`;
-});
-
-// The cluster filter narrows rows but must not force-expand the tree or
-// disable Collapse-all — those belong to the user, whatever the filter is.
-const hasFilter = computed(
-  () => testCaseSearch.value !== '' || activeStatuses.value.length > 0 || testCaseBrowserFilter.value !== 'all',
-);
-
-// Virtualized scroller ref — only the exposed methods we call are typed.
+// ── Virtualized scroller ─────────────────────────────────────────────────────
 const scrollerRef = ref<{
   scrollToItem: (index: number, options?: ScrollToOptions) => void;
   scrollToBottom: () => void;
@@ -395,23 +455,18 @@ const highlightedCaseId = ref<number | null>(null);
 function isAtBottom(el: HTMLElement): boolean {
   return el.scrollHeight - el.scrollTop - el.clientHeight < 50;
 }
-
 function onScrollerScroll(event: Event) {
   const el = event.target as HTMLElement | null;
   if (el) userScrolledAway.value = !isAtBottom(el);
 }
-
-// Reset scroll lock when live mode ends.
 watch(
   () => props.isLive,
   (live) => {
     if (!live) userScrolledAway.value = false;
   },
 );
-
-// Auto-scroll to the newest item during a live run, unless the user scrolled up.
 watch(
-  () => sortedTestCases.value.length,
+  () => rows.value.length,
   () => {
     if (!props.isLive || userScrolledAway.value) return;
     nextTick(() => scrollerRef.value?.scrollToBottom());
@@ -419,12 +474,19 @@ watch(
 );
 
 function scrollToCase(id: number) {
-  // Reveal the row without touching the user's persisted view preference:
-  // the flat override lives for this mount only, the cookie is untouched.
-  flatViewOverride.value = true;
+  // Open the group holding the row, then scroll to it and flash it.
+  const groupKey = groupKeyByExecution.value.get(id);
+  if (groupKey && !isOpen(groupKey)) {
+    const next = new Set(userToggled.value);
+    // Flip the group toward open: for a default-open group that the user closed,
+    // drop the toggle; for a default-collapsed bucket, add the toggle.
+    if (defaultOpen(groupKey)) next.delete(groupKey);
+    else next.add(groupKey);
+    userToggled.value = next;
+  }
   highlightedCaseId.value = id;
   const doScroll = () => {
-    const index = sortedTestCases.value.findIndex((tc) => tc.executionId === id);
+    const index = rows.value.findIndex((r) => r.kind === 'test' && r.tc.executionId === id);
     if (index >= 0) scrollerRef.value?.scrollToItem(index, { behavior: 'smooth' });
   };
   nextTick(() => {
@@ -436,31 +498,7 @@ function scrollToCase(id: number) {
   });
 }
 
-// An explicit toggle choice ends the transient flat override (the timeline
-// jump put the list in flat view for one reveal) and records the preference.
-function selectView(tree: boolean) {
-  flatViewOverride.value = false;
-  setTreeView(tree);
-}
-
-// The table roles only describe the desktop grid layout. Below `md` the same
-// rows render as cards, so leaving role="table"/"rowgroup" on the shared
-// container would expose a table with no rows to assistive technology. The
-// flag initializes after mount so the SSR payload and the first client render
-// agree (attribute-only change later, no hydration mismatch).
-const isDesktopList = ref(false);
-onMounted(() => {
-  const mq = window.matchMedia('(min-width: 768px)');
-  const apply = () => {
-    isDesktopList.value = mq.matches;
-  };
-  apply();
-  mq.addEventListener('change', apply);
-  // Tab switches unmount this component; drop the listener so old closures
-  // don't accumulate across mounts.
-  onUnmounted(() => mq.removeEventListener('change', apply));
-});
-
+onUnmounted(() => {});
 defineExpose({ scrollToCase });
 </script>
 
@@ -468,25 +506,9 @@ defineExpose({ scrollToCase });
   <div class="flex flex-col min-h-0">
     <FilterToolbar class="mb-4 shrink-0">
       <template #start>
-        <div class="flex items-center rounded-md border border-default overflow-hidden">
-          <button
-            class="px-2 py-1 text-xs transition-colors"
-            :class="!effectiveTreeView ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
-            title="Flat list"
-            :aria-pressed="!effectiveTreeView"
-            @click="selectView(false)"
-          >
-            <UIcon name="i-lucide-list" class="size-3.5" />
-          </button>
-          <button
-            class="px-2 py-1 text-xs transition-colors"
-            :class="effectiveTreeView ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
-            title="Tree view"
-            :aria-pressed="effectiveTreeView"
-            @click="selectView(true)"
-          >
-            <UIcon name="i-lucide-folder-tree" class="size-3.5" />
-          </button>
+        <div class="flex items-center gap-1.5">
+          <span class="text-xs text-muted">Group by</span>
+          <USelect v-model="groupBy" :items="groupByItems" size="sm" class="w-28" aria-label="Group tests by" />
         </div>
         <span
           v-if="isLive"
@@ -496,15 +518,14 @@ defineExpose({ scrollToCase });
           {{ finishedCount }} / {{ testCases.length }} completed <HelpHint topic="run.live" />
         </span>
         <span v-else class="text-sm text-zinc-500 tabular-nums inline-flex items-center gap-1">
-          {{ sortedTestCases.length
-          }}{{ sortedTestCases.length !== testCases.length ? ` / ${testCases.length}` : '' }} cases
+          {{ visibleTestCount }}{{ visibleTestCount !== testCases.length ? ` / ${testCases.length}` : '' }} executions
           <HelpHint topic="run.test-cases" />
         </span>
       </template>
 
       <UInput
         v-model="testCaseSearch"
-        placeholder="Search test cases..."
+        placeholder="Search title, path, error…"
         icon="i-lucide-search"
         size="sm"
         class="min-w-48 max-sm:flex-1"
@@ -542,6 +563,35 @@ defineExpose({ scrollToCase });
           />
           {{ opt.label }}
         </button>
+        <!-- The two signals join the status chips as toggles, not checkboxes. -->
+        <button
+          v-if="!isLive"
+          class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap"
+          :class="
+            showNewRegressionsOnly
+              ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
+              : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+          "
+          :aria-pressed="showNewRegressionsOnly"
+          @click="showNewRegressionsOnly = !showNewRegressionsOnly"
+        >
+          <UIcon name="i-lucide-flame" class="size-3 shrink-0" />
+          New regressions
+        </button>
+        <button
+          v-if="!isLive"
+          class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap"
+          :class="
+            showNewFlakyOnly
+              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+              : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+          "
+          :aria-pressed="showNewFlakyOnly"
+          @click="showNewFlakyOnly = !showNewFlakyOnly"
+        >
+          <UIcon name="i-lucide-shuffle" class="size-3 shrink-0" />
+          Newly flaky
+        </button>
       </div>
       <USelect
         v-model="testCaseBrowserFilter"
@@ -550,16 +600,13 @@ defineExpose({ scrollToCase });
         class="w-36"
         aria-label="Filter by browser"
       />
-      <UCheckbox v-if="!isLive" v-model="showNewRegressionsOnly" label="New regressions" size="sm" />
-      <UCheckbox v-if="!isLive" v-model="showNewFlakyOnly" label="New flaky" size="sm" />
-      <!-- Phones get the card layout, which has no sortable column headers. -->
-      <div v-if="!effectiveTreeView" class="flex items-center gap-1 md:hidden">
-        <USelect v-model="mobileSortKey" :items="sortOptions" size="sm" class="w-32" aria-label="Sort cases by" />
+      <div class="flex items-center gap-1">
+        <USelect v-model="sortKey" :items="sortOptions" size="sm" class="w-36" aria-label="Sort tests by" />
         <UButton
           size="sm"
           variant="outline"
           color="neutral"
-          :disabled="sortKey === null"
+          :disabled="sortKey === 'natural'"
           :icon="sortDir === 'asc' ? 'i-lucide-arrow-up-narrow-wide' : 'i-lucide-arrow-down-wide-narrow'"
           :title="sortDir === 'asc' ? 'Sorted ascending' : 'Sorted descending'"
           :aria-label="sortDir === 'asc' ? 'Sorted ascending' : 'Sorted descending'"
@@ -568,419 +615,148 @@ defineExpose({ scrollToCase });
       </div>
     </FilterToolbar>
 
-    <!-- Tree view -->
-    <TestCasesTree
-      v-if="effectiveTreeView"
-      :test-cases="sortedTestCases"
-      :suites="suites"
-      :has-filter="hasFilter"
-      :highlighted-case-id="highlightedCaseId"
-      :live-steps="liveSteps"
-      :project-key="projectKey"
-      :project-name="projectName"
-      :cluster-names="clusterNames"
-      :quarantined-case-ids="quarantinedCaseIds"
-      class="flex-1 min-h-0"
-    />
-
-    <!-- Flat, virtualized table view -->
-    <template v-else-if="!effectiveTreeView">
-      <!-- Bulk triage bar — appears once failing rows are selected. -->
-      <div
-        v-if="selectionEnabled && selectedCount > 0"
-        class="mb-3 shrink-0 flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2"
-      >
-        <span class="text-sm font-medium" aria-live="polite"> {{ selectedCount }} selected </span>
-        <div class="flex flex-wrap items-center gap-2 ml-auto">
-          <UButton
-            size="xs"
-            color="warning"
-            variant="soft"
-            icon="i-lucide-shield-alert"
-            :loading="bulkBusy"
-            @click="onBulkQuarantine"
-          >
-            Quarantine selected
-          </UButton>
-          <UDropdownMenu
-            v-if="allSelectedInCluster"
-            :items="[
-              { label: 'Open', onSelect: () => setClusterStatus('open') },
-              { label: 'Resolved', onSelect: () => setClusterStatus('resolved') },
-              { label: 'Ignored', onSelect: () => setClusterStatus('ignored') },
-            ]"
-          >
-            <UButton
-              size="xs"
-              color="neutral"
-              variant="soft"
-              icon="i-lucide-triangle-alert"
-              trailing-icon="i-lucide-chevron-down"
-              :loading="bulkBusy"
-            >
-              Set cluster status…
-            </UButton>
-          </UDropdownMenu>
-          <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" @click="clearSelection"> Clear </UButton>
-        </div>
-      </div>
-
-      <div
-        v-if="sortedTestCases.length > 0"
-        class="flex-1 min-h-0 md:overflow-x-auto overflow-y-hidden rounded-lg border border-default bg-default"
-      >
-        <!--
-          The grid only claims its minimum width from `md` up, where the columns
-          exist; below that the cards fit the viewport and the page must not
-          scroll sideways.
-        -->
-        <div
-          class="flex flex-col h-full md:min-w-(--grid-min-width)"
-          :role="isDesktopList ? 'table' : undefined"
-          :aria-label="isDesktopList ? 'Test cases' : undefined"
-          :aria-rowcount="isDesktopList ? sortedTestCases.length + 1 : undefined"
-          :style="{ '--grid-min-width': gridMinWidth }"
-        >
-          <!-- Header — the sort control below `md` lives in the toolbar instead -->
-          <div
-            class="hidden md:grid shrink-0 bg-elevated/50 border-b border-default"
-            role="row"
-            :style="{ gridTemplateColumns: gridTemplate }"
-          >
-            <div v-if="selectionEnabled" role="columnheader" class="flex items-center justify-center px-2 py-2">
-              <input
-                type="checkbox"
-                class="size-4 cursor-pointer accent-primary focus-visible:ring-2 focus-visible:ring-primary rounded"
-                :checked="allSelectableSelected"
-                :indeterminate.prop="someSelectableSelected"
-                :aria-label="allSelectableSelected ? 'Deselect all failing tests' : 'Select all failing tests'"
-                @change="toggleAll"
-              />
-            </div>
-            <template v-for="col in columns" :key="col.key">
-              <button
-                v-if="col.sortable"
-                type="button"
-                role="columnheader"
-                :aria-sort="sortKey === col.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'"
-                :aria-label="col.icon ? col.label : undefined"
-                :title="col.icon ? col.label : undefined"
-                class="flex items-center gap-1 min-w-0 px-3 py-2 text-sm font-semibold select-none cursor-pointer hover:text-highlighted transition-colors"
-                :class="col.align === 'right' ? 'justify-end' : ''"
-                @click="toggleSort(col.key)"
-              >
-                <UIcon v-if="col.icon" :name="col.icon" class="shrink-0 size-4" />
-                <span v-else class="truncate">{{ col.label }}</span>
-                <UIcon
-                  :name="sortIcon(col.key)"
-                  class="shrink-0 size-3.5"
-                  :class="sortKey === col.key ? '' : 'opacity-40'"
-                />
-              </button>
-              <div
-                v-else
-                role="columnheader"
-                class="px-3 py-2 text-sm font-semibold"
-                :class="col.align === 'right' ? 'text-right' : ''"
-              >
-                {{ col.label }}
-              </div>
-            </template>
-          </div>
-
-          <!-- Virtualized rows -->
-          <ClientOnly>
-            <DynamicScroller
-              ref="scrollerRef"
-              :items="sortedTestCases"
-              :min-item-size="44"
-              key-field="executionId"
-              :role="isDesktopList ? 'rowgroup' : undefined"
-              class="flex-1 min-h-0"
-              @scroll.passive="onScrollerScroll"
-            >
-              <template #default="{ item, index, active }">
-                <DynamicScrollerItem
-                  :item="item"
-                  :active="active"
-                  :size-dependencies="[
-                    item.title,
-                    item.location,
-                    item.isNewRegression,
-                    item.isNewFlaky,
-                    item.testAnnotations,
-                    item.tags,
-                    liveStep(item)?.title,
-                  ]"
-                  :data-index="index"
-                >
-                  <!--
-                    Below `md` the columns become a card: a phone cannot show
-                    seven of them without a horizontal scroll, and the numbers
-                    need their own labels once the header row is gone. The card
-                    mirrors the tree's row so the two views still read alike.
-                  -->
-                  <div
-                    class="md:hidden border-b border-default px-3 py-2.5 space-y-1.5 text-sm transition-colors"
-                    :class="
-                      highlightedCaseId === item.executionId ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''
-                    "
-                  >
-                    <div class="flex items-start gap-2">
-                      <input
-                        v-if="selectionEnabled && isFailedStatus(item.status)"
-                        type="checkbox"
-                        class="size-4 shrink-0 mt-0.5 cursor-pointer accent-primary focus-visible:ring-2 focus-visible:ring-primary rounded"
-                        :checked="selectedIds.has(item.executionId)"
-                        :aria-label="`Select ${item.title}`"
-                        @change="toggleRow(item)"
-                      />
-                      <span
-                        class="size-4 shrink-0 mt-0.5"
-                        role="img"
-                        :aria-label="`Status: ${statusHint(item)}`"
-                        :title="statusHint(item)"
-                      >
-                        <UIcon
-                          :name="getStatusIcon(item.status)"
-                          class="size-4"
-                          :class="[
-                            getStatusTextClass(item.status),
-                            isStatusInFlight(item.status) ? 'animate-spin' : '',
-                          ]"
-                        />
-                      </span>
-                      <a
-                        :href="`/test-run-cases/${item.executionId}`"
-                        class="text-highlighted hover:text-primary hover:underline font-medium flex-1 min-w-0"
-                        @click.prevent="navigateTo(`/test-run-cases/${item.executionId}`)"
-                        >{{ item.title }}</a
-                      >
-                      <NuxtLink
-                        v-if="item.failureClusterId"
-                        :to="`/failure-clusters/${item.failureClusterId}`"
-                        class="shrink-0"
-                      >
-                        <UBadge color="info" variant="subtle" size="xs" class="max-w-44">
-                          <span class="truncate">{{ clusterLabel(item.failureClusterId) }}</span>
-                        </UBadge>
-                      </NuxtLink>
-                      <QuarantinedChip v-if="isQuarantined(item)" />
-                      <BrowserBadge :browser="item.browser" size="sm" class="mt-0.5" />
-                    </div>
-
-                    <FailureHeadline
-                      v-if="isFailedStatus(item.status) && item.error"
-                      :error="item.error"
-                      :steps="item.steps"
-                      truncate
-                      class="pl-6 text-xs text-gray-600 dark:text-gray-400"
-                    />
-
-                    <OpenInIdeLink
-                      v-if="item.location"
-                      :location="item.location"
-                      :project-key="projectKey"
-                      :project-name="projectName"
-                      class="block pl-6 text-xs text-gray-400 dark:text-gray-500"
-                    />
-
-                    <TestRowBadges
-                      :is-new-regression="Boolean(item.isNewRegression)"
-                      :is-new-flaky="Boolean(item.isNewFlaky)"
-                      :annotations="item.testAnnotations"
-                      :tags="item.tags"
-                      :meta="item.testMeta"
-                      :max-tags="3"
-                      class="pl-6"
-                    />
-
-                    <div class="pl-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-                      <template v-if="item.status === 'running'">
-                        <TestRowLiveStep v-if="liveStep(item)" :step="liveStep(item)!" class="max-w-full" />
-                        <span v-else class="text-info">In progress...</span>
-                      </template>
-                      <DurationValue v-else-if="item.duration" :ms="item.duration" />
-                      <UBadge
-                        v-if="item.workerIndex != null"
-                        color="neutral"
-                        variant="soft"
-                        size="xs"
-                        class="font-mono"
-                        :title="`Worker ${item.workerIndex}`"
-                      >
-                        w{{ item.workerIndex }}
-                      </UBadge>
-                      <UBadge v-if="(item.retries ?? 0) > 0" color="warning" variant="soft" size="xs">
-                        {{ item.retries }}x
-                      </UBadge>
-                      <span
-                        v-if="item.wastedTimeMs"
-                        class="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400"
-                        title="Wasted in fixed waits"
-                      >
-                        <UIcon name="i-lucide-hourglass" class="size-3 shrink-0" />
-                        <DurationValue :ms="item.wastedTimeMs" unit-class="opacity-60" no-title />
-                      </span>
-                    </div>
-                  </div>
-
-                  <div
-                    class="hidden md:grid items-center border-b border-default text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
-                    :class="
-                      highlightedCaseId === item.executionId ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''
-                    "
-                    role="row"
-                    :style="{ gridTemplateColumns: gridTemplate }"
-                  >
-                    <!-- select — failing rows only -->
-                    <div v-if="selectionEnabled" class="flex items-center justify-center px-2 py-2" role="cell">
-                      <input
-                        v-if="isFailedStatus(item.status)"
-                        type="checkbox"
-                        class="size-4 cursor-pointer accent-primary focus-visible:ring-2 focus-visible:ring-primary rounded"
-                        :checked="selectedIds.has(item.executionId)"
-                        :aria-label="`Select ${item.title}`"
-                        @change="toggleRow(item)"
-                      />
-                    </div>
-
-                    <!-- browser -->
-                    <div class="px-3 py-2 flex items-center min-w-0" role="cell">
-                      <BrowserBadge :browser="item.browser" />
-                    </div>
-
-                    <!-- title -->
-                    <div class="px-3 py-2 min-w-0 space-y-0.5" role="cell">
-                      <div class="flex items-center gap-1.5 min-w-0">
-                        <!-- Neutral title: green titles read as "passed" even on failed rows. -->
-                        <a
-                          :href="`/test-run-cases/${item.executionId}`"
-                          class="text-highlighted hover:text-primary hover:underline font-medium truncate"
-                          :title="item.title"
-                          @click.prevent="navigateTo(`/test-run-cases/${item.executionId}`)"
-                          >{{ item.title }}</a
-                        >
-                        <!-- Same badge cluster, in the same place, as the tree's rows. -->
-                        <TestRowBadges
-                          :is-new-regression="Boolean(item.isNewRegression)"
-                          :is-new-flaky="Boolean(item.isNewFlaky)"
-                          :annotations="item.testAnnotations"
-                          :tags="item.tags"
-                          :meta="item.testMeta"
-                          :max-tags="3"
-                          class="shrink-0"
-                        />
-                        <NuxtLink
-                          v-if="item.failureClusterId"
-                          :to="`/failure-clusters/${item.failureClusterId}`"
-                          class="shrink-0"
-                        >
-                          <UBadge color="info" variant="subtle" size="xs" class="max-w-44">
-                            <span class="truncate">{{ clusterLabel(item.failureClusterId) }}</span>
-                          </UBadge>
-                        </NuxtLink>
-                        <QuarantinedChip v-if="isQuarantined(item)" />
-                      </div>
-                      <FailureHeadline
-                        v-if="isFailedStatus(item.status) && item.error"
-                        :error="item.error"
-                        :steps="item.steps"
-                        truncate
-                        class="text-xs text-gray-600 dark:text-gray-400"
-                      />
-                      <OpenInIdeLink
-                        v-if="item.location"
-                        :location="item.location"
-                        :project-key="projectKey"
-                        :project-name="projectName"
-                        class="text-xs text-zinc-400 dark:text-zinc-500"
-                      />
-                      <!-- The step this row's worker is on right now (live runs only). -->
-                      <div v-if="liveStep(item)" class="min-w-0">
-                        <TestRowLiveStep :step="liveStep(item)!" class="max-w-full" />
-                      </div>
-                    </div>
-
-                    <!-- status — the flat view's only status encoding, so it keeps a chip (subtle, not solid) -->
-                    <div class="px-3 py-2 flex items-center" role="cell">
-                      <UBadge
-                        :color="
-                          getStatusColor(
-                            item.status === 'timedOut' || item.status === 'timedout' ? 'failed' : item.status,
-                          )
-                        "
-                        variant="subtle"
-                        class="capitalize"
-                        :title="statusHint(item)"
-                      >
-                        {{ formatStatusLabel(item.status) }}
-                      </UBadge>
-                    </div>
-
-                    <!-- duration -->
-                    <div class="px-3 py-2 flex items-center whitespace-nowrap" role="cell">
-                      <span v-if="item.status === 'running'" class="text-info text-xs">In progress...</span>
-                      <DurationValue v-else :ms="item.duration" fallback="" />
-                    </div>
-
-                    <!-- worker -->
-                    <div class="px-3 py-2 flex items-center" role="cell">
-                      <UBadge v-if="item.workerIndex != null" color="neutral" variant="soft" class="font-mono text-xs">
-                        w{{ item.workerIndex }}
-                      </UBadge>
-                    </div>
-
-                    <!-- retries -->
-                    <div class="px-3 py-2 flex items-center tabular-nums" role="cell">
-                      {{ item.retries && item.retries > 0 ? item.retries : '' }}
-                    </div>
-
-                    <!-- wasted -->
-                    <div v-if="hasWastedTime" class="px-3 py-2 flex items-center whitespace-nowrap" role="cell">
-                      <DurationValue
-                        v-if="item.wastedTimeMs"
-                        :ms="item.wastedTimeMs"
-                        class="text-amber-600 dark:text-amber-400"
-                        unit-class="opacity-60"
-                      />
-                      <span v-else class="text-zinc-400">&mdash;</span>
-                    </div>
-                  </div>
-                </DynamicScrollerItem>
-              </template>
-            </DynamicScroller>
-
-            <template #fallback>
-              <div class="flex-1 min-h-0 flex items-center justify-center py-10 text-sm text-zinc-500">
-                <UIcon name="i-lucide-loader-circle" class="size-4 mr-2 animate-spin" />
-                Loading test cases…
-              </div>
-            </template>
-          </ClientOnly>
-        </div>
-      </div>
-
-      <EmptyState
-        v-else-if="testCases.length === 0"
-        icon="i-lucide-beaker"
-        text="No test cases recorded for this run."
-      />
-
-      <EmptyState v-else icon="i-lucide-search-x" text="No test cases match your filters.">
+    <!-- Bulk triage bar — appears once failing rows are selected. -->
+    <div
+      v-if="selectionEnabled && selectedCount > 0"
+      class="mb-3 shrink-0 flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2"
+    >
+      <span class="text-sm font-medium" aria-live="polite">{{ selectedCount }} selected</span>
+      <div class="flex flex-wrap items-center gap-2 ml-auto">
         <UButton
           size="xs"
-          variant="outline"
-          color="neutral"
-          label="Clear filters"
-          @click="
-            testCaseSearch = '';
-            activeStatuses = [];
-            testCaseBrowserFilter = 'all';
-          "
+          color="warning"
+          variant="soft"
+          icon="i-lucide-shield-alert"
+          :loading="bulkBusy"
+          @click="onBulkQuarantine"
+        >
+          Quarantine selected
+        </UButton>
+        <UDropdownMenu
+          v-if="allSelectedInCluster"
+          :items="[
+            { label: 'Open', onSelect: () => setClusterStatus('open') },
+            { label: 'Resolved', onSelect: () => setClusterStatus('resolved') },
+            { label: 'Ignored', onSelect: () => setClusterStatus('ignored') },
+          ]"
+        >
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-triangle-alert"
+            trailing-icon="i-lucide-chevron-down"
+            :loading="bulkBusy"
+          >
+            Set cluster status…
+          </UButton>
+        </UDropdownMenu>
+        <UButton size="xs" color="neutral" variant="ghost" icon="i-lucide-x" @click="clearSelection">Clear</UButton>
+      </div>
+    </div>
+
+    <div v-if="rows.length > 0" class="flex-1 min-h-0 rounded-lg border border-default bg-default flex flex-col">
+      <!-- Select-all failing, above the list (no column header to host it). -->
+      <div
+        v-if="selectionEnabled"
+        class="flex items-center gap-2 border-b border-default bg-elevated/40 px-3 py-1.5 shrink-0"
+      >
+        <input
+          type="checkbox"
+          class="size-4 cursor-pointer accent-primary focus-visible:ring-2 focus-visible:ring-primary rounded"
+          :checked="allSelectableSelected"
+          :indeterminate.prop="someSelectableSelected"
+          :aria-label="allSelectableSelected ? 'Deselect all failing tests' : 'Select all failing tests'"
+          @change="toggleAll"
         />
-      </EmptyState>
-    </template>
+        <span class="text-xs text-muted">Select all failing</span>
+      </div>
+
+      <ClientOnly>
+        <DynamicScroller
+          ref="scrollerRef"
+          :items="rows"
+          :min-item-size="44"
+          key-field="key"
+          class="flex-1 min-h-0"
+          @scroll.passive="onScrollerScroll"
+        >
+          <template #default="{ item, index, active }">
+            <DynamicScrollerItem
+              :item="item"
+              :active="active"
+              :size-dependencies="
+                item.kind === 'test'
+                  ? [
+                      item.tc.title,
+                      item.tc.location,
+                      item.tc.isNewRegression,
+                      item.tc.isNewFlaky,
+                      item.tc.testAnnotations,
+                      item.tc.tags,
+                      liveStep(item.tc)?.title,
+                    ]
+                  : [item.label, item.count, item.triageStatus]
+              "
+              :data-index="index"
+            >
+              <TestRowGroup
+                v-if="item.kind === 'group'"
+                :label="item.label"
+                :count="item.count"
+                :open="isOpen(item.key)"
+                :icon="item.icon"
+                :triage-status="item.triageStatus"
+                :cluster-id="item.clusterId"
+                :stats="item.stats"
+                :file-path="item.filePath"
+                :project-key="projectKey"
+                :project-name="projectName"
+                @toggle="toggleGroup(item.key)"
+              />
+              <TestRow
+                v-else
+                :test-case="item.tc"
+                :cluster-name="item.tc.failureClusterId != null ? clusterName(item.tc.failureClusterId) : null"
+                :quarantined="isQuarantined(item.tc)"
+                :selectable="selectionEnabled && isFailedStatus(item.tc.status)"
+                :selected="selectedIds.has(item.tc.executionId)"
+                :live-step="liveStep(item.tc)"
+                :highlighted="highlightedCaseId === item.tc.executionId"
+                :project-key="projectKey"
+                :project-name="projectName"
+                @toggle="toggleRow(item.tc)"
+              />
+            </DynamicScrollerItem>
+          </template>
+        </DynamicScroller>
+
+        <template #fallback>
+          <div class="flex-1 min-h-0 flex items-center justify-center py-10 text-sm text-zinc-500">
+            <UIcon name="i-lucide-loader-circle" class="size-4 mr-2 animate-spin" />
+            Loading tests…
+          </div>
+        </template>
+      </ClientOnly>
+    </div>
+
+    <EmptyState v-else-if="testCases.length === 0" icon="i-lucide-beaker" text="No tests recorded for this run." />
+
+    <EmptyState v-else icon="i-lucide-search-x" text="No tests match your filters.">
+      <UButton
+        size="xs"
+        variant="outline"
+        color="neutral"
+        label="Clear filters"
+        @click="
+          testCaseSearch = '';
+          activeStatuses = [];
+          testCaseBrowserFilter = 'all';
+          showNewRegressionsOnly = false;
+          showNewFlakyOnly = false;
+        "
+      />
+    </EmptyState>
 
     <!-- Confirm quarantining a larger selection. -->
     <UModal v-model:open="quarantineConfirmOpen" title="Quarantine selected tests">

@@ -204,8 +204,8 @@ export const HELP_TOPICS = {
 
   // ── Test run detail ───────────────────────────────────────────────────
   'run.summary': {
-    title: 'Run summary',
-    text: 'Headline outcome of this run — overall status, test counts and total duration.',
+    title: 'Run header',
+    text: 'The run at a glance — status, the label and marker, one facts line (started, duration, branch, environment, CI build) with a Details popover for the rest, and one count bar whose segments filter the Tests tab.',
     doc: 'ui-overview#test-run-detail',
   },
   'run.partial': {
@@ -233,8 +233,8 @@ export const HELP_TOPICS = {
     text: 'Extra context attached to the run: tags for grouping, links to external issues, and any custom key/value data your reporter sent.',
   },
   'run.test-cases': {
-    title: 'Test cases',
-    text: 'Per-test results for this run. Filter by status, or by the NEW (new regression) and FLAKY signal badges.',
+    title: 'Tests',
+    text: 'Every execution in this run. Group by cluster, file or none; search title, path and error text; filter by status, browser, new regressions and newly flaky.',
     doc: 'ui-overview#test-run-detail',
   },
   'run.insights': {
