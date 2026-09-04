@@ -313,11 +313,11 @@ const SCENES = [
   },
   {
     name: 'test-case-detail',
-    description: 'Test case detail: summary stats, duration trend, status history, executions',
+    description: 'Test history: facts line, duration trend with the execution strip, recent executions',
     tags: ['docs'],
     out: 'docs',
     route: '/test-cases/1',
-    viewport: { width: 1280, height: 1960 },
+    viewport: { width: 1280, height: 1600 },
     charts: true,
     of: '[data-shot="test-case-detail"]',
     pad: 8,

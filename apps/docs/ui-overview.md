@@ -140,6 +140,13 @@ executions with its failing streak. All of it, plus the bundled trace viewer, is
 test retried, so "how did this execution get here" is answerable at a glance; every attempt is its own
 execution, and each chip links to that attempt's page while the one you are viewing is ringed.
 
+The **test history** page (`/test-cases/:id`) opens on a single facts line under the title — how many
+runs, the pass rate, how many failed, the average duration, the flaky-run count and when it last ran —
+with **Latest execution →** and, in the desktop shell, **Reproduce locally** on the right. A **duration
+trend** chart plots each run coloured by status, and its footer is a strip of the recent executions where
+every square links to that execution. Below it, **Recent executions** lists each attempt as a row that
+opens the execution, and the **failure clusters** the test belongs to and its **links** follow.
+
 ## Failure cluster detail
 
 Each cluster (`/failure-clusters/:id`) reads top to bottom in one column. The **header** states the cluster name and one facts line — error kind, occurrences, affected tests, the first- and last-seen runs, the owner and the known-issue link — with **Re-run in CI** (or Copy retry command) as its one action and the rest in a More menu (quarantine all affected tests, move tests to a new cluster, copy summary). Under it sits the **triage control**: a segmented *Open / Resolved / Ignored* that saves on click, a note, and — once a fix has landed — the **fix verification** badge with its one sentence (which verdict the runs support, the run and commit it landed in, how long the cluster stayed open) and, when triage and fix verification disagree, a one-click reconcile action. See [Did the fix work?](./ai-diagnosis#did-the-fix-work).
