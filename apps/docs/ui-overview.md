@@ -130,9 +130,12 @@ on an execution; the test's title links to the test case above it.
 
 A failing execution reads top to bottom in one column: a **header** (status, title, the exceptional
 badges, the failing file and line, and Copy retry command, with a Details popover for the rest), the
-one-line **headline**, the **clues**, the raw **error**, then one **evidence** card whose content-level
-tabs — Timeline, Screen, Source, Network, Console, State, Performance — hold everything captured, deeper
-still when a trace is attached. All of it, plus the bundled trace viewer, is described in
+one-line **headline** (with the raw **error** one click away behind *Show raw error*), the **other
+clues**, then one **evidence** card whose content-level tabs — Timeline, Screen, Source, Network,
+Console, State, Performance — hold everything captured, deeper still when a trace is attached. Below the
+evidence, the **Fix** card gathers what to do (the locator fix, a fix-plan pointer, the diagnosis, how
+to verify, and the tests this failure blocked) and a **history** block strips this test's recent
+executions with its failing streak. All of it, plus the bundled trace viewer, is described in
 [Failure evidence](./evidence). The header's facts line shows the **attempts** as linked chips when a
 test retried, so "how did this execution get here" is answerable at a glance; every attempt is its own
 execution, and each chip links to that attempt's page while the one you are viewing is ringed.

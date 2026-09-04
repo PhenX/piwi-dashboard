@@ -15,7 +15,22 @@ export default defineAppConfig({
       slots: {
         // Solid muted header so block headers clearly separate from the card
         // body in both modes (zinc-100 on white / zinc-800 on zinc-900).
-        header: 'px-3 py-3 sm:px-6 bg-muted',
+        // Below `sm` the header adds 10 px per side; from `sm` up it is `px-6`.
+        header: 'px-2.5 py-3 sm:px-6 bg-muted',
+        // Below `sm` a card adds 10 px of its own; with the 8 px panel gutter the
+        // first text stays within 20 px of the edge. From `sm` up the Nuxt UI
+        // default (`p-6`) applies.
+        body: 'max-sm:p-2.5',
+        footer: 'max-sm:p-2.5',
+      },
+    },
+    dashboardPanel: {
+      slots: {
+        // Below `sm` the page gutter is 8 px per side: small enough that a card's
+        // own padding keeps text within 20 px of the edge, large enough to hold
+        // panel-level controls (not wrapped in a card) off the edge. Vertical
+        // padding and the `sm`-and-up default (`p-6`) are the Nuxt UI defaults.
+        body: 'max-sm:px-2',
       },
     },
     table: {

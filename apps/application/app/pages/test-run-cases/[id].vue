@@ -3,11 +3,12 @@ import type { AiStepIntent, AttemptOutcome, TestCaseHistoryPoint, TraceInfo } fr
 import { isPiwiAnnotation } from '@piwitests/core/test-meta';
 import { renderAnsi } from '~/utils';
 import { buildRetryCommand } from '~/utils/retry-command';
-import { condenseErrorText } from '#shared/error-fingerprint';
 import type { FailureVerdict } from '#shared/failure-verdict';
 import type { FailureCluesResult } from '#shared/handlers/test-cases';
 import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator';
 import { EVIDENCE_SECTION_TAB } from '~/utils/evidence-sections';
+import type { FixSectionKey } from '~/components/shared/FixCard.vue';
+import type { BlockedCaseRef } from '~~/types/api';
 
 const route = useRoute();
 const testCaseId = route.params.id;
@@ -36,6 +37,8 @@ const clues = computed(() => cluesData.value?.clues ?? []);
 const cluesFailureAt = computed(() => cluesData.value?.failureAt ?? null);
 const topClue = computed(() => clues.value[0] ?? null);
 const topClueSection = computed(() => topClue.value?.citations?.[0]?.section ?? null);
+// The headline prints the strongest clue, so the Other clues card lists the rest.
+const otherClues = computed(() => clues.value.slice(1));
 
 const { data: traceData, refresh: refreshTraces } = await useFetch(`/api/test-run-cases/${testCaseId}/traces`, {
   transform: (r: { items: TraceInfo[] }) => r.items,
@@ -104,6 +107,92 @@ const aiIntents = computed<AiStepIntent[] | null>(() => {
   return usage?.intents ?? null;
 });
 
+// ── Fix card ────────────────────────────────────────────────────────────────
+/** Whether the desktop (Tauri) bridge is present — set on mount below. */
+const desktopBridge = ref(false);
+
+/** The cluster's stored diagnosis, only when it completed and has a summary. */
+const clusterDiagnosis = computed(() => {
+  const d = failureCluster.value?.diagnosis;
+  return d && d.status === 'completed' && d.summary ? d : null;
+});
+const confidenceColor = (c?: string | null): 'success' | 'warning' | 'neutral' =>
+  c === 'high' ? 'success' : c === 'medium' ? 'warning' : 'neutral';
+
+const blockedTests = computed(() => (testCase.value as { blockedTests?: BlockedCaseRef[] } | null)?.blockedTests ?? []);
+
+/** A locator-resolution failure — the only case the Locator fix section applies to. */
+const isLocatorFailure = computed(() =>
+  Boolean(verdict.value?.isLocatorResolutionFailure && testCase.value?.testRun?.id),
+);
+
+// CI re-run for the cluster this failure belongs to, for the Verify section.
+interface RerunInfo {
+  available: boolean;
+  reason: string | null;
+  provider: string | null;
+  enabled: boolean;
+  hasToken: boolean;
+  lastDispatch: { provider: string; url: string; args: string; at: number; byName: string | null } | null;
+}
+const { data: rerunInfo, refresh: refreshRerun } = await useAsyncData<RerunInfo | null>(
+  `test-run-case-rerun-${testCaseId}`,
+  () => {
+    const id = failureCluster.value?.id;
+    return id ? $fetch<RerunInfo>(`/api/failure-clusters/${id}/rerun`) : Promise.resolve(null);
+  },
+  { default: (): RerunInfo | null => null, watch: [() => failureCluster.value?.id] },
+);
+const rerunToast = useToast();
+const rerunning = ref(false);
+async function triggerRerun() {
+  const id = failureCluster.value?.id;
+  if (!id || rerunning.value) return;
+  rerunning.value = true;
+  try {
+    const res = await $fetch<{ ok: boolean; message?: string; dispatch?: { url: string } }>(
+      `/api/failure-clusters/${id}/rerun`,
+      { method: 'POST' },
+    );
+    if (res.ok && res.dispatch) {
+      rerunToast.add({
+        title: 'CI re-run dispatched',
+        description: 'The affected tests are re-running.',
+        color: 'success',
+      });
+      await refreshRerun();
+    } else {
+      rerunToast.add({
+        title: 'CI re-run not started',
+        description: res.message ?? 'Not available.',
+        color: 'warning',
+      });
+    }
+  } catch (e: unknown) {
+    const message = (e as { data?: { message?: string } })?.data?.message ?? 'Dispatch failed.';
+    rerunToast.add({ title: 'CI re-run failed', description: message, color: 'error' });
+  } finally {
+    rerunning.value = false;
+  }
+}
+
+/** The Verify section shows when a CI re-run is configured, or in the desktop shell. */
+const showVerify = computed(() => Boolean(rerunInfo.value?.available) || desktopBridge.value);
+
+/** The Fix card's sections, in the order the card renders them. */
+const fixSections = computed<FixSectionKey[]>(() => {
+  const s: FixSectionKey[] = [];
+  if (isLocatorFailure.value) s.push('locator-fix');
+  if (failureCluster.value) s.push('fix-plan');
+  s.push('diagnosis');
+  if (showVerify.value) s.push('verify');
+  if (blockedTests.value.length) s.push('blocked');
+  return s;
+});
+
+// The Fix card covers a failing execution (something to fix) or one that blocked others.
+const showFix = computed(() => Boolean(verdict.value) || blockedTests.value.length > 0);
+
 const historicalTiming = computed(() => {
   if (!historyData.value || historyData.value.length < 2 || !testCase.value?.duration) return null;
   const previous = historyData.value.filter((h) => h.duration !== null && h.id !== testCase.value?.id);
@@ -135,45 +224,46 @@ const annotations = computed(() =>
 
 const quarantined = computed(() => Boolean((testCase.value as { quarantined?: boolean } | null)?.quarantined));
 
-/** Exceptional badges only: regression, passed on retry, newly flaky, marks. */
+/**
+ * Exceptional badges only. The why-signals (regression, passed on retry, newly
+ * flaky) live in the headline's fact row when there is a headline, so they show
+ * in the header only for an execution with no headline (a passing or
+ * passed-on-retry attempt) — a fact appears once. Playwright marks always show.
+ */
 const headerBadges = computed(() => {
   const tc = testCase.value;
-  if (!tc)
-    return [] as {
-      label: string;
-      color?: 'error' | 'warning' | 'neutral';
-      icon?: string;
-      title?: string;
-      mono?: boolean;
-    }[];
-  const out: {
+  type Badge = {
     label: string;
     color?: 'error' | 'warning' | 'neutral';
     icon?: string;
     title?: string;
     mono?: boolean;
-  }[] = [];
-  if (tc.isNewRegression)
-    out.push({
-      label: 'New regression',
-      color: 'error',
-      icon: 'i-lucide-git-pull-request-arrow',
-      title: 'Passed in the baseline run, failing here',
-    });
-  if (tc.status === 'passed' && (tc.retries ?? 0) > 0)
-    out.push({
-      label: 'Passed on retry',
-      color: 'warning',
-      icon: 'i-lucide-refresh-cw',
-      title: 'This test failed then passed on a retry',
-    });
-  if (tc.isNewFlaky)
-    out.push({
-      label: 'Newly flaky',
-      color: 'warning',
-      icon: 'i-lucide-shuffle',
-      title: 'Newly started passing only on retry',
-    });
+  };
+  if (!tc) return [] as Badge[];
+  const out: Badge[] = [];
+  if (!verdict.value) {
+    if (tc.isNewRegression)
+      out.push({
+        label: 'New regression',
+        color: 'error',
+        icon: 'i-lucide-git-pull-request-arrow',
+        title: 'Passed in the baseline run, failing here',
+      });
+    if (tc.status === 'passed' && (tc.retries ?? 0) > 0)
+      out.push({
+        label: 'Passed on retry',
+        color: 'warning',
+        icon: 'i-lucide-refresh-cw',
+        title: 'This test failed then passed on a retry',
+      });
+    if (tc.isNewFlaky)
+      out.push({
+        label: 'Newly flaky',
+        color: 'warning',
+        icon: 'i-lucide-shuffle',
+        title: 'Newly started passing only on retry',
+      });
+  }
   for (const ann of annotations.value)
     out.push({ label: `@${ann.type}`, color: 'neutral', mono: true, title: ann.description || ann.type });
   return out;
@@ -210,7 +300,6 @@ const retryCommand = computed(() => buildRetryCommand(retryCases.value));
 const { copy: copyRetry, copied: retryCopied } = useCopy();
 const retryTitle = computed(() => (retryCopied.value ? 'Copied!' : copyPreview(retryCommand.value)));
 
-const desktopBridge = ref(false);
 onMounted(() => {
   desktopBridge.value = !!tauriCore();
 });
@@ -234,7 +323,7 @@ async function toggleQuarantine() {
 }
 
 // ── Copy failure ────────────────────────────────────────────────────────────
-const { copyRich, copied: failureCopied } = useCopyRich();
+const { copyRich } = useCopyRich();
 function copyFailure() {
   const tc = testCase.value;
   if (!tc?.error) return;
@@ -347,8 +436,8 @@ onUnmounted(disconnectRunStream);
 // A clue or diagnosis citation reveals the evidence it came from: the evidence
 // tabs handle the tabbed sections (switch tab + scroll), while the on-page error
 // and locator-fix blocks scroll in place.
-const errorEl = ref<HTMLElement | null>(null);
-const locatorHealingCard = ref<{ reveal: () => void } | null>(null);
+const headlineCard = ref<{ revealError: () => void } | null>(null);
+const fixCardEl = ref<HTMLElement | null>(null);
 const evidenceTabs = ref<{
   canLocate: (id: string) => boolean;
   revealSection: (id: string) => boolean;
@@ -358,10 +447,12 @@ const evidenceTabs = ref<{
 function scrollToEl(el: HTMLElement | null) {
   el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+// The raw error lives in the headline card's disclosure; the locator fix lives
+// in the Fix card. A citation reveals or scrolls to the block that holds it.
 const pageSections: Record<string, () => void> = {
-  sampleError: () => scrollToEl(errorEl.value),
-  executionError: () => scrollToEl(errorEl.value),
-  locatorHealing: () => locatorHealingCard.value?.reveal(),
+  sampleError: () => headlineCard.value?.revealError(),
+  executionError: () => headlineCard.value?.revealError(),
+  locatorHealing: () => scrollToEl(fixCardEl.value),
 };
 provide(clusterSectionLocatorKey, {
   // Answered from static maps so a citation renders as a button at SSR time too,
@@ -622,33 +713,19 @@ provide(clusterSectionLocatorKey, {
           :blocked-by-case="(testCase as any)?.blockedByCase ?? null"
         />
 
-        <!-- ── What broke, in one line ────────────────────────────────── -->
-        <TestCaseHeadlineCard v-if="verdict" :verdict="verdict" :top-clue="topClue" />
+        <!-- ── What broke, in one line, with the raw error one click away ── -->
+        <TestCaseHeadlineCard
+          v-if="verdict"
+          ref="headlineCard"
+          :verdict="verdict"
+          :top-clue="topClue"
+          :cluster-triage-status="failureCluster?.status ?? null"
+          :error="testCase?.error ?? null"
+          @copy-failure="copyFailure"
+        />
 
-        <!-- Deterministic, ranked clues correlated from the captured evidence -->
-        <CluesCard :clues="clues" :failure-at="cluesFailureAt" />
-
-        <!-- The raw error, verbatim -->
-        <div ref="errorEl" class="scroll-mt-4">
-          <SectionCard v-if="testCase?.error" icon="i-lucide-circle-x" icon-class="text-red-500" title="Error">
-            <template #actions>
-              <UTooltip :text="failureCopied ? 'Copied!' : 'Copy failure'">
-                <UButton
-                  size="xs"
-                  variant="ghost"
-                  color="neutral"
-                  :icon="failureCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
-                  aria-label="Copy failure"
-                  @click="copyFailure"
-                />
-              </UTooltip>
-            </template>
-            <div
-              class="text-xs font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto rounded bg-red-50 dark:bg-red-950/20 p-3"
-              v-html="renderAnsi(condenseErrorText(testCase.error))"
-            />
-          </SectionCard>
-        </div>
+        <!-- The clues after the strongest one — the headline prints the first -->
+        <CluesCard :clues="otherClues" :failure-at="cluesFailureAt" title="Other clues" />
 
         <!-- ── Evidence ───────────────────────────────────────────────── -->
         <EvidenceTabs
@@ -657,31 +734,112 @@ provide(clusterSectionLocatorKey, {
           :traces="(traceData as TraceInfo[]) ?? []"
           :has-trace="hasTrace"
           :default-section="topClueSection"
-          help="case.evidence"
         />
 
-        <!-- ── What to do (PR 2 merges these into one Fix block) ──────── -->
-        <TestCaseVerdictCard
-          :test-case="(testCase as any) ?? null"
-          :history="historyData"
-          :current-id="Number(testCaseId)"
-        />
+        <!-- ── What to do ─────────────────────────────────────────────── -->
+        <div ref="fixCardEl" class="scroll-mt-4">
+          <FixCard v-if="showFix" :sections="fixSections" help="case.fix">
+            <!-- Ranked replacement locators for a broken locator -->
+            <template #locator-fix>
+              <LocatorHealingPanel
+                v-if="testCase?.testRun?.id"
+                :run-id="testCase.testRun.id"
+                :test-runs-case-id="Number(testCaseId)"
+                :ai-intents="aiIntents"
+                :chrome="false"
+              />
+            </template>
 
-        <FailureClusterCard v-if="failureCluster" :cluster="failureCluster" />
+            <!-- A pointer to the cluster's full fix plan -->
+            <template v-if="failureCluster" #fix-plan>
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <template v-if="failureCluster.diagnosis?.status === 'completed'">
+                  <UBadge v-if="failureCluster.diagnosis.category" color="neutral" variant="soft" size="xs">
+                    {{ failureCluster.diagnosis.category }}
+                  </UBadge>
+                  <UBadge
+                    v-if="failureCluster.diagnosis.confidence"
+                    :color="confidenceColor(failureCluster.diagnosis.confidence)"
+                    variant="soft"
+                    size="xs"
+                  >
+                    {{ failureCluster.diagnosis.confidence }} confidence
+                  </UBadge>
+                </template>
+                <span v-else class="text-muted">Assembled on the cluster page.</span>
+                <UButton
+                  :to="`/failure-clusters/${failureCluster.id}#fix-plan`"
+                  size="xs"
+                  color="neutral"
+                  variant="link"
+                  trailing-icon="i-lucide-arrow-right"
+                  class="px-0"
+                >
+                  Open fix plan
+                </UButton>
+              </div>
+            </template>
 
-        <!-- The downstream tests this failure blocked from running -->
-        <DidNotRunCard :blocked-tests="(testCase as any)?.blockedTests ?? null" />
+            <!-- The cluster's diagnosis summary, else the execution-scope diagnosis -->
+            <template #diagnosis>
+              <div v-if="clusterDiagnosis" class="space-y-1.5">
+                <p class="text-sm text-toned">{{ clusterDiagnosis.summary }}</p>
+                <UButton
+                  :to="`/failure-clusters/${failureCluster!.id}`"
+                  size="xs"
+                  color="neutral"
+                  variant="link"
+                  trailing-icon="i-lucide-arrow-right"
+                  class="px-0"
+                >
+                  Open
+                </UButton>
+              </div>
+              <TestCaseAiCard v-else :test-runs-case-id="Number(testCaseId)" :chrome="false" />
+            </template>
 
-        <!-- Ranked replacement locators for a broken locator -->
-        <LocatorHealingPanel
-          v-if="testCase?.testRun?.id"
-          ref="locatorHealingCard"
-          :run-id="testCase.testRun.id"
-          :test-runs-case-id="Number(testCaseId)"
-          :ai-intents="aiIntents"
-        />
+            <!-- Re-run in CI, or run locally in the desktop shell -->
+            <template v-if="showVerify" #verify>
+              <div class="flex flex-wrap items-center gap-2">
+                <UButton
+                  v-if="rerunInfo?.available"
+                  size="xs"
+                  color="primary"
+                  variant="soft"
+                  icon="i-lucide-refresh-cw"
+                  :loading="rerunning"
+                  @click="triggerRerun"
+                >
+                  Re-run in CI
+                </UButton>
+                <DesktopRunLocallyButton
+                  :project-id="testCase?.testRun?.project?.id"
+                  :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
+                  :cases="retryCases"
+                />
+                <ClientOnly>
+                  <span v-if="rerunInfo?.lastDispatch" class="text-xs text-muted">
+                    Last re-run {{ formatRelativeTime(rerunInfo.lastDispatch.at) }}
+                    <template v-if="rerunInfo.lastDispatch.byName">by {{ rerunInfo.lastDispatch.byName }}</template>
+                  </span>
+                </ClientOnly>
+              </div>
+            </template>
 
-        <TestCaseAiCard :test-runs-case-id="Number(testCaseId)" />
+            <!-- The downstream tests this failure blocked from running -->
+            <template #blocked-label>Blocked by this failure ({{ blockedTests.length }})</template>
+            <template #blocked>
+              <ul class="space-y-1 text-sm">
+                <li v-for="t in blockedTests" :key="t.id" class="flex items-center gap-2 min-w-0">
+                  <UIcon name="i-lucide-circle-slash" class="size-3.5 shrink-0 text-amber-500" />
+                  <NuxtLink :to="`/test-run-cases/${t.id}`" class="text-primary hover:underline truncate">
+                    {{ t.title }}
+                  </NuxtLink>
+                </li>
+              </ul>
+            </template>
+          </FixCard>
+        </div>
 
         <!-- ── History ────────────────────────────────────────────────── -->
         <SectionCard icon="i-lucide-history" title="History" data-shot="execution-history">
@@ -698,7 +856,7 @@ provide(clusterSectionLocatorKey, {
             </UButton>
           </template>
           <ClientOnly>
-            <ExecutionHistoryStrip v-if="historyData?.length" :history="historyData" :current-id="Number(testCaseId)" />
+            <HistoryStrip v-if="historyData?.length" :history="historyData" :current-id="Number(testCaseId)" />
             <p v-else class="text-sm text-muted">No prior executions of this test yet.</p>
           </ClientOnly>
         </SectionCard>
