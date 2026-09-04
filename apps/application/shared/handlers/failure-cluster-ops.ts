@@ -61,6 +61,11 @@ export async function getOrCreateFailureClusters(
               signature: p.fp.signature,
               errorType: p.fp.errorType,
               selector: p.fp.selector,
+              // Drop the stale vector so the post-run reconciler re-embeds from
+              // the new sample instead of scoring the old one. Its backfill
+              // treats a null embedding as "needs a vector" (embeddingModel is
+              // left as-is; it's overwritten together with the new vector).
+              embedding: null,
             }
           : {}),
       })
