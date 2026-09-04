@@ -3,14 +3,14 @@ import { waitForHydration, retryPost } from './utils';
 import { PROJECT } from '#shared/test-project-names';
 
 /**
- * Failure-cluster detail page layout: the left column folds each evidence
- * section to a header + peek by default, the top summary drops the old "Runs"
- * card, and the test-evidence section exposes one tab per affected case with a
- * link through to the test-run case.
+ * Failure-cluster detail page layout: one column, read top to bottom. The
+ * header carries the triage control; the failure reads as a headline with a
+ * "Show raw error" disclosure; the evidence is one tabbed card fed by an
+ * affected-test selector; bulk actions live in the header's More menu.
  */
 
 // Two cases sharing one fingerprint (identical error, different spec files) so
-// the cluster has two affected test cases → tabs. The stack frame is not
+// the cluster has two affected test cases → a selector. The stack frame is not
 // hashed, so they cluster together.
 const sharedError = (frame: string) =>
   `TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Submit' })\n    at ${frame}`;
@@ -72,77 +72,70 @@ test.describe('Failure cluster page layout', () => {
     clusterId = await seedCluster(request);
   });
 
-  test('left sections fold by default and reveal a peek', async ({ page }) => {
+  test('the header carries the triage control and the cluster facts', async ({ page }) => {
     await page.goto(`/failure-clusters/${clusterId}`);
     await waitForHydration(page);
 
-    // Section headers are present…
-    await expect(page.getByRole('heading', { name: 'Error message' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Test evidence' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'What changed' })).toBeVisible();
+    // The segmented triage control (auth is disabled → the virtual admin can write).
+    const triage = page.getByRole('group', { name: 'Triage status' });
+    await expect(triage).toBeVisible();
+    await expect(triage.getByRole('button', { name: 'Open' })).toBeVisible();
+    await expect(triage.getByRole('button', { name: 'Resolved' })).toBeVisible();
+    await expect(triage.getByRole('button', { name: 'Ignored' })).toBeVisible();
 
-    // …but their bodies are folded: the case link (inside the evidence body) is hidden.
-    await expect(page.getByRole('link', { name: 'Open execution' })).toBeHidden();
-
-    // The evidence peek carries the key info while folded (the toggle's accessible
-    // name includes the peek; occurrence count varies so match loosely).
-    await expect(page.getByRole('button', { name: /Test evidence.*2 tests.*occurrences/ })).toBeVisible();
-  });
-
-  test('expanding a section persists across reload', async ({ page }) => {
-    await page.goto(`/failure-clusters/${clusterId}`);
-    await waitForHydration(page);
-
-    await page.getByRole('heading', { name: 'Test evidence' }).click();
-    await expect(page.getByRole('link', { name: 'Open execution' }).first()).toBeVisible();
-
-    await page.reload();
-    await waitForHydration(page);
-    // Cookie kept it expanded.
-    await expect(page.getByRole('link', { name: 'Open execution' }).first()).toBeVisible();
-  });
-
-  test('summary shows Triage and no longer has a Runs card', async ({ page }) => {
-    await page.goto(`/failure-clusters/${clusterId}`);
-    await waitForHydration(page);
-
-    await expect(page.getByRole('heading', { name: 'Triage' })).toBeVisible();
+    // The facts line states the count of affected tests, not a "Runs" card.
+    await expect(page.getByText(/2 tests/).first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Runs', exact: true })).toHaveCount(0);
   });
 
-  test('test evidence has a tab per case linking to the test-run case', async ({ page }) => {
+  test('the evidence card is open by default with an affected-test selector', async ({ page }) => {
     await page.goto(`/failure-clusters/${clusterId}`);
     await waitForHydration(page);
 
-    await page.getByRole('heading', { name: 'Test evidence' }).click();
-
-    // One tab per affected case.
-    const tab1 = page.getByRole('button', { name: 'login submits the form' });
-    const tab2 = page.getByRole('button', { name: 'checkout completes payment' });
-    await expect(tab1).toBeVisible();
-    await expect(tab2).toBeVisible();
-
-    // Switching tab updates the case header (file path) and the link target.
-    // Scope to the Test evidence card — the fix plan card above it also names the
-    // affected specs, so an unscoped match could land on that copy instead.
-    await tab2.click();
-    const evidenceCard = page
-      .locator('div.scroll-mt-4')
-      .filter({ has: page.getByRole('heading', { name: 'Test evidence' }) });
-    await expect(evidenceCard.getByText('tests/checkout.spec.ts').first()).toBeVisible();
-
-    const link = page.getByRole('link', { name: 'Open execution' }).first();
+    // The tabbed evidence card is not folded — its tab strip and the execution
+    // link are both visible without any expand.
+    await expect(page.getByRole('tablist', { name: 'Evidence sections' })).toBeVisible();
+    const link = page.getByRole('link', { name: 'Open execution' });
+    await expect(link).toBeVisible();
     await expect(link).toHaveAttribute('href', /\/test-run-cases\/\d+/);
+
+    // The selector offers every affected case; switching it retargets the link.
+    const before = await link.getAttribute('href');
+    await page.getByRole('combobox', { name: 'Affected test' }).click();
+    await expect(page.getByRole('option', { name: 'login submits the form' })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'checkout completes payment' })).toBeVisible();
+    // Pick the case that is not the current selection so the execution changes.
+    await page.getByRole('option', { selected: false }).first().click();
+    await expect
+      .poll(async () => page.getByRole('link', { name: 'Open execution' }).getAttribute('href'))
+      .not.toBe(before);
   });
 
-  test('extract action is reachable while the section is folded', async ({ page }) => {
+  test('the raw error is behind a "Show raw error" disclosure', async ({ page }) => {
     await page.goto(`/failure-clusters/${clusterId}`);
     await waitForHydration(page);
 
-    // Section starts folded; the header action still works.
-    const extract = page.getByRole('button', { name: 'Extract' });
-    await expect(extract).toBeVisible();
-    await extract.click();
+    // Collapsed by default: the signature is not on the first screen.
+    const disclosure = page.getByRole('button', { name: 'Show raw error' });
+    await expect(disclosure).toBeVisible();
+    await expect(page.getByText('TimeoutError: locator.click', { exact: false })).toBeHidden();
+
+    await disclosure.click();
+    await expect(page.getByText('TimeoutError: locator.click', { exact: false }).first()).toBeVisible();
+  });
+
+  test('what changed is a plain card, not a folded header', async ({ page }) => {
+    await page.goto(`/failure-clusters/${clusterId}`);
+    await waitForHydration(page);
+    await expect(page.getByRole('heading', { name: 'What changed' })).toBeVisible();
+  });
+
+  test('moving tests to a new cluster is reachable from the More menu', async ({ page }) => {
+    await page.goto(`/failure-clusters/${clusterId}`);
+    await waitForHydration(page);
+
+    await page.getByRole('button', { name: 'More actions' }).click();
+    await page.getByRole('menuitem', { name: /Move tests to a new cluster/ }).click();
     await expect(page.getByText('Extract test cases')).toBeVisible();
   });
 });

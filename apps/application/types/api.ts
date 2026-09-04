@@ -280,6 +280,30 @@ export interface ProjectOverview {
 }
 
 /**
+ * One open failure cluster across projects - returned by
+ * GET /api/failure-clusters?status=open. Drives the Home "Open failures" card.
+ */
+export interface OpenFailureCluster {
+  id: number;
+  projectId: number;
+  projectName: string;
+  projectLabel: string | null;
+  title: string | null;
+  signature: string;
+  errorType: string | null;
+  selector: string | null;
+  sampleError: string | null;
+  filePath: string | null;
+  status: string;
+  affectedTests: number;
+  occurrences: number;
+  lastSeenAt: string | Date | null;
+  lastSeenRunStatus: string | null;
+  owner: { name: string; source: 'annotation' } | null;
+  issueLink: { url: string; provider: string; key: string | null } | null;
+}
+
+/**
  * Project with test runs - returned by GET /api/projects/[id]
  */
 export interface ProjectWithTestRuns {
@@ -875,7 +899,12 @@ export interface FailureClusterDetail extends ClusterResolutionFields {
     filePath: string;
     runCount: number;
     recentTestRunsCaseId: number;
+    quarantined: boolean;
   }>;
+  /** Known-issue links pinned to this cluster (Jira / GitHub issue, etc.). */
+  links: EntityLinkInfo[];
+  /** Effective owner of the cluster's tests: `piwi:owner` annotation or CODEOWNERS. */
+  owner: { name: string; source: 'annotation' | 'codeowners' } | null;
 }
 
 /**
@@ -898,6 +927,8 @@ export interface ProjectFailureCluster extends ClusterResolutionFields {
   lastSeenRunStatus: string | null;
   lastSeenAt: string | Date | null;
   diagnosis: DiagnosisCompact | null;
+  /** The pinned known-issue link (newest), shown as a chip. */
+  issueLink: { url: string; provider: string; key: string | null } | null;
 }
 
 /**

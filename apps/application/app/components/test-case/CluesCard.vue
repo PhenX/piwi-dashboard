@@ -18,6 +18,8 @@ const props = defineProps<{
   clues: FailureClue[];
   /** The moment of failure in ms relative to the timeline origin — anchors `t-N s`. */
   failureAt?: number | null;
+  /** Card heading — the cluster page renders the non-leading clues as "Other clues". */
+  title?: string;
 }>();
 
 const locator = useClusterSectionLocator();
@@ -46,7 +48,7 @@ function citationLabel(section: string): string {
     v-if="clues.length"
     icon="i-lucide-search-check"
     icon-class="text-primary"
-    title="Clues"
+    :title="title ?? 'Clues'"
     :count="clues.length"
     help="case.clues"
     data-shot="failure-clues"

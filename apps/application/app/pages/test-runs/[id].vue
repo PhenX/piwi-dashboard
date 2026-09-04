@@ -9,6 +9,7 @@ const route = useRoute();
 const router = useRouter();
 const runId = route.params.id;
 const isDemoMode = Boolean(useRuntimeConfig().public.demoMode);
+const { canSeeAdmin } = useAuth();
 
 const { data: testRun, refresh } = await useFetch<TestRunDetails>(`/api/test-runs/${runId}`);
 
@@ -19,6 +20,16 @@ const { data: latestRunInfo, refresh: refreshLatestRun } = projectId
   ? await useFetch<LatestRunInfo>(`/api/projects/${projectId}/latest-run`, { key: `latest-run-${projectId}` })
   : { data: ref<LatestRunInfo>(null), refresh: async () => {} };
 useRunStream(refreshLatestRun);
+
+// Which of this project's tests are quarantined — marks the matching rows in the
+// executions list. `candidates=false` skips the heavier flaky-analysis proposal.
+const { data: quarantineData, refresh: refreshQuarantine } = projectId
+  ? await useFetch<{ entries: Array<{ testCaseId: number }> }>(
+      `/api/projects/${projectId}/quarantine?candidates=false`,
+      { key: `run-quarantine-${projectId}` },
+    )
+  : { data: ref<{ entries: Array<{ testCaseId: number }> } | null>(null), refresh: async () => {} };
+const quarantinedCaseIds = computed(() => new Set((quarantineData.value?.entries ?? []).map((e) => e.testCaseId)));
 
 const latestRunId = computed(() => latestRunInfo.value?.id ?? testRun.value?.project?.latestRunId ?? null);
 const latestRunStatus = computed(() => latestRunInfo.value?.status ?? testRun.value?.project?.latestRunStatus ?? null);
@@ -36,6 +47,7 @@ useHead(
 );
 
 const toast = useToast();
+const { copy } = useCopy();
 const isDeleteConfirmOpen = ref(false);
 const deleting = ref(false);
 
@@ -261,9 +273,9 @@ function flushPendingEvents() {
       liveSteps.value = {};
       disconnectStream();
       refresh();
-      // Nudge child tabs (Failure groups, Slow endpoints, Regression context,
-      // Insights) to refetch — they keep their own useFetch state and would
-      // otherwise show stale/partial data from before the run finalized.
+      // Nudge child tabs (Insights, Slow endpoints, Regression context) to
+      // refetch — they keep their own useFetch state and would otherwise show
+      // stale/partial data from before the run finalized.
       runRefreshKey.value++;
       pollForReports();
     }
@@ -435,22 +447,42 @@ async function handleDeleteRun() {
   }
 }
 
-const showCustomData = ref(false);
+// A plain-text run summary for the navbar's Copy run summary action.
+function buildRunSummary(): string {
+  const run = testRun.value;
+  if (!run) return '';
+  const statusEmoji =
+    run.status === 'passed' ? '✅' : run.status === 'failed' ? '❌' : run.status === 'running' ? '🔄' : '⚠️';
+  const label = run.label ? ` — ${run.label}` : '';
+  const project = run.project?.label ?? run.project?.name ?? '';
+  const flaky = run.flakyTests ?? 0;
+  const didNotRun = run.didNotRunTests ?? 0;
+  const flakyPart = flaky > 0 ? ` · ${flaky} passed on retry` : '';
+  const didNotRunPart = didNotRun > 0 ? ` · ${didNotRun} didn't run` : '';
+  return [
+    `*Run #${run.id}*${label}`,
+    `Status: ${statusEmoji} ${run.status} | Project: ${project}`,
+    `Tests: ${run.totalTests ?? 0} total · ${run.passedTests ?? 0} passed · ${run.failedTests ?? 0} failed · ${run.skippedTests ?? 0} skipped${didNotRunPart}${flakyPart}`,
+    `Duration: ${formatDuration(run.duration)}`,
+  ].join('\n');
+}
 
 // Test-cases filter state — lifted here so it survives tab switches
 const testCaseSearch = ref('');
 const testCaseActiveStatuses = ref<string[]>([]);
 const testCaseBrowserFilter = ref('all');
 
-// The summary tiles toggle into the same set the list chips use
+// The count-bar segments toggle into the same set the Tests list chips use, and
+// switch to the Tests tab so the filtered rows are on screen.
 function handleFilterStatus(status: string) {
   if (!status || status === 'all') {
     testCaseActiveStatuses.value = [];
-    return;
+  } else {
+    testCaseActiveStatuses.value = testCaseActiveStatuses.value.includes(status)
+      ? testCaseActiveStatuses.value.filter((s) => s !== status)
+      : [...testCaseActiveStatuses.value, status];
   }
-  testCaseActiveStatuses.value = testCaseActiveStatuses.value.includes(status)
-    ? testCaseActiveStatuses.value.filter((s) => s !== status)
-    : [...testCaseActiveStatuses.value, status];
+  activeTab.value = 'test-cases';
 }
 
 // Reports from the files table
@@ -460,75 +492,51 @@ const allReports = computed<ReportInfo[]>(() => testRun.value?.reports || []);
 const totalWastedTime = computed(() => {
   const cases = displayTestCases.value;
   if (!cases) return 0;
-  return cases.reduce((sum, tc) => sum + ((tc as any).wastedTimeMs ?? 0), 0);
+  return cases.reduce((sum, tc) => sum + (tc.wastedTimeMs ?? 0), 0);
 });
 
-// Right panel tabs
 const activeTab = ref('test-cases');
 
 const hasFailures = computed(() => (displayProgress.value?.failedTests ?? 0) > 0);
 
-// A run whose only problem is flakiness has no failures — the failure tabs
-// still have content (clusters track passed-on-retry cases), so they stay
-// enabled whenever there are failures OR flaky tests.
+// A run whose only problem is flakiness has no failures — the change tabs still
+// have content, so they stay enabled whenever there are failures OR flaky tests.
 const showFailureTabs = computed(() => hasFailures.value || (testRun.value?.flakyTests ?? 0) > 0);
 
-// Cluster filter state — set by FailureGroups, consumed by TestCasesList. The
-// id doubles as the `?cluster=` deep-link so the mode survives refresh/sharing.
-const selectedClusterFilter = ref<{ id: number; title: string | null } | null>(null);
+// Cluster names + triage status for the row chips and the cluster group headers,
+// taken from the same failure-groups payload. Fetched whenever the failure tabs
+// become available: a flaky-only run has no failedTests yet still has clusters,
+// and a live run can gain its first failure mid-stream.
+const clusterMeta = ref<Record<number, { name: string; status: string | null }>>({});
 
-// Cluster display names for the list's cluster badges and the filter chip,
-// taken from the same failure-groups payload the Failure groups tab shows.
-// Fetched whenever the failure tabs become available: a flaky-only run has no
-// failedTests yet still has clusters, and a live run can gain its first
-// failure mid-stream — a one-time check at mount misses both.
-const clusterNames = ref<Record<number, string>>({});
-
-async function fetchClusterNames() {
+async function fetchClusterMeta() {
   if (!import.meta.client) return;
   try {
     const r = await $fetch<{ items: FailureGroup[] }>(`/api/test-runs/${runId}/failure-groups`);
-    clusterNames.value = Object.fromEntries(r.items.map((g) => [g.clusterId, g.title || `Cluster #${g.clusterId}`]));
+    clusterMeta.value = Object.fromEntries(
+      r.items.map((g) => [g.clusterId, { name: g.title || `Cluster #${g.clusterId}`, status: g.status ?? null }]),
+    );
   } catch {
-    // badges fall back to plain cluster ids
+    // chips fall back to plain cluster ids, headers to no triage badge
   }
 }
 
 watch(
   showFailureTabs,
   (show) => {
-    if (show) fetchClusterNames();
+    if (show) fetchClusterMeta();
   },
   { immediate: true },
 );
-
-const clusterFilterName = computed(() => {
-  const f = selectedClusterFilter.value;
-  if (!f) return '';
-  return f.title ?? clusterNames.value[f.id] ?? `Cluster #${f.id}`;
-});
-
-const clusterFilterCount = computed(() => {
-  const f = selectedClusterFilter.value;
-  if (!f) return 0;
-  return displayTestCases.value.filter((tc) => tc.failureClusterId === f.id).length;
-});
-
-// Deep-link the cluster filter via ?cluster= (restored like ?tab= above).
-const clusterQuery = typeof route.query.cluster === 'string' ? Number(route.query.cluster) : null;
-if (clusterQuery && !Number.isNaN(clusterQuery)) {
-  selectedClusterFilter.value = { id: clusterQuery, title: null };
-  activeTab.value = 'test-cases';
-}
 
 // Increments when a live run finishes, so child tabs that keep their own
 // fetch state can refetch instead of showing stale pre-finish data.
 const runRefreshKey = ref(0);
 
 // A finishing run can grow its failure-groups payload (new clusters); refetch
-// the display names so newly-appearing badges are labelled.
+// the display names so newly-appearing chips are labelled.
 watch(runRefreshKey, () => {
-  if (showFailureTabs.value) fetchClusterNames();
+  if (showFailureTabs.value) fetchClusterMeta();
 });
 
 // Endpoints count: seeded from the run payload (so the tab never shows a bare
@@ -543,19 +551,6 @@ watch(
   },
 );
 
-function clearClusterFilter() {
-  selectedClusterFilter.value = null;
-}
-
-const failureGroupCount = computed(() => {
-  if (!testRun.value?.testCases) return 0;
-  const clusterIds = new Set<number>();
-  for (const tc of testRun.value.testCases) {
-    if (tc.failureClusterId != null) clusterIds.add(tc.failureClusterId);
-  }
-  return clusterIds.size;
-});
-
 const uniqueWorkerCount = computed(() => {
   const cases = isLive.value ? displayTestCases.value : testRun.value?.testCases;
   if (!cases || cases.length === 0) return 0;
@@ -568,7 +563,7 @@ const uniqueWorkerCount = computed(() => {
 
 const tabItems = computed(() => [
   {
-    label: `Executions (${displayTestCases.value.length})`,
+    label: `Tests (${displayTestCases.value.length})`,
     icon: 'i-lucide-beaker',
     value: 'test-cases',
     slot: 'test-cases',
@@ -578,16 +573,6 @@ const tabItems = computed(() => [
     icon: 'i-lucide-sparkles',
     value: 'insights',
     slot: 'insights',
-  },
-  // Failure-only tabs stay visible but disabled on a green run: tabs that
-  // appear and disappear shift every other tab's position between runs.
-  {
-    label: hasFailures.value ? `Failure clusters (${failureGroupCount.value})` : 'Failure clusters',
-    icon: 'i-lucide-layers',
-    value: 'failure-groups',
-    slot: 'failure-groups',
-    disabled: !showFailureTabs.value,
-    disabledReason: 'no failing tests in this run',
   },
   {
     label: 'Since last pass',
@@ -617,9 +602,24 @@ const tabPanelClass: Record<string, string> = {
   endpoints: 'overflow-hidden flex flex-col',
 };
 
+// The former Failure clusters tab is now the Tests tab's cluster grouping;
+// `?tab=failure-groups` lands there. The grouping cookie is written client-side
+// so the list opens grouped by cluster.
+if (route.query.tab === 'failure-groups') {
+  activeTab.value = 'test-cases';
+  if (import.meta.client) {
+    document.cookie = 'piwi-group-by-run-tests=cluster; path=/; max-age=31536000; sameSite=lax';
+    onMounted(() => {
+      const query = { ...route.query };
+      delete query.cluster;
+      query.tab = 'test-cases';
+      router.replace({ query });
+    });
+  }
+}
+
 // Deep-link the active tab via ?tab= so run views can be shared and cross-page
-// links (e.g. Run insights → this run's Performance) land on the right tab.
-// Failure-only tabs (failure-groups/regression) are disabled on a green run,
+// links land on the right tab. Failure-only tabs are disabled on a green run,
 // so validate against the currently *enabled* tabs.
 const runTabValues = computed(() => tabItems.value.filter((t) => !t.disabled).map((t) => t.value));
 if (typeof route.query.tab === 'string' && runTabValues.value.includes(route.query.tab)) {
@@ -628,12 +628,9 @@ if (typeof route.query.tab === 'string' && runTabValues.value.includes(route.que
 watch(runTabValues, (vals) => {
   if (!vals.includes(activeTab.value)) activeTab.value = 'test-cases';
 });
-// One watcher owns the ?tab= and ?cluster= query params — two independent
-// replaces would race and drop each other's param.
-watch([activeTab, selectedClusterFilter], ([tab, f]) => {
+watch(activeTab, (tab) => {
   const query = { ...route.query };
-  if (f) query.cluster = String(f.id);
-  else delete query.cluster;
+  delete query.cluster;
   query.tab = tab;
   if (JSON.stringify(query) === JSON.stringify({ ...route.query })) return;
   router.replace({ query });
@@ -651,10 +648,25 @@ function handleSelectTestCase(id: number) {
   });
 }
 
-function handleSelectCluster(clusterId: number) {
-  selectedClusterFilter.value = { id: clusterId, title: null };
-  activeTab.value = 'test-cases';
-}
+// ── Navbar More menu ────────────────────────────────────────────────────────
+const moreMenuItems = computed(() => {
+  const items: { label: string; icon: string; color?: 'error'; onSelect: () => void }[] = [];
+  items.push({
+    label: 'Copy run summary',
+    icon: 'i-lucide-clipboard',
+    onSelect: () => copy(buildRunSummary(), { toast: 'Run summary copied' }),
+  });
+  items.push({ label: 'Refresh', icon: 'i-lucide-refresh-cw', onSelect: () => refresh() });
+  if (canSeeAdmin.value) {
+    items.push({
+      label: 'Delete run',
+      icon: 'i-lucide-trash-2',
+      color: 'error',
+      onSelect: () => (isDeleteConfirmOpen.value = true),
+    });
+  }
+  return items;
+});
 </script>
 
 <template>
@@ -695,31 +707,19 @@ function handleSelectCluster(clusterId: number) {
               />
             </template>
           </BreadcrumbNav>
-          <!-- BreadcrumbNav renders only the current-page label below `sm`, so the
-               ancestor `#project` slot (and its pill) is desktop-only. Repeat the
-               freshness pill here for phones. -->
-          <RunFreshnessPill
-            class="ml-1 sm:hidden"
-            :latest-run-id="latestRunId"
-            :current-run-id="Number(runId)"
-            :is-active="isLatestRunActive"
-          />
         </template>
         <template #right>
           <div class="flex items-center shrink-0 min-w-0">
-            <NavbarActions
-              :actions="[
-                { label: 'Refresh', icon: 'i-lucide-refresh-cw', onClick: () => refresh() },
-                {
-                  label: 'Delete',
-                  icon: 'i-lucide-trash-2',
-                  color: 'error',
-                  variant: 'soft',
-                  loading: deleting,
-                  onClick: () => (isDeleteConfirmOpen = true),
-                },
-              ]"
-            />
+            <UDropdownMenu :items="moreMenuItems">
+              <UButton
+                size="sm"
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-ellipsis-vertical"
+                aria-label="More actions"
+                title="More actions"
+              />
+            </UDropdownMenu>
           </div>
         </template>
       </UDashboardNavbar>
@@ -728,50 +728,35 @@ function handleSelectCluster(clusterId: number) {
     <template #body>
       <DetailPageLayout v-model="activeTab" :tab-items="tabItems" :tab-panel-class="tabPanelClass">
         <template #summary>
-          <RunSummary
+          <RunHeader
             v-if="testRun"
             :test-run="testRun"
             :display-progress="displayProgress"
             :all-reports="allReports"
-            :show-custom-data="showCustomData"
             :finalizing="isFinalizing"
             :active-statuses="testCaseActiveStatuses"
             :total-wasted-time="totalWastedTime"
-            @update:show-custom-data="showCustomData = $event"
             @toggle-status="handleFilterStatus"
             @label-updated="refresh"
           />
         </template>
 
         <template #tab-test-cases>
-          <div v-if="selectedClusterFilter != null" class="flex items-center gap-2 mb-3 shrink-0">
-            <UBadge color="info" variant="subtle" size="sm">
-              Cluster: {{ clusterFilterName }} · {{ clusterFilterCount }}
-              {{ clusterFilterCount === 1 ? 'test' : 'tests' }}
-            </UBadge>
-            <UButton
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-x"
-              label="Clear filter"
-              @click="clearClusterFilter"
-            />
-          </div>
           <TestCasesList
             ref="testCasesListRef"
+            data-shot="failure-clusters"
             v-model:search="testCaseSearch"
             v-model:active-statuses="testCaseActiveStatuses"
             v-model:browser-filter="testCaseBrowserFilter"
             :test-cases="displayTestCases"
-            :suites="testRun?.suites ?? []"
             :is-live="isLive"
             :live-steps="liveSteps"
-            :failure-cluster-filter="selectedClusterFilter?.id ?? null"
-            :cluster-names="clusterNames"
+            :cluster-meta="clusterMeta"
+            :quarantined-case-ids="quarantinedCaseIds"
             :project-key="testRun?.projectId"
             :project-name="testRun?.project?.name"
             class="flex-1 min-h-0"
+            @quarantine-changed="refreshQuarantine"
           />
         </template>
 
@@ -781,14 +766,6 @@ function handleSelectCluster(clusterId: number) {
             :run-status="testRun?.status ?? ''"
             :refresh-key="runRefreshKey"
             class="flex-1 min-h-0 p-4"
-          />
-        </template>
-
-        <template #tab-failure-groups>
-          <FailureGroups
-            :refresh-key="runRefreshKey"
-            :test-cases="testRun?.testCases ?? []"
-            @select-cluster="handleSelectCluster"
           />
         </template>
 

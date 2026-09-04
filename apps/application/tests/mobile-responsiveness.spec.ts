@@ -160,15 +160,7 @@ test.describe('Mobile responsiveness', () => {
         await page.goto(`/test-runs/${runId}`);
         await waitForHydration(page);
 
-        const tabLabels = [
-          /Executions/,
-          /Insights/,
-          /Failure clusters/,
-          /Since last pass/,
-          /Timeline/,
-          /Compare/,
-          /Slow endpoints/,
-        ];
+        const tabLabels = [/Tests/, /Insights/, /Since last pass/, /Timeline/, /Compare/, /Slow endpoints/];
 
         for (const label of tabLabels) {
           if (viewport.width < 640) {
@@ -188,10 +180,10 @@ test.describe('Mobile responsiveness', () => {
 
         // The summary + everything below it must be visible without any content
         // being clipped by a fixed-height, overflow-hidden ancestor. Scoped to the
-        // RunSummary heading (not `getByText`, which also matches the breadcrumb's
+        // run header heading (not `getByText`, which also matches the breadcrumb's
         // same-text label rendered — CSS-hidden but still in the DOM — for the
         // desktop breadcrumb variant).
-        await expect(page.locator('h2').filter({ hasText: /Run #/ })).toBeVisible();
+        await expect(page.locator('h1').filter({ hasText: /Run #/ })).toBeVisible();
 
         if (viewport.width < 1024) {
           // Below `lg` the mobile "Hide summary" toggle folds the summary away.

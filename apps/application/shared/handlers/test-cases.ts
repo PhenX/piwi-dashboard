@@ -8,8 +8,9 @@ import {
   failureDiagnoses,
   entityLinks,
   networkRequests,
+  quarantinedTests,
 } from '../../server/database/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-waits';
 import { inlineCasePayloads } from '../../server/utils/case-payloads';
 import { buildFailureVerdict } from '../failure-verdict';
@@ -280,11 +281,20 @@ export async function getTestRunCase(
     }
   }
 
-  const [networkRequestRows, linksForCaseRun, linksForTestCase] = await Promise.all([
+  const [networkRequestRows, linksForCaseRun, linksForTestCase, quarantineRows] = await Promise.all([
     db.select().from(networkRequests).where(eq(networkRequests.testRunsCaseId, trc.id)),
     db.select().from(entityLinks).where(eq(entityLinks.testRunsCaseId, trc.id)),
     testCase ? db.select().from(entityLinks).where(eq(entityLinks.testCaseId, testCase.id)) : Promise.resolve([]),
+    db
+      .select({ id: quarantinedTests.id })
+      .from(quarantinedTests)
+      .where(and(eq(quarantinedTests.testCaseId, trc.testCaseId), isNull(quarantinedTests.releasedAt))),
   ]);
+
+  // Whether this execution's stable test case is currently quarantined — lets the
+  // failure page offer "Quarantine" / "Release" and mark the row without a
+  // separate request to the project quarantine list.
+  const quarantined = quarantineRows.length > 0;
 
   const networkRequestsData = networkRequestRows.map((nr) => ({
     method: nr.method,
@@ -430,6 +440,7 @@ export async function getTestRunCase(
     blockedTests,
     failureCluster,
     verdict,
+    quarantined,
     testRun: testRun ? { ...testRunPublic, project, reports: reportList } : testRun,
     attachments: attachmentList,
     links: linksForCaseRun,

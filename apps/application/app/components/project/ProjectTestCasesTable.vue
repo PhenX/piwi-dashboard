@@ -54,6 +54,9 @@ const statuses = ref<string[]>(typeof init.status === 'string' ? init.status.spl
 const age = ref(typeof init.age === 'string' && init.age !== '' ? Math.max(0, Number(init.age) || 0) : defaultAge);
 const tagsFilter = ref(typeof init.tags === 'string' ? init.tags : '');
 const tagsInput = ref(tagsFilter.value);
+// Owner filter — deep-linked from a cluster's "Owner" line; set only via the URL,
+// cleared with its chip. Narrows to tests declared to / derived for that owner.
+const ownerFilter = ref(typeof init.owner === 'string' ? init.owner : '');
 const sort = ref<TestCasesSort>(typeof init.sort === 'string' ? (init.sort as TestCasesSort) : 'lastRun');
 const dir = ref<'asc' | 'desc'>(init.dir === 'asc' ? 'asc' : 'desc');
 const initialPageSize = Number(init.pageSize);
@@ -71,7 +74,7 @@ watch(
     tagsFilter.value = value.trim();
   }, 300),
 );
-watch([q, statuses, tagsFilter, age, sort, dir, pageSize, treeView], () => {
+watch([q, statuses, tagsFilter, ownerFilter, age, sort, dir, pageSize, treeView], () => {
   page.value = 1;
 });
 
@@ -81,6 +84,7 @@ const query = computed(() => ({
   ...(q.value ? { q: q.value } : {}),
   ...(statuses.value.length > 0 ? { status: statuses.value.join(',') } : {}),
   ...(tagsFilter.value ? { tags: tagsFilter.value } : {}),
+  ...(ownerFilter.value ? { owner: ownerFilter.value } : {}),
   maxAgeDays: age.value,
   sort: sort.value,
   dir: dir.value,
@@ -99,13 +103,14 @@ watch(
 );
 
 if (props.syncQuery) {
-  watch([q, statuses, tagsFilter, age, sort, dir, page, pageSize], () => {
+  watch([q, statuses, tagsFilter, ownerFilter, age, sort, dir, page, pageSize], () => {
     router.replace({
       query: {
         ...route.query,
         q: q.value || undefined,
         status: statuses.value.length > 0 ? statuses.value.join(',') : undefined,
         tags: tagsFilter.value || undefined,
+        owner: ownerFilter.value || undefined,
         age: age.value !== defaultAge ? String(age.value) : undefined,
         sort: sort.value !== 'lastRun' ? sort.value : undefined,
         dir: dir.value !== 'desc' ? dir.value : undefined,
@@ -169,7 +174,7 @@ const showingFrom = computed(() => (total.value === 0 ? 0 : (page.value - 1) * p
 const showingTo = computed(() =>
   treeView.value ? items.value.length : Math.min(page.value * pageSize.value, total.value),
 );
-const hasSearchOrStatusFilter = computed(() => q.value !== '' || statuses.value.length > 0);
+const hasSearchOrStatusFilter = computed(() => q.value !== '' || statuses.value.length > 0 || ownerFilter.value !== '');
 const hasAnyFilter = computed(() => hasSearchOrStatusFilter.value || age.value !== 0);
 const initialLoading = computed(() => status.value === 'pending' && !data.value);
 
@@ -213,6 +218,18 @@ defineExpose({ refresh });
           </button>
         </div>
         <span class="text-sm text-muted tabular-nums"> {{ total }} {{ total === 1 ? 'case' : 'cases' }} </span>
+        <UButton
+          v-if="ownerFilter"
+          size="xs"
+          color="neutral"
+          variant="subtle"
+          icon="i-lucide-users"
+          trailing-icon="i-lucide-x"
+          :title="`Clear owner filter: ${ownerFilter}`"
+          @click="ownerFilter = ''"
+        >
+          Owner: {{ ownerFilter }}
+        </UButton>
       </template>
 
       <UInput

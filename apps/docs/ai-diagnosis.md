@@ -28,6 +28,12 @@ Failed test cases that share the same **error fingerprint** are grouped into a c
 
 Clustering is always on and requires no configuration. When the normalization algorithm is improved, existing clusters are migrated in place (re-fingerprinted from a stored sample error), so triage status, notes, and diagnoses survive the change. AI diagnosis is opt-in.
 
+### Triage: owner and known issue
+
+The cluster page's triage rail names an **owner** — who answers for these tests. It comes from a `piwi:owner` annotation on the test when one exists, otherwise from the repository's [CODEOWNERS](./concepts#tags-ownership) matched against the spec's file path (the source is labeled so you can tell which). The owner links to every test that owner is responsible for, and when it is derived from CODEOWNERS a one-line hint shows how to override it per test.
+
+The same rail pins a **known issue** — the Jira ticket, GitHub issue or PR that tracks the cluster. It is an entity link (`failure_cluster` type), so the provider and key are detected from the URL and unfurled; the key travels with the cluster wherever it is listed, so a triaged cluster shows what is already being done about it. Reporter or admin role is required to pin or remove one. Read the same links over MCP with [`list_links`](./mcp) (`entityType: 'failure_cluster'`).
+
 ### Semantic merging (optional)
 
 If an **embedding** model role is configured (Settings → AI), Piwi adds a semantic layer on top of the deterministic fingerprint. After a run, the clusters first seen in it are embedded and compared (cosine similarity) against the project's other open clusters; near-duplicates above `PIWI_CLUSTER_SIMILARITY_THRESHOLD` (default `0.92`) are merged into the longest-lived cluster. This catches failures that are the same root cause but phrased differently enough to dodge the fingerprint. Merges record a fingerprint alias so future occurrences attach to the survivor instead of re-forking. With no embedding role configured, clustering stays purely deterministic.
@@ -164,8 +170,8 @@ A diagnosis is grounded in your actual run — it is not a generic "ask AI" butt
 - **Suggested fix** and **prevention tips**
 
 <figure>
-  <img src="/screenshots/ai-diagnosis.png" alt="Failure cluster page with the AI diagnosis result alongside the error and alternative locators">
-  <figcaption>A cluster page — the AI diagnosis (category, confidence, root cause, evidence, and a suggested fix) sits beside the actual error and the ranked alternative locators it was grounded in.</figcaption>
+  <img src="/screenshots/ai-diagnosis.png" alt="The AI diagnosis card at the foot of a failure cluster page">
+  <figcaption>The AI diagnosis at the foot of a cluster page — category, confidence, root cause, the evidence it relied on, and a suggested fix — grounded in the same error and evidence the page shows above it.</figcaption>
 </figure>
 
 ## Diagnosing one execution
@@ -255,9 +261,10 @@ Everything above is assembled into one answer — the diagnosis and its validate
 with the exact file and line to edit, the failing tests, the owning team, and the command that verifies the work. The
 same plan is reachable three ways:
 
-- **On the cluster page** — the **Fix plan** card is the first thing in the left column: the diagnosis summary and its
-  patch (copy, `git apply`, download), each locator edit as a before → after with a one-line diff, links to the failing
-  executions, the owner and its source, and the verify command with the **Re-run in CI** button when that is configured.
+- **On the cluster page** — the **Fix plan** card sits in the page's single column, below the evidence: the diagnosis
+  summary and its patch (copy, `git apply`, download), each locator edit as a before → after with a one-line diff, links
+  to the failing executions, the owner and its source, and the verify command with the **Re-run in CI** button when that
+  is configured.
   **Copy as Markdown** hands you the whole plan for a ticket.
 - **As Markdown** — `GET /api/failure-clusters/:id/fix-plan?format=markdown` returns the same rendering as plain text, so
   an export or a script can drop it straight into an issue.

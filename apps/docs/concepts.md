@@ -69,9 +69,7 @@ the same run. So is each browser in a project matrix.
 
 This is the object at `/test-run-cases/:id` — the error, steps, trace, screenshots, console, network,
 Web Vitals, and (for a failure) the diagnosis view. When the docs say *execution* or *test-run case*,
-this is what they mean; when they say *test case*, they mean the identity above it. The run page's
-list still calls executions *cases* in a few labels (the counter, the search box, the title column) —
-same object, older name.
+this is what they mean; when they say *test case*, they mean the identity above it.
 
 The distinction matters in practice: "this test is flaky" is a statement about a **test case**, and
 "here is the stack trace" is a statement about one **execution**.

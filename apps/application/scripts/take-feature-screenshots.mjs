@@ -203,23 +203,24 @@ const SCENES = [
   // ── Docs illustrations (committed) ────────────────────────────────────────
   {
     name: 'locator-healing',
-    description: 'Alternative locators panel with ranked replacements and a recommended fix',
+    description: 'Locator fix: ranked replacements and a recommended fix inside the Fix card',
     tags: ['docs'],
     out: 'docs',
-    route: '/test-run-cases/13',
+    // Execution 533 is a strict-mode locator-resolution failure with pre-captured
+    // alternatives, so the Fix card renders the Locator fix section in full.
+    route: '/test-run-cases/533',
     viewport: { width: 1280, height: 1300 },
-    expand: ['[data-shot="alternative-locators"]'],
     of: '[data-shot="alternative-locators"]',
     pad: 12,
   },
   {
     name: 'gather-evidence',
-    description: 'Failing execution, Diagnosis tab: the error and the evidence gathered on one screen (dark)',
+    description: 'Failing execution: the header, the headline and the evidence tabs on one screen (dark)',
     tags: ['docs'],
     out: 'docs',
     // Execution 37 carries an attachment, a trace and a visual diff, so the
     // evidence cards are populated rather than empty.
-    route: '/test-run-cases/37?tab=diagnosis',
+    route: '/test-run-cases/37',
     viewport: { width: 1560, height: 1400 },
     colorScheme: 'dark',
   },
@@ -236,12 +237,14 @@ const SCENES = [
   },
   {
     name: 'ai-diagnosis',
-    description: 'Failure cluster page: the AI diagnosis beside the error and evidence (dark)',
+    description: 'Failure cluster page: the AI diagnosis card at the foot of the cluster page (dark)',
     tags: ['docs'],
     out: 'docs',
     // Cluster 10 ships a stored, "diagnosis-verified" diagnosis in the demo seed.
     route: '/failure-clusters/10',
-    viewport: { width: 1600, height: 1240 },
+    viewport: { width: 1600, height: 1600 },
+    of: '[data-shot="cluster-diagnosis"]',
+    pad: 12,
     colorScheme: 'dark',
     // The panel hides a stored diagnosis until AI reports configured. Run this
     // scene with the server's AI env vars set (PIWI_AI_PROVIDER / PIWI_AI_API_KEY
@@ -297,13 +300,14 @@ const SCENES = [
   },
   {
     name: 'failure-clusters',
-    description: 'Failure clusters tab grouping failures by normalized error signature',
+    description: 'Run page Tests tab grouped by failure cluster, failures first',
     tags: ['docs'],
     out: 'docs',
-    route: '/projects/1?tab=failure-clusters',
-    // The cluster table needs ~1850px before it stops scrolling sideways, and a
-    // clipped table hides the occurrence counts the page is about.
-    viewport: { width: 2200, height: 1000 },
+    // The run's Tests tab opens grouped by cluster on a red run; each group
+    // header names the cluster and its triage status, with the failing rows
+    // beneath and the passing tests folded away.
+    route: '/test-runs/2',
+    viewport: { width: 1280, height: 1000 },
     of: '[data-shot="failure-clusters"]',
     pad: 12,
   },
@@ -517,11 +521,11 @@ const SCENES = [
   // ── Failure headline (report artifacts) ──────────────────────────────────
   {
     name: 'failure-headline',
-    description: 'Failing execution, Diagnosis tab: the one-line headline card above the raw error',
+    description: 'Failing execution: the one-line headline card with Show raw error at its foot',
     tags: ['desktop'],
     // Execution 37 is clustered with a sibling in its run, so the facts row
     // carries the cluster link next to the why and since-when chips.
-    route: '/test-run-cases/37?tab=diagnosis',
+    route: '/test-run-cases/37',
     viewport: { width: 1280, height: 900 },
     of: '[data-shot="failure-headline"]',
     pad: 12,
@@ -530,7 +534,7 @@ const SCENES = [
     name: 'failure-headline-mobile',
     description: 'The same headline card at phone width',
     tags: ['desktop'],
-    route: '/test-run-cases/37?tab=diagnosis',
+    route: '/test-run-cases/37',
     viewport: { width: 375, height: 812 },
     of: '[data-shot="failure-headline"]',
     pad: 8,

@@ -414,6 +414,13 @@
       "when": 1788460817902,
       "tag": "0058_flowery_shadowcat",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1788465678370,
+      "tag": "0059_broken_clea",
+      "breakpoints": true
     }
   ]
 }

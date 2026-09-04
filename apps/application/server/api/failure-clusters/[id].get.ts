@@ -1,5 +1,6 @@
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../utils/project-access';
 import { getFailureCluster } from '#shared/handlers/failure-clusters';
+import { resolveOwners } from '../../utils/scm/ownership';
 
 defineRouteMeta({
   openAPI: {
@@ -14,10 +15,22 @@ defineRouteMeta({
 
 export default eventHandler(async (event) => {
   const id = requireRouteId(event, 'id', 'cluster ID');
-  const { db } = await requireResolvedProjectAccess(event, id, resolveClusterProjectId, 'Failure cluster');
+  const { db, projectId } = await requireResolvedProjectAccess(event, id, resolveClusterProjectId, 'Failure cluster');
 
-  const result = await getFailureCluster(db, id);
+  const result = (await getFailureCluster(db, id)) as Awaited<ReturnType<typeof getFailureCluster>> & {
+    owner: { name: string; source: 'annotation' | 'codeowners' } | null;
+  };
   if (!result) throw apiError({ statusCode: 404, message: 'Failure cluster not found' });
+
+  // No `piwi:owner` annotation on the tests? The repository's CODEOWNERS still
+  // names one for the representative spec file.
+  const repFilePath = result.affectedTestCases[0]?.filePath;
+  if (!result.owner && repFilePath) {
+    const test = { filePath: repFilePath, owner: null };
+    const resolved = await resolveOwners(db, projectId, [test]).catch(() => new Map());
+    const owner = resolved.get(test)?.owner;
+    if (owner) result.owner = { name: owner, source: 'codeowners' };
+  }
 
   return result;
 });

@@ -50,7 +50,9 @@ The checklist is deliberately evidence-based rather than config-based, so it ans
 
 ## Home
 
-A quick health check across all projects: **stats cards** (projects, runs, active/passing projects, flaky count, slowest project), a **test-results trend chart** (pass/fail/skip/flaky over time), **recent projects**, and a getting-started snippet for teams that haven't wired up the reporter yet.
+A quick health check across all projects: a **stat strip** whose every number is a link (projects, failing now, flaky, average pass rate, runs today), an **Open failures** card, a **Project health** table (per-project run-history bars and a tendency badge), and **recent activity**. New instances show a getting-started wizard instead until the first run arrives.
+
+**Open failures** lists the failure clusters still open across the projects you can see, newest first by when they were last seen — each row shows the cluster name, its project, the number of affected tests, its age, the owner when known, its triage status and any pinned known-issue link. The row opens the cluster; reporters and admins can triage without leaving Home: `j` / `k` move the selection, `o` opens it, `r` resolves and `i` ignores.
 
 ## Analytics
 
@@ -91,19 +93,37 @@ Project **import** (`/projects/:id/import`, admins only) backfills runs recorded
 
 ## Test run detail
 
-A deep dive into a single run. The **summary header** shows status, duration, test counts, duration metrics (avg/P90), and metadata cards (CI/environment, source control, tags). While a run is still `running`, a **live progress bar** and streaming results appear in real time, and each still-running row in the test-case list shows the **step its worker is on right now**, inline under the test title. **Reports** buttons open or download the attached HTML reports (Playwright, Monocart).
+A deep dive into a single run. The **header** shows status, `Run #N`, the run label and marker on the first
+line with the primary action (**Copy retry command** on a red run, the **HTML report** on a green one), then
+one facts line — started, duration, branch, commit, author, environment, CI build — with a **Details** popover
+holding the rest (shards, Playwright and Piwi versions, avg/P90 durations, wasted time, storage and every
+report, tags, links, custom data). Below it, **one count bar** carries the numbers on its segments
+(*N passed · N failed · N passed on retry · N skipped · N didn't run*, zero segments hidden); clicking a
+segment filters the Tests tab and switches to it. While a run is still `running`, a **live progress bar** and
+streaming results appear in real time, and each still-running row shows the **step its worker is on right now**,
+inline under the test title.
 
 The right panel is tabbed:
 
-- **Test cases** — every test with browser icon, status, duration, location, errors, annotations, and traces; searchable, filterable by status/browser, and grouped by suite hierarchy (describe blocks).
-- **Insights** — what changed versus the last passing baseline: new regressions, recurring failures, fixed tests, new flaky tests, performance changes, worker imbalance, and new clusters. See [Run insights](./flaky-tests#run-insights).
-- **Failure groups** — failures grouped by error fingerprint, each with flaky/worker-correlation signals and actions to filter the list, trigger AI diagnosis, or open the cluster. See [AI diagnosis & clustering](./ai-diagnosis).
-- **Regression** *(shown when a baseline exists)* — the regression delta for this run at a glance.
-- **Timeline** — a horizontal per-worker timeline of test execution, with a span-type filter to isolate test phases (setup, actual test, wasted waits, teardown); click a bar to jump to that test case.
+- **Tests** — every execution as one row (status, title, exceptional badges with a `+N` overflow, the failure
+  headline and source path, duration, browser, retries, wasted time and its cluster). **Group by** *Cluster*
+  (the default on a red run — each group header names the cluster, its test count and triage status, with an
+  *Open cluster* link, and passing tests fold into a collapsed *Passed* group), *File* (with per-file tallies),
+  *File + Describe* (the file nested by its describe blocks) or *None*. Search matches the title, path **and**
+  error text; filter by status, browser, new regressions and
+  newly flaky. Select failing rows for bulk triage (quarantine, or set the cluster status) in any grouping.
+- **Insights** — what changed versus the last passing baseline: new regressions, recurring failures, fixed
+  tests, new flaky tests, performance changes, worker imbalance, and new clusters. See
+  [Run insights](./flaky-tests#run-insights).
+- **Since last pass** *(shown when a baseline exists)* — the regression delta for this run at a glance.
+- **Timeline** — a horizontal per-worker timeline of test execution, with a span-type filter to isolate test
+  phases (setup, actual test, wasted waits, teardown); click a bar to jump to that test.
 - **Compare** — pick a baseline run for a side-by-side delta (improved / regressed / unchanged).
-- **Slow endpoints** — network requests grouped by method + normalized route, with avg/p90/max duration and error rate. Requires the [capture fixtures](./capture-fixtures).
+- **Slow endpoints** — network requests grouped by method + normalized route, with avg/p90/max duration and
+  error rate. Requires the [capture fixtures](./capture-fixtures).
 
-Administrators can **delete** the entire run and its files from the header.
+Administrators can **delete** the entire run and its files from the header's More menu, which also copies a
+run summary and refreshes.
 
 ## Test case detail
 
@@ -112,17 +132,23 @@ them: an **execution** (`/test-run-cases/:id`) answers *"why did this attempt fa
 case** (`/test-cases/:id`) answers *"how has this test behaved over time?"*. Most links from a run land
 on an execution; the test's title links to the test case above it.
 
-A failing execution opens diagnosis-first: the error, a verdict, the cluster it belongs to, and an
-evidence funnel running from the call stack down to the ARIA snapshot — deeper still when a trace is
-attached. All of it, plus the bundled trace viewer, is described in
-[Failure evidence](./evidence). The summary shows one chip per **attempt** (with its outcome and
-duration) when a test retried, so "how did this execution get here" is answerable at a glance; every
-attempt is its own execution, and each chip links to that attempt's page while the one you are viewing
-is ringed.
+A failing execution reads top to bottom in one column: a **header** (status, title, the exceptional
+badges, the failing file and line, and Copy retry command, with a Details popover for the rest), the
+one-line **headline** (with the raw **error** one click away behind *Show raw error*), the **other
+clues**, then one **evidence** card whose content-level tabs — Timeline, Screen, Source, Network,
+Console, State, Performance — hold everything captured, deeper still when a trace is attached. Below the
+evidence, the **Fix** card gathers what to do (the locator fix, a fix-plan pointer, the diagnosis, how
+to verify, and the tests this failure blocked) and a **history** block strips this test's recent
+executions with its failing streak. All of it, plus the bundled trace viewer, is described in
+[Failure evidence](./evidence). The header's facts line shows the **attempts** as linked chips when a
+test retried, so "how did this execution get here" is answerable at a glance; every attempt is its own
+execution, and each chip links to that attempt's page while the one you are viewing is ringed.
 
 ## Failure cluster detail
 
-Each cluster (`/failure-clusters/:id`) opens on a summary — signature, affected tests, and **Triage** (set status open/resolved/ignored and write a note) — above a two-column body. Once a fix has landed the summary also carries the **resolution**: which verdict the runs support, the run and commit it landed in, and how long the cluster stayed open. See [Did the fix work?](./ai-diagnosis#did-the-fix-work). The left column collapses each investigation section to a header with an at-a-glance peek (click to expand, and the state is remembered): the **fix plan** (the diagnosis and its patch, the locator edits, the failing tests, the owner and the verify command — see [Fix plans](./ai-diagnosis#fix-plans)), the raw **error message**, an **alternative-locators** panel for broken locators, **test evidence** (one tab per affected case, each linking through to its test-run case, with screenshots, traces, failing steps, console/network signals and source), and **what changed** (the SCM diff since the last green run, with a baseline-commit picker and commit browser). The right column holds the **AI diagnosis** — an SCM-grounded LLM analysis whose cited evidence links back to the matching left-column section, with a **History** control for its previous versions and a staleness banner that only fires while the failure is still live. Full detail: [AI diagnosis & clustering](./ai-diagnosis).
+Each cluster (`/failure-clusters/:id`) reads top to bottom in one column. The **header** states the cluster name and one facts line — error kind, occurrences, affected tests, the first- and last-seen runs, the owner and the known-issue link — with **Re-run in CI** (or Copy retry command) as its one action and the rest in a More menu (quarantine all affected tests, move tests to a new cluster, copy summary). Under it sits the **triage control**: a segmented *Open / Resolved / Ignored* that saves on click, a note, and — once a fix has landed — the **fix verification** badge with its one sentence (which verdict the runs support, the run and commit it landed in, how long the cluster stayed open) and, when triage and fix verification disagree, a one-click reconcile action. See [Did the fix work?](./ai-diagnosis#did-the-fix-work).
+
+Below the header the failure reads as a one-line **headline** built from the cluster's sample error, with a **Show raw error** disclosure for the verbatim error and signature, then the deterministic **clues**. The **evidence** is one card whose content-level tabs — Timeline, Screen, Source, Network, Console, State, Performance — hold everything captured for the affected execution you select from the *from:* row on top; **Open execution** links through to that test-run case. Below the evidence come the **locator fix** panel for broken locators, the **fix plan** (the diagnosis and its patch, the locator edits, the failing tests, the owner and the verify command — see [Fix plans](./ai-diagnosis#fix-plans)), **what changed** (the SCM diff since the last green run, with a baseline-commit picker and commit browser), and the **AI diagnosis** — an SCM-grounded LLM analysis whose cited evidence links back to the matching evidence tab, with a **History** control for its previous versions and a staleness banner that only fires while the failure is still live. Full detail: [AI diagnosis & clustering](./ai-diagnosis).
 
 ## Offline export
 
