@@ -4,7 +4,15 @@
  * time, whether a citation is locatable). Kept out of the component so the
  * page's section locator gives the same answer during SSR and on the client.
  */
-export type EvidenceTabValue = 'timeline' | 'screen' | 'source' | 'network' | 'console' | 'state' | 'performance';
+export type EvidenceTabValue =
+  | 'timeline'
+  | 'attempts'
+  | 'screen'
+  | 'source'
+  | 'network'
+  | 'console'
+  | 'state'
+  | 'performance';
 
 export const EVIDENCE_SECTION_TAB: Record<string, EvidenceTabValue> = {
   steps: 'timeline',

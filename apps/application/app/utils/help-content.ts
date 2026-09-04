@@ -331,6 +331,11 @@ export const HELP_TOPICS = {
     text: 'A snapshot of the accessibility tree at the moment of failure — what assistive tech saw, and useful grounding for AI diagnosis. An empty card says whether it was not captured (add the capture fixtures) or captured with nothing to snapshot; with a trace and no fixtures it is recovered from the trace\'s error context and marked "derived from the trace".',
     doc: 'ai-diagnosis#what-a-diagnosis-contains',
   },
+  'case.attempts': {
+    title: 'Attempts',
+    text: 'When a test failed then passed on retry, this compares the failing attempt against the passing one and lists what differed — the error that was there then gone, a request that failed on only one attempt, a console error, a slower step, a duration or page-state change. Each difference links to the evidence it came from. That delta is the flakiness fingerprint, and it feeds the root-cause classifier.',
+    doc: 'flaky-tests#flaky-test-detection',
+  },
 
   // ── Test case across runs ─────────────────────────────────────────────
   'case.history-chart': {
