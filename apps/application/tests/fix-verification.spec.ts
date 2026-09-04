@@ -179,7 +179,7 @@ test.describe.serial('Fix verification', () => {
   test('the project cluster list shows the verdict next to the triage status', async ({ page, request }) => {
     const cluster = (await clusters(request, projectId)).find((c) => c.fixVerification === 'regressed')!;
 
-    await page.goto(`/projects/${projectId}?tab=failure-clusters`);
+    await page.goto(`/projects/${projectId}?tab=failures`);
     // Anchor on the row's own link rather than its text: the signature cell
     // renders the cluster title when it has one, so matching on error text
     // finds nothing the moment a cluster gets named.

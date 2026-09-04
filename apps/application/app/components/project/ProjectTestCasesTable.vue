@@ -17,9 +17,15 @@ const emit = defineEmits<{ total: [total: number] }>();
 
 const route = useRoute();
 const router = useRouter();
-const { treeView, setTreeView } = useTreeViewCookie('project-test-cases');
 
-const TREE_LIMIT = 1000;
+// Group by File shows the spec-health numbers as headers; None is the flat list.
+const GROUP_OPTIONS = ['none', 'file'] as const;
+type GroupBy = (typeof GROUP_OPTIONS)[number];
+const { raw: groupByRaw, set: setGroupBy } = useGroupByCookie('project-test-cases', GROUP_OPTIONS);
+const groupBy = computed<GroupBy>(() => (groupByRaw.value as GroupBy) ?? 'none');
+const grouped = computed(() => groupBy.value === 'file');
+
+const GROUP_LIMIT = 1000;
 const DEFAULT_PAGE_SIZE = 25;
 const PAGE_SIZE_OPTIONS = [
   { label: '10 / page', value: 10 },
@@ -74,13 +80,13 @@ watch(
     tagsFilter.value = value.trim();
   }, 300),
 );
-watch([q, statuses, tagsFilter, ownerFilter, age, sort, dir, pageSize, treeView], () => {
+watch([q, statuses, tagsFilter, ownerFilter, age, sort, dir, pageSize, grouped], () => {
   page.value = 1;
 });
 
 const query = computed(() => ({
-  limit: treeView.value ? TREE_LIMIT : pageSize.value,
-  offset: treeView.value ? 0 : (page.value - 1) * pageSize.value,
+  limit: grouped.value ? GROUP_LIMIT : pageSize.value,
+  offset: grouped.value ? 0 : (page.value - 1) * pageSize.value,
   ...(q.value ? { q: q.value } : {}),
   ...(statuses.value.length > 0 ? { status: statuses.value.join(',') } : {}),
   ...(tagsFilter.value ? { tags: tagsFilter.value } : {}),
@@ -158,22 +164,105 @@ function sortableHeader(label: string, key: TestCasesSort) {
 }
 
 const columns = computed<TableColumn<TestCaseWithStats>[]>(() => [
-  { accessorKey: 'title', header: sortableHeader('Test case', 'title') },
+  { accessorKey: 'title', header: sortableHeader('Test', 'title') },
   { accessorKey: 'status', header: sortableHeader('Status', 'status') },
   { accessorKey: 'totalRuns', header: sortableHeader('Runs', 'totalRuns') },
   { accessorKey: 'passRate', header: sortableHeader('Pass rate', 'passRate') },
   { id: 'results', header: 'Results' },
   { accessorKey: 'avgDuration', header: sortableHeader('Avg duration', 'avgDuration') },
   { accessorKey: 'lastRun', header: sortableHeader('Last run', 'lastRun') },
-  { id: 'actions', header: () => h('div', { class: 'text-right' }, 'Actions') },
 ]);
 
 const items = computed(() => data.value?.items ?? []);
 const total = computed(() => data.value?.total ?? 0);
 const showingFrom = computed(() => (total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1));
 const showingTo = computed(() =>
-  treeView.value ? items.value.length : Math.min(page.value * pageSize.value, total.value),
+  grouped.value ? items.value.length : Math.min(page.value * pageSize.value, total.value),
 );
+
+// ── Group by File: spec-health numbers as headers ─────────────────────────────
+// The spec-file prefix matches the spec-health endpoint (first two path segments)
+// so each group's header can carry that file's pass rate, flaky rate and timing.
+interface SpecHealth {
+  prefix: string;
+  passRate: number;
+  flakyRate: number;
+  failureCount: number;
+  testCount: number;
+  avgDuration: number;
+}
+
+const { data: specHealth, execute: loadSpecHealth } = useFetch<{ specs: SpecHealth[] }>(
+  () => `/api/projects/${props.projectId}/spec-health?days=90`,
+  { lazy: true, server: false, immediate: false },
+);
+
+// Fetch the spec-health numbers the first time the file grouping is shown.
+watch(
+  grouped,
+  (isGrouped) => {
+    if (isGrouped && !specHealth.value) loadSpecHealth();
+  },
+  { immediate: true },
+);
+
+const specHealthByPrefix = computed(() => {
+  const map = new Map<string, SpecHealth>();
+  for (const s of specHealth.value?.specs ?? []) map.set(s.prefix, s);
+  return map;
+});
+
+function specPrefix(filePath: string): string {
+  return filePath.split(/[\\/]/).slice(0, 2).join('/');
+}
+
+function formatMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+const collapsedGroups = ref<Set<string>>(new Set());
+function toggleGroup(prefix: string) {
+  const next = new Set(collapsedGroups.value);
+  if (next.has(prefix)) next.delete(prefix);
+  else next.add(prefix);
+  collapsedGroups.value = next;
+}
+
+const fileGroups = computed(() => {
+  const groups = new Map<string, TestCaseWithStats[]>();
+  for (const item of items.value) {
+    const prefix = specPrefix(item.filePath);
+    if (!groups.has(prefix)) groups.set(prefix, []);
+    groups.get(prefix)!.push(item);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([prefix, rows]) => {
+      const health = specHealthByPrefix.value.get(prefix);
+      const metrics = health
+        ? [
+            {
+              label: 'Pass',
+              value: `${Math.round(health.passRate * 100)}%`,
+              tone: (health.passRate >= 0.9 ? 'good' : health.passRate > 0 ? 'bad' : 'muted') as
+                | 'good'
+                | 'bad'
+                | 'muted',
+            },
+            { label: 'Flaky', value: `${Math.round(health.flakyRate * 100)}%`, tone: 'muted' as const },
+            {
+              label: 'Failures',
+              value: String(health.failureCount),
+              tone: (health.failureCount > 0 ? 'bad' : 'muted') as 'bad' | 'muted',
+            },
+            { label: 'Tests', value: String(health.testCount), tone: 'muted' as const },
+            { label: 'Avg', value: formatMs(health.avgDuration), tone: 'muted' as const },
+          ]
+        : null;
+      return { prefix, rows, metrics, open: !collapsedGroups.value.has(prefix) };
+    });
+});
 const hasSearchOrStatusFilter = computed(() => q.value !== '' || statuses.value.length > 0 || ownerFilter.value !== '');
 const hasAnyFilter = computed(() => hasSearchOrStatusFilter.value || age.value !== 0);
 const initialLoading = computed(() => status.value === 'pending' && !data.value);
@@ -197,27 +286,30 @@ defineExpose({ refresh });
 
     <FilterToolbar class="mb-4">
       <template #start>
-        <div class="flex items-center rounded-md border border-default overflow-hidden">
-          <button
-            type="button"
-            class="px-2 py-1 text-xs transition-colors"
-            :class="!treeView ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
-            title="Flat list"
-            @click="setTreeView(false)"
-          >
-            <UIcon name="i-lucide-list" class="size-3.5" />
-          </button>
-          <button
-            type="button"
-            class="px-2 py-1 text-xs transition-colors"
-            :class="treeView ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
-            title="Tree view"
-            @click="setTreeView(true)"
-          >
-            <UIcon name="i-lucide-folder-tree" class="size-3.5" />
-          </button>
+        <div class="flex items-center gap-1.5">
+          <span class="text-xs text-muted">Group by</span>
+          <div class="flex items-center rounded-md border border-default overflow-hidden">
+            <button
+              type="button"
+              class="px-2 py-1 text-xs transition-colors"
+              :class="groupBy === 'none' ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
+              title="Flat list"
+              @click="setGroupBy('none')"
+            >
+              None
+            </button>
+            <button
+              type="button"
+              class="px-2 py-1 text-xs transition-colors"
+              :class="groupBy === 'file' ? 'bg-primary text-white dark:text-white' : 'text-muted hover:bg-elevated/60'"
+              title="Group by spec file, with per-file health"
+              @click="setGroupBy('file')"
+            >
+              File
+            </button>
+          </div>
         </div>
-        <span class="text-sm text-muted tabular-nums"> {{ total }} {{ total === 1 ? 'case' : 'cases' }} </span>
+        <span class="text-sm text-muted tabular-nums"> {{ total }} {{ total === 1 ? 'test' : 'tests' }} </span>
         <UButton
           v-if="ownerFilter"
           size="xs"
@@ -324,17 +416,88 @@ defineExpose({ refresh });
 
     <template v-else>
       <div :class="{ 'opacity-60 pointer-events-none': status === 'pending' }" class="transition-opacity">
-        <!-- Tree view -->
-        <template v-if="treeView">
+        <!-- Group by File: a header carries the spec-health numbers per spec file -->
+        <template v-if="grouped">
           <UAlert
             v-if="items.length < total"
             color="warning"
             variant="subtle"
             icon="i-lucide-triangle-alert"
             class="mb-3"
-            :title="`Showing the first ${items.length} of ${total} cases — narrow the search or filters to see the rest.`"
+            :title="`Showing the first ${items.length} of ${total} tests — narrow the search or filters to see the rest.`"
           />
-          <ProjectTestCasesTree :items="items" :has-filter="hasSearchOrStatusFilter" />
+          <div class="space-y-3">
+            <div
+              v-for="group in fileGroups"
+              :key="group.prefix"
+              class="rounded-lg border border-default overflow-hidden"
+            >
+              <TestRowGroup
+                :label="group.prefix"
+                :count="group.rows.length"
+                :open="group.open"
+                :metrics="group.metrics"
+                icon="i-lucide-folder"
+                @toggle="toggleGroup(group.prefix)"
+              />
+              <div v-if="group.open">
+                <div
+                  v-for="tc in group.rows"
+                  :key="tc.id"
+                  class="flex items-center gap-3 border-t border-default px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-900/40"
+                >
+                  <div class="min-w-0 flex-1 space-y-0.5">
+                    <NuxtLink
+                      :to="`/test-cases/${tc.id}`"
+                      class="font-medium text-primary hover:underline truncate block"
+                      :title="tc.title"
+                    >
+                      {{ tc.title }}
+                    </NuxtLink>
+                    <TestMetaBadges
+                      :tags="tc.tags"
+                      :meta="{
+                        owner: tc.owner ?? undefined,
+                        priority: toTestPriority(tc.priority),
+                        feature: tc.feature ?? undefined,
+                        link: tc.link ?? undefined,
+                      }"
+                      :max-tags="3"
+                    />
+                  </div>
+                  <UBadge
+                    :color="testCaseCategoryColor(tc.status)"
+                    variant="subtle"
+                    size="sm"
+                    class="capitalize shrink-0"
+                  >
+                    {{ formatStatusLabel(tc.status) }}
+                  </UBadge>
+                  <PassRateIndicator :rate="tc.passRate" class="shrink-0" />
+                  <div class="w-28 shrink-0 hidden sm:block">
+                    <TestStatusBar
+                      :passed="tc.passedRuns"
+                      :failed="tc.failedRuns"
+                      :skipped="tc.skippedRuns"
+                      :flaky="tc.flakyRuns"
+                      :did-not-run="tc.didNotRunRuns"
+                      :total="tc.totalRuns"
+                    />
+                  </div>
+                  <DurationValue
+                    :ms="tc.avgDuration"
+                    class="hidden md:block shrink-0 text-muted tabular-nums w-16 text-right"
+                  />
+                  <span
+                    class="hidden lg:block shrink-0 text-muted tabular-nums w-20 text-right"
+                    :title="prettyDateFormat(tc.lastRun)"
+                  >
+                    {{ tc.lastRun != null ? formatRelativeTime(tc.lastRun) : '—' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </template>
 
         <!-- Flat view: table from md up, cards below -->
@@ -420,19 +583,6 @@ defineExpose({ refresh });
                 <span class="text-sm text-muted" :title="prettyDateFormat(row.original.lastRun)">
                   {{ row.original.lastRun != null ? formatRelativeTime(row.original.lastRun) : '—' }}
                 </span>
-              </template>
-
-              <template #actions-cell="{ row }">
-                <div class="flex justify-end">
-                  <UButton
-                    :to="`/test-cases/${row.original.id}`"
-                    size="sm"
-                    variant="outline"
-                    trailing-icon="i-lucide-arrow-right"
-                  >
-                    View
-                  </UButton>
-                </div>
               </template>
             </UTable>
           </div>

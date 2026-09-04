@@ -267,7 +267,7 @@ const SCENES = [
     // row until something asks for a classification.
     async prepare({ request, base }) {
       const flaky = await (await request.get(`${base}/api/projects/1/flaky-tests`)).json();
-      for (const test of flaky) {
+      for (const test of flaky.items ?? []) {
         await request.post(`${base}/api/projects/1/flaky-classify`, { data: { testCaseId: test.testCaseId } });
       }
     },

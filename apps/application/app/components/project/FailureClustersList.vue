@@ -8,6 +8,8 @@ const props = defineProps<{
   projectId: string | number;
 }>();
 
+const emit = defineEmits<{ count: [total: number] }>();
+
 const statusFilter = ref<string | undefined>(undefined);
 const {
   data: clusters,
@@ -27,6 +29,11 @@ const {
     transform: (r: { items: ProjectFailureCluster[] }) => r.items,
   },
 );
+
+// Only the unfiltered list stands for the project's cluster count.
+watch(clusters, (list) => {
+  if (list && !statusFilter.value) emit('count', list.length);
+});
 
 const resolutionOf = (cluster: ProjectFailureCluster) => fixVerificationBadge(cluster.fixVerification);
 
@@ -102,7 +109,6 @@ const columns = computed<TableColumn<ProjectFailureCluster>[]>(() => [
   { accessorKey: 'occurrences', header: createSortHeader<ProjectFailureCluster>('Occurrences') },
   { accessorKey: 'diagnosis', header: 'AI' },
   { accessorKey: 'lastSeenAt', header: createSortHeader<ProjectFailureCluster>('Last seen') },
-  { id: 'actions', header: 'Actions' },
 ]);
 </script>
 
@@ -177,10 +183,6 @@ const columns = computed<TableColumn<ProjectFailureCluster>[]>(() => [
             :aria-label="`Select cluster ${describeCluster(row.original)}`"
             @change="toggleRow(row.original.id)"
           />
-        </template>
-
-        <template #actions-header>
-          <div class="text-right">Actions</div>
         </template>
 
         <template #signature-cell="{ row }">
@@ -276,19 +278,6 @@ const columns = computed<TableColumn<ProjectFailureCluster>[]>(() => [
             <span v-if="row.original.lastSeenAt" class="ml-1 text-xs text-gray-400">
               ({{ formatRelativeTime(row.original.lastSeenAt) }})
             </span>
-          </div>
-        </template>
-
-        <template #actions-cell="{ row }">
-          <div class="flex justify-end">
-            <UButton
-              :to="`/failure-clusters/${row.original.id}`"
-              size="sm"
-              variant="outline"
-              trailing-icon="i-lucide-arrow-right"
-            >
-              View
-            </UButton>
           </div>
         </template>
       </UTable>

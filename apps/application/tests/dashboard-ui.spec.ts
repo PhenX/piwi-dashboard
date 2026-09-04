@@ -83,7 +83,10 @@ test.describe('Dashboard UI Tests', () => {
     // Click on first test run. Under heavy parallel load the click has been
     // observed to land without navigating (passes deterministically solo);
     // the mechanism is unverified — retry rather than asserting a cause.
-    const viewButton = page.locator('table').getByRole('link', { name: 'View' }).first();
+    const viewButton = page
+      .locator('table')
+      .getByRole('link', { name: /^Run #/ })
+      .first();
     await expect(viewButton).toBeVisible({ timeout: 10000 });
     await expect(async () => {
       await viewButton.click();
@@ -100,7 +103,10 @@ test.describe('Dashboard UI Tests', () => {
     await page.getByRole('link', { name: PROJECT.UI_TEST }).first().click();
     await page.waitForURL(/\/projects\/\d+/);
     await waitForHydration(page);
-    const viewButton = page.locator('table').getByRole('link', { name: 'View' }).first();
+    const viewButton = page
+      .locator('table')
+      .getByRole('link', { name: /^Run #/ })
+      .first();
     await expect(viewButton).toBeVisible({ timeout: 10000 });
     await expect(async () => {
       await viewButton.click();
