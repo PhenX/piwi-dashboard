@@ -17,11 +17,16 @@ export interface FilterBarState {
   fullRunsOnly: boolean;
 }
 
-const props = defineProps<{
-  modelValue: FilterBarState;
-  availableEnvironments: string[];
-  availableBranches: string[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    modelValue: FilterBarState;
+    availableEnvironments: string[];
+    availableBranches: string[];
+    /** Hide the built-in reset button when the caller supplies its own via #trailing. */
+    showReset?: boolean;
+  }>(),
+  { showReset: true },
+);
 
 const emit = defineEmits<{
   'update:modelValue': [value: FilterBarState];
@@ -54,6 +59,8 @@ function reset() {
 
 <template>
   <div class="flex items-center gap-3 flex-wrap">
+    <slot name="leading" />
+
     <USelectMenu
       v-if="availableEnvironments.length > 0"
       v-model="environments"
@@ -108,7 +115,16 @@ function reset() {
       Full runs only
     </label>
 
-    <UButton v-if="hasActiveFilters" variant="ghost" size="sm" color="neutral" icon="i-lucide-x" @click="reset">
+    <slot name="trailing" />
+
+    <UButton
+      v-if="showReset && hasActiveFilters"
+      variant="ghost"
+      size="sm"
+      color="neutral"
+      icon="i-lucide-x"
+      @click="reset"
+    >
       Reset
     </UButton>
   </div>
