@@ -12,6 +12,7 @@ import {
   failureDiagnoses,
   failureDiagnosisVersions,
 } from '../../server/database/schema';
+import { preferExemplar } from '../prefer-exemplar';
 import type { DrizzleDB } from './db';
 
 /** Per-fingerprint accumulator for the batch being persisted. */
@@ -42,18 +43,35 @@ export async function getOrCreateFailureClusters(
   const ids = new Map<string, number>();
   if (pending.size === 0) return ids;
 
-  const bumpExisting = (clusterId: number, count: number) =>
+  // Bump a re-hit cluster: always advance lastSeenRunId/occurrences, and refresh
+  // the display exemplar (sampleError + its derived signature/errorType/selector)
+  // to this occurrence when it is a better one. The fingerprint and the frozen
+  // fingerprintSample are deliberately left untouched, so refreshing the display
+  // can never destabilize re-fingerprinting.
+  const bumpExisting = (clusterId: number, p: PendingCluster, currentSampleError: string | null) =>
     db
       .update(failureClusters)
       .set({
         lastSeenRunId: testRunId,
-        occurrences: sql`${failureClusters.occurrences} + ${count}`,
+        occurrences: sql`${failureClusters.occurrences} + ${p.count}`,
         updatedAt: new Date(),
+        ...(preferExemplar(currentSampleError ?? '', p.sampleError)
+          ? {
+              sampleError: p.sampleError,
+              signature: p.fp.signature,
+              errorType: p.fp.errorType,
+              selector: p.fp.selector,
+            }
+          : {}),
       })
       .where(eq(failureClusters.id, clusterId));
 
   const existing = await db
-    .select({ id: failureClusters.id, fingerprint: failureClusters.fingerprint })
+    .select({
+      id: failureClusters.id,
+      fingerprint: failureClusters.fingerprint,
+      sampleError: failureClusters.sampleError,
+    })
     .from(failureClusters)
     .where(and(eq(failureClusters.projectId, projectId), inArray(failureClusters.fingerprint, [...pending.keys()])));
 
@@ -62,7 +80,7 @@ export async function getOrCreateFailureClusters(
       const p = pending.get(cluster.fingerprint);
       if (!p) return;
       ids.set(cluster.fingerprint, cluster.id);
-      await bumpExisting(cluster.id, p.count);
+      await bumpExisting(cluster.id, p, cluster.sampleError);
     }),
   );
 
@@ -71,8 +89,13 @@ export async function getOrCreateFailureClusters(
   const unmatched = [...pending.keys()].filter((fp) => !ids.has(fp));
   if (unmatched.length > 0) {
     const aliases = await db
-      .select({ fingerprint: failureClusterAliases.fingerprint, clusterId: failureClusterAliases.clusterId })
+      .select({
+        fingerprint: failureClusterAliases.fingerprint,
+        clusterId: failureClusterAliases.clusterId,
+        sampleError: failureClusters.sampleError,
+      })
       .from(failureClusterAliases)
+      .innerJoin(failureClusters, eq(failureClusters.id, failureClusterAliases.clusterId))
       .where(
         and(eq(failureClusterAliases.projectId, projectId), inArray(failureClusterAliases.fingerprint, unmatched)),
       );
@@ -81,7 +104,7 @@ export async function getOrCreateFailureClusters(
         const p = pending.get(a.fingerprint);
         if (!p || ids.has(a.fingerprint)) return;
         ids.set(a.fingerprint, a.clusterId);
-        await bumpExisting(a.clusterId, p.count);
+        await bumpExisting(a.clusterId, p, a.sampleError);
       }),
     );
   }
@@ -116,12 +139,12 @@ export async function getOrCreateFailureClusters(
       }
 
       const winner = await db
-        .select({ id: failureClusters.id })
+        .select({ id: failureClusters.id, sampleError: failureClusters.sampleError })
         .from(failureClusters)
         .where(and(eq(failureClusters.projectId, projectId), eq(failureClusters.fingerprint, fingerprint)));
       if (winner[0]) {
         ids.set(fingerprint, winner[0].id);
-        await bumpExisting(winner[0].id, p.count);
+        await bumpExisting(winner[0].id, p, winner[0].sampleError);
       }
     }),
   );
