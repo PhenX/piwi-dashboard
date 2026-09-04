@@ -83,7 +83,7 @@ Each page becomes **one column, read top to bottom, in the same order everywhere
 8. **A list row is one component.** Same row in the run list, the file grouping, the cluster grouping, the cluster's affected tests and the project catalog; the row click opens the object (no *View* column).
 9. **Empty states say one of three things** — *not captured (enable X)*, *nothing happened*, *not applicable* — and never own a card of their own: they live inside the tab they explain.
 10. **One name per concept** (§3). Labels come from one helper per enum; no raw enum values on screen.
-11. **Mobile first stays a rule** (`apps/application/AGENTS.md`): every screen is checked at 390 px before it is committed; a single column is what makes that cheap.
+11. **Mobile first stays a rule** (`apps/application/AGENTS.md`): every screen is checked at 390 px before it is committed; a single column is what makes that cheap. Below the `sm` breakpoint the page gutter is at most 8 px per side and a card adds at most 12 px of its own — the panel padding and the card padding no longer stack at their desktop values, so about 40 px of a 390 px screen come back to the content.
 
 ---
 
