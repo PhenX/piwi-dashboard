@@ -112,9 +112,11 @@ test.describe('Dashboard UI Tests', () => {
 
     await page.getByRole('button', { name: /^Timeline/ }).click();
     await page.getByRole('button', { name: /^Changes$/ }).click();
-    // The Changes tab renders one of its states depending on whether the run has
-    // an earlier baseline; any of them proves the tab switched and loaded.
-    await expect(page.getByText(/Compared with|No baseline run found|No changes against the baseline/)).toBeVisible({
+    // Either the baseline selector (a baseline exists) or the no-baseline empty
+    // state renders — the two are mutually exclusive, so matching just them
+    // proves the tab switched and loaded without a strict-mode clash with the
+    // "no changes" note that can sit below the selector.
+    await expect(page.getByText(/Compared with|No baseline run found/).first()).toBeVisible({
       timeout: 15000,
     });
   });
