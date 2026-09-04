@@ -17,11 +17,22 @@ const props = defineProps<{
   storageKey?: string;
   /** Whether the card starts folded on first visit (no stored cookie). */
   defaultFolded?: boolean;
+  /** Drop the "Failure evidence" frame — render each kind as a plain bare section. */
+  embedded?: boolean;
 }>();
 
 const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
 const cardBind = computed(() =>
   props.storageKey ? { storageKey: props.storageKey, defaultFolded: props.defaultFolded } : {},
+);
+
+// Embedded: no "Failure evidence" frame at all — each kind (screenshots, video,
+// traces, attachments) carries its own plain heading in the tab it sits in.
+const wrapperComponent = computed(() => (props.embedded ? 'div' : cardComponent.value));
+const wrapperBind = computed(() =>
+  props.embedded
+    ? {}
+    : { icon: 'i-lucide-camera', title: 'Failure evidence', count: totalCount.value, ...cardBind.value },
 );
 
 const config = useRuntimeConfig();
@@ -72,24 +83,18 @@ defineExpose({
 </script>
 
 <template>
-  <component
-    :is="cardComponent"
-    ref="card"
-    v-bind="cardBind"
-    icon="i-lucide-camera"
-    title="Failure evidence"
-    :count="totalCount"
-  >
-    <template v-if="storageKey" #folded>{{ peek }}</template>
+  <component :is="wrapperComponent" ref="card" v-bind="wrapperBind">
+    <template v-if="storageKey && !embedded" #folded>{{ peek }}</template>
 
-    <div class="space-y-3">
-      <TestEvidenceScreenshots :attachments="attachments" />
-      <TestEvidenceVideos :attachments="attachments" />
-      <TestEvidenceTraces :traces="traces" />
+    <div :class="embedded ? 'space-y-4' : 'space-y-3'">
+      <TestEvidenceScreenshots :attachments="attachments" :embedded="embedded" />
+      <TestEvidenceVideos :attachments="attachments" :embedded="embedded" />
+      <TestEvidenceTraces :traces="traces" :embedded="embedded" />
 
       <!-- Non-media attachments -->
       <TestEvidenceSection
         v-if="otherAttachments.length"
+        :embedded="embedded"
         icon="i-lucide-paperclip"
         label="Attachments"
         :count="otherAttachments.length"

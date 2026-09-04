@@ -6,7 +6,14 @@
  * it can earn its way out, and the table says when it has rather than waiting
  * to be asked.
  */
-const props = defineProps<{ projectId: string | number; projectName?: string | null }>();
+const props = defineProps<{
+  projectId: string | number;
+  projectName?: string | null;
+  /** Hide the "Worth quarantining" card — its role is the flaky list's Quarantine action. */
+  hideCandidates?: boolean;
+}>();
+
+const emit = defineEmits<{ count: [active: number] }>();
 
 interface QuarantineEntry {
   id: number;
@@ -45,6 +52,8 @@ const busy = ref<number | null>(null);
 const { data, status, error, refresh } = await useFetch<QuarantineResponse>(
   () => `/api/projects/${props.projectId}/quarantine`,
 );
+
+watch(data, (d) => emit('count', d?.debt.active ?? 0));
 
 function formatAge(ms: number): string {
   const hours = Math.round(ms / 3_600_000);
@@ -169,7 +178,7 @@ async function release(testCaseId: number) {
     </SectionCard>
 
     <SectionCard
-      v-if="data && data.candidates.length > 0"
+      v-if="!hideCandidates && data && data.candidates.length > 0"
       title="Worth quarantining"
       icon="i-lucide-lightbulb"
       :count="data.candidates.length"

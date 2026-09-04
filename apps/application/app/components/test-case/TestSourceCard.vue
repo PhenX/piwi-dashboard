@@ -23,11 +23,19 @@ const props = defineProps<{
   storageKey?: string;
   /** Whether the card starts folded on first visit (no stored cookie). */
   defaultFolded?: boolean;
+  /** Drop the card frame and padding — render a plain heading row over the body. */
+  embedded?: boolean;
 }>();
 
-const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
+const cardComponent = computed(() =>
+  props.embedded ? SectionCard : props.storageKey ? CollapsibleSectionCard : SectionCard,
+);
 const cardBind = computed(() =>
-  props.storageKey ? { storageKey: props.storageKey, defaultFolded: props.defaultFolded } : {},
+  props.embedded
+    ? { embedded: true }
+    : props.storageKey
+      ? { storageKey: props.storageKey, defaultFolded: props.defaultFolded }
+      : {},
 );
 
 const { data: stack, pending: stackPending } = useTraceCallStack(

@@ -44,7 +44,7 @@ defineExpose({ setFolded, reveal });
 
 <template>
   <div ref="rootEl" class="scroll-mt-4">
-    <UCard :ui="{ header: 'p-3 sm:px-4 sm:py-3', body: folded ? 'p-0 sm:p-0' : '' }" :class="folded && 'divide-y-0'">
+    <UCard :ui="{ header: 'p-2.5 sm:px-4 sm:py-3', body: folded ? 'p-0 sm:p-0' : '' }" :class="folded && 'divide-y-0'">
       <template #header>
         <div class="flex items-center justify-between gap-2">
           <!-- role=button (not <button>) so the nested HelpHint button stays valid HTML -->

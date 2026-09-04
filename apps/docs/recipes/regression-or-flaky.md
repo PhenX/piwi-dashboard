@@ -9,21 +9,21 @@ The most common question in a red CI run, and the most expensive one to answer w
 regression and you ship the bug; chase a flake and you lose an afternoon. Piwi answers it from history
 you already have, in about a minute.
 
-## 1. Open the run's Insights tab
+## 1. Open the run's Changes tab
 
-A run compares itself against **its last passing baseline** and sorts the failures for you. The
-distinction you want is right there in the headings:
+A run compares itself against **one baseline** — the last passing run on the same branch by default —
+and sorts the failures for you. The distinction you want is right there in the headings:
 
-- **New regressions** — this test was passing on the baseline and is failing now.
-- **Recurring failures** — it was already failing before your change.
-- **New flaky** — it failed and passed within the same run, or has started alternating.
+- **New failures** — this test was passing on the baseline and is failing now.
+- **Still failing** — it was already failing before your change.
+- **Newly flaky / passed on retry** — it passed but needed a retry.
 
 <figure>
-  <img src="/screenshots/run-insights.png" alt="Run Insights tab showing pass-rate delta, new regressions, and new flaky tests versus the baseline">
-  <figcaption>The Insights tab — pass-rate and duration deltas against the last green run, with new regressions separated from newly flaky tests.</figcaption>
+  <img src="/screenshots/run-changes.png" alt="Run Changes tab showing the baseline selector, new failures, fixed tests and the commits landed since the baseline">
+  <figcaption>The Changes tab — read against one baseline, with new failures separated from tests that only passed on retry.</figcaption>
 </figure>
 
-If your test is under **New flaky**, stop here: it isn't your change. Jump to
+If your test is under **Newly flaky / passed on retry**, stop here: it isn't your change. Jump to
 [cutting flakiness](./flaky-cleanup) when you have time to spend on it.
 
 ## 2. Check the test's own history

@@ -14,6 +14,8 @@ const props = defineProps<{
   testRunsCaseId: number;
   /** When set, the card folds to a header with a peek (persisted per user). */
   storageKey?: string;
+  /** Drop the card frame and padding — render a plain heading row over the body. */
+  embedded?: boolean;
 }>();
 
 interface DomSnapshotResponse {
@@ -24,8 +26,12 @@ interface DomSnapshotResponse {
   action?: string;
 }
 
-const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
-const cardBind = computed(() => (props.storageKey ? { storageKey: props.storageKey } : {}));
+const cardComponent = computed(() =>
+  props.embedded ? SectionCard : props.storageKey ? CollapsibleSectionCard : SectionCard,
+);
+const cardBind = computed(() =>
+  props.embedded ? { embedded: true } : props.storageKey ? { storageKey: props.storageKey } : {},
+);
 
 const {
   data: snapshot,
