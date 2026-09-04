@@ -214,12 +214,12 @@ const SCENES = [
   },
   {
     name: 'gather-evidence',
-    description: 'Failing execution, Diagnosis tab: the error and the evidence gathered on one screen (dark)',
+    description: 'Failing execution: the headline, the error and the evidence tabs on one screen (dark)',
     tags: ['docs'],
     out: 'docs',
     // Execution 37 carries an attachment, a trace and a visual diff, so the
     // evidence cards are populated rather than empty.
-    route: '/test-run-cases/37?tab=diagnosis',
+    route: '/test-run-cases/37',
     viewport: { width: 1560, height: 1400 },
     colorScheme: 'dark',
   },
@@ -517,11 +517,11 @@ const SCENES = [
   // ── Failure headline (report artifacts) ──────────────────────────────────
   {
     name: 'failure-headline',
-    description: 'Failing execution, Diagnosis tab: the one-line headline card above the raw error',
+    description: 'Failing execution: the one-line headline card above the raw error',
     tags: ['desktop'],
     // Execution 37 is clustered with a sibling in its run, so the facts row
     // carries the cluster link next to the why and since-when chips.
-    route: '/test-run-cases/37?tab=diagnosis',
+    route: '/test-run-cases/37',
     viewport: { width: 1280, height: 900 },
     of: '[data-shot="failure-headline"]',
     pad: 12,
@@ -530,7 +530,7 @@ const SCENES = [
     name: 'failure-headline-mobile',
     description: 'The same headline card at phone width',
     tags: ['desktop'],
-    route: '/test-run-cases/37?tab=diagnosis',
+    route: '/test-run-cases/37',
     viewport: { width: 375, height: 812 },
     of: '[data-shot="failure-headline"]',
     pad: 8,

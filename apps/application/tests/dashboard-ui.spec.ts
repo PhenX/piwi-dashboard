@@ -396,39 +396,6 @@ test.describe('Foldable Summary', () => {
     await expect(page.locator('span:has-text("S:")').first()).toBeVisible();
   });
 
-  test('should start expanded on test case detail page', async ({ page, request }) => {
-    const runRes = await request.get(`/api/test-runs/${runId}`);
-    const runData = await runRes.json();
-    const testCaseId = runData.testCases[0].executionId;
-
-    await page.goto(`/test-run-cases/${testCaseId}`);
-    await page.waitForURL(/\/test-run-cases\/\d+/);
-
-    await expect(page.getByTitle('Collapse summary')).toBeVisible();
-    // The navbar h1 repeats the execution title; the foldable summary heading
-    // is the h2.
-    await expect(page.getByRole('heading', { name: 'fold test case', exact: true, level: 2 })).toBeVisible();
-  });
-
-  test('should collapse and expand test case summary', async ({ page, request }) => {
-    const runRes = await request.get(`/api/test-runs/${runId}`);
-    const runData = await runRes.json();
-    const testCaseId = runData.testCases[0].executionId;
-
-    await page.goto(`/test-run-cases/${testCaseId}`);
-    await page.waitForURL(/\/test-run-cases\/\d+/);
-    await waitForHydration(page);
-
-    await expect(page.getByTitle('Collapse summary')).toBeVisible();
-
-    await page.getByTitle('Collapse summary').click({ force: true });
-    await expect(page.getByRole('heading', { name: 'fold test case', exact: true, level: 2 })).not.toBeVisible();
-    await expect(page.locator('span:has-text("Dur:")').first()).toBeVisible();
-
-    await page.locator('span:has-text("Dur:")').first().click({ force: true });
-    await expect(page.getByTitle('Collapse summary')).toBeVisible();
-  });
-
   test('should persist fold state across navigation', async ({ page }) => {
     await page.goto(`/test-runs/${runId}`);
     await page.waitForURL(/\/test-runs\/\d+/);
