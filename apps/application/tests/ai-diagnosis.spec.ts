@@ -62,8 +62,26 @@ function buildMockAiResponse(): AiDiagnosisResult {
 function startMockAiServer(port: number): http.Server {
   const server = http.createServer((req, res) => {
     if (req.method === 'POST' && req.url?.includes('/chat/completions')) {
-      req.on('data', () => {});
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
       req.on('end', () => {
+        const parsed = JSON.parse(body || '{}') as Record<string, unknown>;
+        if ('max_tokens' in parsed) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              error: {
+                message:
+                  "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+                type: 'invalid_request_error',
+                param: 'max_tokens',
+                code: 'unsupported_parameter',
+              },
+            }),
+          );
+          return;
+        }
+
         const diagResult = buildMockAiResponse();
         const responseContent = JSON.stringify(diagResult);
         const payload = {
@@ -107,6 +125,22 @@ function startStreamingMockAiServer(port: number): http.Server {
           parsed = JSON.parse(body || '{}');
         } catch {
           /* ignore */
+        }
+
+        if ('max_tokens' in parsed) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              error: {
+                message:
+                  "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+                type: 'invalid_request_error',
+                param: 'max_tokens',
+                code: 'unsupported_parameter',
+              },
+            }),
+          );
+          return;
         }
 
         const diagResult = buildMockAiResponse();
