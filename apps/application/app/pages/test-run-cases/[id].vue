@@ -795,7 +795,7 @@ provide(clusterSectionLocatorKey, {
                   Open
                 </UButton>
               </div>
-              <TestCaseAiCard v-else :test-runs-case-id="Number(testCaseId)" :chrome="false" />
+              <DiagnosisPanel v-else scope="execution" :execution-id="Number(testCaseId)" />
             </template>
 
             <!-- Re-run in CI, or run locally in the desktop shell -->
