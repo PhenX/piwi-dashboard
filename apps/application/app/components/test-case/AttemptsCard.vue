@@ -81,7 +81,7 @@ function attemptLabel(retry: number): string {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4" data-shot="attempts-diff">
     <!-- ── Attempt strip ──────────────────────────────────────────────────── -->
     <SectionCard embedded icon="i-lucide-repeat" title="Attempts" help="case.attempts">
       <ul class="flex flex-col sm:flex-row sm:flex-wrap gap-2">
