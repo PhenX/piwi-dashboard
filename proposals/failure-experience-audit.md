@@ -356,9 +356,9 @@ All fourteen landed in PRs #428 (docs), #429 (reporter and alerts), #430 (UI) an
 Each now lands in a **slot the UI simplification reserved** (`ui-simplification.md` §11, last row), so these build on the rebuilt screens rather than the pages the audit first described.
 
 - ✅ **C** the clue engine, with clues fed into the diagnosis prompt as a first-class section and used to prioritize the auto-diagnose budget. *(#435)*
-- 🔄 **L** the unified investigation layout — the UI simplification. Execution, cluster and run pages rebuilt (in `main`); the project page, the run's Changes/Timeline split, the Home *Open failures* card and the vocabulary/docs sweep remain. Tracked in [`ui-simplification.md`](ui-simplification.md), not restarted here.
-- ⬜ **D** the failure inbox. The UI plan's Home *Open failures* card is D at its smallest; the audit's D is the full inbox on top of it — snooze, assign, bulk actions and a "since you last looked" cut. Build it after that card lands.
-- ⬜ **E** attempt diffing for flaky tests, feeding the root-cause classifier. Home: an **Attempts** tab in `EvidenceTabs` shown when a test has more than one attempt, diffing the failing attempt against the passing one (error, timing, network, page state).
+- ✅ **L** the unified investigation layout — the UI simplification. Execution, cluster, run and project pages, the run's Changes/Timeline split, the Home *Open failures* card and every test list rebuilt (PRs #442–#456 in `main`, 2026-09-04); the vocabulary/docs sweep is #459. Tracked in [`ui-simplification.md`](ui-simplification.md), not restarted here.
+- ⬜ **D** the failure inbox. The UI plan's Home *Open failures* card (#442) is D at its smallest; the audit's D is the full inbox on top of it — snooze, assign, bulk actions and a "since you last looked" cut.
+- 🔄 **E** attempt diffing for flaky tests, feeding the root-cause classifier. Home: an **Attempts** tab in `EvidenceTabs` shown when a test has more than one attempt, diffing the failing attempt against the passing one (error, timing, network, page state). In progress in #458.
 - ⬜ **F** reproduction bundle + generated bisect. Home: a **Reproduce** section in `FixCard` › Verify, beside the retry command and *Re-run in CI*.
 - ⬜ **J** sampled green ARIA snapshots + structural page diff. Home: a **Page diff** toggle on the Screen evidence tab; needs the reporter to sample an ARIA snapshot on green runs.
 - ⬜ **K** resolved-cluster memory. Home: a **Fixed before** line in the Fix block, surfacing how a matching cluster was resolved previously.

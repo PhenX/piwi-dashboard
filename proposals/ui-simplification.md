@@ -1,6 +1,6 @@
 # Simpler screens around tests — a UI plan
 
-**Status:** proposal, no code changes · **Scope:** every dashboard screen a developer meets between "the run is red" and "the fix is verified" — the execution page, the failure cluster page, the run page, the project page, the test history page, home and the lists that connect them · **Date:** 2026-09-03 · **Builds on:** [`failure-experience-audit.md`](failure-experience-audit.md)
+**Status:** shipped — PRs #442–#456 merged on 2026-09-04, the sweep (#459) open for review; delivery record at the end of §11 · **Scope:** every dashboard screen a developer meets between "the run is red" and "the fix is verified" — the execution page, the failure cluster page, the run page, the project page, the test history page, home and the lists that connect them · **Date:** 2026-09-03 · **Builds on:** [`failure-experience-audit.md`](failure-experience-audit.md)
 
 This plan is the UI half of the failure audit. The audit fixed *what the dashboard knows* about a red run: the one-line headline, the clues, the failure timeline, the three-state empty cards, the fix plan, the loop-closing rules (all shipped, see its §7). It left one big bet open that is entirely about the screen — **L, one investigation page with a fixed reading order** — and two more that need a place to land: **D** (the failure inbox) and **E/F/J/K**, which each add one more block to the investigation. This document designs L for every page around tests, prepares the places for D–K, and removes what the audit's additions made redundant: the same fact is now shown three times on the execution page, and the run page has seven tabs that answer overlapping questions.
 
@@ -57,17 +57,17 @@ Each page becomes **one column, read top to bottom, in the same order everywhere
 
 ### 1.6 In numbers
 
-| Measure | Today | Target |
-|---|---|---|
-| Execution page: height to the failure screenshot, default state, 1280 px | ~2 000 px | ≤ 900 px (on the first screen at 1280 × 800) |
-| Execution page: page-level tabs / cards on the Diagnosis tab | 5 / 14 | 0 / 5 |
-| Cluster page: sections folded on first visit | 7 of 8 | 0 |
-| Run page: page-level tabs / controls before the first row | 7 / ≈55 | 3 / ≤ 20 |
-| Project page: page-level tabs / navbar buttons | 9–11 / 6 | 5 / 2 + overflow |
-| List row: badges before the title is truncated | up to 15 | 3 + `+N` |
-| Words for "one execution" on the run page | 6 | 1 |
-| Fold-state cookies on these pages | ~20 | 0 |
-| Clicks from Home to a failing execution | 2 (+ scrolling) | 1 |
+| Measure | Before (2026-09-03) | Target | After (2026-09-04, re-measured in #459) |
+|---|---|---|---|
+| Execution page: height to the failure screenshot, default state, 1280 px | ~2 000 px | ≤ 900 px (on the first screen at 1280 × 800) | ~810 px — header, headline, top clue and the Screen tab on the first screen |
+| Execution page: page-level tabs / cards on the Diagnosis tab | 5 / 14 | 0 / 5 | 0 / 5 |
+| Cluster page: sections folded on first visit | 7 of 8 | 0 | 0 |
+| Run page: page-level tabs / controls before the first row | 7 / ≈55 | 3 / ≤ 20 | 3 / ≈20 |
+| Project page: page-level tabs / navbar buttons | 9–11 / 6 | 5 / 2 + overflow | 5 / 2 + overflow |
+| List row: badges before the title is truncated | up to 15 | 3 + `+N` | 3 + `+N` |
+| Words for "one execution" on the run page | 6 | 1 | 1 |
+| Fold-state cookies on these pages | ~20 | 0 | 0 |
+| Clicks from Home to a failing execution | 2 (+ scrolling) | 1 | 1 to the failure cluster, 2 to the execution |
 
 ---
 
@@ -460,42 +460,48 @@ PR-sized steps, each shippable alone, each with acceptance criteria that a scree
 
 ### Phase 1 — the execution page (two PRs)
 
-**PR 1 — header and evidence.** `DetailHeader` (execution variant, Details popover, More menu), `EvidenceTabs` with the seven tabs wrapping the existing card bodies, relevance-based default tab, section locator retargeted to tabs; delete the page-level tabs and the jump chips.
+**PR 1 — header and evidence.** ✅ #443 `DetailHeader` (execution variant, Details popover, More menu), `EvidenceTabs` with the seven tabs wrapping the existing card bodies, relevance-based default tab, section locator retargeted to tabs; delete the page-level tabs and the jump chips.
 Accept when: at 1280 × 800 the first screen shows the headline, the strongest clue and the default evidence tab with the screenshot visible; at 390 px there is no horizontal scroll and the headline is above the fold after the header; `tests/*.spec.ts` that assert on *ARIA snapshot* (8 files), *DOM snapshot*, *Failure timeline* and *Clues* pass against the tabs.
 
-**PR 2 — headline, fix, history.** Fact row absorbs the two cards; *Show raw error* disclosure; *Other clues*; `FixCard` (execution variant) with the locator fix, fix plan line, diagnosis section, verify; `HistoryStrip`. Delete `TestCaseVerdictCard`, `FailureClusterCard`, the fold cookies.
+**PR 2 — headline, fix, history.** ✅ #446 Fact row absorbs the two cards; *Show raw error* disclosure; *Other clues*; `FixCard` (execution variant) with the locator fix, fix plan line, diagnosis section, verify; `HistoryStrip`. Delete `TestCaseVerdictCard`, `FailureClusterCard`, the fold cookies.
 Accept when: *New regression* appears once on the page; the raw error is reachable in one click; `case.verdict`, `case.evidence`, `case.artifacts` help topics are removed or retitled; docs `evidence.md` §"One execution, diagnosis-first" and the `gather-evidence` and `failure-headline` scenes are updated in the same PR.
 
 ### Phase 2 — the failure cluster page (two PRs)
 
-**PR 3 — header, triage, evidence.** `DetailHeader` (cluster variant) with `TriageControl` and the fix-verification sentence; `EvidenceTabs` with the affected-test selector; delete the Triage card, the right column and the fold cookies; the run page's *Diagnose* modal becomes a link.
+**PR 3 — header, triage, evidence.** ✅ #444 `DetailHeader` (cluster variant) with `TriageControl` and the fix-verification sentence; `EvidenceTabs` with the affected-test selector; delete the Triage card, the right column and the fold cookies; the run page's *Diagnose* modal becomes a link.
 Accept when: the first screen shows the name, triage, the headline and the default evidence tab; *Fix verified · still Open* shows the reconcile action; a cluster with no AI provider shows no placeholder column; `failure-clusters.spec.ts` passes.
 
-**PR 4 — fix, changes, affected tests, history.** Unified `DiagnosisPanel` (result outside the configured branch, history menu, context and prompt in the More menu); `FixCard` (cluster variant) merging the fix plan, the locator fix and verify; `PatchBlock`; What changed with the baseline popover; Affected tests with selection (*Move to a new cluster*, *Quarantine*); History block. Delete `FixPlanCard` as a card, `ClusterDiagnosis`, `ClusterTestEvidence`, `ClusterExtractCasesModal`.
+**PR 4 — fix, changes, affected tests, history.** ✅ #453 Unified `DiagnosisPanel` (result outside the configured branch, history menu, context and prompt in the More menu); `FixCard` (cluster variant) merging the fix plan, the locator fix and verify; `PatchBlock`; What changed with the baseline popover; Affected tests with selection (*Move to a new cluster*, *Quarantine*); History block. Delete `FixPlanCard` as a card, `ClusterDiagnosis`, `ClusterTestEvidence`, `ClusterExtractCasesModal`.
 Accept when: *Re-run in CI* and the recommended locator each appear once; a stored diagnosis is visible with the provider unset; `ai-diagnosis` scene and `ai-diagnosis.md` updated.
 
 ### Phase 3 — the run page (two PRs)
 
-**PR 5 — header and Tests.** `DetailHeader` (run variant) with the one count bar; `TestRow` + `TestRowGroup` + `BadgeGroup`; *Group by* cluster / file / none; filters as chips; bulk triage in every grouping; error-text search. Delete `RunSummary` tiles, `TestCasesTree`, `FailureGroups`, `RunReports`.
+**PR 5 — header and Tests.** ✅ #445 `DetailHeader` (run variant) with the one count bar; `TestRow` + `TestRowGroup` + `BadgeGroup`; *Group by* cluster / file / none; filters as chips; bulk triage in every grouping; error-text search. Delete `RunSummary` tiles, `TestCasesTree`, `FailureGroups`, `RunReports`.
 Accept when: three tabs fit at 1280 px untruncated; a fully annotated failing row shows its full title at 1280 px with three badges and `+N`; the count bar filters *and* switches to Tests; `run-live-activity` scene passes; `run-trend`/`failure-clusters` scenes updated.
 
-**PR 6 — Changes and Timeline.** `ChangesView` with the one baseline; move slowest tests and worker distribution to Timeline; move slow endpoints to the project. Delete `RunInsights`, `RegressionContext`, `RunCompare`, `SlowEndpoints` on the run page.
+**PR 6 — Changes and Timeline.** ✅ #450 `ChangesView` with the one baseline; move slowest tests and worker distribution to Timeline; move slow endpoints to the project. Delete `RunInsights`, `RegressionContext`, `RunCompare`, `SlowEndpoints` on the run page.
 Accept when: the same run shows one *new failures* count everywhere; `run-insights` scene is replaced by `run-changes`; `flaky-tests.md` §Run insights rewritten as *Changes*.
 
 ### Phase 4 — the project page (two PRs)
 
-**PR 7 — header, filter bar, five tabs.** Status line; `FilterBar` with one cookie per project; the tab regrouping (Runs with markers slide-over, Tests with file grouping, Failures with the segmented control, Performance with slow endpoints, Settings with members and the edit form); More menu in the navbar. Delete Compare, Spec health, AI steps, Timeline, Members tabs, the *Run comparison* copy, the two extra routes.
+**PR 7 — header, filter bar, five tabs.** ✅ #451 Status line; `FilterBar` with one cookie per project; the tab regrouping (Runs with markers slide-over, Tests with file grouping, Failures with the segmented control, Performance with slow endpoints, Settings with members and the edit form); More menu in the navbar. Delete Compare, Spec health, AI steps, Timeline, Members tabs, the *Run comparison* copy, the two extra routes.
 Accept when: five tabs fit at 1280 px; the command palette's *This project* group matches them; the spec-health numbers are visible as group headers in Tests; `project-detail`, `flaky-detection`, `performance-trends`, `performance` scenes updated; `ui-overview.md` §Project detail rewritten.
 
-**PR 8 — lists everywhere.** `TestRow` in the project catalog, the flaky list, the quarantine list and the test history; *View* columns removed; the test history page's tiles and *Status history* card replaced.
+**PR 8 — lists everywhere.** ✅ #456 `TestRow` in the project catalog, the flaky list, the quarantine list and the test history; *View* columns removed; the test history page's tiles and *Status history* card replaced.
 Accept when: every table with a per-row *View* button has none; `test-case-detail` scene updated.
 
 ### Phase 5 — home and the sweep (two PRs)
 
-**PR 9 — Open failures on Home.** The card, keyboard handling, linked stat numbers; the feature cards removed. This is the audit's D at its smallest useful size; the full inbox (snooze, assign, bulk, "since you last looked") stays in the audit.
+**PR 9 — Open failures on Home.** ✅ #442 The card, keyboard handling, linked stat numbers; the feature cards removed. This is the audit's D at its smallest useful size; the full inbox (snooze, assign, bulk, "since you last looked") stays in the audit.
 Accept when: Home → a failing cluster is one click; the `home` scene is updated.
 
-**PR 10 — vocabulary and docs sweep.** The retired-words test turned on for `app/`, `apps/docs/` and `shared/demo/`; `concepts.md`, `ui-overview.md`, `evidence.md`, `ai-diagnosis.md` aligned with §3; demo mirror (`app/demo/api/`) and `app:seed:demo` re-run where response shapes changed; `app:screens:docs` regenerated; `app:screens:check` green.
+**PR 10 — vocabulary and docs sweep.** ✅ #459 (open) The retired-words test turned on for `app/`, `apps/docs/` and `shared/demo/`; `concepts.md`, `ui-overview.md`, `evidence.md`, `ai-diagnosis.md` aligned with §3; demo mirror (`app/demo/api/`) and `app:seed:demo` re-run where response shapes changed; `app:screens:docs` regenerated; `app:screens:check` green.
+
+### Delivery record (2026-09-04)
+
+All ten PRs were produced by separate sessions from this plan, one PR each, in dependency waves; PRs 1–9 are merged, the sweep (#459) is open. Three PRs landed alongside: **#452** (page and card gutters shrink below `sm`, rule 11 of §2), **#455** (the evidence tabs render their sections bare, no card inside a card — the second half of rule 11) and **#454** (the audit's cluster exemplar refresh, so the cluster headline now reads the latest occurrence instead of the first). #457 added the rule that every UI change sends screenshots.
+
+Deviations from the text above, all recorded in the PR bodies: `RunReports.vue` and `ProjectTimeline.vue` were kept because the project pages still import them (Appendix A listed them for deletion); `AnalyticsScopeBar` stays as a thin wrapper that composes the shared filter bar and adds the period and project pickers; Analytics' environment and branch filters became multi-select to match the shared control; status badges keep the app's title-case rendering ("Timed Out"); Home reaches the failure *cluster* in one click and the individual execution in two. Phase 0 step 2 (baseline scenes) was replaced by ad-hoc captures kept in this session; the numbers in §1.6 come from those and from #459.
 
 ### Cost and risk
 
