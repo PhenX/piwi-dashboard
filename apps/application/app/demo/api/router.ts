@@ -633,9 +633,13 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/insights$/,
-    handler: async (m, _b, _q, ctx) => {
+    handler: async (m, _b, q, ctx) => {
       await assertDemoEntityScope(ctx, 'run', +m[1]!);
-      return computeRunInsights(await getDemoDb(), +m[1]!);
+      const baselineRaw = q?.get('baseline');
+      const baselineId = baselineRaw ? Number(baselineRaw) : null;
+      return computeRunInsights(await getDemoDb(), +m[1]!, {
+        baselineId: baselineId != null && Number.isFinite(baselineId) ? baselineId : null,
+      });
     },
   },
 
