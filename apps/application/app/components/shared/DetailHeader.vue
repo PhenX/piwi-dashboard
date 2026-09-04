@@ -73,5 +73,10 @@ defineProps<{
         </template>
       </UPopover>
     </div>
+
+    <!-- Optional third line: a count bar (the run variant fills it). -->
+    <div v-if="$slots['count-bar']">
+      <slot name="count-bar" />
+    </div>
   </div>
 </template>
