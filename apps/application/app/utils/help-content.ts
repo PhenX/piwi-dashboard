@@ -56,6 +56,11 @@ export const HELP_TOPICS = {
     text: 'Wire the Piwi reporter into your Playwright config to start sending results here. The wizard generates the snippet for you.',
     doc: 'getting-started#using-the-piwi-dashboard-reporter',
   },
+  'home.open-failures': {
+    title: 'Open failures',
+    text: 'Failure clusters still open across your projects, newest first. Open one to investigate, or triage from the keyboard: j / k move, o opens, r resolves, i ignores.',
+    doc: 'ui-overview#home',
+  },
 
   // ── Analytics ─────────────────────────────────────────────────────────
   'analytics.insights': {

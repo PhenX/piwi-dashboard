@@ -280,6 +280,30 @@ export interface ProjectOverview {
 }
 
 /**
+ * One open failure cluster across projects - returned by
+ * GET /api/failure-clusters?status=open. Drives the Home "Open failures" card.
+ */
+export interface OpenFailureCluster {
+  id: number;
+  projectId: number;
+  projectName: string;
+  projectLabel: string | null;
+  title: string | null;
+  signature: string;
+  errorType: string | null;
+  selector: string | null;
+  sampleError: string | null;
+  filePath: string | null;
+  status: string;
+  affectedTests: number;
+  occurrences: number;
+  lastSeenAt: string | Date | null;
+  lastSeenRunStatus: string | null;
+  owner: { name: string; source: 'annotation' } | null;
+  issueLink: { url: string; provider: string; key: string | null } | null;
+}
+
+/**
  * Project with test runs - returned by GET /api/projects/[id]
  */
 export interface ProjectWithTestRuns {

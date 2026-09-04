@@ -72,6 +72,7 @@ export const PROJECT = {
   HEARTBEAT_TEST: 'heartbeat-test',
   HTML_REPORT_SANDBOX: 'html-report-sandbox-test',
   HISTORY: 'history-test',
+  HOME_OPEN_FAILURES: 'home-open-failures-test',
   IMPORT_BLOB: 'import-blob-test',
   IMPORT_BLOB_UI: 'import-blob-ui-test',
   IMPORT_TRACE: 'import-trace-test',
