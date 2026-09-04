@@ -10,6 +10,12 @@ const props = defineProps<{
   projectName?: string | null;
 }>();
 
+const emit = defineEmits<{ count: [total: number]; quarantined: [] }>();
+
+const toast = useToast();
+const { canWrite } = useAuth();
+const quarantiningId = ref<number | null>(null);
+
 const runsWindow = ref(50);
 const rootCauseFilter = ref<string[]>([]);
 
@@ -32,6 +38,26 @@ const filteredTests = computed(() => {
   if (rootCauseFilter.value.length === 0) return tests.value ?? [];
   return (tests.value ?? []).filter((t) => rootCauseFilter.value.includes(t.rootCause ?? ''));
 });
+
+watch(tests, (list) => emit('count', list?.length ?? 0));
+
+async function quarantineTest(test: FlakyTest) {
+  quarantiningId.value = test.testCaseId;
+  try {
+    await $fetch(`/api/projects/${props.projectId}/quarantine`, {
+      method: 'POST',
+      body: { testCaseId: test.testCaseId, reason: 'Flaky', source: 'manual' },
+    });
+    toast.add({ title: 'Test quarantined', description: test.title, color: 'success' });
+    emit('quarantined');
+  } catch (error: unknown) {
+    const message =
+      error && typeof error === 'object' && 'data' in error ? (error.data as { message?: string })?.message : undefined;
+    toast.add({ title: 'Quarantine failed', description: message || 'An error occurred', color: 'error' });
+  } finally {
+    quarantiningId.value = null;
+  }
+}
 
 function scoreColor(score: number): 'error' | 'warning' | 'neutral' {
   if (score >= 60) return 'error';
@@ -132,7 +158,7 @@ const columns: TableColumn<FlakyTest>[] = [
         <template #title-cell="{ row }">
           <div class="min-w-0 space-y-0.5">
             <NuxtLink
-              :to="`/test-run-cases/${row.original.latestRunsCaseId}`"
+              :to="`/test-cases/${row.original.testCaseId}`"
               class="text-sm font-medium text-primary hover:underline truncate block"
               :title="row.original.title"
             >
@@ -209,12 +235,15 @@ const columns: TableColumn<FlakyTest>[] = [
         <template #actions-cell="{ row }">
           <div class="flex justify-end">
             <UButton
-              :to="`/test-run-cases/${row.original.latestRunsCaseId}`"
+              v-if="canWrite"
               size="sm"
               variant="outline"
-              trailing-icon="i-lucide-arrow-right"
+              color="warning"
+              icon="i-lucide-shield-alert"
+              :loading="quarantiningId === row.original.testCaseId"
+              @click="quarantineTest(row.original)"
             >
-              View
+              Quarantine
             </UButton>
           </div>
         </template>

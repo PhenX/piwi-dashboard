@@ -18,6 +18,13 @@ interface GroupStats {
   running: number;
 }
 
+/** A labelled figure on the right of a group header (spec-health numbers). */
+interface GroupMetric {
+  label: string;
+  value: string;
+  tone?: 'good' | 'bad' | 'muted';
+}
+
 const props = withDefaults(
   defineProps<{
     label: string;
@@ -31,6 +38,8 @@ const props = withDefaults(
     clusterId?: number | null;
     /** File grouping: per-status tallies and the path rendered as an IDE link. */
     stats?: GroupStats | null;
+    /** File grouping: labelled figures (spec-health) rendered in place of tallies. */
+    metrics?: GroupMetric[] | null;
     filePath?: string | null;
     projectKey?: string | number | null;
     projectName?: string | null;
@@ -41,11 +50,18 @@ const props = withDefaults(
     triageStatus: null,
     clusterId: null,
     stats: null,
+    metrics: null,
     filePath: null,
     projectKey: null,
     projectName: null,
   },
 );
+
+const metricToneClass: Record<NonNullable<GroupMetric['tone']>, string> = {
+  good: 'text-green-600 dark:text-green-400',
+  bad: 'text-red-600 dark:text-red-400',
+  muted: 'text-muted',
+};
 
 const emit = defineEmits<{ toggle: [] }>();
 
@@ -92,8 +108,16 @@ const visibleStats = computed(() => {
 
     <div class="flex-1" />
 
+    <!-- Spec-health figures (project catalog file grouping). -->
+    <div v-if="metrics && metrics.length" class="flex items-center gap-2 sm:gap-3 shrink-0 tabular-nums">
+      <span v-for="metric in metrics" :key="metric.label" class="text-xs inline-flex items-baseline gap-1">
+        <span class="max-sm:sr-only text-muted">{{ metric.label }}</span>
+        <span :class="metricToneClass[metric.tone ?? 'muted']" class="font-medium">{{ metric.value }}</span>
+      </span>
+    </div>
+
     <!-- File groups: the per-status tallies, failures first. -->
-    <div v-if="visibleStats.length" class="flex items-center gap-1.5 sm:gap-2 shrink-0 tabular-nums">
+    <div v-else-if="visibleStats.length" class="flex items-center gap-1.5 sm:gap-2 shrink-0 tabular-nums">
       <span
         v-for="stat in visibleStats"
         :key="stat.key"
