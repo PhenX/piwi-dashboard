@@ -75,19 +75,15 @@ The primary hub: instant **text search**, **tag filters**, and a table showing e
 
 ## Project detail
 
-The complete history for one project, organized into tabs:
+The complete history for one project. The header states the project's condition on entry — a **status line** with the latest run and its age, the pass rate over the last 20 runs, and the open clusters, flaky and quarantined counts, each a link to the tab that holds it. One **filter bar** (environment, branch, full-runs-only) scopes every list on the page and is remembered per project. The navbar keeps the notification bell and **Import** (admins); **Edit**, **Test functions**, **Selections**, **Delete** and **Refresh** live in a **More** menu.
 
-- **Test runs** — every run with status, start time, duration, test counts, and browser badges; select two runs to compare. Runs with a shared failure signature roll up into **Failure clusters** here (see [AI diagnosis & clustering](./ai-diagnosis)).
-- **Flaky tests** — intermittent tests scored by a composite flakiness metric, with root-cause classification and impact ranking. See [Flaky tests](./flaky-tests#flaky-test-detection).
-- **Performance** — average/P90 duration trends and a slowest-tests table. See [Performance](./flaky-tests#performance).
-- **Test cases** — every unique test with status, executed-only pass rate, result breakdown, average duration, and last run; searchable, filterable by status, [tag](./reporter#test-tags), owner, priority and last-run age (stale cases hidden by default), paginated, with flat and per-spec tree views.
-- **Compare** — side-by-side delta between two runs (new failures, recovered, duration changes).
-- **Spec health** — a heatmap grouping test cases by spec file and coloring each by pass rate, so an unhealthy area of the suite jumps out. See [Spec health heatmap](./flaky-tests#spec-health-heatmap).
-- **Quarantine** — tests excluded from the [CI gate](./ci#blocking-a-merge)'s verdict while still running, each with its passing streak and whether it has earned a release, plus the debt the list represents. See [Quarantine](./flaky-tests#quarantine-with-a-way-out).
-- **AI steps** — liveness for the committed [AI-step artifacts](./ai-steps) this project replays: which prompts are exercised by recent runs, and which have gone dormant.
-- **Members** *(admins, when auth is enabled)* — grant or scope project access per user. See [Project access](./authentication#project-access).
+Five tabs:
 
-Project **edit** (`/projects/:id/edit`) sets the label, description, tags, per-project SCM token, and **AI diagnosis instructions** (project-specific context combined with the global instructions for every diagnosis).
+- **Runs** — the run trend chart (timeline **Markers** open in a slide-over from the chart header, where they can be added, edited and deleted) over a table of every run with status, start time, duration, test counts, and browser badges. A row opens the run; selecting two runs and clicking **Compare** opens the newer run's **Changes** tab with the older as its baseline.
+- **Tests** — every unique test with status, executed-only pass rate, result breakdown, average duration, and last run; searchable, filterable by status, [tag](./reporter#test-tags), owner, priority and last-run age (stale cases hidden by default). **Group by File** groups the tests under each spec file and carries that file's pass rate, flaky rate, failure count, test count and average time in the group header. A row opens the test's full history.
+- **Failures** — one place for everything broken, switched with a segmented control: the **Failure clusters** (executions that failed the same way — see [AI diagnosis & clustering](./ai-diagnosis)), the **Flaky** tests scored by a composite flakiness metric with root-cause classification and impact ranking (see [Flaky tests](./flaky-tests#flaky-test-detection)), each with a **Quarantine** action, and the **Quarantine** list — tests excluded from the [CI gate](./ci#blocking-a-merge)'s verdict while still running, each with its passing streak and whether it has earned a release. See [Quarantine](./flaky-tests#quarantine-with-a-way-out).
+- **Performance** — average/P90 duration trends, a slowest-tests table, timeout opportunities, and the [slow endpoints](./flaky-tests#performance) for a selected run; the AI-step coverage card appears when the project replays committed [AI-step artifacts](./ai-steps).
+- **Settings** *(admins when auth is enabled, otherwise everyone)* — project [access](./authentication#project-access) (members) and the edit form: label, description, tags, default branch, per-project SCM token, and **AI diagnosis instructions** (project-specific context combined with the global instructions for every diagnosis).
 
 Project **import** (`/projects/:id/import`, admins only) backfills runs recorded before you adopted Piwi from Playwright blob reports, checking each archive against the server's size limit and the project's existing imports before uploading anything. See [Importing past runs](./importing-runs).
 

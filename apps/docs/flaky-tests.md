@@ -19,13 +19,13 @@ A test is flaky when its result isn't deterministic. Piwi computes a **composite
 - **Status alternation** — flips between pass and fail across runs.
 - **Failure rate** — overall proportion of failures.
 
-Each project has a dedicated **Flaky tests** tab with a **configurable lookback window** so you can focus on recent behavior or a longer baseline.
+The project's **Failures** tab has a **Flaky** view with a **configurable lookback window** so you can focus on recent behavior or a longer baseline. Each flaky test links to its history and carries a **Quarantine** action.
 
-**Per-environment scoping** — select a single environment in the project's environment filter and the flaky analysis is scoped to runs from that environment, so you can compare stability across `staging`, `production`, and `development` instead of blending them. (Set the environment via the reporter's `environment` option / `PIWI_ENVIRONMENT`; see the [reporter](./reporter) docs.)
+**Per-environment scoping** — select a single environment in the project's filter bar and the flaky analysis is scoped to runs from that environment, so you can compare stability across `staging`, `production`, and `development` instead of blending them. (Set the environment via the reporter's `environment` option / `PIWI_ENVIRONMENT`; see the [reporter](./reporter) docs.)
 
 <figure>
   <img src="/screenshots/flaky-detection.png" alt="Flaky tests tab listing tests with composite score, failure rate, retry passes, and flip counts">
-  <figcaption>The Flaky tests tab — each intermittent test scored by retry passes, status flips, and failure rate, ranked by impact and filterable by root-cause category.</figcaption>
+  <figcaption>The Flaky view of a project's Failures tab — each intermittent test scored by retry passes, status flips, and failure rate, ranked by impact and filterable by root-cause category.</figcaption>
 </figure>
 
 ### Root-cause classification
@@ -93,7 +93,7 @@ verdict and nothing else. That single difference is what makes the exit possible
 The gate always states how many failures quarantine excluded — a green gate that silently ignored failures would be
 worthless — and `--max-quarantined` sets a ceiling so the list can't grow unbounded.
 
-Manage it from the project's **Quarantine** tab, or over the API (`GET`/`POST /api/projects/:id/quarantine`,
+Manage it from the **Quarantine** view of the project's **Failures** tab, or over the API (`GET`/`POST /api/projects/:id/quarantine`,
 `DELETE /api/projects/:id/quarantine/:testCaseId`).
 
 ## Regression signals
@@ -112,8 +112,7 @@ Opening a failing execution surfaces the same signals in its **Verdict** card (s
 - **Duration trends** — average and **P90** over time, so a few slow outliers don't hide a real regression.
 - **Slowest tests** — the top offenders ranked by duration.
 - **Timeout opportunities** — tests whose configured per-test timeout dwarfs their real p95 duration (so a hang or failure waits far longer than necessary), plus tests still carrying a stale `test.slow()` mark they no longer need. Each row suggests a tighter timeout (or removing the mark) and the time reclaimable per failing run, ranked by impact. This relies on the per-test timeout the [reporter](./reporter#per-test-timeout) captures; runs reported before that shipped still surface stale `test.slow()` marks from annotations + durations alone. Thresholds are tunable via `PUT /api/settings/timeout-hygiene`.
-- **Run comparison** — a side-by-side delta of two runs with improved / regressed / unchanged summaries.
-- **Network analysis** — slow API calls grouped by method and normalized route (e.g. `/api/users/:id`).
+- **Network analysis** — slow API calls grouped by method and normalized route (e.g. `/api/users/:id`), for a run picked from the tab.
 - **Browser Web Vitals** — TTFB, DOMContentLoaded, FCP and more, with color-coded thresholds.
 
 Network analysis and Web Vitals require the [capture fixtures](./capture-fixtures) in your test setup.
@@ -125,7 +124,7 @@ Network analysis and Web Vitals require the [capture fixtures](./capture-fixture
 
 ## Spec health heatmap
 
-A project-level overview groups test cases by spec file and colors each by pass rate, so an unhealthy area of the suite jumps out. Cells link straight to the filtered test-case list.
+The project's **Tests** tab has a **Group by File** view that groups the tests under each spec file and carries that file's pass rate, flaky rate, failure count, test count and average time in the group header, so an unhealthy area of the suite jumps out.
 
 ## Across every project
 
