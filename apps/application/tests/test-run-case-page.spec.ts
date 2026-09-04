@@ -3,10 +3,11 @@ import { waitForHydration, retryPost } from './utils';
 import { PROJECT } from '#shared/test-project-names';
 
 /**
- * The single-column execution page: a header, the failure headline, the raw
- * error, then one evidence card with content-level tabs (Timeline, Screen,
- * Source, Network, Console, State, Performance). A passing execution shows the
- * same page with the Timeline tab selected.
+ * The single-column execution page: a header, the failure headline (with the raw
+ * error one click away behind *Show raw error*), the other clues, one evidence
+ * card with content-level tabs (Timeline, Screen, Source, Network, Console,
+ * State, Performance), then the Fix card and the History block. A passing
+ * execution shows the same page with the Timeline tab selected and no Fix card.
  */
 test.describe('Test-run-case page', () => {
   test.describe.configure({ mode: 'serial' });
@@ -75,19 +76,25 @@ test.describe('Test-run-case page', () => {
     passedCaseId = run.testCases.find((c: { status: string }) => c.status === 'passed').executionId;
   });
 
-  test('failing execution leads with the headline, then the error, then the evidence tabs', async ({ page }) => {
+  test('failing execution leads with the headline, the raw error one click away, then evidence and fix', async ({
+    page,
+  }) => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
 
-    // The one-line headline leads the page, ahead of the raw error.
+    // The one-line headline leads the page.
     const headline = page.getByRole('heading', {
       name: /getByRole\('button', \{ name: 'Pay' \}\) was not found on the page — click timed out after 30 s/,
     });
     await expect(headline).toBeVisible();
     await expect(page.getByText('First failure in this run')).toBeVisible();
-    const headlineBox = await headline.boundingBox();
-    const errorBox = await page.getByRole('heading', { name: 'Error', exact: true }).boundingBox();
-    expect(headlineBox!.y).toBeLessThan(errorBox!.y);
+
+    // The raw error is a disclosure in the headline card, collapsed by default,
+    // and reachable — with its Copy failure action — in one click.
+    const showRaw = page.getByRole('button', { name: 'Show raw error' });
+    await expect(showRaw).toBeVisible();
+    await showRaw.click();
+    await expect(page.getByRole('button', { name: 'Copy failure' })).toBeVisible();
 
     // One evidence card with content-level tabs — no page-level tab strip.
     const tablist = page.getByRole('tablist', { name: 'Evidence sections' });
@@ -96,9 +103,18 @@ test.describe('Test-run-case page', () => {
       await expect(page.getByRole('tab', { name: new RegExp(`^${name}`) })).toBeVisible();
     }
 
-    // The verdict and AI-diagnosis blocks stack below the evidence, as they do today.
-    await expect(page.getByRole('heading', { name: 'Regression status' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'AI diagnosis' })).toBeVisible();
+    // The Fix card gathers what to do (diagnosis, verify, …) below the evidence.
+    // With no AI provider its diagnosis is one line, not a placeholder block.
+    const fix = page.locator('[data-shot="fix"]');
+    await expect(fix).toBeVisible();
+    await expect(fix.getByText('AI is not configured')).toBeVisible();
+
+    // Reading order: headline → evidence → fix.
+    const headlineY = (await headline.boundingBox())!.y;
+    const tabsY = (await tablist.boundingBox())!.y;
+    const fixY = (await fix.boundingBox())!.y;
+    expect(headlineY).toBeLessThan(tabsY);
+    expect(tabsY).toBeLessThan(fixY);
   });
 
   test('passing execution opens on the Timeline tab', async ({ page }) => {
@@ -108,8 +124,9 @@ test.describe('Test-run-case page', () => {
     const timelineTab = page.getByRole('tab', { name: /^Timeline/ });
     await expect(timelineTab).toBeVisible();
     await expect(timelineTab).toHaveAttribute('aria-selected', 'true');
-    // No failure → no headline, no error card.
-    await expect(page.getByRole('heading', { name: 'Error', exact: true })).toHaveCount(0);
+    // No failure → no headline, no raw-error disclosure, no Fix card.
+    await expect(page.getByRole('button', { name: 'Show raw error' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Fix', exact: true })).toHaveCount(0);
   });
 
   test('the header offers a Copy retry command action', async ({ page }) => {

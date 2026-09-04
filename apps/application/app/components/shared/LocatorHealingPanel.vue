@@ -5,6 +5,7 @@
  * note. Used on both the cluster detail page and the test-case detail page.
  */
 
+import { defineComponent, h } from 'vue';
 import { recommendLocatorFix, locatorExpression } from '#shared/locator-healing';
 import type { RankedLocator, LocatorFixRecommendation, LocatorHealingResult } from '#shared/locator-healing.types';
 import type { AiStepIntent, TraceInfo } from '~~/types/api';
@@ -17,6 +18,13 @@ const props = defineProps<{
   testRunsCaseId: number;
   /** When set, the panel folds to a header with a peek (persisted per user). */
   storageKey?: string;
+  /**
+   * Render the panel body without a card wrapper — for embedding inside another
+   * card's section (the Fix card). The provenance note leads, then the
+   * recommendation and the alternatives; the card title, icon and count are
+   * dropped since the host section already labels it.
+   */
+  chrome?: boolean;
   /**
    * Number of tests this failure affects (cluster context). When > 1, the panel
    * notes that one fix covers them all — a cluster is one masked-locator root
@@ -31,9 +39,41 @@ const props = defineProps<{
   aiIntents?: AiStepIntent[] | null;
 }>();
 
-// Fold on the cluster page (storageKey set); stay a plain card on the test-case page.
-const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
-const cardBind = computed(() => (props.storageKey ? { storageKey: props.storageKey } : {}));
+// A card-less wrapper for the embedded (Fix card) variant: renders the
+// provenance note first, then the actions, then the body — and swallows the
+// card-only props so they never leak onto the DOM. `data-shot` still falls
+// through to the root so the docs scene keeps its target.
+const BareCard = defineComponent({
+  name: 'LocatorHealingBare',
+  props: {
+    subtitle: { type: String, default: '' },
+    icon: { type: String, default: '' },
+    title: { type: String, default: '' },
+    count: { type: Number, default: null },
+    help: { type: String, default: '' },
+  },
+  setup(bareProps, { slots }) {
+    return () =>
+      h('div', { class: 'space-y-3' }, [
+        slots.subtitle || bareProps.subtitle
+          ? h('div', { class: 'flex items-start justify-between gap-2' }, [
+              h('p', { class: 'text-xs min-w-0' }, slots.subtitle ? slots.subtitle() : bareProps.subtitle),
+              slots.actions ? h('div', { class: 'shrink-0' }, slots.actions()) : null,
+            ])
+          : slots.actions
+            ? h('div', { class: 'flex justify-end' }, slots.actions())
+            : null,
+        slots.default ? slots.default() : null,
+      ]);
+  },
+});
+
+// Card-less inside the Fix card; fold on the cluster page (storageKey set);
+// a plain card on the standalone test-case page.
+const cardComponent = computed(() =>
+  props.chrome === false ? BareCard : props.storageKey ? CollapsibleSectionCard : SectionCard,
+);
+const cardBind = computed(() => (props.chrome !== false && props.storageKey ? { storageKey: props.storageKey } : {}));
 
 interface HealActionChip {
   id: number;
@@ -605,7 +645,7 @@ defineExpose({ reveal: () => cardRef.value?.reveal?.() });
        navigation error, or names no locator). One line, no ranked menu. -->
   <component
     :is="cardComponent"
-    v-else-if="!pending && !error && healing?.applicable === false"
+    v-else-if="chrome !== false && !pending && !error && healing?.applicable === false"
     v-bind="cardBind"
     data-shot="alternative-locators"
     icon="i-lucide-bandage"

@@ -79,7 +79,6 @@ defineExpose({
     icon="i-lucide-camera"
     title="Failure evidence"
     :count="totalCount"
-    help="case.evidence"
   >
     <template v-if="storageKey" #folded>{{ peek }}</template>
 
