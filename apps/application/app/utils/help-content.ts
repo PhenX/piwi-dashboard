@@ -333,19 +333,9 @@ export const HELP_TOPICS = {
   },
 
   // ── Test case across runs ─────────────────────────────────────────────
-  'case.flaky-count': {
-    title: 'Flaky runs',
-    text: 'How many of this test’s recent executions flipped between pass and fail without a code change.',
-    doc: 'flaky-tests#flaky-test-detection',
-  },
   'case.history-chart': {
     title: 'Duration trend',
     text: 'This test’s duration across recent runs. Rising times or spikes hint at a slowdown or instability.',
-    doc: 'flaky-tests#flaky-test-detection',
-  },
-  'case.sparkline': {
-    title: 'Status history',
-    text: 'Pass/fail outcome of this test over its recent runs, oldest to newest — a quick read on its stability.',
     doc: 'flaky-tests#flaky-test-detection',
   },
 

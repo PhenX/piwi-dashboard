@@ -7,16 +7,39 @@
  * single column on a phone, so it reads as a card with no horizontal scroll.
  *
  * Built to be reused by the run's Tests tab, the cluster's affected-tests list,
- * the run's Changes tab and the project catalog; each passes the execution and,
- * when it has one, the resolved cluster name and the live step.
+ * the run's Changes tab, the project catalog, the flaky and quarantine lists and
+ * the test history page. An execution is passed as `testCase`; a list whose rows
+ * are not executions (the project catalog, a flaky or quarantined test, an entry
+ * in a test's history) passes the identity and status directly and supplies its
+ * own right-side facts through the `metrics` slot, an extra line through the
+ * `subline` slot, and its own link through `href`.
  */
 import type { TestCaseResult } from '~~/types/api';
 import type { LiveStepInfo } from '~/utils/live-steps';
+import type { TestRowBadge } from '~/utils/test-row-badges';
 import { badgesFromTestCase } from '~/utils/test-row-badges';
 
 const props = withDefaults(
   defineProps<{
-    testCase: TestCaseResult;
+    /** The execution this row shows. Omit for a test-level or history row. */
+    testCase?: TestCaseResult | null;
+    /** Link the row opens; defaults to the execution page for an execution. */
+    href?: string | null;
+    /** Title override, when the row is not built from an execution. */
+    title?: string | null;
+    /** Status override that drives the left icon (defaults to the execution's). */
+    status?: string | null;
+    /** Left-icon override; defaults to the status glyph. */
+    icon?: string | null;
+    iconClass?: string | null;
+    /** Source path (`file:line:col` or a bare path) for the third line. */
+    location?: string | null;
+    filePath?: string | null;
+    /** Failure headline source, when the row is not built from an execution. */
+    error?: string | null;
+    steps?: TestCaseResult['steps'] | null;
+    /** Badge list override; defaults to the execution's badges. */
+    badges?: TestRowBadge[] | null;
     /** Resolved cluster display name; falls back to the id when absent. */
     clusterName?: string | null;
     /** Show the failing row's cluster chip on the right. */
@@ -36,6 +59,17 @@ const props = withDefaults(
     indent?: number;
   }>(),
   {
+    testCase: null,
+    href: null,
+    title: null,
+    status: null,
+    icon: null,
+    iconClass: null,
+    location: null,
+    filePath: null,
+    error: null,
+    steps: null,
+    badges: null,
     clusterName: null,
     showCluster: true,
     quarantined: false,
@@ -53,19 +87,30 @@ const props = withDefaults(
 const emit = defineEmits<{ toggle: [] }>();
 
 const tc = computed(() => props.testCase);
-const failed = computed(() => isFailedStatus(tc.value.status));
-const href = computed(() => `/test-run-cases/${tc.value.executionId}`);
 
-const badges = computed(() => badgesFromTestCase(tc.value, { quarantined: props.quarantined }));
+const title = computed(() => props.title ?? tc.value?.title ?? '');
+const status = computed(() => props.status ?? tc.value?.status ?? 'unknown');
+const failed = computed(() => isFailedStatus(status.value));
+const href = computed(() => props.href ?? (tc.value ? `/test-run-cases/${tc.value.executionId}` : '#'));
+const errorText = computed(() => props.error ?? tc.value?.error ?? null);
+const stepsData = computed(() => props.steps ?? tc.value?.steps ?? null);
+const locationPath = computed(() => props.location ?? tc.value?.location ?? null);
+
+const badges = computed<TestRowBadge[]>(
+  () => props.badges ?? (tc.value ? badgesFromTestCase(tc.value, { quarantined: props.quarantined }) : []),
+);
+
+const statusIcon = computed(() => props.icon ?? getStatusIcon(status.value));
+const statusIconClass = computed(() => props.iconClass ?? getStatusTextClass(status.value));
 
 const statusHint = computed(() =>
-  tc.value.status === 'didnotrun'
+  tc.value && tc.value.status === 'didnotrun'
     ? formatDidNotRunReason(tc.value.didNotRunReason)
-    : formatStatusLabel(tc.value.status),
+    : formatStatusLabel(status.value),
 );
 
 const clusterLabel = computed(() =>
-  tc.value.failureClusterId != null ? (props.clusterName ?? `Cluster #${tc.value.failureClusterId}`) : '',
+  tc.value?.failureClusterId != null ? (props.clusterName ?? `Cluster #${tc.value.failureClusterId}`) : '',
 );
 </script>
 
@@ -81,14 +126,14 @@ const clusterLabel = computed(() =>
         type="checkbox"
         class="size-4 shrink-0 mt-0.5 cursor-pointer accent-primary focus-visible:ring-2 focus-visible:ring-primary rounded"
         :checked="selected"
-        :aria-label="`Select ${tc.title}`"
+        :aria-label="`Select ${title}`"
         @change="emit('toggle')"
       />
       <span class="size-4 shrink-0 mt-0.5" role="img" :aria-label="`Status: ${statusHint}`" :title="statusHint">
         <UIcon
-          :name="getStatusIcon(tc.status)"
+          :name="statusIcon"
           class="size-4"
-          :class="[getStatusTextClass(tc.status), isStatusInFlight(tc.status) ? 'animate-spin' : '']"
+          :class="[statusIconClass, isStatusInFlight(status) ? 'animate-spin' : '']"
         />
       </span>
 
@@ -99,63 +144,70 @@ const clusterLabel = computed(() =>
           <a
             :href="href"
             class="text-highlighted hover:text-primary hover:underline font-medium break-words min-w-0"
-            :title="tc.title"
+            :title="title"
             @click.prevent="navigateTo(href)"
-            >{{ tc.title }}</a
+            >{{ title }}</a
           >
           <BadgeGroup :badges="badges" :max="badgeMax" />
 
-          <div class="flex items-center gap-2 ml-auto shrink-0 text-xs text-muted">
-            <template v-if="tc.status === 'running'">
-              <span v-if="!liveStep" class="text-info">In progress…</span>
-            </template>
-            <DurationValue v-else-if="tc.duration" :ms="tc.duration" />
-            <BrowserBadge :browser="tc.browser" size="sm" />
-            <UBadge
-              v-if="(tc.retries ?? 0) > 0"
-              color="warning"
-              variant="soft"
-              size="xs"
-              :title="`${tc.retries} retries`"
-            >
-              {{ tc.retries }}x
-            </UBadge>
-            <span
-              v-if="tc.wastedTimeMs"
-              class="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400"
-              title="Wasted in fixed waits"
-            >
-              <UIcon name="i-lucide-hourglass" class="size-3 shrink-0" />
-              <DurationValue :ms="tc.wastedTimeMs" unit-class="opacity-60" no-title />
-            </span>
-            <NuxtLink
-              v-if="showCluster && tc.failureClusterId"
-              :to="`/failure-clusters/${tc.failureClusterId}`"
-              class="shrink-0"
-              @click.stop
-            >
-              <UBadge color="info" variant="subtle" size="xs" class="max-w-44">
-                <span class="truncate">{{ clusterLabel }}</span>
-              </UBadge>
-            </NuxtLink>
+          <div class="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 ml-auto min-w-0 text-xs text-muted">
+            <slot name="metrics">
+              <template v-if="tc">
+                <template v-if="tc.status === 'running'">
+                  <span v-if="!liveStep" class="text-info">In progress…</span>
+                </template>
+                <DurationValue v-else-if="tc.duration" :ms="tc.duration" />
+                <BrowserBadge :browser="tc.browser" size="sm" />
+                <UBadge
+                  v-if="(tc.retries ?? 0) > 0"
+                  color="warning"
+                  variant="soft"
+                  size="xs"
+                  :title="`${tc.retries} retries`"
+                >
+                  {{ tc.retries }}x
+                </UBadge>
+                <span
+                  v-if="tc.wastedTimeMs"
+                  class="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400"
+                  title="Wasted in fixed waits"
+                >
+                  <UIcon name="i-lucide-hourglass" class="size-3 shrink-0" />
+                  <DurationValue :ms="tc.wastedTimeMs" unit-class="opacity-60" no-title />
+                </span>
+                <NuxtLink
+                  v-if="showCluster && tc.failureClusterId"
+                  :to="`/failure-clusters/${tc.failureClusterId}`"
+                  class="shrink-0"
+                  @click.stop
+                >
+                  <UBadge color="info" variant="subtle" size="xs" class="max-w-44">
+                    <span class="truncate">{{ clusterLabel }}</span>
+                  </UBadge>
+                </NuxtLink>
+              </template>
+            </slot>
           </div>
         </div>
 
         <FailureHeadline
-          v-if="failed && tc.error"
-          :error="tc.error"
-          :steps="tc.steps"
+          v-if="failed && errorText"
+          :error="errorText"
+          :steps="stepsData"
           truncate
           class="text-xs text-gray-600 dark:text-gray-400"
         />
 
         <OpenInIdeLink
-          v-if="tc.location"
-          :location="tc.location"
+          v-if="locationPath || filePath"
+          :location="locationPath"
+          :file-path="filePath ?? undefined"
           :project-key="projectKey"
           :project-name="projectName"
           class="block text-xs text-zinc-400 dark:text-zinc-500"
         />
+
+        <slot name="subline" />
 
         <TestRowLiveStep v-if="liveStep" :step="liveStep" class="max-w-full" />
       </div>
