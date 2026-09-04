@@ -26,7 +26,13 @@ Failed test cases that share the same **error fingerprint** are grouped into a c
   <figcaption>The Failure clusters tab — failures sharing an error fingerprint collapse into one row, with error type, occurrence count, and triage status.</figcaption>
 </figure>
 
-Clustering is always on and requires no configuration. When the normalization algorithm is improved, existing clusters are migrated in place (re-fingerprinted from a stored sample error), so triage status, notes, and diagnoses survive the change. AI diagnosis is opt-in.
+Clustering is always on and requires no configuration. When the normalization algorithm is improved, existing clusters are migrated in place — re-fingerprinted from an **immutable sample** captured when the cluster was first created, so triage status, notes, and diagnoses survive the change. That frozen sample is deliberately separate from the sample error shown in the UI (below): the display sample can be refreshed to a better occurrence as the cluster recurs without ever moving which cluster a failure belongs to. AI diagnosis is opt-in.
+
+### The sample error refreshes as a cluster recurs
+
+A cluster is created from the first failure that matched its fingerprint, but a later occurrence often carries clearer evidence. As the same fingerprint is re-hit, Piwi refreshes the cluster's **display sample error** to the more useful occurrence — an error that carries a Playwright `Call log:` wins over one that doesn't, then the one with the longer message before its stack trace; equally-good occurrences leave the stored sample alone, so a recurring cluster doesn't rewrite itself every run. The signature, error type and locator shown for the cluster move with the chosen sample, and the embedding is rebuilt from it on the next post-run reconcile.
+
+An already-generated AI **title** is left untouched — cheap-model titles aren't worth regenerating for a marginally better sample, and a cluster is only ever named while it is still untitled. Only the signature-derived fallback name (used when there is no title) follows the refreshed sample. The fingerprint itself never changes: it is always recomputed from the immutable creation sample, so refreshing the display can't destabilize clustering.
 
 ### Triage: owner and known issue
 
