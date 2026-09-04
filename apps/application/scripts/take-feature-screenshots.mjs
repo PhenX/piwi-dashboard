@@ -203,18 +203,19 @@ const SCENES = [
   // ── Docs illustrations (committed) ────────────────────────────────────────
   {
     name: 'locator-healing',
-    description: 'Alternative locators panel with ranked replacements and a recommended fix',
+    description: 'Locator fix: ranked replacements and a recommended fix inside the Fix card',
     tags: ['docs'],
     out: 'docs',
-    route: '/test-run-cases/13',
+    // Execution 533 is a strict-mode locator-resolution failure with pre-captured
+    // alternatives, so the Fix card renders the Locator fix section in full.
+    route: '/test-run-cases/533',
     viewport: { width: 1280, height: 1300 },
-    expand: ['[data-shot="alternative-locators"]'],
     of: '[data-shot="alternative-locators"]',
     pad: 12,
   },
   {
     name: 'gather-evidence',
-    description: 'Failing execution: the headline, the error and the evidence tabs on one screen (dark)',
+    description: 'Failing execution: the header, the headline and the evidence tabs on one screen (dark)',
     tags: ['docs'],
     out: 'docs',
     // Execution 37 carries an attachment, a trace and a visual diff, so the
@@ -517,7 +518,7 @@ const SCENES = [
   // ── Failure headline (report artifacts) ──────────────────────────────────
   {
     name: 'failure-headline',
-    description: 'Failing execution: the one-line headline card above the raw error',
+    description: 'Failing execution: the one-line headline card with Show raw error at its foot',
     tags: ['desktop'],
     // Execution 37 is clustered with a sibling in its run, so the facts row
     // carries the cluster link next to the why and since-when chips.

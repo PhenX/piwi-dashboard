@@ -6,15 +6,42 @@
  * survives a refresh. The evidence bundle itself is copied from the page's Export
  * menu, which works with no provider configured.
  */
+import { defineComponent, h } from 'vue';
 import type { FailureDiagnosis } from '~~/server/database/schema';
 import type { DiagnosisContextCoverage } from '~~/types/api';
 import type { ContextSection } from '~/composables/useClusterDiagnosis';
 import { extractCitedSectionIds } from '#shared/diagnosis-sections';
 import { errorMessage } from '~/utils';
+import SectionCard from '../shared/SectionCard.vue';
 
 const props = defineProps<{
   testRunsCaseId: number;
+  /** Render without a card wrapper — for embedding inside the Fix card. */
+  chrome?: boolean;
 }>();
+
+// Card-less wrapper for the embedded (Fix card) variant; a plain card otherwise.
+const BareCard = defineComponent({
+  name: 'TestCaseAiBare',
+  props: {
+    icon: { type: String, default: '' },
+    title: { type: String, default: '' },
+    help: { type: String, default: '' },
+  },
+  setup(_bareProps, { slots }) {
+    return () =>
+      h('div', null, [
+        slots.actions ? h('div', { class: 'flex justify-end mb-2' }, slots.actions()) : null,
+        slots.default ? slots.default() : null,
+      ]);
+  },
+});
+const cardComponent = computed(() => (props.chrome === false ? BareCard : SectionCard));
+const cardBind = computed(() =>
+  props.chrome === false
+    ? {}
+    : { icon: 'i-lucide-sparkles', iconClass: 'text-primary', title: 'AI diagnosis', help: 'case.ai' as const },
+);
 
 const { aiStatus } = useAiStatus();
 const toast = useToast();
@@ -146,8 +173,8 @@ const showRunning = computed(
 </script>
 
 <template>
-  <SectionCard icon="i-lucide-sparkles" icon-class="text-primary" title="AI diagnosis" help="case.ai">
-    <template #actions>
+  <component :is="cardComponent" v-bind="cardBind">
+    <template v-if="aiStatus?.configured" #actions>
       <CopyAiPromptButton :context-endpoint="`/api/test-run-cases/${testRunsCaseId}/diagnosis-context`" />
     </template>
 
@@ -247,21 +274,18 @@ const showRunning = computed(
         />
       </template>
 
-      <!-- AI not configured -->
-      <template v-else>
-        <div class="rounded-lg border border-dashed border-default p-4 text-center text-gray-400">
-          <p class="text-sm inline-flex items-center gap-1 justify-center">
-            AI diagnosis is not configured <HelpHint topic="cluster.ai-setup" />
-          </p>
-          <p class="text-xs mt-2 max-w-xs mx-auto">
-            Use <strong>Copy prompt</strong> in this card's header to grab the full evidence bundle for your own AI
-            tool, or configure a provider.
-          </p>
-          <UButton to="/settings/ai" size="xs" color="neutral" variant="outline" class="mt-3">
-            Configure in Settings
-          </UButton>
-        </div>
-      </template>
+      <!-- AI not configured: one line, no placeholder block -->
+      <div v-else class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+        <span class="inline-flex items-center gap-1">
+          <UIcon name="i-lucide-sparkles" class="size-3.5 shrink-0" />
+          AI is not configured
+          <HelpHint topic="cluster.ai-setup" />
+        </span>
+        <span aria-hidden="true">·</span>
+        <NuxtLink to="/settings/ai" class="text-primary hover:underline">Configure</NuxtLink>
+        <span aria-hidden="true">·</span>
+        <CopyAiPromptButton :context-endpoint="`/api/test-run-cases/${testRunsCaseId}/diagnosis-context`" />
+      </div>
 
       <!-- Context modal -->
       <DiagnosisContextModal
@@ -291,5 +315,5 @@ const showRunning = computed(
         </NuxtLink>
       </div>
     </div>
-  </SectionCard>
+  </component>
 </template>

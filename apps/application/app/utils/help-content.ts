@@ -263,15 +263,10 @@ export const HELP_TOPICS = {
     text: 'Deterministic findings a set of rules correlate from the evidence already captured — a request that failed just before the click, a console error naming the failing element, a renamed element, the page ending on a login route, the previous test on this worker failing. No model runs; each clue is ranked by strength and cites the evidence section it came from, so a click jumps straight to it. The same clues are fed to the AI diagnosis as evidence to confirm or refute.',
     doc: 'evidence#clues',
   },
-  'case.verdict': {
-    title: 'Failure verdict',
-    text: 'An at-a-glance read on this failure: whether it newly regressed or is flaky, how many times it retried, and how long the test has been failing.',
-    doc: 'flaky-tests#regression-signals',
-  },
-  'case.evidence': {
-    title: 'Failure evidence',
-    text: 'What was captured at the moment of failure — screenshots, video and traces — grouped so you can see exactly what the browser saw.',
-    doc: 'evidence#trace-viewer',
+  'case.fix': {
+    title: 'Fix',
+    text: 'Everything to do about this failure in one place — the locator fix for a broken locator, a pointer to the cluster’s fix plan, the diagnosis, how to verify a fix, and the tests this failure blocked. Each part shows only when it applies.',
+    doc: 'ai-diagnosis#fix-plans',
   },
   'case.test-source': {
     title: 'Test source',
