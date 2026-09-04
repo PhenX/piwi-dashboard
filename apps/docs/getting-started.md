@@ -259,9 +259,9 @@ After submitting results, the dashboard provides:
 |------|---------|
 | **Home** (`/`) | Overview stats, test trend chart, and quick access to recent projects |
 | **Projects** (`/projects`) | Searchable table of all projects with status, duration, and tag filters |
-| **Project detail** (`/projects/:id`) | Run history for a project, with tabs for failure clusters, flaky tests, performance, spec health, and run comparison |
-| **Test run** (`/test-runs/:id`) | Individual test cases with status, errors, traces, insights, failure groups, worker timeline, and reports |
-| **Test case** (`/test-cases/:id`) | Detailed view of a single test including steps, web vitals, and network data |
+| **Project detail** (`/projects/:id`) | Run history for a project, with Runs, Tests, Failures, Performance and Settings tabs |
+| **Test run** (`/test-runs/:id`) | Executions grouped by failure cluster, a changes tab against a baseline, and a worker timeline |
+| **Test history** (`/test-cases/:id`) | One test's behavior over time — pass rate, duration trend, and every execution |
 | **API Docs** (`/docs`) | Interactive API reference with endpoint documentation, schemas, and try-it console (auto-generated) |
 | **Settings** (`/settings`) | Account, users, storage, tags, wasted-time patterns, AI diagnosis, and notifications |
 
