@@ -170,8 +170,8 @@ A diagnosis is grounded in your actual run — it is not a generic "ask AI" butt
 - **Suggested fix** and **prevention tips**
 
 <figure>
-  <img src="/screenshots/ai-diagnosis.png" alt="Failure cluster page with the AI diagnosis result alongside the error and alternative locators">
-  <figcaption>A cluster page — the AI diagnosis (category, confidence, root cause, evidence, and a suggested fix) sits beside the actual error and the ranked alternative locators it was grounded in.</figcaption>
+  <img src="/screenshots/ai-diagnosis.png" alt="The AI diagnosis card at the foot of a failure cluster page">
+  <figcaption>The AI diagnosis at the foot of a cluster page — category, confidence, root cause, the evidence it relied on, and a suggested fix — grounded in the same error and evidence the page shows above it.</figcaption>
 </figure>
 
 ## Diagnosing one execution
@@ -261,9 +261,10 @@ Everything above is assembled into one answer — the diagnosis and its validate
 with the exact file and line to edit, the failing tests, the owning team, and the command that verifies the work. The
 same plan is reachable three ways:
 
-- **On the cluster page** — the **Fix plan** card is the first thing in the left column: the diagnosis summary and its
-  patch (copy, `git apply`, download), each locator edit as a before → after with a one-line diff, links to the failing
-  executions, the owner and its source, and the verify command with the **Re-run in CI** button when that is configured.
+- **On the cluster page** — the **Fix plan** card sits in the page's single column, below the evidence: the diagnosis
+  summary and its patch (copy, `git apply`, download), each locator edit as a before → after with a one-line diff, links
+  to the failing executions, the owner and its source, and the verify command with the **Re-run in CI** button when that
+  is configured.
   **Copy as Markdown** hands you the whole plan for a ticket.
 - **As Markdown** — `GET /api/failure-clusters/:id/fix-plan?format=markdown` returns the same rendering as plain text, so
   an export or a script can drop it straight into an issue.
