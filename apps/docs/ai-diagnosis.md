@@ -121,6 +121,8 @@ Instead of waiting for a synchronous response, the diagnosis can be **streamed**
 - See the [API docs](https://piwitests.dev/demo/docs) for the exact protocol (the in-app API reference at `/docs` shows the same spec).
 - In the UI, the live thinking panel shows the accumulating text with a stage indicator and auto-scroll. When the stream completes, the panel transitions to the full result card.
 
+To be told when a diagnosis finishes without watching the panel, turn on **Settings → AI → Diagnosis notifications** — a per-browser preference (stored on that device only) that shows a browser notification on completion once you grant the permission.
+
 ### Model roles
 
 Piwi calls models in up to three distinct roles, each with its own complete provider configuration (or a **reuse** pointer to inherit another role's provider and credentials):
@@ -176,14 +178,11 @@ A diagnosis is grounded in your actual run — it is not a generic "ask AI" butt
 
 ## Diagnosing one execution
 
-The [failure cluster](./ui-overview#failure-cluster-detail) page diagnoses a *group* of failures that share a fingerprint. When you are looking at a single failing execution, the [test case detail](./evidence#one-execution-diagnosis-first) page's **Diagnosis** tab can diagnose *just that execution* — same model, same structured result, scoped to the one run in front of you. This is handy when a failure hasn't clustered yet, or when you want a diagnosis grounded in this specific execution's evidence rather than the cluster aggregate.
+The [failure cluster](./ui-overview#failure-cluster-detail) page diagnoses a *group* of failures that share a fingerprint. When you are looking at a single failing execution, the [test case detail](./evidence#one-execution-diagnosis-first) page's Fix card has a **Diagnosis** section that diagnoses *just that execution* — the same panel the cluster page uses, on the same model and structured result, scoped to the one run in front of you. This is handy when a failure hasn't clustered yet, or when you want a diagnosis grounded in this specific execution's evidence rather than the cluster aggregate.
 
-Two things are always available there, even with **no provider configured**:
+A stored diagnosis stays on screen **whether or not a provider is configured** — removing the key never hides a result you already have. With no provider the section shows one line, *AI is not configured · Configure · Copy prompt*, where **Copy prompt** copies the exact request the model would receive (error, steps, console, network, ARIA snapshot, source — plus, when a trace was uploaded, the full call stack with embedded source and the trace's complete network activity — all trimmed to the [context limits](#context-limits-and-token-cost)) so you can paste it into your own AI tool.
 
-- **Copy AI context** — copies the exact evidence bundle (error, steps, console, network, ARIA snapshot, source — plus, when a trace was uploaded, the full call stack with embedded source and the trace's complete network activity — all trimmed to the [context limits](#context-limits-and-token-cost)) so you can paste it into your own AI tool. It is the same context the model would receive.
-- A **coverage strip** showing which evidence sections are present, truncated, or absent — the same map the model sees.
-
-With a provider configured, **Diagnose with AI** runs the diagnosis inline and renders the result (category, confidence, root cause, evidence, suggested fix) right in the tab; cited evidence links jump to the matching section on the page. The result is stored per execution, so it survives a reload, and you can add free-text context or re-diagnose. Execution-scoped and cluster-scoped diagnoses are independent — running one never overwrites the other.
+With a provider configured, **Diagnose with AI** runs the diagnosis inline and renders the result (category, confidence, root cause, evidence, suggested fix) right in the section; cited evidence links jump to the matching section on the page, and a **coverage strip** maps which evidence sections are present, truncated or absent. The result is stored per execution, so it survives a reload, and you can add free-text context or re-diagnose. Execution-scoped and cluster-scoped diagnoses are independent — running one never overwrites the other.
 
 ## SCM-grounded context
 
@@ -261,11 +260,11 @@ Everything above is assembled into one answer — the diagnosis and its validate
 with the exact file and line to edit, the failing tests, the owning team, and the command that verifies the work. The
 same plan is reachable three ways:
 
-- **On the cluster page** — the **Fix plan** card sits in the page's single column, below the evidence: the diagnosis
-  summary and its patch (copy, `git apply`, download), each locator edit as a before → after with a one-line diff, links
-  to the failing executions, the owner and its source, and the verify command with the **Re-run in CI** button when that
-  is configured.
-  **Copy as Markdown** hands you the whole plan for a ticket.
+- **On the cluster page** — the cluster's single **Fix** card gathers the diagnosis and its patch (copy, `git apply`,
+  download), the recommended locator fix, the verify command, and a **Copy as Markdown** action that hands you the whole
+  plan for a ticket. **Re-run in CI** is the page's header action when that is configured. The failing tests are the
+  page's **Affected tests** list and the owner is on the header's facts line, so the plan is assembled from the page you
+  are already reading rather than duplicated in a card of its own.
 - **As Markdown** — `GET /api/failure-clusters/:id/fix-plan?format=markdown` returns the same rendering as plain text, so
   an export or a script can drop it straight into an issue.
 - **For agents** — the `get_fix_plan` [MCP tool](./mcp) returns the structured plan, so a coding agent gets in one call

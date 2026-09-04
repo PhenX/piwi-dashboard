@@ -246,10 +246,11 @@ const SCENES = [
     of: '[data-shot="cluster-diagnosis"]',
     pad: 12,
     colorScheme: 'dark',
-    // The panel hides a stored diagnosis until AI reports configured. Run this
+    // The stored diagnosis renders with or without a provider, but run this
     // scene with the server's AI env vars set (PIWI_AI_PROVIDER / PIWI_AI_API_KEY
-    // / PIWI_AI_MODEL) so status is configured; the model is never called
-    // because cluster 10's diagnosis is already stored in the demo seed.
+    // / PIWI_AI_MODEL) so the illustration shows the configured panel (Re-diagnose
+    // and History, no "not configured" line); the model is never called because
+    // cluster 10's diagnosis is already stored in the demo seed.
   },
   {
     name: 'flaky-detection',
