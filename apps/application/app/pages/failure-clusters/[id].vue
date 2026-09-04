@@ -5,6 +5,8 @@ import { parsePlaywrightError } from '#shared/error-parse';
 import type { FailureCluesResult } from '#shared/handlers/test-cases';
 import type { FailureClusterDetail, TraceInfo } from '~~/types/api';
 import type { FixPlan } from '#shared/fix-plan.types';
+import { fixPlanToMarkdown } from '#shared/fix-plan-markdown';
+import type { FixSectionKey } from '~/components/shared/FixCard.vue';
 import { renderAnsi } from '~/utils';
 import { stripAnsi } from '~/utils/text-format';
 import { buildRetryCommand } from '~/utils/retry-command';
@@ -233,13 +235,30 @@ function refresh() {
   refreshRerun();
 }
 
-// ── Bulk actions (More menu) ─────────────────────────────────────────────────
-const extractModalOpen = ref(false);
-function onExtracted() {
-  extractModalOpen.value = false;
-  refresh();
+// ── Fix card ─────────────────────────────────────────────────────────────────
+// Diagnosis first, then the locator fix, the verify command and the fix plan.
+const hasLocatorPanel = computed(() => Boolean(affectedCases.value[0]?.recentTestRunsCaseId));
+const showVerify = computed(() => Boolean(fixPlan.value?.verify?.command));
+const fixSections = computed<FixSectionKey[]>(() => {
+  const s: FixSectionKey[] = ['diagnosis'];
+  if (hasLocatorPanel.value) s.push('locator-fix');
+  if (showVerify.value) s.push('verify');
+  if (fixPlan.value) s.push('fix-plan');
+  return s;
+});
+
+// The diagnosis panel exposes its context/prompt actions for the page's More menu.
+const diagnosisPanel = ref<{ openContext: () => void; copyPrompt: () => void; openHistory: () => void } | null>(null);
+const { aiStatus } = useAiStatus();
+
+const { copy: copyMarkdown, copied: markdownCopied } = useCopy();
+function copyFixPlanMarkdown() {
+  if (!fixPlan.value) return;
+  const url = typeof window !== 'undefined' ? window.location.href : undefined;
+  copyMarkdown(fixPlanToMarkdown(fixPlan.value, { url }), { toast: 'Fix plan copied as Markdown' });
 }
 
+// ── Bulk actions (More menu) ─────────────────────────────────────────────────
 const quarantineAll = ref<{ trigger: () => void } | null>(null);
 const pendingQuarantine = computed(() => affectedCases.value.filter((c) => !c.quarantined));
 
@@ -252,10 +271,16 @@ const moreMenuItems = computed(() => {
       color: 'warning',
       onSelect: () => quarantineAll.value?.trigger(),
     });
+  if (aiStatus.value?.configured)
+    items.push({
+      label: 'Show context',
+      icon: 'i-lucide-eye',
+      onSelect: () => diagnosisPanel.value?.openContext(),
+    });
   items.push({
-    label: 'Move tests to a new cluster…',
-    icon: 'i-lucide-arrow-up-from-line',
-    onSelect: () => (extractModalOpen.value = true),
+    label: 'Copy prompt',
+    icon: 'i-lucide-clipboard-copy',
+    onSelect: () => diagnosisPanel.value?.copyPrompt(),
   });
   if (rerunInfo.value?.available && retryCommand.value)
     items.push({
@@ -271,12 +296,16 @@ const moreMenuItems = computed(() => {
 // ── Section locator ──────────────────────────────────────────────────────────
 // A clue or diagnosis citation reveals the evidence it came from: the evidence
 // tabs handle the tabbed sections, the fix plan and the raw error scroll in place.
-const fixPlanSection = ref<{ reveal: () => void } | null>(null);
+const fixCardEl = ref<HTMLElement | null>(null);
 const scmEl = ref<HTMLElement | null>(null);
 const evidenceTabs = ref<{ revealSection: (id: string) => boolean } | null>(null);
 
+function scrollToEl(el: HTMLElement | null) {
+  el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 const pageSections: Record<string, () => void> = {
-  fixPlan: () => fixPlanSection.value?.reveal(),
+  fixPlan: () => scrollToEl(fixCardEl.value),
   sampleError: revealRawError,
   executionError: revealRawError,
   scmInvestigation: () => scmEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
@@ -292,9 +321,9 @@ provide(clusterSectionLocatorKey, {
   },
 });
 
-// Deep link from the execution page's "Open fix plan" — unfold and scroll to it.
+// Deep link from the execution page's "Open fix plan" — scroll to the Fix card.
 onMounted(() => {
-  if (route.hash === '#fix-plan') nextTick(() => fixPlanSection.value?.reveal());
+  if (route.hash === '#fix-plan') nextTick(() => scrollToEl(fixCardEl.value));
 });
 
 // Breadcrumbs
@@ -540,44 +569,101 @@ const breadcrumbItems = computed(() => [
           />
         </div>
 
-        <!-- ── Locator fix ────────────────────────────────────────────── -->
-        <LocatorHealingPanel
-          v-if="affectedCases.length && affectedCases[0]?.recentTestRunsCaseId"
-          :run-id="cluster.lastSeenRunId"
-          :test-runs-case-id="affectedCases[0].recentTestRunsCaseId"
-          :affected-count="affectedCases.length"
-        />
+        <!-- ── Fix: diagnosis, locator fix, verify, fix plan ──────────── -->
+        <div ref="fixCardEl" class="scroll-mt-4">
+          <FixCard :sections="fixSections" help="cluster.fix-plan">
+            <!-- Diagnosis — the unified panel; result shows with or without a provider -->
+            <template #diagnosis>
+              <div data-shot="cluster-diagnosis">
+                <DiagnosisPanel
+                  ref="diagnosisPanel"
+                  scope="cluster"
+                  context-in-menu
+                  :cluster-id="clusterId"
+                  :last-seen-run-id="cluster.lastSeenRunId"
+                  :cluster-status="cluster.status"
+                  :fix-verification="cluster.fixVerification"
+                  :last-seen-at="cluster.lastSeenAt"
+                  :affected-test-cases="cluster.affectedTestCases ?? []"
+                />
+              </div>
+            </template>
 
-        <!-- ── What to do (PR 4 folds these into one Fix block) ───────── -->
-        <FixPlanCard
-          v-if="fixPlan"
-          ref="fixPlanSection"
-          :plan="fixPlan"
-          :project-key="cluster.project?.id"
-          :project-name="cluster.project?.name"
-          :rerun-info="rerunInfo"
-          :rerunning="rerunning"
-          @rerun="triggerRerun"
-        />
+            <!-- Locator fix — the recommendation, its provenance and alternatives, once -->
+            <template #locator-fix>
+              <LocatorHealingPanel
+                :run-id="cluster.lastSeenRunId"
+                :test-runs-case-id="affectedCases[0]!.recentTestRunsCaseId"
+                :affected-count="affectedCases.length"
+                :chrome="false"
+              />
+            </template>
 
-        <!-- What changed: baseline picker + commit diff -->
+            <!-- Verify — the command and how to re-run it (the header carries Re-run in CI) -->
+            <template v-if="fixPlan" #verify>
+              <div class="space-y-1.5">
+                <CodeBlock :code="fixPlan.verify.command" lang="bash" />
+                <p class="text-xs text-muted">{{ fixPlan.verify.expectation }}</p>
+                <div class="flex flex-wrap items-center gap-2">
+                  <DesktopRunLocallyButton
+                    :project-id="cluster.project?.id"
+                    :project-label="cluster.project?.label ?? cluster.project?.name"
+                    :cases="affectedRetryCases"
+                  />
+                  <ClientOnly>
+                    <span v-if="rerunInfo?.lastDispatch" class="text-xs text-muted">
+                      Last re-run {{ formatRelativeTime(rerunInfo.lastDispatch.at) }}
+                      <template v-if="rerunInfo.lastDispatch.byName">by {{ rerunInfo.lastDispatch.byName }}</template>
+                    </span>
+                  </ClientOnly>
+                </div>
+              </div>
+            </template>
+
+            <!-- Fix plan — the whole plan assembled for a ticket or an agent -->
+            <template v-if="fixPlan" #fix-plan-actions>
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="outline"
+                :icon="markdownCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
+                title="Copy the whole plan as Markdown for a ticket or an agent"
+                @click="copyFixPlanMarkdown"
+              >
+                Copy as Markdown
+              </UButton>
+            </template>
+            <template v-if="fixPlan" #fix-plan>
+              <p class="flex items-center gap-1 text-xs text-muted">
+                <UIcon name="i-lucide-bot" class="size-3 shrink-0" />
+                The diagnosis, edits, failing tests, owner and verify command in one document —
+                <code class="font-mono">get_fix_plan</code> returns the same to your AI agent via the
+                <NuxtLink to="/mcp" class="text-primary hover:underline">MCP server</NuxtLink>.
+              </p>
+            </template>
+          </FixCard>
+        </div>
+
+        <!-- ── What changed: baseline picker + commit diff ────────────── -->
         <div ref="scmEl" class="scroll-mt-4">
           <SectionCard icon="i-lucide-git-compare-arrows" title="What changed" help="cluster.scm">
             <ClusterInvestigation />
           </SectionCard>
         </div>
 
-        <!-- ── Diagnosis (full width; renders whether or not a provider is set) ── -->
-        <div data-shot="cluster-diagnosis">
-          <DiagnosisPanel
-            :cluster-id="clusterId"
-            :last-seen-run-id="cluster.lastSeenRunId"
-            :cluster-status="cluster.status"
-            :fix-verification="cluster.fixVerification"
-            :last-seen-at="cluster.lastSeenAt"
-            :affected-test-cases="cluster.affectedTestCases ?? []"
-          />
-        </div>
+        <!-- ── Affected tests ─────────────────────────────────────────── -->
+        <ClusterAffectedTests
+          :cluster-id="clusterId"
+          :cases="cluster.affectedTestCases ?? []"
+          :can-write="canWrite"
+          :project-id="cluster.project?.id"
+          :project-key="cluster.project?.id"
+          :project-name="cluster.project?.name"
+          @changed="refresh"
+        />
+
+        <!-- ── History ────────────────────────────────────────────────── -->
+        <ClusterHistory :cluster="cluster" @open-history="diagnosisPanel?.openHistory()" />
       </div>
 
       <ErrorState v-else text="Cluster not found." icon="i-lucide-search-x" class="h-64">
@@ -597,15 +683,5 @@ const breadcrumbItems = computed(() => [
     :cases="cluster.affectedTestCases ?? []"
     :reason="`Quarantined from cluster #${cluster.id}`"
     @changed="refresh"
-  />
-  <ClusterExtractCasesModal
-    v-if="cluster"
-    :open="extractModalOpen"
-    :cluster-id="clusterId"
-    :affected-test-cases="cluster.affectedTestCases ?? []"
-    :project-key="cluster.project?.id"
-    :project-name="cluster.project?.name"
-    @update:open="extractModalOpen = $event"
-    @extracted="onExtracted"
   />
 </template>

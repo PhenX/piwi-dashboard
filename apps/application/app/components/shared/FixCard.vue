@@ -16,15 +16,17 @@ const props = defineProps<{
   help?: HelpTopicKey;
 }>();
 
-const ORDER: { key: FixSectionKey; label: string }[] = [
-  { key: 'locator-fix', label: 'Locator fix' },
-  { key: 'fix-plan', label: 'Fix plan' },
-  { key: 'diagnosis', label: 'Diagnosis' },
-  { key: 'verify', label: 'Verify' },
-  { key: 'blocked', label: 'Blocked by this failure' },
-];
+const LABELS: Record<FixSectionKey, string> = {
+  'locator-fix': 'Locator fix',
+  'fix-plan': 'Fix plan',
+  diagnosis: 'Diagnosis',
+  verify: 'Verify',
+  blocked: 'Blocked by this failure',
+};
 
-const active = computed(() => ORDER.filter((s) => props.sections.includes(s.key)));
+// Rendered in the caller's order — the execution and cluster pages read their
+// Fix block in a different sequence.
+const active = computed(() => props.sections.map((key) => ({ key, label: LABELS[key] })));
 </script>
 
 <template>

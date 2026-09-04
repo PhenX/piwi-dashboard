@@ -377,8 +377,8 @@ export const HELP_TOPICS = {
     doc: 'ai-diagnosis#did-the-fix-work',
   },
   'cluster.fix-plan': {
-    title: 'Fix plan',
-    text: 'Everything needed to repair this cluster in one place — the diagnosis and its validated patch, the concrete locator edits, the failing tests, the owner, and the command that verifies the fix. Copy it as Markdown for a ticket, or let an agent fetch the same plan via the get_fix_plan MCP tool.',
+    title: 'Fix',
+    text: 'Everything needed to repair this cluster in one place — the AI diagnosis and its validated patch, the recommended locator fix, the command that verifies the fix, and the whole plan as Markdown. Copy it for a ticket, or let an agent fetch the same plan via the get_fix_plan MCP tool.',
     doc: 'ai-diagnosis#fix-plans',
   },
   'cluster.evidence': {
@@ -580,6 +580,10 @@ export const HELP_TOPICS = {
     text: 'When a run finishes, up to 3 new failure clusters are diagnosed automatically — each diagnosis is one research call (when a research model is configured) plus one diagnosis call — and new clusters get human-readable titles in one batched call. Requires the diagnosis model to be configured.',
     doc: 'ai-diagnosis#enabling-ai-diagnosis',
     envVars: ['PIWI_AI_AUTO_DIAGNOSE'],
+  },
+  'settings.ai-notifications': {
+    title: 'Diagnosis notifications',
+    text: 'Show a browser notification when a diagnosis finishes. This is a per-browser preference stored on this device only — it is not shared with other users or saved on the server, and it needs the browser’s notification permission.',
   },
   'settings.embedding-model': {
     title: 'Embedding model',
