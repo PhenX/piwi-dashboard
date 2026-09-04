@@ -7,11 +7,19 @@
  */
 import type { TestCaseHistoryPoint } from '~~/types/api';
 
-const props = defineProps<{
-  history: TestCaseHistoryPoint[];
-  /** The current execution's id — ringed in the strip and the streak anchor. */
-  currentId: number;
-}>();
+const props = withDefaults(
+  defineProps<{
+    history: TestCaseHistoryPoint[];
+    /** The current execution's id — ringed in the strip and the streak anchor. */
+    currentId?: number | null;
+    /**
+     * Squares only, no descriptive label and no streak sentence — for the test
+     * history chart's footer, where the facts line already carries the numbers.
+     */
+    compact?: boolean;
+  }>(),
+  { currentId: null, compact: false },
+);
 
 const isFail = (s?: string | null) => s === 'failed' || s === 'timedOut' || s === 'timedout';
 
@@ -59,8 +67,15 @@ const squareClass = (status: string) => ({
 <template>
   <div v-if="strip.length" class="space-y-2">
     <div>
-      <p :id="stripLabelId" class="text-xs text-gray-400 mb-1">Recent executions of this test (oldest → newest)</p>
-      <div class="flex items-center gap-1 flex-wrap" role="group" :aria-labelledby="stripLabelId">
+      <p v-if="!compact" :id="stripLabelId" class="text-xs text-gray-400 mb-1">
+        Recent executions of this test (oldest → newest)
+      </p>
+      <div
+        class="flex items-center gap-1 flex-wrap"
+        role="group"
+        :aria-labelledby="compact ? undefined : stripLabelId"
+        :aria-label="compact ? 'Recent executions of this test, oldest to newest' : undefined"
+      >
         <UTooltip v-for="point in strip" :key="point.id" :text="`Execution in run #${point.runId}: ${point.status}`">
           <NuxtLink
             :to="`/test-run-cases/${point.id}`"
@@ -73,7 +88,7 @@ const squareClass = (status: string) => ({
       </div>
     </div>
 
-    <p v-if="streak && streak.count >= 1" class="text-sm text-gray-600 dark:text-gray-400">
+    <p v-if="!compact && streak && streak.count >= 1" class="text-sm text-gray-600 dark:text-gray-400">
       Failing for
       <strong class="text-gray-800 dark:text-gray-200">{{ streak.count }}</strong>
       consecutive run{{ streak.count === 1 ? '' : 's' }}.
@@ -87,6 +102,8 @@ const squareClass = (status: string) => ({
       <template v-else-if="streak.total > 1"> No passing run in the last {{ streak.total }} recorded. </template>
       <template v-else> First recorded run of this test. </template>
     </p>
-    <p v-else-if="streak?.anchorPassed" class="text-sm text-gray-600 dark:text-gray-400">This execution passed.</p>
+    <p v-else-if="!compact && streak?.anchorPassed" class="text-sm text-gray-600 dark:text-gray-400">
+      This execution passed.
+    </p>
   </div>
 </template>
