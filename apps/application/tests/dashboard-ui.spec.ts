@@ -111,9 +111,12 @@ test.describe('Dashboard UI Tests', () => {
     await expect(page.getByRole('combobox', { name: 'Group tests by' })).toBeVisible();
 
     await page.getByRole('button', { name: /^Timeline/ }).click();
-    await page.getByRole('button', { name: /^Compare$/ }).click();
-    await expect(page.getByText('Run A (baseline)')).toBeVisible({ timeout: 15000 });
-    await page.getByRole('button', { name: /^Slow endpoints/ }).click();
+    await page.getByRole('button', { name: /^Changes$/ }).click();
+    // The Changes tab renders one of its states depending on whether the run has
+    // an earlier baseline; any of them proves the tab switched and loaded.
+    await expect(page.getByText(/Compared with|No baseline run found|No changes against the baseline/)).toBeVisible({
+      timeout: 15000,
+    });
   });
 
   test('should show project switcher dropdown', async ({ page }) => {
