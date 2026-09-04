@@ -108,8 +108,9 @@ The right panel is tabbed:
 - **Tests** — every execution as one row (status, title, exceptional badges with a `+N` overflow, the failure
   headline and source path, duration, browser, retries, wasted time and its cluster). **Group by** *Cluster*
   (the default on a red run — each group header names the cluster, its test count and triage status, with an
-  *Open cluster* link, and passing tests fold into a collapsed *Passed* group), *File* (with per-file tallies)
-  or *None*. Search matches the title, path **and** error text; filter by status, browser, new regressions and
+  *Open cluster* link, and passing tests fold into a collapsed *Passed* group), *File* (with per-file tallies),
+  *File + Describe* (the file nested by its describe blocks) or *None*. Search matches the title, path **and**
+  error text; filter by status, browser, new regressions and
   newly flaky. Select failing rows for bulk triage (quarantine, or set the cluster status) in any grouping.
 - **Insights** — what changed versus the last passing baseline: new regressions, recurring failures, fixed
   tests, new flaky tests, performance changes, worker imbalance, and new clusters. See

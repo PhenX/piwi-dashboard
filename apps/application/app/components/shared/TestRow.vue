@@ -32,6 +32,8 @@ const props = withDefaults(
     projectName?: string | null;
     /** How many badges to show before the rest fold into `+N`. */
     badgeMax?: number;
+    /** Extra left padding in px, to indent a row under a nested group header. */
+    indent?: number;
   }>(),
   {
     clusterName: null,
@@ -44,6 +46,7 @@ const props = withDefaults(
     projectKey: null,
     projectName: null,
     badgeMax: 3,
+    indent: 0,
   },
 );
 
@@ -70,6 +73,7 @@ const clusterLabel = computed(() =>
   <div
     class="border-b border-default px-3 py-2.5 text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
     :class="highlighted ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
+    :style="indent ? { paddingLeft: `${12 + indent}px` } : undefined"
   >
     <div class="flex items-start gap-2 min-w-0">
       <input

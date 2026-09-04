@@ -36,6 +36,7 @@ test.describe.serial('Run page Tests tab', () => {
             status: 'failed',
             duration: 31000,
             location: 'tests/auth.spec.ts:10:5',
+            suitePath: ['Authentication'],
             error: loginTimeout(30000),
           },
           {
@@ -43,6 +44,7 @@ test.describe.serial('Run page Tests tab', () => {
             status: 'failed',
             duration: 16000,
             location: 'tests/auth.spec.ts:30:5',
+            suitePath: ['Authentication'],
             error: loginTimeout(15000),
           },
           {
@@ -118,6 +120,18 @@ test.describe.serial('Run page Tests tab', () => {
     // Switching to None reveals every row.
     await selectGroup(page, 'None');
     await expect(visibleTitles(page)).toHaveCount(4);
+  });
+
+  test('the File + Describe grouping nests tests under their describe block', async ({ page }) => {
+    await page.goto(`/test-runs/${runId}`);
+    await waitForHydration(page);
+    await selectGroup(page, 'File + Describe');
+
+    // The two auth tests share a describe block, so a nested "Authentication"
+    // group header appears (under its file) with both tests beneath it.
+    await expect(page.getByText('Authentication', { exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(visibleTitles(page).filter({ hasText: 'login via header' })).toHaveCount(1);
+    await expect(visibleTitles(page).filter({ hasText: 'login via modal' })).toHaveCount(1);
   });
 
   test('the count bar filters the list and switches to the Tests tab from another tab', async ({ page }) => {

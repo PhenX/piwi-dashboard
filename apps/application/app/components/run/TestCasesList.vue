@@ -7,7 +7,7 @@ import type { LiveStepInfo, LiveStepsByWorker } from '~/utils/live-steps';
  *  cluster group header. Supplied by the page from the failure-groups payload. */
 type ClusterMeta = Record<number, { name: string; status: string | null }>;
 
-type GroupBy = 'cluster' | 'file' | 'none';
+type GroupBy = 'cluster' | 'file' | 'file-describe' | 'none';
 
 const props = defineProps<{
   testCases: TestCaseResult[];
@@ -151,7 +151,7 @@ function sortCases(cases: TestCaseResult[]): TestCaseResult[] {
 }
 
 // ── Grouping ────────────────────────────────────────────────────────────────
-const { raw: storedGroup, set: setGroup } = useGroupByCookie('run-tests', ['cluster', 'file', 'none']);
+const { raw: storedGroup, set: setGroup } = useGroupByCookie('run-tests', ['cluster', 'file', 'file-describe', 'none']);
 const groupBy = computed<GroupBy>({
   // A red run opens on the cluster grouping; a green run has no clusters, so it
   // opens flat. A saved choice always wins.
@@ -161,6 +161,7 @@ const groupBy = computed<GroupBy>({
 const groupByItems = [
   { label: 'Cluster', value: 'cluster' },
   { label: 'File', value: 'file' },
+  { label: 'File + Describe', value: 'file-describe' },
   { label: 'None', value: 'none' },
 ];
 
@@ -201,11 +202,15 @@ interface GroupHeaderItem {
   clusterId?: number | null;
   stats?: { passed: number; failed: number; skipped: number; didnotrun: number; running: number } | null;
   filePath?: string | null;
+  /** Nesting depth for the File + Describe grouping (0 = file). */
+  depth?: number;
 }
 interface TestItem {
   kind: 'test';
   key: string;
   tc: TestCaseResult;
+  /** Nesting depth of the row's group, so a nested test indents under it. */
+  depth?: number;
 }
 type Row = GroupHeaderItem | TestItem;
 
@@ -262,6 +267,58 @@ const rows = computed<Row[]>(() => {
     return out;
   }
 
+  if (groupBy.value === 'file-describe') {
+    const byFile = new Map<string, TestCaseResult[]>();
+    for (const tc of cases) {
+      const fp = tc.filePath ?? 'unknown';
+      if (!byFile.has(fp)) byFile.set(fp, []);
+      byFile.get(fp)!.push(tc);
+    }
+    // Recurse the describe hierarchy: a group per suitePath segment, then the
+    // tests declared directly at this level. Sort applies within each level.
+    const addLevel = (levelCases: TestCaseResult[], filePath: string, parentSuite: string[], depth: number) => {
+      const parentLen = parentSuite.length;
+      const direct = levelCases.filter((t) => (t.suitePath ?? []).length === parentLen);
+      const nested = levelCases.filter((t) => (t.suitePath ?? []).length > parentLen);
+      const groups = new Map<string, TestCaseResult[]>();
+      for (const t of nested) {
+        const seg = (t.suitePath ?? [])[parentLen]!;
+        if (!groups.has(seg)) groups.set(seg, []);
+        groups.get(seg)!.push(t);
+      }
+      for (const [seg, groupTests] of [...groups.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+        const groupPath = [...parentSuite, seg];
+        const key = `describe:${filePath}\x1f${groupPath.join('\x1f')}`;
+        out.push({
+          kind: 'group',
+          key,
+          label: seg,
+          count: groupTests.length,
+          icon: 'i-lucide-folder',
+          depth,
+          stats: computeStats(groupTests),
+        });
+        if (isOpen(key)) addLevel(groupTests, filePath, groupPath, depth + 1);
+      }
+      for (const tc of sortCases(direct)) out.push({ kind: 'test', key: `t${tc.executionId}`, tc, depth });
+    };
+    for (const [filePath, fileCases] of [...byFile.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      const key = `file:${filePath}`;
+      out.push({
+        kind: 'group',
+        key,
+        label: filePath,
+        count: fileCases.length,
+        icon: 'i-lucide-file-code-2',
+        filePath,
+        stats: computeStats(fileCases),
+        depth: 0,
+      });
+      if (isOpen(key)) addLevel(fileCases, filePath, [], 1);
+    }
+    return out;
+  }
+
   // Cluster grouping: failing clustered tests first (largest cluster first),
   // then ungrouped failures, then the non-failing remainder as collapsed groups.
   const failing = cases.filter((tc) => isFailedStatus(tc.status));
@@ -305,22 +362,26 @@ const rows = computed<Row[]>(() => {
   return out;
 });
 
-// Which group each execution sits in, so a jump from the timeline can open the
-// right group even when it is collapsed (derived from the data, not the visible
-// rows, so a hidden row is still locatable).
-const groupKeyByExecution = computed(() => {
-  const map = new Map<number, string>();
+// Every group key an execution sits under (a nested describe row has several),
+// so a jump from the timeline can open the whole chain even when collapsed —
+// derived from the data, not the visible rows, so a hidden row is locatable.
+const groupKeysByExecution = computed(() => {
+  const map = new Map<number, string[]>();
   if (groupBy.value === 'none') return map;
   for (const tc of filteredTestCases.value) {
+    const fp = tc.filePath ?? 'unknown';
     if (groupBy.value === 'file') {
-      map.set(tc.executionId, `file:${tc.filePath ?? 'unknown'}`);
-      continue;
-    }
-    if (isFailedStatus(tc.status)) {
-      map.set(tc.executionId, tc.failureClusterId != null ? `cluster:${tc.failureClusterId}` : 'cluster:none');
+      map.set(tc.executionId, [`file:${fp}`]);
+    } else if (groupBy.value === 'file-describe') {
+      const keys = [`file:${fp}`];
+      const sp = tc.suitePath ?? [];
+      for (let i = 1; i <= sp.length; i++) keys.push(`describe:${fp}\x1f${sp.slice(0, i).join('\x1f')}`);
+      map.set(tc.executionId, keys);
+    } else if (isFailedStatus(tc.status)) {
+      map.set(tc.executionId, [tc.failureClusterId != null ? `cluster:${tc.failureClusterId}` : 'cluster:none']);
     } else {
       const bucket = REMAINDER_BUCKETS.find((b) => b.match(tc));
-      if (bucket) map.set(tc.executionId, `bucket:${bucket.key}`);
+      if (bucket) map.set(tc.executionId, [`bucket:${bucket.key}`]);
     }
   }
   return map;
@@ -474,16 +535,17 @@ watch(
 );
 
 function scrollToCase(id: number) {
-  // Open the group holding the row, then scroll to it and flash it.
-  const groupKey = groupKeyByExecution.value.get(id);
-  if (groupKey && !isOpen(groupKey)) {
-    const next = new Set(userToggled.value);
+  // Open every group in the row's chain, then scroll to it and flash it.
+  const groupKeys = groupKeysByExecution.value.get(id) ?? [];
+  const next = new Set(userToggled.value);
+  for (const groupKey of groupKeys) {
+    if (isOpen(groupKey)) continue;
     // Flip the group toward open: for a default-open group that the user closed,
     // drop the toggle; for a default-collapsed bucket, add the toggle.
     if (defaultOpen(groupKey)) next.delete(groupKey);
     else next.add(groupKey);
-    userToggled.value = next;
   }
+  userToggled.value = next;
   highlightedCaseId.value = id;
   const doScroll = () => {
     const index = rows.value.findIndex((r) => r.kind === 'test' && r.tc.executionId === id);
@@ -706,6 +768,7 @@ defineExpose({ scrollToCase });
                 :count="item.count"
                 :open="isOpen(item.key)"
                 :icon="item.icon"
+                :depth="item.depth ?? 0"
                 :triage-status="item.triageStatus"
                 :cluster-id="item.clusterId"
                 :stats="item.stats"
@@ -723,6 +786,7 @@ defineExpose({ scrollToCase });
                 :selected="selectedIds.has(item.tc.executionId)"
                 :live-step="liveStep(item.tc)"
                 :highlighted="highlightedCaseId === item.tc.executionId"
+                :indent="(item.depth ?? 0) * 16"
                 :project-key="projectKey"
                 :project-name="projectName"
                 @toggle="toggleRow(item.tc)"

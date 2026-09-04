@@ -239,7 +239,7 @@ export const HELP_TOPICS = {
   },
   'run.test-cases': {
     title: 'Tests',
-    text: 'Every execution in this run. Group by cluster, file or none; search title, path and error text; filter by status, browser, new regressions and newly flaky.',
+    text: 'Every execution in this run. Group by cluster, file, file and describe block, or none; search title, path and error text; filter by status, browser, new regressions and newly flaky.',
     doc: 'ui-overview#test-run-detail',
   },
   'run.insights': {
