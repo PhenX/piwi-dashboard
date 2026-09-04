@@ -91,13 +91,13 @@ test.describe('Performance UI Tests', () => {
   test('should show performance tab content', async ({ page }) => {
     await page.goto(`/projects/${projectId}?tab=performance`);
     await expect(page.getByText('Performance trend')).toBeVisible();
-    await expect(page.getByText('Slowest tests')).toBeVisible();
-    await expect(page.getByText('Run comparison')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Slowest tests' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Slow endpoints' })).toBeVisible();
   });
 
   test('should show slowest tests in performance tab', async ({ page }) => {
     await page.goto(`/projects/${projectId}?tab=performance`);
-    await expect(page.getByText('Slowest tests')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Slowest tests' })).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('form submission is slow')).toBeVisible({ timeout: 15000 });
   });
 
