@@ -318,7 +318,9 @@ Fold A–C into a single page shape used by both the execution and the cluster: 
 
 ## 7. A prioritized plan
 
-**Delivery status (2026-09-03).** Shipped and merged to `main`: all fourteen quick wins, **A** verdict headline (#432), **B** failure timeline with call context (#433), **C** clue engine (#435), **G** loop-closing + partial-run verification (#438), the fix-plan page and diagnosis history (#439), **I** evidence without setup (#440), plus agent tooling — the `run-app` skill and `app:screens --route` (#434). In progress: quarantine / owner / issue-link actions with bulk triage (`claude/audit-triage-actions`). Not started: the cluster exemplar refresh, and big bets **D**, **E**, **F**, **J**, **K**, **L**. Each list below is marked ✅ shipped / 🔄 in progress / ⬜ not started.
+**Delivery status (2026-09-04).** Shipped and merged to `main`: all fourteen quick wins, **A** verdict headline (#432), **B** failure timeline with call context (#433), **C** clue engine (#435), **G** loop-closing + partial-run verification (#438), the fix-plan page and diagnosis history (#439), **I** evidence without setup (#440), the quarantine / owner / issue-link actions with bulk triage (#441), plus agent tooling — the `run-app` skill and `app:screens --route` (#434). **L** is being delivered separately as the UI simplification in [`ui-simplification.md`](ui-simplification.md): its execution, cluster and run pages have been rebuilt as one column with tabbed evidence (`DetailHeader`, `EvidenceTabs`, `FixCard`, `TestRow` are in `main`; `TestCaseVerdictCard`, `FailureClusterCard`, `RunSummary`, `FailureGroups` are gone), with the project page, the run's Changes/Timeline tabs, the Home *Open failures* card and a vocabulary sweep still to land. Not started: the cluster exemplar refresh, and big bets **D**, **E**, **F**, **J**, **K**. Each list below is marked ✅ shipped / 🔄 in progress / ⬜ not started.
+
+> **Note on references.** The file paths and line numbers in §0, §4 and Appendix A describe the code as audited on 2026-09-01. The UI simplification has since rebuilt the failure screens, so those pointers are historical; the *findings* they describe are resolved. The live map of the screens is [`ui-simplification.md`](ui-simplification.md).
 
 ### Quick wins (days each, mostly one file) — ✅ shipped 2026-09-02
 
@@ -346,18 +348,20 @@ All fourteen landed in PRs #428 (docs), #429 (reporter and alerts), #430 (UI) an
 - ✅ **G** the loop-closing rules and the partial-run verification change — plus fix-author notification and re-run from the cluster page. *(#438)*
 - ✅ **I** `wrapConfig` defaults, trace-derived fallbacks, three-state empty cards linking to `/setup`. *(#440)*
 - ✅ Fix-plan page + diagnosis history UI (both endpoints existed); real staleness via a written context hash. *(#439)*
-- 🔄 Quarantine / owner / link-to-issue actions on the execution and cluster pages; a multi-select on the run's executions with bulk triage. *(`claude/audit-triage-actions`)*
-- ⬜ Cluster exemplar refresh (`sampleError` from the latest occurrence, keep the original for re-fingerprinting).
+- ✅ Quarantine / owner / link-to-issue actions on the execution and cluster pages; a multi-select on the run's executions with bulk triage. *(#441; the UI simplification relocates these controls into the rebuilt headers)*
+- ⬜ Cluster exemplar refresh (`sampleError` from the latest occurrence, keep the original for re-fingerprinting). Server-side and untouched by the UI work — the cleanest next server task.
 
 ### Big bets (a quarter each)
 
+Each now lands in a **slot the UI simplification reserved** (`ui-simplification.md` §11, last row), so these build on the rebuilt screens rather than the pages the audit first described.
+
 - ✅ **C** the clue engine, with clues fed into the diagnosis prompt as a first-class section and used to prioritize the auto-diagnose budget. *(#435)*
-- ⬜ **D** the failure inbox as the home page.
-- ⬜ **E** attempt diffing for flaky tests, feeding the root-cause classifier.
-- ⬜ **F** reproduction bundle + generated bisect.
-- ⬜ **J** sampled green ARIA snapshots + structural page diff.
-- ⬜ **K** resolved-cluster memory.
-- ⬜ **L** the unified investigation layout — designed page by page in [`ui-simplification.md`](ui-simplification.md).
+- 🔄 **L** the unified investigation layout — the UI simplification. Execution, cluster and run pages rebuilt (in `main`); the project page, the run's Changes/Timeline split, the Home *Open failures* card and the vocabulary/docs sweep remain. Tracked in [`ui-simplification.md`](ui-simplification.md), not restarted here.
+- ⬜ **D** the failure inbox. The UI plan's Home *Open failures* card is D at its smallest; the audit's D is the full inbox on top of it — snooze, assign, bulk actions and a "since you last looked" cut. Build it after that card lands.
+- ⬜ **E** attempt diffing for flaky tests, feeding the root-cause classifier. Home: an **Attempts** tab in `EvidenceTabs` shown when a test has more than one attempt, diffing the failing attempt against the passing one (error, timing, network, page state).
+- ⬜ **F** reproduction bundle + generated bisect. Home: a **Reproduce** section in `FixCard` › Verify, beside the retry command and *Re-run in CI*.
+- ⬜ **J** sampled green ARIA snapshots + structural page diff. Home: a **Page diff** toggle on the Screen evidence tab; needs the reporter to sample an ARIA snapshot on green runs.
+- ⬜ **K** resolved-cluster memory. Home: a **Fixed before** line in the Fix block, surfacing how a matching cluster was resolved previously.
 
 ---
 
