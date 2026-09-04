@@ -7,14 +7,22 @@
  */
 import type { AttachmentInfo, TraceInfo } from '~~/types/api';
 import { isImageFile, isVideoFile } from '~/utils/text-format';
+import SectionCard from '../shared/SectionCard.vue';
+import CollapsibleSectionCard from '../shared/CollapsibleSectionCard.vue';
 
 const props = defineProps<{
   attachments: AttachmentInfo[];
   traces: TraceInfo[];
-  storageKey: string;
+  /** When set, the card folds to a header with a peek (persisted per user); without one it is always open. */
+  storageKey?: string;
   /** Whether the card starts folded on first visit (no stored cookie). */
   defaultFolded?: boolean;
 }>();
+
+const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
+const cardBind = computed(() =>
+  props.storageKey ? { storageKey: props.storageKey, defaultFolded: props.defaultFolded } : {},
+);
 
 const config = useRuntimeConfig();
 
@@ -54,21 +62,26 @@ function fileName(path: string): string {
 }
 
 // Forward reveal so a diagnosis citation can unfold + scroll to this card.
-const card = ref<{ reveal?: () => void } | null>(null);
-defineExpose({ reveal: () => card.value?.reveal?.() });
+const card = ref<{ reveal?: () => void; $el?: HTMLElement } | null>(null);
+defineExpose({
+  reveal: () =>
+    card.value?.reveal
+      ? card.value.reveal()
+      : card.value?.$el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }),
+});
 </script>
 
 <template>
-  <CollapsibleSectionCard
+  <component
+    :is="cardComponent"
     ref="card"
-    :storage-key="storageKey"
-    :default-folded="defaultFolded"
+    v-bind="cardBind"
     icon="i-lucide-camera"
     title="Failure evidence"
     :count="totalCount"
     help="case.evidence"
   >
-    <template #folded>{{ peek }}</template>
+    <template v-if="storageKey" #folded>{{ peek }}</template>
 
     <div class="space-y-3">
       <TestEvidenceScreenshots :attachments="attachments" />
@@ -111,5 +124,5 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
         doc="reporter"
       />
     </div>
-  </CollapsibleSectionCard>
+  </component>
 </template>

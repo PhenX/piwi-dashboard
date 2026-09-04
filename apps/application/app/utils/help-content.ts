@@ -258,11 +258,6 @@ export const HELP_TOPICS = {
     doc: 'ui-overview#test-run-detail',
   },
   // ── Single execution (test-run-case) ──────────────────────────────────
-  'case.diagnosis-tab': {
-    title: 'Diagnosis',
-    text: 'Everything you need to understand and fix this failure in one place — the error, a verdict on what kind of failure it is, the captured evidence, and an AI diagnosis.',
-    doc: 'evidence#one-execution-diagnosis-first',
-  },
   'case.headline': {
     title: 'Failure headline',
     text: 'What broke, in one sentence built from the Playwright error itself: the locator, the last state its call log reported, the expected and received values, the timeout. The chips say why (new regression, passed on retry), since when and on which commit, how many other tests in the run share the cause, and who owns the test. The raw error is right below, verbatim.',
@@ -295,16 +290,6 @@ export const HELP_TOPICS = {
     text: 'Takes this investigation out of the dashboard as a file that needs no network and no Piwi server. HTML is one self-contained page with screenshots and video embedded; ZIP adds the raw artifacts — trace archives, full-size video, logs — plus a machine-readable data.json; PDF is the HTML printed from your browser. Evidence past the size budget is listed in the report as omitted rather than dropped quietly.',
     doc: 'offline-export',
     envVars: ['PIWI_EXPORT_MAX_INLINE_BYTES', 'PIWI_EXPORT_MAX_BYTES', 'PIWI_EXPORT_MAX_CASES'],
-  },
-  'case.artifacts': {
-    title: 'Artifacts',
-    text: 'Traces, attachments, console output and network requests captured for this execution — the raw material behind the result.',
-    doc: 'evidence#trace-viewer',
-  },
-  'case.steps': {
-    title: 'Steps',
-    text: 'Each step Playwright ran, with its duration. A failed step is highlighted with its error, and slow steps are color-coded.',
-    doc: 'evidence#one-execution-diagnosis-first',
   },
   'case.timeline': {
     title: 'Failure timeline',

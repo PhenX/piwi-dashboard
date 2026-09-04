@@ -3,9 +3,10 @@ import { waitForHydration, retryPost } from './utils';
 import { PROJECT } from '#shared/test-project-names';
 
 /**
- * The diagnosis-first test-run-case page: a failing execution opens on the
- * Diagnosis tab (verdict + evidence funnel), a passing one on Steps with an
- * Artifacts tab, and legacy ?tab= links keep working.
+ * The single-column execution page: a header, the failure headline, the raw
+ * error, then one evidence card with content-level tabs (Timeline, Screen,
+ * Source, Network, Console, State, Performance). A passing execution shows the
+ * same page with the Timeline tab selected.
  */
 test.describe('Test-run-case page', () => {
   test.describe.configure({ mode: 'serial' });
@@ -74,12 +75,11 @@ test.describe('Test-run-case page', () => {
     passedCaseId = run.testCases.find((c: { status: string }) => c.status === 'passed').executionId;
   });
 
-  test('failing execution opens on the Diagnosis tab', async ({ page }) => {
+  test('failing execution leads with the headline, then the error, then the evidence tabs', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
 
-    await expect(page.getByRole('button', { name: /^Diagnosis/ })).toBeVisible();
-    // The one-line headline leads the tab, ahead of the raw error.
+    // The one-line headline leads the page, ahead of the raw error.
     const headline = page.getByRole('heading', {
       name: /getByRole\('button', \{ name: 'Pay' \}\) was not found on the page — click timed out after 30 s/,
     });
@@ -88,40 +88,42 @@ test.describe('Test-run-case page', () => {
     const headlineBox = await headline.boundingBox();
     const errorBox = await page.getByRole('heading', { name: 'Error', exact: true }).boundingBox();
     expect(headlineBox!.y).toBeLessThan(errorBox!.y);
-    // The verdict and AI-diagnosis rail cards are the diagnosis-tab signature.
+
+    // One evidence card with content-level tabs — no page-level tab strip.
+    const tablist = page.getByRole('tablist', { name: 'Evidence sections' });
+    await expect(tablist).toBeVisible();
+    for (const name of ['Timeline', 'Screen', 'Source', 'Network', 'Console', 'State', 'Performance']) {
+      await expect(page.getByRole('tab', { name: new RegExp(`^${name}`) })).toBeVisible();
+    }
+
+    // The verdict and AI-diagnosis blocks stack below the evidence, as they do today.
     await expect(page.getByRole('heading', { name: 'Regression status' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'AI diagnosis' })).toBeVisible();
-    // The URL is normalized to the diagnosis tab.
-    await expect(page).toHaveURL(/tab=diagnosis/);
   });
 
-  test('legacy ?tab=error redirects to the Diagnosis tab', async ({ page }) => {
-    await page.goto(`/test-run-cases/${failedCaseId}?tab=error`);
-    await waitForHydration(page);
-    await expect(page.getByRole('heading', { name: 'Regression status' })).toBeVisible();
-  });
-
-  test('passing execution opens on Steps and offers an Artifacts tab', async ({ page }) => {
+  test('passing execution opens on the Timeline tab', async ({ page }) => {
     await page.goto(`/test-run-cases/${passedCaseId}`);
     await waitForHydration(page);
 
-    await expect(page.getByRole('button', { name: /^Artifacts/ })).toBeVisible();
-    // No error → no Diagnosis tab.
-    await expect(page.getByRole('button', { name: /^Diagnosis/ })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^Steps/ })).toBeVisible();
+    const timelineTab = page.getByRole('tab', { name: /^Timeline/ });
+    await expect(timelineTab).toBeVisible();
+    await expect(timelineTab).toHaveAttribute('aria-selected', 'true');
+    // No failure → no headline, no error card.
+    await expect(page.getByRole('heading', { name: 'Error', exact: true })).toHaveCount(0);
   });
 
-  test('the summary offers a Copy retry command action', async ({ page }) => {
+  test('the header offers a Copy retry command action', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
-    // The button keeps its label as accessible name even when icon-only in a narrow card.
+    // The button keeps its label as accessible name even when icon-only in a narrow header.
     await expect(page.getByRole('button', { name: /Copy retry command/ })).toBeVisible();
   });
 
-  test('Performance tab is always available and shows an empty state when nothing captured', async ({ page }) => {
-    await page.goto(`/test-run-cases/${failedCaseId}?tab=performance`);
+  test('the Performance tab opens and shows its Web Vitals block', async ({ page }) => {
+    await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
-    await expect(page.getByRole('button', { name: /^Performance/ })).toBeVisible();
+    await page.getByRole('tab', { name: /^Performance/ }).click();
+    await expect(page.getByRole('heading', { name: 'Browser performance (Web Vitals)' })).toBeVisible();
   });
 
   test('GET /api/test-run-cases/:id/timeline places the steps and marks the failure', async ({ request }) => {
@@ -140,25 +142,25 @@ test.describe('Test-run-case page', () => {
     expect(tl.lanes.steps[1].origin).toEqual({ file: 'pages/checkout.ts', line: 42, function: null, chain: [] });
   });
 
-  test('the failure timeline card renders below the error on the Diagnosis tab', async ({ page }) => {
+  test('the Timeline tab shows the failure timeline and the whole-test step table', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
 
-    const timeline = page.getByRole('heading', { name: 'Failure timeline' });
-    await expect(timeline).toBeVisible();
-    // It sits below the raw error card.
-    const errorBox = await page.getByRole('heading', { name: 'Error', exact: true }).boundingBox();
-    const timelineBox = await timeline.boundingBox();
-    expect(timelineBox!.y).toBeGreaterThan(errorBox!.y);
+    await page.getByRole('tab', { name: /^Timeline/ }).click();
+
+    await expect(page.getByRole('heading', { name: 'Failure timeline' })).toBeVisible();
     // The chronological list and both window controls are present.
     await expect(page.getByRole('heading', { name: 'What happened in this window' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Around the failure' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Whole test' })).toBeVisible();
     // This run recorded no step start times, so the estimated note shows.
     await expect(page.getByText(/Step positions are derived from durations/)).toBeVisible();
+    // The former Steps tab: the whole-test step table lives here now.
+    await expect(page.getByRole('heading', { name: /^Steps/ })).toBeVisible();
+    await expect(page.getByRole('table').getByText("getByRole('button', { name: 'Pay' }).click()")).toBeVisible();
   });
 
-  test('History tab opens populated from the SSR payload, without refetching or a hydration mismatch', async ({
+  test('History block opens populated from the SSR payload, without refetching or a hydration mismatch', async ({
     page,
   }) => {
     // A client-side call to the history endpoint means the rows are missing from
@@ -173,11 +175,12 @@ test.describe('Test-run-case page', () => {
       if (msg.text().includes('Hydration completed but contains mismatches')) hydrationErrors.push(msg.text());
     });
 
-    await page.goto(`/test-run-cases/${failedCaseId}?tab=history`);
+    await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
 
-    await expect(page.getByRole('heading', { name: 'Duration trend' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /History \(\d+\)/ })).toBeVisible();
+    const historyCard = page.locator('[data-shot="execution-history"]');
+    await expect(historyCard.getByRole('heading', { name: 'History', exact: true })).toBeVisible();
+    await expect(historyCard.getByRole('link', { name: 'Test history' })).toBeVisible();
     expect(historyCalls).toEqual([]);
     expect(hydrationErrors).toEqual([]);
   });

@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { waitForHydration } from './utils';
 import { PROJECT } from '#shared/test-project-names';
 
 test.describe('Performance UI Tests', () => {
@@ -125,10 +126,13 @@ test.describe('Performance UI Tests', () => {
 
     if (testCaseWithSteps) {
       await page.goto(`/test-run-cases/${testCaseWithSteps.executionId}`);
-      await expect(page.getByText('Slowest step')).toBeVisible();
+      await waitForHydration(page);
 
-      // Should show steps section
-      await expect(page.getByRole('button', { name: /^Steps/ })).toBeVisible();
+      // The whole-test step table lives in the evidence Timeline tab now.
+      await page.getByRole('tab', { name: /^Timeline/ }).click();
+      await expect(page.getByRole('heading', { name: /^Steps/ })).toBeVisible();
+      // The slowest step is tagged in the table.
+      await expect(page.getByText('slowest').first()).toBeVisible();
     }
   });
 

@@ -114,13 +114,14 @@ them: an **execution** (`/test-run-cases/:id`) answers *"why did this attempt fa
 case** (`/test-cases/:id`) answers *"how has this test behaved over time?"*. Most links from a run land
 on an execution; the test's title links to the test case above it.
 
-A failing execution opens diagnosis-first: the error, a verdict, the cluster it belongs to, and an
-evidence funnel running from the call stack down to the ARIA snapshot — deeper still when a trace is
-attached. All of it, plus the bundled trace viewer, is described in
-[Failure evidence](./evidence). The summary shows one chip per **attempt** (with its outcome and
-duration) when a test retried, so "how did this execution get here" is answerable at a glance; every
-attempt is its own execution, and each chip links to that attempt's page while the one you are viewing
-is ringed.
+A failing execution reads top to bottom in one column: a **header** (status, title, the exceptional
+badges, the failing file and line, and Copy retry command, with a Details popover for the rest), the
+one-line **headline**, the **clues**, the raw **error**, then one **evidence** card whose content-level
+tabs — Timeline, Screen, Source, Network, Console, State, Performance — hold everything captured, deeper
+still when a trace is attached. All of it, plus the bundled trace viewer, is described in
+[Failure evidence](./evidence). The header's facts line shows the **attempts** as linked chips when a
+test retried, so "how did this execution get here" is answerable at a glance; every attempt is its own
+execution, and each chip links to that attempt's page while the one you are viewing is ringed.
 
 ## Failure cluster detail
 
