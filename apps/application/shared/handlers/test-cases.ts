@@ -688,6 +688,8 @@ export interface AttemptDiffResult {
   applicable: boolean;
   /** Why a diff could not be produced. */
   reason?: 'not-found' | 'single-attempt' | 'no-pair';
+  /** Every attempt of this execution, retry-ascending — the strip's source of truth. */
+  attempts: AttemptDiffSummary[];
   /** The failing attempt of the pair. */
   failing?: AttemptDiffSummary;
   /** The passing attempt of the pair. */
@@ -754,7 +756,7 @@ async function loadAttemptEvidence(
  */
 export async function getAttemptDiff(db: DrizzleDB, id: number): Promise<AttemptDiffResult> {
   const [current] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
-  if (!current) return { applicable: false, reason: 'not-found', differences: [] };
+  if (!current) return { applicable: false, reason: 'not-found', attempts: [], differences: [] };
 
   const siblingRows = await db
     .select()
@@ -770,13 +772,37 @@ export async function getAttemptDiff(db: DrizzleDB, id: number): Promise<Attempt
     );
   const rowByRetry = new Map<number, (typeof siblingRows)[number]>(siblingRows.map((r: any) => [r.retries ?? 0, r]));
 
-  // The recorded attempt outcomes; every attempt row carries the full sequence.
-  const attemptsMeta: AttemptMeta[] = (Array.isArray(current.attempts) ? (current.attempts as AttemptMeta[]) : [])
-    .slice()
-    .sort((a, b) => (a.retry ?? 0) - (b.retry ?? 0));
+  // The attempt outcomes, keyed by retry. A real reporter run stores each
+  // attempt as its own row, so the physical rows already list every attempt;
+  // the demo/dev seed collapses retries into the final row, so the full sequence
+  // survives only in the `attempts` JSON — and the reporter fills that JSON in
+  // progressively, so the richest copy (the most entries) sits on the final
+  // attempt. Union both sources: a physical row is authoritative (it carries
+  // evidence), a JSON-only attempt contributes its recorded outcome.
+  const byRetry = new Map<number, AttemptMeta>();
+  for (const r of siblingRows) {
+    byRetry.set(r.retries ?? 0, { retry: r.retries ?? 0, status: r.status, duration: r.duration ?? null });
+  }
+  let richestMeta: AttemptMeta[] = [];
+  for (const r of siblingRows) {
+    const list = Array.isArray(r.attempts) ? (r.attempts as AttemptMeta[]) : [];
+    if (list.length > richestMeta.length) richestMeta = list;
+  }
+  for (const m of richestMeta) {
+    if (!byRetry.has(m.retry)) byRetry.set(m.retry, { retry: m.retry, status: m.status, duration: m.duration ?? null });
+  }
+  const attemptsMeta = [...byRetry.values()].sort((a, b) => (a.retry ?? 0) - (b.retry ?? 0));
+
+  const summarize = (attempt: AttemptMeta): AttemptDiffSummary => ({
+    executionId: rowByRetry.get(attempt.retry)?.id ?? null,
+    retry: attempt.retry,
+    status: attempt.status,
+    duration: attempt.duration ?? rowByRetry.get(attempt.retry)?.duration ?? null,
+  });
+  const attempts = attemptsMeta.map(summarize);
 
   if (attemptsMeta.length < 2)
-    return { applicable: false, reason: 'single-attempt', differences: [], currentExecutionId: id };
+    return { applicable: false, reason: 'single-attempt', attempts, differences: [], currentExecutionId: id };
 
   const currentRetry = current.retries ?? 0;
   let failing: AttemptMeta | undefined;
@@ -790,7 +816,8 @@ export async function getAttemptDiff(db: DrizzleDB, id: number): Promise<Attempt
     failing = [...attemptsMeta].reverse().find((a) => a.retry < currentRetry && isFailingStatus(a.status));
   }
 
-  if (!failing || !passing) return { applicable: false, reason: 'no-pair', differences: [], currentExecutionId: id };
+  if (!failing || !passing)
+    return { applicable: false, reason: 'no-pair', attempts, differences: [], currentExecutionId: id };
 
   const evidenceFor = async (attempt: AttemptMeta): Promise<AttemptEvidence> => {
     const row = rowByRetry.get(attempt.retry);
@@ -803,15 +830,9 @@ export async function getAttemptDiff(db: DrizzleDB, id: number): Promise<Attempt
 
   const differences = diffAttempts(failingEvidence, passingEvidence);
 
-  const summarize = (attempt: AttemptMeta): AttemptDiffSummary => ({
-    executionId: rowByRetry.get(attempt.retry)?.id ?? null,
-    retry: attempt.retry,
-    status: attempt.status,
-    duration: attempt.duration ?? rowByRetry.get(attempt.retry)?.duration ?? null,
-  });
-
   return {
     applicable: true,
+    attempts,
     failing: summarize(failing),
     passing: summarize(passing),
     currentExecutionId: id,

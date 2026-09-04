@@ -23,7 +23,12 @@ const { data, status } = await useFetch<AttemptDiffResult>(`/api/test-run-cases/
 
 const locator = useClusterSectionLocator();
 
-const orderedAttempts = computed(() => [...(props.attempts ?? [])].sort((a, b) => (a.retry ?? 0) - (b.retry ?? 0)));
+// The endpoint's attempt list is authoritative (it unions every attempt row);
+// the page-level `attempts` prop is the fallback while the diff is loading.
+const orderedAttempts = computed(() => {
+  const source = data.value?.attempts?.length ? data.value.attempts : (props.attempts ?? []);
+  return [...source].sort((a, b) => (a.retry ?? 0) - (b.retry ?? 0));
+});
 
 const differences = computed<AttemptDiffEntry[]>(() => data.value?.differences ?? []);
 const applicable = computed(() => data.value?.applicable === true);
