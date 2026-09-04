@@ -1,0 +1,368 @@
+<script setup lang="ts">
+/**
+ * One evidence card with content-level tabs — Timeline, Screen, Source,
+ * Network, Console, State, Performance — each wrapping the evidence captured for
+ * an execution. A tab shows a count or a dot when it holds data and is dimmed
+ * when empty; a dimmed tab still opens and states why it is empty. The default
+ * tab is the one the strongest clue cites, else Timeline when it can place two
+ * or more items, else Screen. A clue or diagnosis citation switches to the tab
+ * that holds the evidence and scrolls to it.
+ */
+import type { NetworkRequest, PerformanceStep, TraceInfo, WebVitals } from '~~/types/api';
+import { getPerformanceHints } from '~/utils/performance-hints';
+import { resolveEvidenceState, type EvidenceState } from '#shared/evidence-state';
+import type { HelpTopicKey } from '~/utils/help-content';
+import { EVIDENCE_SECTION_TAB, type EvidenceTabValue } from '~/utils/evidence-sections';
+
+const props = defineProps<{
+  /** The fetched execution — every tab reads its evidence off this object. */
+  testCase: any;
+  /** Traces for this execution (fetched at page level). */
+  traces: TraceInfo[];
+  hasTrace: boolean;
+  /** The evidence section the strongest clue cites — picks the default tab. */
+  defaultSection?: string | null;
+  /** Inline-help topic for the card header. */
+  help?: HelpTopicKey;
+}>();
+
+type TabValue = EvidenceTabValue;
+
+const runId = computed<number | null>(() => props.testCase?.testRun?.id ?? null);
+const projectKey = computed(() => props.testCase?.testRun?.project?.id ?? undefined);
+const projectName = computed(() => props.testCase?.testRun?.project?.name ?? undefined);
+const testRunsCaseId = computed<number>(() => Number(props.testCase?.id ?? props.testCase?.executionId ?? 0));
+const status = computed<string | null>(() => props.testCase?.status ?? null);
+const hasError = computed(() => Boolean(props.testCase?.error));
+
+const steps = computed<PerformanceStep[]>(() => (props.testCase?.steps as PerformanceStep[]) ?? []);
+const webVitals = computed<WebVitals | null>(() => (props.testCase?.webVitals as unknown as WebVitals | null) ?? null);
+const performanceHints = computed(() => (props.testCase ? getPerformanceHints(props.testCase) : []));
+const networkRequests = computed<NetworkRequest[]>(
+  () => (props.testCase?.networkRequests as unknown as NetworkRequest[] | null) ?? [],
+);
+const consoleLogs = computed<{ type: string; text: string; timestamp?: number; location?: string | null }[]>(
+  () => props.testCase?.consoleLogs ?? [],
+);
+const ariaSnapshot = computed<string | null>(() => props.testCase?.ariaSnapshot ?? null);
+const pageState = computed(() => props.testCase?.pageState ?? null);
+const attachments = computed(() => props.testCase?.attachments ?? []);
+const testSourceFrames = computed(() => props.testCase?.testSourceFrames ?? null);
+const testSource = computed<string | null>(() => props.testCase?.testSource ?? null);
+
+// ── Three-state evidence (never captured / nothing happened / not applicable) ──
+const evidenceSources = computed(
+  () => (props.testCase?.evidenceSources as { console?: 'trace'; network?: 'trace'; aria?: 'trace' } | null) ?? null,
+);
+const fixturesActive = computed(() => {
+  const tc = props.testCase;
+  if (!tc) return false;
+  const src = evidenceSources.value ?? {};
+  return (
+    (consoleLogs.value.length > 0 && src.console !== 'trace') ||
+    (networkRequests.value.length > 0 && src.network !== 'trace') ||
+    (Boolean(ariaSnapshot.value) && src.aria !== 'trace') ||
+    Boolean(pageState.value) ||
+    Boolean(webVitals.value) ||
+    Boolean(tc.aiUsage)
+  );
+});
+const mk = (hasData: boolean, traced?: boolean) => ({
+  hasData,
+  source: traced ? ('trace' as const) : ('fixture' as const),
+  fixturesActive: fixturesActive.value,
+});
+const consoleState = computed(() =>
+  resolveEvidenceState('console', mk(consoleLogs.value.length > 0, evidenceSources.value?.console === 'trace')),
+);
+const networkState = computed(() =>
+  resolveEvidenceState(
+    'network',
+    mk(networkRequests.value.length > 0 || props.hasTrace, evidenceSources.value?.network === 'trace'),
+  ),
+);
+const appStateState = computed(() => resolveEvidenceState('appState', mk(Boolean(pageState.value))));
+const ariaState = computed(() =>
+  resolveEvidenceState('ariaSnapshot', mk(Boolean(ariaSnapshot.value), evidenceSources.value?.aria === 'trace')),
+);
+const webVitalsState = computed(() => resolveEvidenceState('webVitals', mk(Boolean(webVitals.value))));
+
+const derived = (st: EvidenceState) => st.state === 'present' && st.derivedFromTrace;
+const consoleDerived = computed(() => derived(consoleState.value));
+const networkDerived = computed(() => derived(networkState.value));
+const ariaDerived = computed(() => derived(ariaState.value));
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+// The data indicators read only from the already-fetched execution, never from
+// a child card's later "available" signal — a cross-component write during the
+// first render would tear the server and client tab strips apart.
+const screenHasData = computed(
+  () => attachments.value.length > 0 || props.traces.length > 0 || props.hasTrace || Boolean(ariaSnapshot.value),
+);
+const sourceHasData = computed(() => Boolean(testSourceFrames.value?.length || testSource.value || props.hasTrace));
+const stateHasData = computed(() => Boolean(pageState.value));
+const performanceHasData = computed(() => Boolean(webVitals.value) || performanceHints.value.length > 0);
+const timelineHasData = computed(() => steps.value.length > 0);
+
+interface TabDef {
+  value: TabValue;
+  label: string;
+  icon: string;
+  hasData: boolean;
+  count: number | null;
+}
+const tabs = computed<TabDef[]>(() => [
+  { value: 'timeline', label: 'Timeline', icon: 'i-lucide-activity', hasData: timelineHasData.value, count: null },
+  { value: 'screen', label: 'Screen', icon: 'i-lucide-camera', hasData: screenHasData.value, count: null },
+  { value: 'source', label: 'Source', icon: 'i-lucide-file-code-2', hasData: sourceHasData.value, count: null },
+  {
+    value: 'network',
+    label: 'Network',
+    icon: 'i-lucide-arrow-left-right',
+    hasData: networkRequests.value.length > 0 || props.hasTrace,
+    count: networkRequests.value.length || null,
+  },
+  {
+    value: 'console',
+    label: 'Console',
+    icon: 'i-lucide-terminal',
+    hasData: consoleLogs.value.length > 0,
+    count: consoleLogs.value.length || null,
+  },
+  { value: 'state', label: 'State', icon: 'i-lucide-database', hasData: stateHasData.value, count: null },
+  {
+    value: 'performance',
+    label: 'Performance',
+    icon: 'i-lucide-gauge',
+    hasData: performanceHasData.value,
+    count: null,
+  },
+]);
+
+function computeDefault(): TabValue {
+  // A passing execution has no failure to lead with — open on the Timeline.
+  if (!hasError.value) return 'timeline';
+  const cited = props.defaultSection ? EVIDENCE_SECTION_TAB[props.defaultSection] : undefined;
+  if (cited) return cited;
+  const placeable = steps.value.length >= 2 || networkRequests.value.length >= 1;
+  return placeable ? 'timeline' : 'screen';
+}
+
+const activeTab = ref<TabValue>(computeDefault());
+
+// ── Section locator: switch to the tab holding a cited section, then scroll ──
+const timelineWrap = ref<HTMLElement | null>(null);
+const sourceWrap = ref<HTMLElement | null>(null);
+const networkWrap = ref<HTMLElement | null>(null);
+const consoleWrap = ref<HTMLElement | null>(null);
+const pageStateWrap = ref<HTMLElement | null>(null);
+const envDiffWrap = ref<HTMLElement | null>(null);
+const screenEvidenceWrap = ref<HTMLElement | null>(null);
+const visualDiffWrap = ref<HTMLElement | null>(null);
+const domSnapshotWrap = ref<HTMLElement | null>(null);
+const ariaWrap = ref<HTMLElement | null>(null);
+const performanceWrap = ref<HTMLElement | null>(null);
+const WRAP_REF: Record<string, Ref<HTMLElement | null>> = {
+  timeline: timelineWrap,
+  source: sourceWrap,
+  network: networkWrap,
+  console: consoleWrap,
+  pageState: pageStateWrap,
+  envDiff: envDiffWrap,
+  screenEvidence: screenEvidenceWrap,
+  visualDiff: visualDiffWrap,
+  domSnapshot: domSnapshotWrap,
+  aria: ariaWrap,
+  performance: performanceWrap,
+};
+const SECTION_WRAP: Record<string, keyof typeof WRAP_REF> = {
+  steps: 'timeline',
+  failingSteps: 'timeline',
+  testSource: 'source',
+  sourceFiles: 'source',
+  traceCallStack: 'source',
+  networkRequests: 'network',
+  serverTraces: 'network',
+  serverLogs: 'network',
+  backendLogs: 'network',
+  traceNetwork: 'network',
+  console: 'console',
+  appState: 'pageState',
+  environmentDiff: 'envDiff',
+  visualDiff: 'visualDiff',
+  domSnapshot: 'domSnapshot',
+  ariaSnapshot: 'aria',
+  screenshots: 'screenEvidence',
+  tracePointers: 'screenEvidence',
+  artifacts: 'screenEvidence',
+  webVitals: 'performance',
+};
+
+const networkComp = ref<{ showTraceMode?: () => void } | null>(null);
+
+function canLocate(sectionId: string): boolean {
+  return sectionId in EVIDENCE_SECTION_TAB;
+}
+
+function revealSection(sectionId: string): boolean {
+  const tab = EVIDENCE_SECTION_TAB[sectionId];
+  if (!tab) return false;
+  activeTab.value = tab;
+  nextTick(() => {
+    if (sectionId === 'traceNetwork') networkComp.value?.showTraceMode?.();
+    const wrapKey = SECTION_WRAP[sectionId];
+    if (wrapKey) WRAP_REF[wrapKey]?.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  return true;
+}
+
+defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.value = t) });
+</script>
+
+<template>
+  <section class="rounded-lg border border-default bg-default">
+    <!-- Header: the section title, its help, and the content-level tab strip -->
+    <div class="p-3 sm:px-4 sm:py-3 border-b border-default">
+      <div class="flex items-center gap-2 mb-2.5">
+        <UIcon name="i-lucide-microscope" class="size-5 shrink-0 text-primary" />
+        <h2 class="text-lg font-medium">Evidence</h2>
+        <HelpHint v-if="help" :topic="help" />
+      </div>
+      <div class="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Evidence sections">
+        <button
+          v-for="tab in tabs"
+          :key="tab.value"
+          type="button"
+          role="tab"
+          :aria-selected="activeTab === tab.value ? 'true' : 'false'"
+          class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm whitespace-nowrap outline-none focus-visible:outline-2 focus-visible:outline-primary transition-colors"
+          :class="[
+            activeTab === tab.value ? 'bg-primary/10 text-primary font-medium' : 'text-muted hover:bg-elevated/60',
+            !tab.hasData && activeTab !== tab.value ? 'opacity-50' : '',
+          ]"
+          @click="activeTab = tab.value"
+        >
+          <UIcon :name="tab.icon" class="size-4 shrink-0" />
+          {{ tab.label }}
+          <UBadge v-if="tab.count" color="neutral" variant="soft" size="xs" class="tabular-nums">{{
+            tab.count
+          }}</UBadge>
+          <span v-else-if="tab.hasData" class="size-1.5 rounded-full bg-primary/70" aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+
+    <div class="p-3 sm:p-4">
+      <!-- ── Timeline ─────────────────────────────────────────────── -->
+      <div v-if="activeTab === 'timeline'" ref="timelineWrap" class="scroll-mt-4 space-y-4">
+        <!-- The timeline is anchored on the moment of failure — meaningful only for a failed execution. -->
+        <FailureTimelineCard
+          v-if="hasError"
+          :test-runs-case-id="testRunsCaseId"
+          :has-trace="hasTrace"
+          :project-key="projectKey"
+          :project-name="projectName"
+        />
+        <SectionCard icon="i-lucide-list-checks" title="Steps" :count="steps.length || null">
+          <!-- The step table is a data table whose row state is measured in the
+               browser; render it client-side so its hydration stays clean. -->
+          <ClientOnly>
+            <TestStepsTable
+              :steps="steps"
+              :duration-ms="testCase?.duration ?? null"
+              :status="status"
+              :project-key="projectKey"
+              :project-name="projectName"
+            />
+            <template #fallback>
+              <LoadingState text="Loading steps…" />
+            </template>
+          </ClientOnly>
+        </SectionCard>
+      </div>
+
+      <!-- ── Screen ───────────────────────────────────────────────── -->
+      <div v-else-if="activeTab === 'screen'" class="space-y-4">
+        <div ref="screenEvidenceWrap" class="scroll-mt-4">
+          <TestCaseEvidenceCard :attachments="attachments" :traces="traces" />
+        </div>
+        <div ref="visualDiffWrap" class="scroll-mt-4">
+          <VisualDiffCard v-if="runId" :run-id="runId" :test-runs-case-id="testRunsCaseId" />
+        </div>
+        <div ref="ariaWrap" class="scroll-mt-4">
+          <SectionCard icon="i-lucide-scan-text" title="ARIA snapshot" help="case.aria">
+            <template v-if="ariaDerived" #actions><TraceDerivedChip /></template>
+            <div v-if="ariaSnapshot" class="max-h-96 overflow-y-auto">
+              <MarkdownPreview :text="'```yaml\n' + ariaSnapshot + '\n```'" />
+            </div>
+            <EvidenceEmptyState v-else :state="ariaState" doc="/capture-fixtures" compact />
+          </SectionCard>
+        </div>
+        <div ref="domSnapshotWrap" class="scroll-mt-4">
+          <DomSnapshotCard v-if="runId" :run-id="runId" :test-runs-case-id="testRunsCaseId" />
+        </div>
+      </div>
+
+      <!-- ── Source ───────────────────────────────────────────────── -->
+      <div v-else-if="activeTab === 'source'" ref="sourceWrap" class="scroll-mt-4">
+        <TestSourceCard
+          v-if="sourceHasData"
+          :frames="testSourceFrames"
+          :test-source="testSource"
+          :run-id="runId"
+          :test-runs-case-id="testRunsCaseId"
+          :has-trace="hasTrace"
+          :project-key="projectKey"
+          :project-name="projectName"
+        />
+        <EmptyState v-else icon="i-lucide-file-code-2" text="No test source captured for this execution" />
+      </div>
+
+      <!-- ── Network ──────────────────────────────────────────────── -->
+      <div v-else-if="activeTab === 'network'" ref="networkWrap" class="scroll-mt-4">
+        <TestCaseNetworkRequests
+          v-if="networkRequests.length > 0 || hasTrace"
+          ref="networkComp"
+          :requests="networkRequests"
+          :run-id="runId"
+          :test-runs-case-id="testRunsCaseId"
+          :has-trace="hasTrace"
+          :derived-from-trace="networkDerived"
+        />
+        <SectionCard v-else icon="i-lucide-arrow-left-right" title="Network requests" help="case.network">
+          <EvidenceEmptyState :state="networkState" compact />
+        </SectionCard>
+      </div>
+
+      <!-- ── Console ──────────────────────────────────────────────── -->
+      <div v-else-if="activeTab === 'console'" ref="consoleWrap" class="scroll-mt-4">
+        <TestCaseConsoleCard v-if="consoleLogs.length" :entries="consoleLogs" :derived-from-trace="consoleDerived" />
+        <SectionCard v-else icon="i-lucide-terminal" title="Console output" help="case.console">
+          <EvidenceEmptyState :state="consoleState" compact />
+        </SectionCard>
+      </div>
+
+      <!-- ── State ────────────────────────────────────────────────── -->
+      <div v-else-if="activeTab === 'state'" class="space-y-4">
+        <div ref="pageStateWrap" class="scroll-mt-4">
+          <PageStateCard v-if="pageState" :page-state="pageState" />
+          <SectionCard v-else icon="i-lucide-database" title="App state at test end" help="page-state">
+            <EvidenceEmptyState :state="appStateState" compact />
+          </SectionCard>
+        </div>
+        <div ref="envDiffWrap" class="scroll-mt-4">
+          <EnvironmentDiffCard v-if="runId" :run-id="runId" :test-runs-case-id="testRunsCaseId" />
+        </div>
+      </div>
+
+      <!-- ── Performance ──────────────────────────────────────────── -->
+      <div v-else-if="activeTab === 'performance'" ref="performanceWrap" class="scroll-mt-4">
+        <TestCasePerformancePanel
+          :performance-hints="performanceHints"
+          :web-vitals="webVitals"
+          :state="webVitalsState"
+        />
+      </div>
+    </div>
+  </section>
+</template>
