@@ -351,8 +351,14 @@ const columns: TableColumn<ProjectWithStats>[] = [
           </template>
           <template #actions-cell="{ row }">
             <div class="flex justify-end gap-2">
-              <UButton :to="`/projects/${row.original.id}`" size="sm" variant="outline">View details</UButton>
-              <UButton :to="`/projects/${row.original.id}/edit`" size="sm" variant="ghost" icon="i-lucide-pencil" />
+              <UButton
+                :to="`/projects/${row.original.id}/edit`"
+                size="sm"
+                variant="ghost"
+                icon="i-lucide-pencil"
+                :aria-label="`Edit ${row.original.label || row.original.name}`"
+                title="Edit project"
+              />
             </div>
           </template>
         </UTable>
