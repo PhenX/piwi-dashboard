@@ -105,7 +105,7 @@ Individual test cases in a run carry at-a-glance badges:
 
 Toggle filters on the run's test-case list to show only new regressions or new flaky tests.
 
-Opening a failing execution surfaces the same signals in its **Verdict** card (see [Test case detail](./evidence#one-execution-diagnosis-first)): new-regression / new-flaky / passed-on-retry chips, plus how long the test has been failing and a link back to its last green run.
+Opening a failing execution surfaces the same signals (see [Test case detail](./evidence#one-execution-diagnosis-first)): the new-regression / passed-on-retry / newly-flaky badges in the header, the *why* and *since when* facts on the headline, and the failing-streak sentence with a link back to the last green run in the history block.
 
 ## Performance
 
