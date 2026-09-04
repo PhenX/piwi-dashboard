@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { h } from 'vue';
-import { UIcon } from '#components';
-import type { TableColumn } from '@nuxt/ui';
 import type { TestCasesPage, TestCaseWithStats } from '~~/types/api';
 import type { TestCasesSort } from '#shared/handlers/projects';
+import { buildTestRowBadges } from '~/utils/test-row-badges';
 
 const props = defineProps<{
   projectId: string | number;
@@ -133,45 +131,30 @@ function toggleStatus(value: string) {
     : [...statuses.value, value];
 }
 
-function toggleSort(key: TestCasesSort) {
-  if (sort.value === key) {
-    dir.value = dir.value === 'asc' ? 'desc' : 'asc';
-  } else {
-    sort.value = key;
-    dir.value = key === 'title' ? 'asc' : 'desc';
-  }
+const SORT_OPTIONS: { label: string; value: TestCasesSort }[] = [
+  { label: 'Last run', value: 'lastRun' },
+  { label: 'Test', value: 'title' },
+  { label: 'Status', value: 'status' },
+  { label: 'Runs', value: 'totalRuns' },
+  { label: 'Pass rate', value: 'passRate' },
+  { label: 'Avg duration', value: 'avgDuration' },
+];
+
+function toggleDir() {
+  dir.value = dir.value === 'asc' ? 'desc' : 'asc';
 }
 
-function sortableHeader(label: string, key: TestCasesSort) {
-  return () => {
-    const active = sort.value === key;
-    const iconName = !active
-      ? 'i-lucide-chevrons-up-down'
-      : dir.value === 'asc'
-        ? 'i-lucide-chevron-up'
-        : 'i-lucide-chevron-down';
-    return h(
-      'button',
-      {
-        type: 'button',
-        class:
-          'flex items-center gap-1 font-semibold select-none cursor-pointer hover:text-highlighted transition-colors',
-        onClick: () => toggleSort(key),
-      },
-      [label, h(UIcon, { name: iconName, class: ['shrink-0 size-3.5', !active && 'opacity-40'] })],
-    );
-  };
+/** Tags and ownership metadata rendered as the row's badges. */
+function catalogBadges(tc: TestCaseWithStats) {
+  return buildTestRowBadges({
+    tags: tc.tags,
+    meta: {
+      owner: tc.owner ?? undefined,
+      priority: toTestPriority(tc.priority),
+      feature: tc.feature ?? undefined,
+    },
+  });
 }
-
-const columns = computed<TableColumn<TestCaseWithStats>[]>(() => [
-  { accessorKey: 'title', header: sortableHeader('Test', 'title') },
-  { accessorKey: 'status', header: sortableHeader('Status', 'status') },
-  { accessorKey: 'totalRuns', header: sortableHeader('Runs', 'totalRuns') },
-  { accessorKey: 'passRate', header: sortableHeader('Pass rate', 'passRate') },
-  { id: 'results', header: 'Results' },
-  { accessorKey: 'avgDuration', header: sortableHeader('Avg duration', 'avgDuration') },
-  { accessorKey: 'lastRun', header: sortableHeader('Last run', 'lastRun') },
-]);
 
 const items = computed(() => data.value?.items ?? []);
 const total = computed(() => data.value?.total ?? 0);
@@ -381,6 +364,19 @@ defineExpose({ refresh });
         </button>
       </div>
       <USelect v-model="age" :items="AGE_OPTIONS" size="sm" class="w-36" aria-label="Last run age filter" />
+      <div class="flex items-center gap-1">
+        <span class="text-xs text-muted max-sm:sr-only">Sort</span>
+        <USelect v-model="sort" :items="SORT_OPTIONS" size="sm" class="w-36" aria-label="Sort by" />
+        <UButton
+          size="sm"
+          color="neutral"
+          variant="outline"
+          :icon="dir === 'asc' ? 'i-lucide-arrow-up' : 'i-lucide-arrow-down'"
+          :title="dir === 'asc' ? 'Ascending' : 'Descending'"
+          aria-label="Toggle sort direction"
+          @click="toggleDir"
+        />
+      </div>
     </FilterToolbar>
 
     <LoadingState v-if="initialLoading" text="Loading test cases..." />
@@ -441,200 +437,46 @@ defineExpose({ refresh });
                 @toggle="toggleGroup(group.prefix)"
               />
               <div v-if="group.open">
-                <div
+                <TestRow
                   v-for="tc in group.rows"
                   :key="tc.id"
-                  class="flex items-center gap-3 border-t border-default px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-900/40"
+                  :href="`/test-cases/${tc.id}`"
+                  :title="tc.title"
+                  :status="tc.status"
+                  :file-path="tc.filePath"
+                  :badges="catalogBadges(tc)"
+                  :project-key="projectId"
+                  :project-name="projectName"
                 >
-                  <div class="min-w-0 flex-1 space-y-0.5">
-                    <NuxtLink
-                      :to="`/test-cases/${tc.id}`"
-                      class="font-medium text-primary hover:underline truncate block"
-                      :title="tc.title"
-                    >
-                      {{ tc.title }}
-                    </NuxtLink>
-                    <TestMetaBadges
-                      :tags="tc.tags"
-                      :meta="{
-                        owner: tc.owner ?? undefined,
-                        priority: toTestPriority(tc.priority),
-                        feature: tc.feature ?? undefined,
-                        link: tc.link ?? undefined,
-                      }"
-                      :max-tags="3"
-                    />
-                  </div>
-                  <UBadge
-                    :color="testCaseCategoryColor(tc.status)"
-                    variant="subtle"
-                    size="sm"
-                    class="capitalize shrink-0"
-                  >
-                    {{ formatStatusLabel(tc.status) }}
-                  </UBadge>
-                  <PassRateIndicator :rate="tc.passRate" class="shrink-0" />
-                  <div class="w-28 shrink-0 hidden sm:block">
-                    <TestStatusBar
-                      :passed="tc.passedRuns"
-                      :failed="tc.failedRuns"
-                      :skipped="tc.skippedRuns"
-                      :flaky="tc.flakyRuns"
-                      :did-not-run="tc.didNotRunRuns"
-                      :total="tc.totalRuns"
-                    />
-                  </div>
-                  <DurationValue
-                    :ms="tc.avgDuration"
-                    class="hidden md:block shrink-0 text-muted tabular-nums w-16 text-right"
-                  />
-                  <span
-                    class="hidden lg:block shrink-0 text-muted tabular-nums w-20 text-right"
-                    :title="prettyDateFormat(tc.lastRun)"
-                  >
-                    {{ tc.lastRun != null ? formatRelativeTime(tc.lastRun) : '—' }}
-                  </span>
-                </div>
+                  <template #metrics>
+                    <CatalogRowFacts :tc="tc" />
+                  </template>
+                </TestRow>
               </div>
             </div>
           </div>
         </template>
 
-        <!-- Flat view: table from md up, cards below -->
-        <template v-else>
-          <div class="hidden md:block overflow-x-auto">
-            <UTable
-              :data="items"
-              :columns="columns"
-              :ui="{
-                base: 'w-full table-fixed border-separate border-spacing-0 min-w-[56rem]',
-                thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
-                tbody: '[&>tr]:last:[&>td]:border-b-0 [&>tr]:hover:bg-gray-50 dark:[&>tr]:hover:bg-gray-900/50',
-                th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
-                td: 'border-b border-default',
-              }"
-            >
-              <template #title-cell="{ row }">
-                <div class="min-w-0 space-y-0.5">
-                  <NuxtLink
-                    :to="`/test-cases/${row.original.id}`"
-                    class="text-sm font-medium text-primary hover:underline truncate block"
-                    :title="row.original.title"
-                  >
-                    {{ row.original.title }}
-                  </NuxtLink>
-                  <TestMetaBadges
-                    :tags="row.original.tags"
-                    :meta="{
-                      owner: row.original.owner ?? undefined,
-                      priority: toTestPriority(row.original.priority),
-                      feature: row.original.feature ?? undefined,
-                      link: row.original.link ?? undefined,
-                    }"
-                    :max-tags="4"
-                  />
-                  <div class="flex items-center gap-1 text-xs text-muted">
-                    <UIcon name="i-lucide-file-code" class="size-3 shrink-0" />
-                    <OpenInIdeLink
-                      :file-path="row.original.filePath"
-                      :project-key="projectId"
-                      :project-name="projectName"
-                      class="min-w-0"
-                    />
-                  </div>
-                </div>
-              </template>
+        <!-- Flat list: one TestRow per test -->
+        <div v-else class="rounded-lg border border-default overflow-hidden">
+          <TestRow
+            v-for="tc in items"
+            :key="tc.id"
+            :href="`/test-cases/${tc.id}`"
+            :title="tc.title"
+            :status="tc.status"
+            :file-path="tc.filePath"
+            :badges="catalogBadges(tc)"
+            :project-key="projectId"
+            :project-name="projectName"
+          >
+            <template #metrics>
+              <CatalogRowFacts :tc="tc" />
+            </template>
+          </TestRow>
+        </div>
 
-              <template #status-cell="{ row }">
-                <UBadge
-                  :color="testCaseCategoryColor(row.original.status)"
-                  variant="subtle"
-                  size="sm"
-                  class="capitalize"
-                >
-                  {{ formatStatusLabel(row.original.status) }}
-                </UBadge>
-              </template>
-
-              <template #totalRuns-cell="{ row }">
-                <span class="text-sm tabular-nums">{{ row.original.totalRuns }}</span>
-              </template>
-
-              <template #passRate-cell="{ row }">
-                <PassRateIndicator :rate="row.original.passRate" />
-              </template>
-
-              <template #results-cell="{ row }">
-                <TestStatusBar
-                  :passed="row.original.passedRuns"
-                  :failed="row.original.failedRuns"
-                  :skipped="row.original.skippedRuns"
-                  :flaky="row.original.flakyRuns"
-                  :did-not-run="row.original.didNotRunRuns"
-                  :total="row.original.totalRuns"
-                />
-              </template>
-
-              <template #avgDuration-cell="{ row }">
-                <DurationValue :ms="row.original.avgDuration" class="text-sm text-muted" />
-              </template>
-
-              <template #lastRun-cell="{ row }">
-                <span class="text-sm text-muted" :title="prettyDateFormat(row.original.lastRun)">
-                  {{ row.original.lastRun != null ? formatRelativeTime(row.original.lastRun) : '—' }}
-                </span>
-              </template>
-            </UTable>
-          </div>
-
-          <!-- Below md: one card per case (no horizontal scroll) -->
-          <div class="space-y-2 md:hidden">
-            <div v-for="tc in items" :key="tc.id" class="rounded-lg border border-default p-3 space-y-2">
-              <div class="flex items-start justify-between gap-2">
-                <NuxtLink
-                  :to="`/test-cases/${tc.id}`"
-                  class="text-sm font-medium text-primary hover:underline min-w-0 truncate"
-                  :title="tc.title"
-                >
-                  {{ tc.title }}
-                </NuxtLink>
-                <UBadge
-                  :color="testCaseCategoryColor(tc.status)"
-                  variant="subtle"
-                  size="sm"
-                  class="capitalize shrink-0"
-                >
-                  {{ formatStatusLabel(tc.status) }}
-                </UBadge>
-              </div>
-              <div class="flex items-center gap-1 text-xs text-muted min-w-0">
-                <UIcon name="i-lucide-file-code" class="size-3 shrink-0" />
-                <OpenInIdeLink
-                  :file-path="tc.filePath"
-                  :project-key="projectId"
-                  :project-name="projectName"
-                  class="min-w-0"
-                />
-              </div>
-              <TestStatusBar
-                :passed="tc.passedRuns"
-                :failed="tc.failedRuns"
-                :skipped="tc.skippedRuns"
-                :flaky="tc.flakyRuns"
-                :did-not-run="tc.didNotRunRuns"
-                :total="tc.totalRuns"
-              />
-              <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <PassRateIndicator :rate="tc.passRate" />
-                <span class="text-xs text-muted tabular-nums">{{ tc.totalRuns }} runs</span>
-                <DurationValue v-if="tc.avgDuration != null" :ms="tc.avgDuration" class="text-xs text-muted" />
-                <span class="text-xs text-muted" :title="prettyDateFormat(tc.lastRun)">
-                  {{ tc.lastRun != null ? formatRelativeTime(tc.lastRun) : '—' }}
-                </span>
-              </div>
-            </div>
-          </div>
-
+        <template v-if="!grouped">
           <!-- Pagination footer -->
           <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
             <div class="flex flex-wrap items-center gap-3">
