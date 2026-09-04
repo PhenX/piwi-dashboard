@@ -12,6 +12,8 @@ defineProps<{
   performanceHints: ReturnType<typeof getPerformanceHints>;
   webVitals: WebVitals | null;
   state: EvidenceState;
+  /** Drop the card frame and padding — render a plain heading row over the body. */
+  embedded?: boolean;
 }>();
 </script>
 
@@ -60,6 +62,7 @@ defineProps<{
     <SectionCard
       v-if="webVitals"
       id="webvitals-card"
+      :embedded="embedded"
       icon="i-lucide-gauge"
       title="Browser performance (Web Vitals)"
       help="case.web-vitals"
@@ -194,7 +197,13 @@ defineProps<{
         </div>
       </div>
     </SectionCard>
-    <SectionCard v-else icon="i-lucide-gauge" title="Browser performance (Web Vitals)" help="case.web-vitals">
+    <SectionCard
+      v-else
+      :embedded="embedded"
+      icon="i-lucide-gauge"
+      title="Browser performance (Web Vitals)"
+      help="case.web-vitals"
+    >
       <EvidenceEmptyState :state="state" doc="/capture-fixtures" compact />
     </SectionCard>
   </div>
