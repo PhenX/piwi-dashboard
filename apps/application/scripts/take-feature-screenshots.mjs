@@ -363,6 +363,19 @@ const SCENES = [
 
   // ── Feature states (report artifacts) ─────────────────────────────────────
   {
+    name: 'attempt-diff',
+    description: 'Attempts tab: every attempt, and what differed between the failing and passing attempt',
+    // Execution 21 is a flaky test that passed on retry, so the Attempts tab holds a diff.
+    route: '/test-run-cases/21',
+    viewport: { width: 1280, height: 1000 },
+    of: '[data-shot="attempts-diff"]',
+    pad: 12,
+    async run({ shoot, openTab }) {
+      await openTab('Attempts');
+      await shoot();
+    },
+  },
+  {
     name: 'execution-history',
     description: 'Execution page opened straight onto its History tab (duration trend + executions)',
     route: '/test-run-cases/229?tab=history',

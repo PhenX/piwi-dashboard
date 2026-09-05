@@ -97,6 +97,7 @@ import {
   getTestCaseStabilityTrend,
   getFailureTimeline,
   getFailureClues,
+  getAttemptDiff,
 } from '#shared/handlers/test-cases';
 import { buildExecutionReproduce } from '#shared/handlers/reproduce';
 import {
@@ -975,6 +976,14 @@ const routes: RouteEntry[] = [
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'execution', +m[1]!);
       return buildExecutionReproduce(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/attempt-diff$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getAttemptDiff(await getDemoDb(), +m[1]!);
     },
   },
   {
