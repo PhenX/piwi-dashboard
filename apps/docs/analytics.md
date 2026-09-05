@@ -67,13 +67,6 @@ let you record a deploy, a CI-runner migration, or a dependency bump against a p
 as a vertical line across the trend charts — so "the slowdown started the day we switched runners"
 becomes something you can see rather than remember.
 
-## How it's built
-
-Each widget is a registry entry backed by a shared handler and served by one generic endpoint,
-`GET /api/analytics/:widget`. The same handlers back the dashboard, the demo, and the API, so a number
-you read on the page is the number the API returns. Widgets fetch independently, so a slow one never
-blocks the rest of the page.
-
 ## See also
 
 - [Flaky tests](./flaky-tests) — the per-project analysis these widgets aggregate

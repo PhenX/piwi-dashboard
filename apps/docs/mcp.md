@@ -290,9 +290,3 @@ npx @piwitests/reporter skills add investigate-failure --dir .cursor/skills   # 
 | `run-the-right-tests` | Pick and run the right [selection](./test-selection) for the task — smoke, recently-broken, a time budget — instead of always running the whole suite. |
 
 The skills are agent-agnostic Markdown — only the destination directory is tool-specific, so `--dir` points the install wherever your agent reads skills from. They pair with this MCP server: each one prefers a connected Piwi MCP tool (`explain_failure`, `get_locator_healing`, `list_flaky_tests`, …) and falls back to the dashboard UI when MCP is not connected.
-
-## Architecture
-
-The MCP server is implemented as a single Nitro route (`server/routes/mcp.post.ts`) that dispatches JSON-RPC methods to tool handlers in `server/utils/mcp/tools.ts`. Handlers call the same shared DB helpers used by the REST API — no self-HTTP-calls, no extra processes.
-
-The `get_cluster_context` tool calls `buildClusterDiagnosisContext()` directly, so agents receive the identical SCM-grounded evidence the built-in diagnosis AI uses: error samples, test steps, console logs, network failures, ARIA snapshots, and the diff of changed files since the last green run.

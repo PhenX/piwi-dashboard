@@ -22,27 +22,6 @@ Edge blocks other stores until you say otherwise: the first Chrome Web Store pag
 shows an **Allow extensions from other stores** banner — click **Allow** once, and **Get** installs
 and auto-updates exactly as it does in Chrome. There's no separate Edge Add-ons listing yet.
 
-### From source
-
-Only needed if you want an unreleased build, or you're changing the extension itself.
-
-```bash
-git clone https://github.com/PiwiTests/platform.git
-cd platform
-npm install
-npm run extension:build --workspace=apps/extension
-```
-
-Then, in Chrome or Edge:
-
-1. Open `chrome://extensions` (`edge://extensions` on Edge).
-2. Turn on **Developer mode**.
-3. **Load unpacked** → select `apps/extension/dist`.
-
-A source build doesn't auto-update — rebuild and reload its card on the extensions page to pick up
-changes. If you already have the store version installed, disable one or the other so two copies of
-the picker don't both bind the keyboard shortcut.
-
 ## What it does
 
 Every action in the toolbar popup has a digit shortcut, shown on its tile and numbered in
@@ -237,9 +216,3 @@ its pattern actually matches whatever page you're looking at.
 - **Function matching is deterministic, not AI-assisted, in this phase.** The catalog matcher
   scores DOM patterns against recorded steps; there's no optional AI pass yet to name things or
   break ties beyond the scoring itself.
-
-## Source
-
-`apps/extension/` in the [monorepo](https://github.com/PiwiTests/platform) — see
-[`apps/extension/AGENTS.md`](https://github.com/PiwiTests/platform/blob/main/apps/extension/AGENTS.md)
-for how it's built and tested.
