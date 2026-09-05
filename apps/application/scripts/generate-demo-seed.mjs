@@ -747,6 +747,9 @@ for (const proj of DEMO_PROJECTS) {
       const storyEntry = isFailedCase ? storyByCaseId.get(caseId) : null;
       const story = storyEntry?.story ?? null;
       const noPage = Boolean(story?.evidence.noPageArtifacts);
+      // The story behind this case regardless of pass/fail — passing executions
+      // seed its green ARIA baseline so a later failure has a page to diff against.
+      const storyForCase = storyByCaseId.get(caseId)?.story ?? null;
 
       const caseStatus = isFailedCase ? 'failed' : isDidNotRunCase ? 'didnotrun' : 'passed';
       const caseDuration = isDidNotRunCase
@@ -879,7 +882,12 @@ for (const proj of DEMO_PROJECTS) {
         page_state: isDidNotRunCase || noPage ? null : buildPageState(proj, storyEntry),
         ai_usage: isDidNotRunCase || noPage ? null : await buildAiUsage(caseDef),
         console_logs: consoleLogs,
-        aria_snapshot: isFailedCase && !noPage ? story?.aria : null,
+        aria_snapshot:
+          isFailedCase && !noPage
+            ? story?.aria
+            : !isDidNotRunCase && !isFailedCase
+              ? (storyForCase?.baselineAria ?? null)
+              : null,
         test_source: isFailedCase ? buildTestSource(story, storyEntry.failingCase, caseDef.declLine) : null,
         test_source_frames: isFailedCase ? buildSourceFrames(storyEntry.failingCase) : null,
         worker_index: workerIndex,
