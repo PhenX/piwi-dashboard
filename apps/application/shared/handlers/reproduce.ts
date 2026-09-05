@@ -20,7 +20,7 @@ import {
   type ReproduceDesktopContext,
   type ReproRecipe,
 } from '#shared/reproduce';
-import { buildCommitUrl } from '#shared/utils/run-metadata';
+import { commitUrl } from '#shared/scm-urls';
 import { buildRetryCommand, type RetryCase } from '#shared/retry-command';
 import type { BrowserConfig } from '#shared/types';
 import type { DrizzleDB } from './db';
@@ -68,7 +68,7 @@ async function readBisectedCommit(
     subject: stored.subject ?? '',
     author: stored.author ?? null,
     date: stored.date ?? null,
-    commitUrl: repositoryUrl ? buildCommitUrl(repositoryUrl, stored.sha) : null,
+    commitUrl: commitUrl(repositoryUrl, stored.sha),
   };
 }
 

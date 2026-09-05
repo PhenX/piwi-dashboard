@@ -25,7 +25,7 @@ import {
   type LocalRunStep,
 } from '~/utils/local-run-args';
 import type { RetryCase, RetryMode } from '~/utils/retry-command';
-import { buildCommitUrl } from '#shared/utils/run-metadata';
+import { commitUrl } from '#shared/scm-urls';
 
 export type LocalRunStatus = 'running' | 'passed' | 'failed' | 'stopped' | 'error';
 
@@ -69,8 +69,7 @@ export interface BisectTarget {
 
 /** A commit URL derived from a repository URL, for the "Open commit" action. */
 export function bisectCommitUrl(target: BisectTarget | null, sha: string): string | null {
-  if (!target?.repositoryUrl) return null;
-  return buildCommitUrl(target.repositoryUrl, sha);
+  return commitUrl(target?.repositoryUrl, sha);
 }
 
 /** Options as stored per project — every field resolved to a concrete value. */

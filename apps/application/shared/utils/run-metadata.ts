@@ -49,25 +49,6 @@ export function buildCompareUrl(repositoryUrl: string, fromSha: string, toSha: s
   return null;
 }
 
-/** Build a provider-specific "view this commit" URL, or null when the host is unknown. */
-export function buildCommitUrl(repositoryUrl: string, sha: string): string | null {
-  try {
-    const { hostname } = new URL(repositoryUrl);
-    if (hostname === 'github.com' || hostname.endsWith('.github.com')) {
-      return `${repositoryUrl}/commit/${sha}`;
-    }
-    if (hostname === 'gitlab.com' || hostname.includes('gitlab')) {
-      return `${repositoryUrl}/-/commit/${sha}`;
-    }
-    if (hostname === 'bitbucket.org') {
-      return `${repositoryUrl}/commits/${sha}`;
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
 /**
  * The commit span from a baseline commit to a later one, with a compare URL when
  * the repository host is known and the `git log --oneline` command that lists it.
