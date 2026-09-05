@@ -281,6 +281,16 @@ Where to add things in subsystems whose wiring spans several files:
 
 These are the rules that a reasonable change would otherwise break.
 
+### SCM providers — one source for hosts and URLs
+
+Provider hosts and web URLs live only in `shared/scm-urls.ts` (`detectScmHost`, `commitUrl`, `compareUrl`,
+`fileUrl`, `branchUrl`); provider API calls live only in `server/utils/scm/`. Anything that needs a provider gets it
+from `createScmProvider` / `scmProviderForUrl` (or the pure link helpers from `#shared/scm-urls`) — never a hand-written
+`github.com` / `gitlab` / `bitbucket.org` host switch or a re-implemented `/commit/<sha>` path. Import the
+`ScmProviderName` union from `#shared/scm-urls`; never re-declare `'github' | 'gitlab' | 'bitbucket'`.
+`tests/unit/scm-single-source.test.ts` scans `server`, `shared`, `app` and `types` for provider host literals and the
+union outside an explicit allow-list, so a new home for either is a visible diff to that list.
+
 ### Failure clustering & fingerprints
 
 The grouping key is `computeErrorFingerprint` (`shared/error-fingerprint.ts`) over error type + normalized message +

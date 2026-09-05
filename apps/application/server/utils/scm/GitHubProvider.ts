@@ -4,6 +4,8 @@ import type {
   ScmCommitAuthor,
   ScmChanges,
   ScmFileContent,
+  ScmEntityRef,
+  ScmEntityState,
   ScmPullRequest,
   ScmCommitStatus,
   ScmFileEdit,
@@ -177,6 +179,57 @@ export class GitHubProvider extends ScmProvider {
       const result = email ? { name: name || email, email } : null;
       commitAuthorCache.set(key, result);
       return result;
+    } catch {
+      return null;
+    }
+  }
+
+  async fetchIssue(number: number): Promise<ScmEntityRef | null> {
+    return this.fetchEntity('issues', number);
+  }
+
+  async fetchPullRequest(number: number): Promise<ScmEntityRef | null> {
+    return this.fetchEntity('pulls', number);
+  }
+
+  private async fetchEntity(endpoint: 'issues' | 'pulls', number: number): Promise<ScmEntityRef | null> {
+    if (!Number.isInteger(number) || number <= 0) return null;
+    try {
+      const res = await fetch(`https://api.github.com/repos/${this.repoPath}/${endpoint}/${number}`, {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as {
+        title?: string;
+        state?: string;
+        merged?: boolean;
+        draft?: boolean;
+        user?: { login?: string };
+        html_url?: string;
+        updated_at?: string;
+      };
+      const state: ScmEntityState =
+        endpoint === 'pulls'
+          ? data.merged
+            ? 'merged'
+            : data.state === 'closed'
+              ? 'closed'
+              : data.draft
+                ? 'draft'
+                : 'open'
+          : data.state === 'closed'
+            ? 'closed'
+            : data.state === 'open'
+              ? 'open'
+              : null;
+      return {
+        title: data.title ?? null,
+        state,
+        author: data.user?.login ?? null,
+        url: data.html_url ?? null,
+        updatedAt: data.updated_at ?? null,
+      };
     } catch {
       return null;
     }
