@@ -1,5 +1,5 @@
 import { testCases, testRunsCases, testSuites, networkRequests } from '../database/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm';
 import {
   buildNetworkRequestItems,
   buildNetworkRequestInsertValues,
@@ -19,6 +19,7 @@ import {
 import { resolveIngestLimits } from './ingest-limits';
 import { normalizeTestCaseStatus } from '#shared/utils/test-counts';
 import { upsertCasePayloads } from './case-payloads';
+import { GREEN_SAMPLE_MAX_AGE_MS } from '#shared/handlers/aria-sampling';
 import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fingerprint';
 import {
   normalizeTestTags,
@@ -280,6 +281,60 @@ async function syncTestCaseMetadata(db: DB, incoming: Map<number, CaseMetaSnapsh
  * clause silently skips rows that would violate it. This naturally handles both
  * batch retries and same-test-different-browser scenarios.
  */
+/**
+ * Drop redundant green ARIA samples before they reach storage. A passing
+ * execution's snapshot is kept only when the test has no other green snapshot
+ * from the last {@link GREEN_SAMPLE_MAX_AGE_MS} — both against snapshots already
+ * stored and against duplicates within this same batch. Failing snapshots are
+ * never touched. Mutates `payloads[i].aria` in place; the rows keep their other
+ * evidence, they just stop carrying a duplicate green page.
+ */
+async function dedupeGreenSamples(
+  db: DB,
+  rows: Array<typeof testRunsCases.$inferInsert>,
+  payloads: Array<{ aria: string | null; source: string | null; framesJson: string | null }>,
+  now: number = Date.now(),
+): Promise<void> {
+  const cutoff = now - GREEN_SAMPLE_MAX_AGE_MS;
+  const seenInBatch = new Set<number>();
+  const greenRows: Array<{ index: number; caseId: number }> = [];
+
+  rows.forEach((row, i) => {
+    if (row.status !== 'passed' || !payloads[i]!.aria || row.testCaseId == null) return;
+    const caseId = row.testCaseId;
+    // One green sample per test per batch is enough — drop the rest outright.
+    if (seenInBatch.has(caseId)) {
+      payloads[i]!.aria = null;
+      return;
+    }
+    seenInBatch.add(caseId);
+    greenRows.push({ index: i, caseId });
+  });
+  if (greenRows.length === 0) return;
+
+  const caseIds = greenRows.map((r) => r.caseId);
+  const existing = await db
+    .select({
+      testCaseId: testRunsCases.testCaseId,
+      latest: sql<number>`max(${testRunsCases.createdAt})`,
+    })
+    .from(testRunsCases)
+    .where(
+      and(
+        inArray(testRunsCases.testCaseId, caseIds),
+        eq(testRunsCases.status, 'passed'),
+        or(isNotNull(testRunsCases.ariaSnapshotPayloadId), isNotNull(testRunsCases.ariaSnapshot)),
+      ),
+    )
+    .groupBy(testRunsCases.testCaseId);
+
+  const freshById = new Map(existing.map((r) => [r.testCaseId, Number(r.latest)]));
+  for (const { index, caseId } of greenRows) {
+    const latest = freshById.get(caseId);
+    if (latest != null && latest >= cutoff) payloads[index]!.aria = null;
+  }
+}
+
 export async function persistRunCases(
   db: DB,
   projectId: number,
@@ -432,6 +487,10 @@ export async function persistRunCases(
   }
 
   if (runCasesRows.length === 0) return [];
+
+  // Keep at most one green ARIA sample per test per day: a passing snapshot is
+  // dropped when the test already has a recent one, so many runs a day stay bounded.
+  await dedupeGreenSamples(db, runCasesRows, rowPayloads);
 
   // Payloads land first so the junction rows can reference them.
   const payloadIds = await upsertCasePayloads(
