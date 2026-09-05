@@ -207,28 +207,6 @@ and TLS are wired up automatically.
 - **Pin a version.** The templates track `latest`. Pin a tag before you depend on the instance, and read
   [Upgrading](./upgrading) first: migrations are forward-only.
 
-## Building locally
-
-Build from the repository root (the `Dockerfile` lives there):
-
-::: code-group
-
-```bash [Linux / macOS]
-docker build -t piwi-dashboard:local .
-docker run -p 3000:3000 -v $(pwd)/.data:/app/.data piwi-dashboard:local
-```
-
-```powershell [Windows (PowerShell)]
-docker build -t piwi-dashboard:local .
-docker run -p 3000:3000 -v ${PWD}/.data:/app/.data piwi-dashboard:local
-```
-
-:::
-
-Pass `--build-arg PIWI_BUILD_SHA=$(git rev-parse HEAD)` to stamp the image with a commit SHA, shown on
-Settings → About and returned by `GET /api/version`. The published images set it from CI; it's optional
-for a local build.
-
 ## Docker Compose
 
 The repository ships a ready-to-use [`docker-compose.yml`](https://github.com/PiwiTests/platform/blob/main/docker-compose.yml) with commented options (secret key, auth, PostgreSQL). Minimal version:
@@ -380,15 +358,6 @@ $env:PORT='8080'; npx @piwitests/server
 > **Docker remains the recommended path for production** — it ships a pinned Node runtime,
 > runs as a non-root user, and isolates the environment. The npm package is best for a
 > quick local trial or environments where Docker isn't available.
-
-## Production build from source
-
-```bash
-cd apps/application
-npm install
-npm run app:build
-npm run app:preview  # preview the production build locally
-```
 
 ## Health checks
 
