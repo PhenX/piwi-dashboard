@@ -116,6 +116,7 @@ export default defineConfig({
           { text: 'Failure clusters & the inbox', link: '/failure-clusters' },
           { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
           { text: 'Flaky tests', link: '/flaky-tests' },
+          { text: 'Branches', link: '/branches' },
           { text: 'Analytics', link: '/analytics' },
           { text: 'Timeline markers', link: '/timeline-markers' },
           { text: 'Notifications & alerts', link: '/notifications' },
