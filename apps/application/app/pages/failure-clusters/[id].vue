@@ -263,7 +263,11 @@ function refresh() {
 
 // ── Fix card ─────────────────────────────────────────────────────────────────
 // Diagnosis first, then the locator fix, the verify command and the fix plan.
-const hasLocatorPanel = computed(() => Boolean(affectedCases.value[0]?.recentTestRunsCaseId));
+// The Locator fix section applies only to a locator-resolution failure — the same
+// gate the execution page uses; a count mismatch or a value assertion has none.
+const hasLocatorPanel = computed(() =>
+  Boolean(clusterVerdict.value?.isLocatorResolutionFailure && affectedCases.value[0]?.recentTestRunsCaseId),
+);
 const showVerify = computed(() => Boolean(fixPlan.value?.verify?.command));
 const showReproduce = computed(() => Boolean(fixPlan.value?.reproduce?.steps?.length));
 const fixSections = computed<FixSectionKey[]>(() => {
