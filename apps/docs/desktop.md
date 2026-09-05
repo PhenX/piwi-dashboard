@@ -178,6 +178,38 @@ The linked folder also completes [Open in IDE](/ide-integration): when no
 workspace root is configured there, source links resolve against the linked
 folder automatically.
 
+### Reproducing a failure and finding the breaking commit
+
+The [Reproduce section](/ai-diagnosis#reproduce-and-bisect) of the Fix card shows
+a copy-paste recipe on every build. Inside the app it can also run that recipe —
+and drive the whole `git bisect` — for you, against the linked folder, **without
+touching your checkout.**
+
+- **Reproduce here** checks out the failing commit in a throwaway
+  [`git worktree`](https://git-scm.com/docs/git-worktree) under the app's data
+  dir, installs (reusing your `node_modules` when the lockfile is unchanged,
+  otherwise `npm ci` / `pnpm install --frozen-lockfile` / `yarn install`),
+  installs the browser if it is missing, and runs exactly the failing test — each
+  phase a header in the **Local runs** tray. Your working tree, uncommitted
+  changes and installed browsers are left alone. The commit's *own* Playwright
+  version is used (the point of a checkout), not the run's pin.
+- **Find the breaking commit here** drives a real bisect step by step between the
+  last green commit and the failing one — not `git bisect run`, so you get live
+  progress (*step 3 of ~7 — `a1b2c3d` — testing…*), a **Stop** that actually
+  stops (it kills the test and any browsers or dev server it started, resets the
+  bisect and removes the worktree), and a clean result: the first bad commit, with
+  its subject, author and date, linked to your SCM host and recorded on the
+  cluster so it survives a reload and reaches the [fix plan](/mcp).
+
+**The honest limits:** `git`, and your package manager, must be installed on this
+machine (the app ships only Node). Piwi reproduces and bisects **one** repository
+— when your app under test lives in another repo, its history is not part of the
+bisect. And a bisect only means something when the app is built from the same
+checkout: if your Playwright config has a `webServer`, Playwright starts the app
+at each commit and you are done; if it targets an external URL instead, set a
+**start command** (e.g. `npm run dev`) and a readiness URL under the linked
+folder's settings, and the app starts it in the worktree before each step.
+
 ## Importing local files
 
 Drop a Playwright **blob report** or **trace** (`.zip`) anywhere on the app
