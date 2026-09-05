@@ -23,7 +23,7 @@
     "@piwitests/picker-dom": "*"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.63.0",
     "@types/chrome": "^0.1.43",
     "archiver": "^7.0.1",
     "vite": "^8.0.16"
