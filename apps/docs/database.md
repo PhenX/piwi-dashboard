@@ -46,13 +46,13 @@ PIWI_DATABASE_URL=postgresql://user:password@localhost:5432/piwi_dashboard
 ```
 
 `PIWI_DATABASE_PATH` is ignored while `PIWI_DATABASE_URL` is set. A ready-to-run Compose stack with a
-`postgres:16-alpine` service is in the
+`postgres:17-alpine` service is in the
 [deployment guide](./deployment#docker-compose-with-postgresql).
 
 To try it locally against a throwaway server:
 
 ```bash
-docker run -d -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=piwi_dashboard postgres:16-alpine
+docker run -d -p 5432:5432 -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=piwi_dashboard postgres:17-alpine
 ```
 
 ## Switching backends

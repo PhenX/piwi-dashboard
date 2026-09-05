@@ -15,14 +15,7 @@ If you do one thing beyond installing the reporter, do this.
 
 **Option A — extend your existing fixtures:**
 
-```typescript
-// tests/fixtures.ts
-import { test as base, expect } from '@playwright/test'
-import { piwiFixtures } from '@piwitests/reporter'
-
-export const test = base.extend(piwiFixtures)
-export { expect }
-```
+<<< @/snippets/fixtures.ts{ts}
 
 **Option B — one-line extend with `extendPiwiFixtures`:**
 
@@ -131,7 +124,7 @@ Capture is designed to never fail or noticeably slow down a test:
 | `collectPerformanceMetrics: false` | Master switch — disables all fixture capture |
 | `captureLocators: false` (or `PIWI_CAPTURE_LOCATORS=false`) | Disables only the locator snapshots (action and assertion capture alike); network, console, and Web Vitals stay on |
 | `capturePageState: false` (or `PIWI_CAPTURE_PAGE_STATE=false`) | Disables only the test-end app-state capture (URL, storage key names, cookie flags — values are never captured) |
-| `inspectOnFailure: true` (or `PIWI_INSPECT_ON_FAIL=true`) | Opt-in local debugging aid — a failing test opens the Playwright Inspector on its still-open page (headed browsers only, never in CI). See [Inspect the failing page live](./reporter#inspect-the-failing-page-live-local-runs) |
+| `inspectOnFailure: true` (or `PIWI_INSPECT_ON_FAIL=true`) | Opt-in local debugging aid — a failing test opens Piwi's own inspector overlay (not Playwright's inspector) on its still-open page (headed browsers only, never in CI). See [Inspect the failing page live](./reporter#inspect-the-failing-page-live-local-runs) |
 | `pickLocatorOnFailure: true` (or `PIWI_PICK_LOCATOR_ON_FAIL=true`) | Opt-in local debugging aid — after a locator failure, click the intended element on the still-open page and confirm a ranked replacement locator; the choice is recorded for the healing panel (headed browsers only, never in CI). See [Pick a replacement locator](./reporter#pick-a-replacement-locator-on-the-failing-page-local-runs) |
 
 ## Troubleshooting

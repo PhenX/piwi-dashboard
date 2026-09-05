@@ -114,3 +114,28 @@ describe('docs pages the app deep-links into', () => {
     expect(headings, `apps/docs/${page}.md has no heading anchored #${anchor}`).toContain(anchor);
   });
 });
+
+describe('single-source snippets', () => {
+  // Shared blocks live once under apps/docs/snippets/ and are pulled into docs
+  // pages with VitePress code includes (`<<< @/snippets/…`). Surfaces that
+  // cannot include a file — the repo README, the npm package READMEs, the
+  // Docker Hub page, and inline references in prose — carry a literal copy
+  // instead; this guard fails when such a copy drifts from the canonical
+  // snippet, the same way the positioning check keeps that one line in sync
+  // across surfaces. The canonical text is compared trimmed, so a one-liner
+  // embedded inline in a sentence still matches.
+  const SNIPPET_COPIES: Record<string, readonly string[]> = {
+    'apps/docs/snippets/fixtures.ts': ['README.md', 'packages/reporter/README.md'],
+    'apps/docs/snippets/secret.sh': ['README.md', 'DOCKER_HUB.md', 'packages/server/README.md'],
+  };
+
+  for (const [snippet, surfaces] of Object.entries(SNIPPET_COPIES)) {
+    const canonical = read(snippet).trim();
+    test.each(surfaces)(`${snippet} → %s carries it verbatim`, (surface) => {
+      expect(
+        read(surface),
+        `${surface} has drifted from ${snippet} — paste the snippet in byte for byte, or convert the surface to a VitePress include`,
+      ).toContain(canonical);
+    });
+  }
+});

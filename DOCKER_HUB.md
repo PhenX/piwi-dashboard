@@ -70,42 +70,7 @@ The three worth knowing before you expose the container to a network:
 
 Generate a value for the latter two with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
 
-Beyond those: `PIWI_DATABASE_URL` switches to PostgreSQL, `PIWI_STORAGE_TYPE=s3` plus the `PIWI_S3_*` variables switch artifact storage to any S3-compatible service, and `PIWI_RETENTION_DAYS` turns on nightly pruning of old runs.
-
----
-
-## Docker Compose
-
-```yaml
-services:
-  piwi-dashboard:
-    image: phenx/piwitests-server:latest
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./.data:/app/.data
-    environment:
-      PIWI_SECRET_KEY: "replace-with-a-32-byte-hex-string"
-      PIWI_AUTH_ENABLED: "true"
-      PIWI_AUTH_SECRET: "replace-with-a-different-32-byte-hex-string"
-    restart: unless-stopped
-```
-
-PostgreSQL, S3 and MinIO variants are in the [deployment guide](https://piwitests.dev/deployment#docker-compose), alongside Kubernetes manifests, reverse-proxy configuration and backups.
-
----
-
-## Troubleshooting
-
-**Volume permission error** (Linux hosts only) — `mkdir -p .data && chown -R 1001:1001 .data`, then recreate the container.
-
-**Container exits immediately** — `docker logs piwi-dashboard`.
-
-**Data not persisted after restart** — the `-v` volume mount is missing.
-
-**SQLite locked / concurrent write errors** — SQLite allows one writer at a time; set `PIWI_DATABASE_URL` to switch to PostgreSQL.
-
-More, including port conflicts and reverse-proxy issues: [deployment troubleshooting](https://piwitests.dev/deployment#troubleshooting).
+Beyond those: `PIWI_DATABASE_URL` switches to PostgreSQL, `PIWI_STORAGE_TYPE=s3` plus the `PIWI_S3_*` variables switch artifact storage to any S3-compatible service, and `PIWI_RETENTION_DAYS` turns on nightly pruning of old runs. Compose, Kubernetes, PostgreSQL, S3/MinIO, reverse-proxy, backups and troubleshooting are all in the [deployment guide](https://piwitests.dev/deployment).
 
 ---
 

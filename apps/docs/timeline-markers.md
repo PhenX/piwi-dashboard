@@ -19,8 +19,8 @@ Each marker belongs to one project and carries:
 
 ## Where markers show up
 
-- **Project charts** — the **Run trend** and **Performance trend** charts render each marker as a dashed vertical line with a colored flag handle. Hover the handle for the marker's details; click it to jump to the Timeline tab and edit it.
-- **Timeline tab** — every project has a **Timeline** tab listing its markers, with add / edit / delete controls.
+- **Project charts** — the **Run trend** and **Performance trend** charts render each marker as a dashed vertical line with a colored flag handle. Hover the handle for the marker's details; click it to open the **Markers** panel focused on that marker.
+- **Markers panel** — a **Markers** button beside the **Run trend** chart (on the project's Runs tab) opens a panel listing the project's markers, with add / edit / delete controls.
 - **Test-case history** — a single test's duration history chart shows the same markers, so you can tell whether an event affected that specific test.
 - **Run detail** — a run shows an **"After: …"** chip for the nearest preceding marker, so a single run tells you which event it followed.
 - **Run compare** — comparing two runs surfaces any markers that fall between them ("something changed between these runs").

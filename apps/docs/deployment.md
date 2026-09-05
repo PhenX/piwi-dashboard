@@ -52,7 +52,7 @@ unreleased fix; don't run it in production — it has had no release testing and
 | Tag | Description | Docker Hub | GHCR |
 |-----|-------------|:---:|:---:|
 | `latest` | Latest stable release | ✅ | ✅ |
-| `MAJOR.MINOR.PATCH` | One exact release (e.g. `0.25.0`) | ✅ | ✅ |
+| `MAJOR.MINOR.PATCH` | One exact release (e.g. `0.26.1`) | ✅ | ✅ |
 | `MAJOR.MINOR` | Latest patch of that minor (e.g. `0.25`) | ✅ | ✅ |
 | `MAJOR` | Latest release of that major (e.g. `0`) | ✅ | ✅ |
 | `edge` | Built from `main`, unreleased | — | ✅ |
@@ -501,11 +501,11 @@ On **Linux hosts**, the bind-mounted directory must be writable by the container
 
 ```bash
 mkdir -p .data
-chmod 777 .data
+chown -R 1001:1001 .data   # match the container's non-root UID 1001
 docker run -p 3000:3000 -v $(pwd)/.data:/app/.data phenx/piwitests-server:latest
 ```
 
-> On Windows and macOS, Docker Desktop manages volume permissions automatically — no `chmod` is needed. Just run the container with `-v ${PWD}/.data:/app/.data` (PowerShell).
+> On Windows and macOS, Docker Desktop manages volume permissions automatically — no `chown` is needed. Just run the container with `-v ${PWD}/.data:/app/.data` (PowerShell).
 
 ### Database locked
 
