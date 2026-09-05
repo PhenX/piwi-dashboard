@@ -7,7 +7,6 @@ import {
   clusterInQueue,
   countQueues,
   isSnoozedBack,
-  isCurrentlySnoozed,
   effectiveAssignee,
   type InboxQueue,
   type SnoozeOption,
@@ -150,7 +149,6 @@ const knownPeople = computed(() => {
 
 const selectedIndex = ref(-1);
 const selectedIds = ref(new Set<number>());
-const selectionAnchor = ref(-1);
 
 const selectedClusters = computed(() => rows.value.filter((c) => selectedIds.value.has(c.id)));
 
@@ -159,7 +157,6 @@ function toggleSelect(cluster: OpenFailureCluster): void {
   if (next.has(cluster.id)) next.delete(cluster.id);
   else next.add(cluster.id);
   selectedIds.value = next;
-  selectionAnchor.value = visibleRows.value.findIndex((c) => c.id === cluster.id);
 }
 
 function extendSelection(dir: 1 | -1): void {
@@ -178,7 +175,6 @@ function extendSelection(dir: 1 | -1): void {
 
 function clearSelection(): void {
   selectedIds.value = new Set();
-  selectionAnchor.value = -1;
 }
 
 // ── Actions (optimistic + undo) ──────────────────────────────────────────────

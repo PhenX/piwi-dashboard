@@ -454,19 +454,15 @@ export async function getOpenFailureClusters(
       .where(inArray(entityLinks.failureClusterId, clusterIds))
       .orderBy(desc(entityLinks.id)),
 
-    // Clusters with a fresh regression (passed in baseline, failed now) in a
-    // last-seen run — paired with that run's branch below to decide "on default".
+    // Clusters that ever regressed (passed in baseline, then failed) and on which
+    // branch — paired below with the cluster's last-seen branch to decide whether
+    // it is a regression still failing on the default branch.
     db
-      .select({ clusterId: testRunsCases.failureClusterId, runId: testRunsCases.testRunId })
+      .select({ clusterId: testRunsCases.failureClusterId, branch: testRuns.branch })
       .from(testRunsCases)
-      .where(
-        and(
-          inArray(testRunsCases.failureClusterId, clusterIds),
-          inArray(testRunsCases.testRunId, seenRunIds),
-          eq(testRunsCases.isNewRegression, 1),
-        ),
-      )
-      .groupBy(testRunsCases.failureClusterId, testRunsCases.testRunId),
+      .innerJoin(testRuns, eq(testRuns.id, testRunsCases.testRunId))
+      .where(and(inArray(testRunsCases.failureClusterId, clusterIds), eq(testRunsCases.isNewRegression, 1)))
+      .groupBy(testRunsCases.failureClusterId, testRuns.branch),
 
     // Pending merge suggestions touching any of these clusters.
     db
@@ -515,12 +511,13 @@ export async function getOpenFailureClusters(
     }
   }
 
-  // Which of a cluster's own last-seen runs carried a regression.
-  const regressionRunsByCluster = new Map<number, Set<number>>();
+  // The branches each cluster regressed on.
+  const regressionBranchesByCluster = new Map<number, Set<string>>();
   for (const row of regressionRows as any[]) {
-    const set = regressionRunsByCluster.get(row.clusterId) ?? new Set<number>();
-    set.add(row.runId);
-    regressionRunsByCluster.set(row.clusterId, set);
+    if (row.branch == null) continue;
+    const set = regressionBranchesByCluster.get(row.clusterId) ?? new Set<string>();
+    set.add(row.branch);
+    regressionBranchesByCluster.set(row.clusterId, set);
   }
 
   const mergeSuggestionClusterIds = new Set<number>();
@@ -551,14 +548,22 @@ export async function getOpenFailureClusters(
     const firstRun = runById.get(c.firstSeenRunId) as { startTime: Date } | undefined;
     const rep = repByCluster.get(c.id);
 
+    // A regression still failing on the default branch: last seen there, and it
+    // began as a regression (passed in baseline) on that same branch.
     const effectiveDefault = project?.defaultBranch ?? 'main';
     const regressionOnDefault =
-      !!run?.branch && run.branch === effectiveDefault && !!regressionRunsByCluster.get(c.id)?.has(c.lastSeenRunId);
+      run?.branch === effectiveDefault && !!regressionBranchesByCluster.get(c.id)?.has(effectiveDefault);
 
+    // Quarantine readiness: a quarantined member test is ready to release when its
+    // streak has cleared the threshold, or the cluster's fix has verified as held
+    // (its failures stopped) — either way the quarantine is safe to lift.
     const quarantine = quarantineByProject.get(c.projectId);
     const caseIds = caseIdsByCluster.get(c.id) ?? [];
+    const fixHeld = c.fixVerification === 'stopped-failing' || c.fixVerification === 'diagnosis-verified';
     const quarantinedCount = quarantine ? caseIds.filter((id) => quarantine.active.has(id)).length : 0;
-    const quarantineReadyCount = quarantine ? caseIds.filter((id) => quarantine.ready.has(id)).length : 0;
+    const quarantineReadyCount = quarantine
+      ? caseIds.filter((id) => quarantine.active.has(id) && (fixHeld || quarantine.ready.has(id))).length
+      : 0;
 
     return {
       id: c.id,
