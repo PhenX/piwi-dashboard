@@ -134,8 +134,9 @@ test.describe('Performance UI Tests', () => {
       // timeline" for a failed execution, "Steps" for a passing one.
       await page.getByRole('tab', { name: /^Timeline/ }).click();
       await expect(page.getByRole('heading', { name: /Steps|Failure timeline/ })).toBeVisible();
-      // The slowest step is tagged in the table.
-      await expect(page.getByText('slowest').first()).toBeVisible();
+      // The slowest step is tagged in the table (the `md`-and-up view; the phone
+      // card list below `md` carries its own copy, hidden at this width).
+      await expect(page.getByRole('table').getByText('slowest')).toBeVisible();
     }
   });
 

@@ -60,10 +60,13 @@ const BareCard = defineComponent({
   setup(bareProps, { slots }) {
     return () =>
       h('div', { class: 'space-y-3' }, [
+        // Below `sm` the actions drop to their own full-width row under the
+        // provenance line, so the sentence spans the card width instead of being
+        // squeezed into a one-word-per-line column beside the buttons.
         slots.subtitle || bareProps.subtitle
-          ? h('div', { class: 'flex items-start justify-between gap-2' }, [
+          ? h('div', { class: 'flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between' }, [
               h('p', { class: 'text-xs min-w-0' }, slots.subtitle ? slots.subtitle() : bareProps.subtitle),
-              slots.actions ? h('div', { class: 'shrink-0' }, slots.actions()) : null,
+              slots.actions ? h('div', { class: 'sm:shrink-0' }, slots.actions()) : null,
             ])
           : slots.actions
             ? h('div', { class: 'flex justify-end' }, slots.actions())
