@@ -297,10 +297,27 @@ export interface OpenFailureCluster {
   status: string;
   affectedTests: number;
   occurrences: number;
+  firstSeenAt: string | Date | null;
   lastSeenAt: string | Date | null;
   lastSeenRunStatus: string | null;
-  owner: { name: string; source: 'annotation' } | null;
+  owner: { name: string; source: 'annotation' | 'codeowners' } | null;
+  /** Who the cluster is assigned to (name or email); overrides the derived owner. */
+  assignee: string | null;
   issueLink: { url: string; provider: string; key: string | null } | null;
+  /** A one-line cause hint for the row — muted secondary text. */
+  topClue: { text: string; strength: 'strong' | 'medium' | 'weak' } | null;
+  /** Fix-verification state; `'regressed'` drives the "fix didn't hold" queue and badge. */
+  fixVerification: string | null;
+  /** A new regression on the project's default branch in the last-seen run. */
+  regressionOnDefault: boolean;
+  /** Affected tests currently quarantined, and how many are ready for release. */
+  quarantinedCount: number;
+  quarantineReadyCount: number;
+  /** The cluster is part of a pending merge suggestion awaiting a decision. */
+  mergeSuggestionPending: boolean;
+  /** Snooze state — hidden from queues while snoozed; cleared/marked on wake. */
+  snoozedUntil: string | Date | null;
+  snoozeMode: string | null;
 }
 
 /**
