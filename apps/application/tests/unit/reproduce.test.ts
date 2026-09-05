@@ -69,6 +69,18 @@ test('recipe — no cases falls back to plain playwright test', () => {
   expect(run!.bash).toBe('npx playwright test');
 });
 
+test('recipe — dedupes repeated specs so a shared file appears once', () => {
+  const recipe = buildReproRecipe({
+    ...baseInput,
+    cases: [
+      { filePath: 'tests/auth.spec.ts', title: 'a', line: null, projectName: 'API' },
+      { filePath: 'tests/auth.spec.ts', title: 'b', line: null, projectName: 'API' },
+    ],
+  });
+  const run = recipe.steps.find((s) => s.step === 'Run the failing test')!;
+  expect(run.bash.match(/tests\/auth\.spec\.ts/g)).toHaveLength(1);
+});
+
 test('reproScript — assembles a copy-paste block with step comments', () => {
   const recipe = buildReproRecipe(baseInput);
   const bash = reproScript(recipe, 'bash');

@@ -129,7 +129,16 @@ export function buildReproRecipe(input: ReproInput): ReproRecipe {
   steps.push({ step: 'Install the browser', bash: install, powershell: install });
 
   // 5. Run exactly the failing test(s) — file:line specs, scoped to the project.
-  const testCmd = buildRetryCommand(input.cases, { mode: 'file-line' }) || 'npx playwright test';
+  //    Dedupe first: cluster cases carry no line, so several tests in one file
+  //    would otherwise repeat the same spec path.
+  const seenSpec = new Set<string>();
+  const uniqueCases = input.cases.filter((c) => {
+    const key = `${c.filePath}:${c.line ?? ''}:${c.projectName ?? ''}`;
+    if (seenSpec.has(key)) return false;
+    seenSpec.add(key);
+    return true;
+  });
+  const testCmd = buildRetryCommand(uniqueCases, { mode: 'file-line' }) || 'npx playwright test';
   steps.push({ step: 'Run the failing test', bash: testCmd, powershell: testCmd });
 
   const env: ReproEnv[] = [];
