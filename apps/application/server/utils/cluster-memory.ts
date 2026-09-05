@@ -21,7 +21,7 @@ import { failureClusters, failureDiagnoses, testCases, testRuns, testRunsCases }
 import { extractErrorSignature, maskSelector } from '#shared/error-fingerprint';
 import { cosineSimilarity, parseEmbedding } from './cluster-similarity';
 import { normalizeGitUrl } from './scm/git-url';
-import { buildCommitUrl } from '#shared/utils/run-metadata';
+import { commitUrl } from '#shared/scm-urls';
 import { rankFixedBefore, type MemoryCandidate, type MemoryCluster } from '#shared/cluster-memory';
 import type { FixedBeforeMatch } from '#shared/fix-plan.types';
 import type { RunMetadata } from './run-json-types';
@@ -188,7 +188,7 @@ export async function findFixedBefore(db: DrizzleDB, cluster: ClusterRow): Promi
       openMs: row.timeToResolutionMs,
       fixCommit: row.fixCommit,
       fixCommitShort: row.fixCommit ? row.fixCommit.slice(0, 7) : null,
-      fixCommitUrl: buildCommitUrl(repositoryUrl, row.fixCommit),
+      fixCommitUrl: row.fixCommit ? commitUrl(repositoryUrl, row.fixCommit) : null,
       triageNote: row.triageNote,
       owner: tests.get(row.id)?.owner ?? null,
       diagnosisTitle: diag?.summary ?? null,
