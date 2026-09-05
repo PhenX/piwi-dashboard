@@ -1318,10 +1318,23 @@ function buildClusterFix(story, stats) {
   };
 }
 
+// Semantic vectors for a single pair so the demo shows "Fixed before": the open
+// cluster 9 (a report export that never becomes visible) resembles the resolved
+// cluster 10 (a table assertion that was diagnosis-verified). Both carry the same
+// model+recipe tag and near-parallel vectors, so their cosine clears the memory
+// threshold even though their error text differs. Everything else uses the
+// deterministic fingerprint path with no vector.
+const DEMO_EMBED_TAG = 'text-embedding-3-small#v2';
+const DEMO_CLUSTER_EMBEDDINGS = {
+  10: [0.91, 0.12, 0.44, 0.21, 0.68, 0.33, 0.52, 0.6],
+  9: [0.88, 0.18, 0.49, 0.15, 0.62, 0.39, 0.5, 0.55],
+};
+
 for (const story of FAILURE_STORIES) {
   const stats = clusterStats[story.clusterId];
   const fp = storyFingerprints.get(story.clusterId);
   const triage = CLUSTER_TRIAGE[story.clusterId] || {};
+  const embedding = DEMO_CLUSTER_EMBEDDINGS[story.clusterId];
   const createdAt = stats.firstStartMs ? Math.floor(stats.firstStartMs / 1000) : ts('2025-04-20T09:00:00');
   const updatedAt = stats.lastStartMs ? Math.floor(stats.lastStartMs / 1000) : createdAt;
   FAILURE_CLUSTERS.push({
@@ -1340,6 +1353,7 @@ for (const story of FAILURE_STORIES) {
     last_seen_run_id: stats.lastRunId ?? newestRunByProject[story.projectId],
     occurrences: stats.occurrences || 1,
     ...buildClusterFix(story, stats),
+    ...(embedding ? { embedding: JSON.stringify(embedding), embedding_model: DEMO_EMBED_TAG } : {}),
     created_at: createdAt,
     updated_at: updatedAt,
   });

@@ -98,12 +98,14 @@ function describeMatch(s: Signals): string {
   const cos = s.cosine != null && s.cosine > FIXED_BEFORE_EMBED_THRESHOLD ? s.cosine.toFixed(2) : null;
 
   if (s.sameLocator || s.sameMaskedSelector) return err ? 'same error and locator' : 'same failing locator';
-  if (err && s.sameSpec) return `${err}, same spec`;
-  if (err) return err;
-  if (s.sameSpec && cos) return `same spec, similar message (${cos})`;
-  if (s.sameSpec) return 'same spec file';
+
+  const parts: string[] = [];
+  if (err) parts.push(err);
+  if (s.sameSpec) parts.push('same spec');
+  if (cos) parts.push(`similar message (${cos})`);
+  if (parts.length) return parts.join(', ');
+
   if (s.sameTitle) return 'same test';
-  if (cos) return `similar message (${cos})`;
   return 'similar failure';
 }
 
