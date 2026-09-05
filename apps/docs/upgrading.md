@@ -55,7 +55,7 @@ Pin the exact version and bump it deliberately:
 # docker-compose.yml
 services:
   piwi:
-    image: phenx/piwitests-server:0.18.2   # not :latest
+    image: phenx/piwitests-server:0.26.1   # not :latest
 ```
 
 The available tag patterns — and the GHCR mirror — are in

@@ -442,6 +442,8 @@ When `collectCiInfo` is enabled (default), the reporter auto-detects:
 | Travis CI       | Build number, build URL, job number                       |
 | Azure Pipelines | Build number, build ID, build URL, job name               |
 
+These six platforms get rich per-provider fields. The stable **run label** that ties sharded runs together is auto-detected for a broader set of providers (GitHub Actions, GitLab, CircleCI, Travis, Azure, Jenkins, Buildkite, TeamCity, Bitbucket, Semaphore, AppVeyor and Drone) — see [CI & sharding → What gets detected](./ci#what-gets-detected).
+
 ### Playwright configuration
 
 The reporter also records browser project configs, worker count, test timeout, and parallel settings.

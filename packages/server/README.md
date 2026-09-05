@@ -10,7 +10,7 @@ home for your Playwright test results — with a single command, no Docker requi
 
 ## Requirements
 
-- Node.js **24+**
+- Node.js **22+**
 
 ## Quick start
 
