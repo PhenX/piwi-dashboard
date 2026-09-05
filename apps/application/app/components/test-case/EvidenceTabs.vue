@@ -104,6 +104,12 @@ const stateHasData = computed(() => Boolean(pageState.value));
 const performanceHasData = computed(() => Boolean(webVitals.value) || performanceHints.value.length > 0);
 const timelineHasData = computed(() => steps.value.length > 0);
 
+// Every attempt of this execution (each retry is its own row), already fetched.
+const attemptsList = computed<
+  Array<{ retry: number; status: string; duration: number | null; executionId: number | null }>
+>(() => props.testCase?.attempts ?? []);
+const hasMultipleAttempts = computed(() => attemptsList.value.length > 1);
+
 interface TabDef {
   value: TabValue;
   label: string;
@@ -113,6 +119,13 @@ interface TabDef {
 }
 const tabs = computed<TabDef[]>(() => [
   { value: 'timeline', label: 'Timeline', icon: 'i-lucide-activity', hasData: timelineHasData.value, count: null },
+  {
+    value: 'attempts',
+    label: 'Attempts',
+    icon: 'i-lucide-repeat',
+    hasData: hasMultipleAttempts.value,
+    count: hasMultipleAttempts.value ? attemptsList.value.length : null,
+  },
   { value: 'screen', label: 'Screen', icon: 'i-lucide-camera', hasData: screenHasData.value, count: null },
   { value: 'source', label: 'Source', icon: 'i-lucide-file-code-2', hasData: sourceHasData.value, count: null },
   {
@@ -280,6 +293,12 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
             </template>
           </ClientOnly>
         </SectionCard>
+      </div>
+
+      <!-- ── Attempts ─────────────────────────────────────────────── -->
+      <!-- Lazy: this card mounts only when the tab opens, fetching the diff then. -->
+      <div v-else-if="activeTab === 'attempts'" class="scroll-mt-4">
+        <AttemptsCard :test-runs-case-id="testRunsCaseId" :attempts="attemptsList" />
       </div>
 
       <!-- ── Screen ───────────────────────────────────────────────── -->
