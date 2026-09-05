@@ -267,8 +267,9 @@ async function saveStartCommand() {
     </div>
 
     <!-- The app under test — a same-repo bisect only means something when the app
-         is built from the same checkout. -->
-    <ClientOnly>
+         is built from the same checkout. Desktop shell only; the copyable recipe
+         above is unchanged for everyone else. -->
+    <ClientOnly v-if="desktop">
       <div v-if="linked" class="space-y-1.5">
         <p v-if="hasWebServer" class="text-xs text-dimmed">
           Playwright's <code class="font-mono">webServer</code> starts the app at each commit.

@@ -176,7 +176,7 @@ test.describe('Desktop reproduce & bisect', () => {
     });
     expect(failing.ok()).toBeTruthy();
     const data = await failing.json();
-    const run = await (await request.get(`/api/test-runs/${data.testRunId}`)).json();
+    const run = await (await request.get(`/api/test-runs/${data.runId}`)).json();
     const failed = run.testCases.find((c: { status: string; executionId: number }) => c.status === 'failed');
     executionId = failed.executionId;
     expect(executionId).toBeTruthy();
