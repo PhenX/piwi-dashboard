@@ -12,12 +12,13 @@ import css from 'highlight.js/lib/languages/css';
 import diff from 'highlight.js/lib/languages/diff';
 import javascript from 'highlight.js/lib/languages/javascript';
 import json from 'highlight.js/lib/languages/json';
+import powershell from 'highlight.js/lib/languages/powershell';
 import python from 'highlight.js/lib/languages/python';
 import typescript from 'highlight.js/lib/languages/typescript';
 import xml from 'highlight.js/lib/languages/xml';
 import yaml from 'highlight.js/lib/languages/yaml';
 
-const LANGUAGES = { bash, css, diff, javascript, json, python, typescript, xml, yaml } as const;
+const LANGUAGES = { bash, css, diff, javascript, json, powershell, python, typescript, xml, yaml } as const;
 
 for (const [name, language] of Object.entries(LANGUAGES)) {
   if (!hljs.getLanguage(name)) hljs.registerLanguage(name, language);
@@ -28,6 +29,7 @@ if (!hljs.getLanguage('ts')) hljs.registerLanguage('ts', typescript);
 if (!hljs.getLanguage('js')) hljs.registerLanguage('js', javascript);
 if (!hljs.getLanguage('yml')) hljs.registerLanguage('yml', yaml);
 if (!hljs.getLanguage('html')) hljs.registerLanguage('html', xml);
+if (!hljs.getLanguage('pwsh')) hljs.registerLanguage('pwsh', powershell);
 
 /**
  * Auto-detection walks every registered grammar, which is far too slow for a

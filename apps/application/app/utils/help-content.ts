@@ -238,6 +238,11 @@ export const HELP_TOPICS = {
     text: 'Everything to do about this failure in one place — the locator fix for a broken locator, a pointer to the cluster’s fix plan, the diagnosis, how to verify a fix, and the tests this failure blocked. Each part shows only when it applies.',
     doc: 'ai-diagnosis#fix-plans',
   },
+  'fix.reproduce': {
+    title: 'Reproduce',
+    text: 'A copy-paste recipe that reproduces the failure locally — check out the failing commit, install the run’s Playwright version and browser, and run exactly the failing test — plus a generated git bisect between the last green and the failing commit to find what broke it. Both come in Linux/macOS and Windows forms. The bisect needs a last-green commit and an SCM connection; without them it says so.',
+    doc: 'ai-diagnosis#reproduce-and-bisect',
+  },
   'case.test-source': {
     title: 'Test source',
     text: 'The source around the failing line and the callers above it — captured from the failure’s call stack — so you can read where it broke, and the code that led there, without opening your editor. When the execution has a trace, this deepens into the complete call stack with the real source of every frame, read from the trace’s embedded files.',

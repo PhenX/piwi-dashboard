@@ -286,6 +286,47 @@ suggestions and its verification command, so the plan is useful without an AI pr
 Worth stating plainly: none of this leaves your machine. The dashboard is yours, the model is whichever one you
 configured (including a local one), and the patch was validated against your own source before you saw it.
 
+### Reproduce and bisect
+
+The fix plan also hands back the two things you do next: a copy-paste recipe that reproduces the failure locally, and a
+generated `git bisect` that finds the commit that broke it. Both sit in a **Reproduce** section on the Fix card — on the
+cluster page and on the failing execution's page — and travel with the plan through `?format=markdown` and the
+`get_fix_plan` MCP tool.
+
+The **recipe** is the local reproduction, in order: check out the commit the run failed on (`git switch --detach <sha>`),
+install dependencies, pin Playwright to the version the run used, install the browser it ran on, and run exactly the
+failing test. Each part degrades on its own — no recorded commit skips the checkout and says so, an unknown Playwright
+version drops the pin — and the run's environment (label, base URL) is listed beside it. Every command is `git`, `npm` or
+`npx`, so it is identical on Linux, macOS and Windows; the dashboard still offers a **Linux / macOS** and a
+**Windows (PowerShell)** tab so a reader copies the form they expect.
+
+```bash
+# Check out the failing commit
+git switch --detach 9a8b7c6d5e4f30211203f4e5d6c7b8a99a8b7c6d
+# Install dependencies
+npm ci
+# Pin Playwright to the run's version
+npm install -D @playwright/test@1.52.0
+# Install the browser
+npx playwright install chromium
+# Run the failing test
+npx playwright test "tests/admin/users.spec.ts" --project="Chromium"
+```
+
+The **bisect** walks the commits between the last green run and the failing one, re-running the test at each step — a
+non-zero exit marks a commit bad — until it names the first commit that broke it, then `git bisect reset` returns you to
+where you started.
+
+```bash
+git bisect start <failing-commit> <last-green-commit>
+git bisect run npx playwright test "tests/admin/users.spec.ts" -g "Users table paginates 25 rows per page"
+git bisect reset
+```
+
+The bisect needs a **last-green commit** and an **SCM connection**: when Piwi has no commit for the failing run or for the
+last green run before it, or the two are the same commit, the section says so in one line instead of showing a script.
+The recipe is always there.
+
 ## Diagnosis history
 
 Every re-diagnose snapshots the previous result before overwriting it, so a cluster keeps up to 50 prior versions. The

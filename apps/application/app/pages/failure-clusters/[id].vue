@@ -239,10 +239,12 @@ function refresh() {
 // Diagnosis first, then the locator fix, the verify command and the fix plan.
 const hasLocatorPanel = computed(() => Boolean(affectedCases.value[0]?.recentTestRunsCaseId));
 const showVerify = computed(() => Boolean(fixPlan.value?.verify?.command));
+const showReproduce = computed(() => Boolean(fixPlan.value?.reproduce?.steps?.length));
 const fixSections = computed<FixSectionKey[]>(() => {
   const s: FixSectionKey[] = ['diagnosis'];
   if (hasLocatorPanel.value) s.push('locator-fix');
   if (showVerify.value) s.push('verify');
+  if (showReproduce.value) s.push('reproduce');
   if (fixPlan.value) s.push('fix-plan');
   return s;
 });
@@ -618,6 +620,14 @@ const breadcrumbItems = computed(() => [
                   </ClientOnly>
                 </div>
               </div>
+            </template>
+
+            <!-- Reproduce — the local recipe and a generated git bisect -->
+            <template v-if="showReproduce" #reproduce-label>
+              <span class="inline-flex items-center gap-1">Reproduce <HelpHint topic="fix.reproduce" /></span>
+            </template>
+            <template v-if="fixPlan && showReproduce" #reproduce>
+              <ReproduceSection :reproduce="fixPlan.reproduce" :bisect="fixPlan.bisect" />
             </template>
 
             <!-- Fix plan — the whole plan assembled for a ticket or an agent -->
