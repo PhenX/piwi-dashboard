@@ -151,6 +151,7 @@ export default defineConfig({
       {
         text: 'Apps & integrations',
         items: [
+          { text: 'Piwi CLI', link: '/cli' },
           { text: 'Desktop app', link: '/desktop' },
           { text: 'Browser extension', link: '/extension' },
           { text: 'Open in IDE', link: '/ide-integration' },
