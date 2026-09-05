@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Locator } from '@playwright/test';
 import {
   ariaSnapshotBestEffort,
@@ -8,6 +8,13 @@ import {
 } from '../src/internal/capture/capture-fixtures.js';
 import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION } from '../src/internal/capture/attachments.js';
 import type { LocatorSnapshot } from '../src/internal/capture/locator-healing.js';
+import * as path from 'node:path';
+import {
+  ariaSampleIdentity,
+  writeAriaSampleFile,
+  clearAriaSampleFile,
+  resetAriaSampleCache,
+} from '../src/internal/support/aria-sampling.js';
 
 /**
  * Call the probe with the real shared role maps (CAPTURED_ATTRS_ARG) and just
@@ -236,6 +243,7 @@ describe('per-call-site capture dedupe', () => {
       page: { getByTestId: (id: string) => { click: () => Promise<void> } },
       emit: (event: string) => void,
     ) => Promise<void>,
+    infoOverrides: { status?: string; file?: string; title?: string } = {},
   ) {
     let ariaSnapshots = 0;
     const fakeLocator = {
@@ -267,10 +275,14 @@ describe('per-call-site capture dedupe', () => {
     const emit = (event: string) => (listeners.get(event) ?? []).forEach((handler) => handler());
 
     const attached: LocatorSnapshot[] = [];
+    const ariaAttachments: string[] = [];
     const testInfo = {
-      status: 'passed',
-      attach: vi.fn(async (name: string, body: { body: Buffer }) => {
+      status: infoOverrides.status ?? 'passed',
+      file: infoOverrides.file,
+      title: infoOverrides.title,
+      attach: vi.fn(async (name: string, body: { body: Buffer | string }) => {
         if (name === ATTACHMENT_NAMES.locators) attached.push(...JSON.parse(String(body.body)));
+        if (name === ATTACHMENT_NAMES.ariaSnapshot) ariaAttachments.push(String(body.body));
       }),
       annotations: [],
     };
@@ -284,7 +296,7 @@ describe('per-call-site capture dedupe', () => {
     ];
 
     await captureFixture({}, () => pageFixture({ page: fakePage }, (page) => actions(page as never, emit)), testInfo);
-    return { attached, ariaSnapshots };
+    return { attached, ariaSnapshots, ariaAttachments };
   }
 
   it('probes a call site once however many times that line runs', async () => {
@@ -351,6 +363,85 @@ describe('per-call-site capture dedupe', () => {
     expect(probes).toBe(2);
     expect(attached).toHaveLength(1);
     expect(attached[0]!.element?.textContent).toBe('Save');
+  });
+
+  describe('green ARIA sampling on pass', () => {
+    const PROJECT = 'cap-fix-sample';
+    const FILE = path.join(process.cwd(), 'tests/sampled.spec.ts');
+    const TITLE = 'shows the dashboard';
+    const identity = ariaSampleIdentity(path.relative(process.cwd(), FILE).split(path.sep).join('/'), TITLE);
+
+    const savedEnv = { project: process.env.PIWI_PROJECT_NAME, flag: process.env.PIWI_SAMPLE_ARIA_ON_PASS };
+    afterEach(() => {
+      clearAriaSampleFile(PROJECT);
+      resetAriaSampleCache();
+      process.env.PIWI_PROJECT_NAME = savedEnv.project;
+      process.env.PIWI_SAMPLE_ARIA_ON_PASS = savedEnv.flag;
+    });
+
+    it('attaches the ARIA snapshot when the passing test is in the due set', async () => {
+      process.env.PIWI_PROJECT_NAME = PROJECT;
+      delete process.env.PIWI_SAMPLE_ARIA_ON_PASS;
+      writeAriaSampleFile(PROJECT, [identity]);
+      resetAriaSampleCache();
+
+      const { ariaAttachments } = await runCapture(
+        async () => savedButton,
+        async (page) => {
+          await page.getByTestId('save').click();
+        },
+        { status: 'passed', file: FILE, title: TITLE },
+      );
+      expect(ariaAttachments).toHaveLength(1);
+    });
+
+    it('does not sample a passing test outside the due set (rate limit)', async () => {
+      process.env.PIWI_PROJECT_NAME = PROJECT;
+      delete process.env.PIWI_SAMPLE_ARIA_ON_PASS;
+      writeAriaSampleFile(PROJECT, [ariaSampleIdentity('tests/other.spec.ts', 'something else')]);
+      resetAriaSampleCache();
+
+      const { ariaAttachments } = await runCapture(
+        async () => savedButton,
+        async (page) => {
+          await page.getByTestId('save').click();
+        },
+        { status: 'passed', file: FILE, title: TITLE },
+      );
+      expect(ariaAttachments).toHaveLength(0);
+    });
+
+    it('never samples when the run-start call left no sample set (fallback)', async () => {
+      process.env.PIWI_PROJECT_NAME = PROJECT;
+      delete process.env.PIWI_SAMPLE_ARIA_ON_PASS;
+      clearAriaSampleFile(PROJECT);
+      resetAriaSampleCache();
+
+      const { ariaAttachments } = await runCapture(
+        async () => savedButton,
+        async (page) => {
+          await page.getByTestId('save').click();
+        },
+        { status: 'passed', file: FILE, title: TITLE },
+      );
+      expect(ariaAttachments).toHaveLength(0);
+    });
+
+    it('never samples when sampleAriaOnPass is off, even for a due test', async () => {
+      process.env.PIWI_PROJECT_NAME = PROJECT;
+      process.env.PIWI_SAMPLE_ARIA_ON_PASS = 'false';
+      writeAriaSampleFile(PROJECT, [identity]);
+      resetAriaSampleCache();
+
+      const { ariaAttachments } = await runCapture(
+        async () => savedButton,
+        async (page) => {
+          await page.getByTestId('save').click();
+        },
+        { status: 'passed', file: FILE, title: TITLE },
+      );
+      expect(ariaAttachments).toHaveLength(0);
+    });
   });
 });
 

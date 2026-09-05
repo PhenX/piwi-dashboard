@@ -50,6 +50,7 @@ A **clue** is a deterministic, rule-based finding correlated from the evidence a
 - **Console mentions the target** *(strong for an error, medium for a warning)* — a console entry in the failure window names the failing locator or the failing route.
 - **Backend error attached** *(strong)* — a request in the window carries an error-level [backend log](./backend-logs).
 - **Element renamed** *(strong)* — locator healing found the element under a new identity, or flagged the stored name as stale while still recommending a fix.
+- **Page structure changed near the failing locator** *(strong)* — the [page diff](#page-diff) against the last green sample shows the element the locator names was removed or renamed since the test last passed.
 - **Element present but blocked** *(strong)* — the call log says the element resolved but was disabled, hidden, not visible or covered, and the ARIA snapshot still shows one with its role and name.
 - **Wrong page** *(strong)* — the page ended on a login, auth, error or 404 route, or somewhere other than the last navigation the test asked for.
 - **Worker pollution** *(medium)* — the previous test on this worker failed or timed out, so shared state it left behind is a candidate cause.
@@ -77,6 +78,14 @@ Each difference is labeled by the attempt it sits on (*only on the failing attem
 **A passing execution shows the same page** with the evidence card's **Timeline** tab selected; its traces, attachments, console and network are in the same tabs a failing execution uses.
 
 Both keep a **Performance** tab in the evidence card (performance hints plus color-coded **Web Vitals**) and the **history** block below it (this test's recent executions as a strip, linking through to the full test history). A **Copy retry command** button in the header gives you the exact Playwright command to re-run just this test. The Web Vitals, network, console, ARIA-snapshot and alternative-locator data all come from the [capture fixtures](./capture-fixtures).
+
+## Page diff
+
+The **Screen** tab carries a **Screenshot · Page diff** toggle. Where the visual diff compares pixels, the page diff compares *structure*: it parses the failing page's [ARIA snapshot](./reporter#what-gets-captured) and the same test's last passing (green) snapshot into trees and reports what changed between them — nodes **added**, **removed**, **renamed** (same role and place, a different accessible name), **changed** (an attribute like `[disabled]` flipped) or **moved** — with unchanged subtrees collapsed and a compact `+3 −1 ~2` summary. The element the failing locator names is highlighted, so a broken `getByRole('button', { name: 'Pay' })` lands you on the line proving the button became `"Pay now"`. The baseline is stated in one line (*vs last green — run #123 on `abc1234`, 2 days ago*).
+
+The baseline follows the same rule as the [visual](#trace-powered-deep-views) and [environment](#one-execution-diagnosis-first) diffs: the same test's most recent passing execution that carries a snapshot, on the same browser, preferring the same environment then the same branch.
+
+Green snapshots come from **sampling on pass**: the [reporter](./reporter#green-page-sampling-on-pass) captures a passing page's ARIA snapshot about once a day per test (rate-limited by the server, so steady-state runs pay nothing). Until the first one lands, the toggle is replaced by the three-state empty copy: *not captured* (the fixtures are off), *no green sample yet* (a baseline appears after the next passing run), or *not applicable*. The page-diff summary also rides the [`explain_failure`](./mcp) MCP tool, so an agent sees the structural change too.
 
 ## Trace-powered deep views
 

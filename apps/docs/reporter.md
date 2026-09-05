@@ -109,12 +109,22 @@ export { expect } from '@playwright/test'
 - **Network requests** — method, URL, status code, duration, resource type. Aggregated on the dashboard into a *Slow API endpoints* table grouped by `METHOD + normalized route` (e.g. `/api/users/:id`).
 - **Console entries** — `warning`, `error`, and `assert` messages with their source location, shown on the [execution page](./evidence#one-execution-diagnosis-first) and included in the AI diagnosis evidence.
 - **Browser Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint, plus Core Web Vitals (LCP, CLS, INP) — displayed with color-coded thresholds. LCP/CLS/INP come from buffered `PerformanceObserver` entries and are Chromium-only; INP needs at least one interaction, so it is often `n/a` in short tests.
-- **ARIA snapshot** — Captured automatically on failed/timed-out tests via `page.locator(':root').ariaSnapshot()`. Included in the **Copy AI context** bundle on the [execution page](./evidence#one-execution-diagnosis-first)'s Diagnosis tab (`/test-run-cases/:id`) and in the cluster AI diagnosis context.
+- **ARIA snapshot** — Captured automatically on failed/timed-out tests via `page.locator(':root').ariaSnapshot()`. Included in the **Copy AI context** bundle on the [execution page](./evidence#one-execution-diagnosis-first)'s Diagnosis tab (`/test-run-cases/:id`) and in the cluster AI diagnosis context. Also sampled on *passing* tests to anchor the [page diff](./evidence#page-diff) — see [`sampleAriaOnPass`](#green-page-sampling-on-pass) below.
 - **Locator snapshots** — For each element a test proves resolvable — every successful action (click, fill, etc.) *and* every passing web-first assertion (`expect(locator).toBeVisible()`, `toHaveText()`, …) — the fixtures record the element's attributes and a ranked list of alternative locators, stamped with the call site. These power [locator healing](#locator-healing) when a locator later breaks. Gated by `captureLocators` (default on).
 
 These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).
 
 Any attachments Playwright records — including **screenshots** (`screenshot: 'only-on-failure'`) and **videos** (`video: 'retain-on-failure'`) — are uploaded automatically and shown as first-class evidence on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, alongside traces. That includes what a test attaches itself: both `testInfo.attach('payload', { path })` and the inline form `testInfo.attach('payload', { body: JSON.stringify(data), contentType: 'application/json' })` reach the dashboard (an inline body is staged as a temp file under the OS temp directory for the upload and removed when the run ends). One attachment above 500 MB — the dashboard's default upload ceiling — is skipped with a warning naming it rather than failing the upload. Screenshots are the evidence most pages on this site count on, and Playwright records none unless the option is set — which is why [`wrapConfig`](#installing-via-wrapconfig) defaults `screenshot: 'only-on-failure'` and `trace: 'retain-on-failure'` for you. Videos can be large, so pair `retain-on-failure` with periodic [storage cleanup](./storage#storage-management).
+
+### Green page sampling on pass
+
+To power the [page diff](./evidence#page-diff), the fixtures also sample the ARIA snapshot at the end of a *passing* test — a "last known good" of the page to diff a later failure against. It stays cheap by letting the server decide what to capture:
+
+- At the start of every run `globalSetup` makes **one extra request**, `GET /api/projects/:id/aria-sampling`, which returns the tests whose newest green snapshot is older than 24 hours (or missing). The reporter caches that set for the run's workers.
+- A passing test is sampled only when it is in that set, so in steady state — every test sampled within the last day — nothing is captured and the pages cost nothing.
+- The server keeps at most one green snapshot per test per day, so many runs a day stay bounded.
+
+The feature degrades safely: an older server without the endpoint, or any failure of that call, leaves the set empty and **nothing is sampled**. Turn it off entirely with `sampleAriaOnPass: false` (or `PIWI_SAMPLE_ARIA_ON_PASS=false`). It rides the capture fixtures — with the fixtures off, no snapshot is taken regardless.
 
 ## Configuration options
 
@@ -144,6 +154,7 @@ Any attachments Playwright records — including **screenshots** (`screenshot: '
 | `captureLocators`           | boolean  | `true`                    | Capture element snapshots from successful actions and passing assertions — these power [locator healing](#locator-healing). Auto-disabled when `collectPerformanceMetrics` is `false` |
 | `capturePageState`          | boolean  | `true`                    | Record the page's state at test end: URL, history state, storage **key names** and value *lengths*, cookie names and flags. Values are never captured. Auto-disabled when `collectPerformanceMetrics` is `false` |
 | `captureServerTraces`       | boolean  | `true`                    | Read server-side spans from the `X-Piwi-Trace` response header emitted by a Piwi [instrumentation plugin](./backend-logs), and show them next to the network request. Free when no instrumentation is present. Auto-disabled when `collectPerformanceMetrics` is `false` |
+| `sampleAriaOnPass`          | boolean  | `true`                    | Sample the ARIA snapshot at the end of a passing test so a later failure can be diffed against the [page as it last looked green](./evidence#page-diff). Rate-limited server-side (see [Green page sampling on pass](#green-page-sampling-on-pass)); rides the capture fixtures, so nothing is captured without them |
 | `defaultCapture`            | boolean  | `true`                    | When installed via [`wrapConfig`](#installing-via-wrapconfig), default the top-level `use.screenshot` to `'only-on-failure'` and `use.trace` to `'retain-on-failure'` when unset, so failure evidence is captured without the fixtures. Explicit values (including `'off'`) and per-project `use` blocks are untouched. Set `false` to opt out |
 | `inspectOnFailure`          | boolean  | `false`                   | Open Piwi's own inspector overlay on the failing page after a local headed failure — inspect any element and pick a locator for it (see [Inspect the failing page live](#inspect-the-failing-page-live-local-runs)). Never activates under CI |
 | `pickLocatorOnFailure`      | boolean  | `false`                   | Open Piwi's locator picker on the failing page after a local headed locator failure (see [Pick a replacement locator](#pick-a-replacement-locator-on-the-failing-page-local-runs)). Never activates under CI |
@@ -162,6 +173,7 @@ The options in the table below can also be set via a `PIWI_*` environment variab
 |---------------------------------|-------------------------|-----------------|
 | `PIWI_DASHBOARD_URL`            | `serverUrl`             | string          |
 | `PIWI_PROJECT_NAME`             | `projectName`           | string          |
+| `PIWI_SAMPLE_ARIA_ON_PASS`      | `sampleAriaOnPass`      | boolean         |
 | `PIWI_API_KEY`                  | `apiKey`                | string (`pd_…`) |
 | `PIWI_USERNAME`                 | `username`              | string          |
 | `PIWI_PASSWORD`                 | `password`              | string          |
