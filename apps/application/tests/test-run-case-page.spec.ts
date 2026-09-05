@@ -127,6 +127,9 @@ test.describe('Test-run-case page', () => {
     // No failure → no headline, no raw-error disclosure, no Fix card.
     await expect(page.getByRole('button', { name: 'Show raw error' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Fix', exact: true })).toHaveCount(0);
+    // A passing execution shows the steps table without the failure axis or its controls.
+    await expect(page.getByRole('button', { name: 'Around the failure' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: /^Steps/ })).toBeVisible();
   });
 
   test('the header offers a Copy retry command action', async ({ page }) => {
@@ -159,22 +162,30 @@ test.describe('Test-run-case page', () => {
     expect(tl.lanes.steps[1].origin).toEqual({ file: 'pages/checkout.ts', line: 42, function: null, chain: [] });
   });
 
-  test('the Timeline tab shows the failure timeline and the whole-test step table', async ({ page }) => {
+  test('the Timeline tab merges the axis and one steps table', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
 
     await page.getByRole('tab', { name: /^Timeline/ }).click();
 
     await expect(page.getByRole('heading', { name: 'Failure timeline' })).toBeVisible();
-    // The chronological list and both window controls are present.
-    await expect(page.getByRole('heading', { name: 'What happened in this window' })).toBeVisible();
+    // Both window controls drive the axis and the table together.
     await expect(page.getByRole('button', { name: 'Around the failure' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Whole test' })).toBeVisible();
     // This run recorded no step start times, so the estimated note shows.
     await expect(page.getByText(/Step positions are derived from durations/)).toBeVisible();
-    // The former Steps tab: the whole-test step table lives here now.
-    await expect(page.getByRole('heading', { name: /^Steps/ })).toBeVisible();
-    await expect(page.getByRole('table').getByText("getByRole('button', { name: 'Pay' }).click()")).toBeVisible();
+
+    // One merged table — the old duplicate "what happened" list is gone.
+    await expect(page.getByRole('heading', { name: 'What happened in this window' })).toHaveCount(0);
+    const table = page.getByRole('table');
+    await expect(table).toHaveCount(1);
+    // The failed step is a highlighted row in that table.
+    await expect(table.getByText("getByRole('button', { name: 'Pay' }).click()")).toBeVisible();
+
+    // Whole test keeps every step in the table.
+    await page.getByRole('button', { name: 'Whole test' }).click();
+    await expect(table.getByText("page.goto('/checkout')")).toBeVisible();
+    await expect(table.getByText("getByRole('button', { name: 'Pay' }).click()")).toBeVisible();
   });
 
   test('History block opens populated from the SSR payload, without refetching or a hydration mismatch', async ({

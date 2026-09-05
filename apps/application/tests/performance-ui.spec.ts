@@ -130,9 +130,10 @@ test.describe('Performance UI Tests', () => {
       await page.goto(`/test-run-cases/${testCaseWithSteps.executionId}`);
       await waitForHydration(page);
 
-      // The whole-test step table lives in the evidence Timeline tab now.
+      // The step table lives in the evidence Timeline tab now — headed "Failure
+      // timeline" for a failed execution, "Steps" for a passing one.
       await page.getByRole('tab', { name: /^Timeline/ }).click();
-      await expect(page.getByRole('heading', { name: /^Steps/ })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /Steps|Failure timeline/ })).toBeVisible();
       // The slowest step is tagged in the table.
       await expect(page.getByText('slowest').first()).toBeVisible();
     }
