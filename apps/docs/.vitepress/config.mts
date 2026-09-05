@@ -140,6 +140,7 @@ export default defineConfig({
         text: 'Running your instance',
         items: [
           { text: 'Deployment', link: '/deployment' },
+          { text: 'Production checklist', link: '/production-checklist' },
           { text: 'Upgrading', link: '/upgrading' },
           { text: 'Configuration reference', link: '/configuration' },
           { text: 'Configuration generator', link: '/configuration/generator' },

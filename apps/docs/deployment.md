@@ -444,14 +444,7 @@ Piwi is a single Node.js process and runs comfortably on small machines:
 
 ## Security
 
-The container runs as a non-root user (`nodejs:nodejs`, UID/GID 1001).
-
-Security best practices:
-
-- Always use HTTPS in production
-- Mount `.data/` on a persistent volume
-- Set a strong `PIWI_SECRET_KEY` (`node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`, or `openssl rand -hex 32`) to encrypt secrets at rest
-- Set a strong `PIWI_AUTH_SECRET` and enable authentication for multi-user deployments
+The container runs as a non-root user (`nodejs:nodejs`, UID/GID 1001). Everything to set before you put an instance on a shared address — authentication, the encryption key, HTTPS, the trust-proxy flag, backups and version pinning — is the [production checklist](./production-checklist).
 
 ## Troubleshooting
 
