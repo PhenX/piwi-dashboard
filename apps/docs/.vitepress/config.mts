@@ -93,6 +93,7 @@ export default defineConfig({
           { text: 'What Piwi does', link: '/what-piwi-does' },
           { text: 'Getting started', link: '/getting-started' },
           { text: 'Core concepts', link: '/concepts' },
+          { text: 'Your first failure, explained', link: '/first-failure' },
           { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
           { text: 'Privacy & data flow', link: '/privacy' },
         ],
