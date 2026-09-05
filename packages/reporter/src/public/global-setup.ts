@@ -132,10 +132,11 @@ export function createGlobalSetup(
 
       // Ask the server which tests are due a fresh green ARIA sample this run
       // and stash the answer for the worker fixtures. A prior run's set is
-      // cleared first so a stale file never leaks in; an old server or a failed
-      // call simply leaves no file, and the fixtures then sample nothing.
+      // always cleared first so a stale file never leaks in — even when sampling
+      // is off this run; an old server or a failed call then leaves no file, and
+      // the fixtures sample nothing.
+      if (opts.projectName) clearAriaSampleFile(opts.projectName);
       if (opts.sampleAriaOnPass !== false && opts.projectName) {
-        clearAriaSampleFile(opts.projectName);
         const menu = await httpClient.getJSON('/api/projects/menu', auth);
         const projectId = (menu?.items as Array<{ id: number; name: string }> | undefined)?.find(
           (p) => p.name.toLowerCase() === opts.projectName!.toLowerCase(),
