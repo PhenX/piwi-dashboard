@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { HomeFilterState } from '~/components/home/HomeFilters.vue';
+import type { FilterBarState } from '~/components/shared/FilterBar.vue';
 import type { OpenFailureCluster, ProjectOverview, TestRunForChart } from '~~/types/api';
 import { errorMessage } from '~/utils';
 
@@ -57,14 +57,16 @@ function retryLoad(): void {
 
 // ── Filters (persisted to cookie, SSR-safe — no hydration flicker) ───────────
 
-const filters = useCookie<HomeFilterState>('piwi-home-filters', {
-  default: () => ({ environments: [], fullRunsOnly: true }),
+const filters = useCookie<FilterBarState>('piwi-home-filters', {
+  default: () => ({ environments: [], branches: [], fullRunsOnly: true }),
   encode: (v) => JSON.stringify(v),
   decode: (v) => {
     try {
-      return v ? (JSON.parse(v) as HomeFilterState) : { environments: [], fullRunsOnly: true };
+      return v
+        ? { environments: [], branches: [], fullRunsOnly: true, ...(JSON.parse(v) as Partial<FilterBarState>) }
+        : { environments: [], branches: [], fullRunsOnly: true };
     } catch {
-      return { environments: [], fullRunsOnly: true };
+      return { environments: [], branches: [], fullRunsOnly: true };
     }
   },
 });
@@ -227,7 +229,7 @@ function statusBorderClass(status: string): string {
           <UBreadcrumb :items="[{ label: 'Home', icon: 'i-lucide-house', to: '/' }]" />
         </template>
         <template v-if="hasProjects" #trailing>
-          <HomeFilters v-model="filters" :available-environments="availableEnvironments" />
+          <FilterBar v-model="filters" :available-environments="availableEnvironments" :available-branches="[]" />
         </template>
       </UDashboardNavbar>
     </template>

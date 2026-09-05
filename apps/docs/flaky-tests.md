@@ -127,7 +127,7 @@ Network analysis and Web Vitals require the [capture fixtures](./capture-fixture
   <figcaption>The Performance tab — average and P90 duration trends over time, followed by a ranked table of the slowest tests.</figcaption>
 </figure>
 
-## Spec health heatmap
+## Spec health by file
 
 The project's **Tests** tab has a **Group by File** view that groups the tests under each spec file and carries that file's pass rate, flaky rate, failure count, test count and average time in the group header, so an unhealthy area of the suite jumps out.
 

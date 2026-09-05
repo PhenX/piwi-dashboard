@@ -15,8 +15,10 @@ doesn't read stack traces.
 A scope bar at the top sets:
 
 - **Period** — last 7 / 30 / 90 days, last year, or all time.
-- **Environment** — optional; restrict to runs labeled `production`, `staging`, … (see
-  [Environment](./concepts#environment)).
+- **Projects** — optional; restrict to the projects you pick (intersected with the ones you can see).
+- **Environments** and **branches** — optional multi-select; restrict to runs labeled `production`,
+  `staging`, … or reported on the chosen branches (see [Environment](./concepts#environment)). These
+  and the full-runs toggle are the same **filter bar** Home and each project page use.
 - **Full runs only** — exclude partial and interrupted runs, which otherwise skew pass rates.
 
 Every widget re-aggregates against that scope, and each period is compared against the *preceding*

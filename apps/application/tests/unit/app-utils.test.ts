@@ -155,9 +155,9 @@ describe('getStatusColor', () => {
 });
 
 describe('formatStatusLabel', () => {
-  test('normalizes timedOut/timedout to "failed" and didnotrun to "didn\'t run"', () => {
-    expect(formatStatusLabel('timedOut')).toBe('failed');
-    expect(formatStatusLabel('timedout')).toBe('failed');
+  test('renders timedOut/timedout as "timed out" and didnotrun as "didn\'t run"', () => {
+    expect(formatStatusLabel('timedOut')).toBe('timed out');
+    expect(formatStatusLabel('timedout')).toBe('timed out');
     expect(formatStatusLabel('didnotrun')).toBe("didn't run");
     expect(formatStatusLabel('never-run')).toBe('never run');
     expect(formatStatusLabel('passed')).toBe('passed');

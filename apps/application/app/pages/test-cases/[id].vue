@@ -32,7 +32,7 @@ function goToProjectRuns() {
 
 useHead(
   computed(() => ({
-    title: `${testCase.value?.title || `Test case #${testCaseId}`} — Piwi Dashboard`,
+    title: `${testCase.value?.title || `Test #${testCaseId}`} — Piwi Dashboard`,
   })),
 );
 
@@ -80,7 +80,7 @@ const passRateClass = computed(() => {
                     },
                   ]
                 : [{ label: 'Project' }]),
-              { label: testCase?.title || `Test case #${testCaseId}` },
+              { label: testCase?.title || `Test #${testCaseId}` },
             ]"
           />
         </template>
@@ -223,8 +223,8 @@ const passRateClass = computed(() => {
               :to="`/failure-clusters/${cluster.id}`"
               class="flex items-center gap-2 py-2 px-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800"
             >
-              <UBadge :color="clusterColor(cluster.status)" variant="soft" size="xs" class="capitalize shrink-0">
-                {{ cluster.status }}
+              <UBadge :color="clusterColor(cluster.status)" variant="soft" size="xs" class="shrink-0">
+                {{ formatTriageStatus(cluster.status) }}
               </UBadge>
               <span class="text-sm truncate min-w-0" :title="cluster.signature">{{ describeCluster(cluster) }}</span>
               <span v-if="cluster.occurrences > 1" class="text-xs text-gray-400 shrink-0">

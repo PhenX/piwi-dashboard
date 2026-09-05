@@ -56,7 +56,7 @@ A quick health check across all projects: a **stat strip** whose every number is
 
 ## Analytics
 
-A cross-project decision view — where Home answers *"what's happening now"*, Analytics answers *"across projects, over time"*. A **scope bar** at the top sets the period (last 7 / 30 / 90 days, last year, or all time), an optional environment, and a full-runs-only toggle; every widget re-aggregates against that scope.
+A cross-project decision view — where Home answers *"what's happening now"*, Analytics answers *"across projects, over time"*. A **scope bar** at the top sets the period (last 7 / 30 / 90 days, last year, or all time) and the projects, then the same **filter bar** Home and each project use — environments and branches (multi-select) and a full-runs-only toggle; every widget re-aggregates against that scope.
 
 Widgets are grouped into four bands, in reading order:
 
@@ -185,7 +185,7 @@ The dashboard uses Server-Sent Events so it never needs a manual refresh:
 
 The [live demo](https://piwitests.dev/demo/) runs entirely in your browser (in-memory SQLite) and adds two things the real app doesn't need:
 
-**Simulate a test run** — the demo banner replays the exact streaming protocol a Piwi reporter speaks during a real run, so you can watch one arrive live. Scenarios: a passing run, a run with failures (joining a known cluster plus a brand-new one), flaky retries, a performance regression, an interrupted run, and a cross-browser run. Each creates a real run in the in-browser database, so worker timeline, failure groups, and history comparisons all behave exactly as they would against a server.
+**Simulate a test run** — the demo banner replays the exact streaming protocol a Piwi reporter speaks during a real run, so you can watch one arrive live. Scenarios: a passing run, a run with failures (joining a known cluster plus a brand-new one), flaky retries, a performance regression, an interrupted run, and a cross-browser run. Each creates a real run in the in-browser database, so worker timeline, failure clusters, and history comparisons all behave exactly as they would against a server.
 
 **Acting as** — the demo runs with authentication conceptually enabled. Switch between pre-seeded identities (an admin, a CI reporter, and several project-scoped users) to see how [project access](./authentication#project-access) changes what each user sees. Acting as the admin, you can change affectations live and then switch users to see the effect.
 

@@ -342,7 +342,7 @@ defineExpose({ reveal: () => cardRef.value?.reveal?.() });
     v-bind="cardBind"
     data-shot="alternative-locators"
     icon="i-lucide-bandage"
-    title="Alternative locators"
+    title="Locator fix"
     :count="alternatives.length"
     help="locator-healing"
   >
@@ -649,7 +649,7 @@ defineExpose({ reveal: () => cardRef.value?.reveal?.() });
     v-bind="cardBind"
     data-shot="alternative-locators"
     icon="i-lucide-bandage"
-    title="Alternative locators"
+    title="Locator fix"
     subtitle="Not a locator problem"
     help="locator-healing"
   >
@@ -665,7 +665,7 @@ defineExpose({ reveal: () => cardRef.value?.reveal?.() });
     v-else-if="!pending && !error && !hasData"
     v-bind="cardBind"
     icon="i-lucide-bandage"
-    title="Alternative locators"
+    title="Locator fix"
     subtitle="No alternatives available"
     help="locator-healing"
   >

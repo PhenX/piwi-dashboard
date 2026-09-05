@@ -337,7 +337,7 @@ const groups = computed<CommandPaletteGroup[]>(() => {
   if (searchResults.value.cases.length > 0) {
     resultGroups.push({
       id: 'search-cases',
-      label: 'Test cases',
+      label: 'Tests',
       ignoreFilter: true,
       items: searchResults.value.cases.map((c) => ({
         id: `case-${c.id}`,
