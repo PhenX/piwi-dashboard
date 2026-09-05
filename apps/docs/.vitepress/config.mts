@@ -90,6 +90,7 @@ export default defineConfig({
       {
         text: 'Start here',
         items: [
+          { text: 'What Piwi does', link: '/what-piwi-does' },
           { text: 'Getting started', link: '/getting-started' },
           { text: 'Core concepts', link: '/concepts' },
           { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
