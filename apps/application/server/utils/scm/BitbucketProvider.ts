@@ -11,6 +11,8 @@ import type {
   ScmCommitAuthor,
   ScmChanges,
   ScmFileContent,
+  ScmEntityRef,
+  ScmEntityState,
   ScmPullRequest,
   ScmFileEdit,
   CreatePullRequestInput,
@@ -70,6 +72,9 @@ function parsePatchesByFile(rawDiff: string): Map<string, string> {
 
 export class BitbucketProvider extends ScmProvider {
   readonly provider = 'bitbucket' as const;
+  get webUrl(): string {
+    return `https://bitbucket.org/${this.workspace}/${this.repoSlug}`;
+  }
   private readonly base: string;
 
   constructor(
@@ -204,6 +209,63 @@ export class BitbucketProvider extends ScmProvider {
       const result = data.author?.raw ? parseAuthorRaw(data.author.raw) : null;
       commitAuthorCache.set(key, result);
       return result;
+    } catch {
+      return null;
+    }
+  }
+
+  async fetchIssue(number: number): Promise<ScmEntityRef | null> {
+    if (!Number.isInteger(number) || number <= 0) return null;
+    try {
+      const res = await fetch(`${this.base}/issues/${number}`, {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as {
+        title?: string;
+        state?: string;
+        reporter?: { display_name?: string };
+        links?: { html?: { href?: string } };
+        updated_on?: string;
+      };
+      const open = data.state === 'new' || data.state === 'open' || data.state === 'on hold';
+      return {
+        title: data.title ?? null,
+        state: data.state ? (open ? 'open' : 'closed') : null,
+        author: data.reporter?.display_name ?? null,
+        url: data.links?.html?.href ?? null,
+        updatedAt: data.updated_on ?? null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async fetchPullRequest(number: number): Promise<ScmEntityRef | null> {
+    if (!Number.isInteger(number) || number <= 0) return null;
+    try {
+      const res = await fetch(`${this.base}/pullrequests/${number}`, {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as {
+        title?: string;
+        state?: string;
+        author?: { display_name?: string };
+        links?: { html?: { href?: string } };
+        updated_on?: string;
+      };
+      const state: ScmEntityState =
+        data.state === 'MERGED' ? 'merged' : data.state === 'OPEN' ? 'open' : data.state ? 'closed' : null;
+      return {
+        title: data.title ?? null,
+        state,
+        author: data.author?.display_name ?? null,
+        url: data.links?.html?.href ?? null,
+        updatedAt: data.updated_on ?? null,
+      };
     } catch {
       return null;
     }

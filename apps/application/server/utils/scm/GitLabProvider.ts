@@ -4,6 +4,8 @@ import type {
   ScmCommitAuthor,
   ScmChanges,
   ScmFileContent,
+  ScmEntityRef,
+  ScmEntityState,
   ScmPullRequest,
   ScmCommitStatus,
   ScmFileEdit,
@@ -43,6 +45,9 @@ function countDiffLines(diff: string): { additions: number; deletions: number } 
 
 export class GitLabProvider extends ScmProvider {
   readonly provider = 'gitlab' as const;
+  get webUrl(): string {
+    return `https://${this.hostname}/${this.repoPath}`;
+  }
 
   constructor(
     private readonly hostname: string,
@@ -201,6 +206,74 @@ export class GitLabProvider extends ScmProvider {
       const result = email ? { name: name || email, email } : null;
       commitAuthorCache.set(key, result);
       return result;
+    } catch {
+      return null;
+    }
+  }
+
+  async fetchIssue(number: number): Promise<ScmEntityRef | null> {
+    if (!Number.isInteger(number) || number <= 0) return null;
+    try {
+      const projectPath = encodeURIComponent(this.repoPath);
+      const res = await fetch(`https://${this.hostname}/api/v4/projects/${projectPath}/issues/${number}`, {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as {
+        title?: string;
+        state?: string;
+        author?: { name?: string; username?: string };
+        web_url?: string;
+        updated_at?: string;
+      };
+      return {
+        title: data.title ?? null,
+        state: data.state === 'closed' ? 'closed' : data.state === 'opened' ? 'open' : null,
+        author: data.author?.name ?? data.author?.username ?? null,
+        url: data.web_url ?? null,
+        updatedAt: data.updated_at ?? null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async fetchPullRequest(number: number): Promise<ScmEntityRef | null> {
+    if (!Number.isInteger(number) || number <= 0) return null;
+    try {
+      const projectPath = encodeURIComponent(this.repoPath);
+      const res = await fetch(`https://${this.hostname}/api/v4/projects/${projectPath}/merge_requests/${number}`, {
+        headers: this.makeHeaders(),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as {
+        title?: string;
+        state?: string;
+        draft?: boolean;
+        work_in_progress?: boolean;
+        author?: { name?: string; username?: string };
+        web_url?: string;
+        updated_at?: string;
+      };
+      const state: ScmEntityState =
+        data.state === 'merged'
+          ? 'merged'
+          : data.state === 'closed'
+            ? 'closed'
+            : data.draft || data.work_in_progress
+              ? 'draft'
+              : data.state === 'opened'
+                ? 'open'
+                : null;
+      return {
+        title: data.title ?? null,
+        state,
+        author: data.author?.name ?? data.author?.username ?? null,
+        url: data.web_url ?? null,
+        updatedAt: data.updated_at ?? null,
+      };
     } catch {
       return null;
     }

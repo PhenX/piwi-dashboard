@@ -12,6 +12,7 @@ import { createScmProvider, detectScmProvider, resolveScmToken } from './scm';
 import { normalizeGitUrl } from './scm/git-url';
 import { buildRetryArgs } from '#shared/retry-command';
 import { resolveCiRerunSettings, hasRerunTarget, type CiRerunSettings } from '#shared/ci-rerun';
+import type { ScmProviderName } from '#shared/scm-urls';
 import type { RunMetadata } from './run-json-types';
 import type { DbClient } from '../database';
 
@@ -33,7 +34,7 @@ export interface CiRerunAvailability {
   available: boolean;
   /** Human-readable reason the button is disabled, for its tooltip. */
   reason: string | null;
-  provider: 'github' | 'gitlab' | 'bitbucket' | null;
+  provider: ScmProviderName | null;
   enabled: boolean;
   hasToken: boolean;
 }
@@ -107,7 +108,7 @@ export async function clusterRerunArgs(db: DbClient, clusterId: number): Promise
 export async function dispatchClusterRerun(
   db: DbClient,
   cluster: { id: number; projectId: number; lastSeenRunId: number },
-): Promise<{ url: string; args: string; provider: 'github' | 'gitlab' | 'bitbucket' }> {
+): Promise<{ url: string; args: string; provider: ScmProviderName }> {
   const settings = await getCiRerunSettings(db, cluster.projectId);
   const repositoryUrl = await clusterRepositoryUrl(db, cluster.lastSeenRunId);
   const provider = detectScmProvider(repositoryUrl);

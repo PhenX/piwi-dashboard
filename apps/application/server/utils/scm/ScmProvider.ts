@@ -5,6 +5,7 @@ import {
   type CompiledCodeowners,
 } from '@piwitests/core/codeowners';
 import type { CiRerunSettings } from '#shared/ci-rerun';
+import { commitUrl, compareUrl, fileUrl, type ScmProviderName } from '#shared/scm-urls';
 
 export interface ChangedFile {
   filename: string;
@@ -77,6 +78,24 @@ export interface ScmPullRequest {
   url: string;
 }
 
+/** Normalized lifecycle state of an issue or pull/merge request. */
+export type ScmEntityState = 'open' | 'closed' | 'merged' | 'draft' | null;
+
+/**
+ * An issue or pull/merge request reduced to what an unfurl card needs. Each
+ * provider maps its own host's state vocabulary onto {@link ScmEntityState}.
+ */
+export interface ScmEntityRef {
+  title: string | null;
+  state: ScmEntityState;
+  /** Display name or login of the author, or null when the host omits it. */
+  author: string | null;
+  /** Canonical web URL of the entity, or null when the host omits it. */
+  url: string | null;
+  /** ISO-8601 timestamp of the last update, or null. */
+  updatedAt: string | null;
+}
+
 /** A commit status (GitHub "status", GitLab "commit status", Bitbucket "build status"). */
 export interface ScmCommitStatus {
   state: 'success' | 'failure' | 'error' | 'pending';
@@ -104,7 +123,9 @@ export interface CreatePullRequestInput {
 }
 
 export abstract class ScmProvider {
-  abstract readonly provider: 'github' | 'gitlab' | 'bitbucket';
+  abstract readonly provider: ScmProviderName;
+  /** Canonical web URL of the repository (no trailing slash), for building links. */
+  abstract readonly webUrl: string;
   protected readonly token: string | null;
   /**
    * Namespaces module-level cache keys by the token in use so a token-less
@@ -122,6 +143,25 @@ export abstract class ScmProvider {
     const h: Record<string, string> = { 'User-Agent': 'piwi-dashboard' };
     if (this.token) h['Authorization'] = `Bearer ${this.token}`;
     return h;
+  }
+
+  // ── Web links ──────────────────────────────────────────────────────────────
+  // Built from this provider's own `webUrl` through the shared `#shared/scm-urls`
+  // module, so server code that holds a provider never hand-writes a URL.
+
+  /** URL for viewing one commit. */
+  commitUrl(sha: string): string | null {
+    return commitUrl(this.webUrl, sha);
+  }
+
+  /** URL comparing two commits. */
+  compareUrl(fromSha: string, toSha: string): string | null {
+    return compareUrl(this.webUrl, fromSha, toSha);
+  }
+
+  /** URL for a file at a ref, optionally anchored to a line. */
+  fileUrl(ref: string, path: string, line?: number | null): string | null {
+    return fileUrl(this.webUrl, ref, path, line);
   }
 
   abstract listBranches(limit?: number): Promise<string[]>;
@@ -148,6 +188,19 @@ export abstract class ScmProvider {
    * on failure; may be capped by the provider.
    */
   abstract fetchTree(ref: string): Promise<string[] | null>;
+
+  /**
+   * An issue reduced to {@link ScmEntityRef}, or null when the host has no such
+   * issue, the repository disabled issues, or the fetch fails. Best-effort like
+   * the other reads: a token-less fetch still works against a public repo.
+   */
+  abstract fetchIssue(number: number): Promise<ScmEntityRef | null>;
+
+  /**
+   * A pull/merge request reduced to {@link ScmEntityRef}, or null when it does
+   * not exist or the fetch fails. Best-effort, like {@link fetchIssue}.
+   */
+  abstract fetchPullRequest(number: number): Promise<ScmEntityRef | null>;
 
   // ── Pull-request feedback (optional capability) ────────────────────────────
   //
