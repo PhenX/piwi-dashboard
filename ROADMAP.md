@@ -89,6 +89,9 @@ Everything else — analytics, notifications, the CI gate, PR feedback, MCP, the
 - More backend-log instrumentation packages beyond ASP.NET Core and Nitro.
 - Merging imported shards of one CI run into a single run (today each shard imports separately).
 - A dual ESM/CJS reporter build (the package is CommonJS-only today; named imports work everywhere, but a native ESM default import needs an interop shim).
+- **Playwright 1.63 features** — step subtitles and params in the step views and the AI context, test locks on the
+  workers timeline and on executions, per-action aria and screen snapshots read from the trace. Projected in
+  [proposals/playwright-1.63.md](proposals/playwright-1.63.md).
 
 ## Non-goals
 
