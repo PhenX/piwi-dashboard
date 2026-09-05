@@ -1162,6 +1162,26 @@ const moreMenuItems = computed(() => {
                     </div>
                   </NuxtLink>
                 </template>
+                <template #avgDuration-cell="{ row }">
+                  <DurationValue v-if="row.original.avgDuration" :ms="row.original.avgDuration" class="tabular-nums" />
+                  <span v-else class="text-gray-400">—</span>
+                </template>
+                <template #maxDuration-cell="{ row }">
+                  <DurationValue v-if="row.original.maxDuration" :ms="row.original.maxDuration" class="tabular-nums" />
+                  <span v-else class="text-gray-400">—</span>
+                </template>
+                <template #minDuration-cell="{ row }">
+                  <DurationValue v-if="row.original.minDuration" :ms="row.original.minDuration" class="tabular-nums" />
+                  <span v-else class="text-gray-400">—</span>
+                </template>
+                <template #latestDuration-cell="{ row }">
+                  <DurationValue
+                    v-if="row.original.latestDuration"
+                    :ms="row.original.latestDuration"
+                    class="tabular-nums"
+                  />
+                  <span v-else class="text-gray-400">—</span>
+                </template>
                 <template #trend-cell="{ row }">
                   <span v-if="row.original.trend === 'slower'" class="text-red-600 font-medium">▲ Slower</span>
                   <span v-else-if="row.original.trend === 'faster'" class="text-green-600 font-medium">▼ Faster</span>
