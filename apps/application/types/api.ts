@@ -926,6 +926,10 @@ export interface FailureClusterDetail extends ClusterResolutionFields {
   links: EntityLinkInfo[];
   /** Effective owner of the cluster's tests: `piwi:owner` annotation or CODEOWNERS. */
   owner: { name: string; source: 'annotation' | 'codeowners' } | null;
+  /** Inbox triage: assignee (overrides the owner) and snooze state. */
+  assignee: string | null;
+  snoozedUntil: string | Date | null;
+  snoozeMode: string | null;
 }
 
 /**
@@ -950,6 +954,10 @@ export interface ProjectFailureCluster extends ClusterResolutionFields {
   diagnosis: DiagnosisCompact | null;
   /** The pinned known-issue link (newest), shown as a chip. */
   issueLink: { url: string; provider: string; key: string | null } | null;
+  /** Inbox triage — assignee and snooze state. A snoozed open cluster is not failing now. */
+  assignee: string | null;
+  snoozedUntil: string | Date | null;
+  snoozeMode: string | null;
 }
 
 /**
