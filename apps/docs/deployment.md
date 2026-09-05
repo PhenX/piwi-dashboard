@@ -405,31 +405,9 @@ When auth is enabled, set `PIWI_SITE_URL` to the public HTTPS URL so email links
 
 ## Backups
 
-Everything lives in two places — back both up:
+Everything lives in two places — the database (`.data/piwi.db` or your PostgreSQL database) and file storage (`.data/storage/`, unless you use [S3](/storage)). Back up both, together, before every version bump: migrations are forward-only, so a backup is the only rollback path.
 
-1. **The database** — SQLite file `.data/piwi.db` (default) or your PostgreSQL database (`pg_dump`).
-2. **File storage** — `.data/storage/` (HTML reports, traces, attachments), unless you use [S3 storage](/storage).
-
-With the default SQLite + local storage setup, a consistent backup is simply a copy of `.data/` while the container is stopped — or use SQLite's online backup to avoid downtime:
-
-::: code-group
-
-```bash [Linux / macOS]
-# Online, consistent SQLite backup + storage copy
-sqlite3 .data/piwi.db ".backup '.data/piwi-backup.db'"
-tar czf piwi-backup.tar.gz -C .data piwi-backup.db storage
-```
-
-```powershell [Windows (PowerShell)]
-# Stop the container first for a consistent copy, then:
-Compress-Archive -Path .data -DestinationPath piwi-backup.zip
-```
-
-:::
-
-With PostgreSQL: `pg_dump` the database and copy `.data/storage/` (or rely on your S3 bucket's own durability/versioning).
-
-Take one before every version bump: migrations are forward-only, so a backup is the only rollback path. See [Upgrading](./upgrading).
+The full procedure — online SQLite snapshots, `pg_dump`, restoring, and the desktop app's data directory — is on [Backup & restore](./backup-restore).
 
 ## Resource requirements
 

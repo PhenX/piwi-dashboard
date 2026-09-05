@@ -141,6 +141,7 @@ export default defineConfig({
         items: [
           { text: 'Deployment', link: '/deployment' },
           { text: 'Upgrading', link: '/upgrading' },
+          { text: 'Backup & restore', link: '/backup-restore' },
           { text: 'Configuration reference', link: '/configuration' },
           { text: 'Configuration generator', link: '/configuration/generator' },
           { text: 'Authentication', link: '/authentication' },
