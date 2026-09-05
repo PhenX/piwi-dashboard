@@ -87,17 +87,15 @@ The `.data` directory contains:
 
 ### Environment variables
 
+The server reads three process-level variables directly:
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `NODE_ENV` | `production` | Set automatically |
 | `HOST` | `0.0.0.0` | Listen on all interfaces |
 | `PORT` | `3000` | Application port |
-| `PIWI_SECRET_KEY` | — | Master key for encrypting secrets in the database (AI API keys, SCM tokens). Recommended in all deployments. Generate with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` (or `openssl rand -hex 32`). |
-| `PIWI_AUTH_ENABLED` | — | Enable authentication |
-| `PIWI_AUTH_SECRET` | — | Secret for encrypting session cookies (required if auth enabled). Generate with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"` (or `openssl rand -hex 32`). |
-| `PIWI_STORAGE_TYPE` | `local` | Storage backend (`local` or `s3`) |
-| `PIWI_DATABASE_URL` | — | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/db`). When set, PostgreSQL is used instead of SQLite. |
-| `PIWI_DATABASE_PATH` | `.data/piwi.db` | SQLite database path (ignored when `PIWI_DATABASE_URL` is set) |
+
+Everything else is a `PIWI_*` variable, documented with its default and whether the Settings UI can override it in the generated [configuration reference](/configuration) — most deployments start with `PIWI_SECRET_KEY`, `PIWI_AUTH_ENABLED`, `PIWI_AUTH_SECRET`, `PIWI_DATABASE_URL` and `PIWI_STORAGE_TYPE`. The [configuration generator](/configuration/generator) turns your choices into a ready-to-paste block from the same registry.
 
 ## One-click deploy
 

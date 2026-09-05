@@ -39,20 +39,19 @@ npm install @piwitests/server
 
 ## Configuration
 
-All configuration is via environment variables (same as the Docker image). Common ones:
+All configuration is via environment variables (same as the Docker image). `PORT`
+(default `3000`) sets the listen port; everything else is a `PIWI_*` variable
+documented — with its default and whether the Settings UI can override it — in the
+[configuration reference](https://piwitests.dev/configuration). Most deployments set at
+least `PIWI_SECRET_KEY`, the master key for encrypting secrets stored in the database
+(AI API keys, SCM tokens); recommended in any real deployment. Generate one with:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | Port to listen on |
-| `PIWI_SECRET_KEY` | — | Master key for encrypting secrets stored in the database (AI API keys, SCM tokens). Recommended in any real deployment. Generate with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`. |
-| `PIWI_AUTH_ENABLED` | — | Enable authentication (multi-user) |
-| `PIWI_AUTH_SECRET` | — | Secret for encrypting session cookies (required when auth is enabled) |
-| `PIWI_DATABASE_URL` | — | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/db`). When set, PostgreSQL is used instead of SQLite. |
-| `PIWI_DATABASE_PATH` | `.data/piwi.db` | SQLite database path (ignored when `PIWI_DATABASE_URL` is set) |
-| `PIWI_STORAGE_TYPE` | `local` | Storage backend (`local` or `s3`) |
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
 
-See the [configuration reference](https://piwitests.dev/configuration) for the full
-list.
+Enable multi-user access with `PIWI_AUTH_ENABLED=true` plus `PIWI_AUTH_SECRET`, and
+point at PostgreSQL with `PIWI_DATABASE_URL`.
 
 Set variables the usual way for your shell — for example, on a different port:
 
