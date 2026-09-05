@@ -46,6 +46,16 @@ export const HELP_TOPICS = {
     text: 'Failure clusters still open across your projects, newest first. Open one to investigate, or triage from the keyboard: j / k move, o opens, r resolves, i ignores.',
     doc: 'ui-overview#home',
   },
+  'home.failure-inbox': {
+    title: 'Failure inbox',
+    text: "A queue of the failures you still owe a decision. Switch queues to focus — new since you last looked, mine, regressions, fixes that didn't hold, quarantines ready to release, merge suggestions. Triage from the row or the keyboard: j / k move, x select, r resolve, i ignore, q quarantine, a assign, s snooze, l link, o open.",
+    doc: 'failure-clusters#the-failure-inbox',
+  },
+  'cluster.snooze': {
+    title: 'Snoozed',
+    text: 'This cluster is snoozed — hidden from every inbox queue until the deadline passes or, when snoozed until it recurs, until a new run fails it again. Snooze never changes the status; unsnooze to bring it back now.',
+    doc: 'failure-clusters#snoozing',
+  },
 
   // ── Analytics ─────────────────────────────────────────────────────────
   'analytics.insights': {
