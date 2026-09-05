@@ -10,8 +10,17 @@
  * plain reason, so a demo with no SCM metadata still renders the recipe.
  */
 import { and, desc, eq, lt } from 'drizzle-orm';
-import { testCases, testRuns, testRunsCases } from '../../server/database/schema';
-import { buildBisectScript, buildReproRecipe, type BisectResult, type ReproRecipe } from '#shared/reproduce';
+import { failureClusters, testCases, testRuns, testRunsCases } from '../../server/database/schema';
+import { normalizeGitUrl } from '../../server/utils/scm/git-url';
+import {
+  buildBisectScript,
+  buildReproRecipe,
+  type BisectedCommit,
+  type BisectResult,
+  type ReproduceDesktopContext,
+  type ReproRecipe,
+} from '#shared/reproduce';
+import { buildCommitUrl } from '#shared/utils/run-metadata';
 import { buildRetryCommand, type RetryCase } from '#shared/retry-command';
 import type { BrowserConfig } from '#shared/types';
 import type { DrizzleDB } from './db';
@@ -19,6 +28,8 @@ import type { DrizzleDB } from './db';
 export interface ReproduceContext {
   reproduce: ReproRecipe;
   bisect: BisectResult;
+  /** Everything the desktop shell needs to run this locally and persist a bisect. */
+  desktop: ReproduceDesktopContext;
 }
 
 export interface ReproduceInput {
@@ -32,10 +43,34 @@ export interface ReproduceInput {
   verifyCommand: string;
   /** Base URL the run targeted, when known. */
   baseUrl?: string | null;
+  /** The failure cluster this reproduction belongs to — where a bisect result is recorded. */
+  clusterId?: number | null;
 }
 
 /** Minimal view of the metadata JSON this reader needs. */
-type RunScm = { scm?: { commit?: string | null } | null } | null;
+type RunScm = { scm?: { commit?: string | null; remoteUrl?: string | null } | null } | null;
+
+/** Read the bisect result recorded on a cluster and attach a commit URL, if any. */
+async function readBisectedCommit(
+  db: DrizzleDB,
+  clusterId: number | null | undefined,
+  repositoryUrl: string | null,
+): Promise<BisectedCommit | null> {
+  if (!clusterId) return null;
+  const [row] = await db
+    .select({ bisectResult: failureClusters.bisectResult })
+    .from(failureClusters)
+    .where(eq(failureClusters.id, clusterId));
+  const stored = row?.bisectResult as BisectedCommit | null | undefined;
+  if (!stored?.sha) return null;
+  return {
+    sha: stored.sha,
+    subject: stored.subject ?? '',
+    author: stored.author ?? null,
+    date: stored.date ?? null,
+    commitUrl: repositoryUrl ? buildCommitUrl(repositoryUrl, stored.sha) : null,
+  };
+}
 
 /**
  * Compute the reproduction recipe and the bisect for one run. Always returns a
@@ -54,7 +89,9 @@ export async function computeReproduceContext(db: DrizzleDB, input: ReproduceInp
     .from(testRuns)
     .where(eq(testRuns.id, input.runId));
 
-  const commit = (run?.metadata as RunScm)?.scm?.commit ?? null;
+  const scm = (run?.metadata as RunScm)?.scm ?? null;
+  const commit = scm?.commit ?? null;
+  const repositoryUrl = normalizeGitUrl(scm?.remoteUrl ?? null);
 
   let lastGreenCommit: string | null = null;
   if (run) {
@@ -75,7 +112,21 @@ export async function computeReproduceContext(db: DrizzleDB, input: ReproduceInp
 
   const bisect = buildBisectScript({ good: lastGreenCommit, bad: commit, verifyCommand: input.verifyCommand });
 
-  return { reproduce, bisect };
+  const bisectedCommit = await readBisectedCommit(db, input.clusterId, repositoryUrl);
+
+  const desktop: ReproduceDesktopContext = {
+    projectId: run?.projectId ?? null,
+    cases: input.cases,
+    browserName: input.browserName,
+    commit,
+    good: lastGreenCommit,
+    bad: commit,
+    clusterId: input.clusterId ?? null,
+    repositoryUrl,
+    bisectedCommit,
+  };
+
+  return { reproduce, bisect, desktop };
 }
 
 /**
@@ -88,6 +139,7 @@ export async function buildExecutionReproduce(db: DrizzleDB, executionId: number
       testRunId: testRunsCases.testRunId,
       line: testRunsCases.line,
       browser: testRunsCases.browser,
+      failureClusterId: testRunsCases.failureClusterId,
       title: testCases.title,
       filePath: testCases.filePath,
     })
@@ -108,6 +160,7 @@ export async function buildExecutionReproduce(db: DrizzleDB, executionId: number
     cases,
     browserName: browser?.browserName ?? null,
     verifyCommand,
+    clusterId: row.failureClusterId ?? null,
   });
 }
 

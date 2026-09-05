@@ -256,6 +256,7 @@ export const failureClusters = pgTable(
     timeToResolutionMs: integer('time_to_resolution_ms'), // first seen → fix landed
     fixVerification: text('fix_verification'), // 'stopped-failing' | 'diagnosis-verified' | 'regressed'
     lastRerunDispatch: jsonb('last_rerun_dispatch'), // ClusterRerunDispatch — most recent "Re-run in CI" dispatch
+    bisectResult: jsonb('bisect_result'), // BisectedCommit — first bad commit the desktop bisect found (sha, subject, author, date)
     createdAt: timestamp('created_at', { mode: 'date' })
       .notNull()
       .$defaultFn(() => new Date()),
