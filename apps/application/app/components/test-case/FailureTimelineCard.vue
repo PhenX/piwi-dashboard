@@ -651,10 +651,138 @@ function onViewTrace() {
           </span>
         </div>
 
+        <!-- Phone layout (below `md`): one stacked card per row, so the Step and
+             Duration columns are never cut and the page never scrolls sideways.
+             The `md`-and-up table below carries the same rows unchanged. -->
+        <div class="md:hidden space-y-2">
+          <template v-for="row in mergedRows" :key="row.kind === 'step' ? `m-s-${row.index}` : `m-${row.item.id}`">
+            <!-- A step row -->
+            <div
+              v-if="row.kind === 'step'"
+              class="rounded-lg border border-default p-2.5"
+              :class="row.failed ? 'bg-red-50 dark:bg-red-950/30' : ''"
+            >
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span
+                  v-if="status === 'didnotrun'"
+                  class="inline-flex items-center justify-center size-5 shrink-0 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 text-xs leading-none"
+                  title="Not run"
+                  >–</span
+                >
+                <span
+                  v-else-if="row.failed"
+                  class="inline-flex items-center justify-center size-5 shrink-0 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs leading-none"
+                  title="Step failed"
+                  >✗</span
+                >
+                <span
+                  v-else
+                  class="inline-flex items-center justify-center size-5 shrink-0 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs leading-none"
+                  title="Step passed"
+                  >✓</span
+                >
+                <UBadge :color="stepCategoryColor[row.step.category] || 'neutral'" variant="soft" size="xs">
+                  {{ row.step.category }}
+                </UBadge>
+                <UBadge
+                  v-if="row.index === slowestStepIndex"
+                  color="warning"
+                  variant="subtle"
+                  size="xs"
+                  title="Slowest step in this test"
+                >
+                  slowest
+                </UBadge>
+                <span
+                  v-if="showAxis && row.item"
+                  class="ml-auto tabular-nums text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap"
+                >
+                  {{ formatRel(row.item.at) }}
+                </span>
+              </div>
+              <p
+                class="mt-1.5 text-sm break-words"
+                :class="row.failed ? 'text-red-600 dark:text-red-400 font-medium' : ''"
+              >
+                {{ row.step.title }}
+              </p>
+              <ErrorText
+                v-if="row.failed && row.step.error?.message"
+                mode="block"
+                :text="row.step.error.message"
+                class="mt-1"
+              />
+              <OpenInIdeLink
+                v-if="row.step.location"
+                :location="row.step.location"
+                :project-key="projectKey ?? undefined"
+                :project-name="projectName ?? undefined"
+                class="text-xs text-gray-400 dark:text-gray-500 mt-0.5"
+              />
+              <div class="mt-1.5">
+                <div class="flex items-center justify-between gap-2">
+                  <DurationValue
+                    :ms="row.step.duration"
+                    :class="`text-sm ${stepDurationTextClass(row.step.duration)}`"
+                    unit-class="opacity-60"
+                  />
+                  <span
+                    v-if="stepPctOfTest(row.step.duration)"
+                    class="text-xs tabular-nums text-gray-400 dark:text-gray-500"
+                  >
+                    {{ stepPctOfTest(row.step.duration) }}
+                  </span>
+                </div>
+                <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                  <div
+                    class="absolute inset-y-0 rounded-full"
+                    :class="stepBarColorClass(row.step.duration)"
+                    :style="stepBarStyle(row.step)"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <!-- An interleaved network / console / backend row -->
+            <div
+              v-else
+              class="rounded-lg border border-default p-2.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/60"
+              :class="row.item.failed ? 'bg-red-50 dark:bg-red-950/30' : ''"
+              @click="revealItem(row.item)"
+            >
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <UIcon :name="eventIcon(row.item)" class="size-4 shrink-0" :class="eventIconClass(row.item)" />
+                <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                  {{ kindTag(row.item) || row.item.kind }}
+                </span>
+                <span
+                  v-if="showAxis"
+                  class="ml-auto tabular-nums text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap"
+                >
+                  {{ formatRel(row.item.at) }}
+                </span>
+              </div>
+              <div class="mt-1 flex items-baseline justify-between gap-2">
+                <span class="font-mono text-xs break-all text-gray-700 dark:text-gray-300">
+                  {{ row.item.label
+                  }}<span v-if="row.item.kind === 'network'" class="text-gray-500"> → {{ row.item.status }}</span>
+                </span>
+                <span
+                  v-if="row.item.duration != null"
+                  class="shrink-0 text-xs tabular-nums text-gray-500 dark:text-gray-400"
+                >
+                  {{ Math.round(row.item.duration) }} ms
+                </span>
+              </div>
+            </div>
+          </template>
+        </div>
+
         <!-- One table: steps, with network / console / backend items interleaved
              in time order. `min-width` keeps the columns readable while the
-             wrapper (not the page) scrolls on a narrow screen. -->
-        <TableScroller min-width="34rem" :bleed="false">
+             wrapper (not the page) scrolls; on a phone the stacked cards above
+             replace it, so the table shows from `md` up. -->
+        <TableScroller min-width="34rem" :bleed="false" class="hidden md:block">
           <table class="w-full min-w-[34rem] border-separate border-spacing-0 text-sm">
             <thead>
               <tr
