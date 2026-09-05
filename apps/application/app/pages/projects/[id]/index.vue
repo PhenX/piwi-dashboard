@@ -343,12 +343,32 @@ const runsColumns: TableColumn<TestRunSummary>[] = [
   { accessorKey: 'environment', header: createSortHeader<TestRunSummary>('Environment') },
   { accessorKey: 'metadata', header: 'Branch / Commit' },
   { accessorKey: 'duration', header: createSortHeader<TestRunSummary>('Test status / Dur.') },
-  { accessorKey: 'reports', header: 'Reports' },
-  { id: 'actions', header: 'Actions' },
+  { id: 'actions', header: '' },
 ];
 
 function openRun(runId: number) {
   navigateTo(`/test-runs/${runId}`);
+}
+
+// The report links and the delete action share one row overflow menu, so the
+// table fits without a horizontal scroll at 1280 px.
+function runMenuItems(run: TestRunSummary) {
+  const items: Array<Record<string, unknown>> = (run.reports ?? []).map((report) => ({
+    label: report.label,
+    icon: reportIcon(report.type),
+    to: fileApiUrl(report.path, null, runtimeConfig.app?.baseURL),
+    target: '_blank',
+  }));
+  if (items.length) items.push({ type: 'separator' });
+  items.push({
+    label: 'Delete run',
+    icon: 'i-lucide-trash-2',
+    color: 'error',
+    onSelect: () => {
+      confirmDeleteRunId.value = run.id;
+    },
+  });
+  return items;
 }
 
 // === RUNS TAB: markers ===
@@ -823,7 +843,7 @@ const moreMenuItems = computed(() => {
                 :data="filteredRuns"
                 :columns="runsColumns"
                 :ui="{
-                  base: 'table-fixed border-separate border-spacing-0',
+                  base: 'w-full border-separate border-spacing-0',
                   thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
                   tbody: '[&>tr]:last:[&>td]:border-b-0 [&>tr]:hover:bg-gray-50 dark:[&>tr]:hover:bg-gray-900/50',
                   th: 'first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r',
@@ -897,7 +917,8 @@ const moreMenuItems = computed(() => {
                 <template #metadata-cell="{ row }">
                   <div
                     v-if="runBranch(row.original) || row.original.metadata?.scm?.commit"
-                    class="flex items-center gap-1.5 flex-wrap text-xs"
+                    class="flex items-center gap-1.5 flex-wrap text-xs cursor-pointer"
+                    @click="openRun(row.original.id)"
                   >
                     <span
                       v-if="runBranch(row.original)"
@@ -925,23 +946,19 @@ const moreMenuItems = computed(() => {
                     <DurationValue :ms="row.original.duration" class="text-xs text-gray-500" />
                   </div>
                 </template>
-                <template #reports-cell="{ row }">
-                  <RunReports :reports="row.original.reports" />
-                </template>
-                <template #actions-header>
-                  <div class="text-right">Actions</div>
-                </template>
                 <template #actions-cell="{ row }">
                   <div class="flex justify-end">
-                    <UButton
-                      size="sm"
-                      color="error"
-                      variant="soft"
-                      icon="i-lucide-trash-2"
-                      :aria-label="`Delete run #${row.original.id}`"
-                      :loading="deletingRunId === row.original.id"
-                      @click.stop="confirmDeleteRunId = row.original.id"
-                    />
+                    <UDropdownMenu :items="runMenuItems(row.original)" :content="{ align: 'end' }">
+                      <UButton
+                        size="xs"
+                        color="neutral"
+                        variant="ghost"
+                        icon="i-lucide-ellipsis-vertical"
+                        :aria-label="`Run #${row.original.id} actions`"
+                        :loading="deletingRunId === row.original.id"
+                        @click.stop
+                      />
+                    </UDropdownMenu>
                   </div>
                 </template>
               </UTable>
@@ -977,15 +994,17 @@ const moreMenuItems = computed(() => {
                       <DurationValue :ms="run.duration" />
                     </div>
                   </NuxtLink>
-                  <UButton
-                    size="xs"
-                    color="error"
-                    variant="soft"
-                    icon="i-lucide-trash-2"
-                    :aria-label="`Delete run #${run.id}`"
-                    :loading="deletingRunId === run.id"
-                    @click.stop="confirmDeleteRunId = run.id"
-                  />
+                  <UDropdownMenu :items="runMenuItems(run)" :content="{ align: 'end' }">
+                    <UButton
+                      size="xs"
+                      color="neutral"
+                      variant="ghost"
+                      icon="i-lucide-ellipsis-vertical"
+                      :aria-label="`Run #${run.id} actions`"
+                      :loading="deletingRunId === run.id"
+                      @click.stop.prevent
+                    />
+                  </UDropdownMenu>
                 </div>
               </div>
             </div>
