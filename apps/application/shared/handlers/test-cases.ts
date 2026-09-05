@@ -15,10 +15,11 @@ import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-w
 import { inlineCasePayloads } from '../../server/utils/case-payloads';
 import { buildFailureVerdict } from '../failure-verdict';
 import { buildFailureTimeline, type FailureTimeline, type TimelineCallsite } from '../failure-timeline';
-import { buildFailureClues, type FailureClue } from '../failure-clues';
+import { buildFailureClues, type FailureClue, type FailureCluePageDiff } from '../failure-clues';
 import { parsePlaywrightError } from '../error-parse';
 import { getLocatorHealing } from '../../server/utils/locator-healing';
 import { getEnvironmentDiff } from '../../server/utils/environment-diff';
+import { getPageDiff } from '../../server/utils/page-diff';
 import type { PageStateLike } from '../page-state';
 import type { TestStepEvent } from '../types';
 import type { RunMetadata } from '../../server/utils/run-json-types';
@@ -545,6 +546,14 @@ export interface FailureCluesResult {
  * `slowRequestMs` lets the server pass the configured slow-request threshold;
  * without it the engine uses its 1500 ms default.
  */
+/** Reduce a page-diff result to the change (if any) at the failing locator's node, for the clue engine. */
+function pageDiffLocatorChange(pageDiff: Awaited<ReturnType<typeof getPageDiff>> | null): FailureCluePageDiff | null {
+  if (pageDiff?.status !== 'ok') return null;
+  const hunk = pageDiff.hunks?.find((h) => h.matchesLocator);
+  if (!hunk) return null;
+  return { locatorChange: { type: hunk.type, role: hunk.role, name: hunk.name, oldName: hunk.oldName ?? null } };
+}
+
 export async function getFailureClues(
   db: DrizzleDB,
   id: number,
@@ -587,9 +596,10 @@ export async function getFailureClues(
 
   // Run-level facts and the two derived analyses the engine cites, loaded in
   // parallel. Healing and the environment diff resolve their own baselines.
-  const [healing, environmentDiff, browserPeers, workerExecutions, clusterFix] = await Promise.all([
+  const [healing, environmentDiff, pageDiff, browserPeers, workerExecutions, clusterFix] = await Promise.all([
     getLocatorHealing(db, id).catch(() => null),
     getEnvironmentDiff(db, id).catch(() => null),
+    getPageDiff(db, id).catch(() => null),
     db
       .select({
         browserName: testRunsCases.browserName,
@@ -646,6 +656,7 @@ export async function getFailureClues(
     ariaSnapshot: evidence.ariaSnapshot ?? null,
     appState: (trc.pageState as PageStateLike | null) ?? null,
     environmentDiff,
+    pageDiff: pageDiffLocatorChange(pageDiff),
     networkRequests: networkForClues,
     consoleLogs:
       (trc.consoleLogs as Array<{ type?: string | null; text?: string | null; timestamp?: number | null }> | null) ??

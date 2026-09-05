@@ -21,6 +21,7 @@ export const EVIDENCE_SECTION_TAB: Record<string, EvidenceTabValue> = {
   appState: 'state',
   environmentDiff: 'state',
   visualDiff: 'screen',
+  pageDiff: 'screen',
   domSnapshot: 'screen',
   ariaSnapshot: 'screen',
   screenshots: 'screen',
