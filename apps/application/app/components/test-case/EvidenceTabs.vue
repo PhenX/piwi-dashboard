@@ -241,7 +241,13 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
         <h2 class="text-lg font-medium">Evidence</h2>
         <HelpHint v-if="help" :topic="help" />
       </div>
-      <div class="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Evidence sections">
+      <!-- Below `sm` the strip wraps onto as many rows as it needs so no tab is
+           hidden off-screen; from `sm` up it stays one scrollable row. -->
+      <div
+        class="flex items-center gap-1 max-sm:flex-wrap sm:overflow-x-auto"
+        role="tablist"
+        aria-label="Evidence sections"
+      >
         <button
           v-for="tab in tabs"
           :key="tab.value"
