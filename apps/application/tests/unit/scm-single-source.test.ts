@@ -34,9 +34,10 @@ const HOST_ALLOWLIST = [
 
 /**
  * Substrings allowed to appear in any file — the project's own repository links
- * in the nav, about page, login page and demo banner.
+ * in the nav, about page, login page and demo banner, plus the example issue URL
+ * shown as placeholder text in the "link an issue" input (not provider logic).
  */
-const ALLOWED_SUBSTRINGS = ['github.com/piwitests/platform'];
+const ALLOWED_SUBSTRINGS = ['github.com/piwitests/platform', 'github.com/org/repo'];
 
 /** The provider union — declared once in `shared/scm-urls.ts`, imported everywhere else. */
 const UNION_RE = /'github'\s*\|\s*'gitlab'\s*\|\s*'bitbucket'/;
