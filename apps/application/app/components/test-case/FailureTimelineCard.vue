@@ -3,15 +3,22 @@
  * The failure timeline: one SVG time axis that places this execution's steps,
  * console entries, network requests and backend log entries on the same clock,
  * with the moment of failure marked and a default window around the failed step.
- * Below the axis, the same items read as one chronological list ("what happened
- * in this window") — a click on any line reveals its section on the page. The
- * card hides itself when the timeline has fewer than two placed items.
+ * Below the axis sits one steps table: each step carries its offset from the
+ * failure (`t-N s`), category, title (the failed step in red with its error),
+ * duration with its share of the test and a bar; network, console and backend
+ * items in the same window are interleaved as their own rows in time order. The
+ * *Around the failure* / *Whole test* toggle drives both the axis and the table.
  *
- * The data comes pre-built from `/timeline` (the pure `buildFailureTimeline`);
- * this component only draws it. Times shown are relative to the failure moment
- * (`t+0`), so the axis and the list read against the same anchor.
+ * A passing execution has no failure moment: the axis is hidden and the table
+ * lists every step without offsets.
+ *
+ * The axis data comes pre-built from `/timeline` (the pure `buildFailureTimeline`);
+ * step detail (category, error, duration share) comes from the `steps` prop. Times
+ * shown are relative to the failure moment (`t+0`), so the axis and the table read
+ * against the same anchor.
  */
 import type { FailureTimeline, TimelineItem, TimelineLane } from '#shared/failure-timeline';
+import type { PerformanceStep } from '~~/types/api';
 import { useClusterSectionLocator } from '~/composables/useClusterSectionLocator';
 import SectionCard from '../shared/SectionCard.vue';
 import ChartTooltip from '../shared/ChartTooltip.vue';
@@ -20,6 +27,14 @@ import OpenInIdeLink from '../shared/OpenInIdeLink.vue';
 
 const props = defineProps<{
   testRunsCaseId: number;
+  /** The execution's steps — the table's rows and the per-step share and bar. */
+  steps: PerformanceStep[];
+  /** The execution's total duration, for the per-step share of the test. */
+  durationMs: number | null;
+  /** Whether this execution failed — a passing one hides the axis and offsets. */
+  hasError?: boolean;
+  /** Execution status — a did-not-run row shows a neutral step marker. */
+  status?: string | null;
   /** Whether a trace exists — enables the "View trace" affordance in the header. */
   hasTrace?: boolean;
   /** Piwi project id/name — passed to the open-in-IDE links for call sites. */
@@ -29,7 +44,11 @@ const props = defineProps<{
   embedded?: boolean;
 }>();
 
-const { data } = await useFetch<FailureTimeline>(`/api/test-run-cases/${props.testRunsCaseId}/timeline`);
+// The axis only exists for a failure; a passing execution reads its steps off the
+// prop and never needs the timeline build.
+const { data } = await useFetch<FailureTimeline>(`/api/test-run-cases/${props.testRunsCaseId}/timeline`, {
+  immediate: props.hasError !== false,
+});
 
 const locator = useClusterSectionLocator();
 
@@ -61,6 +80,12 @@ const placedCount = computed(() => allItems.value.length);
 const visibleLanes = computed<TimelineLane[]>(() =>
   data.value ? LANE_ORDER.filter((lane) => data.value!.lanes[lane].length > 0) : [],
 );
+
+// The axis (and the offset column) exist only when there is a failure moment to
+// anchor them and at least two items to place; a passing execution shows the
+// bare steps table.
+const hasFailure = computed(() => Boolean(props.hasError) && Boolean(data.value?.failedStep));
+const showAxis = computed(() => hasFailure.value && placedCount.value >= 2);
 
 // ── Window mode ──────────────────────────────────────────────────────────────
 type WindowMode = 'around' | 'whole';
@@ -124,11 +149,21 @@ const windowShade = computed(() => {
 });
 
 // ── Axis ticks (relative to the failure moment) ──────────────────────────────
+// Precision scales with the magnitude: tenths of a second when close, then
+// whole seconds, minutes and hours — so a far-off offset reads as `t+3h`, never
+// a spurious `t+10755.8s`.
 function formatRel(at: number): string {
   const failureAt = data.value?.failureAt ?? 0;
   const d = (at - failureAt) / 1000;
-  if (Math.abs(d) < 0.05) return 't+0';
-  return `t${d < 0 ? '-' : '+'}${Math.abs(d).toFixed(1)}s`;
+  const a = Math.abs(d);
+  if (a < 0.05) return 't+0';
+  const sign = d < 0 ? '-' : '+';
+  let mag: string;
+  if (a < 10) mag = `${a.toFixed(1)}s`;
+  else if (a < 90) mag = `${Math.round(a)}s`;
+  else if (a < 3600) mag = `${Math.round(a / 60)}m`;
+  else mag = `${Math.round(a / 3600)}h`;
+  return `t${sign}${mag}`;
 }
 
 const ticks = computed(() => {
@@ -200,11 +235,6 @@ function callKey(item: TimelineItem): string | null {
 function callLabel(item: TimelineItem): string {
   return item.group ?? (item.origin ? basename(item.origin.file) : '');
 }
-/** A header names a method when its group is that method's function name. */
-function isMethodHeader(item: TimelineItem): boolean {
-  return item.origin?.function != null && item.origin.function === item.group;
-}
-
 /** Runs of consecutive steps that share a call site, drawn as one span in the band. */
 const callSpans = computed(() => {
   const steps = data.value?.lanes.steps ?? [];
@@ -239,23 +269,139 @@ function bandTitle(span: { label: string; origin: TimelineItem['origin'] }): str
   return `${span.label}${where}`;
 }
 
-/** The window list, with a header row before each run of same-origin actions. */
-type WindowRow = { kind: 'header'; item: TimelineItem } | { kind: 'item'; item: TimelineItem; indented: boolean };
-const windowRows = computed<WindowRow[]>(() => {
-  const out: WindowRow[] = [];
-  let curKey: string | null = null;
-  for (const item of windowItems.value) {
-    const key = item.kind === 'step' ? (item.group ?? null) : null;
-    if (key !== curKey) {
-      curKey = key;
-      if (key != null) out.push({ kind: 'header', item });
-    }
-    // A `test.step` entry is shown as the group header, not as an event line too.
-    if (item.kind === 'step' && item.category === 'test.step') continue;
-    out.push({ kind: 'item', item, indented: key != null });
+// ── The merged steps table ───────────────────────────────────────────────────
+// One row per step, with network / console / backend items interleaved in time
+// order. A failing execution reads the rows off the axis window (so the toggle
+// drives the table too) and shows each row's offset from the failure; a passing
+// one lists every step off the prop, without offsets.
+type StepRow = { kind: 'step'; item: TimelineItem | null; step: PerformanceStep; index: number; failed: boolean };
+type EventRow = { kind: 'event'; item: TimelineItem };
+type MergedRow = StepRow | EventRow;
+
+const mergedRows = computed<MergedRow[]>(() => {
+  if (showAxis.value) {
+    return windowItems.value.map<MergedRow>((item) => {
+      if (item.kind === 'step') {
+        const index = item.ref.index;
+        return { kind: 'step', item, step: props.steps[index]!, index, failed: Boolean(item.failed) };
+      }
+      return { kind: 'event', item };
+    });
   }
-  return out;
+  return props.steps.map<MergedRow>((step, index) => ({
+    kind: 'step',
+    item: null,
+    step,
+    index,
+    failed: Boolean(step.failed),
+  }));
 });
+
+const stepCategoryColor: Record<string, 'info' | 'success' | 'warning' | 'neutral'> = {
+  navigation: 'info',
+  assertion: 'success',
+  action: 'warning',
+  input: 'warning',
+  api: 'info',
+  wait: 'neutral',
+  hook: 'neutral',
+  fixture: 'neutral',
+};
+
+// Per-category rollup for the summary strip above the table, over every step
+// (parents include their children, matching the reporter's StepMetrics).
+const stepSummary = computed(() => {
+  const byCat = new Map<string, { count: number; duration: number }>();
+  for (const s of props.steps) {
+    const entry = byCat.get(s.category) ?? { count: 0, duration: 0 };
+    entry.count += 1;
+    entry.duration += s.duration || 0;
+    byCat.set(s.category, entry);
+  }
+  return Array.from(byCat, ([category, v]) => ({ category, ...v })).sort((a, b) => b.duration - a.duration);
+});
+
+// The single slowest step, tagged in the table. All-zero durations (a test that
+// never ran) must not tag row 0 as "slowest".
+const slowestStepIndex = computed(() => {
+  let idx = -1;
+  let max = -1;
+  props.steps.forEach((s, i) => {
+    if ((s.duration || 0) > max) {
+      max = s.duration || 0;
+      idx = i;
+    }
+  });
+  return max > 0 ? idx : -1;
+});
+
+const maxStepDuration = computed(() => props.steps.reduce((m, s) => Math.max(m, s.duration || 0), 0));
+
+// A true waterfall needs a startTime on every step (only a recent reporter records
+// them); otherwise the bars fall back to left-aligned magnitude.
+const hasStepTimings = computed(
+  () => props.steps.length > 0 && props.steps.every((s) => typeof s.startTime === 'number'),
+);
+const timelineStart = computed(() =>
+  hasStepTimings.value ? Math.min(...props.steps.map((s) => s.startTime as number)) : 0,
+);
+const stepsSpan = computed(() => {
+  const total = props.durationMs ?? 0;
+  if (total > 0) return total;
+  if (hasStepTimings.value) {
+    const end = Math.max(...props.steps.map((s) => (s.startTime as number) + (s.duration || 0)));
+    return Math.max(1, end - timelineStart.value);
+  }
+  return 0;
+});
+
+/** Bar geometry for a step: a real waterfall when timings exist, else magnitude. */
+function stepBarStyle(step: PerformanceStep): Record<string, string> {
+  if (hasStepTimings.value && stepsSpan.value > 0) {
+    const left = Math.max(
+      0,
+      Math.min(100, (((step.startTime as number) - timelineStart.value) / stepsSpan.value) * 100),
+    );
+    const width = Math.min(100 - left, Math.max(1.5, ((step.duration || 0) / stepsSpan.value) * 100));
+    return { left: `${left}%`, width: `${width}%` };
+  }
+  const width = maxStepDuration.value > 0 ? Math.max(2, ((step.duration || 0) / maxStepDuration.value) * 100) : 0;
+  return { left: '0%', width: `${width}%` };
+}
+
+/** Step duration as a share of the whole test's wall-clock (e.g. "12%"). */
+function stepPctOfTest(duration: number): string {
+  const total = props.durationMs ?? 0;
+  if (total <= 0) return '';
+  const pct = (duration / total) * 100;
+  if (pct > 0 && pct < 1) return '<1%';
+  return `${Math.round(pct)}%`;
+}
+
+/** Severity color for a duration value, shared by the number and its bar. */
+function stepDurationTextClass(duration: number): string {
+  return duration > 2000 ? 'text-red-600 font-medium' : duration > 500 ? 'text-orange-500' : 'text-gray-500';
+}
+function stepBarColorClass(duration: number): string {
+  return duration > 2000 ? 'bg-red-500' : duration > 500 ? 'bg-orange-400' : 'bg-gray-400 dark:bg-gray-500';
+}
+
+// An interleaved event row: its own icon, a kind label and (for a request) a duration.
+const EVENT_ICON: Record<'network' | 'console' | 'backend', string> = {
+  network: 'i-lucide-arrow-left-right',
+  console: 'i-lucide-terminal',
+  backend: 'i-lucide-server',
+};
+function eventIcon(item: TimelineItem): string {
+  return EVENT_ICON[item.kind as 'network' | 'console' | 'backend'] ?? 'i-lucide-dot';
+}
+function eventIconClass(item: TimelineItem): string {
+  if (item.failed || item.status === 'error' || item.status === 'fatal') return 'text-red-500';
+  if (item.status === 'warning' || item.status === 'warn') return 'text-amber-500';
+  if (item.kind === 'backend') return 'text-violet-500';
+  if (item.kind === 'network') return 'text-sky-500';
+  return 'text-gray-400 dark:text-gray-500';
+}
 
 function revealItem(item: TimelineItem) {
   const sectionId = SECTION_ACTION[item.ref.section];
@@ -271,13 +417,14 @@ function onViewTrace() {
 
 <template>
   <SectionCard
-    v-if="data && placedCount >= 2"
+    v-if="steps.length > 0 || (data && placedCount >= 2)"
     :embedded="embedded"
-    icon="i-lucide-activity"
-    title="Failure timeline"
+    :icon="showAxis ? 'i-lucide-activity' : 'i-lucide-list-checks'"
+    :title="showAxis ? 'Failure timeline' : 'Steps'"
+    :count="showAxis ? null : steps.length || null"
     help="case.timeline"
   >
-    <template #actions>
+    <template v-if="showAxis" #actions>
       <ChartLegend :items="legendItems" class="mr-1" />
       <UButton
         v-if="hasTrace"
@@ -291,8 +438,8 @@ function onViewTrace() {
     </template>
 
     <div class="space-y-3">
-      <!-- Window controls -->
-      <div class="flex items-center gap-1">
+      <!-- Window controls: they drive both the axis and the table below. -->
+      <div v-if="showAxis" class="flex items-center gap-1">
         <UButton
           size="xs"
           :variant="mode === 'around' ? 'solid' : 'soft'"
@@ -310,7 +457,7 @@ function onViewTrace() {
       </div>
 
       <!-- SVG axis -->
-      <div ref="wrapper" :class="embedded ? '-mx-3 sm:-mx-4' : 'w-full'">
+      <div v-if="showAxis && data" ref="wrapper" class="w-full">
         <svg v-if="plotWidth > 0" :width="svgWidth" :height="svgHeight" class="block">
           <!-- Default-window shade (only meaningful in whole-test view) -->
           <rect
@@ -474,91 +621,190 @@ function onViewTrace() {
       </div>
 
       <!-- Estimated-positions note -->
-      <p v-if="data.estimated" class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+      <p v-if="showAxis && data?.estimated" class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
         <UIcon name="i-lucide-info" class="size-3.5 shrink-0" />
         Step positions are derived from durations — this run’s reporter did not record step start times.
       </p>
 
-      <!-- What happened in this window -->
-      <div>
-        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">What happened in this window</h4>
-        <ul class="space-y-0.5">
-          <template v-for="row in windowRows" :key="(row.kind === 'header' ? 'h-' : 'i-') + row.item.id">
-            <!-- Group header: the method or test.step a run of actions came from -->
-            <li
-              v-if="row.kind === 'header'"
-              class="text-xs font-mono px-1.5 pt-1.5 flex items-baseline gap-1 flex-wrap"
-            >
-              <span class="text-gray-400 dark:text-gray-500">↳</span>
-              <template v-if="isMethodHeader(row.item) && row.item.origin">
-                <span class="text-gray-600 dark:text-gray-300">in {{ row.item.origin.function }}()</span>
-                <span class="text-gray-400">·</span>
-                <OpenInIdeLink
-                  :location="`${row.item.origin.file}:${row.item.origin.line}`"
-                  :project-key="projectKey"
-                  :project-name="projectName"
-                />
-                <template v-if="row.item.origin.chain[0]">
-                  <span class="text-gray-400">←</span>
-                  <OpenInIdeLink
-                    :location="`${row.item.origin.chain[0].file}:${row.item.origin.chain[0].line}`"
-                    :project-key="projectKey"
-                    :project-name="projectName"
-                  />
-                </template>
-              </template>
-              <span v-else class="text-gray-600 dark:text-gray-300">{{ row.item.group }}</span>
-            </li>
+      <!-- The failure happened outside any recorded step. -->
+      <UAlert
+        v-if="isFailedStatus(status ?? '') && steps.length > 0 && !steps.some((s) => s.failed)"
+        color="warning"
+        variant="subtle"
+        icon="i-lucide-info"
+        title="The failure was not captured at step level"
+        description="The test failed, but none of the recorded steps is marked failed — the error happened outside the step list."
+      />
 
-            <!-- One event line -->
-            <li v-else>
-              <button
-                type="button"
-                class="w-full text-left text-xs font-mono px-1.5 py-1 rounded flex items-baseline gap-2 hover:bg-gray-50 dark:hover:bg-gray-800/60"
-                :class="[row.item.failed ? 'bg-red-50 dark:bg-red-950/30' : '', row.indented ? 'pl-5' : '']"
-                @click="revealItem(row.item)"
+      <template v-if="steps.length > 0">
+        <!-- Per-category summary strip -->
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+          <span class="font-medium text-gray-600 dark:text-gray-300">{{ steps.length }} steps</span>
+          <span class="text-gray-300 dark:text-gray-600">·</span>
+          <span v-for="c in stepSummary" :key="c.category" class="inline-flex items-center gap-1">
+            <UBadge :color="stepCategoryColor[c.category] || 'neutral'" variant="soft" size="xs">
+              {{ c.category }}
+            </UBadge>
+            <span class="tabular-nums text-gray-500 dark:text-gray-400"
+              >×{{ c.count }} · <DurationValue :ms="c.duration"
+            /></span>
+          </span>
+        </div>
+
+        <!-- One table: steps, with network / console / backend items interleaved
+             in time order. `min-width` keeps the columns readable while the
+             wrapper (not the page) scrolls on a narrow screen. -->
+        <TableScroller min-width="34rem" :bleed="false">
+          <table class="w-full min-w-[34rem] border-separate border-spacing-0 text-sm">
+            <thead>
+              <tr
+                class="[&>th]:bg-elevated/50 [&>th]:border-y [&>th]:border-default [&>th]:px-3 [&>th]:py-2 [&>th]:text-left [&>th]:font-medium [&>th]:text-xs [&>th]:text-gray-500 dark:[&>th]:text-gray-400"
               >
-                <span class="tabular-nums text-gray-400 dark:text-gray-500 shrink-0 w-14">{{
-                  formatRel(row.item.at)
-                }}</span>
-                <span class="min-w-0 break-words">
-                  <template v-if="row.item.kind === 'network'">
-                    <span class="text-gray-700 dark:text-gray-300">{{ row.item.label }}</span>
-                    <span class="text-gray-500"> → {{ row.item.status }}</span>
-                    <span v-if="row.item.duration != null" class="text-gray-400">
-                      ({{ Math.round(row.item.duration) }} ms)</span
-                    >
-                  </template>
-                  <template v-else-if="row.item.kind === 'step'">
+                <th v-if="showAxis" class="w-16 first:rounded-l-lg first:border-l">Time</th>
+                <th class="w-8" :class="showAxis ? '' : 'first:rounded-l-lg first:border-l'">
+                  <span class="sr-only">Kind</span>
+                </th>
+                <th class="w-24">Category</th>
+                <th>Step</th>
+                <th class="w-40 last:rounded-r-lg last:border-r">Duration</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="row in mergedRows" :key="row.kind === 'step' ? `s-${row.index}` : row.item.id">
+                <!-- A step row -->
+                <tr
+                  v-if="row.kind === 'step'"
+                  class="[&>td]:border-b [&>td]:border-default [&>td]:px-3 [&>td]:py-2 [&>td]:align-top"
+                  :class="row.failed ? 'bg-red-50 dark:bg-red-950/30' : ''"
+                >
+                  <td v-if="showAxis" class="tabular-nums text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                    {{ row.item ? formatRel(row.item.at) : '' }}
+                  </td>
+                  <td>
                     <span
-                      :class="
-                        row.item.failed
-                          ? 'text-red-600 dark:text-red-400 font-medium'
-                          : 'text-gray-700 dark:text-gray-300'
-                      "
-                      >{{ row.item.label }}</span
+                      v-if="status === 'didnotrun'"
+                      class="inline-flex items-center justify-center size-5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 text-xs leading-none"
+                      title="Not run"
+                      >–</span
                     >
-                    <span v-if="row.item.failed" class="text-red-500"> failed</span>
-                    <!-- Reporter-only call site (no method group): a muted file:line suffix -->
-                    <span v-if="!row.indented && row.item.origin" class="text-gray-400 dark:text-gray-500">
-                      · {{ basename(row.item.origin.file) }}:{{ row.item.origin.line }}</span
+                    <span
+                      v-else-if="row.failed"
+                      class="inline-flex items-center justify-center size-5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs leading-none"
+                      title="Step failed"
+                      >✗</span
                     >
-                  </template>
-                  <template v-else>
-                    <span class="text-gray-500">{{ kindTag(row.item) }} · </span>
-                    <span class="text-gray-700 dark:text-gray-300">“{{ row.item.label }}”</span>
-                  </template>
-                </span>
-              </button>
-            </li>
-          </template>
-        </ul>
-      </div>
+                    <span
+                      v-else
+                      class="inline-flex items-center justify-center size-5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs leading-none"
+                      title="Step passed"
+                      >✓</span
+                    >
+                  </td>
+                  <td>
+                    <UBadge :color="stepCategoryColor[row.step.category] || 'neutral'" variant="soft" size="xs">
+                      {{ row.step.category }}
+                    </UBadge>
+                  </td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <span :class="row.failed ? 'text-red-600 dark:text-red-400 font-medium' : ''">
+                        {{ row.step.title }}
+                      </span>
+                      <UBadge
+                        v-if="row.index === slowestStepIndex"
+                        color="warning"
+                        variant="subtle"
+                        size="xs"
+                        class="shrink-0"
+                        title="Slowest step in this test"
+                      >
+                        slowest
+                      </UBadge>
+                    </div>
+                    <ErrorText
+                      v-if="row.failed && row.step.error?.message"
+                      mode="block"
+                      :text="row.step.error.message"
+                      class="mt-1"
+                    />
+                    <OpenInIdeLink
+                      v-if="row.step.location"
+                      :location="row.step.location"
+                      :project-key="projectKey ?? undefined"
+                      :project-name="projectName ?? undefined"
+                      class="text-xs text-gray-400 dark:text-gray-500 mt-0.5"
+                    />
+                  </td>
+                  <td>
+                    <div class="min-w-[6rem]">
+                      <div class="flex items-center justify-between gap-2">
+                        <DurationValue
+                          :ms="row.step.duration"
+                          :class="`text-sm ${stepDurationTextClass(row.step.duration)}`"
+                          unit-class="opacity-60"
+                        />
+                        <span
+                          v-if="stepPctOfTest(row.step.duration)"
+                          class="text-xs tabular-nums text-gray-400 dark:text-gray-500"
+                        >
+                          {{ stepPctOfTest(row.step.duration) }}
+                        </span>
+                      </div>
+                      <div class="relative mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                        <div
+                          class="absolute inset-y-0 rounded-full"
+                          :class="stepBarColorClass(row.step.duration)"
+                          :style="stepBarStyle(row.step)"
+                        />
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- An interleaved network / console / backend row -->
+                <tr
+                  v-else
+                  class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/60 [&>td]:border-b [&>td]:border-default [&>td]:px-3 [&>td]:py-2 [&>td]:align-top"
+                  :class="row.item.failed ? 'bg-red-50 dark:bg-red-950/30' : ''"
+                  @click="revealItem(row.item)"
+                >
+                  <td v-if="showAxis" class="tabular-nums text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                    {{ formatRel(row.item.at) }}
+                  </td>
+                  <td>
+                    <UIcon :name="eventIcon(row.item)" class="size-4" :class="eventIconClass(row.item)" />
+                  </td>
+                  <td class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                    {{ kindTag(row.item) || row.item.kind }}
+                  </td>
+                  <td>
+                    <span class="font-mono text-xs break-all text-gray-700 dark:text-gray-300">{{
+                      row.item.label
+                    }}</span>
+                    <span v-if="row.item.kind === 'network'" class="font-mono text-xs text-gray-500">
+                      → {{ row.item.status }}</span
+                    >
+                  </td>
+                  <td>
+                    <span
+                      v-if="row.item.duration != null"
+                      class="text-xs tabular-nums text-gray-500 dark:text-gray-400"
+                    >
+                      {{ Math.round(row.item.duration) }} ms
+                    </span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </TableScroller>
+      </template>
+      <EmptyState v-else icon="i-lucide-list-checks" text="No steps recorded for this execution" />
 
       <!-- What is not (yet) placed -->
-      <p class="text-xs text-gray-400 dark:text-gray-500">
+      <p v-if="showAxis" class="text-xs text-gray-400 dark:text-gray-500">
         Not placed on this axis yet: Web Vitals and screenshots (no capture time is recorded for them)<template
-          v-if="data.unplaced.length"
+          v-if="data?.unplaced.length"
           >, and {{ data.unplaced.length }} captured {{ data.unplaced.length === 1 ? 'item' : 'items' }} with no usable
           timestamp</template
         >.

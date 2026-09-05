@@ -485,7 +485,7 @@ defineExpose({ reveal: () => cardRef.value?.reveal?.() });
     <!-- Recommended fix — the hero action, above the full menu. Keeps the
          original locator style where it's stable enough, and offers the exact
          one-line edit for the failing test. -->
-    <div v-if="recommended" class="rounded-lg border border-primary/40 bg-primary/5 p-3 mb-3 space-y-2">
+    <div v-if="recommended" class="rounded-lg border border-primary/40 bg-primary/5 p-3 max-sm:p-2 mb-3 space-y-2">
       <div class="flex items-center gap-2 min-w-0">
         <UIcon name="i-lucide-star" class="size-4 text-primary shrink-0" />
         <p class="text-xs font-medium text-primary shrink-0">Recommended fix</p>

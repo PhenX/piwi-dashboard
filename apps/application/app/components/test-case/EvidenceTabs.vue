@@ -233,7 +233,7 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
 </script>
 
 <template>
-  <section class="rounded-lg border border-default bg-default">
+  <section class="rounded-lg border border-default bg-default max-sm:rounded-none max-sm:border-x-0">
     <!-- Header: the section title, its help, and the content-level tab strip -->
     <div class="p-3 sm:px-4 sm:py-3 border-b border-default">
       <div class="flex items-center gap-2 mb-2.5">
@@ -241,7 +241,13 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
         <h2 class="text-lg font-medium">Evidence</h2>
         <HelpHint v-if="help" :topic="help" />
       </div>
-      <div class="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Evidence sections">
+      <!-- Below `sm` the strip wraps onto as many rows as it needs so no tab is
+           hidden off-screen; from `sm` up it stays one scrollable row. -->
+      <div
+        class="flex items-center gap-1 max-sm:flex-wrap sm:overflow-x-auto"
+        role="tablist"
+        aria-label="Evidence sections"
+      >
         <button
           v-for="tab in tabs"
           :key="tab.value"
@@ -267,32 +273,21 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
 
     <div class="p-3 sm:p-4">
       <!-- ── Timeline ─────────────────────────────────────────────── -->
-      <div v-if="activeTab === 'timeline'" ref="timelineWrap" class="scroll-mt-4 space-y-4">
-        <!-- The timeline is anchored on the moment of failure — meaningful only for a failed execution. -->
+      <!-- One view: the axis (for a failed execution) over a single steps table,
+           with network / console / backend items interleaved by time. A passing
+           execution shows the same table without the axis or offsets. -->
+      <div v-if="activeTab === 'timeline'" ref="timelineWrap" class="scroll-mt-4">
         <FailureTimelineCard
-          v-if="hasError"
           embedded
           :test-runs-case-id="testRunsCaseId"
+          :steps="steps"
+          :duration-ms="testCase?.duration ?? null"
+          :has-error="hasError"
+          :status="status"
           :has-trace="hasTrace"
           :project-key="projectKey"
           :project-name="projectName"
         />
-        <SectionCard embedded icon="i-lucide-list-checks" title="Steps" :count="steps.length || null">
-          <!-- The step table is a data table whose row state is measured in the
-               browser; render it client-side so its hydration stays clean. -->
-          <ClientOnly>
-            <TestStepsTable
-              :steps="steps"
-              :duration-ms="testCase?.duration ?? null"
-              :status="status"
-              :project-key="projectKey"
-              :project-name="projectName"
-            />
-            <template #fallback>
-              <LoadingState text="Loading steps…" />
-            </template>
-          </ClientOnly>
-        </SectionCard>
       </div>
 
       <!-- ── Attempts ─────────────────────────────────────────────── -->

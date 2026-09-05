@@ -541,7 +541,8 @@ provide(clusterSectionLocatorKey, {
     </template>
 
     <template #body>
-      <div class="flex flex-col gap-4 p-4 max-w-6xl mx-auto w-full">
+      <!-- No side gutter below `sm`: the cards go full-bleed to the screen edge. -->
+      <div class="flex flex-col gap-4 p-4 max-sm:px-0 max-w-6xl mx-auto w-full">
         <!-- ── Header ─────────────────────────────────────────────────── -->
         <DetailHeader :status="testCase?.status ?? ''" :title="testCase?.title ?? ''" :badges="headerBadges">
           <template #badges-extra>

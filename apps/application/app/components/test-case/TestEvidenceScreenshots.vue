@@ -35,7 +35,7 @@ const currentIndex = ref<number | null>(null);
     :collapsible="false"
     :embedded="embedded"
   >
-    <div class="grid grid-cols-2 gap-2" :class="embedded ? '-mx-3 sm:-mx-4' : 'p-2 bg-gray-50 dark:bg-gray-900'">
+    <div class="grid grid-cols-2 gap-2" :class="embedded ? '' : 'p-2 bg-gray-50 dark:bg-gray-900'">
       <div
         v-for="(img, idx) in images"
         :key="img.src"
