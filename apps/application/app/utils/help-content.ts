@@ -41,10 +41,15 @@ export const HELP_TOPICS = {
     text: 'Wire the Piwi reporter into your Playwright config to start sending results here. The wizard generates the snippet for you.',
     doc: 'getting-started#using-the-piwi-dashboard-reporter',
   },
-  'home.open-failures': {
-    title: 'Open failures',
-    text: 'Failure clusters still open across your projects, newest first. Open one to investigate, or triage from the keyboard: j / k move, o opens, r resolves, i ignores.',
-    doc: 'ui-overview#home',
+  'home.failure-inbox': {
+    title: 'Failure inbox',
+    text: "A queue of the failures you still owe a decision. Switch queues to focus — new since you last looked, mine, regressions, fixes that didn't hold, quarantines ready to release, merge suggestions. Triage from the row or the keyboard: j / k move, x select, r resolve, i ignore, q quarantine, a assign, s snooze, l link, o open.",
+    doc: 'failure-clusters#the-failure-inbox',
+  },
+  'cluster.snooze': {
+    title: 'Snoozed',
+    text: 'This cluster is snoozed — hidden from every inbox queue until the deadline passes or, when snoozed until it recurs, until a new run fails it again. Snooze never changes the status; unsnooze to bring it back now.',
+    doc: 'failure-clusters#snoozing',
   },
 
   // ── Analytics ─────────────────────────────────────────────────────────
@@ -319,6 +324,11 @@ export const HELP_TOPICS = {
   'cluster.fix-plan': {
     title: 'Fix',
     text: 'Everything needed to repair this cluster in one place — the AI diagnosis and its validated patch, the recommended locator fix, the command that verifies the fix, and the whole plan as Markdown. Copy it for a ticket, or let an agent fetch the same plan via the get_fix_plan MCP tool.',
+    doc: 'ai-diagnosis#fix-plans',
+  },
+  'cluster.fixed-before': {
+    title: 'Fixed before',
+    text: 'Resolved failures that resemble this one — matched on the same error and locator, the same spec or test, and (when embeddings are configured) semantic similarity. Each shows when it was fixed, the resolving commit, how long it stayed open and the triage note, so you can reuse an earlier resolution. "Apply the same triage" copies that note onto this cluster; it never marks a new cluster resolved because an old one was.',
     doc: 'ai-diagnosis#fix-plans',
   },
   'cluster.evidence': {
@@ -636,6 +646,12 @@ export const HELP_TOPICS = {
   'visual-diff': {
     title: 'Visual diff',
     text: 'Pixel-compares the failing screenshot against the same test’s last passing screenshot (same browser, preferring the same environment and then the same branch). Red pixels in the overlay mark what changed. When the two screenshots have different dimensions the ratio is flagged as unreliable.',
+  },
+
+  // ── Page diff ────────────────────────────────────────────────────────────
+  'case.page-diff': {
+    title: 'Page diff',
+    text: 'Compares the failing page’s ARIA structure against the same test’s last passing (green) sample — same browser, preferring the same environment then branch. Shows what was added, removed, renamed, changed or moved, with unchanged subtrees collapsed and the failing locator’s element highlighted. A green sample is captured about once a day per test, so a baseline appears after the next passing run.',
   },
 
   // ── DOM snapshot ─────────────────────────────────────────────────────────

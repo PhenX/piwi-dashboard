@@ -150,11 +150,7 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
     </div>
 
     <!-- Overlay: red pixels mark what changed against the last pass -->
-    <div
-      v-if="view === 'overlay'"
-      class="rounded overflow-hidden border border-default bg-gray-50 dark:bg-gray-900"
-      :class="embedded ? '-mx-3 sm:-mx-4' : ''"
-    >
+    <div v-if="view === 'overlay'" class="rounded overflow-hidden border border-default bg-gray-50 dark:bg-gray-900">
       <img
         :src="overlaySrc"
         alt="Diff overlay (red = changed pixels)"
@@ -171,7 +167,7 @@ defineExpose({ reveal: () => card.value?.reveal?.() });
     </div>
 
     <!-- Side by side: stacks vertically on phones -->
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2" :class="embedded ? '-mx-3 sm:-mx-4' : ''">
+    <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-2">
       <div class="rounded overflow-hidden border border-red-200 dark:border-red-900 bg-gray-50 dark:bg-gray-900">
         <p class="px-2 py-1 text-[10px] font-medium text-red-600 dark:text-red-400">Failing</p>
         <img

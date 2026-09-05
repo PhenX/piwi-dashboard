@@ -4,7 +4,7 @@ import { caseHeadline, type FailureVerdict } from '#shared/failure-verdict';
 import { parsePlaywrightError } from '#shared/error-parse';
 import type { FailureCluesResult } from '#shared/handlers/test-cases';
 import type { FailureClusterDetail, TraceInfo } from '~~/types/api';
-import type { FixPlan } from '#shared/fix-plan.types';
+import type { FixPlan, FixedBeforeMatch as FixedBeforeMatchType } from '#shared/fix-plan.types';
 import { fixPlanToMarkdown } from '#shared/fix-plan-markdown';
 import type { FixSectionKey } from '~/components/shared/FixCard.vue';
 import { renderAnsi } from '~/utils';
@@ -48,14 +48,30 @@ useHead(computed(() => ({ title: `${clusterName.value} — Piwi Dashboard` })));
 // default is the most-affected case's latest execution (the representative the
 // cluster handler orders first).
 const affectedCases = computed(() => cluster.value?.affectedTestCases ?? []);
-const selectedCaseId = ref<number | undefined>(affectedCases.value[0]?.testCaseId);
+// The latest occurrence — the execution in the last-seen run — is the default
+// the page opens on, for both the evidence and the headline.
+const latestExecId = computed(
+  () => cluster.value?.latestTestRunsCaseId ?? affectedCases.value[0]?.recentTestRunsCaseId ?? null,
+);
+const latestCaseId = computed(() => cluster.value?.latestTestCaseId ?? affectedCases.value[0]?.testCaseId);
+const selectedCaseId = ref<number | undefined>(latestCaseId.value);
+watch(latestCaseId, (id) => {
+  if (selectedCaseId.value === undefined) selectedCaseId.value = id;
+});
 watch(affectedCases, (list) => {
-  if (!list.some((c) => c.testCaseId === selectedCaseId.value)) selectedCaseId.value = list[0]?.testCaseId;
+  if (!list.some((c) => c.testCaseId === selectedCaseId.value)) selectedCaseId.value = latestCaseId.value;
 });
 const selectedCase = computed(
   () => affectedCases.value.find((c) => c.testCaseId === selectedCaseId.value) ?? affectedCases.value[0] ?? null,
 );
-const selectedExecId = computed(() => selectedCase.value?.recentTestRunsCaseId ?? null);
+// The default case opens on its latest occurrence; switching cases shows that
+// case's own most-recent execution.
+const selectedExecId = computed(() =>
+  selectedCase.value?.testCaseId === latestCaseId.value
+    ? latestExecId.value
+    : (selectedCase.value?.recentTestRunsCaseId ?? null),
+);
+const isLatestOccurrence = computed(() => selectedExecId.value === latestExecId.value);
 
 const { data: execution } = await useAsyncData<Record<string, unknown> | null>(
   'cluster-selected-exec',
@@ -90,15 +106,20 @@ const otherClues = computed(() => clues.value.slice(1));
 const hasTrace = computed(() => (execTraces.value?.length ?? 0) > 0);
 const selectedRunId = computed(() => (execution.value as { testRun?: { id?: number } } | null)?.testRun?.id ?? null);
 
-// ── Headline built from the cluster's stored sample error ────────────────────
-// The exemplar-refresh (a sample error from the latest occurrence) has not
-// shipped, so the headline reflects the first occurrence and is labelled as such.
+// ── Headline built from the latest occurrence's own error ────────────────────
+// The loaded execution is the latest occurrence; its stored error drives the
+// headline. When no execution can be loaded the cluster's stored sample error is
+// the fallback, and it reflects the first occurrence.
+const execError = computed(() => (execution.value as { error?: string | null } | null)?.error ?? null);
+const execSteps = computed(() => (execution.value as { steps?: unknown } | null)?.steps ?? null);
 const clusterVerdict = computed<FailureVerdict | null>(() => {
   const c = cluster.value;
-  if (!c?.sampleError) return null;
-  const desc = caseHeadline({ error: c.sampleError, steps: null });
+  if (!c) return null;
+  const error = execError.value ?? c.sampleError;
+  if (!error) return null;
+  const desc = caseHeadline({ error, steps: execError.value ? execSteps.value : null });
   if (!desc) return null;
-  const parsed = parsePlaywrightError(c.sampleError);
+  const parsed = parsePlaywrightError(error);
   return {
     ...desc,
     kind: parsed.kind,
@@ -115,9 +136,14 @@ const clusterVerdict = computed<FailureVerdict | null>(() => {
     owner: c.owner,
   };
 });
-const headlineProvenance = computed(() =>
-  cluster.value ? `first occurrence, run #${cluster.value.firstSeenRunId}` : null,
-);
+const headlineProvenance = computed(() => {
+  const c = cluster.value;
+  if (!c) return null;
+  if (execError.value && selectedRunId.value) {
+    return `${isLatestOccurrence.value ? 'latest occurrence' : 'occurrence'}, run #${selectedRunId.value}`;
+  }
+  return `first occurrence, run #${c.firstSeenRunId}`;
+});
 
 // The newest known-issue link, shown compactly on the facts line.
 const knownIssue = computed(() => cluster.value?.links?.[0] ?? null);
@@ -237,17 +263,51 @@ function refresh() {
 
 // ── Fix card ─────────────────────────────────────────────────────────────────
 // Diagnosis first, then the locator fix, the verify command and the fix plan.
-const hasLocatorPanel = computed(() => Boolean(affectedCases.value[0]?.recentTestRunsCaseId));
+// The Locator fix section applies only to a locator-resolution failure — the same
+// gate the execution page uses; a count mismatch or a value assertion has none.
+const hasLocatorPanel = computed(() =>
+  Boolean(clusterVerdict.value?.isLocatorResolutionFailure && affectedCases.value[0]?.recentTestRunsCaseId),
+);
 const showVerify = computed(() => Boolean(fixPlan.value?.verify?.command));
 const showReproduce = computed(() => Boolean(fixPlan.value?.reproduce?.steps?.length));
+const fixedBefore = computed(() => fixPlan.value?.fixedBefore ?? []);
 const fixSections = computed<FixSectionKey[]>(() => {
   const s: FixSectionKey[] = ['diagnosis'];
+  if (fixedBefore.value.length) s.push('fixed-before');
   if (hasLocatorPanel.value) s.push('locator-fix');
   if (showVerify.value) s.push('verify');
   if (showReproduce.value) s.push('reproduce');
   if (fixPlan.value) s.push('fix-plan');
   return s;
 });
+
+// ── Apply the same triage ─────────────────────────────────────────────────────
+// One click copies an earlier resolved cluster's triage note onto this one,
+// prefixed so the history reads as an intentional reuse. The status is left as
+// it is — a new cluster is never marked resolved because an old one was.
+const applyingId = ref<number | null>(null);
+const applyToast = useToast();
+async function applyTriage(match: FixedBeforeMatchType) {
+  if (!cluster.value || applyingId.value != null) return;
+  applyingId.value = match.clusterId;
+  const excerpt = (match.triageNote ?? match.diagnosisTitle ?? match.reason).replace(/\s+/g, ' ').trim().slice(0, 280);
+  const prefix = `Same as cluster #${match.clusterId}: `;
+  const existing = cluster.value.triageNote?.trim();
+  const line = `${prefix}${excerpt}`;
+  const triageNote = existing ? `${existing}\n${line}` : line;
+  try {
+    await $fetch(`/api/failure-clusters/${clusterId}/status`, {
+      method: 'PATCH',
+      body: { status: cluster.value.status, triageNote },
+    });
+    applyToast.add({ title: `Applied triage from cluster #${match.clusterId}`, color: 'success' });
+    refresh();
+  } catch {
+    applyToast.add({ title: 'Could not apply the triage', color: 'error' });
+  } finally {
+    applyingId.value = null;
+  }
+}
 
 // The diagnosis panel exposes its context/prompt actions for the page's More menu.
 const diagnosisPanel = ref<{ openContext: () => void; copyPrompt: () => void; openHistory: () => void } | null>(null);
@@ -589,6 +649,19 @@ const breadcrumbItems = computed(() => [
                   :affected-test-cases="cluster.affectedTestCases ?? []"
                 />
               </div>
+            </template>
+
+            <!-- Fixed before — resolved clusters this one resembles, and how each was fixed -->
+            <template v-if="fixedBefore.length" #fixed-before-label>
+              <span class="inline-flex items-center gap-1">Fixed before <HelpHint topic="cluster.fixed-before" /></span>
+            </template>
+            <template v-if="fixedBefore.length" #fixed-before>
+              <FixedBeforeMatches
+                :matches="fixedBefore"
+                :can-write="canWrite"
+                :applying-id="applyingId"
+                @apply="applyTriage"
+              />
             </template>
 
             <!-- Locator fix — the recommendation, its provenance and alternatives, once -->

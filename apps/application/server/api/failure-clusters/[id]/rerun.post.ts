@@ -3,6 +3,7 @@ import { failureClusters } from '../../../database/schema';
 import { requireResolvedProjectAccess, requireRouteId, resolveClusterProjectId } from '../../../utils/project-access';
 import { ciRerunAvailability, dispatchClusterRerun } from '../../../utils/ci-rerun';
 import type { ClusterRerunDispatch } from '#shared/ci-rerun';
+import type { ScmProviderName } from '#shared/scm-urls';
 
 defineRouteMeta({
   openAPI: {
@@ -36,7 +37,7 @@ export default eventHandler(async (event) => {
     throw apiError({ statusCode: 400, message: availability.reason ?? 'CI re-run is not available for this cluster' });
   }
 
-  let dispatch: { url: string; args: string; provider: 'github' | 'gitlab' | 'bitbucket' };
+  let dispatch: { url: string; args: string; provider: ScmProviderName };
   try {
     dispatch = await dispatchClusterRerun(db, cluster);
   } catch (e) {

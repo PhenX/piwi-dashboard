@@ -4,6 +4,7 @@
  */
 
 import type { Role, FilterDetails, TestMetadata, TestSourceFrame } from '#shared/types';
+import type { ScmProviderName } from '#shared/scm-urls';
 export type { TestMetadata, TestSourceFrame };
 
 // ============================================================================
@@ -297,10 +298,28 @@ export interface OpenFailureCluster {
   status: string;
   affectedTests: number;
   occurrences: number;
+  firstSeenAt: string | Date | null;
   lastSeenAt: string | Date | null;
+  lastSeenRunId: number;
   lastSeenRunStatus: string | null;
-  owner: { name: string; source: 'annotation' } | null;
+  owner: { name: string; source: 'annotation' | 'codeowners' } | null;
+  /** Who the cluster is assigned to (name or email); overrides the derived owner. */
+  assignee: string | null;
   issueLink: { url: string; provider: string; key: string | null } | null;
+  /** A one-line cause hint for the row — muted secondary text. */
+  topClue: { text: string; strength: 'strong' | 'medium' | 'weak' } | null;
+  /** Fix-verification state; `'regressed'` drives the "fix didn't hold" queue and badge. */
+  fixVerification: string | null;
+  /** A new regression on the project's default branch in the last-seen run. */
+  regressionOnDefault: boolean;
+  /** Affected tests currently quarantined, and how many are ready for release. */
+  quarantinedCount: number;
+  quarantineReadyCount: number;
+  /** The cluster is part of a pending merge suggestion awaiting a decision. */
+  mergeSuggestionPending: boolean;
+  /** Snooze state — hidden from queues while snoozed; cleared/marked on wake. */
+  snoozedUntil: string | Date | null;
+  snoozeMode: string | null;
 }
 
 /**
@@ -891,6 +910,10 @@ export interface FailureClusterDetail extends ClusterResolutionFields {
   affectedTests: number;
   lastSeenRunStatus: string | null;
   lastSeenAt: string | Date | null;
+  /** The execution in the last-seen run — the cluster's latest occurrence, or null when none loads. */
+  latestTestRunsCaseId: number | null;
+  /** The test case that latest occurrence belongs to. */
+  latestTestCaseId: number | null;
   diagnosis: DiagnosisCompact | null;
   project: { id: number; name: string; label: string | null } | null;
   affectedTestCases: Array<{
@@ -905,6 +928,10 @@ export interface FailureClusterDetail extends ClusterResolutionFields {
   links: EntityLinkInfo[];
   /** Effective owner of the cluster's tests: `piwi:owner` annotation or CODEOWNERS. */
   owner: { name: string; source: 'annotation' | 'codeowners' } | null;
+  /** Inbox triage: assignee (overrides the owner) and snooze state. */
+  assignee: string | null;
+  snoozedUntil: string | Date | null;
+  snoozeMode: string | null;
 }
 
 /**
@@ -929,6 +956,10 @@ export interface ProjectFailureCluster extends ClusterResolutionFields {
   diagnosis: DiagnosisCompact | null;
   /** The pinned known-issue link (newest), shown as a chip. */
   issueLink: { url: string; provider: string; key: string | null } | null;
+  /** Inbox triage — assignee and snooze state. A snoozed open cluster is not failing now. */
+  assignee: string | null;
+  snoozedUntil: string | Date | null;
+  snoozeMode: string | null;
 }
 
 /**
@@ -1256,7 +1287,7 @@ export interface DiagnosisContextCoverage {
     hasCommitRange: boolean;
     /** Set when the user manually overrode the baseline commit SHA */
     baseCommitUsed: string | null;
-    provider: 'github' | 'gitlab' | 'bitbucket' | null;
+    provider: ScmProviderName | null;
     commitsCount: number;
     filesCount: number;
     patchedFilesCount: number;
@@ -1546,4 +1577,20 @@ export interface FlakyTest {
   impact: number;
   wastedCiMinutes: number;
   avgFailedDurationMs: number;
+}
+
+/** A page diff between a failing execution and its last green sample. */
+export interface PageDiff {
+  status: 'ok' | 'no-failure-snapshot' | 'no-green-sample' | 'not-applicable' | 'not-found';
+  baseline?: {
+    executionId: number;
+    runId: number;
+    at: number | null;
+    commit: string | null;
+    branch: string | null;
+    environment: string | null;
+  };
+  baselineNote?: string | null;
+  summary?: import('#shared/page-diff').PageDiffSummary;
+  hunks?: import('#shared/page-diff').PageDiffHunk[];
 }

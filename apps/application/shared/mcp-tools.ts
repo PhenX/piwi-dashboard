@@ -550,11 +550,16 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'list_open_clusters',
     description:
-      'Open failure clusters across all in-scope projects, ranked by occurrences — a cross-project triage queue. Filter by status; paginate with pageSize/cursor.',
+      'Open failure clusters across all in-scope projects, ranked by occurrences — a cross-project triage queue, the same one the dashboard failure inbox shows. Filter by status, or by an inbox `queue` to focus (regressions on the default branch, fixes that did not hold, quarantines ready for release, merge suggestions awaiting a decision, or the ones assigned to you). A `queue` filter implies open clusters and excludes snoozed ones. Paginate with pageSize/cursor.',
     inputSchema: {
       type: 'object',
       properties: {
         status: { type: 'string', enum: ['open', 'resolved', 'ignored'], description: 'Triage status (default: open)' },
+        queue: {
+          type: 'string',
+          enum: ['mine', 'regressions', 'fix-didnt-hold', 'quarantine-ready', 'merge-suggestions'],
+          description: 'Focus one inbox queue (open, non-snoozed clusters only); overrides status',
+        },
         pageSize: { type: 'number', description: 'Results per page (default 10, max 50)' },
         cursor: { type: 'string', description: 'Opaque cursor from a previous response to get the next page' },
       },
@@ -569,7 +574,7 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'explain_failure',
     description:
-      'One-call evidence bundle for a single failing execution: a one-line headline, the error, steps, console, ARIA snapshot, the recommended locator fix, a screenshot count, and the AI diagnosis context. Prefer this over chaining get_test_run_case + get_locator_healing + get_test_case_context.',
+      'One-call evidence bundle for a single failing execution: a one-line headline, the error, steps, console, ARIA snapshot, the recommended locator fix, the structural page diff against the last green sample, a screenshot count, and the AI diagnosis context. Prefer this over chaining get_test_run_case + get_locator_healing + get_test_case_context.',
     inputSchema: {
       type: 'object',
       properties: { executionId: { type: 'number', description: 'Test run case ID (executionId)' } },

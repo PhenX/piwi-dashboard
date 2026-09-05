@@ -33,7 +33,7 @@ const videos = computed(() =>
     :collapsible="false"
     :embedded="embedded"
   >
-    <div class="space-y-2" :class="embedded ? '-mx-3 sm:-mx-4' : 'p-2 bg-gray-50 dark:bg-gray-900'">
+    <div class="space-y-2" :class="embedded ? '' : 'p-2 bg-gray-50 dark:bg-gray-900'">
       <VideoPlayer v-for="video in videos" :key="video.src" :src="video.src" :label="video.name" />
     </div>
   </TestEvidenceSection>

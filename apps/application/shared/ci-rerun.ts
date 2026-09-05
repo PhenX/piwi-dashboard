@@ -15,6 +15,8 @@
  * GitHub / GitLab / Bitbucket lives in `server/utils/scm/`.
  */
 
+import type { ScmProviderName } from '#shared/scm-urls';
+
 /** GitHub `workflow_dispatch` target. */
 export interface GitHubRerunTarget {
   /** Workflow file name (e.g. `e2e.yml`) or its numeric id. */
@@ -51,8 +53,6 @@ export interface CiRerunSettings {
 
 export const DEFAULT_CI_RERUN: CiRerunSettings = { enabled: false };
 
-type Provider = 'github' | 'gitlab' | 'bitbucket';
-
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
 /** Merge a partial (possibly untrusted) payload onto the defaults, dropping empties. */
@@ -85,7 +85,7 @@ export function resolveCiRerunSettings(input?: Partial<CiRerunSettings> | null):
 }
 
 /** True when the settings hold a usable target for the given provider. */
-export function hasRerunTarget(settings: CiRerunSettings | null | undefined, provider: Provider): boolean {
+export function hasRerunTarget(settings: CiRerunSettings | null | undefined, provider: ScmProviderName): boolean {
   if (!settings?.enabled) return false;
   return Boolean(settings[provider]);
 }
@@ -93,7 +93,7 @@ export function hasRerunTarget(settings: CiRerunSettings | null | undefined, pro
 /** One recorded CI re-run dispatch, kept on the cluster so the page can show the last one. */
 export interface ClusterRerunDispatch {
   /** Provider the dispatch went to. */
-  provider: Provider;
+  provider: ScmProviderName;
   /** The provider's runs/pipeline URL to watch the re-run. */
   url: string;
   /** The Playwright arguments handed to CI. */

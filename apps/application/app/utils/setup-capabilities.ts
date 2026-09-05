@@ -59,6 +59,15 @@ export const SETUP_CAPABILITIES: SetupCapabilityCopy[] = [
     doc: 'capture-fixtures',
   },
   {
+    id: 'green-samples',
+    title: 'Green page samples',
+    summary:
+      'A passing-page ARIA snapshot sampled about once a day per test, so a failure can be diffed against the page as it last looked when green.',
+    how: 'Comes with the capture fixtures; enable those and samples start accruing on passing runs.',
+    icon: 'i-lucide-scan-text',
+    doc: 'evidence',
+  },
+  {
     id: 'backend-logs',
     title: 'Backend logs',
     summary:

@@ -747,6 +747,9 @@ for (const proj of DEMO_PROJECTS) {
       const storyEntry = isFailedCase ? storyByCaseId.get(caseId) : null;
       const story = storyEntry?.story ?? null;
       const noPage = Boolean(story?.evidence.noPageArtifacts);
+      // The story behind this case regardless of pass/fail — passing executions
+      // seed its green ARIA baseline so a later failure has a page to diff against.
+      const storyForCase = storyByCaseId.get(caseId)?.story ?? null;
 
       const caseStatus = isFailedCase ? 'failed' : isDidNotRunCase ? 'didnotrun' : 'passed';
       const caseDuration = isDidNotRunCase
@@ -879,7 +882,12 @@ for (const proj of DEMO_PROJECTS) {
         page_state: isDidNotRunCase || noPage ? null : buildPageState(proj, storyEntry),
         ai_usage: isDidNotRunCase || noPage ? null : await buildAiUsage(caseDef),
         console_logs: consoleLogs,
-        aria_snapshot: isFailedCase && !noPage ? story?.aria : null,
+        aria_snapshot:
+          isFailedCase && !noPage
+            ? story?.aria
+            : !isDidNotRunCase && !isFailedCase
+              ? (storyForCase?.baselineAria ?? null)
+              : null,
         test_source: isFailedCase ? buildTestSource(story, storyEntry.failingCase, caseDef.declLine) : null,
         test_source_frames: isFailedCase ? buildSourceFrames(storyEntry.failingCase) : null,
         worker_index: workerIndex,
@@ -1237,9 +1245,9 @@ for (const run of TEST_RUNS) {
 
 const CLUSTER_TRIAGE = {
   1: {
-    status: 'resolved',
+    status: 'open',
     triage_note:
-      'Root cause identified: the new payment-provider SDK delays form interactivity on loaded CI runners. Mitigated by waiting for network idle in the payment helper; monitoring for recurrence.',
+      'Root cause identified: the new payment-provider SDK delays form interactivity on loaded CI runners. A fix landed and the cluster was closed, then regressed — reopened automatically. The fix did not hold; investigating the loaded-runner path again.',
   },
   3: {
     status: 'open',
@@ -1250,6 +1258,11 @@ const CLUSTER_TRIAGE = {
     status: 'ignored',
     triage_note:
       'Known issue — three buttons match the unscoped role query on the gallery page. The page intentionally demos multiple variants; the spec needs a name-scoped locator. Not an app bug.',
+  },
+  10: {
+    status: 'open',
+    triage_note:
+      'Capped the API default page size to the requested pageSize so the users table renders 25 rows again; verified once the count assertion turned green.',
   },
 };
 
@@ -1318,10 +1331,23 @@ function buildClusterFix(story, stats) {
   };
 }
 
+// Semantic vectors for a single pair so the demo shows "Fixed before": the open
+// cluster 9 (a report export that never becomes visible) resembles the resolved
+// cluster 10 (a table assertion that was diagnosis-verified). Both carry the same
+// model+recipe tag and near-parallel vectors, so their cosine clears the memory
+// threshold even though their error text differs. Everything else uses the
+// deterministic fingerprint path with no vector.
+const DEMO_EMBED_TAG = 'text-embedding-3-small#v2';
+const DEMO_CLUSTER_EMBEDDINGS = {
+  10: [0.91, 0.12, 0.44, 0.21, 0.68, 0.33, 0.52, 0.6],
+  9: [0.62, 0.4, 0.52, 0.34, 0.5, 0.48, 0.47, 0.44],
+};
+
 for (const story of FAILURE_STORIES) {
   const stats = clusterStats[story.clusterId];
   const fp = storyFingerprints.get(story.clusterId);
   const triage = CLUSTER_TRIAGE[story.clusterId] || {};
+  const embedding = DEMO_CLUSTER_EMBEDDINGS[story.clusterId];
   const createdAt = stats.firstStartMs ? Math.floor(stats.firstStartMs / 1000) : ts('2025-04-20T09:00:00');
   const updatedAt = stats.lastStartMs ? Math.floor(stats.lastStartMs / 1000) : createdAt;
   FAILURE_CLUSTERS.push({
@@ -1340,9 +1366,28 @@ for (const story of FAILURE_STORIES) {
     last_seen_run_id: stats.lastRunId ?? newestRunByProject[story.projectId],
     occurrences: stats.occurrences || 1,
     ...buildClusterFix(story, stats),
+    ...(embedding ? { embedding: JSON.stringify(embedding), embedding_model: DEMO_EMBED_TAG } : {}),
     created_at: createdAt,
     updated_at: updatedAt,
   });
+}
+
+// ── Demo inbox state — assignee + snooze so the inbox queues are exercisable ──
+// The failure inbox's Mine queue matches the signed-in user; assigning an open
+// cluster to the default demo user (Avery) gives that queue a row. One open
+// cluster is snoozed "until it recurs" so the snooze state, its "Unsnooze"
+// action on the cluster page, and the fact that a snoozed cluster leaves every
+// queue are all demonstrable. A far-future deadline keeps it snoozed regardless
+// of the time-shift applied to the rest of the seed.
+{
+  const clusterById = new Map(FAILURE_CLUSTERS.map((c) => [c.id, c]));
+  const assignMine = clusterById.get(7);
+  if (assignMine) assignMine.assignee = DEMO_USERS[0].name;
+  const snoozed = clusterById.get(9);
+  if (snoozed) {
+    snoozed.snoozed_until = Math.floor(Date.UTC(9999, 0, 1) / 1000);
+    snoozed.snooze_mode = 'until-recurs';
+  }
 }
 
 // ── Demo merge suggestions ─────────────────────────────────────────────────
@@ -1443,6 +1488,29 @@ const QUARANTINED_TESTS = [];
       released_at: null,
       released_reason: null,
     });
+  }
+
+  // A quarantined test whose cluster's fix has verified — the inbox's
+  // "Quarantine ready" queue: the failures stopped, so the quarantine is safe to
+  // lift. Anchored at that cluster's newest run so the demo shows it release-ready.
+  {
+    const story = FAILURE_STORIES.find((s) => s.clusterId === 10);
+    const failing = story?.failingCases?.[0];
+    const caseId = story && failing && caseIdByKey.get(`${story.projectId}\x00${story.specFile}\x00${failing.title}`);
+    if (caseId) {
+      QUARANTINED_TESTS.push({
+        id: qId++,
+        project_id: story.projectId,
+        test_case_id: caseId,
+        reason: 'Held while the pagination fix was verified; the fix landed and held.',
+        source: 'manual',
+        quarantined_at_run_id: newestRunByProject[story.projectId] ?? null,
+        created_by: null,
+        created_at: ts('2025-05-02T09:00:00'),
+        released_at: null,
+        released_reason: null,
+      });
+    }
   }
 }
 

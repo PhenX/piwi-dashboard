@@ -163,6 +163,12 @@ function computeDefault(): TabValue {
 
 const activeTab = ref<TabValue>(computeDefault());
 
+// The Screen tab holds two views: the screenshot evidence and the structural
+// page diff. The toggle appears only when a diff is available (the child card
+// signals it after fetching).
+const screenView = ref<'screenshot' | 'pagediff'>('screenshot');
+const pageDiffAvailable = ref(false);
+
 // ── Section locator: switch to the tab holding a cited section, then scroll ──
 const timelineWrap = ref<HTMLElement | null>(null);
 const sourceWrap = ref<HTMLElement | null>(null);
@@ -172,6 +178,7 @@ const pageStateWrap = ref<HTMLElement | null>(null);
 const envDiffWrap = ref<HTMLElement | null>(null);
 const screenEvidenceWrap = ref<HTMLElement | null>(null);
 const visualDiffWrap = ref<HTMLElement | null>(null);
+const pageDiffWrap = ref<HTMLElement | null>(null);
 const domSnapshotWrap = ref<HTMLElement | null>(null);
 const ariaWrap = ref<HTMLElement | null>(null);
 const performanceWrap = ref<HTMLElement | null>(null);
@@ -184,6 +191,7 @@ const WRAP_REF: Record<string, Ref<HTMLElement | null>> = {
   envDiff: envDiffWrap,
   screenEvidence: screenEvidenceWrap,
   visualDiff: visualDiffWrap,
+  pageDiff: pageDiffWrap,
   domSnapshot: domSnapshotWrap,
   aria: ariaWrap,
   performance: performanceWrap,
@@ -203,6 +211,7 @@ const SECTION_WRAP: Record<string, keyof typeof WRAP_REF> = {
   appState: 'pageState',
   environmentDiff: 'envDiff',
   visualDiff: 'visualDiff',
+  pageDiff: 'pageDiff',
   domSnapshot: 'domSnapshot',
   ariaSnapshot: 'aria',
   screenshots: 'screenEvidence',
@@ -221,6 +230,8 @@ function revealSection(sectionId: string): boolean {
   const tab = EVIDENCE_SECTION_TAB[sectionId];
   if (!tab) return false;
   activeTab.value = tab;
+  // The page diff lives behind the Screen tab's Screenshot · Page diff toggle.
+  if (sectionId === 'pageDiff') screenView.value = 'pagediff';
   nextTick(() => {
     if (sectionId === 'traceNetwork') networkComp.value?.showTraceMode?.();
     const wrapKey = SECTION_WRAP[sectionId];
@@ -233,7 +244,7 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
 </script>
 
 <template>
-  <section class="rounded-lg border border-default bg-default">
+  <section class="rounded-lg border border-default bg-default max-sm:rounded-none max-sm:border-x-0">
     <!-- Header: the section title, its help, and the content-level tab strip -->
     <div class="p-3 sm:px-4 sm:py-3 border-b border-default">
       <div class="flex items-center gap-2 mb-2.5">
@@ -241,7 +252,13 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
         <h2 class="text-lg font-medium">Evidence</h2>
         <HelpHint v-if="help" :topic="help" />
       </div>
-      <div class="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Evidence sections">
+      <!-- Below `sm` the strip wraps onto as many rows as it needs so no tab is
+           hidden off-screen; from `sm` up it stays one scrollable row. -->
+      <div
+        class="flex items-center gap-1 max-sm:flex-wrap sm:overflow-x-auto"
+        role="tablist"
+        aria-label="Evidence sections"
+      >
         <button
           v-for="tab in tabs"
           :key="tab.value"
@@ -267,32 +284,21 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
 
     <div class="p-3 sm:p-4">
       <!-- ── Timeline ─────────────────────────────────────────────── -->
-      <div v-if="activeTab === 'timeline'" ref="timelineWrap" class="scroll-mt-4 space-y-4">
-        <!-- The timeline is anchored on the moment of failure — meaningful only for a failed execution. -->
+      <!-- One view: the axis (for a failed execution) over a single steps table,
+           with network / console / backend items interleaved by time. A passing
+           execution shows the same table without the axis or offsets. -->
+      <div v-if="activeTab === 'timeline'" ref="timelineWrap" class="scroll-mt-4">
         <FailureTimelineCard
-          v-if="hasError"
           embedded
           :test-runs-case-id="testRunsCaseId"
+          :steps="steps"
+          :duration-ms="testCase?.duration ?? null"
+          :has-error="hasError"
+          :status="status"
           :has-trace="hasTrace"
           :project-key="projectKey"
           :project-name="projectName"
         />
-        <SectionCard embedded icon="i-lucide-list-checks" title="Steps" :count="steps.length || null">
-          <!-- The step table is a data table whose row state is measured in the
-               browser; render it client-side so its hydration stays clean. -->
-          <ClientOnly>
-            <TestStepsTable
-              :steps="steps"
-              :duration-ms="testCase?.duration ?? null"
-              :status="status"
-              :project-key="projectKey"
-              :project-name="projectName"
-            />
-            <template #fallback>
-              <LoadingState text="Loading steps…" />
-            </template>
-          </ClientOnly>
-        </SectionCard>
       </div>
 
       <!-- ── Attempts ─────────────────────────────────────────────── -->
@@ -302,24 +308,65 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
       </div>
 
       <!-- ── Screen ───────────────────────────────────────────────── -->
-      <div v-else-if="activeTab === 'screen'" class="space-y-4">
-        <div ref="screenEvidenceWrap" class="scroll-mt-4 space-y-4">
-          <TestCaseEvidenceCard :attachments="attachments" :traces="traces" embedded />
+      <div v-else-if="activeTab === 'screen'" data-shot="screen-evidence" class="space-y-4">
+        <!-- Screenshot · Page diff — shown only once a diff is available. -->
+        <div
+          v-if="pageDiffAvailable"
+          role="tablist"
+          aria-label="Screen view"
+          class="inline-flex gap-1 rounded-md bg-elevated/60 p-0.5"
+        >
+          <button
+            v-for="view in [
+              { value: 'screenshot' as const, label: 'Screenshot', icon: 'i-lucide-camera' },
+              { value: 'pagediff' as const, label: 'Page diff', icon: 'i-lucide-file-diff' },
+            ]"
+            :key="view.value"
+            type="button"
+            role="tab"
+            :aria-selected="screenView === view.value ? 'true' : 'false'"
+            class="inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-sm outline-none focus-visible:outline-2 focus-visible:outline-primary transition-colors"
+            :class="
+              screenView === view.value
+                ? 'bg-default shadow-sm text-primary font-medium'
+                : 'text-muted hover:text-default'
+            "
+            @click="screenView = view.value"
+          >
+            <UIcon :name="view.icon" class="size-4 shrink-0" />
+            {{ view.label }}
+          </button>
         </div>
-        <div ref="visualDiffWrap" class="scroll-mt-4">
-          <VisualDiffCard v-if="runId" embedded :run-id="runId" :test-runs-case-id="testRunsCaseId" />
+
+        <div v-show="!pageDiffAvailable || screenView === 'screenshot'" class="space-y-4">
+          <div ref="screenEvidenceWrap" class="scroll-mt-4 space-y-4">
+            <TestCaseEvidenceCard :attachments="attachments" :traces="traces" embedded />
+          </div>
+          <div ref="visualDiffWrap" class="scroll-mt-4">
+            <VisualDiffCard v-if="runId" embedded :run-id="runId" :test-runs-case-id="testRunsCaseId" />
+          </div>
+          <div ref="ariaWrap" class="scroll-mt-4">
+            <SectionCard embedded icon="i-lucide-scan-text" title="ARIA snapshot" help="case.aria">
+              <template v-if="ariaDerived" #actions><TraceDerivedChip /></template>
+              <div v-if="ariaSnapshot" class="max-h-96 overflow-y-auto">
+                <MarkdownPreview :text="'```yaml\n' + ariaSnapshot + '\n```'" />
+              </div>
+              <EvidenceEmptyState v-else :state="ariaState" doc="/capture-fixtures" compact />
+            </SectionCard>
+          </div>
+          <div ref="domSnapshotWrap" class="scroll-mt-4">
+            <DomSnapshotCard v-if="runId" embedded :run-id="runId" :test-runs-case-id="testRunsCaseId" />
+          </div>
         </div>
-        <div ref="ariaWrap" class="scroll-mt-4">
-          <SectionCard embedded icon="i-lucide-scan-text" title="ARIA snapshot" help="case.aria">
-            <template v-if="ariaDerived" #actions><TraceDerivedChip /></template>
-            <div v-if="ariaSnapshot" class="max-h-96 overflow-y-auto">
-              <MarkdownPreview :text="'```yaml\n' + ariaSnapshot + '\n```'" />
-            </div>
-            <EvidenceEmptyState v-else :state="ariaState" doc="/capture-fixtures" compact />
-          </SectionCard>
-        </div>
-        <div ref="domSnapshotWrap" class="scroll-mt-4">
-          <DomSnapshotCard v-if="runId" embedded :run-id="runId" :test-runs-case-id="testRunsCaseId" />
+
+        <div v-show="!pageDiffAvailable || screenView === 'pagediff'" ref="pageDiffWrap" class="scroll-mt-4">
+          <PageDiffCard
+            v-if="runId"
+            embedded
+            :run-id="runId"
+            :test-runs-case-id="testRunsCaseId"
+            @available="pageDiffAvailable = $event"
+          />
         </div>
       </div>
 

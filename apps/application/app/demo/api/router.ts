@@ -30,9 +30,11 @@ import {
 import { getDemoDb } from '../db.client';
 import { getLocatorHealing, saveLocatorPick } from '~~/server/utils/locator-healing';
 import { buildFixPlan } from '~~/server/utils/fix-plan';
+import { findFixedBefore } from '~~/server/utils/cluster-memory';
 import { fixPlanToMarkdown } from '#shared/fix-plan-markdown';
 import { contextStalenessHash } from '#shared/diagnosis-staleness';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
+import { getPageDiff } from '~~/server/utils/page-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
 import { apiExportTestRunCase, apiExportFailureCluster } from './export';
 import { apiGetDemoTraceStacks, apiGetDemoTraceNetwork, apiGetDemoTraceNetworkBody } from './trace-insights';
@@ -104,11 +106,16 @@ import {
   getFailureCluster,
   getOpenFailureClusters,
   patchClusterStatus,
+  patchClusterAssignee,
+  patchClusterSnooze,
+  quarantineClusterTests,
+  bulkTriageClusters,
   patchClusterBaseCommit,
   extractClusterCases,
   getClusterDiagnosis,
   getExecutionDiagnosis,
 } from '#shared/handlers/failure-clusters';
+import { parseBulkIds, isSnoozeOption } from '#shared/inbox-queues';
 import { getClusterCommits, getClusterCommitDiff, getClusterBranches } from './scm';
 import { getTimeoutThresholds } from '~~/server/utils/timeout-thresholds';
 import { getAppSetting } from '~~/server/utils/app-settings';
@@ -161,6 +168,7 @@ import {
 } from '#shared/handlers/users';
 import { searchProjectsTestRunsCases } from '#shared/handlers/search';
 import { getSetupStatus } from '#shared/handlers/setup-status';
+import { getAriaSampling } from '#shared/handlers/aria-sampling';
 import {
   apiSetupTestRun,
   apiBeginTestRun,
@@ -485,6 +493,14 @@ const routes: RouteEntry[] = [
   },
   {
     method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/aria-sampling$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return getAriaSampling(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
     pattern: /^\/api\/projects\/(\d+)\/spec-health$/,
     handler: async (m, _, q, ctx) => {
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
@@ -677,6 +693,65 @@ const routes: RouteEntry[] = [
       await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
       const b = body as { status?: string; triageNote?: string | null };
       return patchClusterStatus(await getDemoDb(), +m[1]!, b.status ?? '', b.triageNote);
+    },
+  },
+  {
+    method: 'PATCH',
+    pattern: /^\/api\/failure-clusters\/(\d+)\/assignee$/,
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      const b = body as { assignee?: string | null };
+      return patchClusterAssignee(await getDemoDb(), +m[1]!, b.assignee ?? null);
+    },
+  },
+  {
+    method: 'PATCH',
+    pattern: /^\/api\/failure-clusters\/(\d+)\/snooze$/,
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      const b = body as { snooze?: string | null };
+      const snooze = b.snooze ?? null;
+      if (snooze !== null && !isSnoozeOption(snooze)) throw demoHttpError(400, 'Invalid snooze option');
+      return patchClusterSnooze(await getDemoDb(), +m[1]!, snooze);
+    },
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/failure-clusters\/(\d+)\/quarantine$/,
+    handler: async (m, body, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      const b = (body ?? {}) as { reason?: string };
+      return quarantineClusterTests(await getDemoDb(), +m[1]!, { reason: b.reason });
+    },
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/failure-clusters\/bulk$/,
+    handler: async (_m, body, _q, _ctx) => {
+      const b = (body ?? {}) as {
+        ids?: unknown;
+        action?: string;
+        status?: string;
+        assignee?: string | null;
+        snooze?: string | null;
+      };
+      const ids = parseBulkIds(b.ids);
+      if (!ids) throw demoHttpError(400, 'ids must be a non-empty array of positive integers (max 200)');
+      const db = await getDemoDb();
+      let result;
+      if (b.action === 'status') {
+        result = await bulkTriageClusters(db, ids, { action: 'status', status: b.status ?? '' });
+      } else if (b.action === 'assign') {
+        result = await bulkTriageClusters(db, ids, { action: 'assign', assignee: b.assignee ?? null });
+      } else if (b.action === 'snooze') {
+        const snooze = b.snooze ?? null;
+        if (snooze !== null && !isSnoozeOption(snooze)) throw demoHttpError(400, 'Invalid snooze option');
+        result = await bulkTriageClusters(db, ids, { action: 'snooze', snooze });
+      } else {
+        throw demoHttpError(400, 'action must be one of: status, assign, snooze');
+      }
+      if (!result) throw demoHttpError(400, 'Invalid bulk triage request');
+      return { requested: ids.length, updated: result.updated };
     },
   },
   {
@@ -956,6 +1031,14 @@ const routes: RouteEntry[] = [
   },
   {
     method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/page-diff$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getPageDiff(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
     pattern: /^\/api\/test-run-cases\/(\d+)\/timeline$/,
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'execution', +m[1]!);
@@ -1184,6 +1267,19 @@ const routes: RouteEntry[] = [
       const format = (q as URLSearchParams | undefined)?.get('format');
       if (format === 'markdown' && plan) return fixPlanToMarkdown(plan);
       return plan;
+    },
+  },
+
+  // Fixed before — resolved clusters this one resembles, read straight from the
+  // in-browser DB by the same scorer the server uses.
+  {
+    method: 'GET',
+    pattern: /^\/api\/failure-clusters\/(\d+)\/fixed-before$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'cluster', +m[1]!);
+      const db = await getDemoDb();
+      const [cluster] = await db.select().from(failureClusters).where(eq(failureClusters.id, +m[1]!));
+      return { items: cluster ? await findFixedBefore(db, cluster) : [] };
     },
   },
 

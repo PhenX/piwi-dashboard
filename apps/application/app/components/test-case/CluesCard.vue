@@ -57,7 +57,7 @@ function citationLabel(section: string): string {
       <li
         v-for="clue in clues"
         :key="clue.id"
-        class="flex flex-col gap-1 rounded-md border border-default p-2.5 sm:flex-row sm:items-start sm:gap-3"
+        class="flex flex-col gap-1 rounded-md border border-default p-2.5 max-sm:p-2 sm:flex-row sm:items-start sm:gap-3"
       >
         <div class="flex shrink-0 items-center gap-1.5">
           <UBadge :color="STRENGTH[clue.strength].color" variant="subtle" size="sm">
