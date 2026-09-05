@@ -581,6 +581,7 @@ export async function getOpenFailureClusters(
       occurrences: c.occurrences ?? 0,
       firstSeenAt: firstRun?.startTime ?? null,
       lastSeenAt: run?.startTime ?? null,
+      lastSeenRunId: c.lastSeenRunId,
       lastSeenRunStatus: run?.status ?? null,
       owner: rep?.owner ? { name: rep.owner, source: 'annotation' } : null,
       assignee: c.assignee ?? null,

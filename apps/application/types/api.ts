@@ -299,6 +299,7 @@ export interface OpenFailureCluster {
   occurrences: number;
   firstSeenAt: string | Date | null;
   lastSeenAt: string | Date | null;
+  lastSeenRunId: number;
   lastSeenRunStatus: string | null;
   owner: { name: string; source: 'annotation' | 'codeowners' } | null;
   /** Who the cluster is assigned to (name or email); overrides the derived owner. */
