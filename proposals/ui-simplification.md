@@ -512,7 +512,7 @@ Deviations from the text above, all recorded in the PR bodies: `RunReports.vue` 
 | The demo SPA mirrors every response | `app/demo/api/` | No new endpoints in Phases 1–3 except the cluster clues call, which reuses the execution endpoint |
 | Docs screenshots are committed | `apps/docs/public/screenshots/` | Regenerate per PR with `app:screens:docs`; `docs-drift` and `app:screens:check` guard |
 | Help topics referenced by removed blocks | `app/utils/help-content.ts` | Remove with the block; the anchor test (`tests/unit/docs-drift.test.ts`) fails on a dangling `doc:` |
-| Two audit big bets not started need a home | E (attempt diff), F (reproduction bundle), J (structural page diff), K (memory) | Places reserved: an *Attempts* tab in `EvidenceTabs` when attempts > 1; a *Reproduce* section in `FixCard` › Verify; a *Page diff* toggle on the Screen tab; a *Fixed before* line in the Fix block — none built here |
+| Two audit big bets not started need a home | E (attempt diff), F (reproduction bundle), J (structural page diff), K (memory), N (re-run readback), O (cause groups) | Places reserved: an *Attempts* tab in `EvidenceTabs` when attempts > 1; a *Reproduce* section in `FixCard` › Verify; a *Page diff* toggle on the Screen tab; a *Fixed before* line in the Fix block; a re-run result line under *Re-run in CI* and on the *Local runs* tray entry; a shared-cause strip above the run page's cluster list and one line in the cluster header — none built here |
 
 ---
 
