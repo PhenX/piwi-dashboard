@@ -22,8 +22,10 @@ import { getLocatorHealingBatch } from './locator-healing';
 import { validatePatch, type PatchValidation } from '#shared/patch';
 import { parseCallsiteLocation } from '#shared/callsite-location';
 import { buildRetryCommand } from '#shared/retry-command';
+import { computeReproduceContext } from '#shared/handlers/reproduce';
 import type { FixPlan, FixPlanEdit } from '#shared/fix-plan.types';
 import type { DrizzleDB } from '#shared/handlers/db';
+import type { BrowserConfig } from '#shared/types';
 
 export type { FixPlan, FixPlanEdit } from '#shared/fix-plan.types';
 
@@ -51,6 +53,7 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
       title: testCases.title,
       filePath: testCases.filePath,
       owner: testCases.owner,
+      browser: testRunsCases.browser,
     })
     .from(testRunsCases)
     .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
@@ -69,7 +72,12 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
       filePath: row.filePath,
       executionId: row.executionId,
       owner: row.owner,
+      projectName: (row.browser as BrowserConfig | null)?.projectName ?? null,
     }));
+
+  // The browser binary the failures ran on — taken from the newest execution, so
+  // the reproduction installs the right one.
+  const reproBrowser = (caseRows[0]?.browser as BrowserConfig | null)?.browserName ?? null;
 
   const [diagnosisRow] = await db
     .select()
@@ -137,6 +145,24 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
   );
   const titles = failingTests.slice(0, 5).map((test) => test.title);
   const grep = titles.length ? ` -g ${quote(titles.join('|'))}` : '';
+  const verifyCommand = `${fileCmd || 'npx playwright test'}${grep}`;
+
+  // Reproduce locally and bisect the regression window: the checkout of the
+  // failing commit, a pinned install, the browser and the exact test command,
+  // then a `git bisect` between the last green commit and this one. Computed from
+  // the same last-seen run the "What changed" panel reads, so it degrades in
+  // lockstep — no SCM metadata means no bisect, spelled out in the payload.
+  const { reproduce, bisect, desktop } = await computeReproduceContext(db, {
+    runId: cluster.lastSeenRunId,
+    cases: failingTests.map((test) => ({
+      filePath: test.filePath,
+      title: test.title,
+      projectName: test.projectName,
+    })),
+    browserName: reproBrowser,
+    verifyCommand,
+    clusterId: cluster.id,
+  });
 
   return {
     cluster: {
@@ -150,12 +176,16 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
     },
     diagnosis,
     edits,
-    failingTests: failingTests.map(({ owner: _owner, ...rest }) => rest),
+    failingTests: failingTests.map(({ owner: _owner, projectName: _projectName, ...rest }) => rest),
     ownership: { owner: declaredOwner, source: declaredOwner ? 'annotation' : null },
     verify: {
-      command: `${fileCmd || 'npx playwright test'}${grep}`,
+      command: verifyCommand,
       expectation:
         'Re-run the affected tests, or the whole suite. When every test in this cluster passes in one run, full or filtered, Piwi records the fix — with the commit and how long the cluster was open — and the cluster stops being reported as open.',
     },
+    reproduce,
+    bisect,
+    bisectedCommit: desktop.bisectedCommit,
+    reproduceDesktop: desktop,
   };
 }

@@ -21,6 +21,48 @@ function makePlan(overrides: Partial<FixPlan> = {}): FixPlan {
       command: 'npx playwright test tests/checkout.spec.ts',
       expectation: 'When these pass, Piwi records the fix.',
     },
+    reproduce: {
+      steps: [
+        {
+          step: 'Check out the failing commit',
+          bash: 'git switch --detach abc123',
+          powershell: 'git switch --detach abc123',
+        },
+        {
+          step: 'Run the failing test',
+          bash: 'npx playwright test tests/checkout.spec.ts',
+          powershell: 'npx playwright test tests/checkout.spec.ts',
+        },
+      ],
+      env: [{ label: 'Environment', value: 'production' }],
+      notes: [],
+      commit: 'abc123',
+      playwrightVersion: '1.50.1',
+      browser: 'chromium',
+      project: 'chromium',
+    },
+    bisect: {
+      available: true,
+      good: 'green01',
+      bad: 'abc123',
+      goodShort: 'green01',
+      badShort: 'abc123',
+      bash: 'git bisect start abc123 green01\ngit bisect run npx playwright test\ngit bisect reset',
+      powershell: 'git bisect start abc123 green01\ngit bisect run npx playwright test\ngit bisect reset',
+      explanation: 'Walks the commits between green01 and abc123.',
+    },
+    bisectedCommit: null,
+    reproduceDesktop: {
+      projectId: 1,
+      cases: [{ filePath: 'tests/checkout.spec.ts', title: 'checkout completes', line: 42, projectName: 'chromium' }],
+      browserName: 'chromium',
+      commit: 'abc123',
+      good: 'green01',
+      bad: 'abc123',
+      clusterId: 7,
+      repositoryUrl: 'https://github.com/acme/web',
+      bisectedCommit: null,
+    },
     ...overrides,
   };
 }
@@ -37,6 +79,41 @@ describe('fixPlanToMarkdown', () => {
     expect(md).not.toContain('## Diagnosis');
     expect(md).not.toContain('## Suggested locator edits');
     expect(md).not.toContain('## Owner');
+  });
+
+  it('renders the reproduce recipe and the bisect', () => {
+    const md = fixPlanToMarkdown(makePlan());
+    expect(md).toContain('## Reproduce locally');
+    expect(md).toContain('# Check out the failing commit');
+    expect(md).toContain('git switch --detach abc123');
+    expect(md).toContain('Environment: production');
+    expect(md).toContain('## Bisect the regression');
+    expect(md).toContain('git bisect start abc123 green01');
+  });
+
+  it('names the bisected first bad commit when one was recorded', () => {
+    const md = fixPlanToMarkdown(
+      makePlan({
+        bisectedCommit: {
+          sha: 'deadbeef1234',
+          subject: 'tighten the checkout guard',
+          author: 'Dev One',
+          date: '2026-01-02',
+          commitUrl: 'https://github.com/acme/web/commit/deadbeef1234',
+        },
+      }),
+    );
+    expect(md).toContain('Bisected to `deadbeef1234`');
+    expect(md).toContain('tighten the checkout guard');
+    expect(md).toContain('Dev One, 2026-01-02');
+  });
+
+  it('renders the bisect reason when the window is unavailable', () => {
+    const md = fixPlanToMarkdown(
+      makePlan({ bisect: { available: false, reason: 'A git bisect needs a last-green commit.' } }),
+    );
+    expect(md).toContain('## Bisect the regression');
+    expect(md).toContain('A git bisect needs a last-green commit.');
   });
 
   it('renders the diagnosis, its patch validation and the patch fence', () => {

@@ -22,45 +22,56 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
   const [cluster] = await db.select().from(failureClusters).where(eq(failureClusters.id, clusterId));
   if (!cluster) return null;
 
-  const [[countRow], [lastRun], [firstSeenRun], [diag], [project], affectedTestCases] = await Promise.all([
-    db
-      .select({ affectedTests: sql<number>`count(distinct ${testRunsCases.testCaseId})` })
-      .from(testRunsCases)
-      .where(eq(testRunsCases.failureClusterId, clusterId)),
+  const [[countRow], [lastRun], [firstSeenRun], [diag], [project], affectedTestCases, [latestOccurrence]] =
+    await Promise.all([
+      db
+        .select({ affectedTests: sql<number>`count(distinct ${testRunsCases.testCaseId})` })
+        .from(testRunsCases)
+        .where(eq(testRunsCases.failureClusterId, clusterId)),
 
-    db
-      .select({ status: testRuns.status, startTime: testRuns.startTime })
-      .from(testRuns)
-      .where(eq(testRuns.id, cluster.lastSeenRunId)),
+      db
+        .select({ status: testRuns.status, startTime: testRuns.startTime })
+        .from(testRuns)
+        .where(eq(testRuns.id, cluster.lastSeenRunId)),
 
-    db.select({ startTime: testRuns.startTime }).from(testRuns).where(eq(testRuns.id, cluster.firstSeenRunId)),
+      db.select({ startTime: testRuns.startTime }).from(testRuns).where(eq(testRuns.id, cluster.firstSeenRunId)),
 
-    db
-      .select()
-      .from(failureDiagnoses)
-      .where(and(eq(failureDiagnoses.clusterId, clusterId), eq(failureDiagnoses.scope, 'cluster'))),
+      db
+        .select()
+        .from(failureDiagnoses)
+        .where(and(eq(failureDiagnoses.clusterId, clusterId), eq(failureDiagnoses.scope, 'cluster'))),
 
-    db
-      .select({ id: projects.id, name: projects.name, label: projects.label })
-      .from(projects)
-      .where(eq(projects.id, cluster.projectId)),
+      db
+        .select({ id: projects.id, name: projects.name, label: projects.label })
+        .from(projects)
+        .where(eq(projects.id, cluster.projectId)),
 
-    db
-      .select({
-        testCaseId: testCases.id,
-        title: testCases.title,
-        filePath: testCases.filePath,
-        owner: testCases.owner,
-        runCount: sql<number>`count(${testRunsCases.id})`,
-        recentTestRunsCaseId: sql<number>`max(${testRunsCases.id})`,
-      })
-      .from(testRunsCases)
-      .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
-      .where(eq(testRunsCases.failureClusterId, clusterId))
-      .groupBy(testCases.id, testCases.title, testCases.filePath, testCases.owner)
-      .orderBy(desc(sql`count(${testRunsCases.id})`))
-      .limit(50),
-  ]);
+      db
+        .select({
+          testCaseId: testCases.id,
+          title: testCases.title,
+          filePath: testCases.filePath,
+          owner: testCases.owner,
+          runCount: sql<number>`count(${testRunsCases.id})`,
+          recentTestRunsCaseId: sql<number>`max(${testRunsCases.id})`,
+        })
+        .from(testRunsCases)
+        .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+        .where(eq(testRunsCases.failureClusterId, clusterId))
+        .groupBy(testCases.id, testCases.title, testCases.filePath, testCases.owner)
+        .orderBy(desc(sql`count(${testRunsCases.id})`))
+        .limit(50),
+
+      // The cluster's latest occurrence: an execution in the last-seen run, so the
+      // page can default its evidence and headline to the newest failure rather
+      // than the highest execution id (which need not be the most recent run).
+      db
+        .select({ id: testRunsCases.id, testCaseId: testRunsCases.testCaseId })
+        .from(testRunsCases)
+        .where(and(eq(testRunsCases.failureClusterId, clusterId), eq(testRunsCases.testRunId, cluster.lastSeenRunId)))
+        .orderBy(desc(testRunsCases.id))
+        .limit(1),
+    ]);
 
   // Which affected tests are currently quarantined — drives the "Quarantined"
   // chip and the per-test / "Quarantine all affected" actions on the page.
@@ -83,6 +94,8 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
     lastSeenRunStatus: lastRun?.status ?? null,
     lastSeenAt: lastRun?.startTime ?? null,
     firstSeenAt: firstSeenRun?.startTime ?? null,
+    latestTestRunsCaseId: latestOccurrence?.id ?? null,
+    latestTestCaseId: latestOccurrence?.testCaseId ?? null,
     diagnosis: diag
       ? {
           status: diag.status,

@@ -14,6 +14,13 @@ const {
 const commitBrowserOpen = ref(false);
 
 const { scmStatus } = useScmStatusSummary(coverage);
+
+// A healthy resolve with an empty diff reads "No changes found"; any other
+// state (no baseline, unsupported host, fetch failed) is the block's empty
+// state, shown as the status sentence — never both at once.
+const scmHealthy = computed(
+  () => scmStatus.value.color === 'text-green-500' || scmStatus.value.color === 'text-blue-500',
+);
 </script>
 
 <template>
@@ -53,8 +60,18 @@ const { scmStatus } = useScmStatusSummary(coverage);
       </div>
     </div>
 
+    <div v-if="contextLoading && !scmChanges" class="flex items-center justify-center py-6">
+      <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-gray-400" />
+    </div>
+
+    <ScmChangesView v-else-if="scmChanges" :changes="scmChanges" />
+
+    <!-- Empty state: a healthy resolve with an empty range, else why the diff is unavailable. -->
+    <p v-else-if="coverage && scmHealthy" class="text-xs text-gray-400 text-center py-4">
+      No changes found in this range.
+    </p>
     <div
-      v-if="coverage"
+      v-else-if="coverage"
       class="flex items-start gap-1.5 text-xs px-2 py-1.5 rounded-md bg-elevated border border-default"
     >
       <UIcon :name="scmStatus.icon" class="size-3.5 mt-0.5 shrink-0" :class="scmStatus.color" />
@@ -63,16 +80,6 @@ const { scmStatus } = useScmStatusSummary(coverage);
         <span v-if="scmStatus.detail" class="text-gray-400 ml-1">— {{ scmStatus.detail }}</span>
       </div>
     </div>
-
-    <div v-if="contextLoading && !scmChanges" class="flex items-center justify-center py-6">
-      <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-gray-400" />
-    </div>
-
-    <ScmChangesView v-else-if="scmChanges" :changes="scmChanges" />
-
-    <p v-else-if="coverage && !contextLoading && !scmChanges" class="text-xs text-gray-400 text-center py-4">
-      No changes found in this range.
-    </p>
   </div>
 
   <CommitBrowserModal

@@ -251,12 +251,12 @@ export function isStatusInFlight(status: string): boolean {
 }
 
 /**
- * Human-readable label for a test-case status badge. Normalizes Playwright's
- * `timedOut` to `failed` (as the UI treats timeouts as failures) and renders
- * `didnotrun` as "didn't run".
+ * Human-readable label for a test-case status badge. A timeout reads "timed
+ * out" (it counts as a failure in every tally, but the word stays accurate) and
+ * `didnotrun` renders as "didn't run".
  */
 export function formatStatusLabel(status: string): string {
-  if (status === 'timedOut' || status === 'timedout') return 'failed';
+  if (status === 'timedOut' || status === 'timedout') return 'timed out';
   if (status === 'didnotrun') return "didn't run";
   if (status === 'never-run') return 'never run';
   return status;

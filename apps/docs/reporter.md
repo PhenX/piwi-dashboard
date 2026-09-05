@@ -361,15 +361,15 @@ The ladder only runs for a **resolution failure** — the call log shows the loc
 When a stored snapshot is found but the element's captured accessible name is provably gone from the failing page (and no rename match was confident), the panel flags the list: name-based alternatives — including the failing locator itself — are kept visible but excluded from the recommendation, and candidates parsed from the failing page are shown alongside. This prevents the panel from "recommending" the very locator that just broke after a label or title change.
 
 <figure>
-  <img src="/diagrams/locator-healing-resolution.svg" alt="Diagram of the healing resolution flow: the failing error is parsed into a locator signature and call site, matched through the stored-history ladder, sanity-checked against the failing page's ARIA snapshot (unchanged, renamed, or gone), and surfaced in the Alternative locators panel">
+  <img src="/diagrams/locator-healing-resolution.svg" alt="Diagram of the healing resolution flow: the failing error is parsed into a locator signature and call site, matched through the stored-history ladder, sanity-checked against the failing page's ARIA snapshot (unchanged, renamed, or gone), and surfaced in the Locator fix panel">
   <figcaption>Healing runs from the failure's own error text: stored history is matched by call site, then signature, then across tests — and every hit is sanity-checked against the failing page before anything is recommended.</figcaption>
 </figure>
 
-The result is shown as an **Alternative locators** panel on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, and folded into the AI diagnosis context so the model recommends a grounded fix (see [AI diagnosis](./ai-diagnosis#locator-healing)). A single **recommended fix** is highlighted — it keeps your original locator *style* where that style is stable enough (a minimal, idiomatic edit), and escalates to the sturdiest alternative (or advises adding a `data-testid`) only when the original style has nothing stable to fall back on.
+The result is shown as a **Locator fix** panel on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, and folded into the AI diagnosis context so the model recommends a grounded fix (see [AI diagnosis](./ai-diagnosis#locator-healing)). A single **recommended fix** is highlighted — it keeps your original locator *style* where that style is stable enough (a minimal, idiomatic edit), and escalates to the sturdiest alternative (or advises adding a `data-testid`) only when the original style has nothing stable to fall back on.
 
 <figure>
-  <img src="/screenshots/locator-healing.png" alt="Alternative locators panel showing ranked replacement locators with stability scores and a recommended fix">
-  <figcaption>The Alternative locators panel — replacements ranked by stability score (data-testid ≈ 100, role + name ≈ 90), with a recommended fix and a copy button for each.</figcaption>
+  <img src="/screenshots/locator-healing.png" alt="Locator fix panel showing ranked replacement locators with stability scores and a recommended fix">
+  <figcaption>The Locator fix panel — replacements ranked by stability score (data-testid ≈ 100, role + name ≈ 90), with a recommended fix and a copy button for each.</figcaption>
 </figure>
 
 When the failing execution has an uploaded trace, the panel offers **Pick from trace**: it opens the trace in the dashboard's bundled [trace viewer](./evidence#trace-viewer), whose *Pick locator* tool works on the recorded page snapshots — so a replacement locator can be picked visually even for a CI failure nobody watched live. A replacement confirmed with the reporter's failure-time locator picker (`pickLocatorOnFailure`) shows a **Your pick** badge and becomes the recommended fix.
@@ -410,7 +410,7 @@ $env:PIWI_PICK_LOCATOR_ON_FAIL='true'; npx playwright test --headed
 
 A confirmed pick is recorded in three places:
 
-- **The run's locator snapshots** — the pick is folded into the failing call site's snapshot (flagged `pickedByUser`, listed first), so after the run uploads, the [Alternative locators](#locator-healing) panel for that failure shows your confirmed choice at the top.
+- **The run's locator snapshots** — the pick is folded into the failing call site's snapshot (flagged `pickedByUser`, listed first), so after the run uploads, the [Locator fix](#locator-healing) panel for that failure shows your confirmed choice at the top.
 - **A `piwi-user-pick` attachment** and a report **annotation**, so the choice is visible in the Playwright report and trace.
 - **The terminal**, with the failing call site (`file:line:col`) and the replacement, ready to paste into the test.
 

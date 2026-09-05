@@ -83,7 +83,10 @@ test.describe('Dashboard UI Tests', () => {
     // Click on first test run. Under heavy parallel load the click has been
     // observed to land without navigating (passes deterministically solo);
     // the mechanism is unverified — retry rather than asserting a cause.
-    const viewButton = page.locator('table').getByRole('link', { name: 'View' }).first();
+    const viewButton = page
+      .locator('table')
+      .getByRole('link', { name: /^Run #/ })
+      .first();
     await expect(viewButton).toBeVisible({ timeout: 10000 });
     await expect(async () => {
       await viewButton.click();
@@ -100,7 +103,10 @@ test.describe('Dashboard UI Tests', () => {
     await page.getByRole('link', { name: PROJECT.UI_TEST }).first().click();
     await page.waitForURL(/\/projects\/\d+/);
     await waitForHydration(page);
-    const viewButton = page.locator('table').getByRole('link', { name: 'View' }).first();
+    const viewButton = page
+      .locator('table')
+      .getByRole('link', { name: /^Run #/ })
+      .first();
     await expect(viewButton).toBeVisible({ timeout: 10000 });
     await expect(async () => {
       await viewButton.click();
@@ -111,9 +117,14 @@ test.describe('Dashboard UI Tests', () => {
     await expect(page.getByRole('combobox', { name: 'Group tests by' })).toBeVisible();
 
     await page.getByRole('button', { name: /^Timeline/ }).click();
-    await page.getByRole('button', { name: /^Compare$/ }).click();
-    await expect(page.getByText('Run A (baseline)')).toBeVisible({ timeout: 15000 });
-    await page.getByRole('button', { name: /^Slow endpoints/ }).click();
+    await page.getByRole('button', { name: /^Changes$/ }).click();
+    // Either the baseline selector (a baseline exists) or the no-baseline empty
+    // state renders — the two are mutually exclusive, so matching just them
+    // proves the tab switched and loaded without a strict-mode clash with the
+    // "no changes" note that can sit below the selector.
+    await expect(page.getByText(/Compared with|No baseline run found/).first()).toBeVisible({
+      timeout: 15000,
+    });
   });
 
   test('should show project switcher dropdown', async ({ page }) => {

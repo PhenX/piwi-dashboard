@@ -17,6 +17,7 @@ import { buildFailureVerdict } from '../failure-verdict';
 import { buildFailureTimeline, type FailureTimeline, type TimelineCallsite } from '../failure-timeline';
 import { buildFailureClues, type FailureClue, type FailureCluePageDiff } from '../failure-clues';
 import { parsePlaywrightError } from '../error-parse';
+import { diffAttempts, type AttemptDiffEntry, type AttemptEvidence } from '../attempt-diff';
 import { getLocatorHealing } from '../../server/utils/locator-healing';
 import { getEnvironmentDiff } from '../../server/utils/environment-diff';
 import { getPageDiff } from '../../server/utils/page-diff';
@@ -675,6 +676,179 @@ export async function getFailureClues(
 function startedAtMs(value: unknown): number | null {
   if (value instanceof Date) return value.getTime();
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** A per-attempt summary for the compared pair. */
+export interface AttemptDiffSummary {
+  /** The sibling execution row for this attempt, or null when it was not stored separately. */
+  executionId: number | null;
+  retry: number;
+  status: string;
+  duration: number | null;
+}
+
+/** One attempt's recorded outcome, as stored in the row's `attempts` JSON. */
+interface AttemptMeta {
+  retry: number;
+  status: string;
+  duration?: number | null;
+}
+
+export interface AttemptDiffResult {
+  /** True only when a failing attempt and a passing attempt could be paired. */
+  applicable: boolean;
+  /** Why a diff could not be produced. */
+  reason?: 'not-found' | 'single-attempt' | 'no-pair';
+  /** Every attempt of this execution, retry-ascending — the strip's source of truth. */
+  attempts: AttemptDiffSummary[];
+  /** The failing attempt of the pair. */
+  failing?: AttemptDiffSummary;
+  /** The passing attempt of the pair. */
+  passing?: AttemptDiffSummary;
+  /** Which attempt the opened execution is, so the UI can mark "this one". */
+  currentExecutionId?: number;
+  /** The ordered differences; empty when not applicable. */
+  differences: AttemptDiffEntry[];
+}
+
+function isFailingStatus(status: string | null | undefined): boolean {
+  return status === 'failed' || status === 'timedOut' || status === 'timedout';
+}
+
+/** Load one attempt's evidence from its execution row and network rows. */
+async function loadAttemptEvidence(
+  db: DrizzleDB,
+  row: {
+    id: number;
+    error: string | null;
+    steps: unknown;
+    consoleLogs: unknown;
+    pageState: unknown;
+    duration: number | null;
+  },
+): Promise<AttemptEvidence> {
+  const [evidence, networkRequestRows] = await Promise.all([
+    inlineCasePayloads(db, row as any),
+    db.select().from(networkRequests).where(eq(networkRequests.testRunsCaseId, row.id)),
+  ]);
+  return {
+    error: row.error,
+    parsedError: row.error ? parsePlaywrightError(row.error) : null,
+    steps: (row.steps as AttemptEvidence['steps']) ?? null,
+    networkRequests: networkRequestRows.map((nr) => ({
+      method: nr.method,
+      url: nr.url,
+      status: nr.status,
+      duration: nr.duration,
+      resourceType: nr.resourceType,
+    })),
+    consoleLogs: (row.consoleLogs as AttemptEvidence['consoleLogs']) ?? null,
+    pageState: (row.pageState as AttemptEvidence['pageState']) ?? null,
+    ariaSnapshot: evidence.ariaSnapshot ?? null,
+    duration: row.duration ?? null,
+  };
+}
+
+/**
+ * Diff the failing and passing attempts of one flaky execution. The per-attempt
+ * outcomes come from the row's `attempts` JSON (recorded on every attempt row);
+ * a real reporter run also stores each attempt as its own execution row, so its
+ * full evidence — error, network, console, page state, ARIA — is loaded through
+ * the same helpers the execution detail reads. When only the final attempt was
+ * stored (the demo/dev seed collapses retries), the missing attempt contributes
+ * just its recorded duration, so a timing difference still shows.
+ *
+ * Pairs the failing attempt with the passing one — the failing attempt this id
+ * belongs to against the first later attempt that passed, or, when this id is
+ * the passing one, the last prior failing attempt — and hands the pair to the
+ * pure `diffAttempts`. Returns `applicable: false` when there is only one
+ * attempt or no failing/passing pair exists. Shared by the REST endpoint and
+ * the demo mirror. Never 404s: "not applicable" is a valid answer.
+ */
+export async function getAttemptDiff(db: DrizzleDB, id: number): Promise<AttemptDiffResult> {
+  const [current] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
+  if (!current) return { applicable: false, reason: 'not-found', attempts: [], differences: [] };
+
+  const siblingRows = await db
+    .select()
+    .from(testRunsCases)
+    .where(
+      and(
+        eq(testRunsCases.testRunId, current.testRunId),
+        eq(testRunsCases.testCaseId, current.testCaseId),
+        current.browserName
+          ? eq(testRunsCases.browserName, current.browserName)
+          : sql`${testRunsCases.browserName} IS NULL`,
+      ),
+    );
+  const rowByRetry = new Map<number, (typeof siblingRows)[number]>(siblingRows.map((r: any) => [r.retries ?? 0, r]));
+
+  // The attempt outcomes, keyed by retry. A real reporter run stores each
+  // attempt as its own row, so the physical rows already list every attempt;
+  // the demo/dev seed collapses retries into the final row, so the full sequence
+  // survives only in the `attempts` JSON — and the reporter fills that JSON in
+  // progressively, so the richest copy (the most entries) sits on the final
+  // attempt. Union both sources: a physical row is authoritative (it carries
+  // evidence), a JSON-only attempt contributes its recorded outcome.
+  const byRetry = new Map<number, AttemptMeta>();
+  for (const r of siblingRows) {
+    byRetry.set(r.retries ?? 0, { retry: r.retries ?? 0, status: r.status, duration: r.duration ?? null });
+  }
+  let richestMeta: AttemptMeta[] = [];
+  for (const r of siblingRows) {
+    const list = Array.isArray(r.attempts) ? (r.attempts as AttemptMeta[]) : [];
+    if (list.length > richestMeta.length) richestMeta = list;
+  }
+  for (const m of richestMeta) {
+    if (!byRetry.has(m.retry)) byRetry.set(m.retry, { retry: m.retry, status: m.status, duration: m.duration ?? null });
+  }
+  const attemptsMeta = [...byRetry.values()].sort((a, b) => (a.retry ?? 0) - (b.retry ?? 0));
+
+  const summarize = (attempt: AttemptMeta): AttemptDiffSummary => ({
+    executionId: rowByRetry.get(attempt.retry)?.id ?? null,
+    retry: attempt.retry,
+    status: attempt.status,
+    duration: attempt.duration ?? rowByRetry.get(attempt.retry)?.duration ?? null,
+  });
+  const attempts = attemptsMeta.map(summarize);
+
+  if (attemptsMeta.length < 2)
+    return { applicable: false, reason: 'single-attempt', attempts, differences: [], currentExecutionId: id };
+
+  const currentRetry = current.retries ?? 0;
+  let failing: AttemptMeta | undefined;
+  let passing: AttemptMeta | undefined;
+
+  if (isFailingStatus(current.status)) {
+    failing = attemptsMeta.find((a) => a.retry === currentRetry) ?? { retry: currentRetry, status: current.status };
+    passing = attemptsMeta.find((a) => a.retry > currentRetry && a.status === 'passed');
+  } else if (current.status === 'passed') {
+    passing = attemptsMeta.find((a) => a.retry === currentRetry) ?? { retry: currentRetry, status: current.status };
+    failing = [...attemptsMeta].reverse().find((a) => a.retry < currentRetry && isFailingStatus(a.status));
+  }
+
+  if (!failing || !passing)
+    return { applicable: false, reason: 'no-pair', attempts, differences: [], currentExecutionId: id };
+
+  const evidenceFor = async (attempt: AttemptMeta): Promise<AttemptEvidence> => {
+    const row = rowByRetry.get(attempt.retry);
+    if (row) return loadAttemptEvidence(db, row);
+    // The attempt was not stored as its own row — only its recorded duration is known.
+    return { error: null, duration: attempt.duration ?? null };
+  };
+
+  const [failingEvidence, passingEvidence] = await Promise.all([evidenceFor(failing), evidenceFor(passing)]);
+
+  const differences = diffAttempts(failingEvidence, passingEvidence);
+
+  return {
+    applicable: true,
+    attempts,
+    failing: summarize(failing),
+    passing: summarize(passing),
+    currentExecutionId: id,
+    differences,
+  };
 }
 
 export async function getTestRunCaseTraces(db: DrizzleDB, id: number) {

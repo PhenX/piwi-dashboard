@@ -9,6 +9,7 @@ import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator
 import { EVIDENCE_SECTION_TAB } from '~/utils/evidence-sections';
 import type { FixSectionKey } from '~/components/shared/FixCard.vue';
 import type { BlockedCaseRef } from '~~/types/api';
+import type { ReproRecipe, BisectResult, ReproduceDesktopContext } from '#shared/reproduce';
 
 const route = useRoute();
 const testCaseId = route.params.id;
@@ -111,6 +112,13 @@ const aiIntents = computed<AiStepIntent[] | null>(() => {
 /** Whether the desktop (Tauri) bridge is present — set on mount below. */
 const desktopBridge = ref(false);
 
+// The local reproduction recipe and generated bisect for this execution.
+const { data: reproduceData } = await useFetch<{
+  reproduce: ReproRecipe;
+  bisect: BisectResult;
+  desktop: ReproduceDesktopContext;
+} | null>(`/api/test-run-cases/${testCaseId}/reproduce`);
+
 /** The cluster's stored diagnosis, only when it completed and has a summary. */
 const clusterDiagnosis = computed(() => {
   const d = failureCluster.value?.diagnosis;
@@ -179,6 +187,9 @@ async function triggerRerun() {
 /** The Verify section shows when a CI re-run is configured, or in the desktop shell. */
 const showVerify = computed(() => Boolean(rerunInfo.value?.available) || desktopBridge.value);
 
+/** Reproduce shows for a failing execution once its recipe is available. */
+const showReproduce = computed(() => Boolean(verdict.value) && Boolean(reproduceData.value?.reproduce?.steps?.length));
+
 /** The Fix card's sections, in the order the card renders them. */
 const fixSections = computed<FixSectionKey[]>(() => {
   const s: FixSectionKey[] = [];
@@ -186,6 +197,7 @@ const fixSections = computed<FixSectionKey[]>(() => {
   if (failureCluster.value) s.push('fix-plan');
   s.push('diagnosis');
   if (showVerify.value) s.push('verify');
+  if (showReproduce.value) s.push('reproduce');
   if (blockedTests.value.length) s.push('blocked');
   return s;
 });
@@ -529,7 +541,8 @@ provide(clusterSectionLocatorKey, {
     </template>
 
     <template #body>
-      <div class="flex flex-col gap-4 p-4 max-w-6xl mx-auto w-full">
+      <!-- No side gutter below `sm`: the cards go full-bleed to the screen edge. -->
+      <div class="flex flex-col gap-4 p-4 max-sm:px-0 max-w-6xl mx-auto w-full">
         <!-- ── Header ─────────────────────────────────────────────────── -->
         <DetailHeader :status="testCase?.status ?? ''" :title="testCase?.title ?? ''" :badges="headerBadges">
           <template #badges-extra>
@@ -797,7 +810,7 @@ provide(clusterSectionLocatorKey, {
                   Open
                 </UButton>
               </div>
-              <TestCaseAiCard v-else :test-runs-case-id="Number(testCaseId)" :chrome="false" />
+              <DiagnosisPanel v-else scope="execution" :execution-id="Number(testCaseId)" />
             </template>
 
             <!-- Re-run in CI, or run locally in the desktop shell -->
@@ -826,6 +839,19 @@ provide(clusterSectionLocatorKey, {
                   </span>
                 </ClientOnly>
               </div>
+            </template>
+
+            <!-- Reproduce locally, then bisect the regression -->
+            <template v-if="showReproduce" #reproduce-label>
+              <span class="inline-flex items-center gap-1">Reproduce <HelpHint topic="fix.reproduce" /></span>
+            </template>
+            <template v-if="showReproduce" #reproduce>
+              <ReproduceSection
+                :reproduce="reproduceData!.reproduce"
+                :bisect="reproduceData!.bisect"
+                :context="reproduceData!.desktop"
+                :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
+              />
             </template>
 
             <!-- The downstream tests this failure blocked from running -->

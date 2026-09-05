@@ -246,10 +246,11 @@ const SCENES = [
     of: '[data-shot="cluster-diagnosis"]',
     pad: 12,
     colorScheme: 'dark',
-    // The panel hides a stored diagnosis until AI reports configured. Run this
+    // The stored diagnosis renders with or without a provider, but run this
     // scene with the server's AI env vars set (PIWI_AI_PROVIDER / PIWI_AI_API_KEY
-    // / PIWI_AI_MODEL) so status is configured; the model is never called
-    // because cluster 10's diagnosis is already stored in the demo seed.
+    // / PIWI_AI_MODEL) so the illustration shows the configured panel (Re-diagnose
+    // and History, no "not configured" line); the model is never called because
+    // cluster 10's diagnosis is already stored in the demo seed.
   },
   {
     name: 'flaky-detection',
@@ -267,25 +268,20 @@ const SCENES = [
     // row until something asks for a classification.
     async prepare({ request, base }) {
       const flaky = await (await request.get(`${base}/api/projects/1/flaky-tests`)).json();
-      for (const test of flaky) {
+      for (const test of flaky.items ?? []) {
         await request.post(`${base}/api/projects/1/flaky-classify`, { data: { testCaseId: test.testCaseId } });
       }
     },
   },
   {
-    name: 'run-insights',
-    description: 'Run Insights tab: pass-rate delta, new regressions and new flaky tests',
+    name: 'run-changes',
+    description: 'Run Changes tab: one baseline, new failures, fixed, slower/faster and commits since',
     tags: ['docs'],
     out: 'docs',
-    route: '/test-runs/2?tab=insights',
+    route: '/test-runs/2?tab=changes',
     viewport: { width: 1280, height: 1560 },
-    of: '[data-shot="run-insights"]',
+    of: '[data-shot="run-changes"]',
     pad: 12,
-    annotate: [
-      { type: 'box', target: '[data-shot="run-summary"]', label: 'vs the last passing run' },
-      { type: 'step', target: '[data-shot="pass-rate"]', n: 1, corner: 'tl' },
-      { type: 'step', target: '[data-shot="new-regressions"]', n: 2, corner: 'tl' },
-    ],
   },
   {
     name: 'performance-trends',
@@ -313,11 +309,11 @@ const SCENES = [
   },
   {
     name: 'test-case-detail',
-    description: 'Test case detail: summary stats, duration trend, status history, executions',
+    description: 'Test history: facts line, duration trend with the execution strip, recent executions',
     tags: ['docs'],
     out: 'docs',
     route: '/test-cases/1',
-    viewport: { width: 1280, height: 1960 },
+    viewport: { width: 1280, height: 1600 },
     charts: true,
     of: '[data-shot="test-case-detail"]',
     pad: 8,
@@ -366,6 +362,19 @@ const SCENES = [
   },
 
   // ── Feature states (report artifacts) ─────────────────────────────────────
+  {
+    name: 'attempt-diff',
+    description: 'Attempts tab: every attempt, and what differed between the failing and passing attempt',
+    // Execution 21 is a flaky test that passed on retry, so the Attempts tab holds a diff.
+    route: '/test-run-cases/21',
+    viewport: { width: 1280, height: 1000 },
+    of: '[data-shot="attempts-diff"]',
+    pad: 12,
+    async run({ shoot, openTab }) {
+      await openTab('Attempts');
+      await shoot();
+    },
+  },
   {
     name: 'execution-history',
     description: 'Execution page opened straight onto its History tab (duration trend + executions)',

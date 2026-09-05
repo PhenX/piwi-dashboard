@@ -17,7 +17,7 @@ import { FAILED_STATUS_KEYS } from '../utils/test-counts';
 import { normalizeRoute } from '../utils/route';
 import { percentile } from '../utils/stats';
 import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-waits';
-import { buildCompareUrl, computeMetadataDiff } from '../utils/run-metadata';
+import { buildCommitRange, computeMetadataDiff } from '../utils/run-metadata';
 import type { TestStepEvent } from '../types';
 import type { EndpointSummary, DiagnosisCompact } from '../../types/api';
 
@@ -712,19 +712,7 @@ export async function computeRegressionContextForRun(db: DrizzleDB, runId: numbe
 
   const repositoryUrl = normalizeGitUrl(remoteUrl);
 
-  let commitRange = null;
-  if (currentCommit && lastGreenCommit && currentCommit !== lastGreenCommit) {
-    const compareUrl = repositoryUrl ? buildCompareUrl(repositoryUrl, lastGreenCommit, currentCommit) : null;
-    commitRange = {
-      fromSha: lastGreenCommit,
-      toSha: currentCommit,
-      fromShort: lastGreenCommit.slice(0, 7),
-      toShort: currentCommit.slice(0, 7),
-      repositoryUrl,
-      compareUrl,
-      gitCommand: `git log --oneline ${lastGreenCommit}..${currentCommit}`,
-    };
-  }
+  const commitRange = buildCommitRange(repositoryUrl, lastGreenCommit, currentCommit);
 
   const metadataDiff = computeMetadataDiff(greenMeta, currMeta, lastGreen.environment, run.environment);
 

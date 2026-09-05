@@ -1,9 +1,11 @@
 import { eq, and } from 'drizzle-orm';
 import { projects, testRuns, testRunsCases, testCases, failureClusters } from '../../server/database/schema';
+import type { TestRun } from '../../server/database/schema';
 import type { DrizzleDB } from './db';
 import { resolveRunBranch } from '../../server/utils/run-branch';
 import { selectBaselineRun } from '../../server/utils/branch-baseline';
-import { FALLBACK_DEFAULT_BRANCH } from '../../server/utils/scm/git-url';
+import { FALLBACK_DEFAULT_BRANCH, normalizeGitUrl } from '../../server/utils/scm/git-url';
+import { buildCommitRange, computeMetadataDiff, type CommitRange, type MetaDiffEntry } from '../utils/run-metadata';
 
 interface TestCaseEntry {
   executionId: number;
@@ -21,8 +23,22 @@ interface PerfChangeEntry {
   pctChange: number;
 }
 
-interface RunInsightsResult {
+/** The chosen baseline run, echoed so the Changes tab can name it in its selector. */
+export interface InsightsBaseline {
+  id: number;
+  startTime: Date;
+  status: string;
+  label: string | null;
+}
+
+export interface RunInsightsResult {
   hasBaseline: boolean;
+  /** The baseline this comparison used (branch-aware default, or the one asked for). */
+  baseline: InsightsBaseline | null;
+  /** Tests that passed in the baseline and fail here — the one "new failures" set. */
+  newFailures: number;
+  commitRange: CommitRange | null;
+  metadataDiff: MetaDiffEntry[];
   totalTests: number;
   passedTests: number;
   failedTests: number;
@@ -51,7 +67,11 @@ interface RunInsightsResult {
 
 const FAIL_STATUSES: ReadonlySet<string> = new Set(['failed', 'timedOut', 'timedout']);
 
-export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<RunInsightsResult> {
+export async function computeRunInsights(
+  db: DrizzleDB,
+  runId: number,
+  options?: { baselineId?: number | null },
+): Promise<RunInsightsResult> {
   const runResults: any[] = await db
     .select({
       id: testRuns.id,
@@ -59,6 +79,7 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
       status: testRuns.status,
       startTime: testRuns.startTime,
       branch: testRuns.branch,
+      environment: testRuns.environment,
       metadata: testRuns.metadata,
     })
     .from(testRuns)
@@ -99,15 +120,29 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
     (run.metadata as { defaultBranch?: string | null } | null)?.defaultBranch?.trim() ||
     FALLBACK_DEFAULT_BRANCH;
 
-  const baselineRun = await selectBaselineRun(db, {
-    projectId: run.projectId,
-    before: run.startTime,
-    branch,
-    defaultBranch,
-    fullRunOnly: true,
-  });
+  // An explicit baseline (the `?baseline=` selection on the Changes tab) wins,
+  // as long as it is a different run in the same project. Otherwise fall back to
+  // the branch-aware default the docs define.
+  let baselineRun: TestRun | null = null;
+  if (options?.baselineId != null && options.baselineId !== runId) {
+    const [picked] = await db.select().from(testRuns).where(eq(testRuns.id, options.baselineId));
+    if (picked && picked.projectId === run.projectId) baselineRun = picked as TestRun;
+  }
+  if (!baselineRun) {
+    baselineRun = await selectBaselineRun(db, {
+      projectId: run.projectId,
+      before: run.startTime,
+      branch,
+      defaultBranch,
+      fullRunOnly: true,
+    });
+  }
   const empty = {
     hasBaseline: false,
+    baseline: null,
+    newFailures: 0,
+    commitRange: null,
+    metadataDiff: [],
     totalTests: 0,
     passedTests: 0,
     failedTests: 0,
@@ -226,14 +261,16 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
     .slice(0, 5)
     .map((c) => ({ executionId: c.id, title: c.title, filePath: c.filePath, duration: c.duration }));
 
-  // Filter out zero-change entries so no test appears in both lists with 0%
-  const nonZeroChanges = perfChanges.filter((c) => c.pctChange !== 0);
-
-  // Most improved (top 5 by negative pctChange)
-  const mostImproved = [...nonZeroChanges].sort((a, b) => a.pctChange - b.pctChange).slice(0, 5);
-
-  // Most regressed (top 5 by positive pctChange)
-  const mostRegressed = [...nonZeroChanges].sort((a, b) => b.pctChange - a.pctChange).slice(0, 5);
+  // Split by direction so "slower" only holds tests that got slower and "faster"
+  // only those that got faster — the ten largest each way.
+  const mostRegressed = perfChanges
+    .filter((c) => c.pctChange > 0)
+    .sort((a, b) => b.pctChange - a.pctChange)
+    .slice(0, 10);
+  const mostImproved = perfChanges
+    .filter((c) => c.pctChange < 0)
+    .sort((a, b) => a.pctChange - b.pctChange)
+    .slice(0, 10);
 
   // Worker imbalance
   const workerCounts = new Map<number, number>();
@@ -260,6 +297,19 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
     }
   }
 
+  // Commit span and environment diff between the baseline and this run, so the
+  // Changes tab shows "commits since the baseline" and "environment changes"
+  // against the same baseline every other section uses.
+  const currMeta = run.metadata as any;
+  const baseMeta = (baselineRun as any).metadata ?? null;
+  const remoteUrl: string | null = currMeta?.scm?.remoteUrl ?? baseMeta?.scm?.remoteUrl ?? null;
+  const commitRange = buildCommitRange(
+    normalizeGitUrl(remoteUrl),
+    baseMeta?.scm?.commit ?? null,
+    currMeta?.scm?.commit ?? null,
+  );
+  const metadataDiff = computeMetadataDiff(baseMeta, currMeta, baselineRun.environment, run.environment);
+
   // New clusters (firstSeenRunId === runId)
   const clusterRows: any[] = await db
     .select({
@@ -275,6 +325,15 @@ export async function computeRunInsights(db: DrizzleDB, runId: number): Promise<
 
   return {
     hasBaseline: true,
+    baseline: {
+      id: baselineRun.id,
+      startTime: baselineRun.startTime,
+      status: baselineRun.status,
+      label: baselineRun.label ?? null,
+    },
+    newFailures: newRegressions.length,
+    commitRange,
+    metadataDiff,
     totalTests,
     passedTests,
     failedTests,

@@ -24,6 +24,17 @@ const roles = reactive<Record<RoleKey, RoleForm>>({
 });
 
 const autoDiagnose = ref(false);
+
+// Browser notifications when a diagnosis finishes — a per-browser client
+// preference (not stored server-side), so it lives outside the settings save.
+const {
+  permission: notifPermission,
+  supported: notifSupported,
+  active: notifActive,
+  requestPermission: requestNotifPermission,
+  toggleEnabled: toggleNotifEnabled,
+} = useDiagnosisNotification();
+
 const customInstructions = ref<string>('');
 const scmToken = ref<string>('');
 const saving = ref(false);
@@ -378,6 +389,37 @@ function resetLimits() {
               diagnosis call each), plus one batched call to title new clusters
             </span>
           </div>
+        </SettingsField>
+
+        <SettingsField label="Diagnosis notifications" help="settings.ai-notifications">
+          <ClientOnly>
+            <div class="flex items-center gap-3">
+              <template v-if="!notifSupported">
+                <span class="text-sm text-gray-500">This browser does not support notifications.</span>
+              </template>
+              <template v-else-if="notifPermission === 'denied'">
+                <span class="text-sm text-gray-500">Notifications are blocked in your browser settings.</span>
+              </template>
+              <template v-else-if="notifPermission === 'default'">
+                <UButton
+                  size="sm"
+                  color="neutral"
+                  variant="outline"
+                  icon="i-lucide-bell"
+                  @click="requestNotifPermission"
+                >
+                  Enable notifications
+                </UButton>
+                <span class="text-sm text-gray-500">Get a browser notification when a diagnosis finishes.</span>
+              </template>
+              <template v-else>
+                <USwitch :model-value="notifActive" @update:model-value="toggleNotifEnabled" />
+                <span class="text-sm text-gray-500">
+                  Show a browser notification when a diagnosis finishes — this browser only.
+                </span>
+              </template>
+            </div>
+          </ClientOnly>
         </SettingsField>
       </div>
 

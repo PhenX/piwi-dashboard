@@ -421,6 +421,20 @@
       "when": 1788465678370,
       "tag": "0059_broken_clea",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1788542324455,
+      "tag": "0060_remarkable_roxanne_simpson",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1788591415215,
+      "tag": "0061_special_queen_noir",
+      "breakpoints": true
     }
   ]
 }

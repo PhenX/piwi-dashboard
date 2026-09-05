@@ -104,6 +104,12 @@ const stateHasData = computed(() => Boolean(pageState.value));
 const performanceHasData = computed(() => Boolean(webVitals.value) || performanceHints.value.length > 0);
 const timelineHasData = computed(() => steps.value.length > 0);
 
+// Every attempt of this execution (each retry is its own row), already fetched.
+const attemptsList = computed<
+  Array<{ retry: number; status: string; duration: number | null; executionId: number | null }>
+>(() => props.testCase?.attempts ?? []);
+const hasMultipleAttempts = computed(() => attemptsList.value.length > 1);
+
 interface TabDef {
   value: TabValue;
   label: string;
@@ -113,6 +119,13 @@ interface TabDef {
 }
 const tabs = computed<TabDef[]>(() => [
   { value: 'timeline', label: 'Timeline', icon: 'i-lucide-activity', hasData: timelineHasData.value, count: null },
+  {
+    value: 'attempts',
+    label: 'Attempts',
+    icon: 'i-lucide-repeat',
+    hasData: hasMultipleAttempts.value,
+    count: hasMultipleAttempts.value ? attemptsList.value.length : null,
+  },
   { value: 'screen', label: 'Screen', icon: 'i-lucide-camera', hasData: screenHasData.value, count: null },
   { value: 'source', label: 'Source', icon: 'i-lucide-file-code-2', hasData: sourceHasData.value, count: null },
   {
@@ -231,7 +244,7 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
 </script>
 
 <template>
-  <section class="rounded-lg border border-default bg-default">
+  <section class="rounded-lg border border-default bg-default max-sm:rounded-none max-sm:border-x-0">
     <!-- Header: the section title, its help, and the content-level tab strip -->
     <div class="p-3 sm:px-4 sm:py-3 border-b border-default">
       <div class="flex items-center gap-2 mb-2.5">
@@ -239,7 +252,13 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
         <h2 class="text-lg font-medium">Evidence</h2>
         <HelpHint v-if="help" :topic="help" />
       </div>
-      <div class="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Evidence sections">
+      <!-- Below `sm` the strip wraps onto as many rows as it needs so no tab is
+           hidden off-screen; from `sm` up it stays one scrollable row. -->
+      <div
+        class="flex items-center gap-1 max-sm:flex-wrap sm:overflow-x-auto"
+        role="tablist"
+        aria-label="Evidence sections"
+      >
         <button
           v-for="tab in tabs"
           :key="tab.value"
@@ -265,31 +284,27 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
 
     <div class="p-3 sm:p-4">
       <!-- ── Timeline ─────────────────────────────────────────────── -->
-      <div v-if="activeTab === 'timeline'" ref="timelineWrap" class="scroll-mt-4 space-y-4">
-        <!-- The timeline is anchored on the moment of failure — meaningful only for a failed execution. -->
+      <!-- One view: the axis (for a failed execution) over a single steps table,
+           with network / console / backend items interleaved by time. A passing
+           execution shows the same table without the axis or offsets. -->
+      <div v-if="activeTab === 'timeline'" ref="timelineWrap" class="scroll-mt-4">
         <FailureTimelineCard
-          v-if="hasError"
+          embedded
           :test-runs-case-id="testRunsCaseId"
+          :steps="steps"
+          :duration-ms="testCase?.duration ?? null"
+          :has-error="hasError"
+          :status="status"
           :has-trace="hasTrace"
           :project-key="projectKey"
           :project-name="projectName"
         />
-        <SectionCard icon="i-lucide-list-checks" title="Steps" :count="steps.length || null">
-          <!-- The step table is a data table whose row state is measured in the
-               browser; render it client-side so its hydration stays clean. -->
-          <ClientOnly>
-            <TestStepsTable
-              :steps="steps"
-              :duration-ms="testCase?.duration ?? null"
-              :status="status"
-              :project-key="projectKey"
-              :project-name="projectName"
-            />
-            <template #fallback>
-              <LoadingState text="Loading steps…" />
-            </template>
-          </ClientOnly>
-        </SectionCard>
+      </div>
+
+      <!-- ── Attempts ─────────────────────────────────────────────── -->
+      <!-- Lazy: this card mounts only when the tab opens, fetching the diff then. -->
+      <div v-else-if="activeTab === 'attempts'" class="scroll-mt-4">
+        <AttemptsCard :test-runs-case-id="testRunsCaseId" :attempts="attemptsList" />
       </div>
 
       <!-- ── Screen ───────────────────────────────────────────────── -->
@@ -324,14 +339,14 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
         </div>
 
         <div v-show="!pageDiffAvailable || screenView === 'screenshot'" class="space-y-4">
-          <div ref="screenEvidenceWrap" class="scroll-mt-4">
-            <TestCaseEvidenceCard :attachments="attachments" :traces="traces" />
+          <div ref="screenEvidenceWrap" class="scroll-mt-4 space-y-4">
+            <TestCaseEvidenceCard :attachments="attachments" :traces="traces" embedded />
           </div>
           <div ref="visualDiffWrap" class="scroll-mt-4">
-            <VisualDiffCard v-if="runId" :run-id="runId" :test-runs-case-id="testRunsCaseId" />
+            <VisualDiffCard v-if="runId" embedded :run-id="runId" :test-runs-case-id="testRunsCaseId" />
           </div>
           <div ref="ariaWrap" class="scroll-mt-4">
-            <SectionCard icon="i-lucide-scan-text" title="ARIA snapshot" help="case.aria">
+            <SectionCard embedded icon="i-lucide-scan-text" title="ARIA snapshot" help="case.aria">
               <template v-if="ariaDerived" #actions><TraceDerivedChip /></template>
               <div v-if="ariaSnapshot" class="max-h-96 overflow-y-auto">
                 <MarkdownPreview :text="'```yaml\n' + ariaSnapshot + '\n```'" />
@@ -340,13 +355,14 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
             </SectionCard>
           </div>
           <div ref="domSnapshotWrap" class="scroll-mt-4">
-            <DomSnapshotCard v-if="runId" :run-id="runId" :test-runs-case-id="testRunsCaseId" />
+            <DomSnapshotCard v-if="runId" embedded :run-id="runId" :test-runs-case-id="testRunsCaseId" />
           </div>
         </div>
 
         <div v-show="!pageDiffAvailable || screenView === 'pagediff'" ref="pageDiffWrap" class="scroll-mt-4">
           <PageDiffCard
             v-if="runId"
+            embedded
             :run-id="runId"
             :test-runs-case-id="testRunsCaseId"
             @available="pageDiffAvailable = $event"
@@ -358,6 +374,7 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
       <div v-else-if="activeTab === 'source'" ref="sourceWrap" class="scroll-mt-4">
         <TestSourceCard
           v-if="sourceHasData"
+          embedded
           :frames="testSourceFrames"
           :test-source="testSource"
           :run-id="runId"
@@ -374,21 +391,27 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
         <TestCaseNetworkRequests
           v-if="networkRequests.length > 0 || hasTrace"
           ref="networkComp"
+          embedded
           :requests="networkRequests"
           :run-id="runId"
           :test-runs-case-id="testRunsCaseId"
           :has-trace="hasTrace"
           :derived-from-trace="networkDerived"
         />
-        <SectionCard v-else icon="i-lucide-arrow-left-right" title="Network requests" help="case.network">
+        <SectionCard v-else embedded icon="i-lucide-arrow-left-right" title="Network requests" help="case.network">
           <EvidenceEmptyState :state="networkState" compact />
         </SectionCard>
       </div>
 
       <!-- ── Console ──────────────────────────────────────────────── -->
       <div v-else-if="activeTab === 'console'" ref="consoleWrap" class="scroll-mt-4">
-        <TestCaseConsoleCard v-if="consoleLogs.length" :entries="consoleLogs" :derived-from-trace="consoleDerived" />
-        <SectionCard v-else icon="i-lucide-terminal" title="Console output" help="case.console">
+        <TestCaseConsoleCard
+          v-if="consoleLogs.length"
+          embedded
+          :entries="consoleLogs"
+          :derived-from-trace="consoleDerived"
+        />
+        <SectionCard v-else embedded icon="i-lucide-terminal" title="Console output" help="case.console">
           <EvidenceEmptyState :state="consoleState" compact />
         </SectionCard>
       </div>
@@ -396,19 +419,20 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
       <!-- ── State ────────────────────────────────────────────────── -->
       <div v-else-if="activeTab === 'state'" class="space-y-4">
         <div ref="pageStateWrap" class="scroll-mt-4">
-          <PageStateCard v-if="pageState" :page-state="pageState" />
-          <SectionCard v-else icon="i-lucide-database" title="App state at test end" help="page-state">
+          <PageStateCard v-if="pageState" embedded :page-state="pageState" />
+          <SectionCard v-else embedded icon="i-lucide-database" title="App state at test end" help="page-state">
             <EvidenceEmptyState :state="appStateState" compact />
           </SectionCard>
         </div>
         <div ref="envDiffWrap" class="scroll-mt-4">
-          <EnvironmentDiffCard v-if="runId" :run-id="runId" :test-runs-case-id="testRunsCaseId" />
+          <EnvironmentDiffCard v-if="runId" embedded :run-id="runId" :test-runs-case-id="testRunsCaseId" />
         </div>
       </div>
 
       <!-- ── Performance ──────────────────────────────────────────── -->
       <div v-else-if="activeTab === 'performance'" ref="performanceWrap" class="scroll-mt-4">
         <TestCasePerformancePanel
+          embedded
           :performance-hints="performanceHints"
           :web-vitals="webVitals"
           :state="webVitalsState"

@@ -22,11 +22,19 @@ const props = defineProps<{
   defaultFolded?: boolean;
   /** Mark the entries as recovered from the trace (the capture fixtures were absent). */
   derivedFromTrace?: boolean;
+  /** Drop the card frame and padding — render a plain heading row over the body. */
+  embedded?: boolean;
 }>();
 
-const cardComponent = computed(() => (props.storageKey ? CollapsibleSectionCard : SectionCard));
+const cardComponent = computed(() =>
+  props.embedded ? SectionCard : props.storageKey ? CollapsibleSectionCard : SectionCard,
+);
 const cardBind = computed(() =>
-  props.storageKey ? { storageKey: props.storageKey, defaultFolded: props.defaultFolded } : {},
+  props.embedded
+    ? { embedded: true }
+    : props.storageKey
+      ? { storageKey: props.storageKey, defaultFolded: props.defaultFolded }
+      : {},
 );
 
 const peek = computed(() => {

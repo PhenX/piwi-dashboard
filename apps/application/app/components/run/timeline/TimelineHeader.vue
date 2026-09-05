@@ -1,24 +1,20 @@
 <script setup lang="ts">
-interface SpanTypeItem {
-  key: string;
-  label: string;
-  checked: boolean;
-}
-
 defineProps<{
   workerCount: number;
   shardTotal?: number | null;
   testCount: number;
   hookCount: number;
   waitCount: number;
-  /** Span-type toggles to offer (only the kinds present in the run). */
-  spanTypes: SpanTypeItem[];
+  /** Whether the run has any setup/hook/fixture/wait spans to reveal. */
+  hasNonTestSpans: boolean;
+  /** Current state of the one span toggle. */
+  showHooksAndWaits: boolean;
   live?: boolean;
 }>();
 
 defineEmits<{
   reset: [];
-  toggleSpan: [key: string, visible: boolean];
+  toggleHooksAndWaits: [visible: boolean];
 }>();
 </script>
 
@@ -37,29 +33,14 @@ defineEmits<{
       <HelpHint topic="run.timeline" />
     </span>
     <div class="flex items-center gap-1">
-      <UPopover v-if="spanTypes.length > 1" :content="{ align: 'end' }">
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="ghost"
-          icon="i-lucide-list-filter"
-          trailing-icon="i-lucide-chevron-down"
-          title="Show or hide span types"
-        >
-          Span types
-        </UButton>
-        <template #content>
-          <div class="p-2 flex flex-col gap-2 min-w-56">
-            <UCheckbox
-              v-for="span in spanTypes"
-              :key="span.key"
-              :model-value="span.checked"
-              :label="span.label"
-              @update:model-value="$emit('toggleSpan', span.key, $event === true)"
-            />
-          </div>
-        </template>
-      </UPopover>
+      <USwitch
+        v-if="hasNonTestSpans"
+        :model-value="showHooksAndWaits"
+        label="Show hooks and waits"
+        size="xs"
+        class="mr-1"
+        @update:model-value="$emit('toggleHooksAndWaits', $event === true)"
+      />
 
       <UButton
         v-if="!live"

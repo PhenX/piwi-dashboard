@@ -640,7 +640,7 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Alternatives list -->
-          <div class="space-y-1" role="radiogroup" aria-label="Alternative locators">
+          <div class="space-y-1" role="radiogroup" aria-label="Locator alternatives">
             <LocatorAlternativeRow
               v-for="(alt, i) in alternatives"
               :key="i"

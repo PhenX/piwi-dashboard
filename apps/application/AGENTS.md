@@ -119,6 +119,10 @@ the `SCENES` registry of `scripts/take-feature-screenshots.mjs`, run it (`node s
 report or PR. Scenes tagged `desktop` write to `.screens/`, which is **gitignored — those images are a report artifact,
 never committed**; the scene, kept current, is what's committed.
 
+**Always send those screenshots to the user in the conversation too — not only attach them to the PR.** A user-facing
+change is never reported as done without the pictures. When the change alters existing UI, send the before and the
+after; capture both narrow (~390 px) and wide (~1280 px) when the change is about layout or responsiveness.
+
 Scenes tagged `docs` are the exception: they write the committed illustrations in `apps/docs/public/screenshots/`, so
 the scene name _is_ the image name and `npm run app:screens:docs` regenerates every one of them.
 

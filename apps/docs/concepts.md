@@ -58,8 +58,7 @@ and moving a spec file does too.
 A test case is browser-independent: `login.spec.ts › signs in` is one test case whether it ran on
 Chromium, Firefox, or all five projects in your matrix.
 
-This is the object at `/test-cases/:id` — pass rate, duration trend, status history, and the list of
-every execution.
+This is the object at `/test-cases/:id` — pass rate, duration trend, and the list of every execution.
 
 ## Execution
 
@@ -82,7 +81,7 @@ with its dynamic arguments masked. That hash is the **error fingerprint**.
 
 Every failed execution sharing a fingerprint joins one **failure cluster**. Fifty red tests caused by
 one broken endpoint become one cluster you triage once, with a status (open / resolved / ignored) and
-a note. API routes and a few components say *failure groups* for the same thing.
+a note.
 
 Fingerprints deliberately **ignore the failing stack frame**, so the same root cause reached from six
 different spec files stays one cluster. Full detail:

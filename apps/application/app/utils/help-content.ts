@@ -31,21 +31,6 @@ export interface HelpTopic {
 
 export const HELP_TOPICS = {
   // ── Home ──────────────────────────────────────────────────────────────
-  'home.flaky': {
-    title: 'Flaky tests',
-    text: 'Tests that pass and fail without code changes. This counts how many were detected across your projects recently.',
-    doc: 'flaky-tests#flaky-test-detection',
-  },
-  'home.trend-bars': {
-    title: 'Run history bars',
-    text: 'One bar per full run (up to 20), oldest left → newest right. Green = pass, red = fail, amber = passed with flaky tests, gray = skipped/unknown. Click a bar to open that run.',
-    doc: 'ui-overview#home',
-  },
-  'home.tendency': {
-    title: 'Tendency',
-    text: 'Derived from the last 5 full runs. Failing = latest run failed; flaky = pass/fail mixed or flaky tests seen in the window; passing = all recent runs green.',
-    doc: 'ui-overview#home',
-  },
   'home.project-health': {
     title: 'Project health',
     text: 'Every project at a glance — run history bars and a tendency badge so you can immediately see which project needs attention. Only full runs count.',
@@ -125,11 +110,6 @@ export const HELP_TOPICS = {
   },
 
   // ── Project detail ────────────────────────────────────────────────────
-  'project.run-scope': {
-    title: 'Full vs partial runs',
-    text: 'A partial run executed only a subset of the suite (a shard, a retry, or a filtered selection). Trends use full runs so partial results don’t skew the numbers.',
-    doc: 'ui-overview#test-run-detail',
-  },
   'project.runs-trend': {
     title: 'Run trend',
     text: 'One stacked bar per run — failed anchored at the bottom, passed on top — following the filters above. A growing red base marks where things broke; hover a bar for the counts, click it to open the run.',
@@ -161,25 +141,25 @@ export const HELP_TOPICS = {
     text: 'The tests taking the most time, ranked. Optimizing the top entries shortens your overall run the fastest.',
     doc: 'flaky-tests#performance',
   },
-  'project.run-compare': {
-    title: 'Run comparison',
-    text: 'Diff two runs to see which tests changed status or duration between them — handy for confirming a fix or spotting a regression.',
-    doc: 'ui-overview#test-run-detail',
+  'project.slow-endpoints': {
+    title: 'Slow endpoints',
+    text: 'Backend routes exercised during a run, aggregated per route and ranked by time. Needs the Piwi capture fixtures. Pick a run to inspect its endpoint timings.',
+    doc: 'flaky-tests#performance',
   },
-  'project.test-cases': {
-    title: 'Test cases',
-    text: 'Every distinct test in the project with its executed-only pass rate, result breakdown and average duration across runs. Search by title or file, filter by status, and switch to a per-spec tree. Cases not run within the selected age window are hidden by default (last 30 days) — pick "All time" to see obsolete ones. Click a test to see its full history.',
+  'project.status-line': {
+    title: 'Project status',
+    text: 'The project’s condition at a glance: the latest run and its age, the pass rate over the last 20 runs, and the open clusters, flaky and quarantined counts. Each figure links to the tab that holds it.',
     doc: 'ui-overview#project-detail',
   },
-  'project.compare': {
-    title: 'Compare runs',
-    text: 'Pick two runs to see a side-by-side summary and a per-test status diff between them.',
-    doc: 'ui-overview#test-run-detail',
+  'project.filters': {
+    title: 'Filters',
+    text: 'Environment, branch and full-runs-only scope every list on the page — the runs table, the trend chart, the flaky analysis and performance. The choice is remembered per project.',
+    doc: 'ui-overview#project-detail',
   },
-  'project.spec-health': {
-    title: 'Spec health',
-    text: 'A heatmap grouped by spec file: pass rate, flaky rate and average time per spec, so you can find the riskiest files at a glance.',
-    doc: 'flaky-tests#spec-health-heatmap',
+  'project.test-cases': {
+    title: 'Tests',
+    text: 'Every distinct test in the project with its executed-only pass rate, result breakdown and average duration across runs. Search by title or file, filter by status, and group by spec file to see each file’s health. Tests not run within the selected age window are hidden by default (last 30 days) — pick "All time" to see obsolete ones. Click a test to see its full history.',
+    doc: 'ui-overview#project-detail',
   },
   'project.members': {
     title: 'Project access',
@@ -208,11 +188,6 @@ export const HELP_TOPICS = {
   },
 
   // ── Test run detail ───────────────────────────────────────────────────
-  'run.summary': {
-    title: 'Run header',
-    text: 'The run at a glance — status, the label and marker, one facts line (started, duration, branch, environment, CI build) with a Details popover for the rest, and one count bar whose segments filter the Tests tab.',
-    doc: 'ui-overview#test-run-detail',
-  },
   'run.partial': {
     title: 'Partial run',
     text: 'This run covered only part of the suite (a shard, retry or filtered selection), so its totals aren’t a full picture.',
@@ -222,11 +197,6 @@ export const HELP_TOPICS = {
     title: 'Live run',
     text: 'This run is still streaming results in real time. Results and counts update as each test finishes.',
     doc: 'reporter#live-streaming',
-  },
-  'run.ci-env': {
-    title: 'CI & environment',
-    text: 'Where this run executed — CI provider, pipeline and machine details — collected automatically by the reporter.',
-    doc: 'reporter#automatic-metadata-collection',
   },
   'run.reports': {
     title: 'Storage & reports',
@@ -242,15 +212,10 @@ export const HELP_TOPICS = {
     text: 'Every execution in this run. Group by cluster, file, file and describe block, or none; search title, path and error text; filter by status, browser, new regressions and newly flaky.',
     doc: 'ui-overview#test-run-detail',
   },
-  'run.insights': {
-    title: 'Run insights',
-    text: 'Automatic highlights for this run — newly failing, flaky and slow tests — surfaced so you don’t have to hunt for them.',
-    doc: 'flaky-tests#run-insights',
-  },
-  'run.regression': {
-    title: 'Since last pass',
-    text: 'Compares this run against the most recent passing run of the project — the commits introduced since and the tests that changed between the two.',
-    doc: 'flaky-tests#regression-signals',
+  'run.changes': {
+    title: 'Changes',
+    text: 'What differs between this run and one baseline — the last passing run on the same branch by default, or the run you pick. The tests that started or stopped failing, the ones that got slower or faster, the commits landed since the baseline, and the environment fields that moved. New failures are counted once against that baseline.',
+    doc: 'flaky-tests#changes',
   },
   'run.timeline': {
     title: 'Workers timeline',
@@ -273,6 +238,11 @@ export const HELP_TOPICS = {
     text: 'Everything to do about this failure in one place — the locator fix for a broken locator, a pointer to the cluster’s fix plan, the diagnosis, how to verify a fix, and the tests this failure blocked. Each part shows only when it applies.',
     doc: 'ai-diagnosis#fix-plans',
   },
+  'fix.reproduce': {
+    title: 'Reproduce',
+    text: 'A copy-paste recipe that reproduces the failure locally — check out the failing commit, install the run’s Playwright version and browser, and run exactly the failing test — plus a generated git bisect between the last green and the failing commit to find what broke it. Both come in Linux/macOS and Windows forms. The bisect needs a last-green commit and an SCM connection; without them it says so. In the desktop app, Reproduce here and Find the breaking commit here run the recipe and drive the bisect for you in a throwaway git worktree, without touching your checkout.',
+    doc: 'ai-diagnosis#reproduce-and-bisect',
+  },
   'case.test-source': {
     title: 'Test source',
     text: 'The source around the failing line and the callers above it — captured from the failure’s call stack — so you can read where it broke, and the code that led there, without opening your editor. When the execution has a trace, this deepens into the complete call stack with the real source of every frame, read from the trace’s embedded files.',
@@ -291,25 +261,10 @@ export const HELP_TOPICS = {
     text: 'One time axis that places this execution’s steps, console entries, network requests and backend log entries on the same clock, with a marker at the moment of failure. The default view is the window around the failed step (10s before, 2s after); switch to “Whole test” to see everything. The list below reads it chronologically — click a line to jump to that step, console entry or request. When a run’s reporter recorded no step start times, positions are estimated from durations and the card says so.',
     doc: 'evidence#one-execution-diagnosis-first',
   },
-  'case.wasted-time': {
-    title: 'Wasted time',
-    text: 'Time spent in fixed waits (waitForTimeout and matching patterns) that could usually be replaced with a web-first assertion.',
-    doc: 'flaky-tests#performance',
-  },
-  'case.ai': {
-    title: 'AI diagnosis for this execution',
-    text: 'Diagnose just this failing execution, or copy the full evidence context to paste into your own AI assistant.',
-    doc: 'ai-diagnosis#diagnosing-one-execution',
-  },
   'case.web-vitals': {
     title: 'Web Vitals',
     text: 'Core Web Vitals (LCP, CLS, etc.) captured during the test, measuring real loading and responsiveness of the page under test. When empty, the card says which of three things it means: not captured (add the capture fixtures), captured but nothing recorded, or not applicable (Web Vitals need a Chromium browser).',
     doc: 'capture-fixtures',
-  },
-  'case.traces': {
-    title: 'Traces',
-    text: 'Playwright trace files for this execution. "View trace" opens them in the dashboard\'s own trace viewer — the trace stays on your server, it is never sent to a third party.',
-    doc: 'evidence#trace-viewer',
   },
   'case.console': {
     title: 'Console output',
@@ -321,31 +276,21 @@ export const HELP_TOPICS = {
     text: 'HTTP requests the page made during the test, with timing and status — useful for spotting failed or slow calls. When the execution has a trace, the Full trace view shows every request (all resource types) with headers, timing phases, a waterfall and capped body previews; sensitive header values are masked. An empty card distinguishes not captured (add the capture fixtures) from captured-but-nothing-happened; with a trace and no fixtures the list is recovered from the trace and marked "derived from the trace".',
     doc: 'evidence#trace-powered-deep-views',
   },
-  'case.backend-logs': {
-    title: 'Backend server logs',
-    text: 'Server-side warnings and errors captured during the test, correlated with this execution via a Piwi backend integration. When empty, the card says whether the capture fixtures are missing or the app under test has no Piwi backend integration (backend logs are "not applicable" without one).',
-    doc: 'backend-logs',
-  },
   'case.aria': {
     title: 'ARIA snapshot',
     text: 'A snapshot of the accessibility tree at the moment of failure — what assistive tech saw, and useful grounding for AI diagnosis. An empty card says whether it was not captured (add the capture fixtures) or captured with nothing to snapshot; with a trace and no fixtures it is recovered from the trace\'s error context and marked "derived from the trace".',
     doc: 'ai-diagnosis#what-a-diagnosis-contains',
   },
-
-  // ── Test case across runs ─────────────────────────────────────────────
-  'case.flaky-count': {
-    title: 'Flaky runs',
-    text: 'How many of this test’s recent executions flipped between pass and fail without a code change.',
+  'case.attempts': {
+    title: 'Attempts',
+    text: 'When a test failed then passed on retry, this compares the failing attempt against the passing one and lists what differed — the error that was there then gone, a request that failed on only one attempt, a console error, a slower step, a duration or page-state change. Each difference links to the evidence it came from. That delta is the flakiness fingerprint, and it feeds the root-cause classifier.',
     doc: 'flaky-tests#flaky-test-detection',
   },
+
+  // ── Test case across runs ─────────────────────────────────────────────
   'case.history-chart': {
     title: 'Duration trend',
     text: 'This test’s duration across recent runs. Rising times or spikes hint at a slowdown or instability.',
-    doc: 'flaky-tests#flaky-test-detection',
-  },
-  'case.sparkline': {
-    title: 'Status history',
-    text: 'Pass/fail outcome of this test over its recent runs, oldest to newest — a quick read on its stability.',
     doc: 'flaky-tests#flaky-test-detection',
   },
 
@@ -353,11 +298,6 @@ export const HELP_TOPICS = {
   'cluster.concept': {
     title: 'Failure clusters',
     text: 'Failures with the same error fingerprint are grouped into one cluster, so a single root cause shows up once instead of N times.',
-    doc: 'ai-diagnosis#failure-clustering',
-  },
-  'cluster.new-vs-known': {
-    title: 'New vs known failure',
-    text: 'Whether this failure matches an existing cluster (a known issue) or opened a new one — a fresh signature worth a closer look.',
     doc: 'ai-diagnosis#failure-clustering',
   },
   'cluster.triage': {
@@ -377,8 +317,8 @@ export const HELP_TOPICS = {
     doc: 'ai-diagnosis#did-the-fix-work',
   },
   'cluster.fix-plan': {
-    title: 'Fix plan',
-    text: 'Everything needed to repair this cluster in one place — the diagnosis and its validated patch, the concrete locator edits, the failing tests, the owner, and the command that verifies the fix. Copy it as Markdown for a ticket, or let an agent fetch the same plan via the get_fix_plan MCP tool.',
+    title: 'Fix',
+    text: 'Everything needed to repair this cluster in one place — the AI diagnosis and its validated patch, the recommended locator fix, the command that verifies the fix, and the whole plan as Markdown. Copy it for a ticket, or let an agent fetch the same plan via the get_fix_plan MCP tool.',
     doc: 'ai-diagnosis#fix-plans',
   },
   'cluster.evidence': {
@@ -417,7 +357,7 @@ export const HELP_TOPICS = {
     doc: 'ai-diagnosis#context-limits-and-token-cost',
   },
   'cluster.result': {
-    title: 'Diagnosis result',
+    title: 'Diagnosis',
     text: 'The AI’s proposed root cause, fix and confidence. Treat it as a lead to verify, not proof — confirm against the evidence before acting.',
     doc: 'ai-diagnosis#what-a-diagnosis-contains',
   },
@@ -450,10 +390,6 @@ export const HELP_TOPICS = {
   },
 
   // ── Settings ──────────────────────────────────────────────────────────
-  'settings.general': {
-    title: 'General settings',
-    text: 'Central place for account, users, AI diagnosis, notifications, storage and tags. Settings that can be overridden by environment variables show a lock badge naming the variable.',
-  },
   'settings.storage-stats': {
     title: 'Storage statistics',
     text: 'How much disk your reports, traces and attachments use, broken down so you can see what to clean up.',
@@ -581,6 +517,10 @@ export const HELP_TOPICS = {
     doc: 'ai-diagnosis#enabling-ai-diagnosis',
     envVars: ['PIWI_AI_AUTO_DIAGNOSE'],
   },
+  'settings.ai-notifications': {
+    title: 'Diagnosis notifications',
+    text: 'Show a browser notification when a diagnosis finishes. This is a per-browser preference stored on this device only — it is not shared with other users or saved on the server, and it needs the browser’s notification permission.',
+  },
   'settings.embedding-model': {
     title: 'Embedding model',
     text: 'Embeds failures so semantically-similar errors group together (used by failure clustering). Can reuse another role’s provider or configure its own.',
@@ -681,7 +621,7 @@ export const HELP_TOPICS = {
 
   // ── Locator healing ────────────────────────────────────────────────────
   'locator-healing': {
-    title: 'Alternative locators',
+    title: 'Locator fix',
     text: 'When a locator breaks after a UI change, Piwi suggests pre-captured alternatives from the last passing run — or from another test in the project that uses the same locator. Each alternative is ranked by stability score — prefer data-testid (100) over CSS classes (10–40). The recommended fix shows the exact one-line edit for the failing test, with a "Copy fix prompt" for an AI coding agent. A "Your pick" badge marks a replacement you confirmed on the failing page: "Pick from snapshot" opens the failure-time DOM and lets you click the intended element, and "Pick from trace" opens the failure trace in the trace viewer, whose Pick locator tool works on the recorded page snapshots.',
     doc: 'reporter#locator-healing',
   },

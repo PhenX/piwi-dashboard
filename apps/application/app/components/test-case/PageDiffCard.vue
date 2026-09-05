@@ -15,6 +15,8 @@ import SectionCard from '../shared/SectionCard.vue';
 const props = defineProps<{
   runId: number;
   testRunsCaseId: number;
+  /** Drop the card chrome when embedded inside an evidence tab panel. */
+  embedded?: boolean;
 }>();
 
 const {
@@ -84,7 +86,7 @@ const emptyState = computed<EvidenceState | null>(() => {
 </script>
 
 <template>
-  <SectionCard icon="i-lucide-file-diff" title="Page diff" help="case.page-diff">
+  <SectionCard :embedded="embedded" icon="i-lucide-file-diff" title="Page diff" help="case.page-diff">
     <template v-if="available && diff?.baseline" #subtitle>
       <span
         >{{ baselineLine }}<template v-if="diff.baselineNote"> · {{ diff.baselineNote }}</template></span

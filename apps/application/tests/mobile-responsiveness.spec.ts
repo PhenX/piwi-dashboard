@@ -160,7 +160,7 @@ test.describe('Mobile responsiveness', () => {
         await page.goto(`/test-runs/${runId}`);
         await waitForHydration(page);
 
-        const tabLabels = [/Tests/, /Insights/, /Since last pass/, /Timeline/, /Compare/, /Slow endpoints/];
+        const tabLabels = [/Tests/, /Changes/, /Timeline/];
 
         for (const label of tabLabels) {
           if (viewport.width < 640) {
@@ -196,19 +196,14 @@ test.describe('Mobile responsiveness', () => {
       });
 
       test('wide tables scroll horizontally in place, not the page', async ({ page }) => {
-        await page.goto(`/projects/${projectId}`);
+        await page.goto(`/projects/${projectId}?tab=performance`);
         await waitForHydration(page);
 
-        if (viewport.width < 640) {
-          await page.getByRole('combobox').first().click();
-          await page.getByRole('option', { name: 'Spec health' }).click();
-        } else {
-          await page.getByRole('button', { name: 'Spec health' }).click();
-        }
-
+        // The slowest-tests table is wider than the viewport and scrolls inside
+        // its own container.
         const table = page.locator('table').first();
         await expect(table).toBeVisible();
-        await expectNoHorizontalOverflow(page, 'project detail spec health tab');
+        await expectNoHorizontalOverflow(page, 'project detail performance tab');
 
         // The table itself may be wider than the viewport — that's fine as
         // long as it scrolls inside its own container.

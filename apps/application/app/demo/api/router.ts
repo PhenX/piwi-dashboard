@@ -98,7 +98,9 @@ import {
   getTestCaseStabilityTrend,
   getFailureTimeline,
   getFailureClues,
+  getAttemptDiff,
 } from '#shared/handlers/test-cases';
+import { buildExecutionReproduce } from '#shared/handlers/reproduce';
 import {
   getFailureCluster,
   getOpenFailureClusters,
@@ -643,9 +645,13 @@ const routes: RouteEntry[] = [
   {
     method: 'GET',
     pattern: /^\/api\/test-runs\/(\d+)\/insights$/,
-    handler: async (m, _b, _q, ctx) => {
+    handler: async (m, _b, q, ctx) => {
       await assertDemoEntityScope(ctx, 'run', +m[1]!);
-      return computeRunInsights(await getDemoDb(), +m[1]!);
+      const baselineRaw = q?.get('baseline');
+      const baselineId = baselineRaw ? Number(baselineRaw) : null;
+      return computeRunInsights(await getDemoDb(), +m[1]!, {
+        baselineId: baselineId != null && Number.isFinite(baselineId) ? baselineId : null,
+      });
     },
   },
 
@@ -980,6 +986,22 @@ const routes: RouteEntry[] = [
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'execution', +m[1]!);
       return getFailureClues(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/reproduce$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return buildExecutionReproduce(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/attempt-diff$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getAttemptDiff(await getDemoDb(), +m[1]!);
     },
   },
   {

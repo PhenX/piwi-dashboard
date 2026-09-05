@@ -66,7 +66,7 @@ const positionStyle = computed(() => {
         </span>
       </div>
       <div class="flex items-center gap-3 text-gray-500">
-        <span class="capitalize">{{ item.status }}</span>
+        <span class="capitalize">{{ formatStatusLabel(item.status) }}</span>
         <span>{{ formatTimelineTime(item.duration) }}</span>
         <span>Worker {{ item.workerIndex }}</span>
         <span v-if="item.parentTitle" class="italic truncate max-w-48"> for {{ item.parentTitle }} </span>

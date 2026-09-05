@@ -302,6 +302,8 @@ const TEST_TIMEOUT_RE = /\bTest timeout of (\d+)ms exceeded(?: while (?:running 
 const STRICT_RE = /strict mode violation: (.+?) resolved to (\d+) elements/;
 const URL_RE = /https?:\/\/[^\s'"`)]+/;
 const CALL_LOG_LINE_RE = /^\s*-\s+(?:(\d+) × )?(.*)$/;
+/** A retry-count line Playwright prints without a bullet, indented under a `waiting for` bullet. */
+const RETRY_COUNT_LINE_RE = /^\s+\d+ × (.+)$/;
 
 interface CallLogRead {
   state: CallLogState;
@@ -322,17 +324,23 @@ function withoutStackFrames(text: string): string {
 }
 
 /**
- * The call-log bullet lines: everything after `Call log:` when the header is
- * present, otherwise any `  - …` bullet in the text (a message that was cut
- * before the header still carries them).
+ * The call-log lines: everything after `Call log:` when the header is present,
+ * otherwise any `  - …` bullet in the text (a message that was cut before the
+ * header still carries them). A retry-count line (`N × locator resolved to …`)
+ * rides under its `waiting for` bullet without one of its own, so it is read too.
  */
 function callLogLines(text: string): string[] {
   const start = text.indexOf('Call log:');
   const region = start === -1 ? text : text.slice(start + 'Call log:'.length);
   const lines: string[] = [];
   for (const line of region.split('\n')) {
-    const m = CALL_LOG_LINE_RE.exec(line);
-    if (m) lines.push(m[2]!.trim());
+    const bulleted = CALL_LOG_LINE_RE.exec(line);
+    if (bulleted) {
+      lines.push(bulleted[2]!.trim());
+      continue;
+    }
+    const retry = RETRY_COUNT_LINE_RE.exec(line);
+    if (retry) lines.push(retry[1]!.trim());
   }
   return lines;
 }

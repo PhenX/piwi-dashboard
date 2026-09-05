@@ -8,6 +8,7 @@
  * with no diagnosis still renders its failing tests and verification command.
  */
 import type { FixPlan } from '#shared/fix-plan.types';
+import { reproScript } from '#shared/reproduce';
 
 /** Fenced code block, guarding against a body that already ends in a newline. */
 function fence(body: string, lang = ''): string {
@@ -98,6 +99,29 @@ export function fixPlanToMarkdown(plan: FixPlan, opts: { url?: string } = {}): s
 
   // Verify
   lines.push('## Verify', '', fence(verify.command), '', verify.expectation, '');
+
+  // Reproduce locally — the commands are git/npm/npx, identical on every OS.
+  if (plan.reproduce.steps.length) {
+    lines.push('## Reproduce locally', '', fence(reproScript(plan.reproduce, 'bash'), 'bash'), '');
+    for (const e of plan.reproduce.env) lines.push(`- ${e.label}: ${e.value}`);
+    if (plan.reproduce.env.length) lines.push('');
+    for (const note of plan.reproduce.notes) lines.push(`> ${note}`);
+    if (plan.reproduce.notes.length) lines.push('');
+  }
+
+  // Bisect
+  if (plan.bisect.available) {
+    lines.push('## Bisect the regression', '', fence(plan.bisect.bash, 'bash'), '', plan.bisect.explanation, '');
+  } else {
+    lines.push('## Bisect the regression', '', plan.bisect.reason, '');
+  }
+  if (plan.bisectedCommit) {
+    const c = plan.bisectedCommit;
+    const who = [c.author, c.date].filter(Boolean).join(', ');
+    const suffix = who ? ` (${who})` : '';
+    const subject = c.subject ? ` — ${c.subject}` : '';
+    lines.push(`Bisected to \`${c.sha.slice(0, 12)}\`${subject}${suffix}.`, '');
+  }
 
   if (opts.url) lines.push('---', '', `[Open this cluster in Piwi](${opts.url})`, '');
 
