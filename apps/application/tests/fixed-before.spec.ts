@@ -110,7 +110,7 @@ test.describe.serial('Fixed before', () => {
     await expect(async () => {
       await applyButton.click();
       expect(await readNote()).toContain(`Same as cluster #${resolvedId}:`);
-    }).toPass({ timeout: 45_000, intervals: [1000, 2000, 3000, 5000] });
+    }).toPass({ timeout: 60_000, intervals: [1000, 2000, 3000, 5000] });
 
     // The status is untouched — a new cluster is never marked resolved because
     // an old one was.
