@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { stepLabel } from '@piwitests/core/step-analysis';
 import type { LiveStepInfo } from '~/utils/live-steps';
 
 /**
@@ -6,7 +7,9 @@ import type { LiveStepInfo } from '~/utils/live-steps';
  * Replaces the bare "In progress..." placeholder while step events stream in;
  * the outcome icon lingers on the last step until the next one begins.
  */
-defineProps<{ step: LiveStepInfo }>();
+const props = defineProps<{ step: LiveStepInfo }>();
+
+const label = computed(() => stepLabel(props.step));
 </script>
 
 <template>
@@ -18,6 +21,6 @@ defineProps<{ step: LiveStepInfo }>();
       class="size-3 shrink-0"
     />
     <UIcon v-else name="i-lucide-loader-circle" class="size-3 shrink-0 animate-spin" />
-    <span class="truncate" :title="step.title">{{ step.title }}</span>
+    <span class="truncate" :title="label">{{ label }}</span>
   </span>
 </template>

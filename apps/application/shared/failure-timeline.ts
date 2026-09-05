@@ -12,6 +12,7 @@
  * yields a valid (possibly empty) timeline, and anything without a usable
  * timestamp is listed in `unplaced` with a reason rather than guessed at.
  */
+import { stepLabel } from '@piwitests/core/step-analysis';
 import { parseCallsiteLocation } from './callsite-location';
 
 /** The rows a lane groups. `backend` holds log entries attached to a request. */
@@ -148,6 +149,7 @@ const MAX_LABEL_CHARS = 200;
 
 type StepRow = {
   title?: unknown;
+  subtitle?: unknown;
   duration?: unknown;
   category?: unknown;
   location?: unknown;
@@ -309,7 +311,7 @@ export function buildFailureTimeline(input: FailureTimelineInput): FailureTimeli
   // `test.step` groups: an action's group is the innermost test.step whose span
   // contains it (a test.step contains itself, so it heads its own group).
   const testStepSpans = steps
-    .map((step, index) => ({ index, title: clampLabel(str(step.title)), ...positions[index]! }))
+    .map((step, index) => ({ index, title: clampLabel(stepLabel(step)), ...positions[index]! }))
     .filter((s) => str(steps[s.index]!.category) === 'test.step' && s.title.length > 0);
   const groupTitleFor = (at: number, dur: number): string | null => {
     const mid = at + dur / 2;
@@ -335,7 +337,7 @@ export function buildFailureTimeline(input: FailureTimelineInput): FailureTimeli
   steps.forEach((step, index) => {
     const { at, dur } = positions[index]!;
     const failed = index === failedStepIndex;
-    const label = clampLabel(str(step.title, `Step ${index + 1}`));
+    const label = clampLabel(stepLabel(step) || `Step ${index + 1}`);
     const location = typeof step.location === 'string' ? step.location : null;
     const frames = (location && callsiteByKey.get(fileLineKey(location) ?? '')) || null;
     const stepOrigin = deriveOrigin(location, frames, specFile);

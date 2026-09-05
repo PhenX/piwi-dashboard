@@ -91,6 +91,34 @@ describe('diffAttempts', () => {
     expect(diff[0]!.ref).toEqual({ section: 'executionError' });
   });
 
+  test('aligns 1.63-shaped steps by label so a failed click is not lost among bare "Click" titles', () => {
+    // Both attempts have two "Click" steps; only the failing attempt's second
+    // one errored. Keying by title alone would pair it with the passing first
+    // click and miss the error — the label (title + subtitle) keeps them apart.
+    const failing = cleanPass({
+      steps: [
+        { title: 'Click', subtitle: "getByRole('button', { name: 'Cancel' })", duration: 10 },
+        {
+          title: 'Click',
+          subtitle: "getByRole('button', { name: 'Pay' })",
+          duration: 10,
+          error: { message: 'not enabled' },
+        },
+      ],
+    });
+    const passing = cleanPass({
+      steps: [
+        { title: 'Click', subtitle: "getByRole('button', { name: 'Cancel' })", duration: 10 },
+        { title: 'Click', subtitle: "getByRole('button', { name: 'Pay' })", duration: 10 },
+      ],
+    });
+    const diff = diffAttempts(failing, passing);
+    const stepRow = diff.find((d) => d.kind === 'step');
+    expect(stepRow?.summary).toBe(
+      "Step \"Click getByRole('button', { name: 'Pay' })\" errored on only the failing attempt",
+    );
+  });
+
   test('two identical attempts yield no differences', () => {
     expect(diffAttempts(cleanPass(), cleanPass())).toEqual([]);
   });

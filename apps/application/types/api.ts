@@ -493,6 +493,10 @@ export interface PerformanceStep {
   title: string;
   duration: number;
   category: string;
+  /** The step's target (rendered locator or URL), carried separately by newer Playwright. */
+  subtitle?: string;
+  /** Curated per-step arguments (rendered locator, URL, value, `test.step` author values). */
+  params?: Record<string, string | number | boolean>;
   /** Error message when the step failed (undefined when the step passed). */
   error?: { message?: string };
   /** True when the step failed. */
@@ -509,6 +513,8 @@ export interface PerformanceStep {
  */
 export interface TestStepEvent {
   title: string;
+  /** The step's target (rendered locator or URL), carried separately by newer Playwright. */
+  subtitle?: string | null;
   category: 'hook' | 'fixture' | 'test.step' | 'expect' | 'wait';
   startedAt: number;
   duration: number;

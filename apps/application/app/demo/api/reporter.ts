@@ -32,6 +32,7 @@ import { resolveRunBranch } from '~~/server/utils/run-branch';
 import type { LocatorSnapshot } from '#shared/locator-healing.types';
 import {
   capArray,
+  capSteps,
   capConsoleLogs,
   capErrorText,
   capSourceFrames,
@@ -655,7 +656,7 @@ export async function persistRunCases(
       attempts: capArray(c.attempts, 30),
       line: c.line,
       column: c.column,
-      steps: capArray(c.steps, DEFAULT_INGEST_LIMITS.steps),
+      steps: capSteps(c.steps, DEFAULT_INGEST_LIMITS),
       stepEvents: capArray(c.stepEvents, DEFAULT_INGEST_LIMITS.stepEvents),
       slowestStep: c.slowestStep ?? null,
       slowestStepDuration: c.slowestStepDuration ?? null,
@@ -767,6 +768,7 @@ export async function apiPostRunEvents(
         type: 'step-begin',
         data: {
           title: tc.title,
+          subtitle: tc.subtitle ?? null,
           parentTitle: tc.parentTitle,
           stepCategory: tc.stepCategory ?? null,
           location: tc.location,
@@ -796,6 +798,7 @@ export async function apiPostRunEvents(
         type: 'step-end',
         data: {
           title: tc.title,
+          subtitle: tc.subtitle ?? null,
           parentTitle: tc.parentTitle,
           stepCategory: tc.stepCategory ?? null,
           status: tc.status,

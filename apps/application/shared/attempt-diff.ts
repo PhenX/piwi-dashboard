@@ -10,6 +10,7 @@
  * error row. Shared by the REST endpoint and the demo mirror, and its
  * network/console signal feeds the flaky root-cause classifier.
  */
+import { stepLabel } from '@piwitests/core/step-analysis';
 import type { ParsedPlaywrightError } from '#shared/error-parse';
 import type { PageStateLike } from '#shared/page-state';
 
@@ -27,6 +28,10 @@ export interface AttemptEvidence {
 
 export interface AttemptStep {
   title: string;
+  /** The step's target (rendered locator or URL), carried separately by newer Playwright. */
+  subtitle?: string | null;
+  /** Curated per-step arguments — the tiebreaker when two steps share a label. */
+  params?: Record<string, string | number | boolean> | null;
   duration?: number | null;
   category?: string | null;
   failed?: boolean | null;
@@ -300,19 +305,32 @@ function consoleLevel(e: AttemptConsoleEntry): string {
   return t === 'error' ? 'error' : 'warning';
 }
 
+/** Params signature used as a tiebreaker when two steps share a label. */
+function paramsSig(s: AttemptStep): string {
+  return s.params ? JSON.stringify(s.params) : '';
+}
+
 function stepDiffs(failSteps: AttemptStep[], passSteps: AttemptStep[]): AttemptDiffEntry[] {
-  const passByTitle = new Map<string, AttemptStep>();
+  // Align on the label (title + subtitle), so newer Playwright's bare "Click"
+  // titles do not collapse every action onto one key; params disambiguate two
+  // steps that still share a label.
+  const passByKey = new Map<string, AttemptStep>();
+  const passByLabel = new Map<string, AttemptStep>();
   for (const s of passSteps) {
-    if (!passByTitle.has(s.title)) passByTitle.set(s.title, s);
+    const label = stepLabel(s);
+    const key = `${label} ${paramsSig(s)}`;
+    if (!passByKey.has(key)) passByKey.set(key, s);
+    if (!passByLabel.has(label)) passByLabel.set(label, s);
   }
   const out: AttemptDiffEntry[] = [];
   for (const s of failSteps) {
-    const twin = passByTitle.get(s.title);
+    const label = stepLabel(s);
+    const twin = passByKey.get(`${label} ${paramsSig(s)}`) ?? passByLabel.get(label);
     const failed = Boolean(s.failed || s.error?.message);
     if (failed && !(twin && (twin.failed || twin.error?.message))) {
       out.push({
         kind: 'step',
-        summary: `Step "${s.title}" errored on only the failing attempt`,
+        summary: `Step "${label}" errored on only the failing attempt`,
         detail: s.error?.message ?? null,
         only: 'failing',
         ref: { section: 'steps' },
@@ -322,7 +340,7 @@ function stepDiffs(failSteps: AttemptStep[], passSteps: AttemptStep[]): AttemptD
       if (delta >= STEP_SLOW_DELTA_MS && s.duration >= 2 * twin.duration) {
         out.push({
           kind: 'step',
-          summary: `Step "${s.title}" was ${formatMs(delta)} slower on the failing attempt`,
+          summary: `Step "${label}" was ${formatMs(delta)} slower on the failing attempt`,
           detail: `${formatMs(s.duration)} vs ${formatMs(twin.duration)}`,
           only: 'failing',
           ref: { section: 'steps' },
