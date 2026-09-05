@@ -37,7 +37,13 @@ import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
 import { getPageDiff } from '~~/server/utils/page-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
 import { apiExportTestRunCase, apiExportFailureCluster } from './export';
-import { apiGetDemoTraceStacks, apiGetDemoTraceNetwork, apiGetDemoTraceNetworkBody } from './trace-insights';
+import {
+  apiGetDemoTraceStacks,
+  apiGetDemoTraceNetwork,
+  apiGetDemoTraceNetworkBody,
+  apiGetDemoTraceSnapshots,
+  apiGetDemoTraceSnapshot,
+} from './trace-insights';
 import {
   listProjects,
   getProject,
@@ -1099,6 +1105,22 @@ const routes: RouteEntry[] = [
     handler: async (m, _body, query, ctx) => {
       await assertDemoEntityScope(ctx, 'execution', +m[1]!);
       return apiGetDemoTraceNetworkBody(+m[1]!, query);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/trace-snapshots$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return apiGetDemoTraceSnapshots(+m[1]!);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/trace-snapshot$/,
+    handler: async (m, _body, query, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return apiGetDemoTraceSnapshot(+m[1]!, query);
     },
   },
   // The demo cannot pixel-diff in the browser — it serves the overlay the
