@@ -4,6 +4,7 @@
  */
 
 import type { Role, FilterDetails, TestMetadata, TestSourceFrame } from '#shared/types';
+import type { ScmProviderName } from '#shared/scm-urls';
 export type { TestMetadata, TestSourceFrame };
 
 // ============================================================================
@@ -1260,7 +1261,7 @@ export interface DiagnosisContextCoverage {
     hasCommitRange: boolean;
     /** Set when the user manually overrode the baseline commit SHA */
     baseCommitUsed: string | null;
-    provider: 'github' | 'gitlab' | 'bitbucket' | null;
+    provider: ScmProviderName | null;
     commitsCount: number;
     filesCount: number;
     patchedFilesCount: number;
