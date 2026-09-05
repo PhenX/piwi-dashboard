@@ -114,3 +114,25 @@ describe('docs pages the app deep-links into', () => {
     expect(headings, `apps/docs/${page}.md has no heading anchored #${anchor}`).toContain(anchor);
   });
 });
+
+describe('single-source snippets', () => {
+  // Shared blocks live once under apps/docs/snippets/ and are pulled into docs
+  // pages with VitePress code includes (`<<< @/snippets/…`). Surfaces that
+  // cannot include a file — the repo README and the npm package READMEs —
+  // carry a literal copy instead; this guard fails when such a copy drifts
+  // from the canonical snippet, the same way the positioning check keeps that
+  // one line in sync across surfaces.
+  const SNIPPET_COPIES: Record<string, readonly string[]> = {
+    'apps/docs/snippets/fixtures.ts': ['README.md', 'packages/reporter/README.md'],
+  };
+
+  for (const [snippet, surfaces] of Object.entries(SNIPPET_COPIES)) {
+    const canonical = read(snippet);
+    test.each(surfaces)(`${snippet} → %s carries it verbatim`, (surface) => {
+      expect(
+        read(surface),
+        `${surface} has drifted from ${snippet} — paste the snippet in byte for byte, or convert the surface to a VitePress include`,
+      ).toContain(canonical);
+    });
+  }
+});

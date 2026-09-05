@@ -15,14 +15,7 @@ If you do one thing beyond installing the reporter, do this.
 
 **Option A — extend your existing fixtures:**
 
-```typescript
-// tests/fixtures.ts
-import { test as base, expect } from '@playwright/test'
-import { piwiFixtures } from '@piwitests/reporter'
-
-export const test = base.extend(piwiFixtures)
-export { expect }
-```
+<<< @/snippets/fixtures.ts{ts}
 
 **Option B — one-line extend with `extendPiwiFixtures`:**
 

@@ -74,14 +74,7 @@ On the Playwright side, the reporter reads `X-Piwi-Logs` automatically from ever
 
 Make sure your test files import `test` from the Piwi Dashboard fixtures (or extend with `piwiFixtures`) so network requests are captured:
 
-```typescript
-// tests/fixtures.ts
-import { test as base, expect } from '@playwright/test'
-import { piwiFixtures } from '@piwitests/reporter'
-
-export const test = base.extend(piwiFixtures)
-export { expect }
-```
+<<< @/snippets/fixtures.ts{ts}
 
 See the [capture fixtures guide](/capture-fixtures) for details.
 

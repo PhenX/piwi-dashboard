@@ -155,14 +155,7 @@ See the [Reporter](./reporter) page for the full configuration reference, includ
 
 One small file unlocks the dashboard's richest features — locator healing, the slow-endpoints table, Web Vitals, console capture, and failure-time ARIA snapshots:
 
-```typescript
-// tests/fixtures.ts
-import { test as base, expect } from '@playwright/test'
-import { piwiFixtures } from '@piwitests/reporter'
-
-export const test = base.extend(piwiFixtures)
-export { expect }
-```
+<<< @/snippets/fixtures.ts{ts}
 
 Then import `test` from this file in your specs instead of `@playwright/test`:
 
