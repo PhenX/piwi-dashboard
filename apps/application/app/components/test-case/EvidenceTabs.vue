@@ -293,7 +293,7 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
       </div>
 
       <!-- ── Screen ───────────────────────────────────────────────── -->
-      <div v-else-if="activeTab === 'screen'" class="space-y-4">
+      <div v-else-if="activeTab === 'screen'" data-shot="screen-evidence" class="space-y-4">
         <!-- Screenshot · Page diff — shown only once a diff is available. -->
         <div
           v-if="pageDiffAvailable"
