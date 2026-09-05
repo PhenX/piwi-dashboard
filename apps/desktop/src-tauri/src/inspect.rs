@@ -51,6 +51,29 @@ pub struct FolderInspection {
     reporter_configured: bool,
     /// `projectName` value parsed out of the Playwright config, when set.
     configured_project_name: Option<String>,
+    /// The Playwright config declares a `webServer` — Playwright starts the app
+    /// under test itself, so a reproduction/bisect exercises the real app.
+    web_server: bool,
+}
+
+/// Whether the config source declares a `webServer` block. A `webServer:` key
+/// (any whitespace before the colon), the shape Playwright requires — enough to
+/// tell "Playwright starts the app" from "the tests target an external URL"
+/// without parsing the config.
+fn has_web_server(source: &str) -> bool {
+    let bytes = source.as_bytes();
+    let mut from = 0;
+    while let Some(found) = source[from..].find("webServer") {
+        let mut i = from + found + "webServer".len();
+        from = i;
+        while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        if i < bytes.len() && bytes[i] == b':' {
+            return true;
+        }
+    }
+    false
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -140,6 +163,7 @@ fn inspect(folder: &Path) -> FolderInspection {
             reporter_installed: false,
             reporter_configured: false,
             configured_project_name: None,
+            web_server: false,
         };
     }
 
@@ -184,6 +208,7 @@ fn inspect(folder: &Path) -> FolderInspection {
             .as_deref()
             .is_some_and(|s| s.contains(REPORTER_PACKAGE)),
         configured_project_name,
+        web_server: config_source.as_deref().is_some_and(has_web_server),
     }
 }
 
@@ -396,6 +421,38 @@ mod tests {
             parse_config_project_name(source).as_deref(),
             Some("real-name")
         );
+    }
+
+    #[test]
+    fn detects_a_web_server_block() {
+        let folder = Folder::new("web-server");
+        folder.write(
+            "playwright.config.ts",
+            "export default defineConfig({\n  webServer: { command: 'npm run dev', url: 'http://localhost:3000' },\n});\n",
+        );
+
+        let result = inspect(&folder.0);
+        assert!(result.web_server);
+    }
+
+    #[test]
+    fn no_web_server_when_the_config_has_none() {
+        let folder = Folder::new("no-web-server");
+        folder.write(
+            "playwright.config.ts",
+            "export default defineConfig({ retries: 2 });\n",
+        );
+
+        let result = inspect(&folder.0);
+        assert!(!result.web_server);
+    }
+
+    #[test]
+    fn web_server_detection_ignores_a_mention_that_is_not_a_key() {
+        assert!(has_web_server("webServer: {}"));
+        assert!(has_web_server("  webServer : { command: 'x' }"));
+        assert!(!has_web_server("// configure your webServer here"));
+        assert!(!has_web_server("const webServerHint = 1;"));
     }
 
     #[test]

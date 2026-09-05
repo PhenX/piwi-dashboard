@@ -216,6 +216,7 @@ export const failureClusters = sqliteTable(
     timeToResolutionMs: integer('time_to_resolution_ms'), // first seen → fix landed
     fixVerification: text('fix_verification'), // 'stopped-failing' | 'diagnosis-verified' | 'regressed'
     lastRerunDispatch: text('last_rerun_dispatch', { mode: 'json' }), // ClusterRerunDispatch — most recent "Re-run in CI" dispatch
+    bisectResult: text('bisect_result', { mode: 'json' }), // BisectedCommit — first bad commit the desktop bisect found (sha, subject, author, date)
     createdAt: integer('created_at', { mode: 'timestamp' })
       .notNull()
       .$defaultFn(() => new Date()),

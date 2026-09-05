@@ -20,6 +20,8 @@ export interface DesktopFolderInspection {
   reporterConfigured: boolean;
   /** `projectName` parsed out of the Playwright config, when set as a literal. */
   configuredProjectName: string | null;
+  /** The Playwright config declares a `webServer` — Playwright starts the app itself. */
+  webServer: boolean;
 }
 
 /** Open the native folder picker. `null` on cancel or without the bridge. */

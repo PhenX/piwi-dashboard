@@ -627,7 +627,12 @@ const breadcrumbItems = computed(() => [
               <span class="inline-flex items-center gap-1">Reproduce <HelpHint topic="fix.reproduce" /></span>
             </template>
             <template v-if="fixPlan && showReproduce" #reproduce>
-              <ReproduceSection :reproduce="fixPlan.reproduce" :bisect="fixPlan.bisect" />
+              <ReproduceSection
+                :reproduce="fixPlan.reproduce"
+                :bisect="fixPlan.bisect"
+                :context="fixPlan.reproduceDesktop"
+                :project-label="cluster?.project?.label ?? cluster?.project?.name"
+              />
             </template>
 
             <!-- Fix plan — the whole plan assembled for a ticket or an agent -->

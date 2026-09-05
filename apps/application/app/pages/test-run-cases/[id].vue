@@ -9,7 +9,7 @@ import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator
 import { EVIDENCE_SECTION_TAB } from '~/utils/evidence-sections';
 import type { FixSectionKey } from '~/components/shared/FixCard.vue';
 import type { BlockedCaseRef } from '~~/types/api';
-import type { ReproRecipe, BisectResult } from '#shared/reproduce';
+import type { ReproRecipe, BisectResult, ReproduceDesktopContext } from '#shared/reproduce';
 
 const route = useRoute();
 const testCaseId = route.params.id;
@@ -113,9 +113,11 @@ const aiIntents = computed<AiStepIntent[] | null>(() => {
 const desktopBridge = ref(false);
 
 // The local reproduction recipe and generated bisect for this execution.
-const { data: reproduceData } = await useFetch<{ reproduce: ReproRecipe; bisect: BisectResult } | null>(
-  `/api/test-run-cases/${testCaseId}/reproduce`,
-);
+const { data: reproduceData } = await useFetch<{
+  reproduce: ReproRecipe;
+  bisect: BisectResult;
+  desktop: ReproduceDesktopContext;
+} | null>(`/api/test-run-cases/${testCaseId}/reproduce`);
 
 /** The cluster's stored diagnosis, only when it completed and has a summary. */
 const clusterDiagnosis = computed(() => {
@@ -841,7 +843,12 @@ provide(clusterSectionLocatorKey, {
               <span class="inline-flex items-center gap-1">Reproduce <HelpHint topic="fix.reproduce" /></span>
             </template>
             <template v-if="showReproduce" #reproduce>
-              <ReproduceSection :reproduce="reproduceData!.reproduce" :bisect="reproduceData!.bisect" />
+              <ReproduceSection
+                :reproduce="reproduceData!.reproduce"
+                :bisect="reproduceData!.bisect"
+                :context="reproduceData!.desktop"
+                :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
+              />
             </template>
 
             <!-- The downstream tests this failure blocked from running -->

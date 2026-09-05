@@ -115,6 +115,13 @@ export function fixPlanToMarkdown(plan: FixPlan, opts: { url?: string } = {}): s
   } else {
     lines.push('## Bisect the regression', '', plan.bisect.reason, '');
   }
+  if (plan.bisectedCommit) {
+    const c = plan.bisectedCommit;
+    const who = [c.author, c.date].filter(Boolean).join(', ');
+    const suffix = who ? ` (${who})` : '';
+    const subject = c.subject ? ` — ${c.subject}` : '';
+    lines.push(`Bisected to \`${c.sha.slice(0, 12)}\`${subject}${suffix}.`, '');
+  }
 
   if (opts.url) lines.push('---', '', `[Open this cluster in Piwi](${opts.url})`, '');
 

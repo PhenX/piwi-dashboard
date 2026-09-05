@@ -240,7 +240,7 @@ export const HELP_TOPICS = {
   },
   'fix.reproduce': {
     title: 'Reproduce',
-    text: 'A copy-paste recipe that reproduces the failure locally — check out the failing commit, install the run’s Playwright version and browser, and run exactly the failing test — plus a generated git bisect between the last green and the failing commit to find what broke it. Both come in Linux/macOS and Windows forms. The bisect needs a last-green commit and an SCM connection; without them it says so.',
+    text: 'A copy-paste recipe that reproduces the failure locally — check out the failing commit, install the run’s Playwright version and browser, and run exactly the failing test — plus a generated git bisect between the last green and the failing commit to find what broke it. Both come in Linux/macOS and Windows forms. The bisect needs a last-green commit and an SCM connection; without them it says so. In the desktop app, Reproduce here and Find the breaking commit here run the recipe and drive the bisect for you in a throwaway git worktree, without touching your checkout.',
     doc: 'ai-diagnosis#reproduce-and-bisect',
   },
   'case.test-source': {
