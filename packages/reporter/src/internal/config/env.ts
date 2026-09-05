@@ -16,6 +16,7 @@ const DEFAULTS: PiwiDashboardOptions = {
   captureLocators: true,
   capturePageState: true,
   captureServerTraces: true,
+  sampleAriaOnPass: true,
   defaultCapture: true,
   streaming: true,
   streamingBatchSize: 5,
@@ -53,6 +54,7 @@ export const PIWI_ENV_KEYS = {
   captureLocators: 'PIWI_CAPTURE_LOCATORS',
   capturePageState: 'PIWI_CAPTURE_PAGE_STATE',
   captureServerTraces: 'PIWI_CAPTURE_SERVER_TRACES',
+  sampleAriaOnPass: 'PIWI_SAMPLE_ARIA_ON_PASS',
   defaultCapture: 'PIWI_DEFAULT_CAPTURE',
   inspectOnFailure: 'PIWI_INSPECT_ON_FAIL',
   pickLocatorOnFailure: 'PIWI_PICK_LOCATOR_ON_FAIL',
@@ -140,6 +142,7 @@ const ENV_FALLBACK_SPECS: ReadonlyArray<{
   { option: 'captureLocators', env: PIWI_ENV_KEYS.captureLocators, kind: 'bool' },
   { option: 'capturePageState', env: PIWI_ENV_KEYS.capturePageState, kind: 'bool' },
   { option: 'captureServerTraces', env: PIWI_ENV_KEYS.captureServerTraces, kind: 'bool' },
+  { option: 'sampleAriaOnPass', env: PIWI_ENV_KEYS.sampleAriaOnPass, kind: 'bool' },
   { option: 'defaultCapture', env: PIWI_ENV_KEYS.defaultCapture, kind: 'bool' },
   { option: 'inspectOnFailure', env: PIWI_ENV_KEYS.inspectOnFailure, kind: 'bool' },
   { option: 'pickLocatorOnFailure', env: PIWI_ENV_KEYS.pickLocatorOnFailure, kind: 'bool' },
@@ -242,6 +245,10 @@ export function applyOptionsToEnv(options: PiwiDashboardOptions): void {
   if (options.captureServerTraces === false || options.collectPerformanceMetrics === false)
     env[PIWI_ENV_KEYS.captureServerTraces] = 'false';
   else if (options.captureServerTraces === true) env[PIWI_ENV_KEYS.captureServerTraces] = 'true';
+  // Green ARIA sampling runs in the worker fixture; bridge only an explicit
+  // value so an unset option keeps the fixture's default-on behavior.
+  if (options.sampleAriaOnPass === false) env[PIWI_ENV_KEYS.sampleAriaOnPass] = 'false';
+  else if (options.sampleAriaOnPass === true) env[PIWI_ENV_KEYS.sampleAriaOnPass] = 'true';
   // Failure-time inspection and the locator picker run in the worker fixture,
   // so bridge them into the env the same way (default-off: only an explicit
   // option value is written).

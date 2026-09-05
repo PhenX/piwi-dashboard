@@ -79,6 +79,16 @@ export interface PiwiDashboardOptions {
    */
   captureServerTraces?: boolean;
   /**
+   * Sample the ARIA snapshot at the end of a *passing* test, so a later failure
+   * can be diffed against the page as it last looked when green. Rate-limited by
+   * the server: at run start the reporter asks which tests are due a fresh
+   * sample (their newest green snapshot is older than a day, or missing) and
+   * captures only those, so steady-state runs pay nothing. Rides the existing
+   * capture fixtures — no snapshot is taken without them. Defaults to `true`.
+   * Set to `false` (or `PIWI_SAMPLE_ARIA_ON_PASS=false`) to never sample on pass.
+   */
+  sampleAriaOnPass?: boolean;
+  /**
    * When installed via `wrapConfig`, default Playwright's own `screenshot` and
    * `trace` options on the top-level `use` block so a failing test keeps a
    * screenshot (`'only-on-failure'`) and a trace (`'retain-on-failure'`) even

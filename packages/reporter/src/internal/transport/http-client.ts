@@ -146,6 +146,30 @@ export class HttpClient {
     return cookie;
   }
 
+  /**
+   * Send a JSON GET request, returning the parsed body, or `null` on any non-2xx
+   * status or parse failure. Unlike `postJSON` this never throws — its callers
+   * treat a missing or unreachable endpoint as "feature unavailable".
+   */
+  async getJSON(pathname: string, auth?: string | null): Promise<any> {
+    let res: HttpResponse;
+    try {
+      res = await this.request('GET', pathname, { auth });
+    } catch (error) {
+      this.logger.debug(`GET ${pathname} failed: ${(error as Error).message}`);
+      return null;
+    }
+    if (res.status < 200 || res.status >= 300) {
+      this.logger.debug(`GET ${pathname} returned ${res.status}`);
+      return null;
+    }
+    try {
+      return JSON.parse(res.text);
+    } catch {
+      return null;
+    }
+  }
+
   /** Send a JSON POST request. `auth` can be an API key (prefix `pd_`) or a session cookie string. */
   async postJSON(pathname: string, payload: unknown, auth?: string | null): Promise<any> {
     const body = JSON.stringify(payload);
@@ -199,7 +223,7 @@ export class HttpClient {
         {
           hostname: url.hostname,
           port: url.port || (url.protocol === 'https:' ? 443 : 80),
-          path: url.pathname,
+          path: url.pathname + url.search,
           method,
           headers,
         },
