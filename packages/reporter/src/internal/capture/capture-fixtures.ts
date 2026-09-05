@@ -40,6 +40,7 @@ import {
 import { ATTACHMENT_NAMES, LOCATOR_SUGGESTION_ANNOTATION, USER_PICK_ANNOTATION } from './attachments.js';
 import { environmentalSkipReason, inspectionGateFromTestInfo, shouldInspectOnFailure } from './inspect-on-failure.js';
 import { applyPickToSnapshots, deriveFailedLocator, runLocatorPicker, type UserPickResult } from './pick-on-failure.js';
+import { isDueForAriaSample } from '../support/aria-sampling.js';
 
 // Re-exported: probeElementAttrs now lives in @piwitests/picker-dom (shared
 // with the dashboard's snapshot picker), but the dogfood mirror
@@ -490,6 +491,16 @@ async function stashPageState(sink: CaptureSink, closing: { page?: Page; context
 
   const status = sink.testInfo?.status;
   if (status === 'failed' || status === 'timedOut' || status === 'interrupted') {
+    const aria = await ariaSnapshotBestEffort(page.locator(':root'), 1000);
+    if (aria) sink.stashedAria = aria;
+  } else if (
+    status === 'passed' &&
+    process.env.PIWI_SAMPLE_ARIA_ON_PASS !== 'false' &&
+    sink.testInfo &&
+    isDueForAriaSample(sink.testInfo)
+  ) {
+    // Sample the green page while it is still open, for the tests the server
+    // flagged as due a fresh snapshot this run.
     const aria = await ariaSnapshotBestEffort(page.locator(':root'), 1000);
     if (aria) sink.stashedAria = aria;
   }
@@ -1173,6 +1184,28 @@ async function flushSink(sink: CaptureSink, testInfo: TestInfo): Promise<void> {
             body: Buffer.from(JSON.stringify(suggestion)),
           });
         }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Sample the ARIA snapshot at the end of a passing test, but only for the
+  // tests the server flagged as due a fresh green sample this run. The same
+  // attachment carries it as a failure snapshot, so ingest and the diff read it
+  // the same way. Rate-limited server-side; a null sample set never samples.
+  if (
+    testInfo.status === 'passed' &&
+    process.env.PIWI_SAMPLE_ARIA_ON_PASS !== 'false' &&
+    isDueForAriaSample(testInfo)
+  ) {
+    try {
+      const snapshot = (pageReadable ? await ariaSnapshotBestEffort(page.locator(':root')) : null) ?? sink.stashedAria;
+      if (snapshot) {
+        await testInfo.attach(ATTACHMENT_NAMES.ariaSnapshot, {
+          contentType: 'text/plain',
+          body: snapshot,
+        });
       }
     } catch {
       /* ignore */

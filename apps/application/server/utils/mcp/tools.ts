@@ -58,6 +58,8 @@ import type {
 import type { RunMetadata, BrowserConfig } from '../run-json-types';
 import { getStorage } from '../../storage';
 import { getLocatorHealingBatch, getLocatorHealing } from '../locator-healing';
+import { getPageDiff } from '../page-diff';
+import { describePageDiff, formatPageDiffSummary } from '#shared/page-diff';
 import { inlineCasePayloads } from '../case-payloads';
 import { selectCaseScreenshots } from '../case-screenshots';
 import { createScmProvider } from '../scm';
@@ -1685,7 +1687,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       .from(testCases)
       .where(eq(testCases.id, row.testCaseId));
 
-    const [healing, screenshotRows, diagContext, cluesResult] = await Promise.all([
+    const [healing, screenshotRows, diagContext, cluesResult, pageDiff] = await Promise.all([
       getLocatorHealing(db, id).catch(() => null),
       selectCaseScreenshots(db, id),
       row.failureClusterId
@@ -1697,6 +1699,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
           }).catch(() => null)
         : Promise.resolve(null),
       getFailureClues(db, id).catch(() => null),
+      getPageDiff(db, id).catch(() => null),
     ]);
 
     const rec = healing && healing.source !== 'none' ? healing.recommendation?.recommended : null;
@@ -1716,6 +1719,20 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       consoleLogs: row.consoleLogs,
       ariaSnapshot: trunc(evidence.ariaSnapshot, 3000),
       locatorFix: rec ? dropNulls({ locator: rec.locator, method: rec.method, score: rec.score }) : null,
+      pageDiff:
+        pageDiff?.status === 'ok' && pageDiff.summary
+          ? dropNulls({
+              summary: describePageDiff(pageDiff.summary),
+              changes: formatPageDiffSummary(pageDiff.summary),
+              baselineRunId: pageDiff.baseline?.runId ?? null,
+              locatorChange:
+                pageDiff.hunks?.find((h) => h.matchesLocator)?.type === 'renamed'
+                  ? `the failing locator's ${pageDiff.hunks.find((h) => h.matchesLocator)!.role} was renamed`
+                  : pageDiff.hunks?.some((h) => h.matchesLocator && h.type === 'removed')
+                    ? `the failing locator's node was removed from the page`
+                    : null,
+            })
+          : null,
       screenshotCount: screenshotRows.length || null,
       diagnosisContext: diagContext?.text || null,
       isNewRegression: row.isNewRegression || null,

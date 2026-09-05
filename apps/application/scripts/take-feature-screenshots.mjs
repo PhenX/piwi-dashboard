@@ -503,6 +503,27 @@ const SCENES = [
   },
 
   {
+    name: 'page-diff',
+    description: 'Screen tab: the Screenshot · Page diff toggle and the structural diff of the failing page',
+    // Execution 37 (checkout) has a green ARIA sample and a failing one that
+    // renames the "Pay" button and disables it — a legible one-line diff.
+    route: '/test-run-cases/37',
+    viewport: { width: 1280, height: 1200 },
+    of: '[data-shot="screen-evidence"]',
+    pad: 12,
+    async run({ page, shoot, settle }) {
+      await page
+        .getByRole('tablist', { name: 'Evidence sections' })
+        .getByRole('tab', { name: 'Screen', exact: true })
+        .click();
+      const toggle = page.getByRole('tablist', { name: 'Screen view' }).getByRole('tab', { name: 'Page diff' });
+      await toggle.waitFor({ state: 'visible', timeout: 30_000 });
+      await toggle.click();
+      await settle();
+      await shoot();
+    },
+  },
+  {
     name: 'setup-companion-tools',
     description: 'Setup page: the companion-tools card below the capability ladder',
     route: '/setup',

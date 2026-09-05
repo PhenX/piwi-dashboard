@@ -1577,3 +1577,19 @@ export interface FlakyTest {
   wastedCiMinutes: number;
   avgFailedDurationMs: number;
 }
+
+/** A page diff between a failing execution and its last green sample. */
+export interface PageDiff {
+  status: 'ok' | 'no-failure-snapshot' | 'no-green-sample' | 'not-applicable' | 'not-found';
+  baseline?: {
+    executionId: number;
+    runId: number;
+    at: number | null;
+    commit: string | null;
+    branch: string | null;
+    environment: string | null;
+  };
+  baselineNote?: string | null;
+  summary?: import('#shared/page-diff').PageDiffSummary;
+  hunks?: import('#shared/page-diff').PageDiffHunk[];
+}

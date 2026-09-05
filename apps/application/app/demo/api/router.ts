@@ -33,6 +33,7 @@ import { buildFixPlan } from '~~/server/utils/fix-plan';
 import { fixPlanToMarkdown } from '#shared/fix-plan-markdown';
 import { contextStalenessHash } from '#shared/diagnosis-staleness';
 import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
+import { getPageDiff } from '~~/server/utils/page-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
 import { apiExportTestRunCase, apiExportFailureCluster } from './export';
 import { apiGetDemoTraceStacks, apiGetDemoTraceNetwork, apiGetDemoTraceNetworkBody } from './trace-insights';
@@ -166,6 +167,7 @@ import {
 } from '#shared/handlers/users';
 import { searchProjectsTestRunsCases } from '#shared/handlers/search';
 import { getSetupStatus } from '#shared/handlers/setup-status';
+import { getAriaSampling } from '#shared/handlers/aria-sampling';
 import {
   apiSetupTestRun,
   apiBeginTestRun,
@@ -486,6 +488,14 @@ const routes: RouteEntry[] = [
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'project', +m[1]!);
       return getProjectLatestRun(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/projects\/(\d+)\/aria-sampling$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'project', +m[1]!);
+      return getAriaSampling(await getDemoDb(), +m[1]!);
     },
   },
   {
@@ -1016,6 +1026,14 @@ const routes: RouteEntry[] = [
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'execution', +m[1]!);
       return getEnvironmentDiff(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/page-diff$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getPageDiff(await getDemoDb(), +m[1]!);
     },
   },
   {
