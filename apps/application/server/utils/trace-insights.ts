@@ -10,11 +10,14 @@
  */
 import type { ParsedTraceData, TraceAction } from './trace-events';
 import { maskSensitiveText } from './dom-snapshot-render';
+import { diffAriaSnapshots } from '#shared/page-diff';
 import type {
   TraceBodyResponse,
   TraceCallStackResponse,
   TraceNetworkEntry,
   TraceNetworkResponse,
+  TraceSnapshotsResponse,
+  TraceSnapshotStep,
   TraceStackFrame,
 } from '../../types/api';
 
@@ -533,6 +536,75 @@ export function matchNetworkBodySha1(
     }
   }
   return null;
+}
+
+/** Whether an action carries any aria or screen snapshot (either phase). */
+function actionHasSnapshot(a: TraceAction): boolean {
+  return !!(a.ariaSnapshotBefore || a.ariaSnapshotAfter || a.screenshotBefore || a.screenshotAfter);
+}
+
+/** The trace-relative file recorded for one action's snapshot phase, or null. */
+export function resolveSnapshotFile(
+  parsed: ParsedTraceData | null,
+  callId: string,
+  kind: 'aria' | 'screen',
+  phase: 'before' | 'after',
+): string | null {
+  const action = parsed?.actions.find((a) => a.callId === callId);
+  if (!action) return null;
+  if (kind === 'aria') return (phase === 'before' ? action.ariaSnapshotBefore : action.ariaSnapshotAfter) ?? null;
+  return (phase === 'before' ? action.screenshotBefore : action.screenshotAfter) ?? null;
+}
+
+/**
+ * Build the per-action aria / screen snapshot inventory and the in-execution
+ * page diff from a parsed trace. `readAriaText` returns the text form of an
+ * `aria/*.json` file (via `ariaJsonToText`); the page diff compares the failing
+ * action's before-phase aria tree against its after-phase tree. Node-free, so
+ * the server and the demo produce the same answer.
+ */
+export function buildTraceSnapshots(
+  parsed: ParsedTraceData | null,
+  readAriaText: (file: string) => string | null,
+): TraceSnapshotsResponse {
+  if (!parsed) return { status: 'no-trace', steps: [], failingCallId: null, hasAria: false, hasScreen: false };
+
+  const failingCallId = parsed.failingAction?.callId ?? null;
+  const steps: TraceSnapshotStep[] = parsed.actions.filter(actionHasSnapshot).map((a, i) => ({
+    callId: a.callId,
+    index: i,
+    title: a.apiName || a.method || 'step',
+    failed: a.callId === failingCallId,
+    startTime: a.startTime,
+    aria: { before: !!a.ariaSnapshotBefore, after: !!a.ariaSnapshotAfter },
+    screen: { before: !!a.screenshotBefore, after: !!a.screenshotAfter },
+  }));
+
+  if (steps.length === 0) return { status: 'no-snapshots', steps: [], failingCallId, hasAria: false, hasScreen: false };
+
+  const hasAria = steps.some((s) => s.aria.before || s.aria.after);
+  const hasScreen = steps.some((s) => s.screen.before || s.screen.after);
+  return {
+    status: 'ok',
+    steps,
+    failingCallId,
+    hasAria,
+    hasScreen,
+    pageDiff: pageDiffForFailingAction(parsed, readAriaText),
+  };
+}
+
+function pageDiffForFailingAction(
+  parsed: ParsedTraceData,
+  readAriaText: (file: string) => string | null,
+): TraceSnapshotsResponse['pageDiff'] {
+  const failing = parsed.failingAction;
+  if (!failing?.ariaSnapshotBefore || !failing.ariaSnapshotAfter) return null;
+  const before = readAriaText(failing.ariaSnapshotBefore);
+  const after = readAriaText(failing.ariaSnapshotAfter);
+  if (before == null || after == null) return null;
+  const { summary, hunks } = diffAriaSnapshots(before, after);
+  return { summary, hunks };
 }
 
 const TEXT_BODY_CAP_CHARS = 100_000;
