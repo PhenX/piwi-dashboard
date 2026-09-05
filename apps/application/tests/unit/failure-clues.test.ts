@@ -194,6 +194,40 @@ describe('console-mentions-target', () => {
   });
 });
 
+describe('page-structure-changed', () => {
+  test('positive: the failing locator maps to a renamed node in the page diff', () => {
+    const input = baseInput({
+      pageDiff: {
+        locatorChange: { type: 'renamed', role: 'button', name: 'Pay now', oldName: 'Pay' },
+      },
+    });
+    const clue = buildFailureClues(input).find((c) => c.rule === 'page-structure-changed');
+    expect(clue).toBeTruthy();
+    expect(clue!.strength).toBe('strong');
+    expect(clue!.detail).toContain('"Pay"');
+    expect(clue!.citations[0]!.section).toBe('pageDiff');
+  });
+
+  test('positive: a removed node the locator names', () => {
+    const input = baseInput({
+      pageDiff: { locatorChange: { type: 'removed', role: 'button', name: 'Refresh', oldName: null } },
+    });
+    expect(rules(input)).toContain('page-structure-changed');
+  });
+
+  test('negative: a moved node is not a broken-locator signal', () => {
+    const input = baseInput({
+      pageDiff: { locatorChange: { type: 'moved', role: 'button', name: 'Pay', oldName: null } },
+    });
+    expect(rules(input)).not.toContain('page-structure-changed');
+  });
+
+  test('negative: no locator change means no clue', () => {
+    expect(rules(baseInput({ pageDiff: { locatorChange: null } }))).not.toContain('page-structure-changed');
+    expect(rules(baseInput())).not.toContain('page-structure-changed');
+  });
+});
+
 describe('backend-error-attached', () => {
   test('positive: a request in the window with an error-level server log', () => {
     const input = baseInput({

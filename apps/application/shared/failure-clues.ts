@@ -30,6 +30,12 @@ export interface FailureClueEnvironmentDiff {
   entries?: Array<{ key: string; label?: string | null }> | null;
 }
 
+/** The page-diff facts the engine reads — the change (if any) at the failing locator's node. */
+export interface FailureCluePageDiff {
+  /** The hunk the failing locator maps to, or null when the locator maps to no change. */
+  locatorChange: { type: string; role: string; name: string | null; oldName?: string | null } | null;
+}
+
 /** The rule that produced a clue — stable ids, used for ordering and tests. */
 export type FailureClueRule =
   | 'failed-request-before-failure'
@@ -37,6 +43,7 @@ export type FailureClueRule =
   | 'console-mentions-target'
   | 'backend-error-attached'
   | 'element-renamed'
+  | 'page-structure-changed'
   | 'element-present-but-blocked'
   | 'wrong-page'
   | 'worker-pollution'
@@ -128,6 +135,8 @@ export interface FailureClueInput {
   ariaSnapshot: string | null;
   appState: PageStateLike | null;
   environmentDiff: FailureClueEnvironmentDiff | null;
+  /** The structural page diff against the last green sample, when one exists. */
+  pageDiff?: FailureCluePageDiff | null;
   networkRequests: FailureClueNetworkRequest[];
   consoleLogs: FailureClueConsoleEntry[];
   /** Sibling executions of this test in this run, one per browser. */
@@ -153,6 +162,7 @@ const RULE_ORDER: FailureClueRule[] = [
   'console-mentions-target',
   'backend-error-attached',
   'element-renamed',
+  'page-structure-changed',
   'element-present-but-blocked',
   'wrong-page',
   'worker-pollution',
@@ -384,6 +394,25 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
         citations: [{ section: 'locatorHealing' }],
       });
     }
+  }
+
+  // ── page-structure-changed (strong) ────────────────────────────────────────
+  // The page diff against the last green sample shows the failing locator's node
+  // was removed or renamed — a structural change that explains the broken locator.
+  const locatorChange = input.pageDiff?.locatorChange;
+  if (locatorChange && (locatorChange.type === 'removed' || locatorChange.type === 'renamed')) {
+    const node = locatorChange.name ? `${locatorChange.role} "${locatorChange.name}"` : locatorChange.role;
+    add({
+      id: 'page-structure-changed',
+      rule: 'page-structure-changed',
+      strength: 'strong',
+      title: 'The page structure changed near the failing locator',
+      detail:
+        locatorChange.type === 'renamed'
+          ? `Since the last passing run the ${locatorChange.role} the locator names was renamed from "${locatorChange.oldName}" to "${locatorChange.name}".`
+          : `Since the last passing run the ${node} the locator names was removed from the page.`,
+      citations: [{ section: 'pageDiff' }],
+    });
   }
 
   // ── element-present-but-blocked (strong) ───────────────────────────────────

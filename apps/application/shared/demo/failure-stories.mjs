@@ -907,6 +907,12 @@ export const FAILURE_STORIES = [
     aria:
       '- document:\n  - form "Checkout":\n    - textbox "Email address"\n    - textbox "Card number"\n' +
       '    - textbox "Expiry date"\n    - textbox "CVV"\n    - button "Pay now" [disabled]',
+    // The page as it last passed: the pay button was named "Pay" and enabled.
+    // Diffed against the failure it reads as a renamed, now-disabled button —
+    // exactly why the `name: 'Pay'` locator stopped matching.
+    baselineAria:
+      '- document:\n  - form "Checkout":\n    - textbox "Email address"\n    - textbox "Card number"\n' +
+      '    - textbox "Expiry date"\n    - textbox "CVV"\n    - button "Pay"',
     domSnapshot: { viewport: DOM_SNAPSHOT_VIEWPORT, html: CHECKOUT_PAY_DOM },
     evidence: {
       consoleOnFail: [
@@ -1459,6 +1465,12 @@ export const FAILURE_STORIES = [
       ),
     ],
     aria: '- document:\n  - main:\n    - heading "Users"\n    - table "Users":\n      - row "Name Email Role"\n      - row "Ada Lovelace ada@example.com admin"',
+    // The page as it last passed: a rows-per-page control and pagination that
+    // vanished on the failure, which is why every row renders at once.
+    baselineAria:
+      '- document:\n  - main:\n    - heading "User directory"\n    - button "Rows per page: 25"\n' +
+      '    - table "Users":\n      - row "Name Email Role"\n      - row "Ada Lovelace ada@example.com admin"\n' +
+      '    - navigation "Pagination":\n      - button "Next page"',
     evidence: {
       failingNetwork: [
         {

@@ -800,6 +800,8 @@ provide(clusterSectionLocatorKey, {
                 :test-runs-case-id="Number(testCaseId)"
                 :ai-intents="aiIntents"
                 :chrome="false"
+                :has-page-diff="true"
+                @show-page-diff="evidenceTabs?.revealSection('pageDiff')"
               />
             </template>
 

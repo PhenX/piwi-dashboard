@@ -37,7 +37,12 @@ const props = defineProps<{
    * shows that prompt next to it — the *intent* behind the broken selector.
    */
   aiIntents?: AiStepIntent[] | null;
+  /** True when a structural page diff is available for this execution — enables the "looks renamed" link to it. */
+  hasPageDiff?: boolean;
 }>();
+
+// Asks the host to reveal the page diff — the structural proof of a rename.
+const emit = defineEmits<{ 'show-page-diff': [] }>();
 
 // A card-less wrapper for the embedded (Fix card) variant: renders the
 // provenance note first, then the actions, then the body — and swallows the
@@ -479,8 +484,25 @@ defineExpose({ reveal: () => cardRef.value?.reveal?.() });
       icon="i-lucide-alert-triangle"
       variant="subtle"
       title="The element's name looks changed"
-      description="The captured accessible name no longer appears on the failing page, so name-based alternatives (and the failing locator itself) probably no longer match. Prefer the structural options, or the failing-page candidates below."
-    />
+    >
+      <template #description>
+        <p>
+          The captured accessible name no longer appears on the failing page, so name-based alternatives (and the
+          failing locator itself) probably no longer match. Prefer the structural options, or the failing-page
+          candidates below.
+        </p>
+        <UButton
+          v-if="hasPageDiff"
+          class="mt-1.5 -ml-1.5"
+          variant="link"
+          color="warning"
+          size="xs"
+          icon="i-lucide-file-diff"
+          label="See it in the page diff"
+          @click="emit('show-page-diff')"
+        />
+      </template>
+    </UAlert>
 
     <!-- Recommended fix — the hero action, above the full menu. Keeps the
          original locator style where it's stable enough, and offers the exact

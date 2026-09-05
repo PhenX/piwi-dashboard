@@ -37,6 +37,7 @@ export const DIAGNOSIS_SECTIONS: DiagnosisSectionMeta[] = [
   { id: 'domSnapshot', label: 'DOM snapshot from trace (failure time)', short: 'DOM' },
   { id: 'screenshots', label: 'Screenshots (attached as images)', short: 'Screenshots' },
   { id: 'visualDiff', label: 'Visual diff vs last passing screenshot', short: 'Visual diff' },
+  { id: 'pageDiff', label: 'Page structure diff vs last green sample', short: 'Page diff' },
   { id: 'browserDistribution', label: 'Browser distribution', short: 'Browsers' },
   { id: 'recurrenceFlakiness', label: 'Recurrence & flakiness', short: 'Flakiness' },
   { id: 'baselineComparison', label: 'Compared to last pass (duration/vitals/steps)', short: 'Baseline' },
