@@ -891,6 +891,10 @@ export interface FailureClusterDetail extends ClusterResolutionFields {
   affectedTests: number;
   lastSeenRunStatus: string | null;
   lastSeenAt: string | Date | null;
+  /** The execution in the last-seen run — the cluster's latest occurrence, or null when none loads. */
+  latestTestRunsCaseId: number | null;
+  /** The test case that latest occurrence belongs to. */
+  latestTestCaseId: number | null;
   diagnosis: DiagnosisCompact | null;
   project: { id: number; name: string; label: string | null } | null;
   affectedTestCases: Array<{

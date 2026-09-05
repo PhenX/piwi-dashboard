@@ -51,6 +51,18 @@ function makePlan(overrides: Partial<FixPlan> = {}): FixPlan {
       powershell: 'git bisect start abc123 green01\ngit bisect run npx playwright test\ngit bisect reset',
       explanation: 'Walks the commits between green01 and abc123.',
     },
+    bisectedCommit: null,
+    reproduceDesktop: {
+      projectId: 1,
+      cases: [{ filePath: 'tests/checkout.spec.ts', title: 'checkout completes', line: 42, projectName: 'chromium' }],
+      browserName: 'chromium',
+      commit: 'abc123',
+      good: 'green01',
+      bad: 'abc123',
+      clusterId: 7,
+      repositoryUrl: 'https://github.com/acme/web',
+      bisectedCommit: null,
+    },
     fixedBefore: [],
     ...overrides,
   };
@@ -78,6 +90,23 @@ describe('fixPlanToMarkdown', () => {
     expect(md).toContain('Environment: production');
     expect(md).toContain('## Bisect the regression');
     expect(md).toContain('git bisect start abc123 green01');
+  });
+
+  it('names the bisected first bad commit when one was recorded', () => {
+    const md = fixPlanToMarkdown(
+      makePlan({
+        bisectedCommit: {
+          sha: 'deadbeef1234',
+          subject: 'tighten the checkout guard',
+          author: 'Dev One',
+          date: '2026-01-02',
+          commitUrl: 'https://github.com/acme/web/commit/deadbeef1234',
+        },
+      }),
+    );
+    expect(md).toContain('Bisected to `deadbeef1234`');
+    expect(md).toContain('tighten the checkout guard');
+    expect(md).toContain('Dev One, 2026-01-02');
   });
 
   it('renders the bisect reason when the window is unavailable', () => {

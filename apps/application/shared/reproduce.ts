@@ -94,6 +94,48 @@ export interface BisectInput {
 }
 
 /**
+ * The first bad commit a bisect found — the identity the desktop shell records
+ * on the cluster so it survives reloads and reaches the fix plan. `commitUrl` is
+ * derived at read time from the project's SCM provider, so it is not stored.
+ */
+export interface BisectedCommit {
+  sha: string;
+  subject: string;
+  author: string | null;
+  /** ISO date the commit was authored, when git reported one. */
+  date: string | null;
+  /** Deep link to the commit on the configured SCM host, when one is known. */
+  commitUrl: string | null;
+}
+
+/**
+ * What the desktop shell needs to run a reproduction or drive a bisect against
+ * the project's linked folder, and to link/persist the result — computed once by
+ * the server alongside the recipe so the Reproduce section never re-derives it.
+ * All fields degrade to null; the desktop actions gate on the ones they need.
+ */
+export interface ReproduceDesktopContext {
+  /** The project the failure belongs to — the key for the folder link. */
+  projectId: number | null;
+  /** The failing tests, structured, for the exact local invocation. */
+  cases: RetryCase[];
+  /** Browser binary the failure ran on (`chromium` / `firefox` / `webkit`). */
+  browserName: string | null;
+  /** The failing commit to check out for a reproduction. */
+  commit: string | null;
+  /** The bisect window's `good` end (last green commit), when known. */
+  good: string | null;
+  /** The bisect window's `bad` end (failing commit), when known. */
+  bad: string | null;
+  /** The failure cluster to persist a bisect result on, when the failure has one. */
+  clusterId: number | null;
+  /** SCM repository URL, for linking a bisected commit to its host. */
+  repositoryUrl: string | null;
+  /** A bisect result already recorded on the cluster, when one was found. */
+  bisectedCommit: BisectedCommit | null;
+}
+
+/**
  * Build the local reproduction recipe. Always returns a recipe; the parts that
  * cannot be pinned drop out with a note rather than failing.
  */

@@ -153,7 +153,7 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
   // then a `git bisect` between the last green commit and this one. Computed from
   // the same last-seen run the "What changed" panel reads, so it degrades in
   // lockstep — no SCM metadata means no bisect, spelled out in the payload.
-  const { reproduce, bisect } = await computeReproduceContext(db, {
+  const { reproduce, bisect, desktop } = await computeReproduceContext(db, {
     runId: cluster.lastSeenRunId,
     cases: failingTests.map((test) => ({
       filePath: test.filePath,
@@ -162,6 +162,7 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
     })),
     browserName: reproBrowser,
     verifyCommand,
+    clusterId: cluster.id,
   });
 
   // Resolved clusters this one resembles, and how each was fixed — best-effort,
@@ -189,6 +190,8 @@ export async function buildFixPlan(db: DrizzleDB, clusterId: number): Promise<Fi
     },
     reproduce,
     bisect,
+    bisectedCommit: desktop.bisectedCommit,
+    reproduceDesktop: desktop,
     fixedBefore,
   };
 }

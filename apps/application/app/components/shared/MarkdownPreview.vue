@@ -80,7 +80,7 @@ const lines = computed<PreviewLine[]>(() => (props.text ? parse(props.text) : []
     </div>
     <div
       v-else-if="lines.length"
-      class="overflow-auto p-3 text-xs font-mono leading-relaxed"
+      class="overflow-auto p-3 max-sm:p-2 text-xs font-mono leading-relaxed"
       :style="{ maxHeight: maxHeight ?? '45vh' }"
     >
       <template v-for="(line, i) in lines" :key="i">

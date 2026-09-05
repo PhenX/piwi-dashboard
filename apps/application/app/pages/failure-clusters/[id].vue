@@ -48,14 +48,30 @@ useHead(computed(() => ({ title: `${clusterName.value} — Piwi Dashboard` })));
 // default is the most-affected case's latest execution (the representative the
 // cluster handler orders first).
 const affectedCases = computed(() => cluster.value?.affectedTestCases ?? []);
-const selectedCaseId = ref<number | undefined>(affectedCases.value[0]?.testCaseId);
+// The latest occurrence — the execution in the last-seen run — is the default
+// the page opens on, for both the evidence and the headline.
+const latestExecId = computed(
+  () => cluster.value?.latestTestRunsCaseId ?? affectedCases.value[0]?.recentTestRunsCaseId ?? null,
+);
+const latestCaseId = computed(() => cluster.value?.latestTestCaseId ?? affectedCases.value[0]?.testCaseId);
+const selectedCaseId = ref<number | undefined>(latestCaseId.value);
+watch(latestCaseId, (id) => {
+  if (selectedCaseId.value === undefined) selectedCaseId.value = id;
+});
 watch(affectedCases, (list) => {
-  if (!list.some((c) => c.testCaseId === selectedCaseId.value)) selectedCaseId.value = list[0]?.testCaseId;
+  if (!list.some((c) => c.testCaseId === selectedCaseId.value)) selectedCaseId.value = latestCaseId.value;
 });
 const selectedCase = computed(
   () => affectedCases.value.find((c) => c.testCaseId === selectedCaseId.value) ?? affectedCases.value[0] ?? null,
 );
-const selectedExecId = computed(() => selectedCase.value?.recentTestRunsCaseId ?? null);
+// The default case opens on its latest occurrence; switching cases shows that
+// case's own most-recent execution.
+const selectedExecId = computed(() =>
+  selectedCase.value?.testCaseId === latestCaseId.value
+    ? latestExecId.value
+    : (selectedCase.value?.recentTestRunsCaseId ?? null),
+);
+const isLatestOccurrence = computed(() => selectedExecId.value === latestExecId.value);
 
 const { data: execution } = await useAsyncData<Record<string, unknown> | null>(
   'cluster-selected-exec',
@@ -90,15 +106,20 @@ const otherClues = computed(() => clues.value.slice(1));
 const hasTrace = computed(() => (execTraces.value?.length ?? 0) > 0);
 const selectedRunId = computed(() => (execution.value as { testRun?: { id?: number } } | null)?.testRun?.id ?? null);
 
-// ── Headline built from the cluster's stored sample error ────────────────────
-// The exemplar-refresh (a sample error from the latest occurrence) has not
-// shipped, so the headline reflects the first occurrence and is labelled as such.
+// ── Headline built from the latest occurrence's own error ────────────────────
+// The loaded execution is the latest occurrence; its stored error drives the
+// headline. When no execution can be loaded the cluster's stored sample error is
+// the fallback, and it reflects the first occurrence.
+const execError = computed(() => (execution.value as { error?: string | null } | null)?.error ?? null);
+const execSteps = computed(() => (execution.value as { steps?: unknown } | null)?.steps ?? null);
 const clusterVerdict = computed<FailureVerdict | null>(() => {
   const c = cluster.value;
-  if (!c?.sampleError) return null;
-  const desc = caseHeadline({ error: c.sampleError, steps: null });
+  if (!c) return null;
+  const error = execError.value ?? c.sampleError;
+  if (!error) return null;
+  const desc = caseHeadline({ error, steps: execError.value ? execSteps.value : null });
   if (!desc) return null;
-  const parsed = parsePlaywrightError(c.sampleError);
+  const parsed = parsePlaywrightError(error);
   return {
     ...desc,
     kind: parsed.kind,
@@ -115,9 +136,14 @@ const clusterVerdict = computed<FailureVerdict | null>(() => {
     owner: c.owner,
   };
 });
-const headlineProvenance = computed(() =>
-  cluster.value ? `first occurrence, run #${cluster.value.firstSeenRunId}` : null,
-);
+const headlineProvenance = computed(() => {
+  const c = cluster.value;
+  if (!c) return null;
+  if (execError.value && selectedRunId.value) {
+    return `${isLatestOccurrence.value ? 'latest occurrence' : 'occurrence'}, run #${selectedRunId.value}`;
+  }
+  return `first occurrence, run #${c.firstSeenRunId}`;
+});
 
 // The newest known-issue link, shown compactly on the facts line.
 const knownIssue = computed(() => cluster.value?.links?.[0] ?? null);
@@ -237,7 +263,11 @@ function refresh() {
 
 // ── Fix card ─────────────────────────────────────────────────────────────────
 // Diagnosis first, then the locator fix, the verify command and the fix plan.
-const hasLocatorPanel = computed(() => Boolean(affectedCases.value[0]?.recentTestRunsCaseId));
+// The Locator fix section applies only to a locator-resolution failure — the same
+// gate the execution page uses; a count mismatch or a value assertion has none.
+const hasLocatorPanel = computed(() =>
+  Boolean(clusterVerdict.value?.isLocatorResolutionFailure && affectedCases.value[0]?.recentTestRunsCaseId),
+);
 const showVerify = computed(() => Boolean(fixPlan.value?.verify?.command));
 const showReproduce = computed(() => Boolean(fixPlan.value?.reproduce?.steps?.length));
 const fixedBefore = computed(() => fixPlan.value?.fixedBefore ?? []);
@@ -670,7 +700,12 @@ const breadcrumbItems = computed(() => [
               <span class="inline-flex items-center gap-1">Reproduce <HelpHint topic="fix.reproduce" /></span>
             </template>
             <template v-if="fixPlan && showReproduce" #reproduce>
-              <ReproduceSection :reproduce="fixPlan.reproduce" :bisect="fixPlan.bisect" />
+              <ReproduceSection
+                :reproduce="fixPlan.reproduce"
+                :bisect="fixPlan.bisect"
+                :context="fixPlan.reproduceDesktop"
+                :project-label="cluster?.project?.label ?? cluster?.project?.name"
+              />
             </template>
 
             <!-- Fix plan — the whole plan assembled for a ticket or an agent -->

@@ -92,10 +92,11 @@ const passRateClass = computed(() => {
 
     <template #body>
       <div class="flex flex-col gap-4 p-4" data-shot="test-case-detail">
-        <!-- Header: title, a single facts line, and the two actions on the right -->
-        <div class="flex items-start gap-4 flex-wrap">
+        <!-- Header: title, a single facts line, and the two actions. The title
+             wraps and the actions drop below it on phones. -->
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
           <div class="flex-1 min-w-0 space-y-2">
-            <h1 class="text-xl font-bold truncate">{{ testCase?.title }}</h1>
+            <h1 class="text-xl font-bold break-words">{{ testCase?.title }}</h1>
             <OpenInIdeLink
               v-if="testCase?.filePath"
               :file-path="testCase.filePath"
@@ -137,7 +138,7 @@ const passRateClass = computed(() => {
             </div>
           </div>
 
-          <div class="flex items-center gap-2 shrink-0">
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
             <DesktopRunLocallyButton
               :project-id="testCase?.project?.id"
               :project-label="testCase?.project?.label ?? testCase?.project?.name"

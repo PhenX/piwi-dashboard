@@ -27,7 +27,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="rounded-lg border border-default bg-default p-3 sm:p-4 space-y-2">
+  <div class="rounded-lg border border-default bg-default p-3 sm:p-4 space-y-2 max-sm:rounded-none max-sm:border-x-0">
     <!-- Line 1: status, title, exceptional badges, primary action -->
     <div class="flex items-start gap-2.5">
       <StatusChip v-if="status" :status="status" class="mt-0.5 shrink-0" />

@@ -15,6 +15,7 @@ mod mcp_clients;
 mod mcp_stdio;
 mod runner;
 mod updates;
+mod worktree;
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -41,8 +42,9 @@ use updates::{desktop_check_update, desktop_install_update, desktop_restart_app}
 use runner::{
     desktop_check_local_env, desktop_check_local_specs, desktop_get_project_link,
     desktop_pick_folder, desktop_run_local_tests, desktop_set_project_link,
-    desktop_stop_local_tests,
+    desktop_set_project_start_command, desktop_stop_local_tests,
 };
+use worktree::{desktop_bisect_here, desktop_reproduce_here};
 
 pub(crate) const STORE_FILE: &str = "settings.json";
 const RUN_BG_KEY: &str = "runInBackground";
@@ -609,6 +611,9 @@ pub fn run() {
             desktop_set_project_link,
             desktop_run_local_tests,
             desktop_stop_local_tests,
+            desktop_set_project_start_command,
+            desktop_reproduce_here,
+            desktop_bisect_here,
             desktop_check_local_specs,
             desktop_check_local_env,
             desktop_take_pending_open_files,

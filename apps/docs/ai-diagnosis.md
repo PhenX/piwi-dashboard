@@ -327,6 +327,11 @@ The bisect needs a **last-green commit** and an **SCM connection**: when Piwi ha
 last green run before it, or the two are the same commit, the section says so in one line instead of showing a script.
 The recipe is always there.
 
+In the [desktop app](/desktop#reproducing-a-failure-and-finding-the-breaking-commit) the same section can also do the
+work for you: **Reproduce here** runs the recipe against the linked folder in a throwaway `git worktree` — your checkout
+is never touched — and **Find the breaking commit here** drives the whole bisect step by step, with live progress and a
+stop that stops, then records the first bad commit on the cluster so it shows here and in the fix plan afterwards.
+
 ### Fixed before
 
 An open cluster often is not new — the same failure, or one close to it, was fixed weeks ago. The fix plan looks back

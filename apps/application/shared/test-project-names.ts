@@ -38,6 +38,7 @@ export const PROJECT = {
   DELETE_TEST: 'delete-test-project',
   DESKTOP_LOCAL_IMPORT: 'desktop-local-import-test',
   DESKTOP_LOCAL_RUN: 'desktop-local-run-test',
+  DESKTOP_REPRODUCE: 'desktop-reproduce-test',
   DIAGNOSE_STREAM: 'diagnose-stream-test',
   DOWNLOAD_TEST: 'download-test-project',
   DUP_UI: 'dup-ui-project',

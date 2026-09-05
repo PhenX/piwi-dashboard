@@ -8,7 +8,7 @@
  */
 import type { PatchValidation } from '#shared/patch';
 import type { LocatorEdit } from '#shared/locator-healing.types';
-import type { ReproRecipe, BisectResult } from '#shared/reproduce';
+import type { ReproRecipe, BisectResult, BisectedCommit, ReproduceDesktopContext } from '#shared/reproduce';
 
 export interface FixPlanEdit {
   filePath: string;
@@ -99,6 +99,10 @@ export interface FixPlan {
   reproduce: ReproRecipe;
   /** A generated `git bisect` between the last green and the failing commit, or why it is unavailable. */
   bisect: BisectResult;
+  /** The first bad commit a desktop bisect found and recorded on this cluster, when one exists. */
+  bisectedCommit: BisectedCommit | null;
+  /** Everything the desktop shell needs to reproduce and bisect this locally (desktop UI only). */
+  reproduceDesktop: ReproduceDesktopContext;
   /** Resolved clusters this one resembles, and how each was fixed. Empty when none match. */
   fixedBefore: FixedBeforeMatch[];
 }
