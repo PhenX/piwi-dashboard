@@ -17,6 +17,10 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{ apply: [match: FixedBeforeMatch] }>();
+
+function onApply(match: FixedBeforeMatch) {
+  emit('apply', match);
+}
 </script>
 
 <template>
@@ -84,7 +88,7 @@ const emit = defineEmits<{ apply: [match: FixedBeforeMatch] }>();
             icon="i-lucide-copy"
             :loading="applyingId === m.clusterId"
             title="Copy this cluster's triage note onto the current cluster"
-            @click="emit('apply', m)"
+            @click="onApply(m)"
           >
             Apply the same triage
           </UButton>

@@ -1251,6 +1251,11 @@ const CLUSTER_TRIAGE = {
     triage_note:
       'Known issue — three buttons match the unscoped role query on the gallery page. The page intentionally demos multiple variants; the spec needs a name-scoped locator. Not an app bug.',
   },
+  10: {
+    status: 'open',
+    triage_note:
+      'Capped the API default page size to the requested pageSize so the users table renders 25 rows again; verified once the count assertion turned green.',
+  },
 };
 
 /**
@@ -1327,7 +1332,7 @@ function buildClusterFix(story, stats) {
 const DEMO_EMBED_TAG = 'text-embedding-3-small#v2';
 const DEMO_CLUSTER_EMBEDDINGS = {
   10: [0.91, 0.12, 0.44, 0.21, 0.68, 0.33, 0.52, 0.6],
-  9: [0.88, 0.18, 0.49, 0.15, 0.62, 0.39, 0.5, 0.55],
+  9: [0.62, 0.4, 0.52, 0.34, 0.5, 0.48, 0.47, 0.44],
 };
 
 for (const story of FAILURE_STORIES) {
