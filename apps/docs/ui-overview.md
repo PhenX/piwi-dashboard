@@ -131,7 +131,10 @@ A failing execution reads top to bottom in one column: a **header** (status, tit
 badges, the failing file and line, and Copy retry command, with a Details popover for the rest), the
 one-line **headline** (with the raw **error** one click away behind *Show raw error*), the **other
 clues**, then one **evidence** card whose content-level tabs — Timeline, Screen, Source, Network,
-Console, State, Performance — hold everything captured, deeper still when a trace is attached. Below the
+Console, State, Performance — hold everything captured, deeper still when a trace is attached. A
+Playwright 1.63 trace with [aria and screen snapshots](./evidence#aria-and-screen-snapshots) adds a
+filmstrip of the page before each step to the Timeline tab, and the before/at-failure screenshots plus
+an in-execution page diff to the Screen tab. Below the
 evidence, the **Fix** card gathers what to do (the locator fix, a fix-plan pointer, the diagnosis, how
 to verify, and the tests this failure blocked) and a **history** block strips this test's recent
 executions with its failing streak. All of it, plus the bundled trace viewer, is described in

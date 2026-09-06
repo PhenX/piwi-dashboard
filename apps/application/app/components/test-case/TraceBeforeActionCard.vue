@@ -15,7 +15,7 @@ const props = defineProps<{
   embedded?: boolean;
 }>();
 
-const { pending, error, hasScreen, failingStep, snapshotUrl } = useTraceSnapshots(() => props.testRunsCaseId);
+const { data, pending, error, failingStep, snapshotUrl } = useTraceSnapshots(() => props.testRunsCaseId);
 
 const beforeSrc = computed(() =>
   failingStep.value?.screen.before ? snapshotUrl(failingStep.value.callId, 'screen', 'before') : null,
@@ -25,31 +25,26 @@ const afterSrc = computed(() =>
 );
 const hasPair = computed(() => Boolean(beforeSrc.value));
 
+// Only present the card for a 1.63 trace that recorded snapshots — a run whose
+// trace carries none (or none at all) never sees an "enable it" nag here.
+const render = computed(() => pending.value || hasPair.value || data.value?.status === 'ok');
+
 const emit = defineEmits<{ available: [value: boolean] }>();
 const available = computed(() => !pending.value && !error.value && hasPair.value);
 watch(available, (value) => emit('available', value), { immediate: true });
 
-const emptyState = computed<EvidenceState | null>(() => {
-  if (pending.value || hasPair.value) return null;
-  if (!hasScreen.value) {
-    return {
-      state: 'not-captured',
-      title: 'Before the failing action',
-      description: 'The page before the failing action is not captured for this project — enable trace snapshots.',
-      to: '/setup',
-      toLabel: 'Open setup',
-    };
-  }
-  return {
-    state: 'not-applicable',
-    title: 'Before the failing action',
-    description: 'No screenshot was recorded before the failing action — not applicable here.',
-  };
-});
+// A 1.63 trace that recorded aria but not screen: nudge toward enabling screen.
+const emptyState = computed<EvidenceState>(() => ({
+  state: 'not-captured',
+  title: 'Before the failing action',
+  description: 'Screenshots before the failing action are not captured — enable screen trace snapshots.',
+  to: '/setup',
+  toLabel: 'Open setup',
+}));
 </script>
 
 <template>
-  <SectionCard :embedded="embedded" icon="i-lucide-image" title="Before the failing action">
+  <SectionCard v-if="render" :embedded="embedded" icon="i-lucide-image" title="Before the failing action">
     <LoadingState v-if="pending" text="Loading trace screenshots…" />
 
     <div v-else-if="hasPair" class="grid gap-4" :class="afterSrc ? 'sm:grid-cols-2' : ''">
@@ -73,6 +68,6 @@ const emptyState = computed<EvidenceState | null>(() => {
       </figure>
     </div>
 
-    <EvidenceEmptyState v-else-if="emptyState" :state="emptyState" doc="/evidence" compact />
+    <EvidenceEmptyState v-else :state="emptyState" doc="/evidence" compact />
   </SectionCard>
 </template>

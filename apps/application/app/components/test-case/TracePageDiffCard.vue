@@ -23,35 +23,29 @@ const pageDiff = computed(() => (data.value?.status === 'ok' ? (data.value.pageD
 const hunks = computed(() => pageDiff.value?.hunks ?? []);
 const summaryText = computed(() => (pageDiff.value ? formatPageDiffSummary(pageDiff.value.summary) : ''));
 
+// Only present the card for a 1.63 trace that recorded aria snapshots — a run
+// whose trace carries none is served by the vs-green diff below, not a nag here.
+const render = computed(
+  () => pending.value || pageDiff.value != null || (data.value?.status === 'ok' && hasAria.value),
+);
+
 // The tab reads `available` to show the Screenshot · Page diff toggle for
 // exactly the condition under which this diff renders.
 const emit = defineEmits<{ available: [value: boolean] }>();
 const available = computed(() => !pending.value && !error.value && pageDiff.value != null);
 watch(available, (value) => emit('available', value), { immediate: true });
 
-// The three-state empty copy: not captured (no aria snapshots at all), or not
-// applicable (aria present but the failing action lacks a before/after pair).
-const emptyState = computed<EvidenceState | null>(() => {
-  if (pending.value || available.value) return null;
-  if (!hasAria.value) {
-    return {
-      state: 'not-captured',
-      title: 'Page diff',
-      description: 'The page around the failing action is not captured for this project — enable trace snapshots.',
-      to: '/setup',
-      toLabel: 'Open setup',
-    };
-  }
-  return {
-    state: 'not-applicable',
-    title: 'Page diff',
-    description: 'This failure has no before-and-after page to compare — not applicable here.',
-  };
-});
+// Aria was recorded but the failing action's page never differed from an earlier
+// one — nothing structural to show.
+const emptyState = computed<EvidenceState>(() => ({
+  state: 'not-applicable',
+  title: 'Page diff',
+  description: 'The page structure did not change on the way to this failure — not applicable here.',
+}));
 </script>
 
 <template>
-  <SectionCard :embedded="embedded" icon="i-lucide-file-diff" title="Page diff" help="case.page-diff">
+  <SectionCard v-if="render" :embedded="embedded" icon="i-lucide-file-diff" title="Page diff" help="case.page-diff">
     <template v-if="available" #subtitle>
       <span>before the failing action → at the failure</span>
     </template>
@@ -73,6 +67,6 @@ const emptyState = computed<EvidenceState | null>(() => {
       <PageDiffHunkList v-else :hunks="hunks" />
     </template>
 
-    <EvidenceEmptyState v-else-if="emptyState" :state="emptyState" doc="/evidence" compact />
+    <EvidenceEmptyState v-else :state="emptyState" doc="/evidence" compact />
   </SectionCard>
 </template>

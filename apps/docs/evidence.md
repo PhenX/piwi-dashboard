@@ -87,6 +87,8 @@ The baseline follows the same rule as the [visual](#trace-powered-deep-views) an
 
 Green snapshots come from **sampling on pass**: the [reporter](./reporter#green-page-sampling-on-pass) captures a passing page's ARIA snapshot about once a day per test (rate-limited by the server, so steady-state runs pay nothing). Until the first one lands, the toggle is replaced by the three-state empty copy: *not captured* (the fixtures are off), *no green sample yet* (a baseline appears after the next passing run), or *not applicable*. The page-diff summary also rides the [`explain_failure`](./mcp) MCP tool, so an agent sees the structural change too.
 
+When the trace carries [aria snapshots](#aria-and-screen-snapshots) (Playwright 1.63+), the toggle also shows an **in-execution** page diff that needs no green baseline: it compares the page structure *at the failure* against the last page *before the failing action* that differs from it — isolating the change that led to the failure, the button that got disabled or the row that vanished, from this run alone. It sits above the vs-green diff, and the toggle appears whenever either has something to show.
+
 ## Trace-powered deep views
 
 ::: tip Screenshots are Playwright's to record
@@ -100,9 +102,18 @@ When an execution has an uploaded trace, two evidence blocks go deeper — no co
 
 Executions without a trace keep the reporter-captured baseline — the blocks simply hint at what a trace would add. Traces recorded without embedded sources still show the full frame list.
 
+### Aria and screen snapshots
+
+A Playwright 1.63 trace can record the page's **aria tree** and a **screenshot** before and after every action (`trace: { snapshots: { dom, aria, screen } }`; [`wrapConfig`](./reporter#installing-via-wrapconfig) turns `aria` on by default, `screen` stays [opt-in](./storage#trace-snapshots)). When it did, two more views appear:
+
+- **Screen tab › Before the failing action** — the page as the failing action saw it, before and at the failure, beside the failure screenshot.
+- **Timeline tab › the filmstrip** — a thumbnail of the page *before each step*, in order, the failing step marked. It turns the step list into a visual scrub of how the page looked on the way to the failure, and needs only `screen`.
+
+The [in-execution page diff](#page-diff) reads the same aria snapshots. All three states use the three-state empty copy (*not captured — enable trace snapshots*, with the `/setup` link) when the trace predates 1.63 or was recorded without the kind.
+
 ### Recovered from the trace without the fixtures
 
-A project that installed only the reporter — no [capture fixtures](./capture-fixtures) — still gets most of the failure evidence, because the trace carries it. When a reported execution has an uploaded trace but no fixture data, the dashboard recovers three things at ingest and stores them in the same place the fixtures would: the **console** entries (`warning`/`error`/`assert`), the **network requests** (method, URL, status, duration, start time — restricted to the API and document requests the fixtures keep, and including the failed and aborted requests the fixtures never captured), and the failure-time **ARIA snapshot** when Playwright wrote an `error-context` alongside the trace. Cards showing this data carry a **derived from the trace** chip. Fixture-captured data is never replaced, and each kind is recovered only when it is otherwise missing. This is on by default with [`wrapConfig`](./reporter#installing-via-wrapconfig), which records the trace for you.
+A project that installed only the reporter — no [capture fixtures](./capture-fixtures) — still gets most of the failure evidence, because the trace carries it. When a reported execution has an uploaded trace but no fixture data, the dashboard recovers three things at ingest and stores them in the same place the fixtures would: the **console** entries (`warning`/`error`/`assert`), the **network requests** (method, URL, status, duration, start time — restricted to the API and document requests the fixtures keep, and including the failed and aborted requests the fixtures never captured), and the failure-time **ARIA snapshot** — from an `error-context` Playwright wrote alongside the trace, or, on a 1.63 trace recorded with [aria snapshots](#aria-and-screen-snapshots), from the failing action's own before-page tree. Cards showing this data carry a **derived from the trace** chip. Fixture-captured data is never replaced, and each kind is recovered only when it is otherwise missing. This is on by default with [`wrapConfig`](./reporter#installing-via-wrapconfig), which records the trace for you.
 
 ### Why a card is empty
 
