@@ -180,6 +180,7 @@ describe('PIWI_ENV_VARS registry', () => {
       'PIWI_ENV_VARS',
       'PIWI_ENV_CATEGORIES',
       'PIWI_ENV_KEYS',
+      'PIWI_FEATURE_GROUPS',
       'PIWI_API_KEY',
       'PIWI_OUTPUT_FILE',
     ]);

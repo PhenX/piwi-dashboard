@@ -56,5 +56,6 @@ Trust is the point, so the limits are stated plainly, not buried:
 
 - [Getting started](./getting-started) — pick a path and land your first run
 - [Core concepts](./concepts) — the vocabulary (run, execution, cluster, fingerprint, baseline)
+- [Feature map](/reference/feature-map) — everything Piwi does, what each thing needs, and where it lives
 - [Why Piwi? (comparison & FAQ)](./comparison) — how it compares, and whether it's the right tool for you
 - [Live demo](https://piwitests.dev/demo/) — the real app on seeded data, entirely in your browser
