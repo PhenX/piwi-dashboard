@@ -158,6 +158,7 @@ export default defineConfig({
           { text: 'Piwi CLI', link: '/cli' },
           { text: 'Desktop app', link: '/desktop' },
           { text: 'Browser extension', link: '/extension' },
+          { text: 'Test functions catalog', link: '/test-functions' },
           { text: 'Open in IDE', link: '/ide-integration' },
           { text: 'MCP server', link: '/mcp' },
           { text: 'Agent skills', link: '/mcp#agent-skills' },
