@@ -17,7 +17,6 @@
  * shown are relative to the failure moment (`t+0`), so the axis and the table read
  * against the same anchor.
  */
-import { stepLabel } from '@piwitests/core/step-analysis';
 import type { FailureTimeline, TimelineItem, TimelineLane } from '#shared/failure-timeline';
 import type { PerformanceStep } from '~~/types/api';
 import { useClusterSectionLocator } from '~/composables/useClusterSectionLocator';
@@ -25,6 +24,8 @@ import SectionCard from '../shared/SectionCard.vue';
 import ChartTooltip from '../shared/ChartTooltip.vue';
 import ChartLegend from '../shared/ChartLegend.vue';
 import OpenInIdeLink from '../shared/OpenInIdeLink.vue';
+import StepLabel from './StepLabel.vue';
+import StepParamsDisclosure from './StepParamsDisclosure.vue';
 
 const props = defineProps<{
   testRunsCaseId: number;
@@ -728,8 +729,9 @@ function onViewTrace() {
                 class="mt-1.5 text-sm break-words"
                 :class="row.failed ? 'text-red-600 dark:text-red-400 font-medium' : ''"
               >
-                {{ stepLabel(row.step) }}
+                <StepLabel :step="row.step" />
               </p>
+              <StepParamsDisclosure :params="row.step.params" class="mt-1" />
               <ErrorText
                 v-if="row.failed && row.step.error?.message"
                 mode="block"
@@ -860,7 +862,7 @@ function onViewTrace() {
                   <td>
                     <div class="flex items-center gap-2">
                       <span :class="row.failed ? 'text-red-600 dark:text-red-400 font-medium' : ''">
-                        {{ stepLabel(row.step) }}
+                        <StepLabel :step="row.step" />
                       </span>
                       <UBadge
                         v-if="row.index === slowestStepIndex"
@@ -873,6 +875,7 @@ function onViewTrace() {
                         slowest
                       </UBadge>
                     </div>
+                    <StepParamsDisclosure :params="row.step.params" class="mt-1" />
                     <ErrorText
                       v-if="row.failed && row.step.error?.message"
                       mode="block"

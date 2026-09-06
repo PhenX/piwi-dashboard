@@ -106,6 +106,27 @@ Every step is idempotent, so it is safe to re-run. If it finds a config shape it
 
 Prefer to wire it up by hand? The manual steps are below.
 
+### Try it without editing your config
+
+On **Playwright 1.63 or later** you can send one run to a dashboard without editing your config or installing anything. Playwright's `--add-reporter` _appends_ a reporter to the ones your config already lists (unlike `--reporter`, which replaces them), and every reporter option has a `PIWI_*` environment-variable equivalent — so point it at your dashboard with env vars and run:
+
+::: code-group
+
+```bash [Linux / macOS]
+PIWI_DASHBOARD_URL=http://localhost:3000 \
+PIWI_API_KEY=your-api-key \
+PIWI_PROJECT_NAME=my-project \
+npx playwright test --add-reporter @piwitests/reporter
+```
+
+```powershell [Windows (PowerShell)]
+$env:PIWI_DASHBOARD_URL='http://localhost:3000'; $env:PIWI_API_KEY='your-api-key'; $env:PIWI_PROJECT_NAME='my-project'; npx playwright test --add-reporter @piwitests/reporter
+```
+
+:::
+
+This is a trial path, not a full setup. You get the run with its results, traces and screenshots, but **not** the [capture fixtures](#recommended-capture-fixtures) (network timing, Web Vitals, console capture, locator healing) and **not** [`wrapConfig`](./reporter#installing-via-wrapconfig)'s failure-evidence capture defaults — for those, run the [fast path](#fast-path-one-command) or wire the reporter in by hand. On older Playwright (before 1.63) `--add-reporter` does not exist; use the manual setup below. `piwi run` makes the same append for you automatically when your config has no Piwi reporter — see the [CLI reference](./cli#select-run).
+
 ### Manual setup
 
 Install it:

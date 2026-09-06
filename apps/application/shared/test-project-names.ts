@@ -99,6 +99,7 @@ export const PROJECT = {
   NO_METADATA: 'no-metadata-test',
   NO_OVERLAP: 'no-overlap',
   PAGE_DIFF: 'page-diff-test',
+  PERFETTO_EXPORT: 'perfetto-export-test',
   PERF_TEST: 'perf-test-project',
   PG_CONCURRENT: 'pg-concurrent-project',
   PG_TEST: 'pg-test-project',

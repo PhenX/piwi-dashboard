@@ -23,6 +23,7 @@ import { TIMELINE_WINDOW_LEAD_MS } from '#shared/failure-timeline';
 import type { LocatorHealingResult } from '#shared/locator-healing.types';
 import type { PageStateLike } from '#shared/page-state';
 import { ariaTextPreferJson } from '#shared/aria-json';
+import { intervalsOverlap } from '#shared/lock-overlap';
 
 /** The environment-diff facts the engine reads — the pure subset of the server result. */
 export interface FailureClueEnvironmentDiff {
@@ -514,11 +515,12 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
 
   // ── wrong-page (strong) ────────────────────────────────────────────────────
   // The page ended on an auth/error route, or somewhere other than the last
-  // navigation the test asked for.
-  const endedPath = pathOf(input.appState?.url);
+  // navigation the test asked for. Where the captured app state carries no URL,
+  // the last navigation step's own `params.url` stands in for where it ended.
+  const lastNav = lastNavigationPath(timeline);
+  const endedPath = pathOf(input.appState?.url) ?? lastNav;
   if (endedPath) {
     const onKnownWrong = WRONG_PAGE_PATHS.find((p) => endedPath === p || endedPath.startsWith(`${p}/`));
-    const lastNav = lastNavigationPath(timeline);
     const driftedFromNav = lastNav && pathsDiffer(endedPath, lastNav);
     if (onKnownWrong || driftedFromNav) {
       add({
@@ -610,7 +612,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
           if (!isFiniteNumber(h.startedAt) || !isFiniteNumber(h.duration)) return false;
           const hStart = h.startedAt as number;
           const hEnd = hStart + (h.duration as number);
-          return hStart < selfEnd && hEnd > selfStart;
+          return intervalsOverlap(selfStart, selfEnd, hStart, hEnd);
         });
         if (overlap) {
           add({
@@ -734,12 +736,18 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
   return clues.slice(0, MAX_CLUES);
 }
 
-/** The path of the last navigation step the test performed, from the timeline. */
+/**
+ * The path of the last navigation step the test performed, from the timeline.
+ * A navigation step's own `params.url` (the full URL newer Playwright records)
+ * is read first; otherwise the URL is parsed out of the step label.
+ */
 function lastNavigationPath(timeline: FailureTimeline | null): string | null {
   if (!timeline) return null;
   const steps = timeline.lanes.steps;
   for (let i = steps.length - 1; i >= 0; i--) {
-    const label = steps[i]!.label;
+    const step = steps[i]!;
+    if (typeof step.params?.url === 'string' && step.params.url.length > 0) return pathOf(step.params.url);
+    const label = step.label;
     const m = /(?:goto|waitForURL)\(\s*['"`]([^'"`]+)['"`]/.exec(label) ?? /https?:\/\/[^\s'"`)]+/.exec(label);
     if (m) return pathOf(m[1] ?? m[0]);
   }

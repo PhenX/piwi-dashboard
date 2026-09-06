@@ -57,6 +57,14 @@ export interface TimelineItem {
   /** Span in ms for bars (steps, network); absent for point marks (console, backend). */
   duration?: number;
   label: string;
+  /**
+   * Steps only: the step's target (rendered locator or URL) when newer
+   * Playwright carried it separately, for two-element rendering. `label`
+   * remains the joined plain-text form.
+   */
+  subtitle?: string;
+  /** Steps only: the step's curated params (rendered `locator`, a navigation `url`, …). */
+  params?: Record<string, string | number | boolean>;
   /** Console type, HTTP status, or step/log status — kind-specific. */
   status?: string;
   kind: TimelineItemKind;
@@ -152,6 +160,7 @@ const MAX_LABEL_CHARS = 200;
 type StepRow = {
   title?: unknown;
   subtitle?: unknown;
+  params?: unknown;
   duration?: unknown;
   category?: unknown;
   location?: unknown;
@@ -192,6 +201,16 @@ function rows<T>(value: unknown): T[] {
 
 function str(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
+}
+
+/** Keep a step's params object as-is when it holds only primitive values. */
+function stepParams(value: unknown): Record<string, string | number | boolean> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const out: Record<string, string | number | boolean> = {};
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') out[key] = val;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function clampLabel(text: string): string {
@@ -348,6 +367,8 @@ export function buildFailureTimeline(input: FailureTimelineInput): FailureTimeli
     const frames = (location && callsiteByKey.get(fileLineKey(location) ?? '')) || null;
     const stepOrigin = deriveOrigin(location, frames, specFile);
     const group = groupTitleFor(at, dur) ?? stepOrigin?.function ?? null;
+    const subtitle = typeof step.subtitle === 'string' && step.subtitle.trim().length > 0 ? step.subtitle.trim() : null;
+    const params = stepParams(step.params);
     lanes.steps.push({
       id: `step-${index}`,
       lane: 'steps',
@@ -359,6 +380,8 @@ export function buildFailureTimeline(input: FailureTimelineInput): FailureTimeli
       ref: { section: 'steps', index },
       origin: stepOrigin,
       group,
+      ...(subtitle ? { subtitle } : {}),
+      ...(params ? { params } : {}),
       ...(str(step.category) ? { category: str(step.category) } : {}),
       ...(failed ? { failed: true } : {}),
     });

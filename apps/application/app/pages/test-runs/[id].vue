@@ -706,6 +706,11 @@ const moreMenuItems = computed(() => {
         </template>
         <template #right>
           <div class="flex items-center shrink-0 min-w-0">
+            <ExportMenu
+              :perfetto-endpoint="`/api/test-runs/${runId}/perfetto`"
+              :base-name="`piwi-run-${runId}`"
+              class="mr-1"
+            />
             <UDropdownMenu :items="moreMenuItems">
               <UButton
                 size="sm"

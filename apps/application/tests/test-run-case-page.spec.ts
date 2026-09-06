@@ -46,11 +46,19 @@ test.describe('Test-run-case page', () => {
                 location: 'pages/checkout.ts:11:5',
               },
               {
+                title: 'Fill "ada@example.com"',
+                subtitle: "getByLabel('Email')",
+                duration: 400,
+                category: 'input',
+                params: { locator: "getByLabel('Email')", value: 'ada@example.com' },
+              },
+              {
                 title: "getByRole('button', { name: 'Pay' }).click()",
                 duration: 5000,
                 category: 'action',
                 failed: true,
                 location: 'pages/checkout.ts:42:5',
+                params: { locator: "getByRole('button', { name: 'Pay' })" },
               },
             ],
           },
@@ -150,16 +158,19 @@ test.describe('Test-run-case page', () => {
     const res = await request.get(`/api/test-run-cases/${failedCaseId}/timeline`);
     expect(res.ok()).toBeTruthy();
     const tl = await res.json();
-    // Two steps, neither carrying a start time, so positions are estimated.
-    expect(tl.lanes.steps).toHaveLength(2);
+    // Three steps, none carrying a start time, so positions are estimated.
+    expect(tl.lanes.steps).toHaveLength(3);
     expect(tl.estimated).toBe(true);
     // The step marked failed is the failure; its end is the failure moment.
-    expect(tl.failedStep.index).toBe(1);
-    expect(tl.failureAt).toBe(5800);
-    expect(tl.lanes.steps[1].failed).toBe(true);
+    expect(tl.failedStep.index).toBe(2);
+    expect(tl.failureAt).toBe(6200);
+    expect(tl.lanes.steps[2].failed).toBe(true);
     expect(tl.window).toBeDefined();
     // Each step is attributed to its reporter call site (file:line; no trace, so no function).
-    expect(tl.lanes.steps[1].origin).toEqual({ file: 'pages/checkout.ts', line: 42, function: null, chain: [] });
+    expect(tl.lanes.steps[2].origin).toEqual({ file: 'pages/checkout.ts', line: 42, function: null, chain: [] });
+    // The 1.63-shaped Fill step carries its subtitle and params on the model.
+    expect(tl.lanes.steps[1].subtitle).toBe("getByLabel('Email')");
+    expect(tl.lanes.steps[1].params).toEqual({ locator: "getByLabel('Email')", value: 'ada@example.com' });
   });
 
   test('the Timeline tab merges the axis and one steps table', async ({ page }) => {
@@ -186,6 +197,27 @@ test.describe('Test-run-case page', () => {
     await page.getByRole('button', { name: 'Whole test' }).click();
     await expect(table.getByText("page.goto('/checkout')")).toBeVisible();
     await expect(table.getByText("getByRole('button', { name: 'Pay' }).click()")).toBeVisible();
+  });
+
+  test('the steps table renders the 1.63 subtitle and a params disclosure', async ({ page }) => {
+    await page.goto(`/test-run-cases/${failedCaseId}`);
+    await waitForHydration(page);
+    await page.getByRole('tab', { name: /^Timeline/ }).click();
+    await page.getByRole('button', { name: 'Whole test' }).click();
+
+    const table = page.getByRole('table');
+    // The Fill step's title reads first; its target renders as a muted subtitle
+    // (a <span>, distinct from the same string in the params disclosure's <dd>).
+    await expect(table.getByText('Fill "ada@example.com"')).toBeVisible();
+    await expect(table.locator('span').filter({ hasText: /^getByLabel\('Email'\)$/ })).toBeVisible();
+
+    // The params disclosure is collapsed until opened, and lists the locator first.
+    const disclosure = table.locator('[data-testid="step-params"]').first();
+    await expect(disclosure).toContainText('Parameters');
+    await expect(disclosure.getByText('ada@example.com')).toBeHidden();
+    await disclosure.getByText(/Parameters/).click();
+    await expect(disclosure.getByText('ada@example.com')).toBeVisible();
+    await expect(disclosure.getByText('locator', { exact: true })).toBeVisible();
   });
 
   test('History block opens populated from the SSR payload, without refetching or a hydration mismatch', async ({

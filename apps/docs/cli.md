@@ -119,7 +119,7 @@ npx @piwitests/reporter run impact --base origin/main
 | `--project <name\|id>` | Project (env `PIWI_PROJECT_NAME`) |
 | `--format <fmt>` | `args` (`file:line`, default) · `grep` · `files` · `json` |
 | `--budget <duration>` | Cap total time, e.g. `5m`, `90s`, `300000` (ms) |
-| `--shard <i/n>` | Keep only shard *i* of *n*, balanced by test duration |
+| `--shard <i/n>` | Keep only shard *i* of *n*, balanced by test duration and lock-aware (a lock's holders stay in one shard) |
 | `--fail-fast` | Order the least-reliable tests first |
 | `--base <ref>` | For `impact`: the ref to diff the working tree against |
 | `--strict` | Fail (exit 2) instead of falling back when unreachable |
@@ -128,6 +128,8 @@ npx @piwitests/reporter run impact --base origin/main
 | `-h`, `--help` | Show help |
 
 Pass extra Playwright arguments after `--`: `piwi run smoke -- --headed --workers=1`.
+
+When `run` spawns Playwright and the target config has **no Piwi reporter**, it appends `--add-reporter @piwitests/reporter` so the run still reaches the dashboard — provided the installed Playwright is **1.63 or later** (the version that added the flag; it appends to the configured reporters rather than replacing them). It logs one line naming what it added. On older Playwright it logs that the reporter is not configured and runs as before. This trial append gives you results, traces and screenshots but not the [capture fixtures](./capture-fixtures) or [`wrapConfig`](./reporter#installing-via-wrapconfig) defaults — wire the reporter into the config (via [`init`](#init)) for the full set. A config that already lists the reporter is left untouched.
 
 ## `ai`
 

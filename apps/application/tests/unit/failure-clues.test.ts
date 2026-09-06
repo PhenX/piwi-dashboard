@@ -59,6 +59,57 @@ function rules(input: FailureClueInput): string[] {
   return buildFailureClues(input).map((c) => c.rule);
 }
 
+describe('buildFailureClues — wrong-page from a navigation step params.url', () => {
+  test('the last navigation step params.url stands in when app state carries no URL', () => {
+    const timeline = buildFailureTimeline(
+      timelineInput({
+        steps: [
+          {
+            title: 'Navigate',
+            subtitle: '/login',
+            category: 'navigation',
+            duration: 1_000,
+            startTime: T0,
+            params: { url: 'https://shop.example.com/login' },
+          },
+          {
+            title: 'Expect "toBeVisible"',
+            subtitle: "getByText('Dashboard')",
+            category: 'assertion',
+            duration: 3_500,
+            startTime: T0 + 1_500,
+            error: 'not visible',
+            params: { locator: "getByText('Dashboard')" },
+          },
+        ],
+      }),
+    );
+    const clue = buildFailureClues(baseInput({ appState: null, timeline })).find((c) => c.rule === 'wrong-page');
+    expect(clue?.title).toBe('The test ended on /login');
+  });
+
+  test('a captured app-state URL still wins over the navigation step', () => {
+    const timeline = buildFailureTimeline(
+      timelineInput({
+        steps: [
+          {
+            title: 'Navigate',
+            subtitle: '/login',
+            category: 'navigation',
+            duration: 1_000,
+            startTime: T0,
+            params: { url: 'https://shop.example.com/login' },
+          },
+        ],
+      }),
+    );
+    const clue = buildFailureClues(baseInput({ appState: { url: 'https://shop.example.com/error' }, timeline })).find(
+      (c) => c.rule === 'wrong-page',
+    );
+    expect(clue?.title).toBe('The test ended on /error');
+  });
+});
+
 describe('buildFailureClues — robustness', () => {
   test('empty input never throws and yields no clues', () => {
     const clues = buildFailureClues({

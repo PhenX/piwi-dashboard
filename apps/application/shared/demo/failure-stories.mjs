@@ -1729,12 +1729,45 @@ export const DEMO_PROJECTS = [
         { name: 'ab_variant', domain: '.shop.example.com', path: '/', httpOnly: false, secure: true },
       ],
     },
+    // Steps in the Playwright 1.63 shape: a bare verb title with the target
+    // carried in `subtitle`, plus curated `params`. The other demo projects keep
+    // the 1.61 shape (target folded into the title, no params) so both render.
     stepTitles: [
-      { title: 'Add items to cart', category: 'action', weight: 900 },
-      { title: 'Fill contact details', category: 'action', weight: 800 },
-      { title: 'Fill payment form', category: 'action', weight: 1100 },
-      { title: 'Submit payment', category: 'action', weight: 1300 },
-      { title: 'Verify confirmation', category: 'assertion', weight: 700 },
+      {
+        title: 'Navigate',
+        subtitle: '/checkout',
+        category: 'navigation',
+        weight: 900,
+        params: { url: 'https://shop.example.com/checkout' },
+      },
+      {
+        title: 'Fill "ada@example.com"',
+        subtitle: "getByLabel('Email')",
+        category: 'input',
+        weight: 800,
+        params: { locator: "getByLabel('Email')", value: 'ada@example.com' },
+      },
+      {
+        title: 'Fill "Ada Lovelace"',
+        subtitle: "getByLabel('Name on card')",
+        category: 'input',
+        weight: 1100,
+        params: { locator: "getByLabel('Name on card')", value: 'Ada Lovelace' },
+      },
+      {
+        title: 'Click',
+        subtitle: "getByRole('button', { name: 'Place order' })",
+        category: 'action',
+        weight: 1300,
+        params: { locator: "getByRole('button', { name: 'Place order' })" },
+      },
+      {
+        title: 'Expect "toBeVisible"',
+        subtitle: "getByText('Order confirmed')",
+        category: 'assertion',
+        weight: 700,
+        params: { locator: "getByText('Order confirmed')" },
+      },
     ],
   },
   {

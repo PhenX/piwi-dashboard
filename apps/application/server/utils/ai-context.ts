@@ -12,7 +12,7 @@ import {
 } from '../database/schema';
 import type { FailureCluster } from '../database/schema';
 import type { DiagnosisContextCoverage } from '~~/types/api';
-import { stepLabel } from '@piwitests/core/step-analysis';
+import { stepLabel, orderedStepParams } from '@piwitests/core/step-analysis';
 import { condenseErrorText, maskVolatile, stripAnsi } from '#shared/error-fingerprint';
 import { DIAGNOSIS_SECTIONS } from '#shared/diagnosis-sections';
 import { evidenceAbsenceReason } from '#shared/evidence-state';
@@ -465,15 +465,28 @@ function ciRunHeaderLines(rep: RepresentativeRow): string[] {
   return lines;
 }
 
+/**
+ * A step's params on one line, omitting `locator` (it is already the step's
+ * label). Surfaces a navigation's full URL, an action's value/button and a
+ * `test.step` author's own values (`{ user: 'admin' }`); null when the step
+ * carried none worth printing.
+ */
+function stepParamsLine(step: TestStepInfo): string | null {
+  const entries = orderedStepParams(step.params).filter(([key]) => key !== 'locator');
+  if (entries.length === 0) return null;
+  return `Parameters: ${entries.map(([key, value]) => `${key}=${value}`).join(', ')}`;
+}
+
 /** Extract steps that have an error attached (D6). */
 function failingStepsSection(rep: RepresentativeRow, limits: ContextLimits): string | null {
   const steps = (rep.steps as TestStepInfo[] | null) ?? [];
   const failing = steps.filter((s) => s.error?.message);
   if (failing.length === 0) return null;
-  const out = failing.map(
-    (s) =>
-      `- [${s.category ?? 'step'}] ${stepLabel(s)}\n\`\`\`\n${condenseErrorText(s.error!.message!, limits.sampleErrorChars)}\n\`\`\``,
-  );
+  const out = failing.map((s) => {
+    const params = stepParamsLine(s);
+    const paramLine = params ? `\n  ${params}` : '';
+    return `- [${s.category ?? 'step'}] ${stepLabel(s)}${paramLine}\n\`\`\`\n${condenseErrorText(s.error!.message!, limits.sampleErrorChars)}\n\`\`\``;
+  });
   return `### Failed Steps\n${out.join('\n')}`;
 }
 
@@ -1679,7 +1692,9 @@ export function representativeExecutionSections(
           const prefix = s.failed ? '✗ ' : '- ';
           const suffix = s.failed ? ' ← FAILED' : '';
           const dur = s.duration != null ? ` (${s.duration}ms)` : '';
-          return `${prefix}[${s.category ?? 'step'}] ${stepLabel(s)}${dur}${suffix}`;
+          const params = stepParamsLine(s);
+          const paramLine = params ? `\n    ${params}` : '';
+          return `${prefix}[${s.category ?? 'step'}] ${stepLabel(s)}${dur}${suffix}${paramLine}`;
         })
         .join('\n')}`,
     });

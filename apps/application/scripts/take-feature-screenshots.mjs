@@ -444,9 +444,10 @@ const SCENES = [
         },
         {
           type: 'step-begin',
-          title: 'expect(page).toHaveURL("**/success")',
+          title: 'Click',
+          subtitle: "getByRole('button', { name: 'Place order' })",
           location: 'tests/checkout.spec.ts:14:5',
-          stepCategory: 'pw:expect',
+          stepCategory: 'pw:api',
           parentTitle: 'purchase flow submits the order',
           workerIndex: 0,
           startedAt: Date.now(),
@@ -498,6 +499,46 @@ const SCENES = [
       await page.locator('[data-testid="live-step"]:visible').first().waitFor({ timeout: 60_000 });
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(400);
+      await shoot();
+    },
+  },
+
+  {
+    name: 'step-params',
+    description: "Whole-test steps table: a step's muted subtitle and its open Parameters disclosure",
+    route: '/projects',
+    viewport: { width: 1280, height: 2400 },
+    of: 'table',
+    pad: 12,
+    async run({ page, base, goto, shoot }) {
+      // Find a failing execution whose steps carry the 1.63 params shape, then
+      // open its Timeline tab, expand every step, and open a Parameters disclosure.
+      const projects = await (await page.request.get(`${base}/api/projects`)).json();
+      const projectList = Array.isArray(projects) ? projects : (projects.items ?? projects.projects ?? []);
+      let execId = null;
+      outer: for (const project of projectList) {
+        const detail = await (await page.request.get(`${base}/api/projects/${project.id}`)).json();
+        for (const run of detail.testRuns ?? []) {
+          const runDetail = await (await page.request.get(`${base}/api/test-runs/${run.id}`)).json();
+          for (const c of runDetail.testCases ?? []) {
+            if (c.status !== 'failed' || !c.executionId) continue;
+            const exec = await (await page.request.get(`${base}/api/test-run-cases/${c.executionId}`)).json();
+            if ((exec.steps ?? []).some((s) => s && s.params && Object.keys(s.params).length > 0)) {
+              execId = c.executionId;
+              break outer;
+            }
+          }
+        }
+      }
+      if (!execId) throw new Error('no execution with 1.63 step params found for the step-params scene');
+      await goto(`/test-run-cases/${execId}`);
+      await page.getByRole('tab', { name: /^Timeline/ }).click();
+      const whole = page.getByRole('button', { name: 'Whole test' });
+      if (await whole.count()) await whole.click();
+      const disclosure = page.locator('table [data-testid="step-params"]:visible').first();
+      await disclosure.getByText(/Parameters/).click();
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForTimeout(300);
       await shoot();
     },
   },

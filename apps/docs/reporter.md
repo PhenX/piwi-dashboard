@@ -15,6 +15,27 @@ npm install --save-dev @piwitests/reporter
 
 Or let `npx @piwitests/reporter init` do the install and wiring for you — see the [one-command setup](./getting-started#fast-path-one-command) in Getting started. The rest of this page is the full manual reference.
 
+### Try it without editing your config
+
+On **Playwright 1.63 or later**, `--add-reporter` appends this reporter to whatever your config already uses (unlike `--reporter`, which replaces them), so you can send one run to a dashboard with no install and no config edit. Every reporter option has a `PIWI_*` [environment variable](#environment-variables), so point it at your dashboard that way:
+
+::: code-group
+
+```bash [Linux / macOS]
+PIWI_DASHBOARD_URL=http://localhost:3000 \
+PIWI_API_KEY=your-api-key \
+PIWI_PROJECT_NAME=my-project \
+npx playwright test --add-reporter @piwitests/reporter
+```
+
+```powershell [Windows (PowerShell)]
+$env:PIWI_DASHBOARD_URL='http://localhost:3000'; $env:PIWI_API_KEY='your-api-key'; $env:PIWI_PROJECT_NAME='my-project'; npx playwright test --add-reporter @piwitests/reporter
+```
+
+:::
+
+This is a trial path: you get results, traces and screenshots, but not the [capture fixtures](#capture-fixtures) or [`wrapConfig`](#installing-via-wrapconfig)'s capture defaults. On Playwright before 1.63 the flag does not exist — configure the reporter normally instead. [`piwi run`](./cli#select-run) makes the same append automatically when the config has no Piwi reporter.
+
 ## Basic configuration
 
 Add the reporter to your `playwright.config.ts`:
@@ -105,7 +126,7 @@ export { expect } from '@playwright/test'
 - **ARIA snapshot** — Captured automatically on failed/timed-out tests via `page.locator(':root').ariaSnapshot()`. When the installed Playwright is 1.63 or later the fixtures also capture the JSON aria tree (`ariaSnapshotJSON()`) beside the YAML — the structured source for [locator healing](#locator-healing)'s rename matching and the page diff, while the YAML keeps feeding the ARIA card. Included in the **Copy AI context** bundle on the [execution page](./evidence#one-execution-diagnosis-first)'s Diagnosis tab (`/test-run-cases/:id`) and in the cluster AI diagnosis context. Also sampled on *passing* tests to anchor the [page diff](./evidence#page-diff) — see [`sampleAriaOnPass`](#green-page-sampling-on-pass) below.
 - **Browser dialogs** — On Playwright 1.63+, `alert`/`confirm`/`prompt`/`beforeunload` dialogs are recorded (type, message, close time) through the `dialogclosed` event, which never suppresses Playwright's automatic dismissal. They drive a *dialogs* lane on the [failure timeline](./evidence#one-execution-diagnosis-first) and a *dialog was open when the action failed* clue.
 - **Locator snapshots** — For each element a test proves resolvable — every successful action (click, fill, etc.) *and* every passing web-first assertion (`expect(locator).toBeVisible()`, `toHaveText()`, …) — the fixtures record the element's attributes and a ranked list of alternative locators, stamped with the call site. These power [locator healing](#locator-healing) when a locator later breaks. Gated by `captureLocators` (default on).
-- **Test steps** — each step's title, category and timing, plus its **subtitle** and a curated **params** object. Playwright 1.63 moved the target of a `pw:api`/`expect` step out of the title into the subtitle — `Click` with the subtitle `getByRole('button', { name: 'Pay' })`, or `Navigate` with the page URL — and Piwi composes the two back into one label wherever a step is shown, so an upgrade keeps the target visible. `params` carries the rendered locator, a navigation's URL, an action's arguments, or a `test.step(title, body, { params })` author's own values. It is capped at 20 keys and 200 characters per value, and token-shaped strings (JWTs, long hex blobs, base64 data URIs) are masked; page content, expressions and request bodies are never captured. On Playwright 1.61 the reporter reads the title only, exactly as before.
+- **Test steps** — each step's title, category and timing, plus its **subtitle** and a curated **params** object. Playwright 1.63 moved the target of a `pw:api`/`expect` step out of the title into the subtitle — `Click` with the subtitle `getByRole('button', { name: 'Pay' })`, or `Navigate` with the page URL — and the dashboard shows the title with the subtitle as a muted second element wherever a step is displayed (composing the two into one string for plain-text uses such as copy actions and the AI context), so an upgrade keeps the target visible. `params` carries the rendered locator, a navigation's URL, an action's arguments, or a `test.step(title, body, { params })` author's own values, and the [step row](./evidence#one-execution-diagnosis-first) shows them in an on-demand **Parameters** disclosure (the locator first). It is capped at 20 keys and 200 characters per value, and token-shaped strings (JWTs, long hex blobs, base64 data URIs) are masked; page content, expressions and request bodies are never captured. On Playwright 1.61 the reporter reads the title only, exactly as before.
 - **Test locks** — The lock names a test or its `describe` declared (`test('…', { lock: 'database' }, …)`) — the shared resources Playwright serializes holders of. They drive the [Timeline tab's lock lanes](./ui-overview#test-run-detail), the lock filter and *Group by lock* on the Tests tabs, and two [clues](./evidence#clues). Captured **best effort**: Playwright exposes locks only to an in-process reporter, never through the public API or the blob report, so a run recorded live carries them and one rebuilt from a [blob import](./importing-runs) does not. Nothing to configure.
 
 These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).

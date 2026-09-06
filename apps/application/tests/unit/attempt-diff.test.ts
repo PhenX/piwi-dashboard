@@ -119,6 +119,45 @@ describe('diffAttempts', () => {
     );
   });
 
+  test('a step run on both attempts with different params is reported', () => {
+    const failing = cleanPass({
+      steps: [
+        {
+          title: 'Navigate',
+          subtitle: '/checkout',
+          duration: 10,
+          params: { url: 'https://app.test/checkout?coupon=EXPIRED' },
+        },
+      ],
+    });
+    const passing = cleanPass({
+      steps: [
+        {
+          title: 'Navigate',
+          subtitle: '/checkout',
+          duration: 10,
+          params: { url: 'https://app.test/checkout?coupon=SAVE10' },
+        },
+      ],
+    });
+    const diff = diffAttempts(failing, passing);
+    const stepRow = diff.find((d) => d.kind === 'step');
+    expect(stepRow?.summary).toBe('Step "Navigate /checkout" ran with different params');
+    expect(stepRow?.detail).toBe(
+      'url: https://app.test/checkout?coupon=EXPIRED → https://app.test/checkout?coupon=SAVE10',
+    );
+  });
+
+  test('a step present on both attempts with identical params yields no step diff', () => {
+    const step = {
+      title: 'Click',
+      subtitle: "getByRole('button')",
+      duration: 10,
+      params: { locator: "getByRole('button')" },
+    };
+    expect(diffAttempts(cleanPass({ steps: [step] }), cleanPass({ steps: [{ ...step }] }))).toEqual([]);
+  });
+
   test('two identical attempts yield no differences', () => {
     expect(diffAttempts(cleanPass(), cleanPass())).toEqual([]);
   });
