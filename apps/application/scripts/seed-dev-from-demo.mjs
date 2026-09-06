@@ -13,9 +13,10 @@
 
 import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { execSync } from 'child_process';
-import { join, dirname } from 'path';
+import { join, dirname, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import { copyDemoMedia } from './copy-demo-media.mjs';
 
 const require = createRequire(import.meta.url);
 const { createClient } = require('@libsql/client');
@@ -24,6 +25,13 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const appDir = join(__dirname, '..');
 const sqlPath = join(appDir, 'public/demo/seed.sql');
 const dbPath = join(appDir, '.data/piwi.db');
+
+// The file endpoint resolves a row's `demo/…` path inside the storage
+// directory, so the seeded evidence binaries must be copied there. Match the
+// server's storage root (`PIWI_STORAGE_PATH`, default `.data/storage`).
+const storageEnv = process.env.PIWI_STORAGE_PATH || '.data/storage';
+const storageDir = isAbsolute(storageEnv) ? storageEnv : join(appDir, storageEnv);
+const publicDemoDir = join(appDir, 'public/demo');
 
 if (!existsSync(sqlPath)) {
   console.log('No demo seed yet — generating public/demo/seed.sql…');
@@ -136,6 +144,13 @@ if (skip > 0) {
   console.error(`Done. ${ok} inserted, ${skip} failed — the dev database is incomplete.`);
   process.exit(1);
 }
+
+// Copy the committed evidence binaries into the storage directory the file
+// endpoint reads from, under the `demo/…` paths the seeded rows reference.
+// Idempotent, so it also heals a storage directory that was wiped after an
+// earlier seed.
+const copied = copyDemoMedia(publicDemoDir, storageDir);
+console.log(`Demo media: ${copied} file(s) copied into ${storageDir}.`);
 
 // The rebase adds a fixed delta to every timestamp, so it may only run over a
 // load that brought in the whole seed. Re-running it against rows that already
