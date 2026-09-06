@@ -54,11 +54,60 @@ export type FailureClueRule =
   | 'lock-cross-shard'
   | 'timeout-budget'
   | 'environment-changed'
-  | 'browser-specific'
-  | 'fixed-before';
+  | 'browser-specific';
 
 /** How strongly a clue points at the cause; drives ranking and the strength chip. */
 export type FailureClueStrength = 'strong' | 'medium' | 'weak';
+
+/** A known combination of clues on one execution, chained into one sentence. */
+export type FailureStoryId =
+  | 'blocked-by-pending-request'
+  | 'renamed'
+  | 'removed'
+  | 'wrong-page'
+  | 'polluted-worker'
+  | 'backend-error'
+  | 'timing';
+
+/**
+ * One story: several clues on the same execution that together name the cause,
+ * chained into a single plain sentence. The UI leads with it and folds the
+ * member clues under it; when no combination matches, `story` is null and the
+ * top clue stands alone.
+ */
+export interface FailureStory {
+  id: FailureStoryId;
+  /** One plain sentence built from the member clues' own data. */
+  sentence: string;
+  /** The ids of the clues that form the story, in the order they are chained. */
+  clueIds: string[];
+  /** The strongest member's strength. */
+  strength: FailureClueStrength;
+}
+
+/** The clues for one execution, plus the story that chains them when one matches. */
+export interface FailureCluesReport {
+  clues: FailureClue[];
+  story: FailureStory | null;
+}
+
+/**
+ * Environment-diff keys that describe the content the test drives — a change in
+ * one of these can plausibly explain a content failure. Tool versions
+ * (Playwright, reporter, Node), color scheme and the naturally-varying
+ * placement keys are excluded, so they never lift `environment-changed` above
+ * weak on their own.
+ */
+const ENVIRONMENT_CONTENT_KEYS = new Set<string>([
+  'browserName',
+  'channel',
+  'viewport',
+  'locale',
+  'timezoneId',
+  'environment',
+  'baseUrl',
+  'baseURL',
+]);
 
 /** A pointer from a clue to the evidence section that backs it. */
 export interface FailureClueCitation {
@@ -210,7 +259,6 @@ const RULE_ORDER: FailureClueRule[] = [
   'timeout-budget',
   'environment-changed',
   'browser-specific',
-  'fixed-before',
 ];
 
 const STRENGTH_RANK: Record<FailureClueStrength, number> = { strong: 0, medium: 1, weak: 2 };
@@ -274,9 +322,26 @@ function readLocatorTarget(parsed: ParsedPlaywrightError | null): LocatorTarget 
   return { name: name ? name.toLowerCase() : null, role, testId };
 }
 
-export function buildFailureClues(input: FailureClueInput): FailureClue[] {
+export function buildFailureClues(input: FailureClueInput): FailureCluesReport {
   const clues: FailureClue[] = [];
   const add = (clue: FailureClue) => clues.push(clue);
+
+  // Structured facts captured as clues are emitted, so the story sentence reads
+  // real values (element, method, path, durations, console lead) without
+  // re-parsing the clue prose.
+  const facts: {
+    blockedState?: string;
+    slowRequest?: { method: string; path: string; durSec: string };
+    failedRequest?: { method: string; path: string; statusText: string };
+    consoleLeadSec?: string | null;
+    reachableLocator?: string | null;
+    renamed?: { role: string; oldName: string | null; newName: string | null };
+    removed?: { role: string; name: string | null };
+    wrongPage?: { endedPath: string; expected: string | null; via: 'request' | 'dialog' | null };
+    worker?: { title: string; workerLabel: string | null };
+    backend?: { method: string; path: string; logLine: string };
+    timing?: { pct: number };
+  } = {};
 
   const timeline = input.timeline;
   const origin = timeline?.origin ?? null;
@@ -318,6 +383,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
       const status = isFiniteNumber(p.req.status) ? p.req.status : 0;
       const statusText = status <= 0 ? 'was aborted' : `returned ${status}`;
       const lead = p.endAt != null && failureAt != null ? formatLead(p.endAt, failureAt) : '';
+      if (i === 0) facts.failedRequest = { method, path, statusText };
       add({
         id: i === 0 ? 'failed-request-before-failure' : `failed-request-before-failure-${i}`,
         rule: 'failed-request-before-failure',
@@ -345,6 +411,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
     if (p) {
       const method = str(p.req.method) || 'GET';
       const path = pathOf(p.req.url) ?? str(p.req.url) ?? '(unknown)';
+      facts.slowRequest = { method, path, durSec: (p.dur / 1000).toFixed(1) };
       add({
         id: 'slow-request-overlapping-failure',
         rule: 'slow-request-overlapping-failure',
@@ -375,6 +442,10 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
       const isError = type === 'error';
       const isWarning = type === 'warning' || type === 'warn';
       if (isError || isWarning) {
+        facts.consoleLeadSec =
+          match.at != null && failureAt != null && failureAt - match.at > 0
+            ? ((failureAt - match.at) / 1000).toFixed(1)
+            : null;
         add({
           id: 'console-mentions-target',
           rule: 'console-mentions-target',
@@ -426,6 +497,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
       if (errorLog) {
         const method = str(p.req.method) || 'GET';
         const path = pathOf(p.req.url) ?? str(p.req.url) ?? '(unknown)';
+        facts.backend = { method, path, logLine: str(errorLog.message).slice(0, 140) };
         add({
           id: 'backend-error-attached',
           rule: 'backend-error-attached',
@@ -450,6 +522,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
       (healing.priorNameMayBeStale === true && healing.recommendation?.recommended != null);
     if (renamed) {
       const rec = healing.recommendation?.recommended;
+      facts.reachableLocator = rec?.locator ?? null;
       add({
         id: 'element-renamed',
         rule: 'element-renamed',
@@ -469,10 +542,18 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
   const locatorChange = input.pageDiff?.locatorChange;
   if (locatorChange && (locatorChange.type === 'removed' || locatorChange.type === 'renamed')) {
     const node = locatorChange.name ? `${locatorChange.role} "${locatorChange.name}"` : locatorChange.role;
+    if (locatorChange.type === 'renamed') {
+      facts.renamed = { role: locatorChange.role, oldName: locatorChange.oldName ?? null, newName: locatorChange.name };
+    } else {
+      facts.removed = { role: locatorChange.role, name: locatorChange.name };
+    }
     add({
       id: 'page-structure-changed',
       rule: 'page-structure-changed',
-      strength: 'strong',
+      // A rename or removal only explains the failure when the locator never
+      // resolved; if it resolved (and failed later), the structure change is
+      // context, not cause, so it stays medium.
+      strength: parsed?.isLocatorResolutionFailure ? 'strong' : 'medium',
       title: 'The page structure changed near the failing locator',
       detail:
         locatorChange.type === 'renamed'
@@ -502,6 +583,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
         'intercepts-pointer': 'covered by another element',
       };
       const label = stateLabel[parsed.lastState] ?? parsed.lastState;
+      facts.blockedState = label;
       add({
         id: 'element-present-but-blocked',
         rule: 'element-present-but-blocked',
@@ -523,6 +605,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
     const onKnownWrong = WRONG_PAGE_PATHS.find((p) => endedPath === p || endedPath.startsWith(`${p}/`));
     const driftedFromNav = lastNav && pathsDiffer(endedPath, lastNav);
     if (onKnownWrong || driftedFromNav) {
+      facts.wrongPage = { endedPath, expected: driftedFromNav ? lastNav : null, via: null };
       add({
         id: 'wrong-page',
         rule: 'wrong-page',
@@ -545,6 +628,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
     const selfIdx = ordered.findIndex((e) => e.id === input.execution.id);
     const previous = selfIdx > 0 ? ordered[selfIdx - 1] : null;
     if (previous && FAILED_PEER_STATUSES.has(str(previous.status))) {
+      facts.worker = { title: str(previous.title) || 'the previous test', workerLabel: null };
       add({
         id: 'worker-pollution',
         rule: 'worker-pollution',
@@ -639,6 +723,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
     const execRatio = execDur != null ? execDur / timeout : 0;
     if (stepRatio >= 0.8 || execRatio >= 0.95) {
       const pct = Math.round(Math.max(stepRatio, execRatio) * 100);
+      facts.timing = { pct };
       add({
         id: 'timeout-budget',
         rule: 'timeout-budget',
@@ -658,7 +743,11 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
   // The same-environment baseline differs from this run's environment.
   const envDiff = input.environmentDiff;
   if (envDiff && envDiff.status === 'ok' && envDiff.entries && envDiff.entries.length > 0) {
-    const onlyEnvLabel = envDiff.entries.length === 1 && envDiff.entries[0]!.key === 'environment';
+    // Medium only when something the test actually drives changed (browser,
+    // viewport, locale, timezone, base URL or the environment label). A tool
+    // version bump or a color-scheme flip alone stays weak and never outranks a
+    // content clue.
+    const hasContentChange = envDiff.entries.some((e) => ENVIRONMENT_CONTENT_KEYS.has(e.key));
     const shown = envDiff.entries
       .slice(0, 3)
       .map((e) => e.label ?? e.key)
@@ -666,7 +755,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
     add({
       id: 'environment-changed',
       rule: 'environment-changed',
-      strength: onlyEnvLabel ? 'weak' : 'medium',
+      strength: hasContentChange ? 'medium' : 'weak',
       title: 'The environment changed since the last pass',
       detail: `Compared to the last passing run in the same environment: ${shown}.`,
       citations: [{ section: 'environmentDiff' }],
@@ -694,34 +783,28 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
     });
   }
 
-  // ── fixed-before (weak) ────────────────────────────────────────────────────
-  // A cluster that recorded a fix has regressed.
-  const cluster = input.cluster;
-  if (
-    cluster &&
-    cluster.fixVerification === 'regressed' &&
-    (str(cluster.fixCommit).length > 0 || cluster.fixLandedRunId != null)
-  ) {
-    const commit = str(cluster.fixCommit);
-    add({
-      id: 'fixed-before',
-      rule: 'fixed-before',
-      strength: 'weak',
-      title: 'This failure was fixed before and has come back',
-      detail: commit
-        ? `This cluster was verified fixed by commit ${commit.slice(0, 7)} and has regressed — the earlier fix did not hold.`
-        : 'This cluster was verified fixed in an earlier run and has regressed — the earlier fix did not hold.',
-      citations: [{ section: 'priorDiagnosis' }],
-    });
-  }
+  // The fact that a fix landed before and did not hold is not a clue about the
+  // cause; it belongs to the verdict's `since.fixedBefore` and the situation
+  // sentence, so it is not emitted here.
 
-  // Rank: strength first, then proximity to the failure moment (anchored clues
-  // closest to the failure win; unanchored clues sort after them), then the
-  // fixed rule order. Cap so the card and the prompt stay readable.
+  // Chain the clues into a story before ranking, so the tie-break can lift a
+  // clue that belongs to the story above one that does not.
+  const story = buildStory(clues, facts, target, parsed);
+  const storyMembers = story ? new Set(story.clueIds) : null;
+
+  // Rank: strength first, then story membership (a clue in the story leads),
+  // then proximity to the failure moment (anchored clues closest to the failure
+  // win; unanchored clues sort after them), then the fixed rule order. Cap so
+  // the card and the prompt stay readable.
   const ruleRank = new Map(RULE_ORDER.map((r, i) => [r, i]));
   clues.sort((a, b) => {
     const strengthDelta = STRENGTH_RANK[a.strength] - STRENGTH_RANK[b.strength];
     if (strengthDelta !== 0) return strengthDelta;
+    if (storyMembers) {
+      const aStory = storyMembers.has(a.id);
+      const bStory = storyMembers.has(b.id);
+      if (aStory !== bStory) return aStory ? -1 : 1;
+    }
     const aAnchored = a.at != null && failureAt != null;
     const bAnchored = b.at != null && failureAt != null;
     if (aAnchored && bAnchored) {
@@ -733,7 +816,162 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
     return (ruleRank.get(a.rule) ?? 99) - (ruleRank.get(b.rule) ?? 99);
   });
 
-  return clues.slice(0, MAX_CLUES);
+  return { clues: clues.slice(0, MAX_CLUES), story };
+}
+
+type StoryFacts = {
+  blockedState?: string;
+  slowRequest?: { method: string; path: string; durSec: string };
+  failedRequest?: { method: string; path: string; statusText: string };
+  consoleLeadSec?: string | null;
+  reachableLocator?: string | null;
+  renamed?: { role: string; oldName: string | null; newName: string | null };
+  removed?: { role: string; name: string | null };
+  wrongPage?: { endedPath: string; expected: string | null; via: 'request' | 'dialog' | null };
+  worker?: { title: string; workerLabel: string | null };
+  backend?: { method: string; path: string; logLine: string };
+  timing?: { pct: number };
+};
+
+/**
+ * Look for a known combination of clues on this execution and, when one is
+ * found, chain its members into a single plain sentence built from the facts
+ * the member clues captured. Returns null when no combination matches — the UI
+ * then falls back to the top clue on its own.
+ */
+function buildStory(
+  clues: FailureClue[],
+  facts: StoryFacts,
+  target: LocatorTarget,
+  parsed: ParsedPlaywrightError | null,
+): FailureStory | null {
+  const has = (rule: FailureClueRule) => clues.some((c) => c.rule === rule);
+  const idsOf = (rules: FailureClueRule[]) =>
+    rules.flatMap((rule) => clues.filter((c) => c.rule === rule).map((c) => c.id));
+  const strongestOf = (ids: string[]): FailureClueStrength => {
+    const members = clues.filter((c) => ids.includes(c.id));
+    return members.reduce<FailureClueStrength>(
+      (best, c) => (STRENGTH_RANK[c.strength] < STRENGTH_RANK[best] ? c.strength : best),
+      'weak',
+    );
+  };
+  const make = (id: FailureStoryId, rules: FailureClueRule[], sentence: string): FailureStory => {
+    const clueIds = idsOf(rules);
+    return { id, sentence, clueIds, strength: strongestOf(clueIds) };
+  };
+
+  const elementLabel =
+    target.role && target.name
+      ? `the ${target.role} "${target.name}"`
+      : target.name
+        ? `"${target.name}"`
+        : target.role
+          ? `the ${target.role}`
+          : 'the element';
+  const action = str(parsed?.action) || 'action';
+
+  // blocked-by-pending-request
+  if (
+    has('element-present-but-blocked') &&
+    (has('slow-request-overlapping-failure') || has('failed-request-before-failure'))
+  ) {
+    const state = facts.blockedState ?? 'blocked';
+    let because: string;
+    if (facts.slowRequest) {
+      because = `${facts.slowRequest.method} ${facts.slowRequest.path} was still in flight (${facts.slowRequest.durSec} s)`;
+    } else if (facts.failedRequest) {
+      because = `${facts.failedRequest.method} ${facts.failedRequest.path} ${facts.failedRequest.statusText}`;
+    } else {
+      because = 'a request never resolved';
+    }
+    const rules: FailureClueRule[] = [
+      'element-present-but-blocked',
+      facts.slowRequest ? 'slow-request-overlapping-failure' : 'failed-request-before-failure',
+    ];
+    let sentence = `${cap(elementLabel)} stayed ${state} because ${because}`;
+    if (has('console-mentions-target')) {
+      rules.push('console-mentions-target');
+      sentence += facts.consoleLeadSec
+        ? `; the console said so ${facts.consoleLeadSec} s before the ${action} gave up`
+        : `; the console said so before the ${action} gave up`;
+    }
+    return make('blocked-by-pending-request', rules, `${sentence}.`);
+  }
+
+  // renamed
+  if (has('element-renamed') && has('page-structure-changed') && facts.renamed) {
+    const r = facts.renamed;
+    const reachable = facts.reachableLocator ? `; it is reachable as ${facts.reachableLocator}` : '';
+    return make(
+      'renamed',
+      ['element-renamed', 'page-structure-changed'],
+      `The ${r.role} the locator names was renamed from "${r.oldName ?? '?'}" to "${r.newName ?? '?'}" since the last pass${reachable}.`,
+    );
+  }
+
+  // removed
+  if (has('page-structure-changed') && !has('element-renamed') && facts.removed) {
+    const r = facts.removed;
+    const node = r.name ? `${r.role} "${r.name}"` : r.role;
+    return make('removed', ['page-structure-changed'], `The ${node} is no longer on the page since the last pass.`);
+  }
+
+  // wrong-page
+  if (has('wrong-page') && (has('failed-request-before-failure') || has('dialog-open-on-failure'))) {
+    const via = has('failed-request-before-failure') ? 'the request' : 'the dialog';
+    const rules: FailureClueRule[] = [
+      'wrong-page',
+      has('failed-request-before-failure') ? 'failed-request-before-failure' : 'dialog-open-on-failure',
+    ];
+    const ended = facts.wrongPage?.endedPath ?? 'another page';
+    const expected = facts.wrongPage?.expected ? ` instead of ${facts.wrongPage.expected}` : '';
+    return make('wrong-page', rules, `The test ended on ${ended}${expected} after ${via}.`);
+  }
+
+  // polluted-worker
+  if (has('worker-pollution')) {
+    const rules: FailureClueRule[] = ['worker-pollution'];
+    if (has('lock-holder-failed')) rules.push('lock-holder-failed');
+    const title = facts.worker?.title ?? 'the previous test';
+    return make(
+      'polluted-worker',
+      rules,
+      `The previous test on this worker ("${title}") failed and left state behind.`,
+    );
+  }
+
+  // backend-error
+  if (
+    has('backend-error-attached') &&
+    (has('failed-request-before-failure') || has('slow-request-overlapping-failure')) &&
+    facts.backend
+  ) {
+    const rules: FailureClueRule[] = [
+      'backend-error-attached',
+      has('failed-request-before-failure') ? 'failed-request-before-failure' : 'slow-request-overlapping-failure',
+    ];
+    return make(
+      'backend-error',
+      rules,
+      `${facts.backend.method} ${facts.backend.path} failed on the server: "${facts.backend.logLine}".`,
+    );
+  }
+
+  // timing
+  if (has('timeout-budget') && has('slow-request-overlapping-failure') && facts.timing && facts.slowRequest) {
+    return make(
+      'timing',
+      ['timeout-budget', 'slow-request-overlapping-failure'],
+      `The step used ${facts.timing.pct} % of the timeout waiting on ${facts.slowRequest.path}.`,
+    );
+  }
+
+  return null;
+}
+
+/** Capitalize the first letter of a sentence fragment. */
+function cap(text: string): string {
+  return text.length > 0 ? text[0]!.toUpperCase() + text.slice(1) : text;
 }
 
 /**

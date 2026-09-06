@@ -33,7 +33,7 @@ const { data: historyData } = await useAsyncData(
 // The deterministic clues for this execution: fed to the headline (top clue as
 // one line), the CluesCard, and the evidence tabs' default-tab choice.
 const { data: cluesData } = await useFetch<FailureCluesResult>(`/api/test-run-cases/${testCaseId}/clues`, {
-  default: (): FailureCluesResult => ({ clues: [], failureAt: null }),
+  default: (): FailureCluesResult => ({ clues: [], story: null, failureAt: null }),
 });
 const clues = computed(() => cluesData.value?.clues ?? []);
 const cluesFailureAt = computed(() => cluesData.value?.failureAt ?? null);

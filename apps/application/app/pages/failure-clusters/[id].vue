@@ -94,8 +94,8 @@ const { data: cluesData } = await useAsyncData<FailureCluesResult>(
   () =>
     selectedExecId.value
       ? $fetch<FailureCluesResult>(`/api/test-run-cases/${selectedExecId.value}/clues`)
-      : Promise.resolve({ clues: [], failureAt: null }),
-  { default: (): FailureCluesResult => ({ clues: [], failureAt: null }), watch: [selectedExecId] },
+      : Promise.resolve({ clues: [], story: null, failureAt: null }),
+  { default: (): FailureCluesResult => ({ clues: [], story: null, failureAt: null }), watch: [selectedExecId] },
 );
 
 const clues = computed(() => cluesData.value?.clues ?? []);
@@ -131,6 +131,7 @@ const clusterVerdict = computed<FailureVerdict | null>(() => {
       firstFailingAt: c.firstSeenAt,
       isFirstFailure: false,
       commit: null,
+      fixedBefore: null,
     },
     cluster: null,
     owner: c.owner,

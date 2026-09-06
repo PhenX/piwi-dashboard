@@ -14,6 +14,7 @@ import { enrichFixPlanOwnership } from '../scm/ownership';
 import { getNetworkRequests, getFailureGroups } from '#shared/handlers/test-runs';
 import {
   getTestCase,
+  getTestRunCase,
   getTestRunCaseTraces,
   getTestCaseStabilityTrend,
   getFailureClues,
@@ -818,7 +819,27 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
 
     const plan = await buildFixPlan(db, clusterId);
     if (!plan) return null;
-    return enrichFixPlanOwnership(db, cluster.projectId, plan);
+    const enriched = await enrichFixPlanOwnership(db, cluster.projectId, plan);
+
+    // Additive: the story, the situation sentence and the computed next step,
+    // read on the cluster's latest occurrence through the shared handlers.
+    const clusterDetail = await getFailureCluster(db, clusterId).catch(() => null);
+    const latestId = clusterDetail?.latestTestRunsCaseId ?? null;
+    const [cluesResult, detail] = await Promise.all([
+      latestId ? getFailureClues(db, latestId).catch(() => null) : Promise.resolve(null),
+      latestId ? getTestRunCase(db, latestId).catch(() => null) : Promise.resolve(null),
+    ]);
+    const story = cluesResult?.story ?? null;
+    const situation = (detail as { situation?: { text?: string } | null } | null)?.situation ?? null;
+
+    return {
+      ...(enriched as unknown as Record<string, unknown>),
+      story: story
+        ? dropNulls({ id: story.id, sentence: story.sentence, strength: story.strength, clueIds: story.clueIds })
+        : null,
+      situation: situation?.text || null,
+      nextStep: clusterDetail?.nextStep ?? null,
+    };
   },
 
   // ── get_cluster_diagnosis ──────────────────────────────────────────────────
@@ -1705,7 +1726,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       .from(testCases)
       .where(eq(testCases.id, row.testCaseId));
 
-    const [healing, screenshotRows, diagContext, cluesResult, pageDiff] = await Promise.all([
+    const [healing, screenshotRows, diagContext, cluesResult, pageDiff, detail] = await Promise.all([
       getLocatorHealing(db, id).catch(() => null),
       selectCaseScreenshots(db, id),
       row.failureClusterId
@@ -1718,9 +1739,13 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         : Promise.resolve(null),
       getFailureClues(db, id).catch(() => null),
       getPageDiff(db, id).catch(() => null),
+      getTestRunCase(db, id).catch(() => null),
     ]);
 
     const rec = healing && healing.source !== 'none' ? healing.recommendation?.recommended : null;
+    const story = cluesResult?.story ?? null;
+    const nextStep = (detail as { nextStep?: unknown } | null)?.nextStep ?? null;
+    const situation = (detail as { situation?: { text?: string } | null } | null)?.situation ?? null;
 
     return dropNulls({
       executionId: id,
@@ -1730,6 +1755,11 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       status: row.status,
       headline: caseHeadline(row)?.headline ?? null,
       error: trunc(row.error, 1500),
+      story: story
+        ? dropNulls({ id: story.id, sentence: story.sentence, strength: story.strength, clueIds: story.clueIds })
+        : null,
+      situation: situation?.text || null,
+      nextStep: nextStep ?? null,
       clues: cluesResult ? compactClues(cluesResult) : null,
       clusterId: row.failureClusterId || null,
       slowestStep: row.slowestStep || null,

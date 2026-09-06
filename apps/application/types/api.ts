@@ -6,7 +6,18 @@
 import type { Role, FilterDetails, TestMetadata, TestSourceFrame } from '#shared/types';
 import type { ScmProviderName } from '#shared/scm-urls';
 import type { PageDiffSummary, PageDiffHunk } from '#shared/page-diff';
+import type { ClusterState } from '#shared/cluster-state';
+import type { NextStep } from '#shared/next-step';
 export type { TestMetadata, TestSourceFrame };
+export type { ClusterState } from '#shared/cluster-state';
+export type { NextStep } from '#shared/next-step';
+
+/** One run's occurrence count for a cluster, for the occurrence sparkline. */
+export interface OccurrenceSeriesPoint {
+  runId: number;
+  startedAt: string | Date | null;
+  occurrences: number;
+}
 
 // ============================================================================
 // Metadata types
@@ -980,6 +991,12 @@ export interface FailureClusterDetail extends ClusterResolutionFields {
   assignee: string | null;
   snoozedUntil: string | Date | null;
   snoozeMode: string | null;
+  /** One sentence with one verb for the cluster's state, and the control that changes it. */
+  clusterState: ClusterState;
+  /** Occurrences per run over the project's last 20 runs, oldest first. */
+  occurrenceSeries: OccurrenceSeriesPoint[];
+  /** The single next step chosen by the policy. */
+  nextStep: NextStep;
 }
 
 /**

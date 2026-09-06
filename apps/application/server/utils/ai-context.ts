@@ -707,13 +707,16 @@ async function environmentDiffSection(
  * conclusions, and can follow each back to its source.
  */
 async function cluesSection(db: DbClient, rep: RepresentativeRow, limits: ContextLimits): Promise<string | null> {
-  const { clues } = await getFailureClues(db, rep.id, { slowRequestMs: limits.slowRequestMs });
+  const { clues, story } = await getFailureClues(db, rep.id, { slowRequestMs: limits.slowRequestMs });
   if (clues.length === 0) return null;
   const lines = clues.map((clue) => {
     const cites = clue.citations.map((c) => `[${c.section}]`).join('');
     return `- [${clue.strength}] ${clue.title} — ${clue.detail} ${cites}`.trimEnd();
   });
-  return `## Clues\nDeterministic, rule-based correlations found in the evidence below. Treat each as a hypothesis to confirm or refute against its cited section, not as a conclusion:\n${lines.join('\n')}`;
+  // When the clues chain into a story, lead with its one-sentence summary so the
+  // model reads the correlation before the individual findings.
+  const storyLine = story ? `**Most likely:** ${story.sentence} [${story.strength}]\n\n` : '';
+  return `## Clues\n${storyLine}Deterministic, rule-based correlations found in the evidence below. Treat each as a hypothesis to confirm or refute against its cited section, not as a conclusion:\n${lines.join('\n')}`;
 }
 
 /**
