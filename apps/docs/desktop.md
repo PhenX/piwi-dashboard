@@ -28,7 +28,7 @@ Grab the installer for your OS from the [latest release](https://github.com/Piwi
 | **Windows** | `.msi` |
 | **macOS** (Apple silicon) | `.dmg` |
 
-Linux is not packaged yet — use [Docker or `npx`](/deployment) there.
+Linux is not packaged yet — use [Docker or `npx`](/operate/deployment) there.
 
 ### Unsigned builds
 
@@ -106,7 +106,7 @@ actual one).
 > your browser* from reaching it. The token means only the app itself and tools
 > you've handed it to (your reporter) can submit or read. Accepting results from
 > *other machines* over the network is intentionally not supported in the desktop
-> build — run the [Docker image](/deployment) for a shared, always-on server.
+> build — run the [Docker image](/operate/deployment) for a shared, always-on server.
 
 ## Projects from local folders
 

@@ -71,7 +71,7 @@ Five ways in, depending on what you already have:
 | **[Desktop app](https://piwitests.dev/desktop)** | You run Playwright locally and don't want to run a server | Download an installer — no Docker, no Node |
 | **Docker** *(below)* | You have Docker, or you're setting up a shared instance | One command |
 | **`npx @piwitests/server`** | You have Node.js 22+ and would rather skip Docker | One command |
-| **[One-click deploy](https://piwitests.dev/deployment#one-click-deploy)** | You want a shared instance and no server to run it on | A button, plus whatever your host charges |
+| **[One-click deploy](https://piwitests.dev/operate/deployment#one-click-deploy)** | You want a shared instance and no server to run it on | A button, plus whatever your host charges |
 
 Two caveats worth knowing before you pick. The **desktop installers are not yet code-signed**, so the
 first launch needs a click-through, and they exist for Windows x64 and Apple-silicon macOS only — on
@@ -80,7 +80,7 @@ Linux or an Intel Mac, use Docker or `npx`. The **one-click templates** ([`rende
 configuration reference so they can't drift from what the app reads) each provision one container with a
 persistent volume and authentication on, but per-provider limits apply — Render needs a paid instance
 for its disk, Koyeb attaches volumes after the fact. Both are covered in the
-[deployment guide](https://piwitests.dev/deployment#one-click-deploy).
+[deployment guide](https://piwitests.dev/operate/deployment#one-click-deploy).
 
 ## Quick start
 
@@ -106,7 +106,7 @@ current directory.
 > **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker
 > auto-creates `.data` owned by `root` and the container can't write to it. Docker Desktop on Windows
 > and macOS handles this for you. See
-> [Permission issues with volumes](https://piwitests.dev/deployment#permission-issues-with-volumes).
+> [Permission issues with volumes](https://piwitests.dev/operate/deployment#permission-issues-with-volumes).
 
 **2. Add the reporter to your test project**
 
@@ -169,17 +169,17 @@ The command above gives you an **open dashboard with authentication off**, which
 and not fine on a network. Three things to set before anyone else can reach it:
 
 - `PIWI_AUTH_ENABLED=true` and `PIWI_AUTH_SECRET` — turn on accounts and roles
-  ([guide](https://piwitests.dev/authentication)).
+  ([guide](https://piwitests.dev/operate/authentication)).
 - `PIWI_SECRET_KEY` — without it, stored credentials (AI keys, SCM tokens) are encrypted with a
   built-in development key rather than yours.
 - **HTTPS**, via a reverse proxy — see the
-  [deployment guide](https://piwitests.dev/deployment#reverse-proxy-https).
+  [deployment guide](https://piwitests.dev/operate/deployment#reverse-proxy-https).
 
 Generate a value for either secret with
 `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
 
 The full list — including the trust-proxy flag, backups and version pinning — is the
-[production checklist](https://piwitests.dev/production-checklist).
+[production checklist](https://piwitests.dev/operate/production-checklist).
 
 Found a vulnerability? Please report it privately via the [security policy](./SECURITY.md).
 
@@ -235,7 +235,7 @@ local/S3 storage with a full Playwright E2E suite.
 
 Upgrades apply database migrations automatically on startup — and those migrations are **forward-only**,
 so rolling back means restoring a backup, not pulling the old tag. Read
-[Upgrading](https://piwitests.dev/upgrading) before your first version bump. Direction and
+[Upgrading](https://piwitests.dev/operate/upgrading) before your first version bump. Direction and
 non-goals live in the [roadmap](./ROADMAP.md).
 
 ## Documentation
@@ -245,8 +245,8 @@ Full docs at **[piwitests.dev](https://piwitests.dev)**. The usual entry points:
 - [Getting started](https://piwitests.dev/getting-started) — install, reporter, first run
 - [Core concepts](https://piwitests.dev/concepts) — runs, test cases, executions, clusters
 - [Reporter](https://piwitests.dev/reporter) and [CI & sharding](https://piwitests.dev/ci) — getting results in
-- [Deployment](https://piwitests.dev/deployment) and [Configuration](https://piwitests.dev/configuration) — running your instance
-- [Upgrading](https://piwitests.dev/upgrading) — what a version bump does, and why downgrading isn't a thing
+- [Deployment](https://piwitests.dev/operate/deployment) and [Configuration](https://piwitests.dev/configuration) — running your instance
+- [Upgrading](https://piwitests.dev/operate/upgrading) — what a version bump does, and why downgrading isn't a thing
 - [Privacy & data flow](https://piwitests.dev/privacy) — exactly what leaves your server (nothing you didn't configure)
 - [Browser extension](https://piwitests.dev/extension) — pick ranked locators from the live page, standalone ([install from the Chrome Web Store](https://chromewebstore.google.com/detail/piwi-picker/pakhnokpjboejcghgcmkjlpnogfjihhe) — works in Edge too)
 

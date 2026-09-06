@@ -7,7 +7,7 @@ lang: en-US
 
 Piwi can push run events to **browser**, **email**, **Slack**, or **HTTP webhooks** so your team hears about failures, new failure clusters, flakiness spikes, and performance regressions without watching the dashboard. AI diagnosis completions can also notify you when they finish.
 
-Notifications do not require authentication. With auth disabled the instance is single-tenant, so every channel and subscription is **global** (instance-wide). With `PIWI_AUTH_ENABLED=true` ([see authentication](./authentication)) each user manages their own channels and subscriptions, and administrators can additionally create global ones shared by everyone.
+Notifications do not require authentication. With auth disabled the instance is single-tenant, so every channel and subscription is **global** (instance-wide). With `PIWI_AUTH_ENABLED=true` ([see authentication](/operate/authentication)) each user manages their own channels and subscriptions, and administrators can additionally create global ones shared by everyone.
 
 ## How it works
 
@@ -138,6 +138,6 @@ Send a test email from **Settings → Notifications** to confirm delivery.
 ## See also
 
 - [CI & sharding](./ci) — the alternative: pull the run URL into your pipeline instead
-- [Authentication](./authentication) — per-user channels and subscriptions
+- [Authentication](/operate/authentication) — per-user channels and subscriptions
 - [Configuration reference](./configuration) — all environment variables
 - [AI diagnosis & failure clustering](./ai-diagnosis) — what triggers `cluster.new`, `cluster.fixed`, `cluster.regressed` and `diagnosis.completed`

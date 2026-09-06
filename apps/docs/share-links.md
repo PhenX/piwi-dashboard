@@ -36,7 +36,7 @@ than an authenticated export does.
 
 Two consequences of "live" worth knowing:
 
-- **Retention thins a shared cluster over time.** When [data retention](./storage#data-retention) prunes old runs, a
+- **Retention thins a shared cluster over time.** When [data retention](/operate/storage#data-retention) prunes old runs, a
   cluster link keeps resolving but progressively loses member evidence — the same thinning the dashboard shows. A
   link whose entity is pruned entirely answers 404. When the investigation must outlive retention, hand over an
   export file instead.
@@ -59,5 +59,5 @@ Two consequences of "live" worth knowing:
 ## See also
 
 - [Offline export](./offline-export) — the file to hand over when the recipient has no network path to your instance
-- [Authentication](./authentication) — roles, and who can mint or revoke
-- [Storage configuration](./storage#data-retention) — retention, and how it interacts with long-lived links
+- [Authentication](/operate/authentication) — roles, and who can mint or revoke
+- [Storage configuration](/operate/storage#data-retention) — retention, and how it interacts with long-lived links

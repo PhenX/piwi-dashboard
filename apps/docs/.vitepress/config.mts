@@ -77,10 +77,12 @@ export default defineConfig({
       { text: 'Home', link: '/' },
       { text: 'Getting started', link: '/getting-started' },
       { text: 'Reporter', link: '/reporter' },
-      // Recipes now have their own path-prefixed sidebar, so the Recipes group
-      // no longer rides along on every page — the top nav is how a reader
-      // reaches them from outside /recipes/.
+      // Recipes and Operate each have their own path-prefixed sidebar, so their
+      // groups no longer ride along on every page — the top nav is how a reader
+      // reaches them from outside those prefixes. activeMatch keeps the nav item
+      // highlighted across every page under the section.
       { text: 'Recipes', link: '/recipes/' },
+      { text: 'Operate', link: '/operate/deployment', activeMatch: '/operate/' },
       { text: 'Blog', link: '/blog/' },
       { text: 'API docs', link: 'https://piwitests.dev/demo/docs' },
       { text: 'Demo', link: 'https://piwitests.dev/demo/' },
@@ -91,12 +93,12 @@ export default defineConfig({
     // answers one question the reader is holding, so a page belongs to the
     // group matching what they are doing, never to the feature it describes.
     // Multi-sidebar, keyed by URL path prefix (VitePress picks the sidebar whose
-    // key prefixes the current path, longest match first). Step 1 of the
-    // restructure: Recipes already live under /recipes/, so they get their own
-    // focused, task-first sidebar; every other page falls back to the
-    // journey-ordered '/' sidebar below. As each remaining section moves under
-    // its own prefix (guide/ features/ operate/ reference/), it gets a key here
-    // and leaves the fallback.
+    // key prefixes the current path, longest match first). The restructure moves
+    // each section under its own prefix so it can present a focused sidebar:
+    // Recipes live under /recipes/, the operator pages under /operate/. Every
+    // page not yet moved falls back to the journey-ordered '/' sidebar below. As
+    // the remaining sections move (guide/ features/ reference/), each gets a key
+    // here and leaves the fallback.
     sidebar: {
       '/recipes/': [
         {
@@ -108,6 +110,25 @@ export default defineConfig({
             { text: 'Triage a run gone red', link: '/recipes/mass-failure' },
             { text: 'Cut costly flakiness', link: '/recipes/flaky-cleanup' },
             { text: 'Cut the time it costs', link: '/recipes/faster-suite' },
+          ],
+        },
+      ],
+      // Operate — the operator's journey: stand it up, secure it, mind the data,
+      // keep it current. The configuration reference and generator stay in the
+      // '/' fallback for now; they move to a Reference sidebar in a later step.
+      '/operate/': [
+        {
+          text: 'Operate',
+          items: [
+            { text: 'Deployment', link: '/operate/deployment' },
+            { text: 'Production checklist', link: '/operate/production-checklist' },
+            { text: 'Authentication', link: '/operate/authentication' },
+            { text: 'Database', link: '/operate/database' },
+            { text: 'Storage configuration', link: '/operate/storage' },
+            { text: 'Backup & restore', link: '/operate/backup-restore' },
+            { text: 'Upgrading', link: '/operate/upgrading' },
+            { text: 'Configuration reference', link: '/configuration' },
+            { text: 'Configuration generator', link: '/configuration/generator' },
           ],
         },
       ],
@@ -157,17 +178,13 @@ export default defineConfig({
           ],
         },
         {
-          text: 'Running your instance',
+          // The operator pages moved to the /operate/ sidebar (reached via the
+          // Operate nav). What remains here is the configuration reference and
+          // generator, still at the root path until they move to Reference.
+          text: 'Configuration',
           items: [
-            { text: 'Deployment', link: '/deployment' },
-            { text: 'Production checklist', link: '/production-checklist' },
-            { text: 'Upgrading', link: '/upgrading' },
-            { text: 'Backup & restore', link: '/backup-restore' },
             { text: 'Configuration reference', link: '/configuration' },
             { text: 'Configuration generator', link: '/configuration/generator' },
-            { text: 'Authentication', link: '/authentication' },
-            { text: 'Database', link: '/database' },
-            { text: 'Storage configuration', link: '/storage' },
           ],
         },
         {

@@ -49,7 +49,7 @@ Piwi is a reporter that uploads from your Playwright run, a server (or the [desk
 Trust is the point, so the limits are stated plainly, not buried:
 
 - **Playwright only, by design.** The ingest API, trace handling, step analytics and locator healing are all built around Playwright's model. If you need to aggregate many frameworks (JUnit, pytest, Cypress) into one place, [ReportPortal or Allure](./comparison) fit better.
-- **Pre-1.0.** Patch and minor releases can carry breaking changes, and the database schema moves with them — read [Upgrading](./upgrading) before you bump a tag.
+- **Pre-1.0.** Patch and minor releases can carry breaking changes, and the database schema moves with them — read [Upgrading](/operate/upgrading) before you bump a tag.
 - **Not an "ask AI" button.** Diagnosis is optional, grounded in your diff, and never in the write path.
 
 ## Where to go next

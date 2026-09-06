@@ -117,7 +117,7 @@ them with `npm run app:generate:deploy --workspace=apps/application`.
 | [Coolify / Dokploy](#coolify-dokploy) | Paste a Compose file | Yes | Onto a server you already own |
 
 Not supported as one-click: **Vercel, Netlify and DigitalOcean App Platform** have no persistent disk, so
-Piwi would need PostgreSQL *and* a bring-your-own [S3 bucket](/storage) — at which point it isn't one click.
+Piwi would need PostgreSQL *and* a bring-your-own [S3 bucket](/operate/storage) — at which point it isn't one click.
 Deploy it to a machine with Docker instead.
 
 ### Railway
@@ -203,7 +203,7 @@ and TLS are wired up automatically.
   `text/event-stream` responses.
 - **Finish the auth setup.** These templates set `PIWI_AUTH_ENABLED=true`, so the first visit shows a
   **Create the first admin account** form — complete it before sharing the URL (or provision the admin via
-  `POST /api/auth/setup`, see [Authentication](/authentication)).
+  `POST /api/auth/setup`, see [Authentication](/operate/authentication)).
 - **Pin a version.** The templates track `latest`. Pin a tag before you depend on the instance, and read
   [Upgrading](./upgrading) first: migrations are forward-only.
 
@@ -401,11 +401,11 @@ server {
 }
 ```
 
-When auth is enabled, set `PIWI_SITE_URL` to the public HTTPS URL so email links and OAuth callbacks point at the right origin, and set `PIWI_TRUST_PROXY=true` so the per-address rate limits on the auth endpoints key on the client address your proxy appends to `X-Forwarded-For` instead of on the proxy's own address — see the [configuration reference](./configuration#authentication).
+When auth is enabled, set `PIWI_SITE_URL` to the public HTTPS URL so email links and OAuth callbacks point at the right origin, and set `PIWI_TRUST_PROXY=true` so the per-address rate limits on the auth endpoints key on the client address your proxy appends to `X-Forwarded-For` instead of on the proxy's own address — see the [configuration reference](/configuration#authentication).
 
 ## Backups
 
-Everything lives in two places — the database (`.data/piwi.db` or your PostgreSQL database) and file storage (`.data/storage/`, unless you use [S3](/storage)). Back up both, together, before every version bump: migrations are forward-only, so a backup is the only rollback path.
+Everything lives in two places — the database (`.data/piwi.db` or your PostgreSQL database) and file storage (`.data/storage/`, unless you use [S3](/operate/storage)). Back up both, together, before every version bump: migrations are forward-only, so a backup is the only rollback path.
 
 The full procedure — online SQLite snapshots, `pg_dump`, restoring, and the desktop app's data directory — is on [Backup & restore](./backup-restore).
 

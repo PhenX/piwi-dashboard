@@ -29,8 +29,8 @@ The dashboard is one Node process, and there are five ways to get one running:
 | [Live demo](https://piwitests.dev/demo/) | Looking around before installing anything | Seeded data, runs in your browser, no backend |
 | [Desktop app](./desktop) | A single developer running Playwright locally | No Docker or Node needed; Windows x64 and Apple-silicon macOS only, and the installers are not yet signed |
 | Docker *(below)* | A shared instance for a team | The recommended path for anything long-lived |
-| [`npx @piwitests/server`](./deployment#npm-npx-quick-local-run) | A quick local run with Node 22+ already installed | Same server, no container |
-| [One-click deploy](./deployment#one-click-deploy) | A shared instance with no server of your own | Railway, Render, Fly.io, Koyeb, Coolify or Dokploy — a button, plus whatever the host charges |
+| [`npx @piwitests/server`](/operate/deployment#npm-npx-quick-local-run) | A quick local run with Node 22+ already installed | Same server, no container |
+| [One-click deploy](/operate/deployment#one-click-deploy) | A shared instance with no server of your own | Railway, Render, Fly.io, Koyeb, Coolify or Dokploy — a button, plus whatever the host charges |
 
 If you only want your own history, flaky scores and locator healing on a laptop, the
 [desktop app](./desktop) is the least setup: install it, copy its access token from **Settings →
@@ -65,9 +65,9 @@ The fastest way to get started is with the pre-built container image:
 
 Visit `http://localhost:3000` to access the dashboard.
 
-> **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker auto-creates `.data` owned by `root` and the container can't write to it. Windows and macOS (Docker Desktop) don't need this step. See [Permission issues with volumes](./deployment#permission-issues-with-volumes) if you hit a permission error.
+> **Linux hosts:** the container runs as non-root UID 1001, so without the `chown` above, Docker auto-creates `.data` owned by `root` and the container can't write to it. Windows and macOS (Docker Desktop) don't need this step. See [Permission issues with volumes](/operate/deployment#permission-issues-with-volumes) if you hit a permission error.
 
-See [Deployment](./deployment) for detailed Docker, Docker Compose, PostgreSQL, and Kubernetes options.
+See [Deployment](/operate/deployment) for detailed Docker, Docker Compose, PostgreSQL, and Kubernetes options.
 
 ## Running from source
 
@@ -246,7 +246,7 @@ The project `my-project` is created automatically if it doesn't exist yet. See t
 ## Running in CI
 
 Nothing Piwi-specific is required in CI — the same reporter runs inside `npx playwright test`. Point it
-at your deployed instance and pass an API key if [authentication](./authentication) is enabled:
+at your deployed instance and pass an API key if [authentication](/operate/authentication) is enabled:
 
 ```yaml
 env:
@@ -279,7 +279,7 @@ See the [UI overview](./ui-overview) for a full map of every page and tab.
 - [Core concepts](./concepts) — the vocabulary the dashboard and these docs use
 - [Reporter](./reporter) — every option, streaming, sharding, and locator healing
 - [UI overview](./ui-overview) — a map of every page and tab
-- [Deployment](./deployment) — running it properly for a team
+- [Deployment](/operate/deployment) — running it properly for a team
 - [Desktop app](./desktop) — the same dashboard as a local app, if you skipped it above
-- [Upgrading](./upgrading) — what a version bump does before you pull a new tag
+- [Upgrading](/operate/upgrading) — what a version bump does before you pull a new tag
 - [Contributing](https://github.com/PiwiTests/platform/blob/main/CONTRIBUTING.md) — dev setup, tests, and commit conventions if you want to hack on Piwi itself

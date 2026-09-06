@@ -4,7 +4,7 @@ Run the self-hosted [Piwi Dashboard](https://piwitests.dev) server — a permane
 home for your Playwright test results — with a single command, no Docker required.
 
 > **Docker is the recommended way to run Piwi in production** (pinned runtime, isolated
-> environment): see the [deployment guide](https://piwitests.dev/deployment). This
+> environment): see the [deployment guide](https://piwitests.dev/operate/deployment). This
 > npm package is a low-friction path for a quick local run or environments where Docker
 > isn't available.
 

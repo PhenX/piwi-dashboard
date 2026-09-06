@@ -15,7 +15,7 @@ A fresh Piwi instance starts as an **open dashboard with authentication off** �
    <<< @/snippets/secret.sh{bash}
 
 3. **Terminate TLS.** Always put the dashboard behind an HTTPS reverse proxy. Mind the two things a proxy gets wrong by default: **upload size** (trace and report uploads reach hundreds of MB) and **SSE buffering** (live runs and browser notifications use long-lived `text/event-stream` responses that must not be buffered). See [Deployment → Reverse proxy (HTTPS)](./deployment#reverse-proxy-https).
-4. **Tell Piwi it's behind a proxy.** Set `PIWI_TRUST_PROXY=true` so the per-client rate limits on the auth endpoints key on the real client address from `X-Forwarded-For` instead of pooling every request into the proxy's one address. Leave it off when clients connect directly — see the [configuration reference](./configuration#authentication).
+4. **Tell Piwi it's behind a proxy.** Set `PIWI_TRUST_PROXY=true` so the per-client rate limits on the auth endpoints key on the real client address from `X-Forwarded-For` instead of pooling every request into the proxy's one address. Leave it off when clients connect directly — see the [configuration reference](/configuration#authentication).
 5. **Persist and back up the data.** Mount `/app/.data` (or your configured database and storage paths) on a persistent volume, and set up a backup before you accumulate history you care about. See [Deployment → Backups](./deployment#backups).
 6. **Pin a version.** Running `latest` lets an unattended `docker pull` move you across a breaking change. Pin an exact tag and bump it deliberately — migrations are forward-only, so the rollback path is *restore a backup*, not "pull the old tag." See [Upgrading](./upgrading).
 
@@ -34,13 +34,13 @@ The defaults are conservative, so the checklist above is short. Without any extr
 
 ## Optional, and worth a thought
 
-- **Public share links** are off by default (`PIWI_SHARE_LINKS_ENABLED`). If you turn them on, know that anyone with the link sees the execution or cluster without signing in — see [Share links](./share-links).
+- **Public share links** are off by default (`PIWI_SHARE_LINKS_ENABLED`). If you turn them on, know that anyone with the link sees the execution or cluster without signing in — see [Share links](/share-links).
 - **Retention.** Automatic pruning is opt-in; set `PIWI_RETENTION_DAYS` to cap how much run history you keep. See [Storage → Data retention](./storage#data-retention).
 
 ## Related
 
 - [Authentication](./authentication) — roles, OAuth, API keys
 - [Deployment](./deployment) — the reverse proxy, backups and the full install
-- [Privacy & data flow](./privacy) — what is stored, and secrets at rest
-- [Configuration reference](./configuration) — every `PIWI_*` variable
+- [Privacy & data flow](/privacy) — what is stored, and secrets at rest
+- [Configuration reference](/configuration) — every `PIWI_*` variable
 - [Security policy](https://github.com/PiwiTests/platform/blob/main/SECURITY.md) — reporting a vulnerability

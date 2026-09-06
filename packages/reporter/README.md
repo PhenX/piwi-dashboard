@@ -60,7 +60,7 @@ Import `test` from this file in your specs instead of `@playwright/test`. A spec
 
 ## Configuration
 
-Every option can also be set via a `PIWI_*` environment variable (config wins over env). The full option and env-var reference lives in the [reporter documentation](https://piwitests.dev/reporter); authentication for CI (API keys) is covered under [Authentication](https://piwitests.dev/authentication).
+Every option can also be set via a `PIWI_*` environment variable (config wins over env). The full option and env-var reference lives in the [reporter documentation](https://piwitests.dev/reporter); authentication for CI (API keys) is covered under [Authentication](https://piwitests.dev/operate/authentication).
 
 ## Requirements
 
