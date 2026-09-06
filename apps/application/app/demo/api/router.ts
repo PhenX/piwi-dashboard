@@ -37,6 +37,7 @@ import { getEnvironmentDiff } from '~~/server/utils/environment-diff';
 import { getPageDiff } from '~~/server/utils/page-diff';
 import { apiGetDemoDomSnapshot } from './dom-snapshot';
 import { apiExportTestRunCase, apiExportFailureCluster } from './export';
+import { apiPerfettoTestRun, apiPerfettoTestRunCase } from './perfetto';
 import {
   apiGetDemoTraceStacks,
   apiGetDemoTraceNetwork,
@@ -632,6 +633,14 @@ const routes: RouteEntry[] = [
       return getTestRunSummary(await getDemoDb(), +m[1]!);
     },
   },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-runs\/(\d+)\/perfetto$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'run', +m[1]!);
+      return apiPerfettoTestRun(+m[1]!);
+    },
+  },
 
   // Failure groups
   {
@@ -979,6 +988,14 @@ const routes: RouteEntry[] = [
     handler: async (m, _, q, ctx) => {
       await assertDemoEntityScope(ctx, 'execution', +m[1]!);
       return apiExportTestRunCase(+m[1]!, q as URLSearchParams | undefined);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/perfetto$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return apiPerfettoTestRunCase(+m[1]!);
     },
   },
   {

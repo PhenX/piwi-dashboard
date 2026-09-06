@@ -562,6 +562,7 @@ provide(clusterSectionLocatorKey, {
             <ExportMenu
               v-if="testCase"
               :endpoint="`/api/test-run-cases/${testCase.id}/export`"
+              :perfetto-endpoint="`/api/test-run-cases/${testCase.id}/perfetto`"
               :base-name="`piwi-execution-${testCase.id}`"
               class="mr-1"
             />
