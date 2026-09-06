@@ -733,7 +733,7 @@ defineExpose({ reveal: () => cardRef.value?.reveal?.() });
         to capture element attributes at test time, or use “Pick from snapshot” above to choose a locator by hand on the
         failure-time page. In local headed runs,
         <DocLink
-          to="reporter#pick-a-replacement-locator-on-the-failing-page-local-runs"
+          to="locator-healing#pick-a-replacement-locator-on-the-failing-page-local-runs"
           no-icon
           class="text-primary hover:underline"
           >pickLocatorOnFailure</DocLink

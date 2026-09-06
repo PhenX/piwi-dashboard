@@ -126,7 +126,7 @@ dashboard. This one does still depend on captured snapshots — it reads the sam
 ## See also
 
 - [Capture fixtures](../capture-fixtures) — everything else the fixtures unlock
-- [Reporter](../reporter#locator-healing) — configuration and how the scoring works
-- [Reporter → Inspect the failing page live](../reporter#inspect-the-failing-page-live-local-runs) — the
+- [Reporter](../locator-healing) — configuration and how the scoring works
+- [Reporter → Inspect the failing page live](../locator-healing#inspect-the-failing-page-live-local-runs) — the
   full reference for the pause-on-failure options
 - [Browser extension](../extension) — picking and recording locators against a live page
