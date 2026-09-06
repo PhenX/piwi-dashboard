@@ -177,6 +177,7 @@ describe('toWireTestCase', () => {
       'error',
       'location',
       'locatorSnapshots',
+      'locks',
       'networkRequests',
       'pageState',
       'retries',
