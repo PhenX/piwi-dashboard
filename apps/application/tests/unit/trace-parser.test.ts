@@ -461,19 +461,22 @@ describe('parseTraceEvents — 1.63 aria/screen snapshot events', () => {
     });
   });
 
-  test('ignores snapshot events with an unknown phase or no open action', async () => {
+  test('folds the input-time action phase into after; the real after wins', async () => {
     const zip = buildTraceZip([
       { type: 'before', callId: 'c1', startTime: 100, class: 'Frame', method: 'click' },
-      // An input-time `action` phase is not a before/after page and is dropped.
       { type: 'aria-snapshot', callId: 'c1', phase: 'action', file: 'aria/c1-action.json' },
+      { type: 'aria-snapshot', callId: 'c1', phase: 'after', file: 'aria/c1-after.json' },
+      { type: 'screenshot', callId: 'c1', phase: 'action', file: 'screenshots/c1-action.png' },
       // A snapshot for a call that never opened is ignored, not crashed on.
       { type: 'screenshot', callId: 'ghost', phase: 'before', file: 'screenshots/ghost-before.png' },
       { type: 'after', callId: 'c1', endTime: 200 },
     ]);
     const data = await parseTraceEvents(zip);
     expect(data!.actions).toHaveLength(1);
+    // `after` arrives last and wins; the lone action-phase screenshot fills after.
+    expect(data!.actions[0]!.ariaSnapshotAfter).toBe('aria/c1-after.json');
+    expect(data!.actions[0]!.screenshotAfter).toBe('screenshots/c1-action.png');
     expect(data!.actions[0]!.ariaSnapshotBefore).toBeUndefined();
-    expect(data!.actions[0]!.screenshotBefore).toBeUndefined();
   });
 
   test('a 1.61 trace with no snapshot events leaves the fields unset', async () => {

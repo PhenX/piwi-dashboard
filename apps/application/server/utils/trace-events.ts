@@ -298,19 +298,20 @@ function extractFromEvents(events: Record<string, unknown>[]): ParsedTraceData {
 
     // 1.63 aria / screen snapshots: one file per action per phase, keyed to the
     // action's callId (the `before` event opened the action just before). The
-    // recorder also emits an `action`-phase snapshot for input actions; only the
-    // before / after phases carry the page structure a step is diffed on.
+    // recorder emits `before`, an optional input-time `action`, and `after`; the
+    // `action` and `after` phases both stand for "after the action" — `after`
+    // wins because it arrives last in the stream.
     if (type === 'aria-snapshot' || type === 'screenshot') {
       const callId = evt.callId as string;
       const file = evt.file as string | undefined;
       const phase = evt.phase as string | undefined;
       const action = callId ? openActions.get(callId) : undefined;
-      if (action && file && (phase === 'before' || phase === 'after')) {
-        if (type === 'aria-snapshot') {
-          if (phase === 'before') action.ariaSnapshotBefore = file;
-          else action.ariaSnapshotAfter = file;
-        } else {
-          if (phase === 'before') action.screenshotBefore = file;
+      if (action && file) {
+        if (phase === 'before') {
+          if (type === 'aria-snapshot') action.ariaSnapshotBefore = file;
+          else action.screenshotBefore = file;
+        } else if (phase === 'action' || phase === 'after') {
+          if (type === 'aria-snapshot') action.ariaSnapshotAfter = file;
           else action.screenshotAfter = file;
         }
       }
