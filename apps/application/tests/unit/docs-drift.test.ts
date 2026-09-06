@@ -3,6 +3,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import { MCP_TOOL_DEFS } from '#shared/mcp-tools';
+import { PIWI_FEATURE_GROUPS } from '#shared/piwi-features';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const read = (relative: string) => readFileSync(join(repoRoot, relative), 'utf8');
@@ -85,15 +86,18 @@ describe('docs pages the app deep-links into', () => {
   })(join(repoRoot, 'apps/application/app'));
 
   const targets = [
-    ...new Set(
-      sources.flatMap((source) => {
+    ...new Set([
+      ...sources.flatMap((source) => {
         const contents = read(source);
         return [
           ...[...contents.matchAll(/doc: '([^']+)'/g)].map((m) => m[1]!),
           ...[...contents.matchAll(/DocLink\s+to="([^"]+)"/g)].map((m) => m[1]!),
         ];
       }),
-    ),
+      // The feature map (apps/docs/reference/feature-map.md) is generated from
+      // this catalog, so every `doc` in it must resolve just like an in-app link.
+      ...PIWI_FEATURE_GROUPS.flatMap((group) => group.features.map((feature) => feature.doc)),
+    ]),
   ];
 
   test('there are links to check', () => {

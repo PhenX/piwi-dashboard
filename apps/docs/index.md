@@ -111,6 +111,8 @@ Start from what you came here to do.
   window: no Docker, no Node.
 - **Learning the vocabulary** — [Core concepts](/guide/concepts) defines runs, test cases, executions and
   clusters. Worth five minutes before the rest.
+- **Seeing everything it does** — the [Feature map](/reference/feature-map) lists every feature, what it needs,
+  where it lives in the dashboard, and the page that explains it.
 - **Wiring up CI** — [CI & sharding](/guide/ci): two environment variables, why ten shards are one run, and
   how to [block a merge](/guide/ci#blocking-a-merge) on the analysis rather than the exit code.
 - **Running it for a team** — [Deployment](/operate/deployment), [Configuration](/reference/configuration),
