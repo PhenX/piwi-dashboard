@@ -4,13 +4,20 @@
   <meta charset="utf-8">
   <title>Piwi Dashboard</title>
   <script>
-    // GitHub Pages SPA redirect.
+    // GitHub Pages SPA redirect + moved-page redirects.
     //
     // GitHub Pages serves this 404.html for any URL that has no matching static
-    // file. For the demo SPA (which is client-side only), every deep link hits
-    // this page. The script below saves the intended path in sessionStorage and
-    // redirects the browser to the SPA entry point so Vue Router can render the
-    // correct page. For all other paths it falls back to the documentation root.
+    // file, and offers no server-side redirects. Two things depend on it:
+    //
+    // 1. The demo SPA (client-side only): every deep link hits this page, so we
+    //    save the intended path in sessionStorage and bounce to the SPA entry
+    //    point for Vue Router to render.
+    // 2. Pages the docs restructure moved to a new path. Old URLs (bookmarks,
+    //    external inbound links, older README copies) must keep working, so we
+    //    map each old path to its new home and redirect, preserving the query
+    //    and hash. Add a row here whenever a page moves.
+    //
+    // Anything not matched falls back to the documentation root.
     ;(function () {
       const demoBase = '/demo'
       const path = window.location.pathname
@@ -19,9 +26,28 @@
         const relativePath = path.slice(demoBase.length) || '/'
         sessionStorage.setItem('spa:redirect', relativePath + window.location.search + window.location.hash)
         window.location.replace(demoBase + '/')
-      } else {
-        window.location.replace('/')
+        return
       }
+
+      // Old path → new path for pages that have moved. Keys are matched against
+      // the pathname with any trailing slash removed.
+      const moved = {
+        '/deployment': '/operate/deployment',
+        '/production-checklist': '/operate/production-checklist',
+        '/upgrading': '/operate/upgrading',
+        '/backup-restore': '/operate/backup-restore',
+        '/authentication': '/operate/authentication',
+        '/database': '/operate/database',
+        '/storage': '/operate/storage',
+      }
+      const normalized = path.length > 1 ? path.replace(/\/$/, '') : path
+      const target = moved[normalized]
+      if (target) {
+        window.location.replace(target + window.location.search + window.location.hash)
+        return
+      }
+
+      window.location.replace('/')
     })()
   </script>
 </head>

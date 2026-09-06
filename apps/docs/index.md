@@ -113,8 +113,8 @@ Start from what you came here to do.
   clusters. Worth five minutes before the rest.
 - **Wiring up CI** — [CI & sharding](/ci): two environment variables, why ten shards are one run, and
   how to [block a merge](/ci#blocking-a-merge) on the analysis rather than the exit code.
-- **Running it for a team** — [Deployment](/deployment), [Configuration](/configuration),
-  [Authentication](/authentication), and [Privacy & data flow](/privacy).
+- **Running it for a team** — [Deployment](/operate/deployment), [Configuration](/configuration),
+  [Authentication](/operate/authentication), and [Privacy & data flow](/privacy).
 - **Letting an agent do the reading** — the [MCP server](/mcp) gives a coding agent 45 tools over your
   test history, and [AI diagnosis](/ai-diagnosis) explains a cluster against your actual git diff with
   a provider you configure. Both optional; a local model works.

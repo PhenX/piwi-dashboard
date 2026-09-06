@@ -169,7 +169,7 @@ export const HELP_TOPICS = {
   'project.members': {
     title: 'Project access',
     text: 'Who can see this project. Admins always have access; reporters and users see only the projects assigned to them.',
-    doc: 'authentication#user-management',
+    doc: 'operate/authentication#user-management',
   },
   'project.ai-instructions': {
     title: 'AI diagnosis instructions',
@@ -403,17 +403,17 @@ export const HELP_TOPICS = {
   'settings.storage-stats': {
     title: 'Storage statistics',
     text: 'How much disk your reports, traces and attachments use, broken down so you can see what to clean up.',
-    doc: 'storage#storage-architecture',
+    doc: 'operate/storage#storage-architecture',
   },
   'settings.cleanup': {
     title: 'Cleanup old runs',
     text: 'Delete runs (and their reports, traces and attachments) older than a chosen age to reclaim storage. This cannot be undone.',
-    doc: 'storage#storage-management',
+    doc: 'operate/storage#storage-management',
   },
   'account.email': {
     title: 'Email & verification',
     text: 'Your account email is used for password resets and notifications. Verifying it confirms you own the address.',
-    doc: 'authentication#user-management',
+    doc: 'operate/authentication#user-management',
   },
   'settings.smtp': {
     title: 'SMTP status',
@@ -488,12 +488,12 @@ export const HELP_TOPICS = {
   'settings.users': {
     title: 'Users & roles',
     text: 'Manage accounts and their role. Administrators control everything; reporters submit results; users have read-only access.',
-    doc: 'authentication#roles',
+    doc: 'operate/authentication#roles',
   },
   'settings.api-keys': {
     title: 'API keys',
     text: 'Tokens (prefixed pd_) that let the reporter or scripts authenticate without a password. Shown once at creation; revoke anytime.',
-    doc: 'authentication#api-keys',
+    doc: 'operate/authentication#api-keys',
   },
   'settings.tags': {
     text: 'Reusable labels you can attach to projects for grouping and filtering across the dashboard.',
@@ -550,7 +550,7 @@ export const HELP_TOPICS = {
   'settings.storage-backend': {
     title: 'Storage backend',
     text: 'Where test artifacts (HTML reports, traces, attachments) are stored — local disk or S3. Configured entirely through environment variables; shown here read-only.',
-    doc: 'storage#storage-architecture',
+    doc: 'operate/storage#storage-architecture',
     envVars: [
       'PIWI_STORAGE_TYPE',
       'PIWI_STORAGE_PATH',
@@ -565,7 +565,7 @@ export const HELP_TOPICS = {
   'settings.auth-toggle': {
     title: 'Authentication',
     text: 'Role-based access control and API keys. Off by default — when disabled, every endpoint behaves as a single virtual administrator.',
-    doc: 'authentication',
+    doc: 'operate/authentication',
     envVars: ['PIWI_AUTH_ENABLED', 'PIWI_AUTH_SECRET'],
   },
   'account.display-name': {
@@ -575,7 +575,7 @@ export const HELP_TOPICS = {
   'account.connected-accounts': {
     title: 'Connected accounts',
     text: 'Sign in with an OAuth provider (Google or GitHub). Providers are configured by an operator through environment variables; one provider can be linked per account.',
-    doc: 'authentication#oauth-google-github',
+    doc: 'operate/authentication#oauth-google-github',
     envVars: [
       'PIWI_OAUTH_GOOGLE_CLIENT_ID',
       'PIWI_OAUTH_GOOGLE_CLIENT_SECRET',
@@ -588,7 +588,7 @@ export const HELP_TOPICS = {
   'account.password': {
     title: 'Password',
     text: 'Change the password you sign in with. OAuth-only accounts manage their password through their provider.',
-    doc: 'authentication#user-management',
+    doc: 'operate/authentication#user-management',
   },
   'notifications.test-email': {
     title: 'Send test email',

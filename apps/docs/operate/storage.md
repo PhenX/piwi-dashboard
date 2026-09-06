@@ -10,7 +10,7 @@ two backends. Runs, test cases and settings live in the [database](./database) i
 
 Every variable below is an ordinary environment variable: pass it to the container, put it in your
 `.env`, or set it in your host's dashboard. The
-[configuration generator](./configuration/generator) will write the block for you.
+[configuration generator](/configuration/generator) will write the block for you.
 
 ## Local storage (default)
 
@@ -133,11 +133,11 @@ Large failure evidence captured per execution — the page's ARIA snapshot, the 
 
 ## Trace snapshots
 
-A Playwright 1.63 trace can record an **aria tree** and a **screenshot** before and after every action (`trace: { snapshots: { dom, aria, screen } }`). Those files ride inside the trace ZIP — `aria/<callId>-<phase>.json` and `screenshots/<callId>-<phase>.png` — and the dashboard keeps them in the slim events blob alongside the trace stream, so the [Screen tab and the filmstrip](./evidence#aria-and-screen-snapshots) read them straight back.
+A Playwright 1.63 trace can record an **aria tree** and a **screenshot** before and after every action (`trace: { snapshots: { dom, aria, screen } }`). Those files ride inside the trace ZIP — `aria/<callId>-<phase>.json` and `screenshots/<callId>-<phase>.png` — and the dashboard keeps them in the slim events blob alongside the trace stream, so the [Screen tab and the filmstrip](/evidence#aria-and-screen-snapshots) read them straight back.
 
 The two kinds cost very differently:
 
-- **`aria`** adds one small JSON tree per action per phase — a few hundred bytes each, negligible next to the trace it rides in. [`wrapConfig`](./reporter#installing-via-wrapconfig) turns it on by default on Playwright 1.63+.
+- **`aria`** adds one small JSON tree per action per phase — a few hundred bytes each, negligible next to the trace it rides in. [`wrapConfig`](/reporter#installing-via-wrapconfig) turns it on by default on Playwright 1.63+.
 - **`screen`** adds a **PNG per action per phase** — by far the trace's biggest cost, growing with the page size and the number of actions. It stays **opt-in**: enable it only when you want the filmstrip and the before/after screenshots, and pair it with [data retention](#data-retention) so the extra bytes are swept. Enable it with `use: { trace: { mode: 'retain-on-failure', snapshots: { dom: true, aria: true, screen: true } } }`.
 
 Unlike the network resource pool, these entries are not deduplicated across executions — each is unique to its action's page — so `screen` is the one capture option that visibly changes storage growth.
@@ -145,6 +145,6 @@ Unlike the network resource pool, these entries are not deduplicated across exec
 ## See also
 
 - [Database](./database) — SQLite versus PostgreSQL, and what lives there instead
-- [Configuration reference](./configuration#storage) — every `PIWI_STORAGE_*` and `PIWI_S3_*` variable
+- [Configuration reference](/configuration#storage) — every `PIWI_STORAGE_*` and `PIWI_S3_*` variable
 - [Backups](./deployment#backups) — copying the storage directory alongside the database
-- [Offline export](./offline-export) — taking one investigation out of storage entirely
+- [Offline export](/offline-export) — taking one investigation out of storage entirely

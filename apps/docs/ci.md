@@ -358,7 +358,7 @@ job really died. Those runs are excluded by the **full runs only** filter in
 ## See also
 
 - [Reporter](./reporter) — every option, streaming, and locator healing
-- [Authentication](./authentication) — creating the API key CI uses
+- [Authentication](/operate/authentication) — creating the API key CI uses
 - [Concepts → Test run](./concepts#test-run) — why shards are one run
 - [Notifications](./notifications) — alerting without touching the pipeline
 - [Test tags & ownership](./reporter#test-tags) — what `--require-tag` matches on

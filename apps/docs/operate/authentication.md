@@ -200,7 +200,7 @@ Assignments are administrator-only and can be edited from either direction:
 
 Both edit the same underlying assignments, so use whichever is more convenient.
 
-> **Try it in the demo:** the [live demo](https://piwitests.dev/demo/) ships with several pre-seeded identities — an admin, a global CI reporter, and users scoped to one or two projects (plus one with none). Use the **Acting as** picker in the demo banner to switch between them and watch the project list, sidebar, and search change to match each user's access. Acting as the admin, change the assignments live and switch back to see the effect. See [UI overview → Live demo](./ui-overview.md#live-demo).
+> **Try it in the demo:** the [live demo](https://piwitests.dev/demo/) ships with several pre-seeded identities — an admin, a global CI reporter, and users scoped to one or two projects (plus one with none). Use the **Acting as** picker in the demo banner to switch between them and watch the project list, sidebar, and search change to match each user's access. Acting as the admin, change the assignments live and switch back to see the effect. See [UI overview → Live demo](/ui-overview#live-demo).
 
 ## API authentication
 
@@ -315,7 +315,7 @@ The reporter automatically calls `/api/auth/login` before each upload and uses t
 Everything to set before you expose an instance — HTTPS, `PIWI_SECRET_KEY`, `PIWI_AUTH_SECRET` and the trust-proxy flag — is the [production checklist](./production-checklist). What authentication adds on top of that:
 
 - Passwords are hashed using scrypt with per-password salts; use strong, unique passwords.
-- Login, initial setup, and password-reset endpoints are rate-limited per client address — failed logins also per account — and throttled requests get a `429` with a `Retry-After` header. Behind a reverse proxy, set `PIWI_TRUST_PROXY` so those per-address limits see real client addresses; see the [configuration reference](./configuration#authentication).
+- Login, initial setup, and password-reset endpoints are rate-limited per client address — failed logins also per account — and throttled requests get a `429` with a `Retry-After` header. Behind a reverse proxy, set `PIWI_TRUST_PROXY` so those per-address limits see real client addresses; see the [configuration reference](/configuration#authentication).
 
 ## Disabling authentication
 

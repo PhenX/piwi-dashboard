@@ -52,7 +52,7 @@ Then point the [Playwright reporter](https://piwitests.dev/reporter) at it — o
 
 The same multi-arch image is mirrored to the GitHub Container Registry as `ghcr.io/piwitests/platform`, which additionally carries an `edge` tag built from `main` (no release testing — not for production).
 
-Read [Upgrading](https://piwitests.dev/upgrading) before bumping a tag: migrations run automatically on startup and are **forward-only**, so rolling back means restoring a backup.
+Read [Upgrading](https://piwitests.dev/operate/upgrading) before bumping a tag: migrations run automatically on startup and are **forward-only**, so rolling back means restoring a backup.
 
 ---
 
@@ -64,13 +64,13 @@ The three worth knowing before you expose the container to a network:
 
 | Variable | Why |
 |----------|-----|
-| `PIWI_AUTH_ENABLED` | Authentication is **off by default**. Set to `true` for anything beyond localhost — see [Authentication](https://piwitests.dev/authentication). |
+| `PIWI_AUTH_ENABLED` | Authentication is **off by default**. Set to `true` for anything beyond localhost — see [Authentication](https://piwitests.dev/operate/authentication). |
 | `PIWI_AUTH_SECRET` | Signs session cookies. Required when auth is enabled. |
 | `PIWI_SECRET_KEY` | Encrypts secrets stored in the database (AI keys, SCM tokens). Recommended in every deployment. |
 
 Generate a value for the latter two with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
 
-Beyond those: `PIWI_DATABASE_URL` switches to PostgreSQL, `PIWI_STORAGE_TYPE=s3` plus the `PIWI_S3_*` variables switch artifact storage to any S3-compatible service, and `PIWI_RETENTION_DAYS` turns on nightly pruning of old runs. Compose, Kubernetes, PostgreSQL, S3/MinIO, reverse-proxy, backups and troubleshooting are all in the [deployment guide](https://piwitests.dev/deployment).
+Beyond those: `PIWI_DATABASE_URL` switches to PostgreSQL, `PIWI_STORAGE_TYPE=s3` plus the `PIWI_S3_*` variables switch artifact storage to any S3-compatible service, and `PIWI_RETENTION_DAYS` turns on nightly pruning of old runs. Compose, Kubernetes, PostgreSQL, S3/MinIO, reverse-proxy, backups and troubleshooting are all in the [deployment guide](https://piwitests.dev/operate/deployment).
 
 ---
 

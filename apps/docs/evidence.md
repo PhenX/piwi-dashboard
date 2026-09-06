@@ -107,7 +107,7 @@ Executions without a trace keep the reporter-captured baseline — the blocks si
 
 ### Aria and screen snapshots
 
-A Playwright 1.63 trace can record the page's **aria tree** and a **screenshot** before and after every action (`trace: { snapshots: { dom, aria, screen } }`; [`wrapConfig`](./reporter#installing-via-wrapconfig) turns `aria` on by default, `screen` stays [opt-in](./storage#trace-snapshots)). When it did, two more views appear:
+A Playwright 1.63 trace can record the page's **aria tree** and a **screenshot** before and after every action (`trace: { snapshots: { dom, aria, screen } }`; [`wrapConfig`](./reporter#installing-via-wrapconfig) turns `aria` on by default, `screen` stays [opt-in](/operate/storage#trace-snapshots)). When it did, two more views appear:
 
 - **Screen tab › Before the failing action** — the page as the failing action saw it, before and at the failure, beside the failure screenshot.
 - **Timeline tab › the filmstrip** — a thumbnail of the page *before each step*, in order, the failing step marked. It turns the step list into a visual scrub of how the page looked on the way to the failure, and needs only `screen`.
@@ -132,10 +132,10 @@ The AI diagnosis reads the same map: its **Data Coverage** block names each abse
 
 Every trace shows a **View trace** button that opens the full Playwright trace viewer — the same UI as `npx playwright show-trace`, with the DOM snapshot timeline, action log, network, console, and source.
 
-The viewer is **served by the dashboard itself** (the `playwright-core` viewer assets are bundled and served at `/trace-viewer/`), so traces are never uploaded to a third party — unlike sending a colleague to `trace.playwright.dev`, the bytes stay on your server. Traces are stored efficiently: each archive is split into a slim events ZIP plus a project-wide, hash-deduplicated resource pool, and reconstructed on download (see [Storage](./storage)). Trace blobs are content-addressed, so the browser caches them and re-opening a trace is instant.
+The viewer is **served by the dashboard itself** (the `playwright-core` viewer assets are bundled and served at `/trace-viewer/`), so traces are never uploaded to a third party — unlike sending a colleague to `trace.playwright.dev`, the bytes stay on your server. Traces are stored efficiently: each archive is split into a slim events ZIP plus a project-wide, hash-deduplicated resource pool, and reconstructed on download (see [Storage](/operate/storage)). Trace blobs are content-addressed, so the browser caches them and re-opening a trace is instant.
 
 ::: tip Authentication caveat
-The bundled `/trace-viewer/` is same-origin, so it works whether or not [authentication](./authentication) is enabled. The hosted `trace.playwright.dev` viewer is a different origin and cannot send your session cookie, so it only works against a dashboard with auth disabled — use the built-in **View trace** button, which always works.
+The bundled `/trace-viewer/` is same-origin, so it works whether or not [authentication](/operate/authentication) is enabled. The hosted `trace.playwright.dev` viewer is a different origin and cannot send your session cookie, so it only works against a dashboard with auth disabled — use the built-in **View trace** button, which always works.
 :::
 
 ## The test case page

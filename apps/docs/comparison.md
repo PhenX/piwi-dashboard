@@ -67,11 +67,11 @@ No — Piwi is Playwright-only by design. The ingest API, trace handling, step a
 
 ### Is it production-ready?
 
-Piwi is a young project under active development (pre-1.0, semver). It's exercised by a CI matrix across SQLite/PostgreSQL × local/S3 storage with a large Playwright E2E suite, and upgrades run database migrations automatically. Pin a version tag, keep backups of `.data/` ([deployment guide](/deployment)), and expect occasional breaking changes between minor versions until 1.0.
+Piwi is a young project under active development (pre-1.0, semver). It's exercised by a CI matrix across SQLite/PostgreSQL × local/S3 storage with a large Playwright E2E suite, and upgrades run database migrations automatically. Pin a version tag, keep backups of `.data/` ([deployment guide](/operate/deployment)), and expect occasional breaking changes between minor versions until 1.0.
 
 ### How much disk/RAM does it need?
 
-Modest — see [resource requirements](/deployment#resource-requirements). Disk is the real variable: traces and HTML reports dominate, and you can prune old runs from Settings → Storage.
+Modest — see [resource requirements](/operate/deployment#resource-requirements). Disk is the real variable: traces and HTML reports dominate, and you can prune old runs from Settings → Storage.
 
 ### Where do I ask questions or propose features?
 

@@ -133,20 +133,20 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     order: 2,
     intro:
       'Piwi uses SQLite by default. Setting `PIWI_DATABASE_URL` switches it to PostgreSQL; migrations run automatically on startup.',
-    note: 'See [Database](./database) for SQLite versus PostgreSQL and [Storage → Data retention](./storage#data-retention) for how the nightly sweep works.',
+    note: 'See [Database](./operate/database) for SQLite versus PostgreSQL and [Storage → Data retention](./operate/storage#data-retention) for how the nightly sweep works.',
   },
   storage: {
     title: 'Storage',
     order: 3,
     intro: 'Controls where test artifacts (HTML reports, traces, attachments) are stored.',
-    note: 'Full details and IAM examples: [Storage configuration](./storage).',
+    note: 'Full details and IAM examples: [Storage configuration](./operate/storage).',
   },
   auth: {
     title: 'Authentication',
     order: 4,
     intro:
       'Authentication is optional and off by default. When disabled, all endpoints behave as a single virtual administrator.',
-    note: '> Behind a reverse proxy, set `PIWI_SITE_URL` so the OAuth `redirect_uri` is built from your public URL and matches what you registered with the provider (instead of being inferred from the request `Host`).\n\nSee [Authentication](./authentication) for roles, API keys, and project assignments.',
+    note: '> Behind a reverse proxy, set `PIWI_SITE_URL` so the OAuth `redirect_uri` is built from your public URL and matches what you registered with the provider (instead of being inferred from the request `Host`).\n\nSee [Authentication](./operate/authentication) for roles, API keys, and project assignments.',
   },
   oauth: { title: 'OAuth (SSO)', order: 5, mergeInto: 'auth' },
   'wasted-time': {
@@ -276,7 +276,7 @@ export const PIWI_ENV_VARS = {
     category: 'database',
     secret: true,
     example: 'postgres://piwi:piwi@db:5432/piwi',
-    docs: 'database#postgresql',
+    docs: 'operate/database#postgresql',
   },
   PIWI_RETENTION_DAYS: {
     description:
@@ -284,7 +284,7 @@ export const PIWI_ENV_VARS = {
     category: 'database',
     type: 'number',
     min: 0,
-    docs: 'storage#data-retention',
+    docs: 'operate/storage#data-retention',
   },
   PIWI_RETENTION_NOTIFICATION_DAYS: {
     description:
@@ -324,7 +324,7 @@ export const PIWI_ENV_VARS = {
     category: 'storage',
     relevantWhen: { PIWI_STORAGE_TYPE: 's3' },
     requiredWhen: { PIWI_STORAGE_TYPE: 's3' },
-    docs: 'storage#s3-compatible-storage',
+    docs: 'operate/storage#s3-compatible-storage',
   },
   PIWI_S3_REGION: {
     description: 'S3 bucket region (when PIWI_STORAGE_TYPE is "s3").',
@@ -412,7 +412,7 @@ export const PIWI_ENV_VARS = {
     category: 'oauth',
     relevantWhen: { PIWI_AUTH_ENABLED: 'true' },
     requiredWhen: { PIWI_OAUTH_GOOGLE_CLIENT_SECRET: '*' },
-    docs: 'authentication#oauth-google-github',
+    docs: 'operate/authentication#oauth-google-github',
   },
   PIWI_OAUTH_GOOGLE_CLIENT_SECRET: {
     description: 'Google OAuth client secret.',
@@ -426,7 +426,7 @@ export const PIWI_ENV_VARS = {
     category: 'oauth',
     relevantWhen: { PIWI_AUTH_ENABLED: 'true' },
     requiredWhen: { PIWI_OAUTH_GITHUB_CLIENT_SECRET: '*' },
-    docs: 'authentication#oauth-google-github',
+    docs: 'operate/authentication#oauth-google-github',
   },
   PIWI_OAUTH_GITHUB_CLIENT_SECRET: {
     description: 'GitHub OAuth client secret.',

@@ -23,8 +23,8 @@ Every outbound connection Piwi can make is something you switched on:
 | Your git host | Only if you connect a repository with a token | API reads: commits and diffs for the project's repo |
 | Your SMTP server | Only if you configure [email notifications](./notifications) | Notification and account emails |
 | Your Slack / webhook URLs | Only for subscriptions you create | The event payload (run status, cluster, test names) |
-| Your S3 endpoint | Only if you switch [storage](./storage) to S3 | Trace files, HTML reports, attachments |
-| Google / GitHub | Only if you enable [OAuth sign-in](./authentication#oauth-google-github) | The standard OAuth exchange |
+| Your S3 endpoint | Only if you switch [storage](/operate/storage) to S3 | Trace files, HTML reports, attachments |
+| Google / GitHub | Only if you enable [OAuth sign-in](/operate/authentication#oauth-google-github) | The standard OAuth exchange |
 
 Nothing on that list has a default. With none of them configured, a Piwi instance talks to nobody.
 
@@ -92,7 +92,7 @@ reaches a server, and there is nothing for it to collect.
 Data you keep is data you're responsible for. Piwi can prune it for you: set `PIWI_RETENTION_DAYS` for
 nightly automatic pruning of old runs and their files, or delete in bulk from **Settings → Storage**.
 Deleting a run removes its executions, traces, reports, and any evidence payloads no longer referenced
-by anything else. See [Storage → Data retention](./storage#data-retention).
+by anything else. See [Storage → Data retention](/operate/storage#data-retention).
 
 ## Verifying any of this
 
@@ -103,6 +103,6 @@ provider, SCM, SMTP, storage and notification clients are the only things there 
 
 ## See also
 
-- [Authentication](./authentication) — roles, API keys, and project-level access
-- [Deployment → Security](./deployment#security) — hardening a public instance
+- [Authentication](/operate/authentication) — roles, API keys, and project-level access
+- [Deployment → Security](/operate/deployment#security) — hardening a public instance
 - [Why Piwi?](./comparison#is-my-data-safe-does-piwi-phone-home) — the same question, short form
