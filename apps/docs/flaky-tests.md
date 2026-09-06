@@ -7,7 +7,7 @@ lang: en-US
 
 A single run tells you what failed. A few dozen runs tell you what's *unreliable* — and that's a
 different, more expensive problem. This page covers what Piwi computes for one project once it has some
-history: flaky scoring, regression signals, performance trends, and spec health.
+history: flaky scoring, regression signals, and spec health.
 
 For the same signals aggregated across every project, see [Analytics](./analytics).
 
@@ -92,21 +92,6 @@ Toggle filters on the run's test-case list to show only new regressions or new f
 
 Opening a failing execution surfaces the same signals (see [Test case detail](./evidence#one-execution-diagnosis-first)): the new-regression / passed-on-retry / newly-flaky badges in the header, the *why* and *since when* facts on the headline, and the failing-streak sentence with a link back to the last green run in the history block.
 
-## Performance
-
-- **Duration trends** — average and **P90** over time, so a few slow outliers don't hide a real regression.
-- **Slowest tests** — the top offenders ranked by duration.
-- **Timeout opportunities** — tests whose configured per-test timeout dwarfs their real p95 duration (so a hang or failure waits far longer than necessary), plus tests still carrying a stale `test.slow()` mark they no longer need. Each row suggests a tighter timeout (or removing the mark) and the time reclaimable per failing run, ranked by impact. This relies on the per-test timeout the [reporter](./reporter#per-test-timeout) captures; runs reported before that shipped still surface stale `test.slow()` marks from annotations + durations alone. Thresholds are tunable via `PUT /api/settings/timeout-hygiene`.
-- **Network analysis** — slow API calls grouped by method and normalized route (e.g. `/api/users/:id`), for a run picked from the tab.
-- **Browser Web Vitals** — TTFB, DOMContentLoaded, FCP and more, with color-coded thresholds.
-
-Network analysis and Web Vitals require the [capture fixtures](./capture-fixtures) in your test setup.
-
-<figure>
-  <img src="/screenshots/performance-trends.png" alt="Performance tab showing the duration trend chart and slowest-tests table">
-  <figcaption>The Performance tab — average and P90 duration trends over time, followed by a ranked table of the slowest tests.</figcaption>
-</figure>
-
 ## Spec health by file
 
 The project's **Tests** tab has a **Group by File** view that groups the tests under each spec file and carries that file's pass rate, flaky rate, failure count, test count and average time in the group header, so an unhealthy area of the suite jumps out.
@@ -121,6 +106,7 @@ regression velocity, a global flaky leaderboard, and an auto-generated insights 
 ## See also
 
 - [What changed in a run](./run-changes) — the Changes tab: new failures, fixed tests, commits since a baseline
+- [Slow tests & wasted time](./slow-tests) — duration trends, slowest tests, and timeout opportunities
 - [Analytics](./analytics) — the same signals across every project
 - [UI overview](./ui-overview) — where each of these views lives in the dashboard
 - [Reporter](./reporter) — how retries, traces, and run metadata get captured

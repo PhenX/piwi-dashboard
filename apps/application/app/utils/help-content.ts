@@ -133,7 +133,7 @@ export const HELP_TOPICS = {
   'project.performance': {
     title: 'Performance',
     text: 'Duration trends for the suite — average and P90 (the slowest 10% threshold). Use it to catch tests getting steadily slower.',
-    doc: 'flaky-tests#performance',
+    doc: 'slow-tests',
   },
   'project.timeline': {
     title: 'Timeline markers',
@@ -144,12 +144,12 @@ export const HELP_TOPICS = {
   'project.slowest-tests': {
     title: 'Slowest tests',
     text: 'The tests taking the most time, ranked. Optimizing the top entries shortens your overall run the fastest.',
-    doc: 'flaky-tests#performance',
+    doc: 'slow-tests',
   },
   'project.slow-endpoints': {
     title: 'Slow endpoints',
     text: 'Backend routes exercised during a run, aggregated per route and ranked by time. Needs the Piwi capture fixtures. Pick a run to inspect its endpoint timings.',
-    doc: 'flaky-tests#performance',
+    doc: 'slow-tests',
   },
   'project.status-line': {
     title: 'Project status',
@@ -501,13 +501,13 @@ export const HELP_TOPICS = {
   'settings.wasted-time': {
     title: 'Wasted-time patterns',
     text: 'Define which wait steps count as wasted time. A wait is wasted when any pattern matches its step title or source location. Patterns are case-insensitive and support * and ? wildcards. Changes apply to existing runs immediately.',
-    doc: 'flaky-tests#performance',
+    doc: 'slow-tests',
     envVars: ['PIWI_WASTED_WAIT_PATTERNS'],
   },
   'settings.timeout-hygiene': {
     title: 'Timeout hygiene',
     text: 'Thresholds for flagging oversized per-test timeouts and stale test.slow() marks. Opportunities are recomputed at read time, so changes apply to existing runs immediately.',
-    doc: 'flaky-tests#performance',
+    doc: 'slow-tests',
   },
   'settings.pr-feedback': {
     title: 'Pull-request feedback',

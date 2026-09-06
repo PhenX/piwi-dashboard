@@ -119,6 +119,7 @@ export default defineConfig({
           { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
           { text: 'What changed in a run', link: '/run-changes' },
           { text: 'Flaky tests', link: '/flaky-tests' },
+          { text: 'Slow tests & wasted time', link: '/slow-tests' },
           { text: 'Branches', link: '/branches' },
           { text: 'Analytics', link: '/analytics' },
           { text: 'Timeline markers', link: '/timeline-markers' },
