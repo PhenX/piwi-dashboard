@@ -33,7 +33,11 @@ export async function getProjectLatestRun(db: DrizzleDB, projectId: number) {
     .select({ id: testRuns.id, status: testRuns.status })
     .from(testRuns)
     .where(eq(testRuns.projectId, projectId))
-    .orderBy(desc(testRuns.id))
+    // Rank by start_time (id as a deterministic tiebreaker), not MAX(id), so
+    // "latest" stays correct when rows are ingested out of chronological order —
+    // historical uploads on the server, or the demo seed which inserts runs
+    // newest-first (MAX(id) would be the oldest run). Matches `listProjects`.
+    .orderBy(desc(testRuns.startTime), desc(testRuns.id))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -58,7 +62,9 @@ export async function getTestRun(
     .select({ id: testRuns.id, status: testRuns.status })
     .from(testRuns)
     .where(eq(testRuns.projectId, testRun.projectId))
-    .orderBy(desc(testRuns.id))
+    // Rank by start_time (see getProjectLatestRun) so the "Newer run" pill points
+    // at the chronologically newest run, not MAX(id).
+    .orderBy(desc(testRuns.startTime), desc(testRuns.id))
     .limit(1);
   const latestRunId = latestRunResult[0]?.id ?? null;
   const latestRunStatus = latestRunResult[0]?.status ?? null;
