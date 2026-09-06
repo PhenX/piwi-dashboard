@@ -180,7 +180,7 @@ folder automatically.
 
 ### Reproducing a failure and finding the breaking commit
 
-The [Reproduce section](/ai-diagnosis#reproduce-and-bisect) of the Fix card shows
+The [Reproduce section](/fix-plans#reproduce-and-bisect) of the Fix card shows
 a copy-paste recipe on every build. Inside the app it can also run that recipe —
 and drive the whole `git bisect` — for you, against the linked folder, **without
 touching your checkout.**
