@@ -314,6 +314,32 @@ test.describe.serial('MCP server', () => {
     expect(click.params.locator).toBe("getByRole('button', { name: 'Pay' })");
   });
 
+  test('tools/call explain_failure — carries situation and nextStep (and story when a combination matches)', async ({
+    request,
+  }) => {
+    const run = JSON.parse(
+      (await mcp(request, 'tools/call', { name: 'get_run', arguments: { runId, statusFilter: 'failed' } })).result
+        .content[0].text,
+    );
+    const execId = run.cases[0].executionId;
+    const res = JSON.parse(
+      (await mcp(request, 'tools/call', { name: 'explain_failure', arguments: { executionId: execId } })).result
+        .content[0].text,
+    );
+    // A failing execution always has a situation sentence and a computed next step.
+    expect(typeof res.situation).toBe('string');
+    expect(res.situation.length).toBeGreaterThan(0);
+    expect(res.nextStep).toBeTruthy();
+    expect(typeof res.nextStep.kind).toBe('string');
+    expect(res.nextStep.primary).toBeTruthy();
+    // `story` is present only when a known clue combination matches; when present
+    // it is one sentence over a set of clue ids.
+    if (res.story) {
+      expect(typeof res.story.sentence).toBe('string');
+      expect(Array.isArray(res.story.clueIds)).toBe(true);
+    }
+  });
+
   test('tools/call get_run_insights — returns baseline comparison shape', async ({ request }) => {
     const insights = JSON.parse(
       (await mcp(request, 'tools/call', { name: 'get_run_insights', arguments: { runId } })).result.content[0].text,
