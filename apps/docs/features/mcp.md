@@ -5,6 +5,8 @@ lang: en-US
 
 # MCP server
 
+<Needs reporter />
+
 Piwi Dashboard exposes a built-in **Model Context Protocol (MCP) server** at `/mcp`. Any MCP-compatible AI client (Claude Code, Cursor, VS Code Copilot, Claude Desktop, Gemini CLI, Windsurf, Continue, …) can connect to it and query your test results, failure clusters, and AI diagnoses directly — with no extra deployment.
 
 The MCP server is served from the same Nitro process as the dashboard. There is nothing extra to install or run.

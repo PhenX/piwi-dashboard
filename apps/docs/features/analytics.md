@@ -5,6 +5,8 @@ lang: en-US
 
 # Analytics
 
+<Needs reporter />
+
 Every other view in Piwi answers a question about one project, one run, or one test. The **Analytics**
 page (`/analytics`) is the one that steps back: it aggregates every project over a time window you
 choose, so you can see where the suite as a whole is drifting — and hand a number to someone who

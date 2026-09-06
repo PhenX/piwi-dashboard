@@ -5,6 +5,8 @@ lang: en-US
 
 # Timeline markers
 
+<Needs reporter admin />
+
 Timeline markers let you record **dated events** against a project — a deploy, a config change, an infrastructure migration, a dependency bump, an incident — and see them overlaid as vertical lines on the analytics trend charts. When a pass-rate drop or a performance regression lines up with a marker, you have your prime suspect: "the slowdown started the day we switched CI runners".
 
 ## What a marker is

@@ -5,6 +5,8 @@ lang: en-US
 
 # Desktop app
 
+<Needs desktop />
+
 The Piwi Dashboard desktop app runs the **entire dashboard on your machine** — no
 Docker, no `npx`, no server to set up. It bundles the same server that ships as
 the Docker image, wraps it in a native window, and keeps your data in a local

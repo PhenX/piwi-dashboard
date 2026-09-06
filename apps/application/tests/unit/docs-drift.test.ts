@@ -179,3 +179,36 @@ describe('no leaked version history', () => {
     }
   });
 });
+
+describe('feature-page word budget', () => {
+  // A feature page follows a fixed skeleton and stays short (the restructure
+  // proposal's 1,200-word budget). This keeps a page from quietly growing back
+  // into the grab-bag it was carved out of.
+  const BUDGET = 1200;
+  // Pages carved from the old grab-bags that are still over budget, pending the
+  // remaining content splits (ai-diagnosis → clusters/diagnosis/fix-plans,
+  // evidence flattened, ui-overview rewritten). Capped at their current size so
+  // they can only shrink toward the budget, never grow — retire an entry once
+  // its page is under BUDGET.
+  const OVER_BUDGET: Record<string, number> = {
+    'ai-diagnosis': 4800,
+    evidence: 3700,
+    'ui-overview': 3100,
+    extension: 2500,
+    mcp: 2300,
+    desktop: 2300,
+    'locator-healing': 2000,
+    notifications: 1400,
+  };
+
+  const featurePages = readdirSync(join(repoRoot, 'apps/docs/features')).filter((f) => f.endsWith('.md'));
+
+  test.each(featurePages)('features/%s is within budget', (file) => {
+    const words = read(`apps/docs/features/${file}`).trim().split(/\s+/).length;
+    const cap = OVER_BUDGET[file.replace(/\.md$/, '')] ?? BUDGET;
+    expect(
+      words,
+      `apps/docs/features/${file} is ${words} words (cap ${cap}) — trim it${cap === BUDGET ? '' : ', and lower its OVER_BUDGET cap'}`,
+    ).toBeLessThanOrEqual(cap);
+  });
+});

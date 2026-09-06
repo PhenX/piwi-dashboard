@@ -5,6 +5,8 @@ lang: en-US
 
 # Slow tests & wasted time
 
+<Needs reporter fixtures />
+
 The test list tells you what failed; it doesn't tell you where the **minutes** go. The **Performance** view on a project surfaces the slow tests, the trends behind them, and the time you could reclaim.
 
 ## Duration trends

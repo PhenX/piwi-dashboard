@@ -5,6 +5,8 @@ lang: en-US
 
 # Test functions catalog
 
+<Needs reporter />
+
 The test functions catalog is a **per-project registry of your own page-object methods and helpers**, each stored with the DOM pattern its steps produce. It lets recordings and agents refer to *your* code instead of raw locators: the [browser extension](./extension) collapses matched steps in a recording into a call to your function, and an MCP agent can register the functions it writes. The catalog lives in the dashboard, and the extension and MCP tools read from it.
 
 ## Where it lives

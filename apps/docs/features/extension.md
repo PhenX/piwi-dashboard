@@ -5,6 +5,8 @@ lang: en-US
 
 # Browser extension
 
+<Needs extension />
+
 Piwi Picker is a Chrome/Edge extension (Manifest V3) that picks ranked, stable Playwright
 locators directly from the page you're looking at — scored by the same engine the dashboard
 uses, and can record a multi-page flow into a runnable TypeScript spec. Picking and recording

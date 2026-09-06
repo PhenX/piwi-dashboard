@@ -5,6 +5,8 @@ lang: en-US
 
 # Branches
 
+<Needs reporter />
+
 Every run Piwi stores is tagged with the git **branch** it came from, and that branch is a real, queryable dimension — not a string buried in metadata. Filter any view to one branch, compare like with like, and let baselines and flakiness scoring stop mixing your feature branches together. This is the headline of 0.26: branch-aware runs and baselines.
 
 **Needs:** the reporter only — the branch is collected automatically with the rest of the git metadata (`collectScmInfo`, on by default). Nothing to install or switch on.

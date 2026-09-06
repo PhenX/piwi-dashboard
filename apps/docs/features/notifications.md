@@ -5,6 +5,8 @@ lang: en-US
 
 # Notifications & alerts
 
+<Needs reporter />
+
 Piwi can push run events to **browser**, **email**, **Slack**, or **HTTP webhooks** so your team hears about failures, new failure clusters, flakiness spikes, and performance regressions without watching the dashboard. AI diagnosis completions can also notify you when they finish.
 
 Notifications do not require authentication. With auth disabled the instance is single-tenant, so every channel and subscription is **global** (instance-wide). With `PIWI_AUTH_ENABLED=true` ([see authentication](/operate/authentication)) each user manages their own channels and subscriptions, and administrators can additionally create global ones shared by everyone.
