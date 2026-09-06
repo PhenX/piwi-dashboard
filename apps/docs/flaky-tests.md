@@ -56,26 +56,6 @@ Not all flaky tests are equally expensive. Piwi ranks them by **impact** — der
 
 Each test case has a **stability trend**: a time series of pass rate, flaky rate, and average duration, bucketed over time — so you can see whether a fix actually stuck.
 
-## Changes
-
-The **Changes** tab on a run compares it against **one baseline** — the last passing run on the same branch by
-default, or the run you pick from the selector (deep-linkable as `?baseline=<runId>`). Every section reads that same
-baseline, so the "new failures" count is computed once and used throughout:
-
-- **New failures** — passed in the baseline, failing here
-- **Fixed** — failed in the baseline, passing here
-- **Still failing** — failing in both
-- **Newly flaky / passed on retry** — passed here but needed a retry
-- **Slower / faster** — the ten largest duration changes each way
-- **Commits since the baseline** — the commit range, a copyable `git log` command and, when the SCM host is known, a
-  link to the commits
-- **Environment changes** — the fields that differ, in *This run* / *Baseline* columns
-
-<figure>
-  <img src="/screenshots/run-changes.png" alt="Run Changes tab showing the baseline selector, the tests that newly started failing, the ones that got fixed, and the commits landed since the baseline">
-  <figcaption>The Changes tab on a run, read against one baseline — new failures, fixed tests, and the commits landed since.</figcaption>
-</figure>
-
 ## Quarantine, with a way out
 
 Detecting a flaky test doesn't stop it blocking merges. Quarantine does — without hiding it.
@@ -140,6 +120,7 @@ regression velocity, a global flaky leaderboard, and an auto-generated insights 
 
 ## See also
 
+- [What changed in a run](./run-changes) — the Changes tab: new failures, fixed tests, commits since a baseline
 - [Analytics](./analytics) — the same signals across every project
 - [UI overview](./ui-overview) — where each of these views lives in the dashboard
 - [Reporter](./reporter) — how retries, traces, and run metadata get captured

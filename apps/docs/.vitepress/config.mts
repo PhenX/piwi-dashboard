@@ -117,6 +117,7 @@ export default defineConfig({
           { text: 'Failure evidence', link: '/evidence' },
           { text: 'Failure clusters & the inbox', link: '/failure-clusters' },
           { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
+          { text: 'What changed in a run', link: '/run-changes' },
           { text: 'Flaky tests', link: '/flaky-tests' },
           { text: 'Branches', link: '/branches' },
           { text: 'Analytics', link: '/analytics' },

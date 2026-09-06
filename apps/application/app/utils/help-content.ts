@@ -220,7 +220,7 @@ export const HELP_TOPICS = {
   'run.changes': {
     title: 'Changes',
     text: 'What differs between this run and one baseline — the last passing run on the same branch by default, or the run you pick. The tests that started or stopped failing, the ones that got slower or faster, the commits landed since the baseline, and the environment fields that moved. New failures are counted once against that baseline.',
-    doc: 'flaky-tests#changes',
+    doc: 'run-changes',
   },
   'run.timeline': {
     title: 'Workers timeline',

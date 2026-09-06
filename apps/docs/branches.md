@@ -34,7 +34,7 @@ Because the branch is an indexed column, these filters are served by the databas
 The bigger change is invisible until you look for it: **baselines are chosen within a branch.**
 
 - **Regression signals** — the *new regression* and *new flaky* badges on an execution compare against the most recent passing run on the **same branch**, then fall back to the default branch. Two feature branches reporting interleaved runs no longer become each other's baseline.
-- **The visual-diff baseline** ([What changed in a run](./flaky-tests#changes)) prefers the same branch the same way, so a screenshot diff compares against a run that shares your branch's state.
+- **The visual-diff baseline** ([What changed in a run](./run-changes)) prefers the same branch the same way, so a screenshot diff compares against a run that shares your branch's state.
 - **Pull-request feedback** builds its "new failures vs. pre-existing" split from those same branch-aware signals, and **exonerates** a test that is already flaky on the default branch — a failure the PR did not introduce is reported as pre-existing rather than blamed on the change. The `max-new-regressions` [CI gate](./ci#blocking-a-merge) then counts the right number.
 
 ## From an agent (MCP)

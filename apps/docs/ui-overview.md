@@ -112,7 +112,7 @@ The right panel is tabbed:
   run you pick — deep-linkable as `?baseline=<runId>`): new failures, fixed, still failing, newly flaky / passed on
   retry, the slower / faster tests, the commits landed since the baseline, and the environment fields that moved. The
   "new failures" count is computed once against that baseline. Disabled until the run finishes. See
-  [Changes](./flaky-tests#changes).
+  [What changed in a run](./run-changes).
 - **Timeline** — a horizontal per-worker timeline of test execution, with a *Show hooks and waits* toggle to reveal
   setup, hook, fixture and wasted-wait spans; click a bar to jump to that test. Beneath it, the **slowest tests** and
   the **worker distribution** for the run.
