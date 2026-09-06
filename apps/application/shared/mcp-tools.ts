@@ -463,6 +463,10 @@ export const MCP_TOOL_DEFS = [
           type: 'string',
           description: 'Comma-separated tags; a test must carry every one of them. A leading @ is optional.',
         },
+        locks: {
+          type: 'string',
+          description: 'Comma-separated lock names; a test must carry every one of them.',
+        },
         owner: { type: 'string', description: 'Exact owner declared via the piwi:owner annotation' },
         priority: {
           type: 'string',
@@ -788,6 +792,8 @@ export interface McpCaseSummary {
   runId?: number;
   runStatus?: string;
   startedAt?: string;
+  /** Lock names this execution held (best effort; none from blob imports). */
+  locks?: string[] | null;
 }
 
 /** Project summary returned by list_projects. */

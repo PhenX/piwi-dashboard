@@ -12,7 +12,7 @@ import {
   entityLinks,
 } from '../../server/database/schema';
 import { asc, desc, eq, exists, sql, and, or, inArray, gte, lte, isNull, isNotNull, count } from 'drizzle-orm';
-import { jsonArrayContainsAll, parseTagFilter } from '../utils/tag-filter';
+import { jsonArrayContainsAll, parseLockFilter, parseTagFilter } from '../utils/tag-filter';
 import { FAILED_STATUS_KEYS } from '../utils/test-counts';
 import { TEST_PRIORITIES } from '@piwitests/core/test-meta';
 
@@ -506,6 +506,8 @@ export interface TestCasesQuery {
   statuses?: string[];
   /** Every tag here must be present on a case for it to match. */
   tags?: string[];
+  /** Every lock here must be present on a case for it to match. */
+  locks?: string[];
   owner?: string;
   priority?: string;
   maxAgeDays: number;
@@ -536,6 +538,7 @@ export function parseTestCasesQuery(input?: URLSearchParams | Record<string, unk
     .filter((s) => (TEST_CASE_STATUS_FILTERS as readonly string[]).includes(s));
   const rawSort = get('sort') ?? '';
   const tags = parseTagFilter(get('tags'));
+  const locks = parseLockFilter(get('locks'));
   const rawPriority = (get('priority') ?? '').trim().toLowerCase();
   const priorities = TEST_PRIORITIES as readonly string[];
   return {
@@ -544,6 +547,7 @@ export function parseTestCasesQuery(input?: URLSearchParams | Record<string, unk
     q: get('q')?.trim() || undefined,
     statuses: statuses.length > 0 ? statuses : undefined,
     tags: tags.length > 0 ? tags : undefined,
+    locks: locks.length > 0 ? locks : undefined,
     owner: get('owner')?.trim() || undefined,
     priority: priorities.includes(rawPriority) ? rawPriority : undefined,
     maxAgeDays: Math.max(0, num('maxAgeDays', 0)),
@@ -584,6 +588,7 @@ export async function getProjectTestCases(db: DrizzleDB, projectId: number, opti
     q,
     statuses,
     tags,
+    locks,
     owner,
     priority,
     maxAgeDays = 0,
@@ -640,6 +645,9 @@ export async function getProjectTestCases(db: DrizzleDB, projectId: number, opti
   if (tags && tags.length > 0) {
     conditions.push(...jsonArrayContainsAll(testCases.tags, tags));
   }
+  if (locks && locks.length > 0) {
+    conditions.push(...jsonArrayContainsAll(testCases.locks, locks));
+  }
   if (owner) {
     conditions.push(eq(testCases.owner, owner));
   }
@@ -669,6 +677,7 @@ export async function getProjectTestCases(db: DrizzleDB, projectId: number, opti
       suitePath: testCases.suitePath,
       title: testCases.title,
       tags: testCases.tags,
+      locks: testCases.locks,
       owner: testCases.owner,
       priority: testCases.priority,
       feature: testCases.feature,

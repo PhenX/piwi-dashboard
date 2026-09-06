@@ -466,3 +466,170 @@ describe('fixed-before', () => {
     expect(rules(input)).not.toContain('fixed-before');
   });
 });
+
+describe('lock-holder-failed', () => {
+  test('positive: the previous holder of the same lock failed', () => {
+    const input = baseInput({
+      execution: { id: 10, testCaseId: 1, status: 'failed', duration: 5_000, startedAt: T0 + 10_000, locks: ['db'] },
+      lockHolders: [
+        {
+          id: 9,
+          title: 'writes an order',
+          status: 'failed',
+          startedAt: T0,
+          duration: 4_000,
+          shardIndex: null,
+          locks: ['db'],
+        },
+        {
+          id: 10,
+          title: 'this test',
+          status: 'failed',
+          startedAt: T0 + 10_000,
+          duration: 5_000,
+          shardIndex: null,
+          locks: ['db'],
+        },
+      ],
+    });
+    const clue = buildFailureClues(input).find((c) => c.rule === 'lock-holder-failed');
+    expect(clue).toBeTruthy();
+    expect(clue!.strength).toBe('strong');
+    expect(clue!.detail).toContain('db');
+    expect(clue!.detail).toContain('writes an order');
+    expect(clue!.citations[0]).toEqual({ section: 'runContext' });
+  });
+
+  test('negative: a prior holder that passed does not fire', () => {
+    const input = baseInput({
+      execution: { id: 10, testCaseId: 1, status: 'failed', duration: 5_000, startedAt: T0 + 10_000, locks: ['db'] },
+      lockHolders: [
+        {
+          id: 9,
+          title: 'writes an order',
+          status: 'passed',
+          startedAt: T0,
+          duration: 4_000,
+          shardIndex: null,
+          locks: ['db'],
+        },
+        {
+          id: 10,
+          title: 'this test',
+          status: 'failed',
+          startedAt: T0 + 10_000,
+          duration: 5_000,
+          shardIndex: null,
+          locks: ['db'],
+        },
+      ],
+    });
+    expect(rules(input)).not.toContain('lock-holder-failed');
+  });
+
+  test('negative: a failed holder of a different lock does not fire', () => {
+    const input = baseInput({
+      execution: { id: 10, testCaseId: 1, status: 'failed', duration: 5_000, startedAt: T0 + 10_000, locks: ['db'] },
+      lockHolders: [
+        { id: 9, title: 'other', status: 'failed', startedAt: T0, duration: 4_000, shardIndex: null, locks: ['api'] },
+        {
+          id: 10,
+          title: 'this test',
+          status: 'failed',
+          startedAt: T0 + 10_000,
+          duration: 5_000,
+          shardIndex: null,
+          locks: ['db'],
+        },
+      ],
+    });
+    expect(rules(input)).not.toContain('lock-holder-failed');
+  });
+});
+
+describe('lock-cross-shard', () => {
+  test('positive: the same lock was held on another shard at the same time', () => {
+    const input = baseInput({
+      execution: {
+        id: 10,
+        testCaseId: 1,
+        status: 'failed',
+        duration: 5_000,
+        startedAt: T0,
+        locks: ['db'],
+        shardIndex: 1,
+      },
+      lockHolders: [
+        { id: 10, title: 'this test', status: 'failed', startedAt: T0, duration: 5_000, shardIndex: 1, locks: ['db'] },
+        {
+          id: 20,
+          title: 'on shard 2',
+          status: 'passed',
+          startedAt: T0 + 1_000,
+          duration: 3_000,
+          shardIndex: 2,
+          locks: ['db'],
+        },
+      ],
+    });
+    const clue = buildFailureClues(input).find((c) => c.rule === 'lock-cross-shard');
+    expect(clue).toBeTruthy();
+    expect(clue!.strength).toBe('medium');
+    expect(clue!.detail).toContain('db');
+    expect(clue!.citations[0]).toEqual({ section: 'runContext' });
+  });
+
+  test('negative: non-overlapping holders on another shard do not fire', () => {
+    const input = baseInput({
+      execution: {
+        id: 10,
+        testCaseId: 1,
+        status: 'failed',
+        duration: 2_000,
+        startedAt: T0,
+        locks: ['db'],
+        shardIndex: 1,
+      },
+      lockHolders: [
+        { id: 10, title: 'this test', status: 'failed', startedAt: T0, duration: 2_000, shardIndex: 1, locks: ['db'] },
+        {
+          id: 20,
+          title: 'later on shard 2',
+          status: 'passed',
+          startedAt: T0 + 5_000,
+          duration: 3_000,
+          shardIndex: 2,
+          locks: ['db'],
+        },
+      ],
+    });
+    expect(rules(input)).not.toContain('lock-cross-shard');
+  });
+
+  test('negative: an overlapping holder on the same shard does not fire', () => {
+    const input = baseInput({
+      execution: {
+        id: 10,
+        testCaseId: 1,
+        status: 'failed',
+        duration: 5_000,
+        startedAt: T0,
+        locks: ['db'],
+        shardIndex: 1,
+      },
+      lockHolders: [
+        { id: 10, title: 'this test', status: 'failed', startedAt: T0, duration: 5_000, shardIndex: 1, locks: ['db'] },
+        {
+          id: 21,
+          title: 'same shard',
+          status: 'passed',
+          startedAt: T0 + 1_000,
+          duration: 1_000,
+          shardIndex: 1,
+          locks: ['db'],
+        },
+      ],
+    });
+    expect(rules(input)).not.toContain('lock-cross-shard');
+  });
+});

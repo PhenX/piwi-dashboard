@@ -774,6 +774,8 @@ export interface TestCaseResult {
   testAnnotations?: Array<{ type: string; description?: string }> | null;
   /** Tags declared on the test, normalized with `@` stripped. */
   tags?: string[] | null;
+  /** Lock names this execution held (best effort; none from blob imports). */
+  locks?: string[] | null;
   /** Ownership metadata from `piwi:` annotations. */
   testMeta?: TestMetadata | null;
   status: string;
@@ -976,6 +978,8 @@ export interface TestCaseWithStats {
   title: string;
   /** Latest-known tags and `piwi:` metadata declared on the test. */
   tags: string[] | null;
+  /** Latest-known lock names declared on the test (best effort). */
+  locks: string[] | null;
   owner: string | null;
   priority: string | null;
   feature: string | null;
