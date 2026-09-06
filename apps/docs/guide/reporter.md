@@ -34,7 +34,7 @@ $env:PIWI_DASHBOARD_URL='http://localhost:3000'; $env:PIWI_API_KEY='your-api-key
 
 :::
 
-This is a trial path: you get results, traces and screenshots, but not the [capture fixtures](#capture-fixtures) or [`wrapConfig`](#installing-via-wrapconfig)'s capture defaults. On Playwright before 1.63 the flag does not exist — configure the reporter normally instead. [`piwi run`](/cli#select-run) makes the same append automatically when the config has no Piwi reporter.
+This is a trial path: you get results, traces and screenshots, but not the [capture fixtures](#capture-fixtures) or [`wrapConfig`](#installing-via-wrapconfig)'s capture defaults. On Playwright before 1.63 the flag does not exist — configure the reporter normally instead. [`piwi run`](/reference/cli#select-run) makes the same append automatically when the config has no Piwi reporter.
 
 ## Basic configuration
 
@@ -217,7 +217,7 @@ The options in the table below can also be set via a `PIWI_*` environment variab
 
 ### Finding the desktop app automatically
 
-If nothing sets a server at all — no `serverUrl`, no `apiKey`, and neither `PIWI_DASHBOARD_URL` nor `PIWI_API_KEY` in the environment — the reporter looks for a running [desktop app](/desktop) on the same machine and uploads there:
+If nothing sets a server at all — no `serverUrl`, no `apiKey`, and neither `PIWI_DASHBOARD_URL` nor `PIWI_API_KEY` in the environment — the reporter looks for a running [desktop app](/features/desktop) on the same machine and uploads there:
 
 ```typescript
 reporter: [

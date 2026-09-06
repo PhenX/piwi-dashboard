@@ -143,7 +143,7 @@ Each archive is uploaded whole, so it must fit under the server's limit — **50
 the effective limit and rejects anything larger before uploading it.
 
 If a reverse proxy in front of Piwi enforces a smaller body limit, set
-[`PIWI_IMPORT_MAX_BYTES`](/configuration#ingest-limits) to match, so the page rejects the same archives your proxy would
+[`PIWI_IMPORT_MAX_BYTES`](/reference/configuration#ingest-limits) to match, so the page rejects the same archives your proxy would
 instead of failing mid-upload.
 
 The limit is the server's to set: the page reads each archive as a stream to fingerprint it, so the browser holds a

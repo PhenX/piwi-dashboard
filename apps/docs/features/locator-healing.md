@@ -86,12 +86,12 @@ A confirmed pick is recorded in three places:
 
 The gate is identical to `inspectOnFailure` (headed browser, never under CI, final attempt only), and the picker suppresses the page's own click handlers while active, so picking can't navigate or mutate the failing page. Picking never rewrites your test — it records the choice so you (or the dashboard) can apply it.
 
-The same picker engine also ships as the [Piwi Picker browser extension](/extension) — pick ranked, uniqueness-checked locators from any live page in Chrome or Edge, with no test run and no server required.
+The same picker engine also ships as the [Piwi Picker browser extension](/features/extension) — pick ranked, uniqueness-checked locators from any live page in Chrome or Edge, with no test run and no server required.
 
 ## Related
 
 - [Capture fixtures](/guide/capture-fixtures) — the one-file setup that records the locator snapshots healing ranks from
 - [Auto-heal PRs](./auto-heal) — when Piwi opens the recommended locator fix as a pull request itself
 - [Fix plans, reproduce & bisect](./fix-plans) — where the locator fix sits in the whole plan
-- [Browser extension](/extension) — the same picker on any live page, no run needed
+- [Browser extension](/features/extension) — the same picker on any live page, no run needed
 - [Core concepts](/guide/concepts#locator-snapshot) — what a locator snapshot stores

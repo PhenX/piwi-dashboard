@@ -39,7 +39,7 @@ The bigger change is invisible until you look for it: **baselines are chosen wit
 
 ## From an agent (MCP)
 
-The MCP tools take a branch filter too: `list_runs` and the flaky tools accept a `branch` argument, so an agent can ask "what is failing on `main`" or "is this test flaky on my branch" without pulling every run. See the [MCP server](/mcp).
+The MCP tools take a branch filter too: `list_runs` and the flaky tools accept a `branch` argument, so an agent can ask "what is failing on `main`" or "is this test flaky on my branch" without pulling every run. See the [MCP server](/features/mcp).
 
 ## Notifications
 

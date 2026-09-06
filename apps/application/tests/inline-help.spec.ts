@@ -36,7 +36,7 @@ test.describe('Inline help (HelpHint)', () => {
 
     // "Learn more" resolves through docsUrl() to the verified anchor.
     const learnMore = page.getByRole('link', { name: /Learn more/ });
-    await expect(learnMore).toHaveAttribute('href', `${DOCS_BASE_URL}/mcp#what-it-provides`);
+    await expect(learnMore).toHaveAttribute('href', `${DOCS_BASE_URL}/features/mcp#what-it-provides`);
     await expect(learnMore).toHaveAttribute('target', '_blank');
   });
 
@@ -88,7 +88,7 @@ test.describe('Inline help (HelpHint)', () => {
 
     // A "Configuration reference" link points at the canonical docs page.
     const configLink = page.getByRole('link', { name: /Configuration reference/ });
-    await expect(configLink).toHaveAttribute('href', `${DOCS_BASE_URL}/configuration`);
+    await expect(configLink).toHaveAttribute('href', `${DOCS_BASE_URL}/reference/configuration`);
     await expect(configLink).toHaveAttribute('target', '_blank');
   });
 

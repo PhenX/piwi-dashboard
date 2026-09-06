@@ -125,7 +125,7 @@ The server implements the **MCP Streamable HTTP transport**. On `initialize` it 
 
 Replace `<your-piwi-url>` with your dashboard base URL (e.g. `http://localhost:3000`) and `pd_YOUR_API_KEY` with a real API key.
 
-> **Desktop app:** none of this is needed there. The [/mcp page](/desktop#connecting-ai-assistants)
+> **Desktop app:** none of this is needed there. The [/mcp page](/features/desktop#connecting-ai-assistants)
 > detects installed clients (Claude Code, Claude Desktop, Cursor, VS Code,
 > Windsurf, Gemini CLI) and writes the entry into their config files in one
 > click — URL and token included, kept current across launches.
@@ -215,7 +215,7 @@ Desktop mishandles arguments containing spaces. On plans that offer them,
 **Settings → Connectors → Add custom connector** takes the `/mcp` URL directly
 and skips the bridge.
 
-In the [desktop app](/desktop#connecting-ai-assistants) none of this applies:
+In the [desktop app](/features/desktop#connecting-ai-assistants) none of this applies:
 one click points Claude Desktop at the app's own built-in bridge, with no Node
 and no token in the file.
 :::

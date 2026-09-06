@@ -10,7 +10,7 @@ two backends. Runs, test cases and settings live in the [database](./database) i
 
 Every variable below is an ordinary environment variable: pass it to the container, put it in your
 `.env`, or set it in your host's dashboard. The
-[configuration generator](/configuration/generator) will write the block for you.
+[configuration generator](/reference/configuration/generator) will write the block for you.
 
 ## Local storage (default)
 
@@ -145,6 +145,6 @@ Unlike the network resource pool, these entries are not deduplicated across exec
 ## See also
 
 - [Database](./database) — SQLite versus PostgreSQL, and what lives there instead
-- [Configuration reference](/configuration#storage) — every `PIWI_STORAGE_*` and `PIWI_S3_*` variable
+- [Configuration reference](/reference/configuration#storage) — every `PIWI_STORAGE_*` and `PIWI_S3_*` variable
 - [Backups](./deployment#backups) — copying the storage directory alongside the database
 - [Offline export](/features/offline-export) — taking one investigation out of storage entirely

@@ -63,7 +63,7 @@ Once you know it's a real regression, narrow the window:
 
 Not everyone wants to click through a dashboard mid-review.
 
-**Ask your coding agent.** The [MCP server](../mcp) is built into the running instance — nothing to
+**Ask your coding agent.** The [MCP server](/features/mcp) is built into the running instance — nothing to
 install. `get_run_insights` returns the same regression / recovery / new-flaky split this page walks
 through, and `get_test_stability_trend` answers "is this getting flakier?" for one test.
 

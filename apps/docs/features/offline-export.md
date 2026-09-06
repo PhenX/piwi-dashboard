@@ -36,7 +36,7 @@ Exports are bounded so one download cannot exhaust the server:
 
 Anything left out is listed in an **Omitted from this export** table in the report and in the ZIP's
 `README.txt` — an export never drops evidence silently. Defaults and tuning:
-[Configuration](/configuration#offline-export).
+[Configuration](/reference/configuration#offline-export).
 
 ## Opening a hostile report safely
 

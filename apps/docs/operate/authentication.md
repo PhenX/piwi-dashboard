@@ -315,7 +315,7 @@ The reporter automatically calls `/api/auth/login` before each upload and uses t
 Everything to set before you expose an instance — HTTPS, `PIWI_SECRET_KEY`, `PIWI_AUTH_SECRET` and the trust-proxy flag — is the [production checklist](./production-checklist). What authentication adds on top of that:
 
 - Passwords are hashed using scrypt with per-password salts; use strong, unique passwords.
-- Login, initial setup, and password-reset endpoints are rate-limited per client address — failed logins also per account — and throttled requests get a `429` with a `Retry-After` header. Behind a reverse proxy, set `PIWI_TRUST_PROXY` so those per-address limits see real client addresses; see the [configuration reference](/configuration#authentication).
+- Login, initial setup, and password-reset endpoints are rate-limited per client address — failed logins also per account — and throttled requests get a `429` with a `Retry-After` header. Behind a reverse proxy, set `PIWI_TRUST_PROXY` so those per-address limits see real client addresses; see the [configuration reference](/reference/configuration#authentication).
 
 ## Disabling authentication
 

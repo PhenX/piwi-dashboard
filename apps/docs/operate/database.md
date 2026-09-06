@@ -72,7 +72,7 @@ about, or accept starting fresh. Your file storage is unaffected either way.
 
 ## See also
 
-- [Configuration reference](/configuration#database) — every `PIWI_DATABASE_*` and retention variable
+- [Configuration reference](/reference/configuration#database) — every `PIWI_DATABASE_*` and retention variable
 - [Storage configuration](./storage) — where reports, traces and attachments go
 - [Deployment](./deployment) — Compose, Kubernetes and one-click templates
 - Changing the schema is a contributor task, not an operator one:

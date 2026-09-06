@@ -30,7 +30,7 @@ into the codebase.
 
 Every source path in the dashboard is clickable, including the failing call stack. Hover the path and
 use **open in IDE** to land on the exact line. That mapping is configured
-[per browser](../ide-integration) and stored locally — your checkout path is never sent to the server.
+[per browser](/features/ide-integration) and stored locally — your checkout path is never sent to the server.
 
 No IDE integration set up? The path and line number are plain text on the page; the fastest route is
 usually copying them.
@@ -109,7 +109,7 @@ alternative-locators panel offers **Pick from trace**: it opens the trace in the
 snapshots. So a CI failure nobody watched live can still be picked visually, days later, from the page
 as it actually was.
 
-**Pick against the live page.** The [browser extension](../extension) scores locators with the same
+**Pick against the live page.** The [browser extension](/features/extension) scores locators with the same
 engine the dashboard uses, directly on the page you're looking at. Picking and recording are fully
 standalone — nothing is sent anywhere, and it works without a Piwi instance at all. The cost: one
 click from the [Chrome Web Store](https://chromewebstore.google.com/detail/piwi-picker/pakhnokpjboejcghgcmkjlpnogfjihhe),
@@ -119,7 +119,7 @@ which is also how you install it in Edge.
 screenshot, and the failing call stack. Playwright's trace viewer is bundled and served by your own
 instance — the DOM snapshot at the moment of failure usually shows what the element became.
 
-**Ask your agent.** `get_locator_healing` over the [MCP server](../mcp) returns the recommended fix and
+**Ask your agent.** `get_locator_healing` over the [MCP server](/features/mcp) returns the recommended fix and
 the full alternatives list for a failing case, so a coding agent can apply it without you opening the
 dashboard. This one does still depend on captured snapshots — it reads the same data the panel does.
 
@@ -129,4 +129,4 @@ dashboard. This one does still depend on captured snapshots — it reads the sam
 - [Reporter](/features/locator-healing) — configuration and how the scoring works
 - [Reporter → Inspect the failing page live](/features/locator-healing#inspect-the-failing-page-live-local-runs) — the
   full reference for the pause-on-failure options
-- [Browser extension](../extension) — picking and recording locators against a live page
+- [Browser extension](/features/extension) — picking and recording locators against a live page

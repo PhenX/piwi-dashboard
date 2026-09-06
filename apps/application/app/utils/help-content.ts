@@ -189,7 +189,7 @@ export const HELP_TOPICS = {
   'project.local-folder': {
     title: 'Linked local folder',
     text: 'The checkout on this machine that produces this project’s runs. Linking it enables running tests from the app and opening files in your IDE. The link is stored on this machine only — never on the server.',
-    doc: 'desktop#running-tests-from-the-app',
+    doc: 'features/desktop#running-tests-from-the-app',
   },
 
   // ── Test run detail ───────────────────────────────────────────────────
@@ -600,22 +600,22 @@ export const HELP_TOPICS = {
   'mcp.tools': {
     title: 'What it provides',
     text: 'The tools this MCP server exposes to AI agents, letting them query your projects, runs and failures directly.',
-    doc: 'mcp#what-it-provides',
+    doc: 'features/mcp#what-it-provides',
   },
   'mcp.auth': {
     title: 'Authentication',
     text: 'How an MCP client authenticates to this server — uses the same API keys as the rest of the dashboard.',
-    doc: 'mcp#authentication',
+    doc: 'features/mcp#authentication',
   },
   'mcp.client-setup': {
     title: 'Client setup',
     text: 'Copy-paste configuration to connect Claude Code, Cursor, VS Code and other MCP clients to this server.',
-    doc: 'mcp#client-setup',
+    doc: 'features/mcp#client-setup',
   },
   'mcp.skills': {
     title: 'Agent skills',
     text: 'Portable SKILL.md workflow instructions for AI coding agents — investigate a failure, apply a healed locator, stabilize flaky tests. Installed into your test project by the reporter CLI; each one prefers this MCP server and falls back to the dashboard UI.',
-    doc: 'mcp#agent-skills',
+    doc: 'features/mcp#agent-skills',
   },
 
   // ── Shared ────────────────────────────────────────────────────────────
@@ -626,7 +626,7 @@ export const HELP_TOPICS = {
   'ide.open': {
     title: 'Open in IDE',
     text: 'Click a source path to open it in your local editor. Set your local workspace folder (so VS Code gets an absolute path) or a JetBrains project name, then pick a method. Auto probes the JetBrains local server first (the only one it can confirm) before falling back to a vscode:// or jetbrains:// launch. These preferences live in this browser only.',
-    doc: 'ide-integration',
+    doc: 'features/ide-integration',
   },
 
   // ── Locator healing ────────────────────────────────────────────────────

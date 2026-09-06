@@ -42,7 +42,7 @@ npm install @piwitests/server
 All configuration is via environment variables (same as the Docker image). `PORT`
 (default `3000`) sets the listen port; everything else is a `PIWI_*` variable
 documented — with its default and whether the Settings UI can override it — in the
-[configuration reference](https://piwitests.dev/configuration). Most deployments set at
+[configuration reference](https://piwitests.dev/reference/configuration). Most deployments set at
 least `PIWI_SECRET_KEY`, the master key for encrypting secrets stored in the database
 (AI API keys, SCM tokens); recommended in any real deployment. Generate one with:
 
