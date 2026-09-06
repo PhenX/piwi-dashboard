@@ -59,8 +59,8 @@ Embedding-based reconciliation runs after every finished run whenever an embeddi
 
 ## Did the fix work?
 
-A cluster used to go quiet and stay open forever — nothing ever confirmed it was actually fixed. Now every run
-answers that.
+Every run checks whether an open cluster is actually fixed, instead of letting it go quiet and sit open forever
+with nothing to confirm the fix held.
 
 When a run executes every test a cluster covers and they all pass, Piwi records the fix: the run, the commit, and how
 long the cluster was open. Three verdicts, because they are not the same claim:
