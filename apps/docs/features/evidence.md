@@ -120,7 +120,7 @@ A project that installed only the reporter — no [capture fixtures](/guide/capt
 
 ### Why a card is empty
 
-Console, network, app state, ARIA snapshot, backend logs and Web Vitals no longer simply vanish when they hold nothing. Each empty card states exactly one of three things, so a blank block is never ambiguous:
+Console, network, app state, ARIA snapshot, backend logs and Web Vitals never blank out silently when they hold nothing. Each empty card states exactly one of three things, so a blank block is never ambiguous:
 
 - **Not captured** — the [capture fixtures](/guide/capture-fixtures) are not active for this project (for example a spec that still imports `test` from `@playwright/test`). The card names what to add and links to the in-app `/setup` capability checklist. "Fixtures active" is decided per execution, so a spec that never adopted the fixtures reads *not captured* while its fixture-using neighbors read *nothing happened*.
 - **Captured, nothing happened** — the fixtures were active and this run simply produced nothing (no console output, no matching requests, …). Working as intended, nothing to fix.

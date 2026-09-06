@@ -42,7 +42,11 @@ describe('documented counts', () => {
       if (entry.isDirectory()) return walk(path);
       return entry.name.endsWith('.md') ? [relative(repoRoot, path)] : [];
     });
-  })(join(repoRoot, 'apps/docs'));
+  })(join(repoRoot, 'apps/docs'))
+    // The generated What's new page repeats historical changelog counts (e.g.
+    // "from 14 to 38 tools") that were correct for that release — it is the one
+    // place stale numbers are the point, so it is not held to the live count.
+    .filter((p) => p !== 'apps/docs/reference/whats-new.md');
   const COUNT_SURFACES = [...docsPages, 'README.md', 'ROADMAP.md', 'DOCKER_HUB.md'];
 
   test.each(COUNT_SURFACES)('%s states the real MCP tool count, if it states one', (relative) => {
@@ -142,4 +146,36 @@ describe('single-source snippets', () => {
       ).toContain(canonical);
     });
   }
+});
+
+describe('no leaked version history', () => {
+  // Version history belongs on the generated What's new page (from the
+  // changelog), not scattered through the feature pages as "since version X" /
+  // "now supports Y" asides that go stale. This bans only the phrasings that are
+  // unambiguously changelog-speak — "no longer" / "used to" / "previously" are
+  // left out because they have too many legitimate uses ("a mark it no longer
+  // needs", "the tags used to organize projects").
+  const BANNED = [/\bsince version\b/i, /\bsince v\d/i, /\bnow supports\b/i];
+
+  // Hand-written docs pages only: the generated pages (What's new is literally
+  // the version history) and the blog essay are allowed to talk about releases.
+  const pages = (function walk(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      if (entry.name === 'node_modules' || entry.name === 'blog' || entry.name.startsWith('.')) return [];
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return walk(path);
+      return entry.name.endsWith('.md') && entry.name !== 'AGENTS.md' ? [relative(repoRoot, path)] : [];
+    });
+  })(join(repoRoot, 'apps/docs')).filter(
+    (p) => !['feature-map', 'whats-new', 'configuration'].some((gen) => p === `apps/docs/reference/${gen}.md`),
+  );
+
+  test.each(pages)('%s carries no changelog-speak', (page) => {
+    const contents = read(page);
+    for (const pattern of BANNED) {
+      expect(pattern.test(contents), `${page} uses "${pattern.source}" — move it to the changelog / What's new`).toBe(
+        false,
+      );
+    }
+  });
 });

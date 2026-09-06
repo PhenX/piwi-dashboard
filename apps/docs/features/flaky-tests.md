@@ -40,7 +40,7 @@ Every flaky test is automatically tagged with one of five categories, using keyw
 | `environment` | Fails repeatedly on exactly one browser while others pass |
 | `other` | No clear signal |
 
-The classifier no longer reads keywords alone: it counts the requests that failed or returned 5xx across the test's recent failing attempts, and — the sharpest signal — weighs each recent flake whose failing attempt made a request that failed while the passing attempt did not (see the [attempt diff](./evidence#attempts)). Such a request recovering on retry is strong evidence the flakiness is a network problem, so it counts for several keyword matches.
+The classifier weighs more than keywords: it counts the requests that failed or returned 5xx across the test's recent failing attempts, and — the sharpest signal — weighs each recent flake whose failing attempt made a request that failed while the passing attempt did not (see the [attempt diff](./evidence#attempts)). Such a request recovering on retry is strong evidence the flakiness is a network problem, so it counts for several keyword matches.
 
 Filter the flaky table by category to triage a class of failures at once.
 

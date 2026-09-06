@@ -205,6 +205,7 @@ export default defineConfig({
           text: 'Reference',
           items: [
             { text: 'Feature map', link: '/reference/feature-map' },
+            { text: "What's new", link: '/reference/whats-new' },
             { text: 'Configuration reference', link: '/reference/configuration' },
             { text: 'Configuration generator', link: '/reference/configuration/generator' },
             { text: 'Piwi CLI', link: '/reference/cli' },
