@@ -17,15 +17,58 @@ export const CAPTURE_DEFAULTS = {
   trace: 'retain-on-failure',
 } as const;
 
+/**
+ * First Playwright version whose `trace.snapshots` accepts the
+ * `{ dom, aria, screen }` object. Earlier versions declare `snapshots` as a
+ * boolean in the protocol validator and reject an object, so on them `trace`
+ * stays the plain `'retain-on-failure'` string.
+ */
+const TRACE_SNAPSHOTS_MIN = { major: 1, minor: 63 } as const;
+
+/**
+ * Read `@playwright/test`'s installed version. Aliased through a variable so the
+ * bundler leaves the lookup as a runtime `require`, resolving the version in the
+ * user's project rather than freezing the one present at build time.
+ */
+function installedPlaywrightVersion(): string | undefined {
+  try {
+    const nodeRequire: NodeRequire = require;
+    return (nodeRequire('@playwright/test/package.json') as { version?: string }).version;
+  } catch {
+    return undefined;
+  }
+}
+
+let readPlaywrightVersion: () => string | undefined = installedPlaywrightVersion;
+
+/** Swap how the installed Playwright version is read; pass `null` to restore. */
+export function setPlaywrightVersionReader(reader: (() => string | undefined) | null): void {
+  readPlaywrightVersion = reader ?? installedPlaywrightVersion;
+}
+
+/** Whether the installed Playwright accepts the `trace.snapshots` object form. */
+function supportsTraceSnapshots(version: string | undefined): boolean {
+  const match = version ? /^(\d+)\.(\d+)/.exec(version) : null;
+  if (!match) return false;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return (
+    major > TRACE_SNAPSHOTS_MIN.major || (major === TRACE_SNAPSHOTS_MIN.major && minor >= TRACE_SNAPSHOTS_MIN.minor)
+  );
+}
+
 type CaptureUse = NonNullable<PlaywrightTestConfig['use']>;
 
 /**
  * Fill the top-level `use` block's `screenshot` / `trace` with the capture
- * defaults when unset, recording which keys were filled in the
- * `PIWI_DEFAULTED_CAPTURE` marker so the reporter can log them once in
- * `onBegin`. An explicit value (including `'off'`) is left untouched, and
- * per-project `use` blocks are never considered. Returns the `use` block to put
- * on the wrapped config — the original reference when nothing changed.
+ * defaults when unset, recording a human-readable summary of what was filled in
+ * the `PIWI_DEFAULTED_CAPTURE` marker so the reporter can log it once in
+ * `onBegin`. On Playwright 1.63 or later the trace default is the object form
+ * `{ mode: 'retain-on-failure', snapshots: { dom: true, aria: true } }`, adding
+ * the per-action aria tree to the trace; `screen` snapshots stay opt-in. An
+ * explicit value (including `'off'`) is left untouched, and per-project `use`
+ * blocks are never considered. Returns the `use` block to put on the wrapped
+ * config — the original reference when nothing changed.
  */
 function applyCaptureDefaults(
   use: CaptureUse | undefined,
@@ -36,17 +79,32 @@ function applyCaptureDefaults(
   const enabled = piwiOptions?.defaultCapture ?? readBool(process.env[PIWI_ENV_KEYS.defaultCapture]) ?? true;
   if (!enabled) return use;
 
+  const ariaSnapshots = supportsTraceSnapshots(readPlaywrightVersion());
+  const traceValue = ariaSnapshots
+    ? { mode: CAPTURE_DEFAULTS.trace, snapshots: { dom: true, aria: true } }
+    : CAPTURE_DEFAULTS.trace;
+  const defaults: ReadonlyArray<{ key: 'screenshot' | 'trace'; value: unknown; display: string }> = [
+    { key: 'screenshot', value: CAPTURE_DEFAULTS.screenshot, display: `screenshot: '${CAPTURE_DEFAULTS.screenshot}'` },
+    {
+      key: 'trace',
+      value: traceValue,
+      display: ariaSnapshots
+        ? `trace: '${CAPTURE_DEFAULTS.trace}' with dom and aria snapshots`
+        : `trace: '${CAPTURE_DEFAULTS.trace}'`,
+    },
+  ];
+
   const next = { ...use } as CaptureUse;
-  const defaulted: string[] = [];
-  for (const key of ['screenshot', 'trace'] as const) {
+  const applied: string[] = [];
+  for (const { key, value, display } of defaults) {
     if ((use as Record<string, unknown> | undefined)?.[key] === undefined) {
-      (next as Record<string, unknown>)[key] = CAPTURE_DEFAULTS[key];
-      defaulted.push(key);
+      (next as Record<string, unknown>)[key] = value;
+      applied.push(display);
     }
   }
-  if (defaulted.length === 0) return use;
+  if (applied.length === 0) return use;
 
-  process.env[PIWI_DEFAULTED_CAPTURE_ENV] = defaulted.join(',');
+  process.env[PIWI_DEFAULTED_CAPTURE_ENV] = applied.join(', ');
   return next;
 }
 
@@ -100,8 +158,10 @@ function resolveSetupModule(): string {
  *
  * The top-level `use` block's `screenshot` and `trace` are defaulted to
  * `'only-on-failure'` / `'retain-on-failure'` when unset so failure evidence is
- * captured without the fixtures; an explicit value (including `'off'`) is kept.
- * Opt out with `defaultCapture: false` (or `PIWI_DEFAULT_CAPTURE=false`).
+ * captured without the fixtures; on Playwright 1.63 or later `trace` also turns
+ * on the per-action aria tree (`snapshots: { dom: true, aria: true }`). An
+ * explicit value (including `'off'`) is kept. Opt out with `defaultCapture:
+ * false` (or `PIWI_DEFAULT_CAPTURE=false`).
  *
  * @param config      The user's Playwright config.
  * @param piwiOptions Optional Piwi Dashboard options (serverUrl, projectName, …).

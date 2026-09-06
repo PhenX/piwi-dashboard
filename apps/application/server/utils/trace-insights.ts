@@ -10,11 +10,14 @@
  */
 import type { ParsedTraceData, TraceAction } from './trace-events';
 import { maskSensitiveText } from './dom-snapshot-render';
+import { diffAriaSnapshots } from '#shared/page-diff';
 import type {
   TraceBodyResponse,
   TraceCallStackResponse,
   TraceNetworkEntry,
   TraceNetworkResponse,
+  TraceSnapshotsResponse,
+  TraceSnapshotStep,
   TraceStackFrame,
 } from '../../types/api';
 
@@ -530,6 +533,111 @@ export function matchNetworkBodySha1(
       if (sha1 === requested || sha1.split('.')[0] === requested.split('.')[0]) {
         return { name: sha1, mimeType: carrier?.mimeType };
       }
+    }
+  }
+  return null;
+}
+
+/** Whether an action carries any aria or screen snapshot (either phase). */
+function actionHasSnapshot(a: TraceAction): boolean {
+  return !!(a.ariaSnapshotBefore || a.ariaSnapshotAfter || a.screenshotBefore || a.screenshotAfter);
+}
+
+/** The trace-relative file recorded for one action's snapshot phase, or null. */
+export function resolveSnapshotFile(
+  parsed: ParsedTraceData | null,
+  callId: string,
+  kind: 'aria' | 'screen',
+  phase: 'before' | 'after',
+): string | null {
+  const action = parsed?.actions.find((a) => a.callId === callId);
+  if (!action) return null;
+  if (kind === 'aria') return (phase === 'before' ? action.ariaSnapshotBefore : action.ariaSnapshotAfter) ?? null;
+  return (phase === 'before' ? action.screenshotBefore : action.screenshotAfter) ?? null;
+}
+
+/**
+ * The snapshotted action the failure belongs to: the failing action itself when
+ * it carries a snapshot, otherwise the last snapshotted action (an assertion
+ * failure keys the error to a runner step that carries none, while the page
+ * interactions that led there do). Its callId marks the failing step.
+ */
+function failureSnapshotCallId(parsed: ParsedTraceData): string | null {
+  const snapshotted = parsed.actions.filter(actionHasSnapshot);
+  if (snapshotted.length === 0) return null;
+  const failing = parsed.failingAction;
+  if (failing && snapshotted.some((a) => a.callId === failing.callId)) return failing.callId;
+  return snapshotted[snapshotted.length - 1]!.callId;
+}
+
+/**
+ * Build the per-action aria / screen snapshot inventory and the in-execution
+ * page diff from a parsed trace. `readAriaText` returns the text form of an
+ * `aria/*.json` file (via `ariaJsonToText`). Node-free, so the server and the
+ * demo produce the same answer.
+ */
+export function buildTraceSnapshots(
+  parsed: ParsedTraceData | null,
+  readAriaText: (file: string) => string | null,
+): TraceSnapshotsResponse {
+  if (!parsed) return { status: 'no-trace', steps: [], failingCallId: null, hasAria: false, hasScreen: false };
+
+  const failingCallId = failureSnapshotCallId(parsed);
+  const steps: TraceSnapshotStep[] = parsed.actions.filter(actionHasSnapshot).map((a, i) => ({
+    callId: a.callId,
+    index: i,
+    title: a.apiName || a.method || 'step',
+    failed: a.callId === failingCallId,
+    startTime: a.startTime,
+    aria: { before: !!a.ariaSnapshotBefore, after: !!a.ariaSnapshotAfter },
+    screen: { before: !!a.screenshotBefore, after: !!a.screenshotAfter },
+  }));
+
+  if (steps.length === 0) return { status: 'no-snapshots', steps: [], failingCallId, hasAria: false, hasScreen: false };
+
+  const hasAria = steps.some((s) => s.aria.before || s.aria.after);
+  const hasScreen = steps.some((s) => s.screen.before || s.screen.after);
+  return {
+    status: 'ok',
+    steps,
+    failingCallId,
+    hasAria,
+    hasScreen,
+    pageDiff: pageDiffToFailure(parsed, failingCallId, readAriaText),
+  };
+}
+
+/**
+ * Diff the page *at the failure* against the last preceding page that differs
+ * from it. The failure page is the failing step's latest aria tree; the baseline
+ * walks back through the earlier snapshots so the diff isolates the change that
+ * led to the failure (the button that got disabled, the row that vanished)
+ * rather than every action in between. Null when nothing before it differed.
+ */
+function pageDiffToFailure(
+  parsed: ParsedTraceData,
+  failingCallId: string | null,
+  readAriaText: (file: string) => string | null,
+): TraceSnapshotsResponse['pageDiff'] {
+  // Every aria snapshot in trace order — before then after per action.
+  const timeline: string[] = [];
+  for (const a of parsed.actions) {
+    if (a.ariaSnapshotBefore) timeline.push(a.ariaSnapshotBefore);
+    if (a.ariaSnapshotAfter) timeline.push(a.ariaSnapshotAfter);
+  }
+  if (timeline.length < 2) return null;
+
+  const failing = failingCallId ? parsed.actions.find((a) => a.callId === failingCallId) : null;
+  const failFile = failing?.ariaSnapshotAfter ?? failing?.ariaSnapshotBefore ?? timeline[timeline.length - 1]!;
+  const failIndex = timeline.lastIndexOf(failFile);
+  const afterText = readAriaText(failFile);
+  if (afterText == null) return null;
+
+  for (let i = failIndex - 1; i >= 0; i--) {
+    const beforeText = readAriaText(timeline[i]!);
+    if (beforeText != null && beforeText !== afterText) {
+      const { summary, hunks } = diffAriaSnapshots(beforeText, afterText);
+      return { summary, hunks };
     }
   }
   return null;

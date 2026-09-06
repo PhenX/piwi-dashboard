@@ -621,6 +621,9 @@ function onViewTrace() {
         </svg>
       </div>
 
+      <!-- Filmstrip: the page before each step, from this run's trace screen snapshots. -->
+      <TraceFilmstrip :test-runs-case-id="testRunsCaseId" />
+
       <!-- Estimated-positions note -->
       <p v-if="showAxis && data?.estimated" class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
         <UIcon name="i-lucide-info" class="size-3.5 shrink-0" />

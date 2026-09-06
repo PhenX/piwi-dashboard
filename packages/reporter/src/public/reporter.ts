@@ -19,7 +19,7 @@ import { workerIndexOf } from '../internal/support/worker-index.js';
 import { detectCliFileFilters } from '../internal/support/cli-filters.js';
 import { readSelectionStamp } from '../internal/support/selection-env.js';
 import { createGlobalSetup } from './global-setup.js';
-import { wrapConfig, CAPTURE_DEFAULTS } from './config-wrapper.js';
+import { wrapConfig } from './config-wrapper.js';
 import { toWireTestCase } from '../internal/submit/serializer.js';
 import {
   mergeAnnotations,
@@ -161,20 +161,14 @@ export class PiwiDashboardReporter {
       `Starting test run for project: ${this.options.projectName} (Playwright v${this.playwrightVersion})`,
     );
 
-    // `wrapConfig` records the capture options it defaulted; name them once so a
-    // half-installed project knows failure evidence is on without the fixtures.
+    // `wrapConfig` records a summary of the capture options it defaulted; name
+    // them once so a half-installed project knows failure evidence is on without
+    // the fixtures.
     const defaulted = process.env[PIWI_DEFAULTED_CAPTURE_ENV];
     if (defaulted) {
-      const applied = defaulted
-        .split(',')
-        .filter((key): key is keyof typeof CAPTURE_DEFAULTS => key in CAPTURE_DEFAULTS)
-        .map((key) => `${key}: '${CAPTURE_DEFAULTS[key]}'`)
-        .join(', ');
-      if (applied) {
-        this.logger.info(
-          `Defaulted Playwright ${applied} for failure evidence (set defaultCapture: false to opt out).`,
-        );
-      }
+      this.logger.info(
+        `Defaulted Playwright ${defaulted} for failure evidence (set defaultCapture: false to opt out).`,
+      );
     }
 
     // Detect partial-run filters so the dashboard can distinguish full-suite runs from ad-hoc focused runs.

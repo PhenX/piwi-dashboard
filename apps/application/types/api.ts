@@ -5,6 +5,7 @@
 
 import type { Role, FilterDetails, TestMetadata, TestSourceFrame } from '#shared/types';
 import type { ScmProviderName } from '#shared/scm-urls';
+import type { PageDiffSummary, PageDiffHunk } from '#shared/page-diff';
 export type { TestMetadata, TestSourceFrame };
 
 // ============================================================================
@@ -649,6 +650,45 @@ export interface TraceBodyResponse {
   mimeType?: string;
   size?: number;
   truncated?: boolean;
+}
+
+/** Whether an action carries a snapshot for each phase, per snapshot kind. */
+export interface TraceSnapshotAvailability {
+  before: boolean;
+  after: boolean;
+}
+
+/** One action's per-phase aria and screen snapshot availability, for the Screen tab and filmstrip. */
+export interface TraceSnapshotStep {
+  /** The action's callId — addresses its snapshot files in the resource endpoint. */
+  callId: string;
+  /** Position of the action in trace order. */
+  index: number;
+  /** Display title of the step (the action's api name). */
+  title: string;
+  /** True when this is the failing action. */
+  failed: boolean;
+  /** Start time of the action, in the trace's own timebase. */
+  startTime: number;
+  aria: TraceSnapshotAvailability;
+  screen: TraceSnapshotAvailability;
+}
+
+/** `GET /api/test-run-cases/:id/trace-snapshots` */
+export interface TraceSnapshotsResponse {
+  status: 'ok' | 'no-trace' | 'no-snapshots';
+  steps: TraceSnapshotStep[];
+  /** The failing action's callId, when the trace recorded one. */
+  failingCallId: string | null;
+  /** Any step carries an aria / screen snapshot — drives the tab's presence. */
+  hasAria: boolean;
+  hasScreen: boolean;
+  /**
+   * Structural diff of the failing action's page *before* it ran against the
+   * page *at the failure* (its before-phase aria tree vs its after-phase tree).
+   * Null when either phase's aria snapshot is missing.
+   */
+  pageDiff?: { summary: PageDiffSummary; hunks: PageDiffHunk[] } | null;
 }
 
 /**
