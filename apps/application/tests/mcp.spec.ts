@@ -35,6 +35,24 @@ test.describe.serial('MCP server', () => {
             location: 'tests/checkout.spec.ts:10:1',
             error: 'Expected button to be visible',
             retries: 0,
+            steps: [
+              {
+                title: 'Navigate',
+                subtitle: '/checkout',
+                category: 'navigation',
+                duration: 500,
+                params: { url: 'https://shop.example.com/checkout' },
+              },
+              {
+                title: 'Click',
+                subtitle: "getByRole('button', { name: 'Pay' })",
+                category: 'action',
+                duration: 1500,
+                failed: true,
+                error: { message: 'Expected button to be visible' },
+                params: { locator: "getByRole('button', { name: 'Pay' })" },
+              },
+            ],
           },
           {
             title: 'payment fails',
@@ -272,6 +290,28 @@ test.describe.serial('MCP server', () => {
     // Previously execution scope produced an empty coverage stub with 0 sections.
     const hasEvidence = (ctx.sections?.length ?? 0) > 0 || !!ctx.rawExecution;
     expect(hasEvidence).toBe(true);
+  });
+
+  test('tools/call get_test_run_case — steps carry their 1.63 subtitle and params', async ({ request }) => {
+    const run = JSON.parse(
+      (await mcp(request, 'tools/call', { name: 'get_run', arguments: { runId, statusFilter: 'failed' } })).result
+        .content[0].text,
+    );
+    const checkout = run.cases.find((c: { title: string }) => c.title === 'checkout fails');
+    expect(checkout).toBeTruthy();
+    const res = JSON.parse(
+      (
+        await mcp(request, 'tools/call', {
+          name: 'get_test_run_case',
+          arguments: { executionId: checkout.executionId, include: ['steps'] },
+        })
+      ).result.content[0].text,
+    );
+    const nav = res.steps.find((s: { title: string }) => s.title === 'Navigate');
+    expect(nav.subtitle).toBe('/checkout');
+    expect(nav.params.url).toBe('https://shop.example.com/checkout');
+    const click = res.steps.find((s: { subtitle?: string }) => s.subtitle === "getByRole('button', { name: 'Pay' })");
+    expect(click.params.locator).toBe("getByRole('button', { name: 'Pay' })");
   });
 
   test('tools/call get_run_insights — returns baseline comparison shape', async ({ request }) => {

@@ -17,6 +17,7 @@ import { buildFailureVerdict } from '../failure-verdict';
 import { buildFailureTimeline, type FailureTimeline, type TimelineCallsite } from '../failure-timeline';
 import { buildFailureClues, type FailureClue, type FailureCluePageDiff } from '../failure-clues';
 import { parsePlaywrightError } from '../error-parse';
+import { failingStepParams } from '../describe-failure';
 import { diffAttempts, type AttemptDiffEntry, type AttemptEvidence } from '../attempt-diff';
 import { getLocatorHealing } from '../../server/utils/locator-healing';
 import { getEnvironmentDiff } from '../../server/utils/environment-diff';
@@ -689,7 +690,13 @@ export async function getFailureClues(
       locks: selfLocks,
       shardIndex: trc.shardIndex ?? null,
     },
-    parsedError: trc.error ? parsePlaywrightError(trc.error) : null,
+    parsedError: trc.error
+      ? parsePlaywrightError(trc.error, {
+          stepParams: failingStepParams(
+            Array.isArray(trc.steps) ? (trc.steps as Parameters<typeof failingStepParams>[0]) : null,
+          ),
+        })
+      : null,
     timeline,
     healing,
     ariaSnapshot: evidence.ariaSnapshot ?? null,
@@ -780,7 +787,13 @@ async function loadAttemptEvidence(
   ]);
   return {
     error: row.error,
-    parsedError: row.error ? parsePlaywrightError(row.error) : null,
+    parsedError: row.error
+      ? parsePlaywrightError(row.error, {
+          stepParams: failingStepParams(
+            Array.isArray(row.steps) ? (row.steps as Parameters<typeof failingStepParams>[0]) : null,
+          ),
+        })
+      : null,
     steps: (row.steps as AttemptEvidence['steps']) ?? null,
     networkRequests: networkRequestRows.map((nr) => ({
       method: nr.method,

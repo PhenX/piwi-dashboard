@@ -8,6 +8,8 @@ import {
   extractTestStepEvents,
   extractWaitEvents,
   stepLabel,
+  stepLabelParts,
+  orderedStepParams,
   MAX_STEP_PARAM_KEYS,
   MAX_STEP_PARAM_VALUE_CHARS,
 } from '../src/internal/collect/step-analyzer.js';
@@ -431,6 +433,54 @@ describe('stepLabel', () => {
 
   it('falls back to the subtitle when the title is empty', () => {
     expect(stepLabel({ title: '', subtitle: 'example.com/' })).toBe('example.com/');
+  });
+});
+
+describe('stepLabelParts', () => {
+  it('returns the title with a null subtitle when there is none', () => {
+    expect(stepLabelParts({ title: 'Click' })).toEqual({ title: 'Click', subtitle: null });
+  });
+
+  it('splits the title and the subtitle when the subtitle adds a target', () => {
+    expect(stepLabelParts({ title: 'Click', subtitle: "getByRole('button', { name: 'Pay' })" })).toEqual({
+      title: 'Click',
+      subtitle: "getByRole('button', { name: 'Pay' })",
+    });
+  });
+
+  it('folds a subtitle already contained in the title', () => {
+    expect(stepLabelParts({ title: 'Fill "x" getByLabel(\'Email\')', subtitle: "getByLabel('Email')" })).toEqual({
+      title: 'Fill "x" getByLabel(\'Email\')',
+      subtitle: null,
+    });
+  });
+
+  it('rejoins to the same string stepLabel produces', () => {
+    const step = { title: 'Navigate', subtitle: '/checkout' };
+    const parts = stepLabelParts(step);
+    expect([parts.title, parts.subtitle].filter(Boolean).join(' ')).toBe(stepLabel(step));
+  });
+});
+
+describe('orderedStepParams', () => {
+  it('is empty for null or non-object params', () => {
+    expect(orderedStepParams(null)).toEqual([]);
+    expect(orderedStepParams(undefined)).toEqual([]);
+  });
+
+  it('puts the locator first and keeps the rest in insertion order', () => {
+    expect(orderedStepParams({ value: 'x', button: 'left', locator: "getByRole('button')" })).toEqual([
+      ['locator', "getByRole('button')"],
+      ['value', 'x'],
+      ['button', 'left'],
+    ]);
+  });
+
+  it('keeps insertion order when there is no locator', () => {
+    expect(orderedStepParams({ url: 'https://x/', method: 'GET' })).toEqual([
+      ['url', 'https://x/'],
+      ['method', 'GET'],
+    ]);
   });
 });
 

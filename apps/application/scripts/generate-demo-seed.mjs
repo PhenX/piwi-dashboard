@@ -456,7 +456,12 @@ function buildSteps(proj, caseDuration, caseStartMs) {
     const duration = Math.round((st.weight / total) * caseDuration);
     const startTime = cursor;
     cursor += duration;
-    return { title: st.title, duration, category: st.category, startTime };
+    const step = { title: st.title, duration, category: st.category, startTime };
+    // Playwright 1.63 shape (some projects only): the target in `subtitle`,
+    // curated arguments in `params`.
+    if (st.subtitle) step.subtitle = st.subtitle;
+    if (st.params) step.params = st.params;
+    return step;
   });
 }
 
