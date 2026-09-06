@@ -74,6 +74,7 @@ export function toWireTestCase(tc: CollectedTestCase): WireTestCase {
     suiteConfig: rest.suiteConfig ?? null,
     testAnnotations: rest.testAnnotations ?? null,
     tags: rest.tags ?? null,
+    locks: rest.locks ?? null,
     testMeta: rest.testMeta ?? null,
     locatorSnapshots: rest.locatorSnapshots || null,
     didNotRunReason: rest.didNotRunReason ?? null,

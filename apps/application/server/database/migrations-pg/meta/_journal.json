@@ -442,6 +442,13 @@
       "when": 1788612782020,
       "tag": "0062_silky_mulholland_black",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1788637371406,
+      "tag": "0063_flippant_shockwave",
+      "breakpoints": true
     }
   ]
 }

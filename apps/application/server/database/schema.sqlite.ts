@@ -120,6 +120,7 @@ export const testCases = sqliteTable(
     // that reports this test. Per-execution truth lives on test_runs_cases;
     // these denormalized columns let project-wide views filter without a join.
     tags: text('tags', { mode: 'json' }), // string[] — normalized, '@' stripped
+    locks: text('locks', { mode: 'json' }), // string[] — lock names this test most recently declared (best effort)
     owner: text('owner'),
     priority: text('priority'), // 'critical' | 'high' | 'medium' | 'low'
     feature: text('feature'),
@@ -457,6 +458,7 @@ export const testRunsCases = sqliteTable(
     browserName: text('browser_name'), // Scalar browser identity (projectName) for index efficiency
     testAnnotations: text('test_annotations', { mode: 'json' }), // Array<{ type, description? }> — runtime test marks (@fixme, @slow …)
     tags: text('tags', { mode: 'json' }), // string[] — tags this execution declared ('@' stripped)
+    locks: text('locks', { mode: 'json' }), // string[] — lock names this execution held (best effort; none from blob imports)
     testMeta: text('test_meta', { mode: 'json' }), // { owner?, priority?, feature?, link? } from `piwi:` annotations
     workerIndex: integer('worker_index'), // Parallel worker index (from Playwright's parallelIndex)
     shardIndex: integer('shard_index'), // Shard index (1-based) for sharded runs; null = not sharded

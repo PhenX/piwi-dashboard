@@ -74,6 +74,8 @@ export interface WireTestCase {
   testAnnotations?: TestAnnotation[] | null;
   /** Normalized `TestCase.tags`, `@` stripped. */
   tags?: string[] | null;
+  /** Lock names from the private `TestCase._locks` (best effort; none from blob imports). */
+  locks?: string[] | null;
   /** Ownership metadata parsed from `piwi:` annotations. */
   testMeta?: TestMetadata | null;
   /** Step-event discriminant (only for `step-begin`/`step-end` events). */
@@ -119,6 +121,7 @@ export interface CompleteStreamEvent {
   suiteConfig?: SuiteConfigEntry[] | null;
   testAnnotations?: TestAnnotation[] | null;
   tags?: string[] | null;
+  locks?: string[] | null;
   testMeta?: TestMetadata | null;
   steps?: unknown;
   stepEvents?: TestStepEvent[] | null;

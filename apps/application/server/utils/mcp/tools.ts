@@ -7,7 +7,7 @@ import {
   getProjectTestCases,
   getProjectSpecHealth,
 } from '#shared/handlers/projects';
-import { parseTagFilter } from '#shared/utils/tag-filter';
+import { parseLockFilter, parseTagFilter } from '#shared/utils/tag-filter';
 import { FAILED_STATUS_KEYS } from '#shared/utils/test-counts';
 import { buildFixPlan } from '../fix-plan';
 import { enrichFixPlanOwnership } from '../scm/ownership';
@@ -533,6 +533,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         runStatus: testRuns.status,
         runStart: testRuns.startTime,
         rawBrowser: testRunsCases.browser,
+        locks: testRunsCases.locks,
       })
       .from(testRunsCases)
       .innerJoin(testRuns, eq(testRunsCases.testRunId, testRuns.id))
@@ -557,6 +558,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         runStatus: r.runStatus,
         startedAt: iso(r.runStart),
         browser: compactBrowser(r.rawBrowser),
+        locks: Array.isArray(r.locks) && r.locks.length ? (r.locks as string[]) : null,
       }),
     );
 
@@ -651,6 +653,8 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       id: tc.id,
       title: tc.title,
       filePath: tc.filePath,
+      tags: tc.tags?.length ? tc.tags : null,
+      locks: tc.locks?.length ? tc.locks : null,
       project: tc.project ? { id: tc.project.id, name: tc.project.name } : null,
       stats: dropNulls({
         totalRuns: tc.totalRuns,
@@ -1017,13 +1021,23 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
         id: testCases.id,
         title: testCases.title,
         filePath: testCases.filePath,
+        tags: testCases.tags,
+        locks: testCases.locks,
       })
       .from(testCases)
       .where(and(...conditions))
       .orderBy(desc(testCases.id))
       .limit(pageSize + 1);
 
-    const mapped = rows.map((r) => dropNulls({ id: r.id, title: r.title, filePath: r.filePath }));
+    const mapped = rows.map((r) =>
+      dropNulls({
+        id: r.id,
+        title: r.title,
+        filePath: r.filePath,
+        tags: Array.isArray(r.tags) && r.tags.length ? (r.tags as string[]) : null,
+        locks: Array.isArray(r.locks) && r.locks.length ? (r.locks as string[]) : null,
+      }),
+    );
 
     return paginatedItems(mapped, pageSize, (r) => String(r.id!));
   },
@@ -1081,6 +1095,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       ariaSnapshot: want('aria') ? trunc(evidence.ariaSnapshot, 8000) : null,
       testSource: want('source') ? evidence.testSource || null : null,
       testAnnotations: row.testAnnotations,
+      locks: Array.isArray(row.locks) && row.locks.length ? (row.locks as string[]) : null,
       startedAt: iso(row.startedAt),
       isNewRegression: row.isNewRegression || null,
       isNewFlaky: row.isNewFlaky || null,
@@ -1447,6 +1462,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
       offset,
       q: query,
       tags: parseTagFilter(typeof params.tags === 'string' ? params.tags : undefined),
+      locks: parseLockFilter(typeof params.locks === 'string' ? params.locks : undefined),
       owner: typeof params.owner === 'string' && params.owner.trim() ? params.owner.trim() : undefined,
       priority: typeof params.priority === 'string' ? params.priority.trim().toLowerCase() : undefined,
     });
@@ -1464,6 +1480,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
           flaky: t.flakyRuns || null,
           lastStatus: t.lastStatus || null,
           tags: t.tags?.length ? t.tags : null,
+          locks: t.locks?.length ? t.locks : null,
           owner: t.owner || null,
           priority: t.priority || null,
           avgDuration: t.avgDuration != null ? Math.round(t.avgDuration) : null,

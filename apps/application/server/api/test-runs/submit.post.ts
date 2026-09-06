@@ -147,6 +147,7 @@ export default eventHandler(async (event) => {
             suiteConfig: testCase.suiteConfig ?? null,
             testAnnotations: testCase.testAnnotations ?? null,
             tags: testCase.tags ?? null,
+            locks: testCase.locks ?? null,
             testMeta: testCase.testMeta ?? null,
             title: testCase.title,
             status: testCase.status,
@@ -301,6 +302,7 @@ export default eventHandler(async (event) => {
         suiteConfig?: unknown;
         testAnnotations?: unknown;
         tags?: unknown;
+        locks?: unknown;
         testMeta?: unknown;
         locatorSnapshots?: unknown;
         didNotRunReason?: string | null;
@@ -316,6 +318,7 @@ export default eventHandler(async (event) => {
           suiteConfig: testCase.suiteConfig ?? null,
           testAnnotations: testCase.testAnnotations ?? null,
           tags: testCase.tags ?? null,
+          locks: testCase.locks ?? null,
           testMeta: testCase.testMeta ?? null,
           title: testCase.title,
           status: testCase.status,

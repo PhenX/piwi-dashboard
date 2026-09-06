@@ -105,6 +105,7 @@ export { expect } from '@playwright/test'
 - **ARIA snapshot** — Captured automatically on failed/timed-out tests via `page.locator(':root').ariaSnapshot()`. Included in the **Copy AI context** bundle on the [execution page](./evidence#one-execution-diagnosis-first)'s Diagnosis tab (`/test-run-cases/:id`) and in the cluster AI diagnosis context. Also sampled on *passing* tests to anchor the [page diff](./evidence#page-diff) — see [`sampleAriaOnPass`](#green-page-sampling-on-pass) below.
 - **Locator snapshots** — For each element a test proves resolvable — every successful action (click, fill, etc.) *and* every passing web-first assertion (`expect(locator).toBeVisible()`, `toHaveText()`, …) — the fixtures record the element's attributes and a ranked list of alternative locators, stamped with the call site. These power [locator healing](#locator-healing) when a locator later breaks. Gated by `captureLocators` (default on).
 - **Test steps** — each step's title, category and timing, plus its **subtitle** and a curated **params** object. Playwright 1.63 moved the target of a `pw:api`/`expect` step out of the title into the subtitle — `Click` with the subtitle `getByRole('button', { name: 'Pay' })`, or `Navigate` with the page URL — and Piwi composes the two back into one label wherever a step is shown, so an upgrade keeps the target visible. `params` carries the rendered locator, a navigation's URL, an action's arguments, or a `test.step(title, body, { params })` author's own values. It is capped at 20 keys and 200 characters per value, and token-shaped strings (JWTs, long hex blobs, base64 data URIs) are masked; page content, expressions and request bodies are never captured. On Playwright 1.61 the reporter reads the title only, exactly as before.
+- **Test locks** — The lock names a test or its `describe` declared (`test('…', { lock: 'database' }, …)`) — the shared resources Playwright serializes holders of. They drive the [Timeline tab's lock lanes](./ui-overview#test-run-detail), the lock filter and *Group by lock* on the Tests tabs, and two [clues](./evidence#clues). Captured **best effort**: Playwright exposes locks only to an in-process reporter, never through the public API or the blob report, so a run recorded live carries them and one rebuilt from a [blob import](./importing-runs) does not. Nothing to configure.
 
 These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).
 
@@ -399,6 +400,29 @@ next run that reports the test.
 
 Tags drive the tag filter on a project's **Test cases** tab, the same filter on the flaky leaderboard, and the
 `requireTags` rule of the [CI gate](./ci#blocking-a-merge).
+
+### Test locks
+
+Playwright 1.63 lets a test or a `describe` declare a **lock** — a named shared resource the runner never lets two
+holders run at once:
+
+```typescript
+test('writes an order', { lock: 'database' }, async ({ page }) => { /* … */ })
+
+test.describe('payments', { lock: ['database', 'external-api'] }, () => { /* every test inside inherits both */ })
+```
+
+The reporter reads the lock names and sends them as `locks`, stored on the execution (`test_runs_cases.locks`) and
+denormalized onto the test case (`test_cases.locks`, the latest declaration) — the same treatment as tags. They power
+the [Timeline tab's lock lanes and *Locks* table](./ui-overview#test-run-detail), the lock filter and *Group by lock*
+on the Tests tabs, lock badges on every test row, and two [clues](./evidence#clues) (a lock's previous holder failed;
+a lock was held on two shards at once).
+
+Capture is **best effort**. Playwright exposes locks only to an in-process reporter — there is no public API property,
+and the tele protocol that backs blob reports and `merge-reports` carries none — so a run recorded live has its locks
+and a run [rebuilt from a blob import](./importing-runs) has none. Locks also serialize only within one
+`npx playwright test` process: two `--shard` runs are separate processes and can hold the same lock at the same time,
+which the cross-shard clue points out.
 
 ### Ownership metadata (`piwi:` annotations)
 

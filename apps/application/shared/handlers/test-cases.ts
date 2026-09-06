@@ -10,7 +10,7 @@ import {
   networkRequests,
   quarantinedTests,
 } from '../../server/database/schema';
-import { eq, and, desc, sql, isNull } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull, isNotNull } from 'drizzle-orm';
 import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-waits';
 import { inlineCasePayloads } from '../../server/utils/case-payloads';
 import { buildFailureVerdict } from '../failure-verdict';
@@ -23,6 +23,7 @@ import { getEnvironmentDiff } from '../../server/utils/environment-diff';
 import { getPageDiff } from '../../server/utils/page-diff';
 import type { PageStateLike } from '../page-state';
 import type { TestStepEvent } from '../types';
+import type { TestMetadata } from '@piwitests/core/test-meta';
 import type { RunMetadata } from '../../server/utils/run-json-types';
 
 import type { DrizzleDB } from './db';
@@ -114,6 +115,8 @@ export async function getTestCase(db: DrizzleDB, id: number) {
     filePath: testCase.filePath,
     suitePath: testCase.suitePath,
     title: testCase.title,
+    tags: (testCase.tags as string[] | null) ?? null,
+    locks: (testCase.locks as string[] | null) ?? null,
     project: project ? { id: project.id, name: project.name, label: project.label } : null,
     totalRuns,
     passedRuns: aggResult[0]?.passedRuns ?? 0,
@@ -413,6 +416,9 @@ export async function getTestRunCase(
     testSource: evidence.testSource,
     testSourceFrames: evidence.testSourceFrames,
     testAnnotations: trc.testAnnotations,
+    tags: (trc.tags as string[] | null) ?? null,
+    locks: (trc.locks as string[] | null) ?? null,
+    testMeta: (trc.testMeta as TestMetadata | null) ?? null,
     startedAt: trc.startedAt,
     slowestStep: trc.slowestStep,
     slowestStepDuration: trc.slowestStepDuration,
@@ -595,52 +601,82 @@ export async function getFailureClues(
     networkRequests: networkForClues,
   });
 
+  // Lock holders in this run are only needed when this execution declared a
+  // lock — the two lock rules can then correlate against the other holders.
+  const selfLocks = Array.isArray(trc.locks) ? (trc.locks as string[]) : [];
+
   // Run-level facts and the two derived analyses the engine cites, loaded in
   // parallel. Healing and the environment diff resolve their own baselines.
-  const [healing, environmentDiff, pageDiff, browserPeers, workerExecutions, clusterFix] = await Promise.all([
-    getLocatorHealing(db, id).catch(() => null),
-    getEnvironmentDiff(db, id).catch(() => null),
-    getPageDiff(db, id).catch(() => null),
-    db
-      .select({
-        browserName: testRunsCases.browserName,
-        status: testRunsCases.status,
-      })
-      .from(testRunsCases)
-      .where(and(eq(testRunsCases.testRunId, trc.testRunId), eq(testRunsCases.testCaseId, trc.testCaseId))),
-    trc.workerIndex != null
-      ? db
-          .select({
-            id: testRunsCases.id,
-            testCaseId: testRunsCases.testCaseId,
-            title: testCases.title,
-            status: testRunsCases.status,
-            startedAt: testRunsCases.startedAt,
-          })
-          .from(testRunsCases)
-          .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
-          .where(and(eq(testRunsCases.testRunId, trc.testRunId), eq(testRunsCases.workerIndex, trc.workerIndex)))
-      : Promise.resolve(
-          [] as Array<{
-            id: number;
-            testCaseId: number;
-            title: string | null;
-            status: string;
-            startedAt: number | null;
-          }>,
-        ),
-    trc.failureClusterId
-      ? db
-          .select({
-            fixCommit: failureClusters.fixCommit,
-            fixLandedRunId: failureClusters.fixLandedRunId,
-            fixVerification: failureClusters.fixVerification,
-          })
-          .from(failureClusters)
-          .where(eq(failureClusters.id, trc.failureClusterId))
-          .then((r: any[]) => r[0] ?? null)
-      : Promise.resolve(null),
-  ]);
+  const [healing, environmentDiff, pageDiff, browserPeers, workerExecutions, clusterFix, lockHolders] =
+    await Promise.all([
+      getLocatorHealing(db, id).catch(() => null),
+      getEnvironmentDiff(db, id).catch(() => null),
+      getPageDiff(db, id).catch(() => null),
+      db
+        .select({
+          browserName: testRunsCases.browserName,
+          status: testRunsCases.status,
+        })
+        .from(testRunsCases)
+        .where(and(eq(testRunsCases.testRunId, trc.testRunId), eq(testRunsCases.testCaseId, trc.testCaseId))),
+      trc.workerIndex != null
+        ? db
+            .select({
+              id: testRunsCases.id,
+              testCaseId: testRunsCases.testCaseId,
+              title: testCases.title,
+              status: testRunsCases.status,
+              startedAt: testRunsCases.startedAt,
+            })
+            .from(testRunsCases)
+            .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+            .where(and(eq(testRunsCases.testRunId, trc.testRunId), eq(testRunsCases.workerIndex, trc.workerIndex)))
+        : Promise.resolve(
+            [] as Array<{
+              id: number;
+              testCaseId: number;
+              title: string | null;
+              status: string;
+              startedAt: number | null;
+            }>,
+          ),
+      trc.failureClusterId
+        ? db
+            .select({
+              fixCommit: failureClusters.fixCommit,
+              fixLandedRunId: failureClusters.fixLandedRunId,
+              fixVerification: failureClusters.fixVerification,
+            })
+            .from(failureClusters)
+            .where(eq(failureClusters.id, trc.failureClusterId))
+            .then((r: any[]) => r[0] ?? null)
+        : Promise.resolve(null),
+      selfLocks.length > 0
+        ? db
+            .select({
+              id: testRunsCases.id,
+              title: testCases.title,
+              status: testRunsCases.status,
+              startedAt: testRunsCases.startedAt,
+              duration: testRunsCases.duration,
+              shardIndex: testRunsCases.shardIndex,
+              locks: testRunsCases.locks,
+            })
+            .from(testRunsCases)
+            .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
+            .where(and(eq(testRunsCases.testRunId, trc.testRunId), isNotNull(testRunsCases.locks)))
+        : Promise.resolve(
+            [] as Array<{
+              id: number;
+              title: string | null;
+              status: string;
+              startedAt: number | null;
+              duration: number | null;
+              shardIndex: number | null;
+              locks: unknown;
+            }>,
+          ),
+    ]);
 
   const clues = buildFailureClues({
     execution: {
@@ -650,6 +686,8 @@ export async function getFailureClues(
       duration: trc.duration,
       browserName: trc.browserName,
       startedAt: startedAtMs(trc.startedAt),
+      locks: selfLocks,
+      shardIndex: trc.shardIndex ?? null,
     },
     parsedError: trc.error ? parsePlaywrightError(trc.error) : null,
     timeline,
@@ -664,6 +702,15 @@ export async function getFailureClues(
       [],
     browserPeers,
     workerExecutions: workerExecutions.map((w) => ({ ...w, startedAt: startedAtMs(w.startedAt) })),
+    lockHolders: lockHolders.map((h) => ({
+      id: h.id,
+      title: h.title,
+      status: h.status,
+      startedAt: startedAtMs(h.startedAt),
+      duration: h.duration,
+      shardIndex: h.shardIndex,
+      locks: Array.isArray(h.locks) ? (h.locks as string[]) : [],
+    })),
     cluster: clusterFix,
     timeout: trc.timeout ?? null,
     slowRequestMs: opts.slowRequestMs ?? null,

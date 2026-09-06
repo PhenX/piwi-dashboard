@@ -8,6 +8,8 @@
  */
 import { computed } from 'vue';
 import type { TestCaseResult } from '~~/types/api';
+import { useTimelineModel } from '~/composables/useTimelineModel';
+import { formatTimelineTime, lockColorHex } from '~/utils/timeline';
 
 const props = defineProps<{
   testCases: TestCaseResult[];
@@ -15,6 +17,23 @@ const props = defineProps<{
   projectKey?: string | number | null;
   projectName?: string | null;
 }>();
+
+// Reuse the timeline's own interval model so the held time and serialization
+// estimate line up exactly with the bars above.
+const { runLocks, lockSummary } = useTimelineModel(props);
+
+/** Lock name → color, matching the timeline's brackets and legend. */
+const lockColor = computed(() => {
+  const map = new Map<string, string>();
+  runLocks.value.forEach((lock, i) => map.set(lock, lockColorHex(i)));
+  return map;
+});
+
+/** The lock whose hold runs into the tail of the run, if any, for the hint line. */
+const tailLock = computed(() => lockSummary.value.find((row) => row.dominatesTail) ?? null);
+function pct(share: number): string {
+  return `${Math.round(share * 100)}%`;
+}
 
 const slowest = computed(() =>
   [...props.testCases]
@@ -69,6 +88,50 @@ function clusterName(tc: TestCaseResult): string | null {
           :project-key="projectKey"
           :project-name="projectName"
         />
+      </div>
+    </SectionCard>
+
+    <SectionCard v-if="lockSummary.length > 0" icon="i-lucide-lock" icon-class="text-violet-500" title="Locks">
+      <p v-if="tailLock" class="flex items-start gap-1.5 text-xs text-amber-600 mb-3">
+        <UIcon name="i-lucide-alert-triangle" class="size-3.5 shrink-0 mt-0.5" />
+        <span>
+          <span class="font-medium">{{ tailLock.lock }}</span> was held for most of the run's tail — its holders run one
+          at a time, so the last workers idle while they wait.
+        </span>
+      </p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-xs text-muted border-b border-default">
+              <th class="py-1.5 pr-3 font-medium">Lock</th>
+              <th class="py-1.5 px-3 font-medium text-right">Tests</th>
+              <th class="py-1.5 px-3 font-medium text-right">Held</th>
+              <th class="py-1.5 px-3 font-medium text-right">Share</th>
+              <th class="py-1.5 pl-3 font-medium text-right">
+                <span title="Estimated time that ran serialized behind another holder">Serialized (est.)</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in lockSummary" :key="row.lock" class="border-b border-default/60 last:border-0">
+              <td class="py-1.5 pr-3">
+                <span class="inline-flex items-center gap-1.5">
+                  <span
+                    class="inline-block h-2.5 w-3 rounded-sm shrink-0"
+                    :style="{ backgroundColor: lockColor.get(row.lock) }"
+                  />
+                  <span class="font-medium">{{ row.lock }}</span>
+                </span>
+              </td>
+              <td class="py-1.5 px-3 text-right tabular-nums">{{ row.testCount }}</td>
+              <td class="py-1.5 px-3 text-right tabular-nums">{{ formatTimelineTime(row.heldMs) }}</td>
+              <td class="py-1.5 px-3 text-right tabular-nums">{{ pct(row.share) }}</td>
+              <td class="py-1.5 pl-3 text-right tabular-nums">
+                {{ row.serializationMs > 0 ? formatTimelineTime(row.serializationMs) : '—' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </SectionCard>
 

@@ -743,6 +743,19 @@ provide(clusterSectionLocatorKey, {
                 Wasted in fixed waits: <DurationValue :ms="testCase?.wastedTimeMs" />
               </p>
             </div>
+            <div v-if="testCase?.locks?.length" class="space-y-1">
+              <p class="text-xs font-medium text-muted uppercase tracking-wide">Locks</p>
+              <p class="flex flex-wrap items-center gap-1.5">
+                <span
+                  v-for="lock in testCase.locks"
+                  :key="lock"
+                  class="inline-flex items-center gap-1 text-highlighted"
+                  title="Only one holder of this lock runs at a time"
+                >
+                  <UIcon name="i-lucide-lock" class="size-3 text-warning" />{{ lock }}
+                </span>
+              </p>
+            </div>
             <div v-if="testCase?.tags?.length || testCase?.testMeta" class="space-y-1">
               <p class="text-xs font-medium text-muted uppercase tracking-wide">Tags</p>
               <TestMetaBadges :tags="testCase?.tags" :meta="testCase?.testMeta" />

@@ -78,6 +78,8 @@ export interface CollectedTestCase {
   testAnnotations?: TestAnnotation[] | null;
   /** Normalized `TestCase.tags`, `@` stripped (see `@piwitests/core/test-meta`). */
   tags?: string[] | null;
+  /** Lock names read from the private `TestCase._locks` (best effort). */
+  locks?: string[] | null;
   /** Ownership metadata parsed from `piwi:` annotations. */
   testMeta?: TestMetadata | null;
   /** Source snippet around the failing line (failed/timedOut only). */

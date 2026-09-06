@@ -868,6 +868,15 @@ export const PIWI_ENV_VARS = {
     min: 20,
     max: 10000,
   },
+  PIWI_INGEST_MAX_LOCKS: {
+    description: 'Max lock names stored per execution.',
+    category: 'ingest',
+    type: 'number',
+    default: '20',
+    min: 1,
+    max: 100,
+    since: '0.27.0',
+  },
   PIWI_INGEST_MAX_ARIA_CHARS: {
     description: 'Max characters of the ARIA snapshot stored per failing execution.',
     category: 'ingest',

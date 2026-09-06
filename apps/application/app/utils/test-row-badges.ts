@@ -56,6 +56,8 @@ export interface TestRowBadgeInput {
   quarantined?: boolean | null;
   annotations?: Array<{ type: string; description?: string }> | null;
   tags?: string[] | null;
+  /** Lock names this test held — a shared resource the runner serializes holders of. */
+  locks?: string[] | null;
   meta?: TestMetadata | null;
 }
 
@@ -136,6 +138,16 @@ export function buildTestRowBadges(input: TestRowBadgeInput): TestRowBadge[] {
   for (const tag of input.tags ?? []) {
     badges.push({ key: `tag:${tag}`, label: `@${tag}`, color: 'primary', variant: 'soft', mono: true });
   }
+  for (const lock of input.locks ?? []) {
+    badges.push({
+      key: `lock:${lock}`,
+      label: lock,
+      color: 'warning',
+      variant: 'soft',
+      icon: 'i-lucide-lock',
+      title: `Lock: only one holder of "${lock}" runs at a time`,
+    });
+  }
   if (meta?.owner) {
     badges.push({
       key: 'owner',
@@ -161,6 +173,7 @@ export function badgesFromTestCase(tc: TestCaseResult, opts?: { quarantined?: bo
     quarantined: opts?.quarantined,
     annotations: tc.testAnnotations,
     tags: tc.tags,
+    locks: tc.locks,
     meta: tc.testMeta,
   });
 }

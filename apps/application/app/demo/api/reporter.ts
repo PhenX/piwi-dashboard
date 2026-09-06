@@ -50,6 +50,7 @@ import { countFailedFromTally, sumFailedAndTimedOut } from '#shared/utils/test-c
 import { syncAutoMarkersForRun } from '#shared/handlers/markers';
 import { joinSuitePath, SUITE_PATH_SEP } from '#shared/utils/suites';
 import {
+  normalizeTestLocks,
   normalizeTestTags,
   parseTestMetadata,
   sanitizeTestMetadata,
@@ -390,6 +391,7 @@ export interface RunCaseInput {
   testSourceFrames?: unknown;
   testAnnotations?: unknown;
   tags?: unknown;
+  locks?: unknown;
   testMeta?: unknown;
   status: string;
   duration?: number | null;
@@ -476,15 +478,20 @@ async function resolveSuites(db: DemoDb, projectId: number, cases: RunCaseInput[
   return suiteIdMap;
 }
 
-/** Latest-known tags + `piwi:` metadata for one test case, as stored. */
+/** Latest-known tags, locks + `piwi:` metadata for one test case, as stored. */
 interface CaseMetaSnapshot {
   tags: string[];
+  locks: string[];
   meta: TestMetadata | null;
 }
 
+function sameStringList(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((value, i) => value === b[i]);
+}
+
 function sameSnapshot(stored: CaseMetaSnapshot, incoming: CaseMetaSnapshot): boolean {
-  if (stored.tags.length !== incoming.tags.length) return false;
-  if (stored.tags.some((tag, i) => tag !== incoming.tags[i])) return false;
+  if (!sameStringList(stored.tags, incoming.tags)) return false;
+  if (!sameStringList(stored.locks, incoming.locks)) return false;
   const a = stored.meta ?? {};
   const b = incoming.meta ?? {};
   return a.owner === b.owner && a.priority === b.priority && a.feature === b.feature && a.link === b.link;
@@ -499,6 +506,7 @@ async function syncTestCaseMetadata(db: DemoDb, incoming: Map<number, CaseMetaSn
     .select({
       id: testCases.id,
       tags: testCases.tags,
+      locks: testCases.locks,
       owner: testCases.owner,
       priority: testCases.priority,
       feature: testCases.feature,
@@ -512,6 +520,7 @@ async function syncTestCaseMetadata(db: DemoDb, incoming: Map<number, CaseMetaSn
       row.id,
       {
         tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+        locks: Array.isArray(row.locks) ? (row.locks as string[]) : [],
         meta: sanitizeTestMetadata({
           owner: row.owner,
           priority: row.priority,
@@ -530,6 +539,7 @@ async function syncTestCaseMetadata(db: DemoDb, incoming: Map<number, CaseMetaSn
       .update(testCases)
       .set({
         tags: next.tags.length ? next.tags : null,
+        locks: next.locks.length ? next.locks : null,
         owner: next.meta?.owner ?? null,
         priority: next.meta?.priority ?? null,
         feature: next.meta?.feature ?? null,
@@ -614,8 +624,9 @@ export async function persistRunCases(
     // Re-normalize on arrival, like the server — annotations win over a
     // supplied `testMeta` because they are the declared source.
     const tags = normalizeTestTags(c.tags);
+    const locks = normalizeTestLocks(c.locks).slice(0, DEFAULT_INGEST_LIMITS.locks);
     const testMeta = parseTestMetadata(c.testAnnotations) ?? sanitizeTestMetadata(c.testMeta);
-    caseMetaSnapshots.set(shared.id, { tags, meta: testMeta });
+    caseMetaSnapshots.set(shared.id, { tags, locks, meta: testMeta });
 
     if (deduplicate && existingRunCaseSet) {
       const rowKey = `${shared.id}::${c.retries ?? 0}::${resolveBrowserName(c.browser) ?? ''}`;
@@ -675,6 +686,7 @@ export async function persistRunCases(
       testSourceFrames: capSourceFrames(c.testSourceFrames, DEFAULT_INGEST_LIMITS),
       testAnnotations: (c.testAnnotations as never) ?? null,
       tags: tags.length ? tags : null,
+      locks: locks.length ? locks : null,
       testMeta,
       browser: c.browser ?? null,
       browserName: resolveBrowserName(c.browser),

@@ -40,7 +40,7 @@ import {
   buildSourceFrames,
   storyByClusterId,
 } from '../shared/demo/failure-stories.mjs';
-import { demoTestMeta, demoTags, buildAiUsage } from '../shared/demo/demo-test-meta.mjs';
+import { demoTestMeta, demoTags, demoLocks, buildAiUsage } from '../shared/demo/demo-test-meta.mjs';
 import { computeDemoFingerprint } from '../shared/demo/demo-fingerprint.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -308,6 +308,7 @@ for (const proj of DEMO_PROJECTS) {
       title: c.title,
       flaky_root_cause: flaky?.rootCause ?? null,
       tags: JSON.stringify(demoTags(c.file, proj.cases.indexOf(c))),
+      locks: JSON.stringify(demoLocks(c.file, proj.cases.indexOf(c))),
       owner: demoTestMeta(c.file, proj.cases.indexOf(c))?.owner ?? null,
       priority: demoTestMeta(c.file, proj.cases.indexOf(c))?.priority ?? null,
       feature: demoTestMeta(c.file, proj.cases.indexOf(c))?.feature ?? null,
@@ -872,6 +873,7 @@ for (const proj of DEMO_PROJECTS) {
         browser_name: browser.projectName ?? null,
         test_annotations: testAnnotations,
         tags: JSON.stringify(demoTags(caseDef.file, j)),
+        locks: JSON.stringify(demoLocks(caseDef.file, j)),
         test_meta: demoTestMeta(caseDef.file, j),
         steps,
         step_events: stepEvents,

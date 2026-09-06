@@ -163,7 +163,7 @@ export const HELP_TOPICS = {
   },
   'project.test-cases': {
     title: 'Tests',
-    text: 'Every distinct test in the project with its executed-only pass rate, result breakdown and average duration across runs. Search by title or file, filter by status, and group by spec file to see each file’s health. Tests not run within the selected age window are hidden by default (last 30 days) — pick "All time" to see obsolete ones. Click a test to see its full history.',
+    text: 'Every distinct test in the project with its executed-only pass rate, result breakdown and average duration across runs. Search by title or file, filter by status, tag or lock, and group by spec file to see each file’s health. Tests not run within the selected age window are hidden by default (last 30 days) — pick "All time" to see obsolete ones. Click a test to see its full history.',
     doc: 'ui-overview#project-detail',
   },
   'project.members': {
@@ -214,7 +214,7 @@ export const HELP_TOPICS = {
   },
   'run.test-cases': {
     title: 'Tests',
-    text: 'Every execution in this run. Group by cluster, file, file and describe block, or none; search title, path and error text; filter by status, browser, new regressions and newly flaky.',
+    text: 'Every execution in this run. Group by cluster, file, file and describe block, lock, or none; search title, path and error text; filter by status, browser, lock, new regressions and newly flaky.',
     doc: 'ui-overview#test-run-detail',
   },
   'run.changes': {
@@ -224,7 +224,7 @@ export const HELP_TOPICS = {
   },
   'run.timeline': {
     title: 'Workers timeline',
-    text: 'When each test ran on each parallel worker. Gaps and long bars reveal poor parallelization or a single slow test stalling a shard.',
+    text: 'When each test ran on each parallel worker. Gaps and long bars reveal poor parallelization or a single slow test stalling a shard. Turn on Show locks to see when each named lock was held and how much of the run it serialized.',
     doc: 'ui-overview#test-run-detail',
   },
   // ── Single execution (test-run-case) ──────────────────────────────────

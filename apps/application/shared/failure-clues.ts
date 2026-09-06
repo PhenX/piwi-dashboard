@@ -47,6 +47,8 @@ export type FailureClueRule =
   | 'element-present-but-blocked'
   | 'wrong-page'
   | 'worker-pollution'
+  | 'lock-holder-failed'
+  | 'lock-cross-shard'
   | 'timeout-budget'
   | 'environment-changed'
   | 'browser-specific'
@@ -111,6 +113,21 @@ export interface FailureClueWorkerExecution {
   startedAt?: number | null;
 }
 
+/**
+ * One execution in this run that held at least one lock — the raw material for
+ * the two lock rules (previous holder failed, cross-shard overlap).
+ */
+export interface FailureClueLockHolder {
+  id: number;
+  title?: string | null;
+  status?: string | null;
+  /** Epoch ms; orders holders and bounds the cross-shard overlap window. */
+  startedAt?: number | null;
+  duration?: number | null;
+  shardIndex?: number | null;
+  locks: string[];
+}
+
 /** The cluster's recorded fix history, when this failure belongs to a cluster. */
 export interface FailureClueClusterFix {
   fixCommit?: string | null;
@@ -128,6 +145,10 @@ export interface FailureClueInput {
     browser?: string | null;
     browserName?: string | null;
     startedAt?: number | null;
+    /** Lock names this execution held; anchors the two lock rules. */
+    locks?: string[] | null;
+    /** This execution's shard, when the run was sharded. */
+    shardIndex?: number | null;
   };
   parsedError: ParsedPlaywrightError | null;
   timeline: FailureTimeline | null;
@@ -143,6 +164,8 @@ export interface FailureClueInput {
   browserPeers: FailureClueBrowserPeer[];
   /** Executions on the same worker in this run, ordered by `startedAt`. */
   workerExecutions: FailureClueWorkerExecution[];
+  /** Executions in this run that held a lock, for the two lock rules. Empty when this execution holds none. */
+  lockHolders?: FailureClueLockHolder[];
   cluster: FailureClueClusterFix | null;
   /** Effective per-test timeout in ms; 0/nullish disables the budget rule. */
   timeout: number | null;
@@ -166,6 +189,8 @@ const RULE_ORDER: FailureClueRule[] = [
   'element-present-but-blocked',
   'wrong-page',
   'worker-pollution',
+  'lock-holder-failed',
+  'lock-cross-shard',
   'timeout-budget',
   'environment-changed',
   'browser-specific',
@@ -487,6 +512,77 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
         } — shared state it left behind is a classic cross-test cause.`,
         citations: [{ section: 'runContext' }],
       });
+    }
+  }
+
+  // ── lock rules ─────────────────────────────────────────────────────────────
+  // Both read the run's lock-holding executions. They only apply when this
+  // execution itself declared a lock.
+  const selfLocks = (input.execution.locks ?? []).filter((l) => typeof l === 'string' && l.length > 0);
+  const lockHolders = input.lockHolders ?? [];
+  if (selfLocks.length > 0 && lockHolders.length > 0) {
+    const selfStart = isFiniteNumber(input.execution.startedAt) ? input.execution.startedAt : null;
+
+    // ── lock-holder-failed (strong) ──────────────────────────────────────────
+    // The previous holder of a lock this test holds, in this run, failed or
+    // timed out — a named shared resource left in a bad state.
+    if (selfStart != null) {
+      for (const lock of selfLocks) {
+        const priors = lockHolders
+          .filter(
+            (h) =>
+              h.id !== input.execution.id &&
+              h.locks.includes(lock) &&
+              isFiniteNumber(h.startedAt) &&
+              (h.startedAt as number) < selfStart,
+          )
+          .sort((a, b) => (b.startedAt as number) - (a.startedAt as number));
+        const previous = priors[0];
+        if (previous && FAILED_PEER_STATUSES.has(str(previous.status))) {
+          add({
+            id: `lock-holder-failed:${lock}`,
+            rule: 'lock-holder-failed',
+            strength: 'strong',
+            title: `The previous holder of lock "${lock}" failed`,
+            detail: `"${str(previous.title) || 'the previous holder'}" held lock "${lock}" just before this test and ${
+              str(previous.status) === 'timedout' || str(previous.status) === 'timedOut' ? 'timed out' : 'failed'
+            } — only one holder runs at a time, so state it left behind in that shared resource is a likely cause.`,
+            citations: [{ section: 'runContext' }],
+          });
+          break; // one lock-holder clue is enough; the strongest lock leads.
+        }
+      }
+    }
+
+    // ── lock-cross-shard (medium) ────────────────────────────────────────────
+    // A lock this test holds was held at the same wall-clock time on a
+    // different shard — shards are separate processes and never coordinate, so
+    // the lock's guarantee did not hold across machines.
+    const selfEnd =
+      selfStart != null && isFiniteNumber(input.execution.duration) ? selfStart + input.execution.duration : null;
+    const selfShard = input.execution.shardIndex ?? null;
+    if (selfStart != null && selfEnd != null && selfShard != null) {
+      for (const lock of selfLocks) {
+        const overlap = lockHolders.find((h) => {
+          if (h.id === input.execution.id || !h.locks.includes(lock)) return false;
+          if (h.shardIndex == null || h.shardIndex === selfShard) return false;
+          if (!isFiniteNumber(h.startedAt) || !isFiniteNumber(h.duration)) return false;
+          const hStart = h.startedAt as number;
+          const hEnd = hStart + (h.duration as number);
+          return hStart < selfEnd && hEnd > selfStart;
+        });
+        if (overlap) {
+          add({
+            id: `lock-cross-shard:${lock}`,
+            rule: 'lock-cross-shard',
+            strength: 'medium',
+            title: `Lock "${lock}" was held on two shards at once`,
+            detail: `Shard ${selfShard} and shard ${overlap.shardIndex} both held lock "${lock}" at the same time. Locks only serialize within one \`playwright test\` process, so sharded runs do not coordinate — the classic "passes on one machine" flake.`,
+            citations: [{ section: 'runContext' }],
+          });
+          break;
+        }
+      }
     }
   }
 

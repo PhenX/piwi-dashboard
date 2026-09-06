@@ -23,6 +23,7 @@ import { upsertCasePayloads } from './case-payloads';
 import { GREEN_SAMPLE_MAX_AGE_MS } from '#shared/handlers/aria-sampling';
 import { computeErrorFingerprint, type ErrorFingerprint } from '#shared/error-fingerprint';
 import {
+  normalizeTestLocks,
   normalizeTestTags,
   parseTestMetadata,
   sanitizeTestMetadata,
@@ -59,6 +60,8 @@ export interface RunCaseInput {
   testAnnotations?: Array<{ type: string; description?: string }> | null;
   /** Tags declared on the test — re-normalized here, so raw reporter input is fine. */
   tags?: unknown;
+  /** Lock names the execution held — re-normalized here, so raw reporter input is fine. */
+  locks?: unknown;
   /** `piwi:` metadata; re-derived from `testAnnotations` when absent. */
   testMeta?: unknown;
   title: string;
@@ -192,15 +195,20 @@ async function resolveSuites(db: DB, projectId: number, cases: RunCaseInput[]): 
   return suiteIdMap;
 }
 
-/** Latest-known tags + `piwi:` metadata for one test case, as stored. */
+/** Latest-known tags, locks + `piwi:` metadata for one test case, as stored. */
 interface CaseMetaSnapshot {
   tags: string[];
+  locks: string[];
   meta: TestMetadata | null;
 }
 
+function sameStringList(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((value, i) => value === b[i]);
+}
+
 function sameSnapshot(stored: CaseMetaSnapshot, incoming: CaseMetaSnapshot): boolean {
-  if (stored.tags.length !== incoming.tags.length) return false;
-  if (stored.tags.some((tag, i) => tag !== incoming.tags[i])) return false;
+  if (!sameStringList(stored.tags, incoming.tags)) return false;
+  if (!sameStringList(stored.locks, incoming.locks)) return false;
   const a = stored.meta ?? {};
   const b = incoming.meta ?? {};
   return a.owner === b.owner && a.priority === b.priority && a.feature === b.feature && a.link === b.link;
@@ -225,6 +233,7 @@ async function syncTestCaseMetadata(db: DB, incoming: Map<number, CaseMetaSnapsh
     .select({
       id: testCases.id,
       tags: testCases.tags,
+      locks: testCases.locks,
       owner: testCases.owner,
       priority: testCases.priority,
       feature: testCases.feature,
@@ -238,6 +247,7 @@ async function syncTestCaseMetadata(db: DB, incoming: Map<number, CaseMetaSnapsh
       row.id,
       {
         tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+        locks: Array.isArray(row.locks) ? (row.locks as string[]) : [],
         meta: sanitizeTestMetadata({
           owner: row.owner,
           priority: row.priority,
@@ -256,6 +266,7 @@ async function syncTestCaseMetadata(db: DB, incoming: Map<number, CaseMetaSnapsh
       .update(testCases)
       .set({
         tags: next.tags.length ? next.tags : null,
+        locks: next.locks.length ? next.locks : null,
         owner: next.meta?.owner ?? null,
         priority: next.meta?.priority ?? null,
         feature: next.meta?.feature ?? null,
@@ -415,8 +426,9 @@ export async function persistRunCases(
     // convenience rather than a guarantee. Annotations win over a supplied
     // `testMeta` because they are the declared source.
     const tags = normalizeTestTags(c.tags);
+    const locks = normalizeTestLocks(c.locks).slice(0, limits.locks);
     const testMeta = parseTestMetadata(c.testAnnotations) ?? sanitizeTestMetadata(c.testMeta);
-    caseMetaSnapshots.set(caseId, { tags, meta: testMeta });
+    caseMetaSnapshots.set(caseId, { tags, locks, meta: testMeta });
 
     // Collect locator snapshots; upserted in one batch after the case insert.
     // Only a passed case may purge stale locations — a failed run can stop
@@ -473,6 +485,7 @@ export async function persistRunCases(
       testSourceFrames: null,
       testAnnotations: (c.testAnnotations as any) ?? null,
       tags: tags.length ? tags : null,
+      locks: locks.length ? locks : null,
       testMeta,
       browser: c.browser ?? null,
       browserName: resolveBrowserName(c.browser),

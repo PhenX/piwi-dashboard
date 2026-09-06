@@ -27,7 +27,7 @@ import {
   resolveUnrunReason,
   linkBlockedTests,
 } from '../internal/collect/skip-classify.js';
-import { collectTestMetadata, collectTestTags } from '../internal/collect/test-meta.js';
+import { collectTestLocks, collectTestMetadata, collectTestTags } from '../internal/collect/test-meta.js';
 import { buildErrorText } from '../internal/collect/error-text.js';
 import { RunSubmitter } from '../internal/submit/run-submitter.js';
 import { Logger } from '../internal/support/logger.js';
@@ -322,6 +322,7 @@ export class PiwiDashboardReporter {
     const annotations = mergeAnnotations(test, result);
     const status = classifyStatus(result.status, annotations);
     const tags = collectTestTags(test);
+    const locks = collectTestLocks(test);
 
     // Playwright calls onTestEnd once per attempt (result.retry increases), so
     // accumulate the attempt list per test and snapshot it onto every attempt's
@@ -356,6 +357,7 @@ export class PiwiDashboardReporter {
       suiteConfig,
       testAnnotations: annotations.length ? annotations : null,
       tags: tags.length ? tags : null,
+      locks: locks.length ? locks : null,
       testMeta: collectTestMetadata(annotations),
       // An annotation-less skip reclassified to `didnotrun` is a serial-group
       // cascade: an earlier test failed and Playwright skipped the rest.
@@ -460,6 +462,7 @@ export class PiwiDashboardReporter {
       const { suitePath, suiteConfig } = this.metadataCollector.getSuiteInfo(test);
       const declaredAnnotations = (test.annotations ?? []) as TestAnnotation[];
       const tags = collectTestTags(test);
+      const locks = collectTestLocks(test);
       const testCase: CollectedTestCase = {
         type: 'complete',
         title: test.title,
@@ -478,6 +481,7 @@ export class PiwiDashboardReporter {
         suiteConfig,
         testAnnotations: declaredAnnotations.length ? declaredAnnotations : null,
         tags: tags.length ? tags : null,
+        locks: locks.length ? locks : null,
         testMeta: collectTestMetadata(declaredAnnotations),
         didNotRunReason: reason,
       };

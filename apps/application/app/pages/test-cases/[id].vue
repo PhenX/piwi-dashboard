@@ -108,6 +108,12 @@ const passRateClass = computed(() => {
               {{ testCase.project.name }}
             </UBadge>
 
+            <TestMetaBadges
+              v-if="testCase?.tags?.length || testCase?.locks?.length"
+              :tags="testCase?.tags"
+              :locks="testCase?.locks"
+            />
+
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
               <span class="tabular-nums">
                 <strong class="text-highlighted">{{ testCase?.totalRuns ?? 0 }}</strong> runs

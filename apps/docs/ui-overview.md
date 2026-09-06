@@ -80,7 +80,7 @@ The complete history for one project. The header states the project's condition 
 Five tabs:
 
 - **Runs** — the run trend chart (timeline **Markers** open in a slide-over from the chart header, where they can be added, edited and deleted) over a table of every run with status, start time, duration, test counts, and browser badges. A row opens the run; selecting two runs and clicking **Compare** opens the newer run's **Changes** tab with the older as its baseline.
-- **Tests** — every unique test with status, executed-only pass rate, result breakdown, average duration, and last run; searchable, filterable by status, [tag](./reporter#test-tags), owner, priority and last-run age (stale cases hidden by default). **Group by File** groups the tests under each spec file and carries that file's pass rate, flaky rate, failure count, test count and average time in the group header. A row opens the test's full history.
+- **Tests** — every unique test with status, executed-only pass rate, result breakdown, average duration, and last run; searchable, filterable by status, [tag](./reporter#test-tags), [lock](./reporter#test-locks), owner, priority and last-run age (stale cases hidden by default). **Group by File** groups the tests under each spec file and carries that file's pass rate, flaky rate, failure count, test count and average time in the group header. A row opens the test's full history.
 - **Failures** — one place for everything broken, switched with a segmented control: the **Failure clusters** (executions that failed the same way — see [AI diagnosis & clustering](./ai-diagnosis)), the **Flaky** tests scored by a composite flakiness metric with root-cause classification and impact ranking (see [Flaky tests](./flaky-tests#flaky-test-detection)), each with a **Quarantine** action, and the **Quarantine** list — tests excluded from the [CI gate](./ci#blocking-a-merge)'s verdict while still running, each with its passing streak and whether it has earned a release. See [Quarantine](./flaky-tests#quarantine-with-a-way-out).
 - **Performance** — average/P90 duration trends, a slowest-tests table, timeout opportunities, and the [slow endpoints](./slow-tests) for a selected run; the AI-step coverage card appears when the project replays committed [AI-step artifacts](./ai-steps).
 - **Settings** *(admins when auth is enabled, otherwise everyone)* — project [access](./authentication#project-access) (members) and the edit form: label, description, tags, default branch, per-project SCM token, and **AI diagnosis instructions** (project-specific context combined with the global instructions for every diagnosis).
@@ -105,8 +105,9 @@ The right panel is tabbed:
   headline and source path, duration, browser, retries, wasted time and its cluster). **Group by** *Cluster*
   (the default on a red run — each group header names the cluster, its test count and triage status, with an
   *Open cluster* link, and passing tests fold into a collapsed *Passed* group), *File* (with per-file tallies),
-  *File + Describe* (the file nested by its describe blocks) or *None*. Search matches the title, path **and**
-  error text; filter by status, browser, new regressions and
+  *File + Describe* (the file nested by its describe blocks), *Lock* (each [lock](./reporter#test-locks) the run
+  declared, holders grouped under it, when the run has locks) or *None*. Search matches the title, path **and**
+  error text; filter by status, browser, lock, new regressions and
   newly flaky. Select failing rows for bulk triage (quarantine, or set the cluster status) in any grouping.
 - **Changes** — what differs against **one baseline** (the last passing run on the same branch by default, or the
   run you pick — deep-linkable as `?baseline=<runId>`): new failures, fixed, still failing, newly flaky / passed on
@@ -114,8 +115,12 @@ The right panel is tabbed:
   "new failures" count is computed once against that baseline. Disabled until the run finishes. See
   [What changed in a run](./run-changes).
 - **Timeline** — a horizontal per-worker timeline of test execution, with a *Show hooks and waits* toggle to reveal
-  setup, hook, fixture and wasted-wait spans; click a bar to jump to that test. Beneath it, the **slowest tests** and
-  the **worker distribution** for the run.
+  setup, hook, fixture and wasted-wait spans and, when the run declared [locks](./reporter#test-locks), a *Show locks*
+  toggle that colors each holder's bar by the lock it held (one color per lock, legend above, and the bar tooltip lists
+  a test's locks); click a bar to jump to that test. Beneath it, the **slowest tests**, a **Locks** table (per lock:
+  its tests, how long it was held, its share of the run's wall time, and an estimate of the time that ran serialized
+  behind another holder) with a note when a lock's holders run one at a time into the tail of the run, and the
+  **worker distribution** for the run.
 
 Administrators can **delete** the entire run and its files from the header's More menu, which also copies a
 run summary and refreshes.

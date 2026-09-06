@@ -54,6 +54,8 @@ A **clue** is a deterministic, rule-based finding correlated from the evidence a
 - **Element present but blocked** *(strong)* — the call log says the element resolved but was disabled, hidden, not visible or covered, and the ARIA snapshot still shows one with its role and name.
 - **Wrong page** *(strong)* — the page ended on a login, auth, error or 404 route, or somewhere other than the last navigation the test asked for.
 - **Worker pollution** *(medium)* — the previous test on this worker failed or timed out, so shared state it left behind is a candidate cause.
+- **Previous lock holder failed** *(strong)* — the execution that held the same [lock](./reporter#test-locks) just before this test, in this run, failed or timed out — a named shared resource, stronger than worker pollution because the resource is named.
+- **Lock held on two shards** *(medium)* — a lock this test held overlapped in wall-clock time with a holder on a different shard. Locks serialize only within one `playwright test` process, so sharded runs never coordinate — the classic "passes on one machine" flake.
 - **Timeout budget** *(medium)* — the failed step used ≥ 80 % of the test timeout, or the execution used ≥ 95 % of it.
 - **Environment changed** *(medium, weak when only the environment label differs)* — the same-environment [environment diff](#one-execution-diagnosis-first) is non-empty.
 - **Browser-specific** *(medium)* — the same test passed on at least one other browser in this run.

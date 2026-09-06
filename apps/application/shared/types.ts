@@ -94,6 +94,8 @@ export interface TestCasePayload {
   testAnnotations?: TestAnnotation[] | null;
   /** Tags declared on the test (`TestCase.tags`), normalized with `@` stripped. */
   tags?: string[] | null;
+  /** Lock names the execution held (`TestCase._locks`); best effort — none from blob imports. */
+  locks?: string[] | null;
   /** Ownership metadata declared via `piwi:` annotations. */
   testMeta?: TestMetadata | null;
   /** Per-element locator snapshots with ranked alternatives (transient — not stored as a column). */
@@ -187,6 +189,7 @@ export interface StreamEventPayload {
   suiteConfig?: SuiteConfigEntry[] | null;
   testAnnotations?: TestAnnotation[] | null;
   tags?: string[] | null;
+  locks?: string[] | null;
   testMeta?: TestMetadata | null;
   locatorSnapshots?: LocatorSnapshot[] | null;
   /** Source snippet around the failing line of the spec file (captured on failure only). */

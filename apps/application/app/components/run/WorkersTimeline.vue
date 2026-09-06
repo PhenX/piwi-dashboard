@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import type { TestCaseResult, SetupStepEvent } from '~~/types/api';
 import { useTimelineModel, type TimelineItem } from '~/composables/useTimelineModel';
 import { useTimelineViewport } from '~/composables/useTimelineViewport';
+import { lockColorHex } from '~/utils/timeline';
 
 const props = defineProps<{
   testCases: TestCaseResult[];
@@ -17,7 +18,23 @@ const emit = defineEmits<{
   selectTestCase: [id: number];
 }>();
 
-const { timelineData, workerRows, shardGroups, maxTime } = useTimelineModel(props);
+const { timelineData, workerRows, shardGroups, maxTime, runLocks } = useTimelineModel(props);
+
+// Lock name → its color (assigned by the run's sorted lock order, so a lock
+// keeps its color across the brackets, the legend and the tooltip).
+const lockColorMap = computed(() => {
+  const map = new Map<string, string>();
+  runLocks.value.forEach((lock, i) => map.set(lock, lockColorHex(i)));
+  return map;
+});
+const hasLocks = computed(() => runLocks.value.length > 0);
+const showLocks = ref(false);
+
+/** The colors for one bar's locks, in the run's stable lock order. */
+function lockColorsFor(item: TimelineItem): string[] {
+  if (!showLocks.value || item.kind !== 'test' || !item.locks?.length) return [];
+  return runLocks.value.filter((lock) => item.locks!.includes(lock)).map((lock) => lockColorMap.value.get(lock)!);
+}
 
 const containerRef = ref<HTMLElement | null>(null);
 const rowCount = computed(() => workerRows.value.length);
@@ -90,10 +107,26 @@ function onBarLeave() {
       :wait-count="waitCount"
       :has-non-test-spans="hasNonTestSpans"
       :show-hooks-and-waits="showHooksAndWaits"
+      :has-locks="hasLocks"
+      :show-locks="showLocks"
+      :lock-count="runLocks.length"
       :live="live"
       @toggle-hooks-and-waits="showHooksAndWaits = $event"
+      @toggle-locks="showLocks = $event"
       @reset="resetView"
     />
+
+    <!-- Legend for the lock brackets, shown only while locks are on. -->
+    <div v-if="showLocks && hasLocks" class="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2 text-xs text-gray-500">
+      <span class="inline-flex items-center gap-1">
+        <UIcon name="i-lucide-lock" class="size-3" />
+        Locks
+      </span>
+      <span v-for="lock in runLocks" :key="lock" class="inline-flex items-center gap-1">
+        <span class="inline-block h-2 w-3 rounded-sm" :style="{ backgroundColor: lockColorMap.get(lock) }" />
+        {{ lock }}
+      </span>
+    </div>
 
     <div
       ref="containerRef"
@@ -138,6 +171,7 @@ function onBarLeave() {
           :x="getBarX(item)"
           :y="getBarTop(item)"
           :width="getBarWidth(item)"
+          :lock-colors="lockColorsFor(item)"
           @select="emit('selectTestCase', $event)"
           @hover="onBarEnter"
           @move="onBarMove"
@@ -146,7 +180,7 @@ function onBarLeave() {
       </svg>
     </div>
 
-    <TimelineTooltip :item="hoveredItem" :pos="tooltipPos" />
+    <TimelineTooltip :item="hoveredItem" :pos="tooltipPos" :lock-color-map="lockColorMap" />
   </div>
   <EmptyState v-else icon="i-lucide-rows-3" text="No worker data available for this run." />
 </template>

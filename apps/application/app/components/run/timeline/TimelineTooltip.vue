@@ -12,6 +12,8 @@ import {
 const props = defineProps<{
   item: TimelineItem | null;
   pos: { x: number; y: number };
+  /** Lock name → color, so the tooltip swatches match the brackets. */
+  lockColorMap?: Map<string, string>;
 }>();
 
 const swatchStyle = computed(() => {
@@ -70,6 +72,16 @@ const positionStyle = computed(() => {
         <span>{{ formatTimelineTime(item.duration) }}</span>
         <span>Worker {{ item.workerIndex }}</span>
         <span v-if="item.parentTitle" class="italic truncate max-w-48"> for {{ item.parentTitle }} </span>
+      </div>
+      <div v-if="item.locks?.length" class="flex items-center gap-2 flex-wrap mt-1 text-gray-500">
+        <UIcon name="i-lucide-lock" class="size-3 shrink-0" />
+        <span v-for="lock in item.locks" :key="lock" class="inline-flex items-center gap-1">
+          <span
+            class="inline-block size-2 rounded-sm shrink-0"
+            :style="{ backgroundColor: lockColorMap?.get(lock) ?? '#a1a1aa' }"
+          />
+          {{ lock }}
+        </span>
       </div>
     </div>
   </Teleport>

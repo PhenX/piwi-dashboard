@@ -23,7 +23,7 @@ import {
   buildSourceFrames,
   buildWebAssertionError,
 } from '#shared/demo/failure-stories.mjs';
-import { demoTags, demoTestMeta, buildAiUsage } from '#shared/demo/demo-test-meta.mjs';
+import { demoLocks, demoTags, demoTestMeta, buildAiUsage } from '#shared/demo/demo-test-meta.mjs';
 
 export const DEMO_SIMULATOR_INSTANCE_ID = 'demo-simulator';
 
@@ -76,6 +76,7 @@ interface SimTest {
   pageState?: Record<string, unknown> | null;
   browser?: Record<string, unknown> | null;
   tags?: string[];
+  locks?: string[];
   testMeta?: { owner?: string | null; priority?: string | null; feature?: string | null } | null;
   suitePath?: string[];
   suiteConfig?: Array<{ mode: string; annotations: Array<{ type: string; description?: string }> }>;
@@ -631,6 +632,7 @@ function baseTests(opts: BaseTestOptions = {}): SimTest[] {
       // Same deterministic tags/ownership the seed generator assigns, so
       // owner/priority/tag filters see simulated runs like seeded ones.
       tags: demoTags(t.file, i),
+      locks: demoLocks(t.file, i),
       testMeta: demoTestMeta(t.file, i),
       suitePath: suite?.suitePath,
       suiteConfig: suite?.suiteConfig,
@@ -1228,6 +1230,7 @@ async function runSingleSimulation(
             pageState: test.pageState ?? null,
             aiUsage: (await buildAiUsage({ file: test.file, title: test.title })) ?? null,
             tags: test.tags,
+            locks: test.locks,
             testMeta: test.testMeta,
             consoleLogs: a.consoleLogs ?? null,
             ariaSnapshot: a.ariaSnapshot ?? null,
@@ -1292,6 +1295,7 @@ async function runSingleSimulation(
           suitePath: t.suitePath ?? null,
           suiteConfig: t.suiteConfig ?? null,
           tags: t.tags,
+          locks: t.locks,
           testMeta: t.testMeta,
           didNotRunReason: unrunReason,
         },
