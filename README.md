@@ -178,6 +178,9 @@ and not fine on a network. Three things to set before anyone else can reach it:
 Generate a value for either secret with
 `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`.
 
+The full list — including the trust-proxy flag, backups and version pinning — is the
+[production checklist](https://piwitests.dev/production-checklist).
+
 Found a vulnerability? Please report it privately via the [security policy](./SECURITY.md).
 
 ## A quick tour

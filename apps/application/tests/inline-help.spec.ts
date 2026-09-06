@@ -66,7 +66,7 @@ test.describe('Inline help (HelpHint)', () => {
 
     await expect(page.getByText('Duration trends for the suite')).toBeVisible();
     const learnMore = page.getByRole('link', { name: /Learn more/ });
-    await expect(learnMore).toHaveAttribute('href', `${DOCS_BASE_URL}/flaky-tests#performance`);
+    await expect(learnMore).toHaveAttribute('href', `${DOCS_BASE_URL}/slow-tests`);
   });
 
   test('settings AI provider hint lists the backing PIWI_AI_* env vars', async ({ page }) => {

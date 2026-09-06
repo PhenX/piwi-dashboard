@@ -18,7 +18,7 @@
 import { and, eq } from 'drizzle-orm';
 import { testRunsCases, networkRequests, files } from '../database/schema';
 import { getStorage } from '../storage';
-import { resolveCaseTraceBlobPath, loadTraceEvidenceStreams } from './trace-evidence';
+import { resolveCaseTraceBlobPath, loadTraceEvidenceStreams, getTraceFallbackAriaTextFromBlob } from './trace-evidence';
 import { inferResourceType, type TraceResourceSnapshot } from './trace-insights';
 import { consoleLogsFromTrace, parseErrorContext } from './import-evidence';
 import { buildNetworkRequestItems } from './network-request-helpers';
@@ -153,9 +153,11 @@ export async function deriveTraceEvidence(db: DB, testRunsCaseId: number): Promi
     }
   }
 
-  // The ARIA snapshot rides in Playwright's `error-context` attachment.
+  // The ARIA snapshot rides in Playwright's `error-context` attachment; when a
+  // 1.63 trace carries per-action aria snapshots instead, the failing action's
+  // *before* tree stands in for it.
   if (ariaMissing) {
-    const aria = await ariaFromErrorContext(db, testRunsCaseId);
+    const aria = (await ariaFromErrorContext(db, testRunsCaseId)) ?? (await getTraceFallbackAriaTextFromBlob(blobPath));
     const capped = capText(aria, limits.ariaSnapshotChars);
     if (capped) {
       rowUpdate.ariaSnapshot = capped;

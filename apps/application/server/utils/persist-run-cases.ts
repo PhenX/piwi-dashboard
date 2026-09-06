@@ -7,6 +7,7 @@ import {
 } from './network-request-helpers';
 import {
   capArray,
+  capSteps,
   capConsoleLogs,
   capErrorText,
   capSourceFrames,
@@ -466,7 +467,7 @@ export async function persistRunCases(
       attempts: capArray(normalizeAttemptStatuses(c.attempts), 30),
       line: c.line,
       column: c.column,
-      steps: capArray(c.steps, limits.steps),
+      steps: capSteps(c.steps, limits),
       stepEvents: capArray(c.stepEvents, limits.stepEvents),
       slowestStep: c.slowestStep ?? null,
       slowestStepDuration: c.slowestStepDuration ?? null,

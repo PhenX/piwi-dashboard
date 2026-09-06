@@ -127,7 +127,7 @@ the **call site** (`file:line`) rather than the selector text. One row per call 
 passing run.
 
 When that locator later fails, those snapshots are what Piwi ranks replacement locators from. See
-[Locator healing](./reporter#locator-healing).
+[Locator healing](./locator-healing).
 
 ## Environment
 

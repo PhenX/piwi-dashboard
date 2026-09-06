@@ -17,6 +17,7 @@
  * shown are relative to the failure moment (`t+0`), so the axis and the table read
  * against the same anchor.
  */
+import { stepLabel } from '@piwitests/core/step-analysis';
 import type { FailureTimeline, TimelineItem, TimelineLane } from '#shared/failure-timeline';
 import type { PerformanceStep } from '~~/types/api';
 import { useClusterSectionLocator } from '~/composables/useClusterSectionLocator';
@@ -620,6 +621,9 @@ function onViewTrace() {
         </svg>
       </div>
 
+      <!-- Filmstrip: the page before each step, from this run's trace screen snapshots. -->
+      <TraceFilmstrip :test-runs-case-id="testRunsCaseId" />
+
       <!-- Estimated-positions note -->
       <p v-if="showAxis && data?.estimated" class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
         <UIcon name="i-lucide-info" class="size-3.5 shrink-0" />
@@ -704,7 +708,7 @@ function onViewTrace() {
                 class="mt-1.5 text-sm break-words"
                 :class="row.failed ? 'text-red-600 dark:text-red-400 font-medium' : ''"
               >
-                {{ row.step.title }}
+                {{ stepLabel(row.step) }}
               </p>
               <ErrorText
                 v-if="row.failed && row.step.error?.message"
@@ -836,7 +840,7 @@ function onViewTrace() {
                   <td>
                     <div class="flex items-center gap-2">
                       <span :class="row.failed ? 'text-red-600 dark:text-red-400 font-medium' : ''">
-                        {{ row.step.title }}
+                        {{ stepLabel(row.step) }}
                       </span>
                       <UBadge
                         v-if="row.index === slowestStepIndex"

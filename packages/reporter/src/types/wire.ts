@@ -145,6 +145,8 @@ export interface CompleteStreamEvent {
 export interface StepBeginStreamEvent {
   type: 'step-begin';
   title: string;
+  /** The step's target (rendered locator or URL), carried separately by newer Playwright. */
+  subtitle?: string | null;
   location: string;
   /** Playwright step category (`hook`, `fixture`, `pw:api`, `pw:expect`, …). */
   stepCategory: string;
@@ -156,6 +158,8 @@ export interface StepBeginStreamEvent {
 export interface StepEndStreamEvent {
   type: 'step-end';
   title: string;
+  /** The step's target (rendered locator or URL), carried separately by newer Playwright. */
+  subtitle?: string | null;
   location: string;
   status: string;
   duration: number;

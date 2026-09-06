@@ -8,6 +8,7 @@
 import { and, eq } from 'drizzle-orm';
 import { files } from '../database/schema';
 import { getStorage } from '../storage';
+import { ariaJsonToText } from '#shared/aria-json';
 import { parseZip, type ZipEntry } from './trace-zip';
 import { parseTraceTexts, traceFileRank, type ParsedTraceData } from './trace-events';
 import {
@@ -15,16 +16,23 @@ import {
   buildTraceBodyPreview,
   buildTraceCallStack,
   buildTraceNetwork,
+  buildTraceSnapshots,
   matchNetworkBodySha1,
   parseNetworkTexts,
   parseStacksTexts,
+  resolveSnapshotFile,
   type ActionCallsite,
   type TraceResourceReader,
   type TraceResourceSnapshot,
   type TraceStacksIndex,
 } from './trace-insights';
 import type { DbClient } from '../database';
-import type { TraceBodyResponse, TraceCallStackResponse, TraceNetworkResponse } from '../../types/api';
+import type {
+  TraceBodyResponse,
+  TraceCallStackResponse,
+  TraceNetworkResponse,
+  TraceSnapshotsResponse,
+} from '../../types/api';
 
 /** Path of the execution's stored (slim) trace blob, or null when no trace was uploaded. */
 export async function resolveCaseTraceBlobPath(db: DbClient, testRunsCaseId: number): Promise<string | null> {
@@ -41,6 +49,8 @@ interface TraceBundle {
   stacks: TraceStacksIndex | null;
   network: TraceResourceSnapshot[];
   readResource: TraceResourceReader;
+  /** Bytes of an `aria/*` or `screenshots/*` snapshot entry, or null when absent. */
+  readSnapshot: (file: string) => Buffer | null;
 }
 
 /**
@@ -68,6 +78,14 @@ async function loadTraceBundle(blobPath: string): Promise<TraceBundle | null> {
   const parsed = traceTexts.length > 0 ? parseTraceTexts(traceTexts) : null;
   const stacks = stacksTexts.length > 0 ? parseStacksTexts(stacksTexts) : null;
   const network = networkTexts.length > 0 ? parseNetworkTexts(networkTexts) : [];
+
+  // 1.63 aria / screen snapshots sit at their own top-level prefixes in the
+  // slim ZIP (never pooled like `resources/`), so they read straight from the
+  // parsed entries by their trace-relative path.
+  const snapshotEntries = new Map(
+    entries.filter((e) => e.name.startsWith('aria/') || e.name.startsWith('screenshots/')).map((e) => [e.name, e.data]),
+  );
+  const readSnapshot = (file: string): Buffer | null => snapshotEntries.get(file) ?? null;
 
   // Resource pool lookup: the blob's manifest lists every `resources/` name the
   // original ZIP carried; a legacy full ZIP keeps them inline instead.
@@ -106,7 +124,7 @@ async function loadTraceBundle(blobPath: string): Promise<TraceBundle | null> {
     return null;
   };
 
-  return { parsed, stacks, network, readResource };
+  return { parsed, stacks, network, readResource, readSnapshot };
 }
 
 /**
@@ -177,4 +195,58 @@ export async function getTraceNetworkBodyFromBlob(blobPath: string, requestedSha
   const bytes = await bundle.readResource(match.name);
   if (!bytes) return { status: 'not-found' };
   return buildTraceBodyPreview(bytes, match.mimeType);
+}
+
+/** Read an `aria/*.json` snapshot entry and convert it to the ARIA text form, or null. */
+function readAriaText(bundle: TraceBundle, file: string): string | null {
+  const bytes = bundle.readSnapshot(file);
+  return bytes ? ariaJsonToText(bytes.toString('utf8')) : null;
+}
+
+/**
+ * The per-action aria / screen snapshot inventory recorded in a 1.63 trace,
+ * plus the in-execution page diff (the failing action's page before it ran
+ * against the page at the failure). Feeds the Screen tab and the filmstrip.
+ */
+export async function getTraceSnapshotsFromBlob(blobPath: string): Promise<TraceSnapshotsResponse> {
+  const bundle = await loadTraceBundle(blobPath);
+  if (!bundle) return { status: 'no-trace', steps: [], failingCallId: null, hasAria: false, hasScreen: false };
+  return buildTraceSnapshots(bundle.parsed, (file) => readAriaText(bundle, file));
+}
+
+/** A single snapshot file served out of the trace: raw bytes plus the content type to send. */
+export interface TraceSnapshotResource {
+  bytes: Buffer;
+  contentType: string;
+}
+
+/**
+ * Serve one action's aria (JSON) or screen (PNG) snapshot for a phase, addressed
+ * by callId. The file path comes from the parsed action, so only entries the
+ * trace actually recorded are reachable.
+ */
+export async function getTraceSnapshotResourceFromBlob(
+  blobPath: string,
+  callId: string,
+  kind: 'aria' | 'screen',
+  phase: 'before' | 'after',
+): Promise<TraceSnapshotResource | null> {
+  const bundle = await loadTraceBundle(blobPath);
+  const file = resolveSnapshotFile(bundle?.parsed ?? null, callId, kind, phase);
+  if (!bundle || !file) return null;
+  const bytes = bundle.readSnapshot(file);
+  if (!bytes) return null;
+  return { bytes, contentType: kind === 'aria' ? 'application/json' : 'image/png' };
+}
+
+/**
+ * The failing action's *before* aria tree rendered as ARIA text, for the
+ * fixture-less fallback evidence. Null when the trace carries no failing-action
+ * aria snapshot.
+ */
+export async function getTraceFallbackAriaTextFromBlob(blobPath: string): Promise<string | null> {
+  const bundle = await loadTraceBundle(blobPath);
+  const file = bundle?.parsed?.failingAction?.ariaSnapshotBefore;
+  if (!bundle || !file) return null;
+  return readAriaText(bundle, file);
 }

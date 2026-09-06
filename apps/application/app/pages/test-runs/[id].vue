@@ -217,6 +217,7 @@ function flushPendingEvents() {
     } else if (parsed.type === 'step-begin') {
       const d = parsed.data as {
         title: string;
+        subtitle?: string | null;
         stepCategory?: string | null;
         parentTitle?: string | null;
         workerIndex?: number;
@@ -227,6 +228,7 @@ function flushPendingEvents() {
         ...liveSteps.value,
         [d.workerIndex]: {
           title: d.title,
+          subtitle: d.subtitle ?? null,
           category: d.stepCategory ?? null,
           status: undefined,
           parentTitle: d.parentTitle ?? null,
@@ -235,6 +237,7 @@ function flushPendingEvents() {
     } else if (parsed.type === 'step-end') {
       const d = parsed.data as {
         title: string;
+        subtitle?: string | null;
         stepCategory?: string | null;
         parentTitle?: string | null;
         status?: string;
@@ -247,6 +250,7 @@ function flushPendingEvents() {
         ...liveSteps.value,
         [d.workerIndex]: {
           title: d.title,
+          subtitle: d.subtitle ?? null,
           category: d.stepCategory ?? null,
           status: d.status ?? 'passed',
           parentTitle: d.parentTitle ?? null,

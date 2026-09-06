@@ -106,6 +106,7 @@ export default eventHandler(async (event) => {
         type: 'step-begin',
         data: {
           title: tc.title,
+          subtitle: tc.subtitle ?? null,
           parentTitle: tc.parentTitle,
           stepCategory: tc.stepCategory ?? null,
           location: tc.location,
@@ -136,6 +137,7 @@ export default eventHandler(async (event) => {
         type: 'step-end',
         data: {
           title: tc.title,
+          subtitle: tc.subtitle ?? null,
           parentTitle: tc.parentTitle,
           stepCategory: tc.stepCategory ?? null,
           status: tc.status,

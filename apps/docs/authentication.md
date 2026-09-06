@@ -312,13 +312,10 @@ The reporter automatically calls `/api/auth/login` before each upload and uses t
 
 ## Security considerations
 
-- Always use HTTPS in production.
-- Use strong, unique passwords.
-- Set `PIWI_SECRET_KEY` (generate with `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`, or `openssl rand -hex 32`) to encrypt AI API keys and SCM tokens at rest in the database. This is recommended even when authentication is disabled.
-- Set `PIWI_AUTH_SECRET` (same generator) for session cookie encryption — required when `PIWI_AUTH_ENABLED=true`.
-- Passwords are hashed using scrypt with per-password salts.
+Everything to set before you expose an instance — HTTPS, `PIWI_SECRET_KEY`, `PIWI_AUTH_SECRET` and the trust-proxy flag — is the [production checklist](./production-checklist). What authentication adds on top of that:
+
+- Passwords are hashed using scrypt with per-password salts; use strong, unique passwords.
 - Login, initial setup, and password-reset endpoints are rate-limited per client address — failed logins also per account — and throttled requests get a `429` with a `Retry-After` header. Behind a reverse proxy, set `PIWI_TRUST_PROXY` so those per-address limits see real client addresses; see the [configuration reference](./configuration#authentication).
-- Never use the default secrets in production.
 
 ## Disabling authentication
 

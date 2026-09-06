@@ -169,28 +169,10 @@ that — saving it, running codegen server-side — isn't implemented; if it is 
 opt-in per recording with a payload preview before the first send, matching the standard this
 extension already holds itself to for the API key.
 
-The function catalog itself is managed from a project's **Test functions** page in the
-dashboard — add entries by hand, or paste a page-object method/helper's source code and let AI
-propose the name, parameters, and DOM pattern (a review form you edit before saving). With
-[AI](./ai-diagnosis) configured on the instance, an **Extract** button calls it directly. Without
-one — or if you'd rather use your own — **Copy prompt for your own AI** copies the full
-extraction prompt (rules, JSON schema, and your pasted code) for pasting into any AI chat
-(ChatGPT, Claude.ai, an IDE assistant, …); paste its reply back into the form below it and it's
-validated against the exact same schema, no Piwi AI credits spent either way. An MCP-connected
-coding agent (Claude Code, Cursor, …) can skip the copy-paste entirely and call the
-`create_test_function` [MCP tool](./mcp) directly, using its own model to read the source.
-Registered entries can be edited in place from the same page — the pencil button reopens the
-form with everything filled in.
-
-A parameter can be typed **object** for the options-bag argument most helpers take
-(`selectOption(page, { label }, { value })`), listing the bag's keys; a parameter source then
-targets one key by name, so generated calls pass `{ label: 'Country' }` rather than a bare
-string. Extraction is deliberately conservative: a function that branches on its arguments,
-loops, or calls other helpers whose source isn't visible can't be captured as one fixed
-pattern, so it comes back with low confidence and a note saying what was left out, rather than
-a confident-looking guess.
-
-Once a function is registered, use **Test functions** in the extension popup to check whether
+The catalog the extension matches against is managed in the dashboard, not in the extension:
+registering functions (by hand, by AI extraction, or from an MCP agent), object parameters, and
+what extraction can and can't capture are all covered on the [Test functions catalog](./test-functions)
+page. Once a function is registered, use **Test functions** in the extension popup to check whether
 its pattern actually matches whatever page you're looking at.
 
 ## Current limits

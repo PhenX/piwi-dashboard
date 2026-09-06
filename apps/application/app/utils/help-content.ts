@@ -133,7 +133,7 @@ export const HELP_TOPICS = {
   'project.performance': {
     title: 'Performance',
     text: 'Duration trends for the suite — average and P90 (the slowest 10% threshold). Use it to catch tests getting steadily slower.',
-    doc: 'flaky-tests#performance',
+    doc: 'slow-tests',
   },
   'project.timeline': {
     title: 'Timeline markers',
@@ -144,12 +144,12 @@ export const HELP_TOPICS = {
   'project.slowest-tests': {
     title: 'Slowest tests',
     text: 'The tests taking the most time, ranked. Optimizing the top entries shortens your overall run the fastest.',
-    doc: 'flaky-tests#performance',
+    doc: 'slow-tests',
   },
   'project.slow-endpoints': {
     title: 'Slow endpoints',
     text: 'Backend routes exercised during a run, aggregated per route and ranked by time. Needs the Piwi capture fixtures. Pick a run to inspect its endpoint timings.',
-    doc: 'flaky-tests#performance',
+    doc: 'slow-tests',
   },
   'project.status-line': {
     title: 'Project status',
@@ -220,7 +220,7 @@ export const HELP_TOPICS = {
   'run.changes': {
     title: 'Changes',
     text: 'What differs between this run and one baseline — the last passing run on the same branch by default, or the run you pick. The tests that started or stopped failing, the ones that got slower or faster, the commits landed since the baseline, and the environment fields that moved. New failures are counted once against that baseline.',
-    doc: 'flaky-tests#changes',
+    doc: 'run-changes',
   },
   'run.timeline': {
     title: 'Workers timeline',
@@ -241,12 +241,12 @@ export const HELP_TOPICS = {
   'case.fix': {
     title: 'Fix',
     text: 'Everything to do about this failure in one place — the locator fix for a broken locator, a pointer to the cluster’s fix plan, the diagnosis, how to verify a fix, and the tests this failure blocked. Each part shows only when it applies.',
-    doc: 'ai-diagnosis#fix-plans',
+    doc: 'fix-plans',
   },
   'fix.reproduce': {
     title: 'Reproduce',
     text: 'A copy-paste recipe that reproduces the failure locally — check out the failing commit, install the run’s Playwright version and browser, and run exactly the failing test — plus a generated git bisect between the last green and the failing commit to find what broke it. Both come in Linux/macOS and Windows forms. The bisect needs a last-green commit and an SCM connection; without them it says so. In the desktop app, Reproduce here and Find the breaking commit here run the recipe and drive the bisect for you in a throwaway git worktree, without touching your checkout.',
-    doc: 'ai-diagnosis#reproduce-and-bisect',
+    doc: 'fix-plans#reproduce-and-bisect',
   },
   'case.test-source': {
     title: 'Test source',
@@ -324,12 +324,12 @@ export const HELP_TOPICS = {
   'cluster.fix-plan': {
     title: 'Fix',
     text: 'Everything needed to repair this cluster in one place — the AI diagnosis and its validated patch, the recommended locator fix, the command that verifies the fix, and the whole plan as Markdown. Copy it for a ticket, or let an agent fetch the same plan via the get_fix_plan MCP tool.',
-    doc: 'ai-diagnosis#fix-plans',
+    doc: 'fix-plans',
   },
   'cluster.fixed-before': {
     title: 'Fixed before',
     text: 'Resolved failures that resemble this one — matched on the same error and locator, the same spec or test, and (when embeddings are configured) semantic similarity. Each shows when it was fixed, the resolving commit, how long it stayed open and the triage note, so you can reuse an earlier resolution. "Apply the same triage" copies that note onto this cluster; it never marks a new cluster resolved because an old one was.',
-    doc: 'ai-diagnosis#fix-plans',
+    doc: 'fix-plans#fixed-before',
   },
   'cluster.evidence': {
     title: 'Test evidence',
@@ -501,13 +501,13 @@ export const HELP_TOPICS = {
   'settings.wasted-time': {
     title: 'Wasted-time patterns',
     text: 'Define which wait steps count as wasted time. A wait is wasted when any pattern matches its step title or source location. Patterns are case-insensitive and support * and ? wildcards. Changes apply to existing runs immediately.',
-    doc: 'flaky-tests#performance',
+    doc: 'slow-tests',
     envVars: ['PIWI_WASTED_WAIT_PATTERNS'],
   },
   'settings.timeout-hygiene': {
     title: 'Timeout hygiene',
     text: 'Thresholds for flagging oversized per-test timeouts and stale test.slow() marks. Opportunities are recomputed at read time, so changes apply to existing runs immediately.',
-    doc: 'flaky-tests#performance',
+    doc: 'slow-tests',
   },
   'settings.pr-feedback': {
     title: 'Pull-request feedback',
@@ -633,7 +633,7 @@ export const HELP_TOPICS = {
   'locator-healing': {
     title: 'Locator fix',
     text: 'When a locator breaks after a UI change, Piwi suggests pre-captured alternatives from the last passing run — or from another test in the project that uses the same locator. Each alternative is ranked by stability score — prefer data-testid (100) over CSS classes (10–40). The recommended fix shows the exact one-line edit for the failing test, with a "Copy fix prompt" for an AI coding agent. A "Your pick" badge marks a replacement you confirmed on the failing page: "Pick from snapshot" opens the failure-time DOM and lets you click the intended element, and "Pick from trace" opens the failure trace in the trace viewer, whose Pick locator tool works on the recorded page snapshots.',
-    doc: 'reporter#locator-healing',
+    doc: 'locator-healing',
   },
 
   // ── Environment diff ────────────────────────────────────────────────────

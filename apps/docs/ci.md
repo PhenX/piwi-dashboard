@@ -215,7 +215,7 @@ What the comment says, in this order:
 
 Each failure carries its error, its owner and tags when the test declares them (see
 [ownership metadata](./reporter#ownership-metadata-piwi-annotations)), and — when a locator broke — the
-[replacement locator](./reporter#locator-healing) captured from the last passing run. The footer reports the CI minutes
+[replacement locator](./locator-healing) captured from the last passing run. The footer reports the CI minutes
 the run spent on waits and failed attempts.
 
 ### What it needs

@@ -86,7 +86,7 @@ Everything Playwright itself recorded comes across:
 - Test results — status, duration, timeout, retries, worker, start time, annotations
 - Suite structure — spec file, `describe` nesting, Playwright project (browser) name
 - Errors, with full call logs, so failures **cluster exactly like reported ones**
-- Steps, including the slowest step and wasted-time totals
+- Steps, including their subtitles and capped, masked params (Playwright 1.63+), the slowest step and wasted-time totals
 - Traces, screenshots and videos — the trace viewer, call stack, network and DOM snapshot views all work
 - The failure-time page snapshot and source snippet, recovered from Playwright's `error-context` attachment
 - Browser console entries, recovered from the trace
@@ -153,7 +153,7 @@ chunk at a time rather than the whole file, however large the server is willing 
 
 - **Sharded runs import separately.** A blob report that is one shard of a larger run becomes its own run in Piwi —
   shards are not merged. The import summary flags this when it detects one.
-- **Traces carry less than reports.** No annotations, no worker index, no `didnotrun` tests, and no screenshots or
-  videos — a trace holds only itself.
+- **Traces carry less than reports.** No annotations, no worker index, no `didnotrun` tests, no step subtitles or
+  params, and no screenshots or videos — a trace holds only itself.
 - **Administrators only.** Importing can create projects and back-dates history, so it is not open to the reporter role.
 - **One archive per request.** There is no bulk endpoint; the page handles batching for you.

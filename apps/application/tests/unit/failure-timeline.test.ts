@@ -75,6 +75,26 @@ describe('buildFailureTimeline', () => {
     expect(tl.lanes.steps[0]!.failed).toBeUndefined();
   });
 
+  test('labels a 1.63-shaped step by composing its title and subtitle', () => {
+    const tl = buildFailureTimeline({
+      startedAt: T0,
+      duration: 2_000,
+      status: 'failed',
+      steps: [
+        {
+          title: 'Click',
+          subtitle: "getByRole('button', { name: 'Pay' })",
+          category: 'action',
+          duration: 2_000,
+          startTime: T0,
+          error: 'element is not enabled',
+        },
+      ],
+    });
+    expect(tl.lanes.steps[0]!.label).toBe("Click getByRole('button', { name: 'Pay' })");
+    expect(tl.failedStep?.label).toBe("Click getByRole('button', { name: 'Pay' })");
+  });
+
   test('falls back to the last step of a failed execution when nothing is marked', () => {
     const tl = buildFailureTimeline({
       startedAt: T0,

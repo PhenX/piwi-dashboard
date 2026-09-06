@@ -40,7 +40,7 @@ export default defineConfig({
 
 The `use` block is Playwright's, not Piwi's: `trace`, `screenshot` and `video` decide what Playwright records, and the reporter uploads whatever exists. Leave `screenshot` at its default (`'off'`) and the failure evidence has no screenshot to show.
 
-When you install via [`wrapConfig`](#installing-via-wrapconfig) (what `init` does), the reporter fills in `screenshot: 'only-on-failure'` and `trace: 'retain-on-failure'` for you whenever the top-level `use` leaves them unset — the trace alone gives the dashboard the DOM snapshot, full call stack, full network with bodies and the visual diff without the capture fixtures. Any value you set yourself (including `'off'`) is kept, per-project `use` blocks are never touched, and the reporter logs one line at the start of the run naming what it defaulted. Opt out with `defaultCapture: false` or `PIWI_DEFAULT_CAPTURE=false` to let Playwright's own defaults stand.
+When you install via [`wrapConfig`](#installing-via-wrapconfig) (what `init` does), the reporter fills in `screenshot: 'only-on-failure'` and `trace: 'retain-on-failure'` for you whenever the top-level `use` leaves them unset — the trace alone gives the dashboard the DOM snapshot, full call stack, full network with bodies and the visual diff without the capture fixtures. On Playwright 1.63 or later the trace default also turns on the per-action **aria tree** (`snapshots: { dom: true, aria: true }`), which feeds the [Screen tab and the page diff](./evidence#aria-and-screen-snapshots) at negligible size. The `screen` snapshot kind — a PNG before and after every action, the trace's biggest cost — stays opt-in; set it yourself with `trace: { mode: 'retain-on-failure', snapshots: { dom: true, aria: true, screen: true } }`. Any value you set yourself (including `'off'`) is kept, per-project `use` blocks are never touched, and the reporter logs one line at the start of the run naming what it defaulted. Opt out with `defaultCapture: false` or `PIWI_DEFAULT_CAPTURE=false` to let Playwright's own defaults stand.
 
 ## Installing via wrapConfig
 
@@ -63,7 +63,7 @@ export default defineConfig(
 
 The first argument is your Playwright config; the second is the [Piwi options](#configuration-options). On top of injecting the reporter, `wrapConfig`:
 
-- Sets `screenshot: 'only-on-failure'` and `trace: 'retain-on-failure'` on the **top-level** `use` block when each is unset. A value you set yourself is kept — including `'off'` — and per-project `use` blocks are left alone. These two options unlock the DOM snapshot, full call stack, full network with bodies and the visual diff **without** the capture fixtures. Opt out with `defaultCapture: false` (or `PIWI_DEFAULT_CAPTURE=false`); the reporter logs one line at the start of the run naming whatever it defaulted.
+- Sets `screenshot: 'only-on-failure'` and `trace: 'retain-on-failure'` on the **top-level** `use` block when each is unset. A value you set yourself is kept — including `'off'` — and per-project `use` blocks are left alone. These two options unlock the DOM snapshot, full call stack, full network with bodies and the visual diff **without** the capture fixtures. On Playwright 1.63 or later `trace` becomes the object form `{ mode: 'retain-on-failure', snapshots: { dom: true, aria: true } }`, adding the per-action aria tree; the object is version-gated because an older Playwright rejects it. The `screen` snapshot kind stays opt-in — see [what `screen` adds per action](./storage#trace-snapshots). Opt out with `defaultCapture: false` (or `PIWI_DEFAULT_CAPTURE=false`); the reporter logs one line at the start of the run naming whatever it defaulted.
 - Forwards the CI-gate option `failOnFlakyTests` into Playwright's native config so a flaky-only run exits non-zero locally.
 
 <a id="performance-metrics-web-vitals"></a>
@@ -104,6 +104,7 @@ export { expect } from '@playwright/test'
 - **Browser Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint, plus Core Web Vitals (LCP, CLS, INP) — displayed with color-coded thresholds. LCP/CLS/INP come from buffered `PerformanceObserver` entries and are Chromium-only; INP needs at least one interaction, so it is often `n/a` in short tests.
 - **ARIA snapshot** — Captured automatically on failed/timed-out tests via `page.locator(':root').ariaSnapshot()`. Included in the **Copy AI context** bundle on the [execution page](./evidence#one-execution-diagnosis-first)'s Diagnosis tab (`/test-run-cases/:id`) and in the cluster AI diagnosis context. Also sampled on *passing* tests to anchor the [page diff](./evidence#page-diff) — see [`sampleAriaOnPass`](#green-page-sampling-on-pass) below.
 - **Locator snapshots** — For each element a test proves resolvable — every successful action (click, fill, etc.) *and* every passing web-first assertion (`expect(locator).toBeVisible()`, `toHaveText()`, …) — the fixtures record the element's attributes and a ranked list of alternative locators, stamped with the call site. These power [locator healing](#locator-healing) when a locator later breaks. Gated by `captureLocators` (default on).
+- **Test steps** — each step's title, category and timing, plus its **subtitle** and a curated **params** object. Playwright 1.63 moved the target of a `pw:api`/`expect` step out of the title into the subtitle — `Click` with the subtitle `getByRole('button', { name: 'Pay' })`, or `Navigate` with the page URL — and Piwi composes the two back into one label wherever a step is shown, so an upgrade keeps the target visible. `params` carries the rendered locator, a navigation's URL, an action's arguments, or a `test.step(title, body, { params })` author's own values. It is capped at 20 keys and 200 characters per value, and token-shaped strings (JWTs, long hex blobs, base64 data URIs) are masked; page content, expressions and request bodies are never captured. On Playwright 1.61 the reporter reads the title only, exactly as before.
 - **Test locks** — The lock names a test or its `describe` declared (`test('…', { lock: 'database' }, …)`) — the shared resources Playwright serializes holders of. They drive the [Timeline tab's lock lanes](./ui-overview#test-run-detail), the lock filter and *Group by lock* on the Tests tabs, and two [clues](./evidence#clues). Captured **best effort**: Playwright exposes locks only to an in-process reporter, never through the public API or the blob report, so a run recorded live carries them and one rebuilt from a [blob import](./importing-runs) does not. Nothing to configure.
 
 These are only collected when `collectPerformanceMetrics` is `true` (the default). If fixture data does not appear in the dashboard, the most likely cause is that your test files import `test` from `@playwright/test` directly instead of from your fixtures file (see options A/B above).
@@ -149,7 +150,7 @@ The feature degrades safely: an older server without the endpoint, or any failur
 | `capturePageState`          | boolean  | `true`                    | Record the page's state at test end: URL, history state, storage **key names** and value *lengths*, cookie names and flags. Values are never captured. Auto-disabled when `collectPerformanceMetrics` is `false` |
 | `captureServerTraces`       | boolean  | `true`                    | Read server-side spans from the `X-Piwi-Trace` response header emitted by a Piwi [instrumentation plugin](./backend-logs), and show them next to the network request. Free when no instrumentation is present. Auto-disabled when `collectPerformanceMetrics` is `false` |
 | `sampleAriaOnPass`          | boolean  | `true`                    | Sample the ARIA snapshot at the end of a passing test so a later failure can be diffed against the [page as it last looked green](./evidence#page-diff). Rate-limited server-side (see [Green page sampling on pass](#green-page-sampling-on-pass)); rides the capture fixtures, so nothing is captured without them |
-| `defaultCapture`            | boolean  | `true`                    | When installed via [`wrapConfig`](#installing-via-wrapconfig), default the top-level `use.screenshot` to `'only-on-failure'` and `use.trace` to `'retain-on-failure'` when unset, so failure evidence is captured without the fixtures. Explicit values (including `'off'`) and per-project `use` blocks are untouched. Set `false` to opt out |
+| `defaultCapture`            | boolean  | `true`                    | When installed via [`wrapConfig`](#installing-via-wrapconfig), default the top-level `use.screenshot` to `'only-on-failure'` and `use.trace` to `'retain-on-failure'` when unset, so failure evidence is captured without the fixtures. On Playwright 1.63+ the trace default also turns on the per-action aria tree (`snapshots: { dom: true, aria: true }`); `screen` stays opt-in. Explicit values (including `'off'`) and per-project `use` blocks are untouched. Set `false` to opt out |
 | `inspectOnFailure`          | boolean  | `false`                   | Open Piwi's own inspector overlay on the failing page after a local headed failure — inspect any element and pick a locator for it (see [Inspect the failing page live](#inspect-the-failing-page-live-local-runs)). Never activates under CI |
 | `pickLocatorOnFailure`      | boolean  | `false`                   | Open Piwi's locator picker on the failing page after a local headed locator failure (see [Pick a replacement locator](#pick-a-replacement-locator-on-the-failing-page-local-runs)). Never activates under CI |
 | `username`                  | string   | —                         | Username for dashboard login (use `apiKey` instead when possible)                           |
@@ -333,84 +334,7 @@ Any other type is also accepted; the directory must be provided via `dir`.
 
 ## Locator healing
 
-When a locator stops matching — a button was renamed, an element moved, a hashed class changed — Piwi suggests concrete, ranked replacements instead of leaving you to guess.
-
-While tests run, the [capture fixtures](./capture-fixtures) wrap Playwright's locator methods (`getByRole`, `getByTestId`, `locator`, …) and, after each successful action **or passing web-first assertion** (a passing `expect(locator).toBeVisible()` proves the element resolved just as a click does — so locators that are only ever asserted build healing history too), record the target element's attributes plus a list of alternative locators ranked by a stability score (`data-testid` = 100, role + accessible name ≈ 90, semantic CSS ≈ 35–40, hash-suffixed ≈ 10). Alongside the name-based alternatives, capture also generates **structural, rename-proof** ones — locators scoped to a stable ancestor (`getByTestId('signup-form').getByRole('textbox')` ≈ 72, `locator('#sidebar').getByRole('link')` ≈ 64, a document-unique landmark such as `getByRole('navigation').getByRole('link')` ≈ 55) and a name-free `getByRole` (≈ 58) when the element is the only one of its role on the page, or the only heading at its level (`getByRole('heading', { level: 1 })`). These keep working when a label or title changes, which breaks every name-derived locator at once. Heading locators carry their `level`, and the element's position among same-role elements is stored so a fully renamed element can still be re-identified on the failing page. Each candidate selector is probed against the live page for uniqueness — alternatives that would match several elements (strict-mode violations) are dropped at capture time. Live input *values* are never captured, so filled-in secrets can't leak into snapshots. One row per call site is upserted into the `locator_snapshots` table, so the latest known-good snapshot for every locator is always available.
-
-<figure>
-  <img src="/diagrams/locator-healing-capture.svg" alt="Diagram of the capture flow: a successful action or passing assertion goes through the capture proxy to an in-page element probe, which produces ranked alternative locators stored as one row per call site in the locator_snapshots table">
-  <figcaption>Capture runs while tests pass: every locator that proves it resolves — through an action or an assertion — leaves behind ranked, uniqueness-checked replacements for the day it breaks.</figcaption>
-</figure>
-
-When a locator later fails, the server resolves replacements through a ladder, most-trustworthy first:
-
-1. **Prior run** — the exact call site (`file:line:col`) had a passing snapshot; its pre-captured alternatives are reused.
-2. **Element match** — the old element appears renamed or moved (its identity is gone from the failing page's ARIA snapshot), so *fresh* locators are generated for the element it most likely became. The match narrows heading candidates by `level` and, on a total rename with no shared words, falls back to the element's captured position among same-role elements (only when the same-role count is unchanged).
-3. **Fingerprint** — the call site shifted lines, but a locator-signature match finds the prior snapshot anyway.
-4. **Cross-test** — the same locator was captured by *another* test in the project (useful when the failing test has no capture history of its own for that locator — e.g. it fails on its very first run, or the history predates assertion capture); the freshest snapshot is reused.
-5. **ARIA fallback** — no prior snapshot exists; limited suggestions are derived from the failure-time ARIA snapshot (no HTML attributes).
-
-The ladder only runs for a **resolution failure** — the call log shows the locator never resolved (`waiting for <locator>` with no later `locator resolved to …` line), matched nothing (`resolved to 0 elements`), or matched several elements (a strict-mode violation). When the locator *did* resolve and the action or assertion failed afterwards (`locator resolved to 51 elements`, `element is not enabled`, a hidden element), or when the error is a navigation failure (`page.goto`, `net::ERR_*`), the panel shows one line — *The locator resolved; this is not a locator problem* — instead of a ranked menu, and no "Locator fix" signal appears on the run page. Rewriting a locator that already found its element would be a harmful edit.
-
-When a stored snapshot is found but the element's captured accessible name is provably gone from the failing page (and no rename match was confident), the panel flags the list: name-based alternatives — including the failing locator itself — are kept visible but excluded from the recommendation, and candidates parsed from the failing page are shown alongside. This prevents the panel from "recommending" the very locator that just broke after a label or title change.
-
-<figure>
-  <img src="/diagrams/locator-healing-resolution.svg" alt="Diagram of the healing resolution flow: the failing error is parsed into a locator signature and call site, matched through the stored-history ladder, sanity-checked against the failing page's ARIA snapshot (unchanged, renamed, or gone), and surfaced in the Locator fix panel">
-  <figcaption>Healing runs from the failure's own error text: stored history is matched by call site, then signature, then across tests — and every hit is sanity-checked against the failing page before anything is recommended.</figcaption>
-</figure>
-
-The result is shown as a **Locator fix** panel on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, and folded into the AI diagnosis context so the model recommends a grounded fix (see [AI diagnosis](./ai-diagnosis#locator-healing)). A single **recommended fix** is highlighted — it keeps your original locator *style* where that style is stable enough (a minimal, idiomatic edit), and escalates to the sturdiest alternative (or advises adding a `data-testid`) only when the original style has nothing stable to fall back on.
-
-<figure>
-  <img src="/screenshots/locator-healing.png" alt="Locator fix panel showing ranked replacement locators with stability scores and a recommended fix">
-  <figcaption>The Locator fix panel — replacements ranked by stability score (data-testid ≈ 100, role + name ≈ 90), with a recommended fix and a copy button for each.</figcaption>
-</figure>
-
-When the failing execution has an uploaded trace, the panel offers **Pick from trace**: it opens the trace in the dashboard's bundled [trace viewer](./evidence#trace-viewer), whose *Pick locator* tool works on the recorded page snapshots — so a replacement locator can be picked visually even for a CI failure nobody watched live. A replacement confirmed with the reporter's failure-time locator picker (`pickLocatorOnFailure`) shows a **Your pick** badge and becomes the recommended fix.
-
-Capture adds a small cost in the test worker: one DOM read per call site, plus an ARIA snapshot only when the element's own attributes don't already settle its accessible name. Actions and passing assertions alike probe at most **once per call site per test** — a line re-run in a loop, a `toPass()` block, or a page-object method called repeatedly never probes twice. Negated assertions (`.not.…`), absence checks (`toBeHidden`, `toBeDetached`) and multi-element checks (`toHaveCount`, array forms) are never probed. Turn it off with `captureLocators: false` or `PIWI_CAPTURE_LOCATORS=false`; it is also disabled automatically whenever `collectPerformanceMetrics` is `false`.
-
-> Healing is read-only — it never rewrites your test. It surfaces the replacement so you can apply it yourself.
-
-### Inspect the failing page live (local runs)
-
-When a locator breaks while you're developing locally, the fastest fix is often to just look at the page. With `inspectOnFailure: true` (or `PIWI_INSPECT_ON_FAIL=true`), a failing test opens **Piwi's own inspector overlay** on its still-open page right before the browser would close — click any element to generate ranked, uniqueness-checked locators for it (with the same guided parent-anchoring described below), confirm one, and it's recorded just like a pick. This is Piwi's own overlay, **not** Playwright's native inspector, so anything you confirm flows back into the dashboard's healing data.
-
-```bash
-# Linux / macOS
-PIWI_INSPECT_ON_FAIL=true npx playwright test --headed
-
-# Windows (PowerShell)
-$env:PIWI_INSPECT_ON_FAIL='true'; npx playwright test --headed
-```
-
-`inspectOnFailure` opens the overlay on **any** failure so you can inspect the whole page; `pickLocatorOnFailure` (below) opens the **same** overlay but targeted at the locator that broke. Both are local debugging aids and deliberately conservative: they require a **headed** browser (`--headed` / `headless: false`), never activate under CI (any `CI` env var), skip expected failures (`test.fail()`), and with retries configured only open on the final attempt. While the overlay is open the run waits (the test timeout is lifted), so prefer `--workers=1` when enabling it.
-
-### Pick a replacement locator on the failing page (local runs)
-
-One step beyond inspection: with `pickLocatorOnFailure: true` (or `PIWI_PICK_LOCATOR_ON_FAIL=true`), a test that failed on a locator gets Piwi's own picker injected into the still-open page — whether the failure was a **locator action** (`.click()`, `.fill()`, …) or an **assertion** (`expect(locator).toBeVisible()`). For an action, the broken locator and its call site come from the captured failure; for an assertion, they're read from Playwright's error (`Locator:` line + call site). The flow is guided, in three steps (Esc skips at any point):
-
-1. **Pick the element.** Hovering highlights; the pick snaps to the nearest actionable ancestor (clicking the `<span>` inside a button picks the button), and <kbd>↑</kbd>/<kbd>↓</kbd> walk the DOM tree up/down before you click — the locator for the element under the cursor is shown in a chip pinned to it and again on its own line in the banner, so each step of the walk shows what it would produce.
-2. **Bless stable parents (optional).** The element's ancestors are listed with their strongest hook (`data-testid`, `#id`, labeled landmark, role). Select one or more to scope the locator to — hovering a row outlines that parent in the page and names it in a chip pinned to it, and a live **"matches N"** count is recomputed against the real failing page on every toggle (exactly 1 = green). Selected parents produce anchor-scoped chains like `getByTestId('signup-form').getByRole('button')` — the rename-proof style — and picking several adds a combined chain when it isolates exactly one element.
-3. **Confirm.** The ranked, uniqueness-checked candidates (standard generation merged with your anchor-scoped chains) are listed; pick one to confirm it.
-
-```bash
-# Linux / macOS
-PIWI_PICK_LOCATOR_ON_FAIL=true npx playwright test --headed
-
-# Windows (PowerShell)
-$env:PIWI_PICK_LOCATOR_ON_FAIL='true'; npx playwright test --headed
-```
-
-A confirmed pick is recorded in three places:
-
-- **The run's locator snapshots** — the pick is folded into the failing call site's snapshot (flagged `pickedByUser`, listed first), so after the run uploads, the [Locator fix](#locator-healing) panel for that failure shows your confirmed choice at the top.
-- **A `piwi-user-pick` attachment** and a report **annotation**, so the choice is visible in the Playwright report and trace.
-- **The terminal**, with the failing call site (`file:line:col`) and the replacement, ready to paste into the test.
-
-The gate is identical to `inspectOnFailure` (headed browser, never under CI, final attempt only), and the picker suppresses the page's own click handlers while active, so picking can't navigate or mutate the failing page. Picking never rewrites your test — it records the choice so you (or the dashboard) can apply it.
-
-The same picker engine also ships as the [Piwi Picker browser extension](./extension) — pick ranked, uniqueness-checked locators from any live page in Chrome or Edge, with no test run and no server required.
+The capture fixtures record ranked, uniqueness-checked **locator snapshots** while your tests pass (see [Capture fixtures → Locator snapshots](./capture-fixtures)). When a locator later breaks, Piwi resolves replacements from those snapshots through a most-trustworthy-first ladder and surfaces a single recommended fix — plus an optional failure-time inspector overlay and locator picker for local runs (`inspectOnFailure` / `pickLocatorOnFailure`). The full explanation, the resolution ladder, and those local-run aids are on [Locator healing](./locator-healing).
 
 ## Automatic metadata collection
 
@@ -456,7 +380,7 @@ In the dashboard UI, the test run detail page offers a **Tree** view that groups
 
 ### Test annotations (Playwright marks)
 
-The reporter captures Playwright test marks set via `test.info().annotations` (e.g. `@fixme`, `@slow`, `@skip`) and sends them as `testAnnotations` in every test case payload. These are stored per-run on the `test_runs_cases` table and rendered as badges on the test case row and test case detail page. A `@slow` mark combined with a test's duration history powers the **stale `test.slow()`** detection in [Timeout opportunities](./flaky-tests#performance).
+The reporter captures Playwright test marks set via `test.info().annotations` (e.g. `@fixme`, `@slow`, `@skip`) and sends them as `testAnnotations` in every test case payload. These are stored per-run on the `test_runs_cases` table and rendered as badges on the test case row and test case detail page. A `@slow` mark combined with a test's duration history powers the **stale `test.slow()`** detection in [Timeout opportunities](./slow-tests#timeout-opportunities).
 
 ### Test tags
 
@@ -541,7 +465,7 @@ reporter.
 
 The reporter records each test's effective per-test timeout (`TestCase.timeout`) and sends it as `timeout` (milliseconds) on every test case payload, stored on `test_runs_cases.timeout`. `0` means the test has no timeout (unbounded); runs reported by an older reporter that predates this field store `null`.
 
-Together with the test's duration history this drives the **Timeout opportunities** analysis (see [Performance](./flaky-tests#performance)), which flags tests whose timeout far exceeds their real p95 duration so failures and hangs stop wasting time waiting.
+Together with the test's duration history this drives the **Timeout opportunities** analysis (see [Slow tests & wasted time](./slow-tests#timeout-opportunities)), which flags tests whose timeout far exceeds their real p95 duration so failures and hangs stop wasting time waiting.
 
 ### Skipped vs "didn't run"
 
