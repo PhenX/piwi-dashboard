@@ -77,6 +77,10 @@ export default defineConfig({
       { text: 'Home', link: '/' },
       { text: 'Getting started', link: '/getting-started' },
       { text: 'Reporter', link: '/reporter' },
+      // Recipes now have their own path-prefixed sidebar, so the Recipes group
+      // no longer rides along on every page — the top nav is how a reader
+      // reaches them from outside /recipes/.
+      { text: 'Recipes', link: '/recipes/' },
       { text: 'Blog', link: '/blog/' },
       { text: 'API docs', link: 'https://piwitests.dev/demo/docs' },
       { text: 'Demo', link: 'https://piwitests.dev/demo/' },
@@ -86,90 +90,101 @@ export default defineConfig({
     // in → read them → run the instance → wire it into other tools. A group
     // answers one question the reader is holding, so a page belongs to the
     // group matching what they are doing, never to the feature it describes.
-    sidebar: [
-      {
-        text: 'Start here',
-        items: [
-          { text: 'What Piwi does', link: '/what-piwi-does' },
-          { text: 'Getting started', link: '/getting-started' },
-          { text: 'Core concepts', link: '/concepts' },
-          { text: 'Your first failure, explained', link: '/first-failure' },
-          { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
-          { text: 'Privacy & data flow', link: '/privacy' },
-        ],
-      },
-      {
-        text: 'Sending results',
-        items: [
-          { text: 'Reporter', link: '/reporter' },
-          { text: 'Capture fixtures', link: '/capture-fixtures' },
-          { text: 'AI steps', link: '/ai-steps' },
-          { text: 'CI & sharding', link: '/ci' },
-          { text: 'Test selections', link: '/test-selection' },
-          { text: 'Backend logs', link: '/backend-logs' },
-          { text: 'Importing past runs', link: '/importing-runs' },
-        ],
-      },
-      {
-        text: 'Reading the results',
-        items: [
-          { text: 'UI overview', link: '/ui-overview' },
-          { text: 'Failure evidence', link: '/evidence' },
-          { text: 'Failure clusters & the inbox', link: '/failure-clusters' },
-          { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
-          { text: 'Fix plans, reproduce & bisect', link: '/fix-plans' },
-          { text: 'What changed in a run', link: '/run-changes' },
-          { text: 'Flaky tests', link: '/flaky-tests' },
-          { text: 'Slow tests & wasted time', link: '/slow-tests' },
-          { text: 'Branches', link: '/branches' },
-          { text: 'Analytics', link: '/analytics' },
-          { text: 'Timeline markers', link: '/timeline-markers' },
-          { text: 'Notifications & alerts', link: '/notifications' },
-          { text: 'Locator healing', link: '/locator-healing' },
-          { text: 'Auto-heal PRs', link: '/auto-heal' },
-          { text: 'Offline export', link: '/offline-export' },
-          { text: 'Share links', link: '/share-links' },
-        ],
-      },
-      {
-        text: 'Recipes',
-        items: [
-          { text: 'All recipes', link: '/recipes/' },
-          { text: 'Regression or flake?', link: '/recipes/regression-or-flaky' },
-          { text: 'Fix a broken locator', link: '/recipes/broken-locator' },
-          { text: 'Triage a run gone red', link: '/recipes/mass-failure' },
-          { text: 'Cut costly flakiness', link: '/recipes/flaky-cleanup' },
-          { text: 'Cut the time it costs', link: '/recipes/faster-suite' },
-        ],
-      },
-      {
-        text: 'Running your instance',
-        items: [
-          { text: 'Deployment', link: '/deployment' },
-          { text: 'Production checklist', link: '/production-checklist' },
-          { text: 'Upgrading', link: '/upgrading' },
-          { text: 'Backup & restore', link: '/backup-restore' },
-          { text: 'Configuration reference', link: '/configuration' },
-          { text: 'Configuration generator', link: '/configuration/generator' },
-          { text: 'Authentication', link: '/authentication' },
-          { text: 'Database', link: '/database' },
-          { text: 'Storage configuration', link: '/storage' },
-        ],
-      },
-      {
-        text: 'Apps & integrations',
-        items: [
-          { text: 'Piwi CLI', link: '/cli' },
-          { text: 'Desktop app', link: '/desktop' },
-          { text: 'Browser extension', link: '/extension' },
-          { text: 'Test functions catalog', link: '/test-functions' },
-          { text: 'Open in IDE', link: '/ide-integration' },
-          { text: 'MCP server', link: '/mcp' },
-          { text: 'Agent skills', link: '/mcp#agent-skills' },
-          { text: 'API docs (interactive)', link: 'https://piwitests.dev/demo/docs' },
-        ],
-      },
-    ],
+    // Multi-sidebar, keyed by URL path prefix (VitePress picks the sidebar whose
+    // key prefixes the current path, longest match first). Step 1 of the
+    // restructure: Recipes already live under /recipes/, so they get their own
+    // focused, task-first sidebar; every other page falls back to the
+    // journey-ordered '/' sidebar below. As each remaining section moves under
+    // its own prefix (guide/ features/ operate/ reference/), it gets a key here
+    // and leaves the fallback.
+    sidebar: {
+      '/recipes/': [
+        {
+          text: 'Recipes',
+          items: [
+            { text: 'All recipes', link: '/recipes/' },
+            { text: 'Regression or flake?', link: '/recipes/regression-or-flaky' },
+            { text: 'Fix a broken locator', link: '/recipes/broken-locator' },
+            { text: 'Triage a run gone red', link: '/recipes/mass-failure' },
+            { text: 'Cut costly flakiness', link: '/recipes/flaky-cleanup' },
+            { text: 'Cut the time it costs', link: '/recipes/faster-suite' },
+          ],
+        },
+      ],
+      '/': [
+        {
+          text: 'Start here',
+          items: [
+            { text: 'What Piwi does', link: '/what-piwi-does' },
+            { text: 'Getting started', link: '/getting-started' },
+            { text: 'Core concepts', link: '/concepts' },
+            { text: 'Your first failure, explained', link: '/first-failure' },
+            { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
+            { text: 'Privacy & data flow', link: '/privacy' },
+          ],
+        },
+        {
+          text: 'Sending results',
+          items: [
+            { text: 'Reporter', link: '/reporter' },
+            { text: 'Capture fixtures', link: '/capture-fixtures' },
+            { text: 'AI steps', link: '/ai-steps' },
+            { text: 'CI & sharding', link: '/ci' },
+            { text: 'Test selections', link: '/test-selection' },
+            { text: 'Backend logs', link: '/backend-logs' },
+            { text: 'Importing past runs', link: '/importing-runs' },
+          ],
+        },
+        {
+          text: 'Reading the results',
+          items: [
+            { text: 'UI overview', link: '/ui-overview' },
+            { text: 'Failure evidence', link: '/evidence' },
+            { text: 'Failure clusters & the inbox', link: '/failure-clusters' },
+            { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
+            { text: 'Fix plans, reproduce & bisect', link: '/fix-plans' },
+            { text: 'What changed in a run', link: '/run-changes' },
+            { text: 'Flaky tests', link: '/flaky-tests' },
+            { text: 'Slow tests & wasted time', link: '/slow-tests' },
+            { text: 'Branches', link: '/branches' },
+            { text: 'Analytics', link: '/analytics' },
+            { text: 'Timeline markers', link: '/timeline-markers' },
+            { text: 'Notifications & alerts', link: '/notifications' },
+            { text: 'Locator healing', link: '/locator-healing' },
+            { text: 'Auto-heal PRs', link: '/auto-heal' },
+            { text: 'Offline export', link: '/offline-export' },
+            { text: 'Share links', link: '/share-links' },
+          ],
+        },
+        {
+          text: 'Running your instance',
+          items: [
+            { text: 'Deployment', link: '/deployment' },
+            { text: 'Production checklist', link: '/production-checklist' },
+            { text: 'Upgrading', link: '/upgrading' },
+            { text: 'Backup & restore', link: '/backup-restore' },
+            { text: 'Configuration reference', link: '/configuration' },
+            { text: 'Configuration generator', link: '/configuration/generator' },
+            { text: 'Authentication', link: '/authentication' },
+            { text: 'Database', link: '/database' },
+            { text: 'Storage configuration', link: '/storage' },
+          ],
+        },
+        {
+          text: 'Apps & integrations',
+          items: [
+            { text: 'Piwi CLI', link: '/cli' },
+            { text: 'Desktop app', link: '/desktop' },
+            { text: 'Browser extension', link: '/extension' },
+            { text: 'Test functions catalog', link: '/test-functions' },
+            { text: 'Open in IDE', link: '/ide-integration' },
+            { text: 'MCP server', link: '/mcp' },
+            { text: 'Agent skills', link: '/mcp#agent-skills' },
+            { text: 'API docs (interactive)', link: 'https://piwitests.dev/demo/docs' },
+          ],
+        },
+      ],
+    },
 
     editLink: {
       pattern: 'https://github.com/PiwiTests/platform/edit/main/apps/docs/:path',
