@@ -137,6 +137,7 @@ export const PROJECT = {
   TRACE_DEDUP: 'trace-dedup-test',
   TRACE_INSIGHTS: 'trace-insights-test',
   TRACE_PREFLIGHT: 'trace-preflight-test',
+  TRACE_SNAPSHOTS: 'trace-snapshots-test',
   TRACE_RESOURCES: 'trace-resources-test',
   TRACES_API: 'traces-api-test',
   UI_CREATED: 'ui-created',
