@@ -59,6 +59,15 @@ still covers the whole selection (so a `--require-selection` gate sees all of it
 npx @piwitests/reporter run smoke --shard 2/4 -- --shard=2/4
 ```
 
+The split is **lock-aware**: every test that shares a [lock](./reporter#test-locks) is placed in the same shard, then
+the shards are balanced by duration. Playwright serializes lock holders inside one `npx playwright test` process only —
+two `--shard` runs are separate processes and can hold the same lock at once — so keeping a lock's holders together
+restores the guarantee across shards. A lock group larger than a shard's fair share still goes to one shard (the lock
+guarantee wins over even balancing); grouping is transitive, so a test declaring two locks binds both groups. The
+assignment is deterministic for the same catalog. When a selection's tests share a lock, resolving it (including
+`piwi select --format json`) carries a `split-lock` warning, a reminder to shard with `piwi run --shard` rather than
+Playwright's own `playwright test --shard`, which would split the lock.
+
 ### Fail fast
 
 `--fail-fast` emits the selection worst-first — the least-reliable tests (by pass rate) lead, so a likely failure

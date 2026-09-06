@@ -531,7 +531,7 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'suggest_selections',
     description:
-      'Suggest tags and a smoke suite for a project from observed history (suggest-only, with evidence). Returns `slow` tags for duration outliers, `feature` tags from the route families tests hit, and a mined smoke suite — a budgeted set cover over observed routes, each pick buying fewer new routes than the last. `budgetMs` caps the smoke suite (default 5 min).',
+      'Suggest tags and a smoke suite for a project from observed history (suggest-only, with evidence). Returns `slow` tags for duration outliers, `feature` tags from the route families tests hit, and a mined smoke suite — a budgeted set cover over observed routes, each pick buying fewer new routes than the last. The smoke suite lists any `splitLocks` (locks held by more than one pick), which plain `playwright test --shard` could split across shards — run it with `piwi run --shard` (lock-aware) instead. `budgetMs` caps the smoke suite (default 5 min).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -544,7 +544,7 @@ export const MCP_TOOL_DEFS = [
   {
     name: 'analyze_selections',
     description:
-      'Health and drift for a project\'s selections. For each: what it resolves to now (count, quarantined members, duration, warnings) and whether that differs from what its most recent stamped run recorded — a silent drift a green build can hide. Plus coverage: how many tests are matched by no stored selection (the "unselected" gap), with a sample. Read-only.',
+      'Health and drift for a project\'s selections. For each: what it resolves to now (count, quarantined members, duration, warnings — including a `split-lock` warning when a lock is shared by more than one test, which Playwright\'s own `--shard` could split across shards) and whether that differs from what its most recent stamped run recorded — a silent drift a green build can hide. Plus coverage: how many tests are matched by no stored selection (the "unselected" gap), with a sample. Read-only.',
     inputSchema: {
       type: 'object',
       properties: { projectId: { type: 'number', description: 'Project ID' } },

@@ -42,6 +42,7 @@ import type { DbClient } from '../../database';
 import type { FilterDetails } from '#shared/types';
 import { errorExcerpt } from '#shared/notification-events';
 import { caseHeadline } from '#shared/failure-verdict';
+import { locksHeldAcrossShards } from '#shared/lock-overlap';
 
 /** Read the resolved settings, falling back to the (disabled) defaults. */
 export async function getPrFeedbackSettings(db: DbClient): Promise<PrFeedbackSettings> {
@@ -74,6 +75,9 @@ interface CaseRow {
   filePath: string;
   tags: unknown;
   owner: string | null;
+  locks: unknown;
+  shardIndex: number | null;
+  startedAt: number | null;
 }
 
 /**
@@ -169,6 +173,9 @@ export async function buildRunPrSummary(
       filePath: testCases.filePath,
       tags: testCases.tags,
       owner: testCases.owner,
+      locks: testRunsCases.locks,
+      shardIndex: testRunsCases.shardIndex,
+      startedAt: testRunsCases.startedAt,
     })
     .from(testRunsCases)
     .innerJoin(testCases, eq(testRunsCases.testCaseId, testCases.id))
@@ -265,6 +272,18 @@ export async function buildRunPrSummary(
     selection: (() => {
       const stamp = (run.filterDetails as FilterDetails | null)?.selection;
       return stamp ? { key: stamp.key, testCount: stamp.resolvedCount } : null;
+    })(),
+    splitLocks: (() => {
+      const held = locksHeldAcrossShards(
+        caseRows.map((row) => ({
+          id: row.id,
+          shardIndex: row.shardIndex,
+          startedAt: row.startedAt,
+          duration: row.duration,
+          locks: Array.isArray(row.locks) ? (row.locks as string[]) : [],
+        })),
+      );
+      return held.length ? held : null;
     })(),
     hasBaseline: insights?.hasBaseline ?? false,
   };

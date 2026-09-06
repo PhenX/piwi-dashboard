@@ -114,6 +114,8 @@ export interface PrSummaryInput {
   wastedMinutes: number | null;
   /** The named selection this run resolved from, when it came from `piwi run`. */
   selection?: { key: string; testCount: number } | null;
+  /** Locks held on two shards at once in this run — the guarantee sharding is meant to keep. */
+  splitLocks?: string[] | null;
   /** True when no previous green run existed to compare against. */
   hasBaseline: boolean;
 }
@@ -221,6 +223,14 @@ export function buildPrComment(input: PrSummaryInput): string {
   if (input.selection) {
     const n = input.selection.testCount;
     sections.push(`🎯 Selection **\`${input.selection.key}\`** — ${n} ${n === 1 ? 'test' : 'tests'}`);
+  }
+
+  if (input.splitLocks && input.splitLocks.length > 0) {
+    const names = input.splitLocks.map((lock) => `\`${escapeCell(lock)}\``).join(', ');
+    const plural = input.splitLocks.length === 1 ? 'Lock' : 'Locks';
+    sections.push(
+      `🔓 ${plural} ${names} held on two shards at once — locks serialize only within one \`playwright test\` process, so sharded runs don't coordinate. Shard with \`piwi run --shard\` (lock-aware) to keep each lock in one shard.`,
+    );
   }
 
   if (input.newRegressions.length > 0) {
