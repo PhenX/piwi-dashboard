@@ -40,12 +40,13 @@
  */
 
 import { createRequire } from 'module';
-import { spawn, execSync } from 'child_process';
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 import { drawAnnotations, clearAnnotations } from './screenshot-annotations.mjs';
+import { resolveChromium, startServer, waitForPortFree } from './lib/dev-server.mjs';
+import { waitForHydration, settlePage } from './lib/page-waits.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -54,7 +55,6 @@ const sharp = require('sharp');
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_DIR = join(__dirname, '..');
 const DOCS_SHOTS_DIR = join(APP_DIR, '..', 'docs', 'public', 'screenshots');
-const PORT = 3050;
 
 /** Where a scene's images land. `screens` is gitignored; `docs` is committed. */
 const OUT_TARGETS = {
@@ -611,6 +611,35 @@ const SCENES = [
     pad: 8,
   },
 
+  // ── Failure page clarity (report artifacts) ───────────────────────────────
+  // The first screen of each detail page in its default state, at wide and phone
+  // width, so the clarity plan's "In numbers" table can be re-read visually after
+  // each phase. Full-viewport, nothing expanded — the baseline these phases diff.
+  {
+    name: 'execution-clarity',
+    description: 'Execution page first screen, default state (1280×800 clarity baseline)',
+    route: '/test-run-cases/37',
+    viewport: { width: 1280, height: 800 },
+  },
+  {
+    name: 'execution-clarity-mobile',
+    description: 'The same execution page first screen at phone width',
+    route: '/test-run-cases/37',
+    viewport: { width: 390, height: 800 },
+  },
+  {
+    name: 'cluster-clarity',
+    description: 'Failure cluster page first screen, default state (1280×800 clarity baseline)',
+    route: '/failure-clusters/10',
+    viewport: { width: 1280, height: 800 },
+  },
+  {
+    name: 'cluster-clarity-mobile',
+    description: 'The same cluster page first screen at phone width',
+    route: '/failure-clusters/10',
+    viewport: { width: 390, height: 800 },
+  },
+
   // ── Desktop shell (report artifacts) ──────────────────────────────────────
   {
     name: 'desktop-nav',
@@ -808,38 +837,6 @@ function bridgeScript(scene) {
   `;
 }
 
-async function waitForHydration(page) {
-  await page.waitForLoadState('load');
-  await page
-    .waitForFunction(() => window.useNuxtApp?.().isHydrating === false, undefined, { timeout: 20000 })
-    .catch(() => page.waitForTimeout(1500));
-}
-
-/**
- * Wait for the page to stop moving: web fonts resolved, no in-flight requests,
- * nothing reporting itself busy, and — when the scene asks — chart geometry
- * actually drawn. Replaces guessing with a timeout.
- */
-async function settlePage(page, { charts = false, timeout = 20_000 } = {}) {
-  await page.waitForLoadState('networkidle', { timeout }).catch(() => {});
-  await page.evaluate(() => document.fonts.ready);
-  await page
-    .waitForFunction(() => !document.querySelector('[aria-busy="true"]'), undefined, { timeout })
-    .catch(() => {});
-  if (charts) {
-    await page.waitForFunction(
-      () => {
-        const svgs = [...document.querySelectorAll('svg')];
-        return svgs.some((svg) => svg.querySelector('path[d], rect[width], circle[r]'));
-      },
-      undefined,
-      { timeout },
-    );
-  }
-  // One frame after the last mutation, so a chart that just mounted has painted.
-  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-}
-
 /** Attributes the region capture puts on the page, and takes off again. */
 const REGION_ATTR = 'data-shot-region';
 const KEEP_ATTR = 'data-shot-keep';
@@ -926,103 +923,6 @@ function regionStyle(pad, { gridParent = false } = {}) {
   ]
     .filter(Boolean)
     .join('\n');
-}
-
-function ensureDevDb() {
-  if (existsSync(join(APP_DIR, '.data', 'piwi.db'))) return;
-  console.log('No dev DB — creating and seeding one (first run only)…');
-  if (!existsSync(join(APP_DIR, 'public', 'demo', 'seed.sql'))) {
-    execSync('npm run app:seed:demo', { cwd: APP_DIR, stdio: 'inherit' });
-  }
-  mkdirSync(join(APP_DIR, '.data'), { recursive: true });
-  execSync('npm run db:migrate', { cwd: APP_DIR, stdio: 'inherit' });
-  execSync('npm run app:seed:dev', { cwd: APP_DIR, stdio: 'inherit' });
-}
-
-async function waitForHealth(base, timeoutMs = 120_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(`${base}/api/health`);
-      if (res.ok) return;
-    } catch {
-      // not up yet
-    }
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  throw new Error(`server at ${base} did not become healthy within ${timeoutMs / 1000}s`);
-}
-
-/**
- * Wait for a stopped server to release the port. Without this a second mode's
- * server fails to bind and the run silently captures against the first one,
- * which is still answering.
- */
-async function waitForPortFree(base, timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      await fetch(`${base}/api/health`);
-    } catch {
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`server at ${base} did not shut down within ${timeoutMs / 1000}s`);
-}
-
-/**
- * Boot a dev server in `mode`; returns { base, stop }. The desktop UI is enabled
- * for `desktop` only — the sidebar's back/forward pair exists in the Tauri shell
- * alone, and would misrepresent the web app in a full-viewport capture.
- */
-async function startServer(mode) {
-  ensureDevDb();
-  const desktop = mode === 'desktop';
-  const child = spawn('npx', ['nuxt', 'dev', '--port', String(PORT)], {
-    cwd: APP_DIR,
-    env: { ...process.env, NUXT_IGNORE_LOCK: '1', ...(desktop ? { NUXT_PUBLIC_DESKTOP: 'true' } : {}) },
-    stdio: 'ignore',
-    // Detached puts nuxt in its own process group so stop() can kill the whole
-    // tree; on Windows npx needs a shell and group-kill is unsupported anyway.
-    detached: process.platform !== 'win32',
-    shell: process.platform === 'win32',
-  });
-  const stop = () => {
-    // Negative pid kills the whole nuxt process group where supported. On
-    // Windows child.kill() only terminates the cmd wrapper — the nuxt node
-    // process survives and keeps the port bound, so kill the tree explicitly.
-    try {
-      if (process.platform === 'win32') {
-        execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: 'ignore' });
-      } else {
-        process.kill(-child.pid, 'SIGTERM');
-      }
-    } catch {
-      // already gone
-    }
-  };
-  process.on('SIGINT', () => {
-    stop();
-    process.exit(130);
-  });
-  const base = `http://localhost:${PORT}`;
-  console.log(`Starting dev server at ${base}${desktop ? ' (desktop UI enabled)' : ''}…`);
-  try {
-    await waitForHealth(base);
-  } catch (err) {
-    stop();
-    throw err;
-  }
-  return { base, stop };
-}
-
-function resolveChromium() {
-  // The sandboxed environments provide a Chromium via PLAYWRIGHT_BROWSERS_PATH;
-  // a normal checkout uses Playwright's own download.
-  const provided = process.env.PLAYWRIGHT_BROWSERS_PATH;
-  if (provided && existsSync(join(provided, 'chromium'))) return join(provided, 'chromium');
-  return undefined;
 }
 
 /** Levenshtein distance, for suggesting what the user meant by an unknown scene. */
@@ -1381,7 +1281,7 @@ async function main() {
   let written = 0;
   try {
     for (const [mode, group] of byMode) {
-      const server = flags.url ? { base: flags.url, stop: () => {} } : await startServer(mode);
+      const server = flags.url ? { base: flags.url, stop: () => {} } : await startServer({ mode });
       try {
         for (const scene of group) {
           try {
