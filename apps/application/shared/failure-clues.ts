@@ -22,6 +22,7 @@ import type { FailureTimeline } from '#shared/failure-timeline';
 import { TIMELINE_WINDOW_LEAD_MS } from '#shared/failure-timeline';
 import type { LocatorHealingResult } from '#shared/locator-healing.types';
 import type { PageStateLike } from '#shared/page-state';
+import { intervalsOverlap } from '#shared/lock-overlap';
 
 /** The environment-diff facts the engine reads — the pure subset of the server result. */
 export interface FailureClueEnvironmentDiff {
@@ -569,7 +570,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
           if (!isFiniteNumber(h.startedAt) || !isFiniteNumber(h.duration)) return false;
           const hStart = h.startedAt as number;
           const hEnd = hStart + (h.duration as number);
-          return hStart < selfEnd && hEnd > selfStart;
+          return intervalsOverlap(selfStart, selfEnd, hStart, hEnd);
         });
         if (overlap) {
           add({

@@ -1567,6 +1567,7 @@ const HANDLERS: Record<McpToolName, McpToolHandler> = {
             totalRoutes: suggestions.smoke.totalRoutes,
             coveredRoutes: suggestions.smoke.coveredRoutes,
             testCaseIds: suggestions.smoke.testCaseIds,
+            splitLocks: suggestions.smoke.splitLocks.length ? suggestions.smoke.splitLocks : null,
             picks: suggestions.smoke.picks.map((p) =>
               dropNulls({
                 testCaseId: p.testCaseId,
