@@ -2649,6 +2649,7 @@ function collectAnchorSec() {
   for (const r of TEST_RUNS_CASES) {
     bump(r.started_at, 'ms');
     bump(r.created_at, 'ms');
+    for (const e of r.steps || []) bump(e.startTime, 'ms');
     for (const e of r.step_events || []) bump(e.startedAt, 'ms');
     for (const e of r.console_logs || []) bump(e.timestamp, 'ms');
   }
@@ -2667,10 +2668,13 @@ const D = '(SELECT delta_sec FROM _rebase)';
 const D_MS = `(SELECT delta_sec FROM _rebase) * 1000`;
 
 // Shift a JSON array column's per-element ms timestamp (`$.field`) in place,
-// preserving element order (json_each iterates in array order).
+// preserving element order (json_each iterates in array order). Elements that
+// carry no `$.field` are left untouched, so a shift never writes a null key.
 const shiftJsonMs = (table, column, field) =>
-  `UPDATE ${table} SET ${column} = (SELECT json_group_array(json_set(value, '$.${field}', ` +
-  `json_extract(value, '$.${field}') + ${D_MS})) FROM json_each(${table}.${column})) ` +
+  `UPDATE ${table} SET ${column} = (SELECT json_group_array(` +
+  `CASE WHEN json_extract(value, '$.${field}') IS NOT NULL ` +
+  `THEN json_set(value, '$.${field}', json_extract(value, '$.${field}') + ${D_MS}) ELSE value END) ` +
+  `FROM json_each(${table}.${column})) ` +
   `WHERE ${column} IS NOT NULL AND json_valid(${column});`;
 
 const REBASE_SQL = [
@@ -2702,6 +2706,7 @@ const REBASE_SQL = [
   `UPDATE locator_snapshots SET last_seen_at = last_seen_at + ${D_MS};`,
   '',
   '-- Millisecond timestamps embedded in JSON columns',
+  shiftJsonMs('test_runs_cases', 'steps', 'startTime'),
   shiftJsonMs('test_runs_cases', 'step_events', 'startedAt'),
   shiftJsonMs('test_runs_cases', 'console_logs', 'timestamp'),
   shiftJsonMs('network_requests', 'server_logs', 'timestamp'),
