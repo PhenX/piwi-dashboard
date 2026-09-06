@@ -153,6 +153,22 @@ Ordered by value over cost, sized in sessions, and placed against the work in fl
 
 **Later.** The perfetto export; the upstream request for public `locks` (and `parallelMode`).
 
+### Delivery record (2026-09-06)
+
+Seven pull requests, each produced by a separate session from this document, in two waves; all merged to `main` the same day.
+
+| Item | PR | Decisions recorded in the PR |
+|---|---|---|
+| 1 — subtitle and params capture, `@playwright/test` 1.63 bump | #482 | `stepLabel()` composes title and subtitle; `capSteps` re-caps and masks params at ingest (`PIWI_INGEST_MAX_STEP_PARAM_KEYS`, `PIWI_INGEST_MAX_STEP_PARAM_VALUE_CHARS`); the trace-import path keeps its titles because no selector-to-locator formatter exists |
+| 3 — test locks | #484 | Colored brackets on the bars rather than lanes above the workers; locks read from the private field, none from blob imports; `PIWI_INGEST_MAX_LOCKS` |
+| 4 — aria and screen snapshots in traces | #485 | `aria` defaulted on 1.63+ only, version-gated as §4.2 says; `screen` stays opt-in; the in-execution page diff compares the failure page with the last preceding page that differs |
+| 2 — subtitle and params display and analysis | #493 | `StepLabel` and `StepParamsDisclosure` components; `params.locator` feeds the headline; the URL clue reads the last navigation's `params.url` |
+| 6 — lock-aware sharding, split-lock warning, `--add-reporter` | #491 | The desktop-shell part stays with **M** |
+| Later — perfetto export | #492 | Shared builder in `shared/`, run and execution endpoints, an export-menu entry |
+| 5 — locators and capture fixtures | #494 | Dialogs recorded from `dialogclosed` only (a `dialog` listener would suppress Playwright's automatic dismissal); the `.visible()` suggestion is gated on the run's Playwright version and was verified against a crafted 1.63 execution because the seeded data predates 1.63 |
+
+Not done, as planned: the upstream request for a public `testCase.locks` (outside this repository).
+
 ---
 
 ## 9. Compatibility and rollout
