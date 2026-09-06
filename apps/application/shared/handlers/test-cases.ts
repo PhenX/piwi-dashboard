@@ -25,6 +25,7 @@ import { getPageDiff } from '../../server/utils/page-diff';
 import type { PageStateLike } from '../page-state';
 import type { TestStepEvent } from '../types';
 import type { TestMetadata } from '@piwitests/core/test-meta';
+import type { FlatStep } from '@piwitests/core/step-analysis';
 import type { RunMetadata } from '../../server/utils/run-json-types';
 
 import type { DrizzleDB } from './db';
@@ -533,6 +534,41 @@ export async function getFailureTimeline(
       serverTraces: nr.serverTraces,
     })),
   });
+}
+
+/** One execution's flattened steps plus the timing the timeline positions them against. */
+export interface ExecutionSteps {
+  steps: FlatStep[];
+  /** Absolute start time in ms, or null when the reporter recorded none. */
+  startedAt: number | null;
+  /** Total duration in ms. */
+  duration: number | null;
+  status: string | null;
+}
+
+/**
+ * The flattened step list for one execution (the `steps` column), loaded on
+ * demand when a worker-timeline row is expanded into its per-step waterfall.
+ * Kept separate from the run detail payload, which omits `steps` to stay light.
+ * Returns an empty list when the execution does not exist.
+ */
+export async function getExecutionSteps(db: DrizzleDB, id: number): Promise<ExecutionSteps> {
+  const [trc] = await db
+    .select({
+      steps: testRunsCases.steps,
+      startedAt: testRunsCases.startedAt,
+      duration: testRunsCases.duration,
+      status: testRunsCases.status,
+    })
+    .from(testRunsCases)
+    .where(eq(testRunsCases.id, id));
+  if (!trc) return { steps: [], startedAt: null, duration: null, status: null };
+  return {
+    steps: (trc.steps as FlatStep[] | null) ?? [],
+    startedAt: trc.startedAt ?? null,
+    duration: trc.duration ?? null,
+    status: trc.status ?? null,
+  };
 }
 
 /** What the clue engine returns for one execution, plus the failure anchor the UI needs. */

@@ -11,11 +11,38 @@ export const TIMELINE_LAYOUT = {
   labelWidth: 80,
   sidePadding: 16,
   axisHeight: 28,
+  /** Height of a step bar inside an expanded sub-lane (shorter than a test bar). */
+  stepBarHeight: 15,
   /** Derived: a full row is a bar plus the gap below it. */
   get rowHeight(): number {
     return this.barHeight + this.rowGap;
   },
 } as const;
+
+/**
+ * Fill per reporter step category, used when a test row is expanded into its
+ * step waterfall. Chosen to sit apart from the pass/fail status palette so a
+ * step reads by what it did, not by an outcome; a failed step overrides to red.
+ */
+const STEP_CATEGORY_HEX: Record<string, string> = {
+  action: '#2563eb',
+  input: '#4f46e5',
+  navigation: '#0891b2',
+  assertion: '#7c3aed',
+  wait: '#d97706',
+  hook: '#64748b',
+  fixture: '#94a3b8',
+  setup: '#0d9488',
+  api: '#c026d3',
+  'test.step': '#475569',
+  other: '#6b7280',
+};
+
+/** Fill for a step bar: its category color, or red when the step failed. */
+export function timelineStepColor(category: string, failed: boolean): string {
+  if (failed) return '#dc2626';
+  return STEP_CATEGORY_HEX[category] ?? STEP_CATEGORY_HEX.other!;
+}
 
 const STATUS_HEX: Record<string, string> = {
   passed: '#16a34a',

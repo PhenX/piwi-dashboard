@@ -15,6 +15,8 @@ defineProps<{
   showLocks?: boolean;
   /** Distinct lock names in the run. */
   lockCount?: number;
+  /** How many test rows are currently expanded into their step waterfall. */
+  expandedCount?: number;
   live?: boolean;
 }>();
 
@@ -22,6 +24,7 @@ defineEmits<{
   reset: [];
   toggleHooksAndWaits: [visible: boolean];
   toggleLocks: [visible: boolean];
+  collapseAll: [];
 }>();
 </script>
 
@@ -43,6 +46,16 @@ defineEmits<{
       <HelpHint topic="run.timeline" />
     </span>
     <div class="flex items-center gap-1">
+      <UButton
+        v-if="expandedCount && expandedCount > 0"
+        size="xs"
+        color="neutral"
+        variant="ghost"
+        icon="i-lucide-chevrons-down-up"
+        @click="$emit('collapseAll')"
+      >
+        Collapse steps ({{ expandedCount }})
+      </UButton>
       <USwitch
         v-if="hasNonTestSpans"
         :model-value="showHooksAndWaits"

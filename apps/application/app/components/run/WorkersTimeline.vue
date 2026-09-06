@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import type { TestCaseResult, SetupStepEvent } from '~~/types/api';
+import type { TestCaseResult, SetupStepEvent, PerformanceStep } from '~~/types/api';
 import { useTimelineModel, type TimelineItem } from '~/composables/useTimelineModel';
 import { useTimelineViewport } from '~/composables/useTimelineViewport';
 import { lockColorHex } from '~/utils/timeline';
@@ -18,7 +18,72 @@ const emit = defineEmits<{
   selectTestCase: [id: number];
 }>();
 
-const { timelineData, workerRows, shardGroups, maxTime, runLocks } = useTimelineModel(props);
+// Which test rows are expanded into their step waterfall, and the steps fetched
+// for them (loaded on demand — the run payload omits the heavy `steps` column).
+const expandedExecutions = ref(new Set<number>());
+const stepsByExecution = ref(new Map<number, PerformanceStep[]>());
+const stepsLoading = new Set<number>();
+
+// Getter-based input so useTimelineModel keeps tracking the component props and
+// the expansion refs reactively (a spread would snapshot them).
+const modelInput = {
+  get testCases() {
+    return props.testCases;
+  },
+  get setupSteps() {
+    return props.setupSteps;
+  },
+  get wastedPatterns() {
+    return props.wastedPatterns;
+  },
+  get expandedExecutions() {
+    return expandedExecutions.value;
+  },
+  get stepsByExecution() {
+    return stepsByExecution.value;
+  },
+};
+
+const { timelineData, workerRows, laneCount, maxTime, runLocks } = useTimelineModel(modelInput);
+
+const expandedCount = computed(() => expandedExecutions.value.size);
+
+/** A test row can be expanded when it is a persisted execution and the run is not live. */
+function barExpandable(item: TimelineItem): boolean {
+  return item.kind === 'test' && !props.live && (item.testCaseId ?? 0) > 0;
+}
+
+async function toggleExpand(id: number): Promise<void> {
+  const next = new Set(expandedExecutions.value);
+  if (next.has(id)) {
+    next.delete(id);
+    expandedExecutions.value = next;
+    return;
+  }
+  next.add(id);
+  expandedExecutions.value = next;
+
+  // Frame the test's own span — at run-fit zoom its steps are sub-pixel.
+  const testItem = timelineData.value.find((d) => d.kind === 'test' && d.testCaseId === id);
+  if (testItem) zoomToRange(testItem.start, testItem.start + testItem.duration);
+
+  if (stepsByExecution.value.has(id) || stepsLoading.has(id)) return;
+  stepsLoading.add(id);
+  try {
+    const res = await $fetch<{ steps: PerformanceStep[] }>(`/api/test-run-cases/${id}/steps`);
+    const map = new Map(stepsByExecution.value);
+    map.set(id, res.steps ?? []);
+    stepsByExecution.value = map;
+  } catch {
+    // Leave the row expanded but empty; toggling it again retries the fetch.
+  } finally {
+    stepsLoading.delete(id);
+  }
+}
+
+function collapseAll(): void {
+  expandedExecutions.value = new Set();
+}
 
 // Lock name → its color (assigned by the run's sorted lock order, so a lock
 // keeps its color across the brackets, the legend and the tooltip).
@@ -37,7 +102,7 @@ function lockColorsFor(item: TimelineItem): string[] {
 }
 
 const containerRef = ref<HTMLElement | null>(null);
-const rowCount = computed(() => workerRows.value.length);
+const rowCount = computed(() => laneCount.value);
 const hasData = computed(() => timelineData.value.length > 0);
 
 const {
@@ -54,20 +119,24 @@ const {
   onPointerMove,
   onPointerUp,
   resetView,
+  zoomToRange,
 } = useTimelineViewport({ containerRef, maxTime, rowCount, hasData, live: () => props.live });
 
 // Header counts (tests vs. hook/fixture/setup segments vs. wasted waits).
 const testCount = computed(() => timelineData.value.filter((d) => d.kind === 'test').length);
-const hookCount = computed(() => timelineData.value.filter((d) => d.kind !== 'test' && d.kind !== 'wait').length);
+const hookCount = computed(
+  () => timelineData.value.filter((d) => d.kind === 'hook' || d.kind === 'fixture' || d.kind === 'setup').length,
+);
 const waitCount = computed(() => timelineData.value.filter((d) => d.kind === 'wait').length);
 
 // One toggle folds every non-test span (setup, hooks, fixtures, wasted waits)
-// in and out; tests are always drawn. The toggle only appears when the run has
-// such spans to show.
+// in and out; tests are always drawn, and expanded step spans are always drawn
+// since expanding a row is itself the explicit request to see them. The toggle
+// only appears when the run has such spans to show.
 const showHooksAndWaits = ref(false);
-const hasNonTestSpans = computed(() => timelineData.value.some((item) => item.kind !== 'test'));
+const hasNonTestSpans = computed(() => timelineData.value.some((item) => item.kind !== 'test' && item.kind !== 'step'));
 const visibleItems = computed(() =>
-  showHooksAndWaits.value ? timelineData.value : timelineData.value.filter((item) => item.kind === 'test'),
+  timelineData.value.filter((item) => item.kind === 'test' || item.kind === 'step' || showHooksAndWaits.value),
 );
 
 // Tooltip state — driven by hover events from the bars.
@@ -110,9 +179,11 @@ function onBarLeave() {
       :has-locks="hasLocks"
       :show-locks="showLocks"
       :lock-count="runLocks.length"
+      :expanded-count="expandedCount"
       :live="live"
       @toggle-hooks-and-waits="showHooksAndWaits = $event"
       @toggle-locks="showLocks = $event"
+      @collapse-all="collapseAll"
       @reset="resetView"
     />
 
@@ -158,7 +229,6 @@ function onBarLeave() {
 
         <TimelineGrid
           :worker-rows="workerRows"
-          :shard-groups="shardGroups"
           :tick-marks="tickMarks"
           :content-width="contentWidth"
           :shard-total="shardTotal"
@@ -172,7 +242,9 @@ function onBarLeave() {
           :y="getBarTop(item)"
           :width="getBarWidth(item)"
           :lock-colors="lockColorsFor(item)"
+          :expandable="barExpandable(item)"
           @select="emit('selectTestCase', $event)"
+          @toggle-expand="toggleExpand($event)"
           @hover="onBarEnter"
           @move="onBarMove"
           @leave="onBarLeave"
