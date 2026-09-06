@@ -12,6 +12,7 @@ import {
 } from '../database/schema';
 import type { FailureCluster } from '../database/schema';
 import type { DiagnosisContextCoverage } from '~~/types/api';
+import { stepLabel } from '@piwitests/core/step-analysis';
 import { condenseErrorText, maskVolatile, stripAnsi } from '#shared/error-fingerprint';
 import { DIAGNOSIS_SECTIONS } from '#shared/diagnosis-sections';
 import { evidenceAbsenceReason } from '#shared/evidence-state';
@@ -471,7 +472,7 @@ function failingStepsSection(rep: RepresentativeRow, limits: ContextLimits): str
   if (failing.length === 0) return null;
   const out = failing.map(
     (s) =>
-      `- [${s.category ?? 'step'}] ${s.title}\n\`\`\`\n${condenseErrorText(s.error!.message!, limits.sampleErrorChars)}\n\`\`\``,
+      `- [${s.category ?? 'step'}] ${stepLabel(s)}\n\`\`\`\n${condenseErrorText(s.error!.message!, limits.sampleErrorChars)}\n\`\`\``,
   );
   return `### Failed Steps\n${out.join('\n')}`;
 }
@@ -1678,7 +1679,7 @@ export function representativeExecutionSections(
           const prefix = s.failed ? '✗ ' : '- ';
           const suffix = s.failed ? ' ← FAILED' : '';
           const dur = s.duration != null ? ` (${s.duration}ms)` : '';
-          return `${prefix}[${s.category ?? 'step'}] ${s.title}${dur}${suffix}`;
+          return `${prefix}[${s.category ?? 'step'}] ${stepLabel(s)}${dur}${suffix}`;
         })
         .join('\n')}`,
     });

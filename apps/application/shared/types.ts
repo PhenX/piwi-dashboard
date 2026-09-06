@@ -170,6 +170,8 @@ export interface StreamEventPayload {
   steps?: unknown;
   stepEvents?: TestStepEvent[] | null;
   stepCategory?: string | null;
+  /** Step target for a `step-begin`/`step-end` event (rendered locator or URL). */
+  subtitle?: string | null;
   parentTitle?: string | null;
   slowestStep?: string | null;
   slowestStepDuration?: number | null;

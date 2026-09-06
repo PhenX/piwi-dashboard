@@ -83,6 +83,8 @@ export interface ParsedBlobReport {
 interface StepNode {
   title: string;
   category: string;
+  subtitle?: string;
+  params?: Record<string, unknown>;
   startTime: number;
   duration: number;
   location?: { file: string; line: number; column: number };
@@ -252,6 +254,9 @@ function applyStepBegin(acc: ResultAccumulator, step: Record<string, unknown>, r
     duration: 0,
     steps: [],
   };
+  if (typeof step.subtitle === 'string' && step.subtitle.length > 0) node.subtitle = step.subtitle;
+  if (step.params && typeof step.params === 'object' && !Array.isArray(step.params))
+    node.params = step.params as Record<string, unknown>;
   if (typeof location?.file === 'string') {
     node.location = {
       file: resolver.fromRoot(location.file),

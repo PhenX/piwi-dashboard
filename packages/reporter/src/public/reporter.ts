@@ -271,6 +271,7 @@ export class PiwiDashboardReporter {
     const event: StreamEvent = {
       type: 'step-begin',
       title: step.title,
+      subtitle: typeof step.subtitle === 'string' && step.subtitle.length > 0 ? step.subtitle : null,
       location: step.location ? `${step.location.file}:${step.location.line}:${step.location.column}` : 'unknown',
       stepCategory: cat,
       parentTitle: test?.title || null,
@@ -292,6 +293,7 @@ export class PiwiDashboardReporter {
     const event: StreamEvent = {
       type: 'step-end',
       title: step.title,
+      subtitle: typeof step.subtitle === 'string' && step.subtitle.length > 0 ? step.subtitle : null,
       location: step.location ? `${step.location.file}:${step.location.line}:${step.location.column}` : 'unknown',
       status: step.error ? 'failed' : 'passed',
       duration: step.duration || 0,

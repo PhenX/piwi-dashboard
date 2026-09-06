@@ -91,6 +91,8 @@ export interface TestSourceFrame {
 /** A hook/fixture/step event with absolute timings (for the workers timeline). */
 export interface TestStepEvent {
   title: string;
+  /** The step's target (rendered locator or URL), carried separately by newer Playwright. */
+  subtitle?: string | null;
   category: 'hook' | 'fixture' | 'test.step' | 'expect' | 'wait';
   startedAt: number;
   duration: number;
