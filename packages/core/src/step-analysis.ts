@@ -147,6 +147,38 @@ export function stepLabel(step: { title?: unknown; subtitle?: unknown }): string
 }
 
 /**
+ * The title and subtitle split for two-element display: the title, and the
+ * subtitle only when it adds a target the title does not already spell out.
+ * The visual counterpart of {@link stepLabel} (which joins the same two parts
+ * into one plain-text string) — a renderer shows `title` then a muted
+ * `subtitle`, and joining them with a space reproduces `stepLabel`.
+ */
+export function stepLabelParts(step: { title?: unknown; subtitle?: unknown }): {
+  title: string;
+  subtitle: string | null;
+} {
+  const title = typeof step.title === 'string' ? step.title : '';
+  const subtitle = typeof step.subtitle === 'string' ? step.subtitle.trim() : '';
+  if (!subtitle) return { title, subtitle: null };
+  if (!title) return { title: subtitle, subtitle: null };
+  return title.includes(subtitle) ? { title, subtitle: null } : { title, subtitle };
+}
+
+/**
+ * A step's params in display order: the rendered `locator` first (it is the
+ * step's subject), then the remaining keys in insertion order. Used by the
+ * params disclosure and the analysis lines so every surface lists them the same
+ * way. Returns an empty array when the step carries none.
+ */
+export function orderedStepParams(
+  params: Record<string, string | number | boolean> | null | undefined,
+): Array<[string, string | number | boolean]> {
+  if (!params || typeof params !== 'object') return [];
+  const entries = Object.entries(params);
+  return entries.sort(([a], [b]) => (a === 'locator' ? -1 : b === 'locator' ? 1 : 0));
+}
+
+/**
  * Normalize a step's raw `params`: keep primitives as they are, JSON-stringify
  * anything else, mask token-shaped strings, and cap both the key count and each
  * value's length. Returns undefined when nothing survives.
