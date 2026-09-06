@@ -310,6 +310,20 @@ function paramsSig(s: AttemptStep): string {
   return s.params ? JSON.stringify(s.params) : '';
 }
 
+/**
+ * The params that changed between two same-label steps, as `key: failing → passing`
+ * lines (a key present on only one side reads as `∅` on the other). Null when the
+ * two carry the same params.
+ */
+function paramsDiffLines(failing: AttemptStep, passing: AttemptStep): string | null {
+  const f = failing.params ?? {};
+  const p = passing.params ?? {};
+  const keys = [...new Set([...Object.keys(f), ...Object.keys(p)])];
+  const changed = keys.filter((k) => String(f[k] ?? '') !== String(p[k] ?? ''));
+  if (changed.length === 0) return null;
+  return changed.map((k) => `${k}: ${k in f ? f[k] : '∅'} → ${k in p ? p[k] : '∅'}`).join('\n');
+}
+
 function stepDiffs(failSteps: AttemptStep[], passSteps: AttemptStep[]): AttemptDiffEntry[] {
   // Align on the label (title + subtitle), so newer Playwright's bare "Click"
   // titles do not collapse every action onto one key; params disambiguate two
@@ -343,6 +357,20 @@ function stepDiffs(failSteps: AttemptStep[], passSteps: AttemptStep[]): AttemptD
           summary: `Step "${label}" was ${formatMs(delta)} slower on the failing attempt`,
           detail: `${formatMs(s.duration)} vs ${formatMs(twin.duration)}`,
           only: 'failing',
+          ref: { section: 'steps' },
+        });
+      }
+    }
+    // A step run on both attempts whose params (a URL, a value, a test.step
+    // input) differed — the change often is the difference between the runs.
+    const labelTwin = passByLabel.get(label);
+    if (labelTwin) {
+      const paramLines = paramsDiffLines(s, labelTwin);
+      if (paramLines) {
+        out.push({
+          kind: 'step',
+          summary: `Step "${label}" ran with different params`,
+          detail: paramLines,
           ref: { section: 'steps' },
         });
       }
