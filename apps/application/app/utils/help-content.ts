@@ -241,12 +241,12 @@ export const HELP_TOPICS = {
   'case.fix': {
     title: 'Fix',
     text: 'Everything to do about this failure in one place — the locator fix for a broken locator, a pointer to the cluster’s fix plan, the diagnosis, how to verify a fix, and the tests this failure blocked. Each part shows only when it applies.',
-    doc: 'ai-diagnosis#fix-plans',
+    doc: 'fix-plans',
   },
   'fix.reproduce': {
     title: 'Reproduce',
     text: 'A copy-paste recipe that reproduces the failure locally — check out the failing commit, install the run’s Playwright version and browser, and run exactly the failing test — plus a generated git bisect between the last green and the failing commit to find what broke it. Both come in Linux/macOS and Windows forms. The bisect needs a last-green commit and an SCM connection; without them it says so. In the desktop app, Reproduce here and Find the breaking commit here run the recipe and drive the bisect for you in a throwaway git worktree, without touching your checkout.',
-    doc: 'ai-diagnosis#reproduce-and-bisect',
+    doc: 'fix-plans#reproduce-and-bisect',
   },
   'case.test-source': {
     title: 'Test source',
@@ -324,12 +324,12 @@ export const HELP_TOPICS = {
   'cluster.fix-plan': {
     title: 'Fix',
     text: 'Everything needed to repair this cluster in one place — the AI diagnosis and its validated patch, the recommended locator fix, the command that verifies the fix, and the whole plan as Markdown. Copy it for a ticket, or let an agent fetch the same plan via the get_fix_plan MCP tool.',
-    doc: 'ai-diagnosis#fix-plans',
+    doc: 'fix-plans',
   },
   'cluster.fixed-before': {
     title: 'Fixed before',
     text: 'Resolved failures that resemble this one — matched on the same error and locator, the same spec or test, and (when embeddings are configured) semantic similarity. Each shows when it was fixed, the resolving commit, how long it stayed open and the triage note, so you can reuse an earlier resolution. "Apply the same triage" copies that note onto this cluster; it never marks a new cluster resolved because an old one was.',
-    doc: 'ai-diagnosis#fix-plans',
+    doc: 'fix-plans#fixed-before',
   },
   'cluster.evidence': {
     title: 'Test evidence',
