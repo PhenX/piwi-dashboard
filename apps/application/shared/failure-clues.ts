@@ -22,6 +22,7 @@ import type { FailureTimeline } from '#shared/failure-timeline';
 import { TIMELINE_WINDOW_LEAD_MS } from '#shared/failure-timeline';
 import type { LocatorHealingResult } from '#shared/locator-healing.types';
 import type { PageStateLike } from '#shared/page-state';
+import { ariaTextPreferJson } from '#shared/aria-json';
 
 /** The environment-diff facts the engine reads — the pure subset of the server result. */
 export interface FailureClueEnvironmentDiff {
@@ -41,6 +42,7 @@ export type FailureClueRule =
   | 'failed-request-before-failure'
   | 'slow-request-overlapping-failure'
   | 'console-mentions-target'
+  | 'dialog-open-on-failure'
   | 'backend-error-attached'
   | 'element-renamed'
   | 'page-structure-changed'
@@ -94,6 +96,14 @@ export interface FailureClueConsoleEntry {
   type?: string | null;
   text?: string | null;
   timestamp?: number | null;
+}
+
+/** One browser dialog observed via its close event. */
+export interface FailureClueDialog {
+  type?: string | null;
+  message?: string | null;
+  defaultValue?: string | null;
+  closedAt?: number | null;
 }
 
 /** One sibling execution of the same test in this run, on a given browser. */
@@ -154,12 +164,16 @@ export interface FailureClueInput {
   timeline: FailureTimeline | null;
   healing: LocatorHealingResult | null;
   ariaSnapshot: string | null;
+  /** The failure-time aria tree as JSON (Playwright ≥ 1.63), preferred over the YAML. */
+  ariaSnapshotJson?: string | null;
   appState: PageStateLike | null;
   environmentDiff: FailureClueEnvironmentDiff | null;
   /** The structural page diff against the last green sample, when one exists. */
   pageDiff?: FailureCluePageDiff | null;
   networkRequests: FailureClueNetworkRequest[];
   consoleLogs: FailureClueConsoleEntry[];
+  /** Browser dialogs observed during this execution (Playwright ≥ 1.63). */
+  dialogs?: FailureClueDialog[] | null;
   /** Sibling executions of this test in this run, one per browser. */
   browserPeers: FailureClueBrowserPeer[];
   /** Executions on the same worker in this run, ordered by `startedAt`. */
@@ -183,6 +197,7 @@ const RULE_ORDER: FailureClueRule[] = [
   'failed-request-before-failure',
   'slow-request-overlapping-failure',
   'console-mentions-target',
+  'dialog-open-on-failure',
   'backend-error-attached',
   'element-renamed',
   'page-structure-changed',
@@ -374,6 +389,32 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
     }
   }
 
+  // ── dialog-open-on-failure (strong) ────────────────────────────────────────
+  // A browser dialog closed around the failure moment — it was open, and a native
+  // dialog blocks the page until dismissed, so the action could not proceed.
+  const dialogs = input.dialogs ?? [];
+  if (origin != null && dialogs.length > 0) {
+    const positioned = dialogs
+      .map((d, index) => ({ d, index, at: isFiniteNumber(d.closedAt) ? d.closedAt - origin : null }))
+      .filter((p) => inWindow(p.at));
+    const hit = positioned[positioned.length - 1];
+    if (hit) {
+      const type = str(hit.d.type) || 'dialog';
+      const message = str(hit.d.message);
+      add({
+        id: 'dialog-open-on-failure',
+        rule: 'dialog-open-on-failure',
+        strength: 'strong',
+        title: `A ${type} dialog was open when the action failed`,
+        detail: `A browser ${type} dialog${
+          message ? ` ("${message.slice(0, 140)}")` : ''
+        } was open around the failure — a native dialog blocks the page until it is dismissed, so the action could not proceed.`,
+        citations: [{ section: 'dialogs', index: hit.index }],
+        ...(hit.at != null ? { at: hit.at } : {}),
+      });
+    }
+  }
+
   // ── backend-error-attached (strong) ────────────────────────────────────────
   // A request in the window whose backend logs carry an error-level entry.
   if (origin != null) {
@@ -444,7 +485,7 @@ export function buildFailureClues(input: FailureClueInput): FailureClue[] {
   // The call log says the element resolved but was not actionable, and the ARIA
   // snapshot still shows one with the failing role and name.
   if (parsed && BLOCKED_STATES.has(parsed.lastState)) {
-    const aria = str(input.ariaSnapshot).toLowerCase();
+    const aria = str(ariaTextPreferJson(input.ariaSnapshotJson, input.ariaSnapshot)).toLowerCase();
     const roleName = target.role ? target.role.toLowerCase() : null;
     const nameNeedle = target.name;
     const present =

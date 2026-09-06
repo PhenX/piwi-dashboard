@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Locator } from '@playwright/test';
 import {
   ariaSnapshotBestEffort,
+  ariaSnapshotJSONBestEffort,
   piwiFixtures,
   probeElementAttrs,
   CAPTURED_ATTRS_ARG,
@@ -120,6 +121,28 @@ describe('ariaSnapshotBestEffort', () => {
     const locator = fakeLocator(ariaSnapshot);
     await expect(ariaSnapshotBestEffort(locator)).resolves.toBeNull();
     expect(ariaSnapshot).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ariaSnapshotJSONBestEffort', () => {
+  it('returns null when the installed Playwright has no ariaSnapshotJSON (< 1.63)', async () => {
+    const locator = { ariaSnapshot: async () => '- button' } as unknown as Locator;
+    expect(await ariaSnapshotJSONBestEffort(locator)).toBeNull();
+  });
+
+  it('stringifies the JSON tree the method returns', async () => {
+    const tree = [{ role: 'button', name: 'Pay' }];
+    const ariaSnapshotJSON = vi.fn().mockResolvedValue(tree);
+    const locator = { ariaSnapshotJSON } as unknown as Locator;
+    const result = await ariaSnapshotJSONBestEffort(locator, 500);
+    expect(result).toBe(JSON.stringify(tree));
+    expect(ariaSnapshotJSON).toHaveBeenCalledWith({ timeout: 500 });
+  });
+
+  it('returns null (never throws) when the method rejects', async () => {
+    const ariaSnapshotJSON = vi.fn().mockRejectedValue(new Error('nope'));
+    const locator = { ariaSnapshotJSON } as unknown as Locator;
+    await expect(ariaSnapshotJSONBestEffort(locator)).resolves.toBeNull();
   });
 });
 
@@ -1154,5 +1177,76 @@ describe('visible() and frameLocator() chains', () => {
     // The selector form is returned as Playwright hands it back — its locators
     // are outside the capture proxy, so nothing is recorded.
     expect(snapshots).toBeNull();
+  });
+});
+
+
+describe('dialog capture (dialogclosed)', () => {
+  /** Drive the fixtures against a fake page, fire dialog events, read the attachment. */
+  async function runDialogs(
+    fire: (emit: (event: string, dialog?: unknown) => void) => void,
+  ): Promise<Array<Record<string, unknown>> | null> {
+    const handlers = new Map<string, Array<(arg?: unknown) => void>>();
+    const rootLocator = { ariaSnapshot: async () => null };
+    const factory = () => ({ click: async () => {}, evaluate: async () => null });
+    const fakePage = {
+      getByRole: factory,
+      getByTestId: factory,
+      getByText: factory,
+      getByLabel: factory,
+      getByPlaceholder: factory,
+      getByAltText: factory,
+      getByTitle: factory,
+      locator: (sel: string) => (sel === ':root' ? rootLocator : factory()),
+      on: (event: string, handler: (arg?: unknown) => void) => {
+        const list = handlers.get(event) ?? [];
+        list.push(handler);
+        handlers.set(event, list);
+      },
+      evaluate: async () => null,
+    };
+    const emit = (event: string, dialog?: unknown) => (handlers.get(event) ?? []).forEach((h) => h(dialog));
+    const testInfo = { status: 'failed', attach: vi.fn(async () => {}), annotations: [] };
+
+    const pageFixture = piwiFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
+      (args: object, use: () => Promise<void>, info: unknown) => Promise<void>,
+    ];
+
+    await captureFixture(
+      {},
+      () =>
+        pageFixture({ page: fakePage }, async () => {
+          fire(emit);
+        }),
+      testInfo,
+    );
+
+    const call = testInfo.attach.mock.calls.find((c) => c[0] === ATTACHMENT_NAMES.dialogs);
+    return call ? (JSON.parse((call[1] as { body: Buffer }).body.toString()) as Array<Record<string, unknown>>) : null;
+  }
+
+  const fakeDialog = (type: string, message: string) => ({
+    type: () => type,
+    message: () => message,
+    defaultValue: () => '',
+  });
+
+  it('records a dialog observed through the close event', async () => {
+    const dialogs = await runDialogs((emit) => {
+      emit('dialogclosed', fakeDialog('confirm', 'Stay signed in?'));
+    });
+    expect(dialogs).toHaveLength(1);
+    expect(dialogs![0]!.type).toBe('confirm');
+    expect(dialogs![0]!.message).toBe('Stay signed in?');
+    expect(typeof dialogs![0]!.closedAt).toBe('number');
+  });
+
+  it('attaches nothing when no dialog was observed', async () => {
+    const dialogs = await runDialogs(() => {});
+    expect(dialogs).toBeNull();
   });
 });

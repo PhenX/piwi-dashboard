@@ -98,8 +98,12 @@ export interface CollectedTestCase {
   aiUsage?: unknown;
   /** Parsed from `piwi-console` attachments. */
   consoleLogs?: unknown;
+  /** Parsed from `piwi-dialogs` attachment: browser dialogs observed via the close event. */
+  dialogs?: unknown;
   /** Parsed from `piwi-aria-snapshot` attachment. */
   ariaSnapshot?: string;
+  /** Parsed from `piwi-aria-snapshot-json` attachment (Playwright ≥ 1.63). */
+  ariaSnapshotJson?: string;
   /** Parsed from `piwi-locators` attachment. */
   locatorSnapshots?: LocatorSnapshot[];
   /** Why a `didnotrun` case never executed; unset for tests that ran. */

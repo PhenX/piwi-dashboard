@@ -832,6 +832,13 @@ for (const proj of DEMO_PROJECTS) {
         }));
       }
 
+      // A dialog left open at the failure moment, when the story carries one —
+      // closes just before the failure so it lands in the failure window.
+      const dialogs =
+        isFailedCase && !noPage && story?.evidence.dialogOnFail
+          ? [{ ...story.evidence.dialogOnFail, closedAt: caseStartMs + Math.round(caseDuration * 0.95) }]
+          : null;
+
       // Effective per-test timeout (ms), stable per test case across runs. Most
       // tests keep a healthy 20s budget that timeout-hygiene never flags (its
       // headroom stays under the 20s floor); the designated slow case keeps a
@@ -884,6 +891,7 @@ for (const proj of DEMO_PROJECTS) {
         page_state: isDidNotRunCase || noPage ? null : buildPageState(proj, storyEntry),
         ai_usage: isDidNotRunCase || noPage ? null : await buildAiUsage(caseDef),
         console_logs: consoleLogs,
+        dialogs,
         aria_snapshot:
           isFailedCase && !noPage
             ? story?.aria

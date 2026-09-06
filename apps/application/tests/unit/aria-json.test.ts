@@ -1,5 +1,11 @@
 import { describe, test, expect } from 'vitest';
-import { ariaJsonTreeToText, ariaJsonToText, parseAriaJsonTree, type AriaJsonNode } from '#shared/aria-json';
+import {
+  ariaJsonTreeToText,
+  ariaJsonToText,
+  ariaTextPreferJson,
+  parseAriaJsonTree,
+  type AriaJsonNode,
+} from '#shared/aria-json';
 import { diffAriaSnapshots, parseAriaSnapshot } from '#shared/page-diff';
 
 describe('ariaJsonTreeToText', () => {
@@ -86,5 +92,19 @@ describe('parseAriaJsonTree / ariaJsonToText', () => {
     );
     const { summary } = diffAriaSnapshots(before, after);
     expect(summary.changed).toBe(1);
+  });
+});
+
+describe('ariaTextPreferJson', () => {
+  const json = JSON.stringify([{ role: 'button', name: 'Pay', disabled: true }]);
+
+  test('renders the JSON tree to text when present', () => {
+    expect(ariaTextPreferJson(json, '- button "old"')).toBe('- button "Pay" [disabled]');
+  });
+
+  test('falls back to the YAML when the JSON is absent or unusable', () => {
+    expect(ariaTextPreferJson(null, '- button "Pay"')).toBe('- button "Pay"');
+    expect(ariaTextPreferJson('not json', '- button "Pay"')).toBe('- button "Pay"');
+    expect(ariaTextPreferJson(undefined, undefined)).toBeNull();
   });
 });

@@ -931,6 +931,12 @@ export const FAILURE_STORIES = [
           resourceType: 'fetch',
         },
       ],
+      // A confirm dialog left open at the failure moment blocks the page until
+      // it is dismissed, so the Pay action never resolves.
+      dialogOnFail: {
+        type: 'confirm',
+        message: 'Your session is about to expire. Stay signed in?',
+      },
       pageStateDropKeys: ['quote'],
     },
     appFiles: ['tests/helpers/payment.ts', 'src/components/CheckoutForm.vue'],

@@ -444,14 +444,17 @@ export const testRunsCases = sqliteTable(
     pageState: text('page_state', { mode: 'json' }), // URL/history/storage-keys/cookie-flags at test end (values never captured)
     aiUsage: text('ai_usage', { mode: 'json' }), // { entries: string[], intents?: {template,locator,kind}[] } — replayed AI-step artifacts + their prompts
     consoleLogs: text('console_logs', { mode: 'json' }), // Array of { type, text, timestamp, location } console entries
+    dialogs: text('dialogs', { mode: 'json' }), // Array of { type, message, defaultValue, closedAt } browser dialogs
     evidenceSources: text('evidence_sources', { mode: 'json' }), // { console?, network?, aria?: 'trace' } — marks evidence recovered from the trace when the capture fixtures were absent
     // Legacy inline payload columns: still readable on old rows, no longer
     // written — new rows store these payloads content-addressed in
     // case_payloads and reference them via the *PayloadId columns below.
     ariaSnapshot: text('aria_snapshot'), // ARIA snapshot of the page (YAML-like string from locator.ariaSnapshot())
+    ariaSnapshotJson: text('aria_snapshot_json'), // ARIA tree as JSON (from locator.ariaSnapshotJSON(), Playwright >= 1.63)
     testSource: text('test_source'), // Source snippet around the failing assertion (sent by reporter)
     testSourceFrames: text('test_source_frames', { mode: 'json' }), // Array<{ file, line, snippet }> — in-project call-stack frames (innermost first)
     ariaSnapshotPayloadId: integer('aria_snapshot_payload_id').references(() => casePayloads.id),
+    ariaSnapshotJsonPayloadId: integer('aria_snapshot_json_payload_id').references(() => casePayloads.id),
     testSourcePayloadId: integer('test_source_payload_id').references(() => casePayloads.id),
     testSourceFramesPayloadId: integer('test_source_frames_payload_id').references(() => casePayloads.id),
     browser: text('browser', { mode: 'json' }), // Playwright project/browser config: { projectName, browserName, channel, viewport }
@@ -488,6 +491,9 @@ export const testRunsCases = sqliteTable(
     ariaPayloadIdx: index('idx_trc_aria_payload')
       .on(table.ariaSnapshotPayloadId)
       .where(sql`aria_snapshot_payload_id IS NOT NULL`),
+    ariaJsonPayloadIdx: index('idx_trc_aria_json_payload')
+      .on(table.ariaSnapshotJsonPayloadId)
+      .where(sql`aria_snapshot_json_payload_id IS NOT NULL`),
     sourcePayloadIdx: index('idx_trc_source_payload')
       .on(table.testSourcePayloadId)
       .where(sql`test_source_payload_id IS NOT NULL`),

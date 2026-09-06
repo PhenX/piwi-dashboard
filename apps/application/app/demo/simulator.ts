@@ -52,6 +52,7 @@ interface SimAttempt {
   duration?: number;
   error?: string;
   consoleLogs?: Array<Record<string, unknown>>;
+  dialogs?: Array<Record<string, unknown>>;
   ariaSnapshot?: string;
   testAnnotations?: Array<{ type: string; description?: string }> | null;
   testSource?: string | null;
@@ -724,6 +725,13 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
             duration: failedDuration,
             error: failingCase.error,
             consoleLogs: themedConsoleLogs(CLUSTER1_STORY.evidence.consoleOnFail, startedAt),
+            // The first holder also leaves a confirm dialog open at the failure
+            // moment — it blocks the page until dismissed, so the Pay action
+            // never resolves. Feeds the dialogs lane and the dialog clue.
+            dialogs:
+              i === 0 && CLUSTER1_STORY.evidence.dialogOnFail
+                ? [{ ...CLUSTER1_STORY.evidence.dialogOnFail, closedAt: startedAt + failedDuration - 250 }]
+                : undefined,
             testAnnotations: [{ type: 'fixme', description: `Known issue — see cluster ${CLUSTER1_STORY.clusterId}` }],
             testSource: buildTestSource(CLUSTER1_STORY, failingCase, CHECKOUT_TESTS[i]!.declLine),
             testSourceFrames: buildSourceFrames(failingCase),
@@ -1233,6 +1241,7 @@ async function runSingleSimulation(
             locks: test.locks,
             testMeta: test.testMeta,
             consoleLogs: a.consoleLogs ?? null,
+            dialogs: a.dialogs ?? null,
             ariaSnapshot: a.ariaSnapshot ?? null,
             testSource: a.testSource ?? null,
             testSourceFrames: a.testSourceFrames ?? null,

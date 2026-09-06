@@ -14,6 +14,7 @@ import {
   capText,
   sanitizeWebVitals,
   sanitizeConsoleLogs,
+  sanitizeDialogs,
   sanitizePageState,
   sanitizeAiUsage,
 } from './sanitize';
@@ -85,7 +86,9 @@ export interface RunCaseInput {
   pageState?: unknown;
   aiUsage?: unknown;
   consoleLogs?: unknown;
+  dialogs?: unknown;
   ariaSnapshot?: string | null;
+  ariaSnapshotJson?: string | null;
   testSource?: string | null;
   testSourceFrames?: unknown;
   workerIndex?: number | null;
@@ -304,7 +307,7 @@ async function syncTestCaseMetadata(db: DB, incoming: Map<number, CaseMetaSnapsh
 async function dedupeGreenSamples(
   db: DB,
   rows: Array<typeof testRunsCases.$inferInsert>,
-  payloads: Array<{ aria: string | null; source: string | null; framesJson: string | null }>,
+  payloads: Array<{ aria: string | null; ariaJson: string | null; source: string | null; framesJson: string | null }>,
   now: number = Date.now(),
 ): Promise<void> {
   const cutoff = now - GREEN_SAMPLE_MAX_AGE_MS;
@@ -317,6 +320,7 @@ async function dedupeGreenSamples(
     // One green sample per test per batch is enough — drop the rest outright.
     if (seenInBatch.has(caseId)) {
       payloads[i]!.aria = null;
+      payloads[i]!.ariaJson = null;
       return;
     }
     seenInBatch.add(caseId);
@@ -343,7 +347,10 @@ async function dedupeGreenSamples(
   const freshById = new Map(existing.map((r) => [r.testCaseId, Number(r.latest)]));
   for (const { index, caseId } of greenRows) {
     const latest = freshById.get(caseId);
-    if (latest != null && latest >= cutoff) payloads[index]!.aria = null;
+    if (latest != null && latest >= cutoff) {
+      payloads[index]!.aria = null;
+      payloads[index]!.ariaJson = null;
+    }
   }
 }
 
@@ -376,7 +383,12 @@ export async function persistRunCases(
   // Capped payload strings per row, deduplicated into case_payloads after the
   // loop; the junction rows store only the payload ids (inline columns stay
   // null on new rows — readers coalesce via inlineCasePayloads).
-  const rowPayloads: Array<{ aria: string | null; source: string | null; framesJson: string | null }> = [];
+  const rowPayloads: Array<{
+    aria: string | null;
+    ariaJson: string | null;
+    source: string | null;
+    framesJson: string | null;
+  }> = [];
   const networkRequestBuilders: NetworkRequestBuilder[] = [];
   const rowFingerprints: Array<ErrorFingerprint | null> = [];
   const pendingClusters = new Map<string, PendingCluster>();
@@ -452,9 +464,10 @@ export async function persistRunCases(
     rowFingerprints.push(fingerprint);
 
     const aria = capText(c.ariaSnapshot, limits.ariaSnapshotChars);
+    const ariaJson = capText(c.ariaSnapshotJson, limits.ariaSnapshotChars);
     const source = capText(c.testSource, limits.testSourceChars);
     const frames = capSourceFrames(c.testSourceFrames, limits);
-    rowPayloads.push({ aria, source, framesJson: frames != null ? JSON.stringify(frames) : null });
+    rowPayloads.push({ aria, ariaJson, source, framesJson: frames != null ? JSON.stringify(frames) : null });
 
     runCasesRows.push({
       testRunId,
@@ -480,7 +493,9 @@ export async function persistRunCases(
           sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined),
           limits,
         ) ?? null,
+      dialogs: capArray(sanitizeDialogs(c.dialogs), limits.dialogs) ?? null,
       ariaSnapshot: null,
+      ariaSnapshotJson: null,
       testSource: null,
       testSourceFrames: null,
       testAnnotations: (c.testAnnotations as any) ?? null,
@@ -510,11 +525,12 @@ export async function persistRunCases(
   const payloadIds = await upsertCasePayloads(
     db,
     projectId,
-    rowPayloads.flatMap((p) => [p.aria, p.source, p.framesJson]),
+    rowPayloads.flatMap((p) => [p.aria, p.ariaJson, p.source, p.framesJson]),
   );
   runCasesRows.forEach((row, i) => {
     const p = rowPayloads[i]!;
     row.ariaSnapshotPayloadId = p.aria ? (payloadIds.get(p.aria) ?? null) : null;
+    row.ariaSnapshotJsonPayloadId = p.ariaJson ? (payloadIds.get(p.ariaJson) ?? null) : null;
     row.testSourcePayloadId = p.source ? (payloadIds.get(p.source) ?? null) : null;
     row.testSourceFramesPayloadId = p.framesJson ? (payloadIds.get(p.framesJson) ?? null) : null;
   });

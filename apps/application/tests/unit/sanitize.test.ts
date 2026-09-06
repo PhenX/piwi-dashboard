@@ -7,6 +7,7 @@ import {
   sanitizeMetadata,
   sanitizeConsoleLogs,
   sanitizeAiUsage,
+  sanitizeDialogs,
   capSteps,
 } from '../../server/utils/sanitize';
 import { DEFAULT_INGEST_LIMITS } from '#shared/ingest-limits';
@@ -187,5 +188,26 @@ describe('capSteps', () => {
       Record<string, unknown>
     >;
     expect('params' in out[0]!).toBe(false);
+  });
+});
+
+describe('sanitizeDialogs', () => {
+  test('keeps recognized fields and drops unknown ones', () => {
+    const out = sanitizeDialogs([
+      { type: 'confirm', message: 'Stay signed in?', defaultValue: 'yes', closedAt: 123, extra: 'x' },
+    ]);
+    expect(out).toEqual([{ type: 'confirm', message: 'Stay signed in?', defaultValue: 'yes', closedAt: 123 }]);
+  });
+
+  test('masks a token-shaped dialog message', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcDEF123456';
+    const out = sanitizeDialogs([{ type: 'prompt', message: jwt }]) as Array<{ message: string }>;
+    expect(out[0]!.message).toBe('[masked-token]');
+  });
+
+  test('returns null for non-arrays and empty results', () => {
+    expect(sanitizeDialogs(null)).toBeNull();
+    expect(sanitizeDialogs('nope')).toBeNull();
+    expect(sanitizeDialogs([42, null])).toBeNull();
   });
 });

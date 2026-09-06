@@ -19,6 +19,7 @@ import {
   alternativeUsesName,
 } from '#shared/locator-healing';
 import { elementMatchOutcome, generateFromAriaSnapshot, type ElementFingerprint } from '#shared/locator-fingerprint';
+import { ariaTextPreferJson } from '#shared/aria-json';
 import { buildHealEdit } from '#shared/heal-edit';
 import { inlineCasePayloads, resolveCasePayloadContents } from './case-payloads';
 import type {
@@ -413,8 +414,10 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
       testCaseId: testRunsCases.testCaseId,
       testRunId: testRunsCases.testRunId,
       ariaSnapshot: testRunsCases.ariaSnapshot,
+      ariaSnapshotJson: testRunsCases.ariaSnapshotJson,
       testSource: testRunsCases.testSource,
       ariaSnapshotPayloadId: testRunsCases.ariaSnapshotPayloadId,
+      ariaSnapshotJsonPayloadId: testRunsCases.ariaSnapshotJsonPayloadId,
       testSourcePayloadId: testRunsCases.testSourcePayloadId,
       filePath: testCases.filePath,
     })
@@ -438,6 +441,7 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
     {
       error: row.error,
       ariaSnapshot: row.ariaSnapshot,
+      ariaSnapshotJson: row.ariaSnapshotJson,
       testSource: row.testSource,
       failingRunId: row.testRunId,
       filePath: row.filePath,
@@ -451,6 +455,8 @@ export async function getLocatorHealing(db: DrizzleDB, testRunsCaseId: number): 
 export interface HealingCaseInput {
   error: string | null;
   ariaSnapshot?: string | null;
+  /** The failure-time aria tree as JSON (Playwright ≥ 1.63), preferred over the YAML. */
+  ariaSnapshotJson?: string | null;
   testSource?: string | null;
   /** The failing execution's run id — enables healed-run detection. */
   failingRunId?: number | null;
@@ -501,7 +507,7 @@ export async function resolveHealingForCase(
 ): Promise<LocatorHealingResult> {
   if (!input.error) return notApplicableResult(null, null);
   const error = input.error;
-  const aria = input.ariaSnapshot ?? null;
+  const aria = ariaTextPreferJson(input.ariaSnapshotJson, input.ariaSnapshot);
 
   // Parse the failing locator from the error (for display + signature lookup).
   // Use the chain leaf — the innermost call identifies the resolved element and
@@ -637,8 +643,10 @@ export async function getLocatorHealingBatch(
       testCaseId: testRunsCases.testCaseId,
       testRunId: testRunsCases.testRunId,
       ariaSnapshot: testRunsCases.ariaSnapshot,
+      ariaSnapshotJson: testRunsCases.ariaSnapshotJson,
       testSource: testRunsCases.testSource,
       ariaSnapshotPayloadId: testRunsCases.ariaSnapshotPayloadId,
+      ariaSnapshotJsonPayloadId: testRunsCases.ariaSnapshotJsonPayloadId,
       testSourcePayloadId: testRunsCases.testSourcePayloadId,
       filePath: testCases.filePath,
     })
@@ -648,12 +656,15 @@ export async function getLocatorHealingBatch(
 
   const payloadContents = await resolveCasePayloadContents(
     db,
-    rawCaseRows.flatMap((r) => [r.ariaSnapshotPayloadId, r.testSourcePayloadId]),
+    rawCaseRows.flatMap((r) => [r.ariaSnapshotPayloadId, r.ariaSnapshotJsonPayloadId, r.testSourcePayloadId]),
   );
   const caseRows = rawCaseRows.map((r) => ({
     ...r,
     ariaSnapshot:
       (r.ariaSnapshotPayloadId != null ? payloadContents.get(r.ariaSnapshotPayloadId) : undefined) ?? r.ariaSnapshot,
+    ariaSnapshotJson:
+      (r.ariaSnapshotJsonPayloadId != null ? payloadContents.get(r.ariaSnapshotJsonPayloadId) : undefined) ??
+      r.ariaSnapshotJson,
     testSource:
       (r.testSourcePayloadId != null ? payloadContents.get(r.testSourcePayloadId) : undefined) ?? r.testSource,
   }));
@@ -681,6 +692,7 @@ export async function getLocatorHealingBatch(
         {
           error: row.error,
           ariaSnapshot: row.ariaSnapshot,
+          ariaSnapshotJson: row.ariaSnapshotJson,
           testSource: row.testSource,
           failingRunId: row.testRunId,
           filePath: row.filePath,

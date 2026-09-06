@@ -28,6 +28,7 @@ export const DIAGNOSIS_SECTIONS: DiagnosisSectionMeta[] = [
   { id: 'failingSteps', label: 'Failing steps', short: 'Steps' },
   { id: 'aiSteps', label: 'AI-step prompts (natural-language intents)', short: 'AI steps' },
   { id: 'console', label: 'Browser console logs', short: 'Console' },
+  { id: 'dialogs', label: 'Browser dialogs', short: 'Dialogs' },
   { id: 'networkRequests', label: 'Network requests', short: 'Network' },
   { id: 'serverLogs', label: 'Backend server logs', short: 'Server logs' },
   { id: 'serverTraces', label: 'Server traces (spans)', short: 'Traces' },

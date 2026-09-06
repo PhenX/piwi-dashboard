@@ -519,6 +519,7 @@ export async function getFailureTimeline(
     steps: trc.steps,
     stepEvents: trc.stepEvents,
     consoleLogs: trc.consoleLogs,
+    dialogs: trc.dialogs,
     specFile: testCase?.filePath ?? null,
     traceCallsites: opts.traceCallsites ?? null,
     networkRequests: networkRequestRows.map((nr) => ({
@@ -597,6 +598,7 @@ export async function getFailureClues(
     steps: trc.steps,
     stepEvents: trc.stepEvents,
     consoleLogs: trc.consoleLogs,
+    dialogs: trc.dialogs,
     specFile: testCase?.filePath ?? null,
     networkRequests: networkForClues,
   });
@@ -693,6 +695,7 @@ export async function getFailureClues(
     timeline,
     healing,
     ariaSnapshot: evidence.ariaSnapshot ?? null,
+    ariaSnapshotJson: evidence.ariaSnapshotJson ?? null,
     appState: (trc.pageState as PageStateLike | null) ?? null,
     environmentDiff,
     pageDiff: pageDiffLocatorChange(pageDiff),
@@ -700,6 +703,13 @@ export async function getFailureClues(
     consoleLogs:
       (trc.consoleLogs as Array<{ type?: string | null; text?: string | null; timestamp?: number | null }> | null) ??
       [],
+    dialogs:
+      (trc.dialogs as Array<{
+        type?: string | null;
+        message?: string | null;
+        defaultValue?: string | null;
+        closedAt?: number | null;
+      }> | null) ?? null,
     browserPeers,
     workerExecutions: workerExecutions.map((w) => ({ ...w, startedAt: startedAtMs(w.startedAt) })),
     lockHolders: lockHolders.map((h) => ({

@@ -84,7 +84,9 @@ export interface TestCasePayload {
   /** AI-step usage manifest (`{ entries: string[] }`): committed AI-step artifacts this test replayed. */
   aiUsage?: unknown;
   consoleLogs?: unknown;
+  dialogs?: unknown;
   ariaSnapshot?: unknown;
+  ariaSnapshotJson?: unknown;
   workerIndex?: number | null;
   shardIndex?: number | null;
   startedAt?: number | null;
@@ -183,7 +185,9 @@ export interface StreamEventPayload {
   pageState?: unknown;
   aiUsage?: unknown;
   consoleLogs?: unknown;
+  dialogs?: unknown;
   ariaSnapshot?: unknown;
+  ariaSnapshotJson?: unknown;
   browser?: BrowserConfig | null;
   suitePath?: string[] | null;
   suiteConfig?: SuiteConfigEntry[] | null;

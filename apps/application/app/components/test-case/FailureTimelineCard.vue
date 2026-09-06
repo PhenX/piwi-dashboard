@@ -60,14 +60,16 @@ const SECTION_ACTION: Record<TimelineItem['ref']['section'], string> = {
   console: 'console',
   networkRequests: 'networkRequests',
   backendLogs: 'networkRequests',
+  dialogs: 'console',
 };
 
 // ── Placed items and lanes ───────────────────────────────────────────────────
-const LANE_ORDER: TimelineLane[] = ['steps', 'network', 'console', 'backend'];
+const LANE_ORDER: TimelineLane[] = ['steps', 'network', 'console', 'dialogs', 'backend'];
 const LANE_LABEL: Record<TimelineLane, string> = {
   steps: 'Steps',
   network: 'Network',
   console: 'Console',
+  dialogs: 'Dialogs',
   backend: 'Backend',
 };
 
@@ -200,6 +202,7 @@ const legendItems = computed(() => {
   }
   if (visibleLanes.value.includes('network')) items.push({ color: 'rgb(56, 189, 248)', label: 'Request' });
   if (visibleLanes.value.includes('console')) items.push({ color: 'rgb(245, 158, 11)', label: 'Console' });
+  if (visibleLanes.value.includes('dialogs')) items.push({ color: 'rgb(20, 184, 166)', label: 'Dialog' });
   if (visibleLanes.value.includes('backend')) items.push({ color: 'rgb(139, 92, 246)', label: 'Backend' });
   return items;
 });
@@ -221,6 +224,7 @@ const windowItems = computed<TimelineItem[]>(() => {
 function kindTag(item: TimelineItem): string {
   if (item.kind === 'console') return `console ${item.status ?? ''}`.trim();
   if (item.kind === 'backend') return `backend ${item.status ?? ''}`.trim();
+  if (item.kind === 'dialogs') return `dialog ${item.status ?? ''}`.trim();
   return '';
 }
 
@@ -388,19 +392,21 @@ function stepBarColorClass(duration: number): string {
 }
 
 // An interleaved event row: its own icon, a kind label and (for a request) a duration.
-const EVENT_ICON: Record<'network' | 'console' | 'backend', string> = {
+const EVENT_ICON: Record<'network' | 'console' | 'backend' | 'dialogs', string> = {
   network: 'i-lucide-arrow-left-right',
   console: 'i-lucide-terminal',
   backend: 'i-lucide-server',
+  dialogs: 'i-lucide-message-square',
 };
 function eventIcon(item: TimelineItem): string {
-  return EVENT_ICON[item.kind as 'network' | 'console' | 'backend'] ?? 'i-lucide-dot';
+  return EVENT_ICON[item.kind as 'network' | 'console' | 'backend' | 'dialogs'] ?? 'i-lucide-dot';
 }
 function eventIconClass(item: TimelineItem): string {
   if (item.failed || item.status === 'error' || item.status === 'fatal') return 'text-red-500';
   if (item.status === 'warning' || item.status === 'warn') return 'text-amber-500';
   if (item.kind === 'backend') return 'text-violet-500';
   if (item.kind === 'network') return 'text-sky-500';
+  if (item.kind === 'dialogs') return 'text-teal-500';
   return 'text-gray-400 dark:text-gray-500';
 }
 
@@ -572,6 +578,20 @@ function onViewTrace() {
               r="4"
               class="cursor-pointer"
               :class="consoleClass(item.status)"
+              @click="revealItem(item)"
+              @mouseenter="show($event, item)"
+              @mousemove="move($event)"
+              @mouseleave="hide()"
+            />
+          </template>
+
+          <!-- Dialog marks -->
+          <template v-for="item in data.lanes.dialogs" :key="item.id">
+            <circle
+              :cx="xOf(item.at)"
+              :cy="laneY('dialogs') + LANE_H / 2"
+              r="4"
+              class="cursor-pointer fill-teal-500"
               @click="revealItem(item)"
               @mouseenter="show($event, item)"
               @mousemove="move($event)"
