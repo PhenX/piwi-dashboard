@@ -5,6 +5,8 @@ lang: en-US
 
 # Failure clusters & the inbox
 
+<Needs reporter />
+
 A run gives you a list of failures. The same root cause usually breaks several tests, and the same break
 comes back run after run — so a list of failures is really a much shorter list of *problems*, repeated.
 Piwi groups failures by that root cause into **failure clusters**, and the Home page turns those clusters

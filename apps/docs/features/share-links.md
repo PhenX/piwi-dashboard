@@ -5,6 +5,8 @@ lang: en-US
 
 # Share links
 
+<Needs reporter />
+
 A share link is a read-only URL for one execution or one failure cluster that anyone can open — no dashboard
 account, no login. It is the live counterpart of an [offline export](./offline-export): instead of a file frozen at
 export time, the link renders the investigation as it stands when it is opened.

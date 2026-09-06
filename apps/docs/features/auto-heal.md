@@ -5,6 +5,8 @@ lang: en-US
 
 # Auto-heal PRs
 
+<Needs reporter scm llm />
+
 When a locator breaks on your default branch and Piwi has high-confidence evidence for the replacement, it can open the
 fix pull request itself: a branch, a one-line locator edit per broken call site, and a body that shows the change, the
 score, where the replacement came from, and the command that verifies it. The CI gate runs on the PR like any other,

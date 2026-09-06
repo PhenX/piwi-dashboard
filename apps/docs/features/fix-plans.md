@@ -5,6 +5,8 @@ lang: en-US
 
 # Fix plans, reproduce & bisect
 
+<Needs reporter desktop />
+
 A **fix plan** gathers everything Piwi knows about a failure cluster into one answer to "what do I do about this?" — the [AI diagnosis](./ai-diagnosis) and its validated patch, the ranked [locator replacement](./ai-diagnosis#locator-healing) with the exact file and line to edit, the failing tests, the owning team, and the command that verifies the work. None of it needs a model of its own: a cluster with no AI diagnosis still returns its failing tests, its locator suggestions and its verification command, so the plan is useful with no AI provider configured at all.
 
 ## Where to get it

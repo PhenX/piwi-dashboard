@@ -5,6 +5,8 @@ lang: en-US
 
 # Offline export
 
+<Needs reporter />
+
 An investigation is only useful while someone can open it. Piwi can write a failing execution or a
 whole failure cluster to a file that opens with **no network and no Piwi server** — for a ticket
 attachment, a mail to someone without an account, or an archive that outlives your retention window.

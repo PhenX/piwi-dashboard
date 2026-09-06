@@ -5,6 +5,8 @@ lang: en-US
 
 # Open in IDE
 
+<Needs reporter />
+
 Every source path the dashboard shows — the failing call stack ("Failed here"), a
 run's test-case list, a test case's file, flaky lists, cluster evidence, the AI
 suggested-fix — is clickable. Hover a path and a small **open in IDE** control

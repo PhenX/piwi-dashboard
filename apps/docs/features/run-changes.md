@@ -5,6 +5,8 @@ lang: en-US
 
 # What changed in a run
 
+<Needs reporter />
+
 The **Changes** tab on a run compares it against **one baseline** and tells you what moved: which tests newly started failing, which got fixed, and what landed between the two. It's the fastest way to answer "did my push break this, or was it already red?"
 
 ## The baseline
