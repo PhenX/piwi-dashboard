@@ -20,6 +20,8 @@ export interface IngestLimits {
   steps: number;
   /** Max stored step events per execution. */
   stepEvents: number;
+  /** Max stored lock names per execution. */
+  locks: number;
   /** Max characters of the stored ARIA snapshot. */
   ariaSnapshotChars: number;
   /** Max characters of the stored per-execution error (head + tail are kept). */
@@ -39,6 +41,7 @@ export const DEFAULT_INGEST_LIMITS: IngestLimits = {
   consoleEntryChars: 2000,
   steps: 500,
   stepEvents: 1000,
+  locks: 20,
   ariaSnapshotChars: 100000,
   errorChars: 20000,
   sampleErrorChars: 50000,
@@ -85,6 +88,13 @@ export const INGEST_LIMIT_FIELDS: IngestLimitField[] = [
     description: 'Max step events stored per execution.',
     min: 20,
     max: 10000,
+  },
+  {
+    key: 'locks',
+    envVar: 'PIWI_INGEST_MAX_LOCKS',
+    description: 'Max lock names stored per execution.',
+    min: 1,
+    max: 100,
   },
   {
     key: 'ariaSnapshotChars',

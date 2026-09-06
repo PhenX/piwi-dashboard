@@ -518,6 +518,7 @@ export default eventHandler(async (event) => {
         shardIndex: testCase.shardIndex as number | null | undefined,
         startedAt: testCase.startedAt as number | null | undefined,
         tags: testCase.tags ?? null,
+        locks: testCase.locks ?? null,
         testMeta: testCase.testMeta ?? null,
         locatorSnapshots: (testCase as any).locatorSnapshots ?? null,
         didNotRunReason: (testCase.didNotRunReason as string | null | undefined) ?? null,

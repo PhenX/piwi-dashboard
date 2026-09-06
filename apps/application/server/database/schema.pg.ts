@@ -160,6 +160,7 @@ export const testCases = pgTable(
     // that reports this test. Per-execution truth lives on test_runs_cases;
     // these denormalized columns let project-wide views filter without a join.
     tags: jsonb('tags'), // string[] — normalized, '@' stripped
+    locks: jsonb('locks'), // string[] — lock names this test most recently declared (best effort)
     owner: text('owner'),
     priority: text('priority'), // 'critical' | 'high' | 'medium' | 'low'
     feature: text('feature'),
@@ -491,6 +492,7 @@ export const testRunsCases = pgTable(
     browserName: text('browser_name'), // Scalar browser identity (projectName) for index efficiency
     testAnnotations: jsonb('test_annotations'), // Array<{ type, description? }> — runtime test marks (@fixme, @slow …)
     tags: jsonb('tags'), // string[] — tags this execution declared ('@' stripped)
+    locks: jsonb('locks'), // string[] — lock names this execution held (best effort; none from blob imports)
     testMeta: jsonb('test_meta'), // { owner?, priority?, feature?, link? } from `piwi:` annotations
     workerIndex: integer('worker_index'), // Parallel worker index (from Playwright's parallelIndex)
     shardIndex: integer('shard_index'), // Shard index (1-based) for sharded runs; null = not sharded

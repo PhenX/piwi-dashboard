@@ -38,6 +38,7 @@ export interface ParsedCompleteEvent {
   suiteConfig?: Array<{ mode: string; annotations: Array<{ type: string; description?: string }> }> | null;
   testAnnotations?: Array<{ type: string; description?: string }> | null;
   tags?: unknown;
+  locks?: unknown;
   testMeta?: unknown;
   workerIndex?: number | null;
   shardIndex?: number | null;
@@ -63,6 +64,7 @@ export function mapCompleteEventToRunCase(tc: ParsedCompleteEvent): RunCaseInput
     suiteConfig: tc.suiteConfig ?? null,
     testAnnotations: tc.testAnnotations ?? null,
     tags: tc.tags ?? null,
+    locks: tc.locks ?? null,
     testMeta: tc.testMeta ?? null,
     title: tc.title as string,
     status: tc.status as string,
