@@ -75,12 +75,11 @@ export default defineConfig({
 
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Getting started', link: '/getting-started' },
-      { text: 'Reporter', link: '/reporter' },
-      // Recipes and Operate each have their own path-prefixed sidebar, so their
-      // groups no longer ride along on every page — the top nav is how a reader
-      // reaches them from outside those prefixes. activeMatch keeps the nav item
-      // highlighted across every page under the section.
+      // Each moved section has its own path-prefixed sidebar, so its group no
+      // longer rides along on every page — the top nav is how a reader reaches
+      // it from outside its prefix. activeMatch keeps the nav item highlighted
+      // across every page under the section.
+      { text: 'Guide', link: '/guide/what-piwi-does', activeMatch: '/guide/' },
       { text: 'Features', link: '/features/ui-overview', activeMatch: '/features/' },
       { text: 'Recipes', link: '/recipes/' },
       { text: 'Operate', link: '/operate/deployment', activeMatch: '/operate/' },
@@ -96,11 +95,11 @@ export default defineConfig({
     // Multi-sidebar, keyed by URL path prefix (VitePress picks the sidebar whose
     // key prefixes the current path, longest match first). The restructure moves
     // each section under its own prefix so it can present a focused sidebar:
-    // Recipes live under /recipes/, the result-reading feature pages under
-    // /features/, the operator pages under /operate/. Every page not yet moved
-    // falls back to the journey-ordered '/' sidebar below. As the remaining
-    // sections move (guide/ reference/), each gets a key here and leaves the
-    // fallback.
+    // the guide under /guide/, the result-reading feature pages under /features/,
+    // the operator pages under /operate/, recipes under /recipes/. What remains
+    // in the '/' fallback is the configuration reference/generator and the
+    // apps & integrations pages, until the final Reference step gives them a key
+    // here too.
     sidebar: {
       '/recipes/': [
         {
@@ -160,35 +159,41 @@ export default defineConfig({
           ],
         },
       ],
-      '/': [
+      // Guide — the new user's ordered path: understand what Piwi does, get a
+      // first run in, learn the vocabulary, then read a first failure. The
+      // "Sending results" group covers getting results into the dashboard.
+      '/guide/': [
         {
           text: 'Start here',
           items: [
-            { text: 'What Piwi does', link: '/what-piwi-does' },
-            { text: 'Getting started', link: '/getting-started' },
-            { text: 'Core concepts', link: '/concepts' },
-            { text: 'Your first failure, explained', link: '/first-failure' },
-            { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
-            { text: 'Privacy & data flow', link: '/privacy' },
+            { text: 'What Piwi does', link: '/guide/what-piwi-does' },
+            { text: 'Getting started', link: '/guide/getting-started' },
+            { text: 'Core concepts', link: '/guide/concepts' },
+            { text: 'Your first failure, explained', link: '/guide/first-failure' },
+            { text: 'Why Piwi? (comparison & FAQ)', link: '/guide/comparison' },
+            { text: 'Privacy & data flow', link: '/guide/privacy' },
           ],
         },
         {
           text: 'Sending results',
           items: [
-            { text: 'Reporter', link: '/reporter' },
-            { text: 'Capture fixtures', link: '/capture-fixtures' },
-            { text: 'AI steps', link: '/ai-steps' },
-            { text: 'CI & sharding', link: '/ci' },
-            { text: 'Test selections', link: '/test-selection' },
-            { text: 'Backend logs', link: '/backend-logs' },
-            { text: 'Importing past runs', link: '/importing-runs' },
+            { text: 'Reporter', link: '/guide/reporter' },
+            { text: 'Capture fixtures', link: '/guide/capture-fixtures' },
+            { text: 'AI steps', link: '/guide/ai-steps' },
+            { text: 'CI & sharding', link: '/guide/ci' },
+            { text: 'Test selections', link: '/guide/test-selection' },
+            { text: 'Backend logs', link: '/guide/backend-logs' },
+            { text: 'Importing past runs', link: '/guide/importing-runs' },
           ],
         },
+      ],
+      '/': [
         {
-          // The result-reading feature pages moved to the /features/ sidebar
-          // (reached via the Features nav); the operator pages moved to
-          // /operate/. What remains here is the configuration reference and
-          // generator, still at the root path until they move to Reference.
+          // The guide, feature and operator pages have each moved to their own
+          // path-prefixed sidebar (reached via the top nav). What remains in
+          // this fallback is the configuration reference and generator plus the
+          // apps & integrations pages, still at the root path until the final
+          // Reference step gives them a key of their own.
           text: 'Configuration',
           items: [
             { text: 'Configuration reference', link: '/configuration' },

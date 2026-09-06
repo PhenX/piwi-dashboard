@@ -69,7 +69,7 @@ $env:PORT='8080'; npx @piwitests/server
 
 Add the [`@piwitests/reporter`](https://www.npmjs.com/package/@piwitests/reporter) to your
 Playwright project and point it at this server — see the
-[getting started guide](https://piwitests.dev/getting-started).
+[getting started guide](https://piwitests.dev/guide/getting-started).
 
 ## License
 

@@ -53,7 +53,7 @@ The server exposes 45 tools — mostly read-only, plus a few write/triage tools 
 | `explain_failure` | **One-call evidence bundle** for a failure: one-line headline + error + steps + console + deterministic [clues](/features/evidence#clues) + locator fix + [page diff](/features/evidence#page-diff) + diagnosis context |
 | `list_links` | External links (Jira/PR/issue) attached to a run, execution, test case, or failure cluster |
 
-**Test selections** *([named, data-driven test subsets](./test-selection))*
+**Test selections** *([named, data-driven test subsets](/guide/test-selection))*
 
 | Tool | Description |
 |------|-------------|
@@ -287,6 +287,6 @@ npx @piwitests/reporter skills add investigate-failure --dir .cursor/skills   # 
 | `investigate-failure` | Investigate a failed run and propose a fix grounded in Piwi's evidence — error, steps, console, network, and the diff since the last green run. |
 | `apply-locator-healing` | Replace a brittle locator with Piwi's ranked healed selector at its call site, then re-run to confirm. |
 | `stabilize-flaky-tests` | Fix the root cause of the highest-impact flaky tests (never by adding retries), then verify with repeated runs. |
-| `run-the-right-tests` | Pick and run the right [selection](./test-selection) for the task — smoke, recently-broken, a time budget — instead of always running the whole suite. |
+| `run-the-right-tests` | Pick and run the right [selection](/guide/test-selection) for the task — smoke, recently-broken, a time budget — instead of always running the whole suite. |
 
 The skills are agent-agnostic Markdown — only the destination directory is tool-specific, so `--dir` points the install wherever your agent reads skills from. They pair with this MCP server: each one prefers a connected Piwi MCP tool (`explain_failure`, `get_locator_healing`, `list_flaky_tests`, …) and falls back to the dashboard UI when MCP is not connected.

@@ -41,6 +41,6 @@ The defaults are conservative, so the checklist above is short. Without any extr
 
 - [Authentication](./authentication) — roles, OAuth, API keys
 - [Deployment](./deployment) — the reverse proxy, backups and the full install
-- [Privacy & data flow](/privacy) — what is stored, and secrets at rest
+- [Privacy & data flow](/guide/privacy) — what is stored, and secrets at rest
 - [Configuration reference](/configuration) — every `PIWI_*` variable
 - [Security policy](https://github.com/PiwiTests/platform/blob/main/SECURITY.md) — reporting a vulnerability

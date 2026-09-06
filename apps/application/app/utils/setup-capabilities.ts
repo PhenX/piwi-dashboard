@@ -38,7 +38,7 @@ export const SETUP_CAPABILITIES: SetupCapabilityCopy[] = [
     summary: 'Your Playwright runs are reaching this dashboard and their history is being kept.',
     how: 'Follow the four steps above to add the reporter to your Playwright config.',
     icon: 'i-lucide-antenna',
-    doc: 'reporter',
+    doc: 'guide/reporter',
   },
   {
     id: 'fixtures',
@@ -47,7 +47,7 @@ export const SETUP_CAPABILITIES: SetupCapabilityCopy[] = [
       'Network timing, Web Vitals, console errors and ARIA snapshots, captured per test. Powers slow endpoints, performance trends and the richer AI diagnosis context.',
     how: 'Extend your Playwright `test` with `piwiFixtures` — see "Go further" above.',
     icon: 'i-lucide-radio',
-    doc: 'capture-fixtures',
+    doc: 'guide/capture-fixtures',
   },
   {
     id: 'locator-healing',
@@ -56,7 +56,7 @@ export const SETUP_CAPABILITIES: SetupCapabilityCopy[] = [
       'When a selector breaks, ranked replacement locators captured from the last passing run — with a recommended fix.',
     how: 'Comes with the capture fixtures; enable those and healing data starts accumulating on passing runs.',
     icon: 'i-lucide-bandage',
-    doc: 'capture-fixtures',
+    doc: 'guide/capture-fixtures',
   },
   {
     id: 'green-samples',
@@ -74,7 +74,7 @@ export const SETUP_CAPABILITIES: SetupCapabilityCopy[] = [
       'Server-side warnings, errors and spans captured during each test and shown next to the network request that triggered them.',
     how: 'Install a Piwi instrumentation package in the app under test — @piwitests/instrumentation-nitro on npm, or PiwiTests.Instrumentation.AspNetCore on NuGet.',
     icon: 'i-lucide-server',
-    doc: 'backend-logs',
+    doc: 'guide/backend-logs',
     optional: true,
   },
   {
@@ -137,7 +137,7 @@ export const SETUP_CAPABILITIES: SetupCapabilityCopy[] = [
       "Playwright's own test tags plus `piwi:owner` / `priority` / `feature` annotations, filterable across the catalog and the flaky leaderboard.",
     how: 'Tag tests in your specs, or define project tags in Settings.',
     icon: 'i-lucide-tags',
-    doc: 'reporter',
+    doc: 'guide/reporter',
     to: '/settings/tags',
     toLabel: 'Manage tags',
     optional: true,

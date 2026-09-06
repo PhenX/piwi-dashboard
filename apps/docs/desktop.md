@@ -79,7 +79,7 @@ The app publishes its address and access token to `~/.piwi/desktop.json`
 on each launch and deleting it on quit. The reporter reads it **only** when your
 config and environment set no `serverUrl` and no `apiKey`, so a project already
 pointed at a shared dashboard — or a CI job with `PIWI_API_KEY` set — is never
-redirected here. See [Finding the desktop app automatically](/reporter#finding-the-desktop-app-automatically).
+redirected here. See [Finding the desktop app automatically](/guide/reporter#finding-the-desktop-app-automatically).
 
 ### Configuring it by hand
 
@@ -115,7 +115,7 @@ the code: **Projects → New project → Choose folder…** picks a checkout on 
 machine, detects the name it would report under (the `projectName` in its
 Playwright config, else the `package.json` name, else the folder name), and
 checks the setup — Playwright config present, Playwright installed, the
-[reporter](/reporter) installed and wired into the config. Anything missing is
+[reporter](/guide/reporter) installed and wired into the config. Anything missing is
 a warning, not a blocker: create the project anyway and run
 `npx @piwitests/reporter init` in the folder when you're ready. The chosen folder is linked to the new project
 automatically.
@@ -223,7 +223,7 @@ Piwi Dashboard** in your file manager, dropping archives on the dock icon
 *optional* opener for `.zip` files — it never takes over your system's default
 archive handler.
 
-Semantics match the [import page](/importing-runs): idempotent by content
+Semantics match the [import page](/guide/importing-runs): idempotent by content
 hash, and imports never trigger notifications, AI diagnosis or regression
 signals.
 

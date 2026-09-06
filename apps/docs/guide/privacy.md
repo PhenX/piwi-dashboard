@@ -46,7 +46,7 @@ context before it's sent, and you can cap its size. See
   provides the report with an in-memory Web Storage facade so Playwright's settings UI works; it is discarded with the
   report document and cannot read the dashboard's cookies or local storage. Uploaded reports remain untrusted active
   content.
-- **Your IDE mapping.** The [Open in IDE](./ide-integration) workspace root lives in your browser's
+- **Your IDE mapping.** The [Open in IDE](/ide-integration) workspace root lives in your browser's
   local storage, because the source is on your machine, not the server's. It is never sent to the
   dashboard.
 

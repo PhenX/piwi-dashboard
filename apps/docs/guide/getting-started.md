@@ -27,13 +27,13 @@ The dashboard is one Node process, and there are five ways to get one running:
 | Path | Best for | Notes |
 |---|---|---|
 | [Live demo](https://piwitests.dev/demo/) | Looking around before installing anything | Seeded data, runs in your browser, no backend |
-| [Desktop app](./desktop) | A single developer running Playwright locally | No Docker or Node needed; Windows x64 and Apple-silicon macOS only, and the installers are not yet signed |
+| [Desktop app](/desktop) | A single developer running Playwright locally | No Docker or Node needed; Windows x64 and Apple-silicon macOS only, and the installers are not yet signed |
 | Docker *(below)* | A shared instance for a team | The recommended path for anything long-lived |
 | [`npx @piwitests/server`](/operate/deployment#npm-npx-quick-local-run) | A quick local run with Node 22+ already installed | Same server, no container |
 | [One-click deploy](/operate/deployment#one-click-deploy) | A shared instance with no server of your own | Railway, Render, Fly.io, Koyeb, Coolify or Dokploy — a button, plus whatever the host charges |
 
 If you only want your own history, flaky scores and locator healing on a laptop, the
-[desktop app](./desktop) is the least setup: install it, copy its access token from **Settings →
+[desktop app](/desktop) is the least setup: install it, copy its access token from **Settings →
 Storage**, and skip to [the reporter](#using-the-piwi-dashboard-reporter). Everything below about the
 reporter, CI and fixtures applies identically whichever path you pick.
 
@@ -100,7 +100,7 @@ From your Playwright project, one command installs the reporter, wraps your `pla
 npx @piwitests/reporter init --server-url http://localhost:3000 --project my-project
 ```
 
-Every step is idempotent, so it is safe to re-run. If it finds a config shape it will not rewrite (or a fixtures file that already exists), it reports that step as `manual` with the exact change to make instead of touching the file. Pass `--dry-run` to preview, or `--json` to get a machine-readable plan — the latter is what lets a coding agent run the setup for you and finish anything left manual. `init` also drops the [Piwi agent skills](./mcp#agent-skills) into the project so your agent can investigate failures, heal locators, and stabilize flaky tests. See `npx @piwitests/reporter init --help` for all options.
+Every step is idempotent, so it is safe to re-run. If it finds a config shape it will not rewrite (or a fixtures file that already exists), it reports that step as `manual` with the exact change to make instead of touching the file. Pass `--dry-run` to preview, or `--json` to get a machine-readable plan — the latter is what lets a coding agent run the setup for you and finish anything left manual. `init` also drops the [Piwi agent skills](/mcp#agent-skills) into the project so your agent can investigate failures, heal locators, and stabilize flaky tests. See `npx @piwitests/reporter init --help` for all options.
 
 > The reporter is published as `@piwitests/reporter`; its command is `piwi`. Invoke it through the package name — `npx @piwitests/reporter <command>` — so npx always resolves *this* package. (`npx piwi` would fetch an unrelated `piwi` package from npm.) Once the reporter is a dependency of your project, a plain `npx piwi <command>` also works, since it resolves the local binary first.
 
@@ -125,7 +125,7 @@ $env:PIWI_DASHBOARD_URL='http://localhost:3000'; $env:PIWI_API_KEY='your-api-key
 
 :::
 
-This is a trial path, not a full setup. You get the run with its results, traces and screenshots, but **not** the [capture fixtures](#recommended-capture-fixtures) (network timing, Web Vitals, console capture, locator healing) and **not** [`wrapConfig`](./reporter#installing-via-wrapconfig)'s failure-evidence capture defaults — for those, run the [fast path](#fast-path-one-command) or wire the reporter in by hand. On older Playwright (before 1.63) `--add-reporter` does not exist; use the manual setup below. `piwi run` makes the same append for you automatically when your config has no Piwi reporter — see the [CLI reference](./cli#select-run).
+This is a trial path, not a full setup. You get the run with its results, traces and screenshots, but **not** the [capture fixtures](#recommended-capture-fixtures) (network timing, Web Vitals, console capture, locator healing) and **not** [`wrapConfig`](./reporter#installing-via-wrapconfig)'s failure-evidence capture defaults — for those, run the [fast path](#fast-path-one-command) or wire the reporter in by hand. On older Playwright (before 1.63) `--add-reporter` does not exist; use the manual setup below. `piwi run` makes the same append for you automatically when your config has no Piwi reporter — see the [CLI reference](/cli#select-run).
 
 ### Manual setup
 
@@ -280,6 +280,6 @@ See the [UI overview](/features/ui-overview) for a full map of every page and ta
 - [Reporter](./reporter) — every option, streaming, sharding, and locator healing
 - [UI overview](/features/ui-overview) — a map of every page and tab
 - [Deployment](/operate/deployment) — running it properly for a team
-- [Desktop app](./desktop) — the same dashboard as a local app, if you skipped it above
+- [Desktop app](/desktop) — the same dashboard as a local app, if you skipped it above
 - [Upgrading](/operate/upgrading) — what a version bump does before you pull a new tag
 - [Contributing](https://github.com/PiwiTests/platform/blob/main/CONTRIBUTING.md) — dev setup, tests, and commit conventions if you want to hack on Piwi itself

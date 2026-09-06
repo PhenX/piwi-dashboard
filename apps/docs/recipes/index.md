@@ -17,7 +17,7 @@ matters.
 | "Our suite is unreliable and I have one afternoon." | [Cut the flakiness that costs the most](./flaky-cleanup) |
 | "CI takes forever and I don't know what's slow." | [Cut the time the suite costs](./faster-suite) |
 
-Every recipe assumes the [reporter](../reporter) is installed and has sent a few runs — that's the only
+Every recipe assumes the [reporter](/guide/reporter) is installed and has sent a few runs — that's the only
 hard requirement. Where a step needs more than that (the capture fixtures, an LLM key, a browser
 extension), it says so and gives you a route that doesn't.
 
@@ -29,7 +29,7 @@ know what exists and what it costs to switch on.
 | Surface | What it's for | What it needs |
 |---|---|---|
 | **Dashboard** | Everything, by hand | The server. Always available. |
-| **[Capture fixtures](../capture-fixtures)** | Locator healing, network timing, Web Vitals, console, ARIA snapshots | One file in your test setup, imported by your specs |
+| **[Capture fixtures](/guide/capture-fixtures)** | Locator healing, network timing, Web Vitals, console, ARIA snapshots | One file in your test setup, imported by your specs |
 | **[MCP server](../mcp)** | Asking your coding agent instead of clicking | Nothing — it's built into the server at `/mcp` |
 | **REST API** | Scripts, dashboards of your own, CI steps | Nothing; see the [API docs](https://piwitests.dev/demo/docs) |
 | **[AI diagnosis](/features/ai-diagnosis)** | An explanation of a cluster read against your git diff | An LLM you configure. Off by default; a local model works |
@@ -38,5 +38,5 @@ know what exists and what it costs to switch on.
 | **[Desktop app](../desktop)** | Running all of this without Docker | Windows x64 or Apple-silicon macOS; installers aren't signed yet |
 | **[Notifications](/features/notifications)** | Being told instead of looking | An email, Slack, or webhook target |
 
-If you only ever add one thing beyond the reporter, add the [capture fixtures](../capture-fixtures) —
+If you only ever add one thing beyond the reporter, add the [capture fixtures](/guide/capture-fixtures) —
 two of the five recipes above get materially better with them, and they're a single file.

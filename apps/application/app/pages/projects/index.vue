@@ -381,7 +381,7 @@ const columns: TableColumn<ProjectWithStats>[] = [
           <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">npx @piwitests/reporter init</code> wires a Playwright
           project in one command. See the <NuxtLink to="/" class="text-primary hover:underline">home page</NuxtLink> for
           a copy-paste setup, or the
-          <DocLink to="getting-started#fast-path-one-command" no-icon class="text-primary hover:underline"
+          <DocLink to="guide/getting-started#fast-path-one-command" no-icon class="text-primary hover:underline"
             >getting-started docs</DocLink
           >.
         </p>

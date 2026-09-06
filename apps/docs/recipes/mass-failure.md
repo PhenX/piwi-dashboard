@@ -89,4 +89,4 @@ and the payload carries a sample error excerpt and the affected cases.
 
 - [AI diagnosis & failure clustering](/features/ai-diagnosis) — how fingerprints and semantic merging work
 - [Regression or flake?](./regression-or-flaky) — when it's one test rather than forty
-- [Core concepts](../concepts) — *cluster*, *fingerprint*, *baseline*
+- [Core concepts](/guide/concepts) — *cluster*, *fingerprint*, *baseline*

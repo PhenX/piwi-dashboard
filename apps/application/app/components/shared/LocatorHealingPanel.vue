@@ -681,7 +681,7 @@ defineExpose({ reveal: () => cardRef.value?.reveal?.() });
     <UAlert v-if="healing?.source === 'aria-snapshot'" class="mt-3" color="info" icon="i-lucide-info" variant="subtle">
       <template #description>
         No HTML attributes were available.
-        <DocLink to="capture-fixtures" no-icon class="text-primary hover:underline"
+        <DocLink to="guide/capture-fixtures" no-icon class="text-primary hover:underline"
           >Enable Piwi fixture capture</DocLink
         >
         for full alternatives including data-testid and CSS selectors.
@@ -750,7 +750,7 @@ defineExpose({ reveal: () => cardRef.value?.reveal?.() });
     <UAlert color="neutral" icon="i-lucide-info" variant="subtle">
       <template #description>
         No pre-captured alternatives — this locator has never passed in a previous run.
-        <DocLink to="capture-fixtures" no-icon class="text-primary hover:underline"
+        <DocLink to="guide/capture-fixtures" no-icon class="text-primary hover:underline"
           >Enable Piwi dashboard fixtures</DocLink
         >
         to capture element attributes at test time, or use “Pick from snapshot” above to choose a locator by hand on the

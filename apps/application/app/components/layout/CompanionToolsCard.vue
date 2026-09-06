@@ -72,9 +72,9 @@ const isDesktop = useIsDesktop();
             <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">select</code> execute a named test selection.
           </p>
           <div class="flex items-center gap-3 mt-2 text-sm">
-            <DocLink to="getting-started#fast-path-one-command" class="text-sm">init</DocLink>
-            <DocLink to="ci#blocking-a-merge" class="text-sm">gate</DocLink>
-            <DocLink to="test-selection" class="text-sm">run &amp; select</DocLink>
+            <DocLink to="guide/getting-started#fast-path-one-command" class="text-sm">init</DocLink>
+            <DocLink to="guide/ci#blocking-a-merge" class="text-sm">gate</DocLink>
+            <DocLink to="guide/test-selection" class="text-sm">run &amp; select</DocLink>
           </div>
         </div>
       </li>

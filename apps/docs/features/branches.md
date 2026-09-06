@@ -17,7 +17,7 @@ On CI, git alone is unreliable: a pull-request checkout is usually a detached `H
 2. **The CI provider's branch variables** — `GITHUB_HEAD_REF` / `GITHUB_REF_NAME` on GitHub Actions, the merge-request and commit refs on GitLab, and the equivalents for CircleCI, Travis, Azure, Jenkins and Bitbucket. On a pull-request build the **source** branch wins over the plain ref, so the run records the branch under test.
 3. **`git rev-parse --abbrev-ref HEAD`** — the local answer, used only when it is a real branch. A detached `HEAD` is discarded rather than recorded.
 
-When the provider exposes it, the reporter also captures the **pull-request number**, so [pull-request feedback](/ci#pull-request-feedback) can look the PR up exactly instead of guessing from the branch name. Branch and PR detection happen automatically as part of CI collection — see [CI & sharding → What gets detected](/ci#what-gets-detected).
+When the provider exposes it, the reporter also captures the **pull-request number**, so [pull-request feedback](/guide/ci#pull-request-feedback) can look the PR up exactly instead of guessing from the branch name. Branch and PR detection happen automatically as part of CI collection — see [CI & sharding → What gets detected](/guide/ci#what-gets-detected).
 
 ## The default branch
 
@@ -35,7 +35,7 @@ The bigger change is invisible until you look for it: **baselines are chosen wit
 
 - **Regression signals** — the *new regression* and *new flaky* badges on an execution compare against the most recent passing run on the **same branch**, then fall back to the default branch. Two feature branches reporting interleaved runs no longer become each other's baseline.
 - **The visual-diff baseline** ([What changed in a run](./run-changes)) prefers the same branch the same way, so a screenshot diff compares against a run that shares your branch's state.
-- **Pull-request feedback** builds its "new failures vs. pre-existing" split from those same branch-aware signals, and **exonerates** a test that is already flaky on the default branch — a failure the PR did not introduce is reported as pre-existing rather than blamed on the change. The `max-new-regressions` [CI gate](/ci#blocking-a-merge) then counts the right number.
+- **Pull-request feedback** builds its "new failures vs. pre-existing" split from those same branch-aware signals, and **exonerates** a test that is already flaky on the default branch — a failure the PR did not introduce is reported as pre-existing rather than blamed on the change. The `max-new-regressions` [CI gate](/guide/ci#blocking-a-merge) then counts the right number.
 
 ## From an agent (MCP)
 
@@ -53,7 +53,7 @@ Notification subscriptions can filter by branch and alert only on the default br
 
 ## Related
 
-- [CI & sharding](/ci) — how the branch and PR number are detected on each provider
+- [CI & sharding](/guide/ci) — how the branch and PR number are detected on each provider
 - [Flaky tests](./flaky-tests) — the leaderboard and regression signals the branch filter scopes
 - [Analytics](./analytics) — trends you can read one branch at a time
-- [Core concepts](/concepts) — where branch sits among run, execution and baseline
+- [Core concepts](/guide/concepts) — where branch sits among run, execution and baseline

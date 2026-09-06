@@ -90,7 +90,7 @@ Everything above shaves time off the harness. This step is the one that finds a 
 - **Web Vitals** — TTFB, FCP, LCP, CLS and the rest per execution, color-coded. LCP/CLS/INP are
   Chromium-only, and INP needs an interaction, so short tests often show `n/a`.
 
-Both require the [capture fixtures](../capture-fixtures) — the reporter alone cannot see the network.
+Both require the [capture fixtures](/guide/capture-fixtures) — the reporter alone cannot see the network.
 Without them you still have the trace: its network waterfall shows the same requests for one execution,
 just not aggregated across the suite.
 
@@ -100,8 +100,8 @@ just not aggregated across the suite.
   distribution: if one worker finishes long after the others, the suite is as slow as its unluckiest shard, and no
   amount of per-test tuning fixes that.
 - **Sharding** is Playwright's own `--shard`; Piwi merges the shards back into [one
-  run](../concepts#test-run), so you can raise the shard count without turning your history into
-  fragments. See [CI & sharding](../ci#sharding).
+  run](/guide/concepts#test-run), so you can raise the shard count without turning your history into
+  fragments. See [CI & sharding](/guide/ci#sharding).
 
 ## Other ways in
 
@@ -122,4 +122,4 @@ into a channel — see the [API docs](https://piwitests.dev/demo/docs).
   tests and timeout hygiene
 - [Cut the flakiness that costs the most](./flaky-cleanup) — step 4 in full
 - [Analytics](/features/analytics) — CI time and wasted CI time across every project
-- [Capture fixtures](../capture-fixtures) — what unlocks the network and Web Vitals views
+- [Capture fixtures](/guide/capture-fixtures) — what unlocks the network and Web Vitals views
