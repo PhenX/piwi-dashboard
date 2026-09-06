@@ -168,7 +168,7 @@ exempt — quarantine already means "don't gate on this test".
 
 The project's **Selections** tab lists the built-ins and your saved selections, with a builder that previews live what
 a definition resolves to — the matching tests, the estimated duration, any warnings, and the exact command — before you
-save it. For AI agents, the [MCP server](/mcp) exposes `list_selections`, `resolve_selection` (key → tests + verify
+save it. For AI agents, the [MCP server](/features/mcp) exposes `list_selections`, `resolve_selection` (key → tests + verify
 command), `preview_selection` (an ad-hoc definition, dry-run) and `analyze_selections` (health and drift); the
 `run-the-right-tests` skill ties them together.
 

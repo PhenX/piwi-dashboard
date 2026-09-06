@@ -38,7 +38,7 @@ An already-generated AI **title** is left untouched — cheap-model titles aren'
 
 The cluster page's triage rail names an **owner** — who answers for these tests. It comes from a `piwi:owner` annotation on the test when one exists, otherwise from the repository's [CODEOWNERS](/guide/concepts#tags-ownership) matched against the spec's file path (the source is labeled so you can tell which). The owner links to every test that owner is responsible for, and when it is derived from CODEOWNERS a one-line hint shows how to override it per test.
 
-The same rail pins a **known issue** — the Jira ticket, GitHub issue or PR that tracks the cluster. It is an entity link (`failure_cluster` type), so the provider and key are detected from the URL and unfurled; the key travels with the cluster wherever it is listed, so a triaged cluster shows what is already being done about it. Reporter or admin role is required to pin or remove one. Read the same links over MCP with [`list_links`](/mcp) (`entityType: 'failure_cluster'`).
+The same rail pins a **known issue** — the Jira ticket, GitHub issue or PR that tracks the cluster. It is an entity link (`failure_cluster` type), so the provider and key are detected from the URL and unfurled; the key travels with the cluster wherever it is listed, so a triaged cluster shows what is already being done about it. Reporter or admin role is required to pin or remove one. Read the same links over MCP with [`list_links`](/features/mcp) (`entityType: 'failure_cluster'`).
 
 ### Semantic merging (optional)
 
@@ -265,7 +265,7 @@ This evidence is generated from the locator snapshots recorded by the [capture f
 Everything above is assembled into an actionable **fix plan** — the diagnosis and its validated patch, the ranked
 locator replacement with the exact file and line, the failing tests, the owning team, and the command that verifies the
 work — reachable on the cluster's Fix card, as Markdown (`?format=markdown`), or through the `get_fix_plan` [MCP
-tool](/mcp). It also hands back a local **reproduce** recipe and a generated **`git bisect`**, and surfaces clusters
+tool](/features/mcp). It also hands back a local **reproduce** recipe and a generated **`git bisect`**, and surfaces clusters
 you've **fixed before**. The full story — including the reproduce/bisect recipes and the desktop app's one-click
 reproduction — is on [Fix plans, reproduce & bisect](./fix-plans).
 
@@ -293,7 +293,7 @@ Tailor the analysis to your stack with **global** instructions (Settings → AI)
 
 Every piece of evidence sent to the model costs tokens. Piwi caps each input so diagnoses stay fast and affordable. Defaults live in `shared/ai-context-limits.ts`; override them in **Settings → AI** or via env (env wins; the UI then shows the field read-only).
 
-The full list of `PIWI_AI_MAX_*` limit variables, their defaults and their clamping ranges lives in the [Configuration reference → AI context limits](/configuration#ai-context-limits) — generated from the same registry the server reads, so it can never drift from the code.
+The full list of `PIWI_AI_MAX_*` limit variables, their defaults and their clamping ranges lives in the [Configuration reference → AI context limits](/reference/configuration#ai-context-limits) — generated from the same registry the server reads, so it can never drift from the code.
 
 Screenshots are the one input a provider can refuse outright: many self-hosted and gateway models are text-only and reject a request that carries images. Piwi retries that call without them, so the diagnosis still runs on the text evidence. Setting `PIWI_AI_MAX_IMAGES=0` skips the rejected first attempt.
 
@@ -307,12 +307,12 @@ visible without waiting for it to occur.
 
 ## Privacy
 
-API keys are encrypted at rest with [`PIWI_SECRET_KEY`](/configuration#general). When you run a diagnosis, the bounded context above is sent to your configured provider — so for fully local analysis, use Ollama or another self-hosted OpenAI-compatible model and keep everything on your own infrastructure.
+API keys are encrypted at rest with [`PIWI_SECRET_KEY`](/reference/configuration#general). When you run a diagnosis, the bounded context above is sent to your configured provider — so for fully local analysis, use Ollama or another self-hosted OpenAI-compatible model and keep everything on your own infrastructure.
 
 ## See also
 
 - [Core concepts](/guide/concepts#error-fingerprint-failure-cluster) — fingerprints, clusters, and baselines in one place
 - [Privacy & data flow](/guide/privacy) — exactly what a diagnosis sends, and where
-- [Configuration reference](/configuration) — all environment variables
+- [Configuration reference](/reference/configuration) — all environment variables
 - [Notifications](./notifications) — subscribe to `cluster.new`, `cluster.fixed`, `cluster.regressed` and `diagnosis.completed` to get alerted when a new cluster appears, a fix lands or regresses, or a diagnosis completes (browser, email, Slack, or webhook)
-- [MCP server](/mcp) — let AI agents query clusters and diagnoses directly
+- [MCP server](/features/mcp) — let AI agents query clusters and diagnoses directly

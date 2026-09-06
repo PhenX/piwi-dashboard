@@ -762,7 +762,9 @@ defineExpose({ reveal: () => cardRef.value?.reveal?.() });
           >pickLocatorOnFailure</DocLink
         >
         opens the same picker on the still-open failing page, and the
-        <DocLink to="extension" no-icon class="text-primary hover:underline">Piwi Picker browser extension</DocLink>
+        <DocLink to="features/extension" no-icon class="text-primary hover:underline"
+          >Piwi Picker browser extension</DocLink
+        >
         picks from any live page without a test run.
       </template>
     </UAlert>

@@ -67,7 +67,7 @@ The intended workflow:
 
 ### Authoring (resolve mode)
 
-Authoring needs a running Piwi dashboard with an AI provider configured (**Settings → AI**, or the `PIWI_AI_PROVIDER` [environment variables](/configuration#ai-diagnosis)). The reporter sends each iteration to the server's resolution endpoint; the server calls the model and returns one decision, which the reporter compiles deterministically. **API keys stay on the server.**
+Authoring needs a running Piwi dashboard with an AI provider configured (**Settings → AI**, or the `PIWI_AI_PROVIDER` [environment variables](/reference/configuration#ai-diagnosis)). The reporter sends each iteration to the server's resolution endpoint; the server calls the model and returns one decision, which the reporter compiles deterministically. **API keys stay on the server.**
 
 Point the reporter at that server and run the suite in resolve mode:
 
@@ -155,7 +155,7 @@ Set these under the `ai` key of your reporter options (in `wrapConfig`'s second 
 
 Authoring also reads `PIWI_DASHBOARD_URL` and `PIWI_API_KEY` (the server that runs the model), and `PIWI_AI_UPDATE=true` (or `--update-ai`) forces re-authoring of entries that already exist.
 
-On the **server** side, two limits bound each authoring iteration — see the [AI steps section](/configuration#ai-steps) of the configuration reference:
+On the **server** side, two limits bound each authoring iteration — see the [AI steps section](/reference/configuration#ai-steps) of the configuration reference:
 
 - `PIWI_AI_STEP_MAX_SNAPSHOT_CHARS` — snapshot characters the model receives.
 - `PIWI_AI_STEP_MAX_OUTPUT_TOKENS` — output tokens the model may return. **Reasoning models** spend tokens on hidden chain-of-thought, so raise this (up to `8192`) when authoring with one, or the JSON decision can be truncated.

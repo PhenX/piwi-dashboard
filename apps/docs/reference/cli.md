@@ -30,7 +30,7 @@ Several commands read connection settings from the environment as a fallback: `P
 
 ## `init`
 
-Wire a Playwright project up to a dashboard. It installs the reporter as a dev dependency, wraps `export default defineConfig(...)` with [`wrapConfig(...)`](/guide/reporter#installing-via-wrapconfig), creates the [capture-fixtures](/guide/capture-fixtures) file, records `PIWI_*` connection settings in `.env` / `.env.example` (and `.gitignore`), and installs the [agent skills](./mcp#agent-skills). **Every step is idempotent** — safe to re-run — and a config shape it will not rewrite is reported as `manual` with the exact change to make. See the [one-command setup](/guide/getting-started#fast-path-one-command) in Getting started.
+Wire a Playwright project up to a dashboard. It installs the reporter as a dev dependency, wraps `export default defineConfig(...)` with [`wrapConfig(...)`](/guide/reporter#installing-via-wrapconfig), creates the [capture-fixtures](/guide/capture-fixtures) file, records `PIWI_*` connection settings in `.env` / `.env.example` (and `.gitignore`), and installs the [agent skills](/features/mcp#agent-skills). **Every step is idempotent** — safe to re-run — and a config shape it will not rewrite is reported as `manual` with the exact change to make. See the [one-command setup](/guide/getting-started#fast-path-one-command) in Getting started.
 
 ```bash
 npx @piwitests/reporter init --server-url http://localhost:3000 --project my-project
@@ -54,7 +54,7 @@ npx @piwitests/reporter init --server-url http://localhost:3000 --project my-pro
 
 ## `skills`
 
-Install the Piwi [agent skills](./mcp#agent-skills) into a project — agent-agnostic Markdown that lets a coding agent investigate failures, heal locators, and stabilize flaky tests. `init` installs these for you; use `skills` to add them to a project that already has the reporter, or to a different skills directory.
+Install the Piwi [agent skills](/features/mcp#agent-skills) into a project — agent-agnostic Markdown that lets a coding agent investigate failures, heal locators, and stabilize flaky tests. `init` installs these for you; use `skills` to add them to a project that already has the reporter, or to a different skills directory.
 
 ```bash
 npx @piwitests/reporter skills list
@@ -165,4 +165,4 @@ npx @piwitests/reporter ai prune
 - [CI & sharding](/guide/ci) — `gate` in a CI job, and the run output file
 - [Test selections](/guide/test-selection) — what `select` / `run` resolve
 - [AI steps](/guide/ai-steps) — the authoring/replay lifecycle `ai` manages
-- [MCP server → Agent skills](./mcp#agent-skills) — what `skills` installs
+- [MCP server → Agent skills](/features/mcp#agent-skills) — what `skills` installs

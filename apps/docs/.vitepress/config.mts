@@ -83,23 +83,21 @@ export default defineConfig({
       { text: 'Features', link: '/features/ui-overview', activeMatch: '/features/' },
       { text: 'Recipes', link: '/recipes/' },
       { text: 'Operate', link: '/operate/deployment', activeMatch: '/operate/' },
+      { text: 'Reference', link: '/reference/configuration', activeMatch: '/reference/' },
       { text: 'Blog', link: '/blog/' },
       { text: 'API docs', link: 'https://piwitests.dev/demo/docs' },
       { text: 'Demo', link: 'https://piwitests.dev/demo/' },
     ],
 
-    // Sidebar order follows the reader's journey: understand it → get results
-    // in → read them → run the instance → wire it into other tools. A group
-    // answers one question the reader is holding, so a page belongs to the
-    // group matching what they are doing, never to the feature it describes.
+    // A group answers one question the reader is holding, so a page belongs to
+    // the group matching what they are doing, never to the feature it describes.
     // Multi-sidebar, keyed by URL path prefix (VitePress picks the sidebar whose
-    // key prefixes the current path, longest match first). The restructure moves
-    // each section under its own prefix so it can present a focused sidebar:
-    // the guide under /guide/, the result-reading feature pages under /features/,
-    // the operator pages under /operate/, recipes under /recipes/. What remains
-    // in the '/' fallback is the configuration reference/generator and the
-    // apps & integrations pages, until the final Reference step gives them a key
-    // here too.
+    // key prefixes the current path, longest match first). Every content page
+    // lives under a section prefix reached from the top nav — the guide under
+    // /guide/, the feature pages under /features/, the operator pages under
+    // /operate/, recipes under /recipes/, and the reference material under
+    // /reference/. There is no '/' fallback: the only page at the root is the
+    // home-layout landing, which shows no sidebar.
     sidebar: {
       '/recipes/': [
         {
@@ -115,8 +113,8 @@ export default defineConfig({
         },
       ],
       // Operate — the operator's journey: stand it up, secure it, mind the data,
-      // keep it current. The configuration reference and generator stay in the
-      // '/' fallback for now; they move to a Reference sidebar in a later step.
+      // keep it current. The configuration reference and generator live in the
+      // Reference sidebar but are linked here too, since they are operator work.
       '/operate/': [
         {
           text: 'Operate',
@@ -128,8 +126,8 @@ export default defineConfig({
             { text: 'Storage configuration', link: '/operate/storage' },
             { text: 'Backup & restore', link: '/operate/backup-restore' },
             { text: 'Upgrading', link: '/operate/upgrading' },
-            { text: 'Configuration reference', link: '/configuration' },
-            { text: 'Configuration generator', link: '/configuration/generator' },
+            { text: 'Configuration reference', link: '/reference/configuration' },
+            { text: 'Configuration generator', link: '/reference/configuration/generator' },
           ],
         },
       ],
@@ -156,6 +154,17 @@ export default defineConfig({
             { text: 'Auto-heal PRs', link: '/features/auto-heal' },
             { text: 'Offline export', link: '/features/offline-export' },
             { text: 'Share links', link: '/features/share-links' },
+          ],
+        },
+        {
+          text: 'Use it from elsewhere',
+          items: [
+            { text: 'MCP server', link: '/features/mcp' },
+            { text: 'Agent skills', link: '/features/mcp#agent-skills' },
+            { text: 'Desktop app', link: '/features/desktop' },
+            { text: 'Browser extension', link: '/features/extension' },
+            { text: 'Test functions catalog', link: '/features/test-functions' },
+            { text: 'Open in IDE', link: '/features/ide-integration' },
           ],
         },
       ],
@@ -187,29 +196,17 @@ export default defineConfig({
           ],
         },
       ],
-      '/': [
+      // Reference — the power user's lookup surface: the generated configuration
+      // reference and its interactive generator, and the CLI. Every content page
+      // now lives under a section prefix, so there is no '/' fallback — the only
+      // page left at the root is the home-layout landing, which has no sidebar.
+      '/reference/': [
         {
-          // The guide, feature and operator pages have each moved to their own
-          // path-prefixed sidebar (reached via the top nav). What remains in
-          // this fallback is the configuration reference and generator plus the
-          // apps & integrations pages, still at the root path until the final
-          // Reference step gives them a key of their own.
-          text: 'Configuration',
+          text: 'Reference',
           items: [
-            { text: 'Configuration reference', link: '/configuration' },
-            { text: 'Configuration generator', link: '/configuration/generator' },
-          ],
-        },
-        {
-          text: 'Apps & integrations',
-          items: [
-            { text: 'Piwi CLI', link: '/cli' },
-            { text: 'Desktop app', link: '/desktop' },
-            { text: 'Browser extension', link: '/extension' },
-            { text: 'Test functions catalog', link: '/test-functions' },
-            { text: 'Open in IDE', link: '/ide-integration' },
-            { text: 'MCP server', link: '/mcp' },
-            { text: 'Agent skills', link: '/mcp#agent-skills' },
+            { text: 'Configuration reference', link: '/reference/configuration' },
+            { text: 'Configuration generator', link: '/reference/configuration/generator' },
+            { text: 'Piwi CLI', link: '/reference/cli' },
             { text: 'API docs (interactive)', link: 'https://piwitests.dev/demo/docs' },
           ],
         },

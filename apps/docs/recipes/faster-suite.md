@@ -40,7 +40,7 @@ only explicit sleeps count — `waitForTimeout` and friends — because framewor
   wasted waits, teardown. Filter to wasted waits and the sleeps light up as bars you can click straight
   through to the test.
 - Tune what counts in **Settings → Performance** (or lock it with
-  [`PIWI_WASTED_WAIT_PATTERNS`](../configuration#wasted-time)). Classification happens *when a run is
+  [`PIWI_WASTED_WAIT_PATTERNS`](/reference/configuration#wasted-time)). Classification happens *when a run is
   viewed*, so widening the patterns re-classifies your whole history immediately — no re-run needed.
 
 <figure>
@@ -105,7 +105,7 @@ just not aggregated across the suite.
 
 ## Other ways in
 
-**Ask your agent.** Over the [MCP server](../mcp) — no install, it is part of the server —
+**Ask your agent.** Over the [MCP server](/features/mcp) — no install, it is part of the server —
 `get_slow_tests` returns the ranked slowest tests, `get_performance_trend` the duration history, and
 `get_run_insights` the worker-imbalance and duration deltas for one run. Useful for "what should I
 speed up this sprint?" without opening a browser.

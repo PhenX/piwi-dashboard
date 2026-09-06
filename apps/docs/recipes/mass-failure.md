@@ -74,7 +74,7 @@ about collapsing near-duplicates.
 
 ## Other ways in
 
-**From your agent.** `get_failure_groups` over the [MCP server](../mcp) returns a run's failures grouped
+**From your agent.** `get_failure_groups` over the [MCP server](/features/mcp) returns a run's failures grouped
 by cluster with the worker correlation included, and `get_test_case_context` pulls the evidence behind a
 single failure — steps, console, network, SCM diff. No install; the server is part of the dashboard.
 

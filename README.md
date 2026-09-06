@@ -68,7 +68,7 @@ Five ways in, depending on what you already have:
 | Path | Start here if | What it costs |
 |---|---|---|
 | **[Live demo](https://piwitests.dev/demo/)** | You just want to look around first | Nothing — seeded data, runs entirely in your browser |
-| **[Desktop app](https://piwitests.dev/desktop)** | You run Playwright locally and don't want to run a server | Download an installer — no Docker, no Node |
+| **[Desktop app](https://piwitests.dev/features/desktop)** | You run Playwright locally and don't want to run a server | Download an installer — no Docker, no Node |
 | **Docker** *(below)* | You have Docker, or you're setting up a shared instance | One command |
 | **`npx @piwitests/server`** | You have Node.js 22+ and would rather skip Docker | One command |
 | **[One-click deploy](https://piwitests.dev/operate/deployment#one-click-deploy)** | You want a shared instance and no server to run it on | A button, plus whatever your host charges |
@@ -245,10 +245,10 @@ Full docs at **[piwitests.dev](https://piwitests.dev)**. The usual entry points:
 - [Getting started](https://piwitests.dev/guide/getting-started) — install, reporter, first run
 - [Core concepts](https://piwitests.dev/guide/concepts) — runs, test cases, executions, clusters
 - [Reporter](https://piwitests.dev/guide/reporter) and [CI & sharding](https://piwitests.dev/guide/ci) — getting results in
-- [Deployment](https://piwitests.dev/operate/deployment) and [Configuration](https://piwitests.dev/configuration) — running your instance
+- [Deployment](https://piwitests.dev/operate/deployment) and [Configuration](https://piwitests.dev/reference/configuration) — running your instance
 - [Upgrading](https://piwitests.dev/operate/upgrading) — what a version bump does, and why downgrading isn't a thing
 - [Privacy & data flow](https://piwitests.dev/guide/privacy) — exactly what leaves your server (nothing you didn't configure)
-- [Browser extension](https://piwitests.dev/extension) — pick ranked locators from the live page, standalone ([install from the Chrome Web Store](https://chromewebstore.google.com/detail/piwi-picker/pakhnokpjboejcghgcmkjlpnogfjihhe) — works in Edge too)
+- [Browser extension](https://piwitests.dev/features/extension) — pick ranked locators from the live page, standalone ([install from the Chrome Web Store](https://chromewebstore.google.com/detail/piwi-picker/pakhnokpjboejcghgcmkjlpnogfjihhe) — works in Edge too)
 
 A running dashboard also serves interactive API docs at `/docs`, rendered in-app from its own OpenAPI
 spec — no external CDN, so they work offline.

@@ -133,20 +133,20 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     order: 2,
     intro:
       'Piwi uses SQLite by default. Setting `PIWI_DATABASE_URL` switches it to PostgreSQL; migrations run automatically on startup.',
-    note: 'See [Database](./operate/database) for SQLite versus PostgreSQL and [Storage → Data retention](./operate/storage#data-retention) for how the nightly sweep works.',
+    note: 'See [Database](/operate/database) for SQLite versus PostgreSQL and [Storage → Data retention](/operate/storage#data-retention) for how the nightly sweep works.',
   },
   storage: {
     title: 'Storage',
     order: 3,
     intro: 'Controls where test artifacts (HTML reports, traces, attachments) are stored.',
-    note: 'Full details and IAM examples: [Storage configuration](./operate/storage).',
+    note: 'Full details and IAM examples: [Storage configuration](/operate/storage).',
   },
   auth: {
     title: 'Authentication',
     order: 4,
     intro:
       'Authentication is optional and off by default. When disabled, all endpoints behave as a single virtual administrator.',
-    note: '> Behind a reverse proxy, set `PIWI_SITE_URL` so the OAuth `redirect_uri` is built from your public URL and matches what you registered with the provider (instead of being inferred from the request `Host`).\n\nSee [Authentication](./operate/authentication) for roles, API keys, and project assignments.',
+    note: '> Behind a reverse proxy, set `PIWI_SITE_URL` so the OAuth `redirect_uri` is built from your public URL and matches what you registered with the provider (instead of being inferred from the request `Host`).\n\nSee [Authentication](/operate/authentication) for roles, API keys, and project assignments.',
   },
   oauth: { title: 'OAuth (SSO)', order: 5, mergeInto: 'auth' },
   'wasted-time': {
@@ -161,14 +161,14 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     order: 7,
     intro:
       '`PIWI_AI_PROVIDER` is the master switch: when it is set, AI configuration is environment-managed (the Settings UI shows the fields read-only) and the other `PIWI_AI_*` variables apply. When it is unset, AI diagnosis is configured from **Settings → AI** instead and the variables below are ignored.',
-    note: 'See [AI diagnosis](./features/ai-diagnosis) for how diagnosis, the research stage, and semantic clustering work.',
+    note: 'See [AI diagnosis](/features/ai-diagnosis) for how diagnosis, the research stage, and semantic clustering work.',
   },
   'ai-limits': {
     title: 'AI context limits',
     order: 8,
     intro:
       'Cap how much evidence (and how many tokens) go into each AI diagnosis. Resolution order: defaults ← values stored from **Settings → AI** ← environment; the environment wins and locks the field in the UI. Values are clamped to the min–max range; a `0` disables a section only where the minimum is `0`.',
-    note: 'See [AI diagnosis → Context limits](./features/ai-diagnosis#context-limits-and-token-cost) for section-by-section guidance.',
+    note: 'See [AI diagnosis → Context limits](/features/ai-diagnosis#context-limits-and-token-cost) for section-by-section guidance.',
   },
   'ai-steps': {
     title: 'AI steps',
@@ -177,7 +177,7 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     order: 8.5,
     intro:
       "Bounds on the reporter's AI-step **authoring** pass (`page.piwiLocator(...)` / `page.piwiRun(...)` in `resolve`/`heal` mode), which calls the model through this server. They cap how much of the page snapshot and how many output tokens go into each authoring iteration. They never apply during normal `replay` runs, which make no model calls. Values are clamped to the min–max range.",
-    note: 'Reasoning models spend output tokens on hidden chain-of-thought, so raise `PIWI_AI_STEP_MAX_OUTPUT_TOKENS` for them. See [AI steps](./guide/ai-steps) for the full authoring/replay model and the reporter-side `PIWI_AI*` options.',
+    note: 'Reasoning models spend output tokens on hidden chain-of-thought, so raise `PIWI_AI_STEP_MAX_OUTPUT_TOKENS` for them. See [AI steps](/guide/ai-steps) for the full authoring/replay model and the reporter-side `PIWI_AI*` options.',
   },
   ingest: {
     title: 'Ingest limits',
@@ -197,20 +197,20 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     order: 12,
     intro:
       'Required for email notifications and account flows (verification, password reset, invites). Set via environment only.',
-    note: 'Email sending activates once `PIWI_SMTP_HOST` and `PIWI_SMTP_FROM` are set; add `PIWI_SMTP_USER`/`PIWI_SMTP_PASS` when the server requires authentication. See [Notifications](./features/notifications) for channels and subscriptions.',
+    note: 'Email sending activates once `PIWI_SMTP_HOST` and `PIWI_SMTP_FROM` are set; add `PIWI_SMTP_USER`/`PIWI_SMTP_PASS` when the server requires authentication. See [Notifications](/features/notifications) for channels and subscriptions.',
   },
   clustering: {
     title: 'Failure clustering',
     order: 13,
     intro:
       'Tunes the similarity thresholds used when grouping failures into clusters by their error fingerprint (and optional embeddings). Only used when an embedding model is configured.',
-    note: 'See [AI diagnosis → Failure clustering](./features/ai-diagnosis#failure-clustering).',
+    note: 'See [AI diagnosis → Failure clustering](/features/ai-diagnosis#failure-clustering).',
   },
   testing: {
     title: 'Backend logs',
     order: 14,
     intro:
-      'Controls the `X-Piwi-Logs` response-header capture that attaches backend logs to test failures. See [Backend logs](./guide/backend-logs).',
+      'Controls the `X-Piwi-Logs` response-header capture that attaches backend logs to test failures. See [Backend logs](/guide/backend-logs).',
   },
   build: {
     title: 'Build-time',

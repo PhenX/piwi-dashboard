@@ -79,7 +79,7 @@ across every project, including wasted CI minutes and a global flaky leaderboard
 
 ## Other ways in
 
-**Ask your agent.** `list_flaky_tests` over the [MCP server](../mcp) returns the scores, impact ranking,
+**Ask your agent.** `list_flaky_tests` over the [MCP server](/features/mcp) returns the scores, impact ranking,
 and root-cause category; `get_test_stability_trend` answers whether one test is getting worse. Useful
 for "what should I fix this sprint?" without opening a browser.
 
@@ -88,7 +88,7 @@ for "what should I fix this sprint?" without opening a browser.
 be a scheduled job. Shapes are in the [API docs](https://piwitests.dev/demo/docs).
 
 **No server at all.** If this is your own laptop suite rather than a team's, the
-[desktop app](../desktop) runs the same analysis with no Docker and no Node — Windows x64 and
+[desktop app](/features/desktop) runs the same analysis with no Docker and no Node — Windows x64 and
 Apple-silicon macOS only, and the installers aren't signed yet.
 
 ## See also

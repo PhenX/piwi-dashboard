@@ -15,7 +15,7 @@ A fresh Piwi instance starts as an **open dashboard with authentication off** �
    <<< @/snippets/secret.sh{bash}
 
 3. **Terminate TLS.** Always put the dashboard behind an HTTPS reverse proxy. Mind the two things a proxy gets wrong by default: **upload size** (trace and report uploads reach hundreds of MB) and **SSE buffering** (live runs and browser notifications use long-lived `text/event-stream` responses that must not be buffered). See [Deployment → Reverse proxy (HTTPS)](./deployment#reverse-proxy-https).
-4. **Tell Piwi it's behind a proxy.** Set `PIWI_TRUST_PROXY=true` so the per-client rate limits on the auth endpoints key on the real client address from `X-Forwarded-For` instead of pooling every request into the proxy's one address. Leave it off when clients connect directly — see the [configuration reference](/configuration#authentication).
+4. **Tell Piwi it's behind a proxy.** Set `PIWI_TRUST_PROXY=true` so the per-client rate limits on the auth endpoints key on the real client address from `X-Forwarded-For` instead of pooling every request into the proxy's one address. Leave it off when clients connect directly — see the [configuration reference](/reference/configuration#authentication).
 5. **Persist and back up the data.** Mount `/app/.data` (or your configured database and storage paths) on a persistent volume, and set up a backup before you accumulate history you care about. See [Deployment → Backups](./deployment#backups).
 6. **Pin a version.** Running `latest` lets an unattended `docker pull` move you across a breaking change. Pin an exact tag and bump it deliberately — migrations are forward-only, so the rollback path is *restore a backup*, not "pull the old tag." See [Upgrading](./upgrading).
 
@@ -42,5 +42,5 @@ The defaults are conservative, so the checklist above is short. Without any extr
 - [Authentication](./authentication) — roles, OAuth, API keys
 - [Deployment](./deployment) — the reverse proxy, backups and the full install
 - [Privacy & data flow](/guide/privacy) — what is stored, and secrets at rest
-- [Configuration reference](/configuration) — every `PIWI_*` variable
+- [Configuration reference](/reference/configuration) — every `PIWI_*` variable
 - [Security policy](https://github.com/PiwiTests/platform/blob/main/SECURITY.md) — reporting a vulnerability

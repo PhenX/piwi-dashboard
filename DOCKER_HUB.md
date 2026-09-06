@@ -58,7 +58,7 @@ Read [Upgrading](https://piwitests.dev/operate/upgrading) before bumping a tag: 
 
 ## Configuration
 
-Piwi runs with **zero configuration** — set variables only to change a default. The full list, with defaults and which ones the Settings UI can override, is the [configuration reference](https://piwitests.dev/configuration); the [configuration generator](https://piwitests.dev/configuration/generator) builds a ready-to-paste `.env`, Compose, Kubernetes or systemd block in your browser.
+Piwi runs with **zero configuration** — set variables only to change a default. The full list, with defaults and which ones the Settings UI can override, is the [configuration reference](https://piwitests.dev/reference/configuration); the [configuration generator](https://piwitests.dev/reference/configuration/generator) builds a ready-to-paste `.env`, Compose, Kubernetes or systemd block in your browser.
 
 The three worth knowing before you expose the container to a network:
 

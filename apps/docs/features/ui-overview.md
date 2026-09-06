@@ -15,7 +15,7 @@ Blocks that aren't self-explanatory carry a small muted help icon (a circled que
 
 ## Open in IDE
 
-Every source path shown in the dashboard is clickable — hover it to reveal an **open in IDE** control that jumps to that file (and line) in VS Code or JetBrains. See [Open in IDE](/ide-integration) for setup and the available methods.
+Every source path shown in the dashboard is clickable — hover it to reveal an **open in IDE** control that jumps to that file (and line) in VS Code or JetBrains. See [Open in IDE](/features/ide-integration) for setup and the available methods.
 
 ## Navigation
 
@@ -29,7 +29,7 @@ The sidebar gives access to the top-level sections:
 | Settings | `/settings` | Configuration, in two groups — **Instance** (account, users, notifications, storage) and **Analysis** (AI diagnosis, wasted time, timeout hygiene, tags, pull requests) |
 | Setup *(admins)* | `/setup` | Connect the reporter, and a checklist of which optional capabilities are actually active on this instance |
 | API docs | `/docs` | Self-contained OpenAPI 3.1 reference (no external CDN) — browse endpoints and schemas, try requests live, copy cURL / fetch snippets |
-| MCP server | `/mcp` | Setup guide for connecting AI clients (see [MCP server](/mcp)) |
+| MCP server | `/mcp` | Setup guide for connecting AI clients (see [MCP server](/features/mcp)) |
 
 Everything else is reached by drilling into a project, run, or test case:
 
@@ -176,11 +176,11 @@ opens with no network and no Piwi server. See [Offline export](./offline-export)
 | Storage | `/settings/storage` | Storage stats and cleanup (bulk-delete runs older than N days) — see [Storage](/operate/storage#storage-management) |
 | Tags | `/settings/tags` | Create, color, edit, and delete the tags used to organize projects |
 | Pull requests | `/settings/pr-feedback` | What Piwi posts back to a pull request when a run finishes — see [Pull-request feedback](/guide/ci#pull-request-feedback) |
-| Performance | `/settings/performance` | Wasted-time patterns (which Playwright waits count as "wasted time") and timeout-hygiene thresholds (oversized per-test timeouts, stale `test.slow()` marks) — see [Configuration](/configuration#wasted-time) |
+| Performance | `/settings/performance` | Wasted-time patterns (which Playwright waits count as "wasted time") and timeout-hygiene thresholds (oversized per-test timeouts, stale `test.slow()` marks) — see [Configuration](/reference/configuration#wasted-time) |
 | AI | `/settings/ai` | Provider/model roles, auto-diagnose, global instructions, and context limits — see [AI diagnosis](./ai-diagnosis#enabling-ai-diagnosis) |
 | Notifications | `/settings/notifications` | Channels, subscriptions, and SMTP — see [Notifications & alerts](./notifications) |
 
-Where an environment variable backs a setting, the field is shown read-only with a lock badge and the env var name (see [Configuration](/configuration)).
+Where an environment variable backs a setting, the field is shown read-only with a lock badge and the env var name (see [Configuration](/reference/configuration)).
 
 ## Real-time updates
 

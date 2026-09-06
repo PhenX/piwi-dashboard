@@ -139,5 +139,5 @@ Send a test email from **Settings → Notifications** to confirm delivery.
 
 - [CI & sharding](/guide/ci) — the alternative: pull the run URL into your pipeline instead
 - [Authentication](/operate/authentication) — per-user channels and subscriptions
-- [Configuration reference](/configuration) — all environment variables
+- [Configuration reference](/reference/configuration) — all environment variables
 - [AI diagnosis & failure clustering](./ai-diagnosis) — what triggers `cluster.new`, `cluster.fixed`, `cluster.regressed` and `diagnosis.completed`

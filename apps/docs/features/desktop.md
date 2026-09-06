@@ -174,7 +174,7 @@ config includes the Piwi reporter. Both show in the
 [**Local folder** checks](#projects-from-local-folders), and the run dialog
 warns up front when no Playwright installation is found.
 
-The linked folder also completes [Open in IDE](/ide-integration): when no
+The linked folder also completes [Open in IDE](/features/ide-integration): when no
 workspace root is configured there, source links resolve against the linked
 folder automatically.
 
@@ -199,7 +199,7 @@ touching your checkout.**
   stops (it kills the test and any browsers or dev server it started, resets the
   bisect and removes the worktree), and a clean result: the first bad commit, with
   its subject, author and date, linked to your SCM host and recorded on the
-  cluster so it survives a reload and reaches the [fix plan](/mcp).
+  cluster so it survives a reload and reaches the [fix plan](/features/mcp).
 
 **The honest limits:** `git`, and your package manager, must be installed on this
 machine (the app ships only Node). Piwi reproduces and bisects **one** repository
@@ -229,7 +229,7 @@ signals.
 
 ## Connecting AI assistants
 
-The app exposes the same [MCP server](/mcp) as every Piwi deployment — and on
+The app exposes the same [MCP server](/features/mcp) as every Piwi deployment — and on
 this machine it can also do the wiring. The **MCP server** page detects
 installed clients — Claude Code, Claude Desktop, Cursor, VS Code, Windsurf and
 Gemini CLI — and connects each with one click:
