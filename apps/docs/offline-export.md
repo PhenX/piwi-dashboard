@@ -10,7 +10,8 @@ whole failure cluster to a file that opens with **no network and no Piwi server*
 attachment, a mail to someone without an account, or an archive that outlives your retention window.
 
 The **Export** button sits on a test-case execution (`/test-run-cases/:id`) and on a failure cluster
-(`/failure-clusters/:id`).
+(`/failure-clusters/:id`). A run (`/test-runs/:id`) and an execution also offer a **Perfetto trace**
+(see [below](#perfetto-trace)).
 
 ## Formats
 
@@ -49,6 +50,26 @@ The ZIP carries reconstructed `trace.zip` archives, but reading one still needs 
 viewer — `npx playwright show-trace trace.zip`, or the [bundled viewer](./evidence#trace-viewer) on any
 Piwi instance. Bundling the viewer's assets into the export itself is on the
 [roadmap](https://github.com/PiwiTests/platform/blob/main/ROADMAP.md).
+
+## Perfetto trace
+
+A run and an execution also export as a **Perfetto trace** — a [Trace Event Format](https://perfetto.dev/docs/reference/trace-config-proto) JSON file that opens the run on a timeline in
+[ui.perfetto.dev](https://ui.perfetto.dev) or Chrome's `chrome://tracing`, with no Piwi server needed.
+
+The file lays the run out the way it ran: **one process per shard, one thread per worker**. Each
+execution is a slice on its worker's thread, with its hooks, fixtures and steps nested underneath by
+start time, and a slice colored by outcome (green passed, red failed). A failing execution adds an
+instant marker at the moment it failed. Every slice carries its details in the event arguments —
+source location, step params, tags, locks, annotations, status, error message, and links back to the
+execution and its attachments on the dashboard. Suite-level `beforeAll`/`afterAll` setup steps appear
+on their worker's thread too.
+
+Open it by dragging the downloaded `.json` onto [ui.perfetto.dev](https://ui.perfetto.dev), or use
+**Open trace file** there. Timestamps are relative to the first event, so a run always starts at zero.
+
+The trace **does not embed the attachments themselves** — screenshots, video and trace archives are
+referenced by their dashboard URL, so following those links needs the Piwi instance the run came from.
+For a self-contained snapshot of one failure, use the HTML or ZIP export above.
 
 ## See also
 
