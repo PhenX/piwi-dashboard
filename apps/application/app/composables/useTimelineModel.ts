@@ -20,6 +20,97 @@ export interface TimelineItem {
   rowIndex: number;
   /** Title of the test the segment belongs to (hooks/fixtures/waits only). */
   parentTitle?: string | null;
+  /** Lock names this execution held — test bars only (best effort). */
+  locks?: string[] | null;
+}
+
+/** Per-lock summary for the Locks table under the timeline. */
+export interface LockSummary {
+  lock: string;
+  /** Distinct executions in the run that held this lock. */
+  testCount: number;
+  /** Total wall time the lock was held (union of holder intervals). */
+  heldMs: number;
+  /** Held time as a fraction of the run's wall time (0..1). */
+  share: number;
+  /**
+   * Estimated time that ran serialized behind another holder: the duration of
+   * each holder that started within 500 ms of the previous holder's end. A
+   * heuristic — holders on separate shards do not actually coordinate.
+   */
+  serializationMs: number;
+  /** True when the lock was held for most of the final quarter of the run. */
+  dominatesTail: boolean;
+}
+
+/** Back-to-back gap under which a holder is treated as having waited for the lock. */
+const LOCK_SERIALIZATION_GAP_MS = 500;
+
+/** Merge sorted [start, end] intervals, joining overlapping or touching ones. */
+function mergeIntervals(intervals: Array<{ start: number; end: number }>): Array<{ start: number; end: number }> {
+  if (intervals.length === 0) return [];
+  const sorted = [...intervals].sort((a, b) => a.start - b.start);
+  const merged: Array<{ start: number; end: number }> = [{ ...sorted[0]! }];
+  for (let i = 1; i < sorted.length; i++) {
+    const cur = sorted[i]!;
+    const last = merged[merged.length - 1]!;
+    if (cur.start <= last.end) last.end = Math.max(last.end, cur.end);
+    else merged.push({ ...cur });
+  }
+  return merged;
+}
+
+/**
+ * Summarize how each lock shaped the run, from the drawn test bars. Pure so it
+ * can be unit-tested: takes the timeline items and the run span, returns one row
+ * per lock ordered by held time descending.
+ */
+export function computeLockSummary(items: TimelineItem[], maxTime: number): LockSummary[] {
+  const holdersByLock = new Map<string, Array<{ start: number; end: number }>>();
+  for (const item of items) {
+    if (item.kind !== 'test' || !item.locks?.length) continue;
+    const interval = { start: item.start, end: item.start + item.duration };
+    for (const lock of item.locks) {
+      const list = holdersByLock.get(lock);
+      if (list) list.push(interval);
+      else holdersByLock.set(lock, [interval]);
+    }
+  }
+
+  const tailStart = maxTime * 0.75;
+  const tailLength = maxTime - tailStart;
+
+  const rows: LockSummary[] = [];
+  for (const [lock, holders] of holdersByLock) {
+    const merged = mergeIntervals(holders);
+    const heldMs = merged.reduce((sum, iv) => sum + (iv.end - iv.start), 0);
+
+    const ordered = [...holders].sort((a, b) => a.start - b.start);
+    let serializationMs = 0;
+    for (let i = 1; i < ordered.length; i++) {
+      const gap = ordered[i]!.start - ordered[i - 1]!.end;
+      if (gap >= 0 && gap <= LOCK_SERIALIZATION_GAP_MS) {
+        serializationMs += ordered[i]!.end - ordered[i]!.start;
+      }
+    }
+
+    const heldInTail = merged.reduce(
+      (sum, iv) => sum + Math.max(0, Math.min(iv.end, maxTime) - Math.max(iv.start, tailStart)),
+      0,
+    );
+    const dominatesTail = tailLength > 0 && heldInTail / tailLength > 0.5;
+
+    rows.push({
+      lock,
+      testCount: holders.length,
+      heldMs,
+      share: maxTime > 0 ? heldMs / maxTime : 0,
+      serializationMs,
+      dominatesTail,
+    });
+  }
+
+  return rows.sort((a, b) => b.heldMs - a.heldMs || a.lock.localeCompare(b.lock));
 }
 
 /** Shard group for rendering separators and labels. */
@@ -109,6 +200,8 @@ export function useTimelineModel(props: TimelineModelInput): {
   workerRows: ComputedRef<Array<{ shardIndex: number | null; workerIndex: number }>>;
   shardGroups: ComputedRef<ShardGroup[]>;
   maxTime: ComputedRef<number>;
+  runLocks: ComputedRef<string[]>;
+  lockSummary: ComputedRef<LockSummary[]>;
 } {
   /** Effective wasted-wait patterns (falls back to the built-in default). */
   const wastedPatterns = computed<readonly string[]>(() =>
@@ -161,6 +254,7 @@ export function useTimelineModel(props: TimelineModelInput): {
           start,
           duration,
           rowIndex,
+          locks: tc.locks ?? null,
         });
         cursor = start + duration;
 
@@ -265,5 +359,14 @@ export function useTimelineModel(props: TimelineModelInput): {
     return max || 60000;
   });
 
-  return { timelineData, workerRows, shardGroups, maxTime };
+  /** Distinct lock names declared anywhere in the run, sorted for stable colors. */
+  const runLocks = computed(() => {
+    const locks = new Set<string>();
+    for (const tc of props.testCases) for (const lock of tc.locks ?? []) locks.add(lock);
+    return [...locks].sort((a, b) => a.localeCompare(b));
+  });
+
+  const lockSummary = computed(() => computeLockSummary(timelineData.value, maxTime.value));
+
+  return { timelineData, workerRows, shardGroups, maxTime, runLocks, lockSummary };
 }

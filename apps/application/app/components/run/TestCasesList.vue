@@ -7,7 +7,7 @@ import type { LiveStepInfo, LiveStepsByWorker } from '~/utils/live-steps';
  *  cluster group header. Supplied by the page from the failure-groups payload. */
 type ClusterMeta = Record<number, { name: string; status: string | null }>;
 
-type GroupBy = 'cluster' | 'file' | 'file-describe' | 'none';
+type GroupBy = 'cluster' | 'file' | 'file-describe' | 'lock' | 'none';
 
 const props = defineProps<{
   testCases: TestCaseResult[];
@@ -43,6 +43,19 @@ const testCaseBrowserFilter = defineModel<string>('browserFilter', { default: 'a
 
 const showNewRegressionsOnly = ref(false);
 const showNewFlakyOnly = ref(false);
+const testCaseLockFilter = ref('all');
+
+/** Lock names present anywhere in this run, for the lock filter dropdown. */
+const testCaseLockOptions = computed(() => {
+  const locks = new Set<string>();
+  for (const tc of props.testCases) for (const lock of tc.locks ?? []) locks.add(lock);
+  const items = [{ label: 'All locks', value: 'all' }];
+  for (const lock of [...locks].sort()) items.push({ label: lock, value: lock });
+  return items;
+});
+
+/** True when at least one execution in the run carries a lock. */
+const hasAnyLocks = computed(() => props.testCases.some((tc) => (tc.locks?.length ?? 0) > 0));
 
 const STATUS_OPTIONS = [
   { label: 'Passed', value: 'passed', color: 'green' },
@@ -97,6 +110,9 @@ const filteredTestCases = computed<TestCaseResult[]>(() => {
   }
   if (showNewRegressionsOnly.value) cases = cases.filter((tc) => tc.isNewRegression);
   if (showNewFlakyOnly.value) cases = cases.filter((tc) => tc.isNewFlaky);
+  if (testCaseLockFilter.value !== 'all') {
+    cases = cases.filter((tc) => (tc.locks ?? []).includes(testCaseLockFilter.value));
+  }
   return cases;
 });
 
@@ -151,30 +167,44 @@ function sortCases(cases: TestCaseResult[]): TestCaseResult[] {
 }
 
 // ── Grouping ────────────────────────────────────────────────────────────────
-const { raw: storedGroup, set: setGroup } = useGroupByCookie('run-tests', ['cluster', 'file', 'file-describe', 'none']);
+const { raw: storedGroup, set: setGroup } = useGroupByCookie('run-tests', [
+  'cluster',
+  'file',
+  'file-describe',
+  'lock',
+  'none',
+]);
 const groupBy = computed<GroupBy>({
   // A red run opens on the cluster grouping; a green run has no clusters, so it
   // opens flat. A saved choice always wins.
-  get: () => (storedGroup.value as GroupBy | null) ?? (failedCount.value > 0 ? 'cluster' : 'none'),
+  get: () => {
+    const stored = storedGroup.value as GroupBy | null;
+    // A saved "lock" choice is meaningless on a run with no locks — fall back.
+    if (stored === 'lock' && !hasAnyLocks.value) return failedCount.value > 0 ? 'cluster' : 'none';
+    return stored ?? (failedCount.value > 0 ? 'cluster' : 'none');
+  },
   set: (v) => setGroup(v),
 });
-const groupByItems = [
+const groupByItems = computed(() => [
   { label: 'Cluster', value: 'cluster' },
   { label: 'File', value: 'file' },
   { label: 'File + Describe', value: 'file-describe' },
+  // Only offer lock grouping when the run actually declared locks.
+  ...(hasAnyLocks.value ? [{ label: 'Lock', value: 'lock' }] : []),
   { label: 'None', value: 'none' },
-];
+]);
 
 // The quiet buckets (passed, skipped, didn't run) start collapsed; every other
 // group starts open. A user click flips a group from its default; a filter
 // forces everything open so a match is never hidden behind a collapsed header.
-const DEFAULT_COLLAPSED_BUCKETS = new Set(['bucket:passed', 'bucket:skipped', 'bucket:didnotrun']);
+const DEFAULT_COLLAPSED_BUCKETS = new Set(['bucket:passed', 'bucket:skipped', 'bucket:didnotrun', 'lock:none']);
 const userToggled = ref(new Set<string>());
 const hasFilter = computed(
   () =>
     testCaseSearch.value !== '' ||
     activeStatuses.value.length > 0 ||
     testCaseBrowserFilter.value !== 'all' ||
+    testCaseLockFilter.value !== 'all' ||
     showNewRegressionsOnly.value ||
     showNewFlakyOnly.value,
 );
@@ -319,6 +349,42 @@ const rows = computed<Row[]>(() => {
     return out;
   }
 
+  if (groupBy.value === 'lock') {
+    // A group per lock name; a test holding several locks appears under each.
+    // Tests with no lock fall into a trailing "No lock" group.
+    const byLock = new Map<string, TestCaseResult[]>();
+    const noLock: TestCaseResult[] = [];
+    for (const tc of cases) {
+      const locks = tc.locks ?? [];
+      if (locks.length === 0) noLock.push(tc);
+      else
+        for (const lock of locks) {
+          if (!byLock.has(lock)) byLock.set(lock, []);
+          byLock.get(lock)!.push(tc);
+        }
+    }
+    for (const [lock, lockCases] of [...byLock.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      const key = `lock:${lock}`;
+      out.push({
+        kind: 'group',
+        key,
+        label: lock,
+        count: lockCases.length,
+        icon: 'i-lucide-lock',
+        stats: computeStats(lockCases),
+      });
+      if (isOpen(key))
+        for (const tc of sortCases(lockCases)) out.push({ kind: 'test', key: `t${tc.executionId}:${lock}`, tc });
+    }
+    if (noLock.length > 0) {
+      const key = 'lock:none';
+      out.push({ kind: 'group', key, label: 'No lock', count: noLock.length, stats: computeStats(noLock) });
+      if (isOpen(key))
+        for (const tc of sortCases(noLock)) out.push({ kind: 'test', key: `t${tc.executionId}:nolock`, tc });
+    }
+    return out;
+  }
+
   // Cluster grouping: failing clustered tests first (largest cluster first),
   // then ungrouped failures, then the non-failing remainder as collapsed groups.
   const failing = cases.filter((tc) => isFailedStatus(tc.status));
@@ -370,7 +436,10 @@ const groupKeysByExecution = computed(() => {
   if (groupBy.value === 'none') return map;
   for (const tc of filteredTestCases.value) {
     const fp = tc.filePath ?? 'unknown';
-    if (groupBy.value === 'file') {
+    if (groupBy.value === 'lock') {
+      const locks = tc.locks ?? [];
+      map.set(tc.executionId, locks.length ? locks.map((l) => `lock:${l}`) : ['lock:none']);
+    } else if (groupBy.value === 'file') {
       map.set(tc.executionId, [`file:${fp}`]);
     } else if (groupBy.value === 'file-describe') {
       const keys = [`file:${fp}`];
@@ -662,6 +731,15 @@ defineExpose({ scrollToCase });
         class="w-36"
         aria-label="Filter by browser"
       />
+      <USelect
+        v-if="hasAnyLocks"
+        v-model="testCaseLockFilter"
+        :items="testCaseLockOptions"
+        icon="i-lucide-lock"
+        size="sm"
+        class="w-36"
+        aria-label="Filter by lock"
+      />
       <div class="flex items-center gap-1">
         <USelect v-model="sortKey" :items="sortOptions" size="sm" class="w-36" aria-label="Sort tests by" />
         <UButton
@@ -756,6 +834,7 @@ defineExpose({ scrollToCase });
                       item.tc.isNewFlaky,
                       item.tc.testAnnotations,
                       item.tc.tags,
+                      item.tc.locks,
                       liveStep(item.tc)?.title,
                     ]
                   : [item.label, item.count, item.triageStatus]
@@ -816,6 +895,7 @@ defineExpose({ scrollToCase });
           testCaseSearch = '';
           activeStatuses = [];
           testCaseBrowserFilter = 'all';
+          testCaseLockFilter = 'all';
           showNewRegressionsOnly = false;
           showNewFlakyOnly = false;
         "

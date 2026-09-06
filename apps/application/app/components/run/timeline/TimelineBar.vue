@@ -15,6 +15,8 @@ const props = defineProps<{
   x: number;
   y: number;
   width: number;
+  /** Colors of the locks this bar's execution held, in the run's lock order. */
+  lockColors?: string[];
 }>();
 
 const emit = defineEmits<{
@@ -152,6 +154,17 @@ function onClick(): void {
         :fill="timelineStatusHex(item.status)"
         class="timeline-bar-shape transition-opacity duration-100 cursor-pointer opacity-90"
         @click="onClick"
+      />
+      <!-- Lock brackets: a thin colored strip along the top edge per held lock. -->
+      <rect
+        v-for="(color, i) in lockColors ?? []"
+        :key="`lock${i}`"
+        :x="x"
+        :y="y + i * 3"
+        :width="width"
+        :height="2.5"
+        :fill="color"
+        class="pointer-events-none"
       />
       <text
         v-if="width > 40"

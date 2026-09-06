@@ -9,12 +9,19 @@ defineProps<{
   hasNonTestSpans: boolean;
   /** Current state of the one span toggle. */
   showHooksAndWaits: boolean;
+  /** Whether the run declared any locks (best effort). */
+  hasLocks?: boolean;
+  /** Current state of the lock toggle. */
+  showLocks?: boolean;
+  /** Distinct lock names in the run. */
+  lockCount?: number;
   live?: boolean;
 }>();
 
 defineEmits<{
   reset: [];
   toggleHooksAndWaits: [visible: boolean];
+  toggleLocks: [visible: boolean];
 }>();
 </script>
 
@@ -28,7 +35,10 @@ defineEmits<{
         </template>
         &middot; {{ testCount }} tests
         <template v-if="hookCount > 0"> &middot; {{ hookCount }} hooks </template>
-        <template v-if="waitCount > 0"> &middot; {{ waitCount }} waits </template></span
+        <template v-if="waitCount > 0"> &middot; {{ waitCount }} waits </template>
+        <template v-if="lockCount && lockCount > 0">
+          &middot; {{ lockCount }} lock{{ lockCount > 1 ? 's' : '' }}
+        </template></span
       >
       <HelpHint topic="run.timeline" />
     </span>
@@ -40,6 +50,14 @@ defineEmits<{
         size="xs"
         class="mr-1"
         @update:model-value="$emit('toggleHooksAndWaits', $event === true)"
+      />
+      <USwitch
+        v-if="hasLocks"
+        :model-value="showLocks"
+        label="Show locks"
+        size="xs"
+        class="mr-1"
+        @update:model-value="$emit('toggleLocks', $event === true)"
       />
 
       <UButton

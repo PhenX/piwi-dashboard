@@ -58,6 +58,8 @@ const statuses = ref<string[]>(typeof init.status === 'string' ? init.status.spl
 const age = ref(typeof init.age === 'string' && init.age !== '' ? Math.max(0, Number(init.age) || 0) : defaultAge);
 const tagsFilter = ref(typeof init.tags === 'string' ? init.tags : '');
 const tagsInput = ref(tagsFilter.value);
+const locksFilter = ref(typeof init.locks === 'string' ? init.locks : '');
+const locksInput = ref(locksFilter.value);
 // Owner filter — deep-linked from a cluster's "Owner" line; set only via the URL,
 // cleared with its chip. Narrows to tests declared to / derived for that owner.
 const ownerFilter = ref(typeof init.owner === 'string' ? init.owner : '');
@@ -78,7 +80,13 @@ watch(
     tagsFilter.value = value.trim();
   }, 300),
 );
-watch([q, statuses, tagsFilter, ownerFilter, age, sort, dir, pageSize, grouped], () => {
+watch(
+  locksInput,
+  useDebounceFn((value: string) => {
+    locksFilter.value = value.trim();
+  }, 300),
+);
+watch([q, statuses, tagsFilter, locksFilter, ownerFilter, age, sort, dir, pageSize, grouped], () => {
   page.value = 1;
 });
 
@@ -88,6 +96,7 @@ const query = computed(() => ({
   ...(q.value ? { q: q.value } : {}),
   ...(statuses.value.length > 0 ? { status: statuses.value.join(',') } : {}),
   ...(tagsFilter.value ? { tags: tagsFilter.value } : {}),
+  ...(locksFilter.value ? { locks: locksFilter.value } : {}),
   ...(ownerFilter.value ? { owner: ownerFilter.value } : {}),
   maxAgeDays: age.value,
   sort: sort.value,
@@ -107,13 +116,14 @@ watch(
 );
 
 if (props.syncQuery) {
-  watch([q, statuses, tagsFilter, ownerFilter, age, sort, dir, page, pageSize], () => {
+  watch([q, statuses, tagsFilter, locksFilter, ownerFilter, age, sort, dir, page, pageSize], () => {
     router.replace({
       query: {
         ...route.query,
         q: q.value || undefined,
         status: statuses.value.length > 0 ? statuses.value.join(',') : undefined,
         tags: tagsFilter.value || undefined,
+        locks: locksFilter.value || undefined,
         owner: ownerFilter.value || undefined,
         age: age.value !== defaultAge ? String(age.value) : undefined,
         sort: sort.value !== 'lastRun' ? sort.value : undefined,
@@ -148,6 +158,7 @@ function toggleDir() {
 function catalogBadges(tc: TestCaseWithStats) {
   return buildTestRowBadges({
     tags: tc.tags,
+    locks: tc.locks,
     meta: {
       owner: tc.owner ?? undefined,
       priority: toTestPriority(tc.priority),
@@ -246,7 +257,14 @@ const fileGroups = computed(() => {
       return { prefix, rows, metrics, open: !collapsedGroups.value.has(prefix) };
     });
 });
-const hasSearchOrStatusFilter = computed(() => q.value !== '' || statuses.value.length > 0 || ownerFilter.value !== '');
+const hasSearchOrStatusFilter = computed(
+  () =>
+    q.value !== '' ||
+    statuses.value.length > 0 ||
+    tagsFilter.value !== '' ||
+    locksFilter.value !== '' ||
+    ownerFilter.value !== '',
+);
 const hasAnyFilter = computed(() => hasSearchOrStatusFilter.value || age.value !== 0);
 const initialLoading = computed(() => status.value === 'pending' && !data.value);
 
@@ -323,6 +341,15 @@ defineExpose({ refresh });
         class="min-w-44 max-sm:flex-1"
         aria-label="Filter by tag"
         title="Show only cases carrying every listed tag. A leading @ is optional."
+      />
+      <UInput
+        v-model="locksInput"
+        placeholder="Locks (comma-separated)…"
+        icon="i-lucide-lock"
+        size="sm"
+        class="min-w-44 max-sm:flex-1"
+        aria-label="Filter by lock"
+        title="Show only cases carrying every listed lock name."
       />
       <div class="flex flex-wrap items-center gap-1">
         <button

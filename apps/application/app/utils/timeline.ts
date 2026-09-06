@@ -39,6 +39,29 @@ export const TIMELINE_WAIT_COLORS = {
   swatch: '#f59e0b',
 } as const;
 
+/**
+ * Distinct colors for lock lanes/brackets, chosen to sit apart from the status
+ * palette (green/red/orange/blue/gray/amber) so a lock never reads as a result.
+ * Assigned by index in the run's sorted lock order and reused past the end.
+ */
+export const TIMELINE_LOCK_COLORS = [
+  '#8b5cf6',
+  '#0891b2',
+  '#db2777',
+  '#0d9488',
+  '#c026d3',
+  '#4f46e5',
+  '#65a30d',
+  '#e11d48',
+] as const;
+
+/** Color for the lock at `index` in the run's sorted lock order. */
+export function lockColorHex(index: number): string {
+  return TIMELINE_LOCK_COLORS[
+    ((index % TIMELINE_LOCK_COLORS.length) + TIMELINE_LOCK_COLORS.length) % TIMELINE_LOCK_COLORS.length
+  ]!;
+}
+
 /** Bar fill color for a test-case status (falls back to neutral gray). */
 export function timelineStatusHex(status: string): string {
   return STATUS_HEX[status] || '#a1a1aa';
