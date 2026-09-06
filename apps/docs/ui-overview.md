@@ -82,7 +82,7 @@ Five tabs:
 - **Runs** — the run trend chart (timeline **Markers** open in a slide-over from the chart header, where they can be added, edited and deleted) over a table of every run with status, start time, duration, test counts, and browser badges. A row opens the run; selecting two runs and clicking **Compare** opens the newer run's **Changes** tab with the older as its baseline.
 - **Tests** — every unique test with status, executed-only pass rate, result breakdown, average duration, and last run; searchable, filterable by status, [tag](./reporter#test-tags), owner, priority and last-run age (stale cases hidden by default). **Group by File** groups the tests under each spec file and carries that file's pass rate, flaky rate, failure count, test count and average time in the group header. A row opens the test's full history.
 - **Failures** — one place for everything broken, switched with a segmented control: the **Failure clusters** (executions that failed the same way — see [AI diagnosis & clustering](./ai-diagnosis)), the **Flaky** tests scored by a composite flakiness metric with root-cause classification and impact ranking (see [Flaky tests](./flaky-tests#flaky-test-detection)), each with a **Quarantine** action, and the **Quarantine** list — tests excluded from the [CI gate](./ci#blocking-a-merge)'s verdict while still running, each with its passing streak and whether it has earned a release. See [Quarantine](./flaky-tests#quarantine-with-a-way-out).
-- **Performance** — average/P90 duration trends, a slowest-tests table, timeout opportunities, and the [slow endpoints](./flaky-tests#performance) for a selected run; the AI-step coverage card appears when the project replays committed [AI-step artifacts](./ai-steps).
+- **Performance** — average/P90 duration trends, a slowest-tests table, timeout opportunities, and the [slow endpoints](./slow-tests) for a selected run; the AI-step coverage card appears when the project replays committed [AI-step artifacts](./ai-steps).
 - **Settings** *(admins when auth is enabled, otherwise everyone)* — project [access](./authentication#project-access) (members) and the edit form: label, description, tags, default branch, per-project SCM token, and **AI diagnosis instructions** (project-specific context combined with the global instructions for every diagnosis).
 
 Project **import** (`/projects/:id/import`, admins only) backfills runs recorded before you adopted Piwi from Playwright blob reports, checking each archive against the server's size limit and the project's existing imports before uploading anything. See [Importing past runs](./importing-runs).
@@ -112,7 +112,7 @@ The right panel is tabbed:
   run you pick — deep-linkable as `?baseline=<runId>`): new failures, fixed, still failing, newly flaky / passed on
   retry, the slower / faster tests, the commits landed since the baseline, and the environment fields that moved. The
   "new failures" count is computed once against that baseline. Disabled until the run finishes. See
-  [Changes](./flaky-tests#changes).
+  [What changed in a run](./run-changes).
 - **Timeline** — a horizontal per-worker timeline of test execution, with a *Show hooks and waits* toggle to reveal
   setup, hook, fixture and wasted-wait spans; click a bar to jump to that test. Beneath it, the **slowest tests** and
   the **worker distribution** for the run.

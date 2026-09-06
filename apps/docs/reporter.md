@@ -455,7 +455,7 @@ In the dashboard UI, the test run detail page offers a **Tree** view that groups
 
 ### Test annotations (Playwright marks)
 
-The reporter captures Playwright test marks set via `test.info().annotations` (e.g. `@fixme`, `@slow`, `@skip`) and sends them as `testAnnotations` in every test case payload. These are stored per-run on the `test_runs_cases` table and rendered as badges on the test case row and test case detail page. A `@slow` mark combined with a test's duration history powers the **stale `test.slow()`** detection in [Timeout opportunities](./flaky-tests#performance).
+The reporter captures Playwright test marks set via `test.info().annotations` (e.g. `@fixme`, `@slow`, `@skip`) and sends them as `testAnnotations` in every test case payload. These are stored per-run on the `test_runs_cases` table and rendered as badges on the test case row and test case detail page. A `@slow` mark combined with a test's duration history powers the **stale `test.slow()`** detection in [Timeout opportunities](./slow-tests#timeout-opportunities).
 
 ### Test tags
 
@@ -517,7 +517,7 @@ reporter.
 
 The reporter records each test's effective per-test timeout (`TestCase.timeout`) and sends it as `timeout` (milliseconds) on every test case payload, stored on `test_runs_cases.timeout`. `0` means the test has no timeout (unbounded); runs reported by an older reporter that predates this field store `null`.
 
-Together with the test's duration history this drives the **Timeout opportunities** analysis (see [Performance](./flaky-tests#performance)), which flags tests whose timeout far exceeds their real p95 duration so failures and hangs stop wasting time waiting.
+Together with the test's duration history this drives the **Timeout opportunities** analysis (see [Slow tests & wasted time](./slow-tests#timeout-opportunities)), which flags tests whose timeout far exceeds their real p95 duration so failures and hangs stop wasting time waiting.
 
 ### Skipped vs "didn't run"
 

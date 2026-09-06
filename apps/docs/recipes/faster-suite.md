@@ -118,7 +118,7 @@ into a channel — see the [API docs](https://piwitests.dev/demo/docs).
 
 ## See also
 
-- [Flaky tests → Performance](../flaky-tests#performance) — the full reference for trends, slowest
+- [Slow tests & wasted time](../slow-tests) — the full reference for trends, slowest
   tests and timeout hygiene
 - [Cut the flakiness that costs the most](./flaky-cleanup) — step 4 in full
 - [Analytics](../analytics) — CI time and wasted CI time across every project
