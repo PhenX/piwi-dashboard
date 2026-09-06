@@ -1050,3 +1050,109 @@ describe('_expect assertion capture', () => {
     });
   });
 });
+
+describe('visible() and frameLocator() chains', () => {
+  const PAY_ATTRS = {
+    tagName: 'button',
+    attributes: {},
+    textContent: 'Pay',
+    center: { x: 1, y: 1 },
+    hasLabel: false,
+    selectorCounts: {},
+    rolePosition: null,
+    ancestors: [],
+  };
+
+  /**
+   * Drive the real fixtures against a fake page, letting the body build a
+   * locator through whatever chain it likes and click it, then return the
+   * captured healing snapshots.
+   */
+  async function runChain(
+    fakePageExtras: Record<string, unknown>,
+    body: (page: Record<string, (...args: unknown[]) => unknown>) => Promise<void>,
+  ): Promise<LocatorSnapshot[] | null> {
+    const leaf = {
+      click: async () => {},
+      evaluate: async () => PAY_ATTRS,
+      ariaSnapshot: async () => '- button "Pay"',
+    };
+    const rootLocator = { ariaSnapshot: async () => null };
+    const factory = () => leaf;
+    const fakePage = {
+      getByRole: factory,
+      getByTestId: factory,
+      getByText: factory,
+      getByLabel: factory,
+      getByPlaceholder: factory,
+      getByAltText: factory,
+      getByTitle: factory,
+      locator: (sel: string) => (sel === ':root' ? rootLocator : { visible: () => leaf, evaluate: leaf.evaluate }),
+      on: () => {},
+      evaluate: async () => null,
+      ...fakePageExtras,
+    };
+    const testInfo = { status: 'passed', attach: vi.fn(async () => {}), annotations: [] };
+
+    const pageFixture = piwiFixtures.page as unknown as (
+      args: { page: unknown },
+      use: (page: typeof fakePage) => Promise<void>,
+    ) => Promise<void>;
+    const [captureFixture] = piwiFixtures.piwiCapture as unknown as [
+      (args: object, use: () => Promise<void>, info: unknown) => Promise<void>,
+    ];
+
+    await captureFixture(
+      {},
+      () =>
+        pageFixture({ page: fakePage }, (page) =>
+          body(page as unknown as Record<string, (...args: unknown[]) => unknown>),
+        ),
+      testInfo,
+    );
+
+    const call = testInfo.attach.mock.calls.find((c) => c[0] === ATTACHMENT_NAMES.locators);
+    return call ? (JSON.parse((call[1] as { body: Buffer }).body.toString()) as LocatorSnapshot[]) : null;
+  }
+
+  it('keeps the origin locator when the chain goes through visible()', async () => {
+    const snapshots = await runChain({}, async (page) => {
+      const loc = page.locator!('button') as { visible: () => { click: () => Promise<void> } };
+      await loc.visible().click();
+    });
+
+    expect(snapshots).toHaveLength(1);
+    // visible() narrows without changing identity, so the healed locator is the
+    // origin `locator('button')`, not the `visible()` call.
+    expect(snapshots![0]!.used).toEqual({ method: 'locator', args: ['button'], raw: 'locator(["button"])' });
+    expect(snapshots![0]!.element?.textContent).toBe('Pay');
+  });
+
+  it('records a no-selector frameLocator() chain like a page-level locator', async () => {
+    const frameLocator = { getByRole: () => ({ click: async () => {}, evaluate: async () => PAY_ATTRS }) };
+    const snapshots = await runChain({ frameLocator: () => frameLocator }, async (page) => {
+      const loc = page.frameLocator!() as { getByRole: (...a: unknown[]) => { click: () => Promise<void> } };
+      await loc.getByRole('button', { name: 'Pay' }).click();
+    });
+
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots![0]!.used).toEqual({
+      method: 'getByRole',
+      args: ['button', { name: 'Pay' }],
+      raw: 'getByRole(["button",{"name":"Pay"}])',
+    });
+    expect(snapshots![0]!.element?.textContent).toBe('Pay');
+  });
+
+  it('leaves the selector form of frameLocator() unwrapped', async () => {
+    const frameLocator = { getByRole: () => ({ click: async () => {}, evaluate: async () => PAY_ATTRS }) };
+    const snapshots = await runChain({ frameLocator: () => frameLocator }, async (page) => {
+      const loc = page.frameLocator!('#frame') as { getByRole: (...a: unknown[]) => { click: () => Promise<void> } };
+      await loc.getByRole('button', { name: 'Pay' }).click();
+    });
+
+    // The selector form is returned as Playwright hands it back — its locators
+    // are outside the capture proxy, so nothing is recorded.
+    expect(snapshots).toBeNull();
+  });
+});

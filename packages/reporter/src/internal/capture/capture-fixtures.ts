@@ -5,6 +5,7 @@ import type {
   BrowserContext,
   ConsoleMessage,
   Fixtures,
+  FrameLocator,
   Locator,
   Page,
   PlaywrightTestArgs,
@@ -560,6 +561,7 @@ const PATCHED_BROWSERS = new WeakSet<Browser>();
 // turned into Sets once here.
 const CHAIN_METHOD_SET = new Set(CHAIN_METHODS);
 const ACTION_METHOD_SET = new Set(ACTION_METHODS);
+const LOCATOR_METHOD_SET = new Set(LOCATOR_METHODS);
 
 /**
  * Everything the in-page probe needs, serialized into the browser on every
@@ -898,6 +900,28 @@ function wrapLocator(page: Page, locator: Locator, originMethod: string, originA
 }
 
 /**
+ * Wrap a frame locator so the locators built through it capture like page-level
+ * ones. Only the locator-building methods are intercepted; the resulting locator
+ * is proxied by `wrapLocator` with the builder call as its origin, so a healing
+ * snapshot records `getByRole(…)` rather than the frame path. Frame locators
+ * carry no action methods of their own, so nothing else is wrapped.
+ */
+function wrapFrameLocator(page: Page, frameLocator: FrameLocator): FrameLocator {
+  return new Proxy(frameLocator, {
+    get(target, prop) {
+      const original = Reflect.get(target, prop) as unknown;
+      if (typeof original !== 'function') return original;
+      const fn = original as (...args: unknown[]) => unknown;
+      if (!LOCATOR_METHOD_SET.has(prop as string)) return original;
+      return (...args: unknown[]): Locator => {
+        if (currentSink) currentSink.lastActivePage = page;
+        return wrapLocator(page, fn.apply(target, args) as Locator, String(prop), args);
+      };
+    },
+  });
+}
+
+/**
  * Instrument a single page: wrap its locator-building methods for healing
  * capture and attach console/network listeners. Idempotent — safe to call on a
  * page already reached through another path (browser patch, `page` fixture).
@@ -943,6 +967,20 @@ function instrumentPage(page: Page): void {
         // assertion-only tests that never call an action method.
         if (currentSink) currentSink.lastActivePage = page;
         return wrapLocator(page, original(...args), method, args);
+      };
+    }
+
+    // The no-selector `frameLocator()` searches the whole frame subtree and is a
+    // single wrappable entry point. The selector form (`frameLocator('#f')`)
+    // stays unwrapped: it predates the no-selector form and is left as Playwright
+    // returns it.
+    const originalFrameLocator = typeof page.frameLocator === 'function' ? page.frameLocator.bind(page) : null;
+    if (originalFrameLocator) {
+      (page as unknown as Record<string, (...args: unknown[]) => FrameLocator>).frameLocator = (
+        ...args: unknown[]
+      ): FrameLocator => {
+        const frame = (originalFrameLocator as (...a: unknown[]) => FrameLocator)(...args);
+        return args.length === 0 ? wrapFrameLocator(page, frame) : frame;
       };
     }
 
