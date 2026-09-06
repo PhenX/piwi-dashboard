@@ -44,7 +44,7 @@ The error, trace, headline and clustering work with the reporter alone. The cons
 
 At the bottom, the **Fix** card gathers what to do about it, each part shown only when it applies:
 
-- a **[replacement locator](./reporter#locator-healing)** when a locator broke, ranked by stability and in your suite's own style;
+- a **[replacement locator](./locator-healing)** when a locator broke, ranked by stability and in your suite's own style;
 - the **[AI diagnosis](./ai-diagnosis)** summary, when you've configured a model (optional, and grounded in your real diff);
 - **verify** — re-run in CI, or run it locally — and the tests this failure blocked.
 

@@ -26,7 +26,7 @@ Explaining a failure is the heart of it, and it's a loop: gather the evidence, g
   <figcaption>The loop the whole product serves — gather, group, explain, hand back, then verify the fix held.</figcaption>
 </figure>
 
-Each step is a page on this site: the [failing execution](./evidence) and its [evidence](./evidence#clues), [failure clusters](./failure-clusters), [AI diagnosis](./ai-diagnosis), [locator healing](./reporter#locator-healing) and [auto-heal PRs](./auto-heal), and the [fix verification](./ai-diagnosis#did-the-fix-work) that closes it.
+Each step is a page on this site: the [failing execution](./evidence) and its [evidence](./evidence#clues), [failure clusters](./failure-clusters), [AI diagnosis](./ai-diagnosis), [locator healing](./locator-healing) and [auto-heal PRs](./auto-heal), and the [fix verification](./ai-diagnosis#did-the-fix-work) that closes it.
 
 ## Two rules
 
