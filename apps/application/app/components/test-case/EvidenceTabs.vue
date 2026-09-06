@@ -164,10 +164,12 @@ function computeDefault(): TabValue {
 const activeTab = ref<TabValue>(computeDefault());
 
 // The Screen tab holds two views: the screenshot evidence and the structural
-// page diff. The toggle appears only when a diff is available (the child card
-// signals it after fetching).
+// page diff. The toggle appears once either page-diff card signals it has a
+// diff — the in-execution before→failure diff or the vs-last-green diff.
 const screenView = ref<'screenshot' | 'pagediff'>('screenshot');
 const pageDiffAvailable = ref(false);
+const traceDiffAvailable = ref(false);
+const pageDiffToggleShown = computed(() => pageDiffAvailable.value || traceDiffAvailable.value);
 
 // ── Section locator: switch to the tab holding a cited section, then scroll ──
 const timelineWrap = ref<HTMLElement | null>(null);
@@ -311,7 +313,7 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
       <div v-else-if="activeTab === 'screen'" data-shot="screen-evidence" class="space-y-4">
         <!-- Screenshot · Page diff — shown only once a diff is available. -->
         <div
-          v-if="pageDiffAvailable"
+          v-if="pageDiffToggleShown"
           role="tablist"
           aria-label="Screen view"
           class="inline-flex gap-1 rounded-md bg-elevated/60 p-0.5"
@@ -338,9 +340,12 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
           </button>
         </div>
 
-        <div v-show="!pageDiffAvailable || screenView === 'screenshot'" class="space-y-4">
+        <div v-show="!pageDiffToggleShown || screenView === 'screenshot'" class="space-y-4">
           <div ref="screenEvidenceWrap" class="scroll-mt-4 space-y-4">
             <TestCaseEvidenceCard :attachments="attachments" :traces="traces" embedded />
+          </div>
+          <div class="scroll-mt-4">
+            <TraceBeforeActionCard embedded :test-runs-case-id="testRunsCaseId" />
           </div>
           <div ref="visualDiffWrap" class="scroll-mt-4">
             <VisualDiffCard v-if="runId" embedded :run-id="runId" :test-runs-case-id="testRunsCaseId" />
@@ -359,7 +364,12 @@ defineExpose({ canLocate, revealSection, selectTab: (t: TabValue) => (activeTab.
           </div>
         </div>
 
-        <div v-show="!pageDiffAvailable || screenView === 'pagediff'" ref="pageDiffWrap" class="scroll-mt-4">
+        <div
+          v-show="!pageDiffToggleShown || screenView === 'pagediff'"
+          ref="pageDiffWrap"
+          class="scroll-mt-4 space-y-4"
+        >
+          <TracePageDiffCard embedded :test-runs-case-id="testRunsCaseId" @available="traceDiffAvailable = $event" />
           <PageDiffCard
             v-if="runId"
             embedded
