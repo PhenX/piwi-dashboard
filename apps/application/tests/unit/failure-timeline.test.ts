@@ -239,7 +239,7 @@ describe('buildFailureTimeline', () => {
     expect(() => buildFailureTimeline({})).not.toThrow();
     const empty = buildFailureTimeline({});
     expect(empty.origin).toBe(0);
-    expect(empty.lanes).toEqual({ steps: [], console: [], network: [], backend: [] });
+    expect(empty.lanes).toEqual({ steps: [], console: [], network: [], backend: [], dialogs: [] });
     expect(empty.window).toEqual({ start: 0, end: 0 });
 
     expect(() =>
@@ -353,5 +353,32 @@ describe('buildFailureTimeline', () => {
       expect(tl.lanes.steps[0]!.origin).toBeNull();
       expect(tl.lanes.steps[0]!.group).toBeNull();
     });
+  });
+});
+
+describe('dialogs lane', () => {
+  test('places a dialog by its close time and refs the dialogs section', () => {
+    const tl = buildFailureTimeline({
+      ...realTimestampInput(),
+      dialogs: [{ type: 'confirm', message: 'Stay signed in?', closedAt: T0 + 4_000 }],
+    });
+    expect(tl.lanes.dialogs).toHaveLength(1);
+    expect(tl.lanes.dialogs[0]!.at).toBe(4_000);
+    expect(tl.lanes.dialogs[0]!.kind).toBe('dialogs');
+    expect(tl.lanes.dialogs[0]!.label).toBe('confirm: Stay signed in?');
+    expect(tl.lanes.dialogs[0]!.ref).toEqual({ section: 'dialogs', index: 0 });
+  });
+
+  test('a dialog without a timestamp is reported as unplaced', () => {
+    const tl = buildFailureTimeline({
+      ...realTimestampInput(),
+      dialogs: [{ type: 'alert', message: 'No time' }],
+    });
+    expect(tl.lanes.dialogs).toHaveLength(0);
+    expect(tl.unplaced.some((u) => u.section === 'dialogs')).toBe(true);
+  });
+
+  test('no dialogs leaves the lane empty', () => {
+    expect(buildFailureTimeline(realTimestampInput()).lanes.dialogs).toEqual([]);
   });
 });

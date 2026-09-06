@@ -337,6 +337,8 @@ const visibleAlternatives = computed<RankedLocator[]>(() =>
   showAllAlternatives.value ? alternatives.value : alternatives.value.slice(0, ALT_PREVIEW),
 );
 
+const narrowing = computed(() => healing.value?.narrowingSuggestion ?? null);
+
 // Forward the fold/scroll so a clue or AI citation to `locatorHealing` can reveal it.
 const cardRef = ref<{ reveal?: () => void } | null>(null);
 defineExpose({ reveal: () => cardRef.value?.reveal?.() });
@@ -579,6 +581,27 @@ defineExpose({ reveal: () => cardRef.value?.reveal?.() });
           Copy patch
         </UButton>
       </div>
+    </div>
+
+    <!-- Narrowing suggestion — add .visible() when only one match is visible -->
+    <div v-if="narrowing" class="rounded-lg border border-default bg-elevated p-3 mb-3 flex items-center gap-3">
+      <UIcon name="i-lucide-eye" class="size-5 text-primary shrink-0" />
+      <div class="flex-1 min-w-0">
+        <p class="text-xs font-medium text-primary">Or narrow with <code>.visible()</code></p>
+        <p class="text-xs text-gray-500 mt-0.5">
+          The locator matched {{ narrowing.matchCount }} elements but only one is visible — adding
+          <code>.visible()</code> keeps it without changing the locator.
+        </p>
+      </div>
+      <UButton
+        size="sm"
+        color="neutral"
+        variant="outline"
+        :trailing-icon="copiedKey === 'narrowing' ? 'i-lucide-check' : 'i-lucide-copy'"
+        @click="copyLocator('.visible()', 'narrowing')"
+      >
+        Copy
+      </UButton>
     </div>
 
     <!-- Sturdier option — surfaced when the recommended fix keeps the original (less stable) style -->

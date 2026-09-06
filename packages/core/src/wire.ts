@@ -67,6 +67,7 @@ export interface BrowserConfig {
   colorScheme?: string | null;
   reducedMotion?: string | null;
   forcedColors?: string | null;
+  contrast?: string | null;
   offline?: boolean | null;
   bypassCSP?: boolean | null;
   javaScriptEnabled?: boolean | null;

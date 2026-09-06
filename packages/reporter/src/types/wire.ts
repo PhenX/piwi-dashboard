@@ -65,7 +65,9 @@ export interface WireTestCase {
   pageState?: unknown;
   aiUsage?: unknown;
   consoleLogs?: unknown;
+  dialogs?: unknown;
   ariaSnapshot?: unknown;
+  ariaSnapshotJson?: unknown;
   testSource?: string | null;
   testSourceFrames?: TestSourceFrame[] | null;
   browser?: BrowserConfig | null;
@@ -132,7 +134,9 @@ export interface CompleteStreamEvent {
   pageState?: unknown;
   aiUsage?: unknown;
   consoleLogs?: unknown;
+  dialogs?: unknown;
   ariaSnapshot?: unknown;
+  ariaSnapshotJson?: unknown;
   testSource?: string | null;
   testSourceFrames?: TestSourceFrame[] | null;
   locatorSnapshots?: unknown;

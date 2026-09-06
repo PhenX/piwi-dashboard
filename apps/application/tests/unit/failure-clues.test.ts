@@ -684,3 +684,29 @@ describe('lock-cross-shard', () => {
     expect(rules(input)).not.toContain('lock-cross-shard');
   });
 });
+
+describe('dialog-open-on-failure', () => {
+  // The failed click ends at T0 + 5000; a dialog closing near it is in the
+  // failure window.
+  test('flags a dialog that closed around the failure moment', () => {
+    const input = baseInput({
+      dialogs: [{ type: 'confirm', message: 'Stay signed in?', closedAt: T0 + 4_800 }],
+    });
+    const clue = buildFailureClues(input).find((c) => c.rule === 'dialog-open-on-failure');
+    expect(clue).toBeDefined();
+    expect(clue!.strength).toBe('strong');
+    expect(clue!.title).toContain('confirm');
+    expect(clue!.citations).toContainEqual({ section: 'dialogs', index: 0 });
+  });
+
+  test('ignores a dialog closed long before the failure window', () => {
+    const input = baseInput({
+      dialogs: [{ type: 'alert', message: 'Welcome', closedAt: T0 - 60_000 }],
+    });
+    expect(rules(input)).not.toContain('dialog-open-on-failure');
+  });
+
+  test('no dialogs, no clue', () => {
+    expect(rules(baseInput())).not.toContain('dialog-open-on-failure');
+  });
+});

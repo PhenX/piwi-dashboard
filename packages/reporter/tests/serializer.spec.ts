@@ -168,10 +168,12 @@ describe('toWireTestCase', () => {
     expect(Object.keys(out).sort()).toEqual([
       'aiUsage',
       'ariaSnapshot',
+      'ariaSnapshotJson',
       'attempts',
       'blockedBy',
       'browser',
       'consoleLogs',
+      'dialogs',
       'didNotRunReason',
       'duration',
       'error',

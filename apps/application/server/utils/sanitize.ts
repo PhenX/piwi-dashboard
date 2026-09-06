@@ -203,6 +203,30 @@ export function sanitizeConsoleLogs(
   });
 }
 
+/** Max characters kept per stored dialog message / default value. */
+const DIALOG_TEXT_CAP = 2000;
+
+/**
+ * Keep only the recognized fields of each recorded dialog, mask token-shaped
+ * strings in the free text, and bound each string. Anything that is not an
+ * array of objects becomes null.
+ */
+export function sanitizeDialogs(dialogs: unknown): Array<Record<string, unknown>> | null {
+  if (!Array.isArray(dialogs)) return null;
+  const out = dialogs
+    .filter((d): d is Record<string, unknown> => !!d && typeof d === 'object')
+    .map((d) => {
+      const entry: Record<string, unknown> = {};
+      if (typeof d.type === 'string') entry.type = d.type.slice(0, 40);
+      if (typeof d.message === 'string') entry.message = maskTokenLike(d.message).slice(0, DIALOG_TEXT_CAP);
+      if (typeof d.defaultValue === 'string' && d.defaultValue)
+        entry.defaultValue = maskTokenLike(d.defaultValue).slice(0, DIALOG_TEXT_CAP);
+      if (typeof d.closedAt === 'number') entry.closedAt = d.closedAt;
+      return entry;
+    });
+  return out.length > 0 ? out : null;
+}
+
 /*
  * Ingest storage caps (see `shared/ingest-limits.ts`): bound the size of the
  * per-execution payloads before they are persisted. Applied by

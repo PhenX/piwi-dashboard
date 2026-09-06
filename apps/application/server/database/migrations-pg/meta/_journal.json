@@ -449,6 +449,13 @@
       "when": 1788637371406,
       "tag": "0063_flippant_shockwave",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1788683266744,
+      "tag": "0064_numerous_star_brand",
+      "breakpoints": true
     }
   ]
 }

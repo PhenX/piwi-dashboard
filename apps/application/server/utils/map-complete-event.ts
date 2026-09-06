@@ -31,7 +31,9 @@ export interface ParsedCompleteEvent {
   pageState?: unknown;
   aiUsage?: unknown;
   consoleLogs?: unknown;
+  dialogs?: unknown;
   ariaSnapshot?: unknown;
+  ariaSnapshotJson?: unknown;
   testSource?: string | null;
   testSourceFrames?: unknown;
   suitePath?: string[] | null;
@@ -85,7 +87,9 @@ export function mapCompleteEventToRunCase(tc: ParsedCompleteEvent): RunCaseInput
     pageState: tc.pageState,
     aiUsage: tc.aiUsage,
     consoleLogs: tc.consoleLogs,
+    dialogs: tc.dialogs,
     ariaSnapshot: (tc.ariaSnapshot as string | null | undefined) ?? null,
+    ariaSnapshotJson: (tc.ariaSnapshotJson as string | null | undefined) ?? null,
     testSource: tc.testSource ?? null,
     testSourceFrames: tc.testSourceFrames ?? null,
     workerIndex: tc.workerIndex ?? null,

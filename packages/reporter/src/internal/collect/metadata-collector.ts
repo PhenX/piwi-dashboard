@@ -154,6 +154,7 @@ export class MetadataCollector {
           if (use.colorScheme) config.colorScheme = use.colorScheme;
           if (use.reducedMotion) config.reducedMotion = use.reducedMotion;
           if (use.forcedColors) config.forcedColors = use.forcedColors;
+          if (use.contrast) config.contrast = use.contrast;
           if (use.offline) config.offline = use.offline;
           if (use.bypassCSP) config.bypassCSP = use.bypassCSP;
           if (use.javaScriptEnabled === false) config.javaScriptEnabled = false;

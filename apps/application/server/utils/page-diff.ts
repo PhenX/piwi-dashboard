@@ -10,6 +10,7 @@ import { and, eq, desc, isNotNull, or } from 'drizzle-orm';
 import { testRuns, testRunsCases } from '../database/schema';
 import { rankBaselineCandidates, baselineEnvironmentNote } from '#shared/baseline-order';
 import { diffAriaSnapshots, type PageDiffHunk, type PageDiffSummary } from '#shared/page-diff';
+import { ariaTextPreferJson } from '#shared/aria-json';
 import { parsePlaywrightError } from '#shared/error-parse';
 import { resolveCasePayloadContents } from './case-payloads';
 import { resolveRunBranch } from './run-branch';
@@ -54,7 +55,9 @@ function selectExecution(db: DrizzleDB, where: ReturnType<typeof and>) {
       browserName: testRunsCases.browserName,
       error: testRunsCases.error,
       ariaSnapshot: testRunsCases.ariaSnapshot,
+      ariaSnapshotJson: testRunsCases.ariaSnapshotJson,
       ariaSnapshotPayloadId: testRunsCases.ariaSnapshotPayloadId,
+      ariaSnapshotJsonPayloadId: testRunsCases.ariaSnapshotJsonPayloadId,
       runId: testRuns.id,
       runEnvironment: testRuns.environment,
       runBranch: testRuns.branch,
@@ -124,14 +127,19 @@ export async function getPageDiff(db: DrizzleDB, testRunsCaseId: number): Promis
 
   const contents = await resolveCasePayloadContents(db, [
     failing.ariaSnapshotPayloadId,
+    failing.ariaSnapshotJsonPayloadId,
     baseline.ariaSnapshotPayloadId,
+    baseline.ariaSnapshotJsonPayloadId,
   ]);
-  const failingAria =
-    (failing.ariaSnapshotPayloadId != null ? contents.get(failing.ariaSnapshotPayloadId) : undefined) ??
-    failing.ariaSnapshot;
-  const baselineAria =
-    (baseline.ariaSnapshotPayloadId != null ? contents.get(baseline.ariaSnapshotPayloadId) : undefined) ??
-    baseline.ariaSnapshot;
+  const resolve = (id: number | null, inline: string | null) => (id != null ? contents.get(id) : undefined) ?? inline;
+  const failingAria = ariaTextPreferJson(
+    resolve(failing.ariaSnapshotJsonPayloadId, failing.ariaSnapshotJson),
+    resolve(failing.ariaSnapshotPayloadId, failing.ariaSnapshot),
+  );
+  const baselineAria = ariaTextPreferJson(
+    resolve(baseline.ariaSnapshotJsonPayloadId, baseline.ariaSnapshotJson),
+    resolve(baseline.ariaSnapshotPayloadId, baseline.ariaSnapshot),
+  );
 
   if (!failingAria) return { status: 'no-failure-snapshot' };
   if (!baselineAria) return { status: 'no-green-sample' };

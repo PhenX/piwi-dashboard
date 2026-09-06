@@ -74,6 +74,7 @@ export async function deleteRunsOlderThan(db: DbClient, olderThanDays: number): 
     const refs = await db
       .select({
         aria: testRunsCases.ariaSnapshotPayloadId,
+        ariaJson: testRunsCases.ariaSnapshotJsonPayloadId,
         source: testRunsCases.testSourcePayloadId,
         frames: testRunsCases.testSourceFramesPayloadId,
       })
@@ -81,6 +82,7 @@ export async function deleteRunsOlderThan(db: DbClient, olderThanDays: number): 
       .where(inArray(testRunsCases.id, batch));
     for (const ref of refs) {
       if (ref.aria != null) candidatePayloadIds.add(ref.aria);
+      if (ref.ariaJson != null) candidatePayloadIds.add(ref.ariaJson);
       if (ref.source != null) candidatePayloadIds.add(ref.source);
       if (ref.frames != null) candidatePayloadIds.add(ref.frames);
     }
@@ -160,6 +162,7 @@ export async function deleteRunsOlderThan(db: DbClient, olderThanDays: number): 
  */
 function payloadUnreferenced(): SQL {
   return sql`NOT EXISTS (SELECT 1 FROM ${testRunsCases} WHERE ${testRunsCases.ariaSnapshotPayloadId} = ${casePayloads.id})
+    AND NOT EXISTS (SELECT 1 FROM ${testRunsCases} WHERE ${testRunsCases.ariaSnapshotJsonPayloadId} = ${casePayloads.id})
     AND NOT EXISTS (SELECT 1 FROM ${testRunsCases} WHERE ${testRunsCases.testSourcePayloadId} = ${casePayloads.id})
     AND NOT EXISTS (SELECT 1 FROM ${testRunsCases} WHERE ${testRunsCases.testSourceFramesPayloadId} = ${casePayloads.id})`;
 }

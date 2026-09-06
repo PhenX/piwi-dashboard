@@ -168,7 +168,9 @@ export default eventHandler(async (event) => {
             pageState: testCase.pageState,
             aiUsage: testCase.aiUsage,
             consoleLogs: testCase.consoleLogs,
+            dialogs: testCase.dialogs,
             ariaSnapshot: testCase.ariaSnapshot as string | null | undefined,
+            ariaSnapshotJson: testCase.ariaSnapshotJson as string | null | undefined,
             testSource: testCase.testSource ?? null,
             testSourceFrames: testCase.testSourceFrames ?? null,
             workerIndex: testCase.workerIndex,
@@ -291,7 +293,9 @@ export default eventHandler(async (event) => {
         pageState?: unknown;
         aiUsage?: unknown;
         consoleLogs?: unknown;
+        dialogs?: unknown;
         ariaSnapshot?: unknown;
+        ariaSnapshotJson?: unknown;
         testSource?: string | null;
         testSourceFrames?: unknown;
         startedAt?: number | null;
@@ -339,7 +343,9 @@ export default eventHandler(async (event) => {
           pageState: testCase.pageState,
           aiUsage: testCase.aiUsage,
           consoleLogs: testCase.consoleLogs,
+          dialogs: testCase.dialogs,
           ariaSnapshot: testCase.ariaSnapshot as string | null | undefined,
+          ariaSnapshotJson: testCase.ariaSnapshotJson as string | null | undefined,
           testSource: testCase.testSource ?? null,
           testSourceFrames: testCase.testSourceFrames ?? null,
           workerIndex: testCase.workerIndex,

@@ -16,14 +16,14 @@ import { stepLabel } from '@piwitests/core/step-analysis';
 import { parseCallsiteLocation } from './callsite-location';
 
 /** The rows a lane groups. `backend` holds log entries attached to a request. */
-export type TimelineLane = 'steps' | 'console' | 'network' | 'backend';
+export type TimelineLane = 'steps' | 'console' | 'network' | 'backend' | 'dialogs';
 
 /** What an item stands for; the card colors and formats each kind differently. */
-export type TimelineItemKind = 'step' | 'console' | 'network' | 'backend';
+export type TimelineItemKind = 'step' | 'console' | 'network' | 'backend' | 'dialogs';
 
 /** The page section (and index within it) an item was read from, for click-through. */
 export interface TimelineRef {
-  section: 'steps' | 'console' | 'networkRequests' | 'backendLogs';
+  section: 'steps' | 'console' | 'networkRequests' | 'backendLogs' | 'dialogs';
   /** Index within the source list; backend logs carry their parent request's index. */
   index: number;
 }
@@ -98,6 +98,7 @@ export interface TimelineLanes {
   console: TimelineItem[];
   network: TimelineItem[];
   backend: TimelineItem[];
+  dialogs: TimelineItem[];
 }
 
 export interface FailureTimeline {
@@ -139,6 +140,7 @@ export interface FailureTimelineInput {
   steps?: unknown;
   stepEvents?: unknown;
   consoleLogs?: unknown;
+  dialogs?: unknown;
   networkRequests?: unknown;
   traceAnchor?: TimelineTraceAnchor | null;
   /** The test's spec file (project-relative) — the boundary for the "enclosing method". */
@@ -168,6 +170,8 @@ type StepRow = {
 };
 
 type ConsoleRow = { type?: unknown; text?: unknown; timestamp?: unknown; location?: unknown };
+
+type DialogRow = { type?: unknown; message?: unknown; defaultValue?: unknown; closedAt?: unknown };
 
 type ServerLogRow = { timestamp?: unknown; level?: unknown; message?: unknown };
 
@@ -273,6 +277,7 @@ function deriveOrigin(
 export function buildFailureTimeline(input: FailureTimelineInput): FailureTimeline {
   const steps = rows<StepRow>(input.steps);
   const consoleLogs = rows<ConsoleRow>(input.consoleLogs);
+  const dialogs = rows<DialogRow>(input.dialogs);
   const networkRequests = rows<NetworkRow>(input.networkRequests);
   const stepEvents = rows<StepEventRow>(input.stepEvents);
 
@@ -291,13 +296,14 @@ export function buildFailureTimeline(input: FailureTimelineInput): FailureTimeli
   if (stepsHaveStartTimes) for (const s of steps) originCandidates.push(s.startTime as number);
   for (const e of stepEvents) if (isFiniteNumber(e.startedAt)) originCandidates.push(e.startedAt);
   for (const c of consoleLogs) if (isFiniteNumber(c.timestamp)) originCandidates.push(c.timestamp);
+  for (const d of dialogs) if (isFiniteNumber(d.closedAt)) originCandidates.push(d.closedAt);
   for (const n of networkRequests) if (isFiniteNumber(n.startTime)) originCandidates.push(n.startTime);
   for (const n of networkRequests)
     for (const log of rows<ServerLogRow>(n.serverLogs))
       if (isFiniteNumber(log.timestamp)) originCandidates.push(log.timestamp);
   const origin = originCandidates.length > 0 ? Math.min(...originCandidates) : 0;
 
-  const lanes: TimelineLanes = { steps: [], console: [], network: [], backend: [] };
+  const lanes: TimelineLanes = { steps: [], console: [], network: [], backend: [], dialogs: [] };
   const unplaced: TimelineUnplaced[] = [];
   let latestEnd = 0;
   const noteEnd = (at: number, dur = 0) => {
@@ -399,6 +405,28 @@ export function buildFailureTimeline(input: FailureTimelineInput): FailureTimeli
       status: str(entry.type, 'log'),
       kind: 'console',
       ref: { section: 'console', index },
+    });
+    noteEnd(at);
+  });
+
+  // ── Dialogs lane ───────────────────────────────────────────────────────────
+  dialogs.forEach((dialog, index) => {
+    const type = str(dialog.type, 'dialog');
+    const message = clampLabel(str(dialog.message));
+    const label = message ? `${type}: ${message}` : type;
+    if (!isFiniteNumber(dialog.closedAt)) {
+      unplaced.push({ section: 'dialogs', label: label || `Dialog ${index + 1}`, reason: 'no timestamp' });
+      return;
+    }
+    const at = dialog.closedAt - origin;
+    lanes.dialogs.push({
+      id: `dialog-${index}`,
+      lane: 'dialogs',
+      at,
+      label,
+      status: type,
+      kind: 'dialogs',
+      ref: { section: 'dialogs', index },
     });
     noteEnd(at);
   });

@@ -41,6 +41,7 @@ import {
   sanitizeMetadata,
   sanitizeWebVitals,
   sanitizeConsoleLogs,
+  sanitizeDialogs,
   sanitizePageState,
 } from '~~/server/utils/sanitize';
 import { DEFAULT_INGEST_LIMITS } from '#shared/ingest-limits';
@@ -409,7 +410,9 @@ export interface RunCaseInput {
   pageState?: unknown;
   aiUsage?: unknown;
   consoleLogs?: unknown;
+  dialogs?: unknown;
   ariaSnapshot?: string | null;
+  ariaSnapshotJson?: string | null;
   workerIndex?: number | null;
   shardIndex?: number | null;
   startedAt?: number | null;
@@ -679,9 +682,11 @@ export async function persistRunCases(
           sanitizeConsoleLogs(c.consoleLogs as Array<Record<string, unknown>> | null | undefined),
           DEFAULT_INGEST_LIMITS,
         ) ?? null,
+      dialogs: capArray(sanitizeDialogs(c.dialogs), DEFAULT_INGEST_LIMITS.dialogs) ?? null,
       // Demo-mode rows keep writing inline (never case_payloads), which
       // permanently exercises the readers' payload → inline fallback.
       ariaSnapshot: capText(c.ariaSnapshot, DEFAULT_INGEST_LIMITS.ariaSnapshotChars),
+      ariaSnapshotJson: capText(c.ariaSnapshotJson, DEFAULT_INGEST_LIMITS.ariaSnapshotChars),
       testSource: capText(c.testSource, DEFAULT_INGEST_LIMITS.testSourceChars),
       testSourceFrames: capSourceFrames(c.testSourceFrames, DEFAULT_INGEST_LIMITS),
       testAnnotations: (c.testAnnotations as never) ?? null,

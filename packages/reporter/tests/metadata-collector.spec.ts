@@ -132,6 +132,26 @@ describe('MetadataCollector.getBrowserConfig', () => {
     const test = { parent: { parent: { parent: undefined } } } as any;
     expect(mc.getBrowserConfig(test)).toBe(null);
   });
+
+  it('captures the contrast preference alongside reducedMotion and forcedColors', () => {
+    const mc = new MetadataCollector();
+    const project = {
+      name: 'chromium',
+      use: { reducedMotion: 'reduce', forcedColors: 'active', contrast: 'more' },
+    };
+    const test = { parent: { parent: { project: () => project } } } as any;
+    const cfg = mc.getBrowserConfig(test);
+    expect(cfg?.reducedMotion).toBe('reduce');
+    expect(cfg?.forcedColors).toBe('active');
+    expect(cfg?.contrast).toBe('more');
+  });
+
+  it('omits contrast when the project does not set it', () => {
+    const mc = new MetadataCollector();
+    const project = { name: 'chromium', use: { browserName: 'chromium' } };
+    const test = { parent: { parent: { project: () => project } } } as any;
+    expect(mc.getBrowserConfig(test)).not.toHaveProperty('contrast');
+  });
 });
 
 describe('MetadataCollector.collect — CI provider detection', () => {

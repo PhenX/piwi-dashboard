@@ -108,3 +108,19 @@ export function ariaJsonToText(raw: string): string | null {
   const text = ariaJsonTreeToText(tree);
   return text.length > 0 ? text : null;
 }
+
+/**
+ * The aria snapshot as text, preferring the JSON tree (a structured source with
+ * states and boxes) over the YAML dump when a valid one is present. Falls back
+ * to the YAML — and to null when neither yields anything.
+ */
+export function ariaTextPreferJson(
+  ariaSnapshotJson: string | null | undefined,
+  ariaSnapshotYaml: string | null | undefined,
+): string | null {
+  if (ariaSnapshotJson) {
+    const text = ariaJsonToText(ariaSnapshotJson);
+    if (text) return text;
+  }
+  return ariaSnapshotYaml ?? null;
+}
