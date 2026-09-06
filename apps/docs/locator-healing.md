@@ -33,6 +33,10 @@ When a stored snapshot is found but the element's captured accessible name is pr
 
 The result is shown as a **Locator fix** panel on the [execution](./evidence#one-execution-diagnosis-first) and failure-cluster pages, and folded into the AI diagnosis context so the model recommends a grounded fix (see [AI diagnosis](./ai-diagnosis#locator-healing)). A single **recommended fix** is highlighted — it keeps your original locator *style* where that style is stable enough (a minimal, idiomatic edit), and escalates to the sturdiest alternative (or advises adding a `data-testid`) only when the original style has nothing stable to fall back on.
 
+### Narrowing a strict-mode violation with `.visible()`
+
+When the failure is a **strict-mode violation** — the locator matched several elements — and only **one of them is visible**, the panel also suggests adding `.visible()` beside the replacement locators. Playwright 1.63's `locator.visible()` keeps only the visible matches, so `page.getByRole('button', { name: 'Pay' }).visible().click()` resolves the ambiguity without changing the locator itself — the right fix when the duplicates are hidden variants (a loading or off-screen copy) rather than a naming problem. The visible-match count comes from the failure-time ARIA snapshot, which omits hidden nodes. The suggestion is shown only when the run's stored Playwright version is **1.63 or later** (older runs have no `.visible()` to add).
+
 <figure>
   <img src="/screenshots/locator-healing.png" alt="Locator fix panel showing ranked replacement locators with stability scores and a recommended fix">
   <figcaption>The Locator fix panel — replacements ranked by stability score (data-testid ≈ 100, role + name ≈ 90), with a recommended fix and a copy button for each.</figcaption>

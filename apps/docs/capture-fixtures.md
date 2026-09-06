@@ -48,7 +48,8 @@ That's the entire setup — there is nothing to start, wrap, or await inside you
 | **Network requests** — method, URL, status, duration, start time, content type. Only API/document traffic (fetch, XHR, document); static assets are skipped | per request | *Slow API endpoints* table on the [run page](./ui-overview#test-run-detail) with `/api/users/:id`-style route normalization; [backend log correlation](./backend-logs) via the `X-Piwi-Logs` response header; the [failure timeline](./evidence#one-execution-diagnosis-first) (start time places each request, backend logs by their own timestamp) |
 | **Console entries** — `warning`, `error`, and `assert` messages with source location and a timestamp (`console.log` noise is not collected) | as they happen | Console card on the [execution page](./evidence#one-execution-diagnosis-first); the [failure timeline](./evidence#one-execution-diagnosis-first) (placed by their timestamp); [AI diagnosis](./ai-diagnosis) evidence |
 | **Web Vitals** — TTFB, DOM Interactive, DOMContentLoaded, Load Complete, First Paint, First Contentful Paint, plus LCP, CLS and INP (Chromium-only) | at test teardown | Web vitals card with color-coded thresholds; [performance trends](./slow-tests) |
-| **ARIA snapshot** of the final page state | on failure | Failure evidence on the [execution](./evidence#one-execution-diagnosis-first) and cluster pages; [AI diagnosis](./ai-diagnosis) context |
+| **ARIA snapshot** of the final page state — the YAML dump, plus the JSON aria tree when the installed Playwright is 1.63 or later | on failure | Failure evidence on the [execution](./evidence#one-execution-diagnosis-first) and cluster pages; [AI diagnosis](./ai-diagnosis) context. The JSON tree, when present, is the structured source for [locator healing](./locator-healing)'s rename matching and the page-structure diff; the YAML keeps feeding the ARIA card |
+| **Browser dialogs** — an `alert`/`confirm`/`prompt`/`beforeunload` dialog's type, message and close time. Observed through Playwright 1.63's `dialogclosed` event only, which never suppresses Playwright's automatic dismissal (a `dialog` listener would, and could hang a test) | as each dialog closes | A *dialogs* lane on the [failure timeline](./evidence#one-execution-diagnosis-first) and a *a dialog was open when the action failed* [clue](./evidence#clues) |
 | **Locator snapshots** — element attributes, stable-ancestor anchors, and same-role position, plus ranked alternative locators (including rename-proof ancestor-scoped and name-free ones) for each element a test proves resolvable, stamped with the call site | after each successful action and each passing web-first assertion (`toBeVisible()`, `toHaveText()`, …) | [Locator healing](./locator-healing); when a failing name-based locator (`getByRole`, `getByText`, `getByLabel`, …) matches nothing, a fresh suggestion is attached to the test as a Playwright annotation |
 
 ::: tip Test source is captured without any fixture
@@ -69,6 +70,7 @@ The reporter degrades gracefully — nothing breaks without the fixtures. This i
 | Web Vitals & performance trends | — | ✅ |
 | Console warnings/errors card | — | ✅ |
 | Failure-time ARIA snapshot + locator suggestion | — | ✅ |
+| Dialogs lane on the failure timeline (Playwright 1.63+) | — | ✅ |
 | Locator healing (ranked alternatives panel) | — | ✅ |
 | Backend log correlation | — | ✅ with a [backend integration](./backend-logs) |
 

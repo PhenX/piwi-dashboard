@@ -877,6 +877,15 @@ export const PIWI_ENV_VARS = {
     max: 100,
     since: '0.27.0',
   },
+  PIWI_INGEST_MAX_DIALOGS: {
+    description: 'Max browser dialogs stored per execution.',
+    category: 'ingest',
+    type: 'number',
+    default: '50',
+    min: 1,
+    max: 500,
+    since: '0.27.0',
+  },
   PIWI_INGEST_MAX_ARIA_CHARS: {
     description: 'Max characters of the ARIA snapshot stored per failing execution.',
     category: 'ingest',
