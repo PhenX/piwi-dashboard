@@ -75,30 +75,29 @@ export default defineConfig({
 
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Getting started', link: '/getting-started' },
-      { text: 'Reporter', link: '/reporter' },
-      // Recipes and Operate each have their own path-prefixed sidebar, so their
-      // groups no longer ride along on every page — the top nav is how a reader
-      // reaches them from outside those prefixes. activeMatch keeps the nav item
-      // highlighted across every page under the section.
+      // Each moved section has its own path-prefixed sidebar, so its group no
+      // longer rides along on every page — the top nav is how a reader reaches
+      // it from outside its prefix. activeMatch keeps the nav item highlighted
+      // across every page under the section.
+      { text: 'Guide', link: '/guide/what-piwi-does', activeMatch: '/guide/' },
+      { text: 'Features', link: '/features/ui-overview', activeMatch: '/features/' },
       { text: 'Recipes', link: '/recipes/' },
       { text: 'Operate', link: '/operate/deployment', activeMatch: '/operate/' },
+      { text: 'Reference', link: '/reference/configuration', activeMatch: '/reference/' },
       { text: 'Blog', link: '/blog/' },
       { text: 'API docs', link: 'https://piwitests.dev/demo/docs' },
       { text: 'Demo', link: 'https://piwitests.dev/demo/' },
     ],
 
-    // Sidebar order follows the reader's journey: understand it → get results
-    // in → read them → run the instance → wire it into other tools. A group
-    // answers one question the reader is holding, so a page belongs to the
-    // group matching what they are doing, never to the feature it describes.
+    // A group answers one question the reader is holding, so a page belongs to
+    // the group matching what they are doing, never to the feature it describes.
     // Multi-sidebar, keyed by URL path prefix (VitePress picks the sidebar whose
-    // key prefixes the current path, longest match first). The restructure moves
-    // each section under its own prefix so it can present a focused sidebar:
-    // Recipes live under /recipes/, the operator pages under /operate/. Every
-    // page not yet moved falls back to the journey-ordered '/' sidebar below. As
-    // the remaining sections move (guide/ features/ reference/), each gets a key
-    // here and leaves the fallback.
+    // key prefixes the current path, longest match first). Every content page
+    // lives under a section prefix reached from the top nav — the guide under
+    // /guide/, the feature pages under /features/, the operator pages under
+    // /operate/, recipes under /recipes/, and the reference material under
+    // /reference/. There is no '/' fallback: the only page at the root is the
+    // home-layout landing, which shows no sidebar.
     sidebar: {
       '/recipes/': [
         {
@@ -114,8 +113,8 @@ export default defineConfig({
         },
       ],
       // Operate — the operator's journey: stand it up, secure it, mind the data,
-      // keep it current. The configuration reference and generator stay in the
-      // '/' fallback for now; they move to a Reference sidebar in a later step.
+      // keep it current. The configuration reference and generator live in the
+      // Reference sidebar but are linked here too, since they are operator work.
       '/operate/': [
         {
           text: 'Operate',
@@ -127,76 +126,89 @@ export default defineConfig({
             { text: 'Storage configuration', link: '/operate/storage' },
             { text: 'Backup & restore', link: '/operate/backup-restore' },
             { text: 'Upgrading', link: '/operate/upgrading' },
-            { text: 'Configuration reference', link: '/configuration' },
-            { text: 'Configuration generator', link: '/configuration/generator' },
+            { text: 'Configuration reference', link: '/reference/configuration' },
+            { text: 'Configuration generator', link: '/reference/configuration/generator' },
           ],
         },
       ],
-      '/': [
+      // Features — reading the results: what the dashboard shows you and does
+      // with a run, from the dashboard map through evidence, clusters, diagnosis,
+      // the fix, and the supporting lenses (analytics, notifications, sharing).
+      '/features/': [
+        {
+          text: 'Reading the results',
+          items: [
+            { text: 'UI overview', link: '/features/ui-overview' },
+            { text: 'Failure evidence', link: '/features/evidence' },
+            { text: 'Failure clusters & the inbox', link: '/features/failure-clusters' },
+            { text: 'AI diagnosis & clustering', link: '/features/ai-diagnosis' },
+            { text: 'Fix plans, reproduce & bisect', link: '/features/fix-plans' },
+            { text: 'What changed in a run', link: '/features/run-changes' },
+            { text: 'Flaky tests', link: '/features/flaky-tests' },
+            { text: 'Slow tests & wasted time', link: '/features/slow-tests' },
+            { text: 'Branches', link: '/features/branches' },
+            { text: 'Analytics', link: '/features/analytics' },
+            { text: 'Timeline markers', link: '/features/timeline-markers' },
+            { text: 'Notifications & alerts', link: '/features/notifications' },
+            { text: 'Locator healing', link: '/features/locator-healing' },
+            { text: 'Auto-heal PRs', link: '/features/auto-heal' },
+            { text: 'Offline export', link: '/features/offline-export' },
+            { text: 'Share links', link: '/features/share-links' },
+          ],
+        },
+        {
+          text: 'Use it from elsewhere',
+          items: [
+            { text: 'MCP server', link: '/features/mcp' },
+            { text: 'Agent skills', link: '/features/mcp#agent-skills' },
+            { text: 'Desktop app', link: '/features/desktop' },
+            { text: 'Browser extension', link: '/features/extension' },
+            { text: 'Test functions catalog', link: '/features/test-functions' },
+            { text: 'Open in IDE', link: '/features/ide-integration' },
+          ],
+        },
+      ],
+      // Guide — the new user's ordered path: understand what Piwi does, get a
+      // first run in, learn the vocabulary, then read a first failure. The
+      // "Sending results" group covers getting results into the dashboard.
+      '/guide/': [
         {
           text: 'Start here',
           items: [
-            { text: 'What Piwi does', link: '/what-piwi-does' },
-            { text: 'Getting started', link: '/getting-started' },
-            { text: 'Core concepts', link: '/concepts' },
-            { text: 'Your first failure, explained', link: '/first-failure' },
-            { text: 'Why Piwi? (comparison & FAQ)', link: '/comparison' },
-            { text: 'Privacy & data flow', link: '/privacy' },
+            { text: 'What Piwi does', link: '/guide/what-piwi-does' },
+            { text: 'Getting started', link: '/guide/getting-started' },
+            { text: 'Core concepts', link: '/guide/concepts' },
+            { text: 'Your first failure, explained', link: '/guide/first-failure' },
+            { text: 'Why Piwi? (comparison & FAQ)', link: '/guide/comparison' },
+            { text: 'Privacy & data flow', link: '/guide/privacy' },
           ],
         },
         {
           text: 'Sending results',
           items: [
-            { text: 'Reporter', link: '/reporter' },
-            { text: 'Capture fixtures', link: '/capture-fixtures' },
-            { text: 'AI steps', link: '/ai-steps' },
-            { text: 'CI & sharding', link: '/ci' },
-            { text: 'Test selections', link: '/test-selection' },
-            { text: 'Backend logs', link: '/backend-logs' },
-            { text: 'Importing past runs', link: '/importing-runs' },
+            { text: 'Reporter', link: '/guide/reporter' },
+            { text: 'Capture fixtures', link: '/guide/capture-fixtures' },
+            { text: 'AI steps', link: '/guide/ai-steps' },
+            { text: 'CI & sharding', link: '/guide/ci' },
+            { text: 'Test selections', link: '/guide/test-selection' },
+            { text: 'Backend logs', link: '/guide/backend-logs' },
+            { text: 'Importing past runs', link: '/guide/importing-runs' },
           ],
         },
+      ],
+      // Reference — the power user's lookup surface: the generated configuration
+      // reference and its interactive generator, and the CLI. Every content page
+      // now lives under a section prefix, so there is no '/' fallback — the only
+      // page left at the root is the home-layout landing, which has no sidebar.
+      '/reference/': [
         {
-          text: 'Reading the results',
+          text: 'Reference',
           items: [
-            { text: 'UI overview', link: '/ui-overview' },
-            { text: 'Failure evidence', link: '/evidence' },
-            { text: 'Failure clusters & the inbox', link: '/failure-clusters' },
-            { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
-            { text: 'Fix plans, reproduce & bisect', link: '/fix-plans' },
-            { text: 'What changed in a run', link: '/run-changes' },
-            { text: 'Flaky tests', link: '/flaky-tests' },
-            { text: 'Slow tests & wasted time', link: '/slow-tests' },
-            { text: 'Branches', link: '/branches' },
-            { text: 'Analytics', link: '/analytics' },
-            { text: 'Timeline markers', link: '/timeline-markers' },
-            { text: 'Notifications & alerts', link: '/notifications' },
-            { text: 'Locator healing', link: '/locator-healing' },
-            { text: 'Auto-heal PRs', link: '/auto-heal' },
-            { text: 'Offline export', link: '/offline-export' },
-            { text: 'Share links', link: '/share-links' },
-          ],
-        },
-        {
-          // The operator pages moved to the /operate/ sidebar (reached via the
-          // Operate nav). What remains here is the configuration reference and
-          // generator, still at the root path until they move to Reference.
-          text: 'Configuration',
-          items: [
-            { text: 'Configuration reference', link: '/configuration' },
-            { text: 'Configuration generator', link: '/configuration/generator' },
-          ],
-        },
-        {
-          text: 'Apps & integrations',
-          items: [
-            { text: 'Piwi CLI', link: '/cli' },
-            { text: 'Desktop app', link: '/desktop' },
-            { text: 'Browser extension', link: '/extension' },
-            { text: 'Test functions catalog', link: '/test-functions' },
-            { text: 'Open in IDE', link: '/ide-integration' },
-            { text: 'MCP server', link: '/mcp' },
-            { text: 'Agent skills', link: '/mcp#agent-skills' },
+            { text: 'Feature map', link: '/reference/feature-map' },
+            { text: "What's new", link: '/reference/whats-new' },
+            { text: 'Configuration reference', link: '/reference/configuration' },
+            { text: 'Configuration generator', link: '/reference/configuration/generator' },
+            { text: 'Piwi CLI', link: '/reference/cli' },
             { text: 'API docs (interactive)', link: 'https://piwitests.dev/demo/docs' },
           ],
         },

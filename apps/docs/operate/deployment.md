@@ -95,7 +95,7 @@ The server reads three process-level variables directly:
 | `HOST` | `0.0.0.0` | Listen on all interfaces |
 | `PORT` | `3000` | Application port |
 
-Everything else is a `PIWI_*` variable, documented with its default and whether the Settings UI can override it in the generated [configuration reference](/configuration) — most deployments start with `PIWI_SECRET_KEY`, `PIWI_AUTH_ENABLED`, `PIWI_AUTH_SECRET`, `PIWI_DATABASE_URL` and `PIWI_STORAGE_TYPE`. The [configuration generator](/configuration/generator) turns your choices into a ready-to-paste block from the same registry.
+Everything else is a `PIWI_*` variable, documented with its default and whether the Settings UI can override it in the generated [configuration reference](/reference/configuration) — most deployments start with `PIWI_SECRET_KEY`, `PIWI_AUTH_ENABLED`, `PIWI_AUTH_SECRET`, `PIWI_DATABASE_URL` and `PIWI_STORAGE_TYPE`. The [configuration generator](/reference/configuration/generator) turns your choices into a ready-to-paste block from the same registry.
 
 ## One-click deploy
 
@@ -105,7 +105,7 @@ instead. They all provision the same thing — **one container, one persistent v
 so the only real difference is the provider's own volume and pricing model.
 
 The manifests are generated from the same variable registry as this site's
-[configuration reference](/configuration), so they can't drift from what the app actually reads. Regenerate
+[configuration reference](/reference/configuration), so they can't drift from what the app actually reads. Regenerate
 them with `npm run app:generate:deploy --workspace=apps/application`.
 
 | Provider | How | Persistent volume | Notes |
@@ -341,7 +341,7 @@ layout the Docker image mounts at `/app/.data`. Run the command from the same di
 each time to keep your data.
 
 Configuration uses the same environment variables as the Docker image (see the table
-above and the [configuration reference](/configuration)). For example, to change the port:
+above and the [configuration reference](/reference/configuration)). For example, to change the port:
 
 ::: code-group
 
@@ -401,7 +401,7 @@ server {
 }
 ```
 
-When auth is enabled, set `PIWI_SITE_URL` to the public HTTPS URL so email links and OAuth callbacks point at the right origin, and set `PIWI_TRUST_PROXY=true` so the per-address rate limits on the auth endpoints key on the client address your proxy appends to `X-Forwarded-For` instead of on the proxy's own address — see the [configuration reference](/configuration#authentication).
+When auth is enabled, set `PIWI_SITE_URL` to the public HTTPS URL so email links and OAuth callbacks point at the right origin, and set `PIWI_TRUST_PROXY=true` so the per-address rate limits on the auth endpoints key on the client address your proxy appends to `X-Forwarded-For` instead of on the proxy's own address — see the [configuration reference](/reference/configuration#authentication).
 
 ## Backups
 

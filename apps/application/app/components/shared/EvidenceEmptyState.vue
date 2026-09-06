@@ -20,7 +20,7 @@ withDefaults(
     /** Tighter layout for a folded card. */
     compact?: boolean;
   }>(),
-  { doc: '/capture-fixtures', compact: false },
+  { doc: 'guide/capture-fixtures', compact: false },
 );
 </script>
 

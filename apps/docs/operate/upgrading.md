@@ -98,7 +98,7 @@ npm install --save-dev @piwitests/reporter@latest
 
 ## Upgrading the desktop app
 
-The [desktop build](/desktop) bundles its own server, so installing a newer build upgrades both. Its
+The [desktop build](/features/desktop) bundles its own server, so installing a newer build upgrades both. Its
 database lives outside the app bundle and is migrated on first launch, exactly as the server does —
 which means the same forward-only rule applies. Back up its data directory before a major jump.
 
