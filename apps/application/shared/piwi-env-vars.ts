@@ -161,14 +161,14 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     order: 7,
     intro:
       '`PIWI_AI_PROVIDER` is the master switch: when it is set, AI configuration is environment-managed (the Settings UI shows the fields read-only) and the other `PIWI_AI_*` variables apply. When it is unset, AI diagnosis is configured from **Settings → AI** instead and the variables below are ignored.',
-    note: 'See [AI diagnosis](./ai-diagnosis) for how diagnosis, the research stage, and semantic clustering work.',
+    note: 'See [AI diagnosis](./features/ai-diagnosis) for how diagnosis, the research stage, and semantic clustering work.',
   },
   'ai-limits': {
     title: 'AI context limits',
     order: 8,
     intro:
       'Cap how much evidence (and how many tokens) go into each AI diagnosis. Resolution order: defaults ← values stored from **Settings → AI** ← environment; the environment wins and locks the field in the UI. Values are clamped to the min–max range; a `0` disables a section only where the minimum is `0`.',
-    note: 'See [AI diagnosis → Context limits](./ai-diagnosis#context-limits-and-token-cost) for section-by-section guidance.',
+    note: 'See [AI diagnosis → Context limits](./features/ai-diagnosis#context-limits-and-token-cost) for section-by-section guidance.',
   },
   'ai-steps': {
     title: 'AI steps',
@@ -197,14 +197,14 @@ export const PIWI_ENV_CATEGORIES: Record<PiwiEnvVarCategory, PiwiEnvVarCategoryM
     order: 12,
     intro:
       'Required for email notifications and account flows (verification, password reset, invites). Set via environment only.',
-    note: 'Email sending activates once `PIWI_SMTP_HOST` and `PIWI_SMTP_FROM` are set; add `PIWI_SMTP_USER`/`PIWI_SMTP_PASS` when the server requires authentication. See [Notifications](./notifications) for channels and subscriptions.',
+    note: 'Email sending activates once `PIWI_SMTP_HOST` and `PIWI_SMTP_FROM` are set; add `PIWI_SMTP_USER`/`PIWI_SMTP_PASS` when the server requires authentication. See [Notifications](./features/notifications) for channels and subscriptions.',
   },
   clustering: {
     title: 'Failure clustering',
     order: 13,
     intro:
       'Tunes the similarity thresholds used when grouping failures into clusters by their error fingerprint (and optional embeddings). Only used when an embedding model is configured.',
-    note: 'See [AI diagnosis → Failure clustering](./ai-diagnosis#failure-clustering).',
+    note: 'See [AI diagnosis → Failure clustering](./features/ai-diagnosis#failure-clustering).',
   },
   testing: {
     title: 'Backend logs',
@@ -940,7 +940,7 @@ export const PIWI_ENV_VARS = {
     category: 'markers',
     type: 'boolean',
     default: 'true',
-    docs: 'timeline-markers',
+    docs: 'features/timeline-markers',
     notes: 'Only the exact value `false` disables auto-markers.',
   },
 

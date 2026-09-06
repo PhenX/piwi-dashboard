@@ -187,11 +187,11 @@ Found a vulnerability? Please report it privately via the [security policy](./SE
 
 | | |
 |---|---|
-| [![Failure cluster with AI diagnosis](./apps/docs/public/screenshots/failure-cluster.png)](https://piwitests.dev/ai-diagnosis) | [![AI diagnosis grounded in your SCM diff](./apps/docs/public/screenshots/ai-diagnosis.png)](https://piwitests.dev/ai-diagnosis) |
+| [![Failure cluster with AI diagnosis](./apps/docs/public/screenshots/failure-cluster.png)](https://piwitests.dev/features/ai-diagnosis) | [![AI diagnosis grounded in your SCM diff](./apps/docs/public/screenshots/ai-diagnosis.png)](https://piwitests.dev/features/ai-diagnosis) |
 | **Failure clusters** — forty red tests, three root causes | **AI diagnosis** — read against your actual git diff |
-| [![Flaky test detection](./apps/docs/public/screenshots/flaky-detection.png)](https://piwitests.dev/flaky-tests) | [![Test run detail with worker timeline](./apps/docs/public/screenshots/test-run.png)](https://piwitests.dev/ui-overview) |
+| [![Flaky test detection](./apps/docs/public/screenshots/flaky-detection.png)](https://piwitests.dev/features/flaky-tests) | [![Test run detail with worker timeline](./apps/docs/public/screenshots/test-run.png)](https://piwitests.dev/features/ui-overview) |
 | **Flaky tests** — scored, classified, ranked by wasted CI time | **Run detail** — cases, worker timeline, traces, retry command |
-| [![Locator healing suggestions](./apps/docs/public/screenshots/locator-healing.png)](https://piwitests.dev/reporter#locator-healing) | [![Performance trends](./apps/docs/public/screenshots/performance-trends.png)](https://piwitests.dev/flaky-tests#performance) |
+| [![Locator healing suggestions](./apps/docs/public/screenshots/locator-healing.png)](https://piwitests.dev/reporter#locator-healing) | [![Performance trends](./apps/docs/public/screenshots/performance-trends.png)](https://piwitests.dev/features/flaky-tests#performance) |
 | **Locator healing** — replacements from the last passing run | **Performance** — P90 trends and slowest-test tracking |
 
 ## Where this fits

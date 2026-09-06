@@ -272,13 +272,13 @@ After submitting results, the dashboard provides:
 | **API Docs** (`/docs`) | Interactive API reference with endpoint documentation, schemas, and try-it console (auto-generated) |
 | **Settings** (`/settings`) | Account, users, storage, tags, wasted-time patterns, AI diagnosis, and notifications |
 
-See the [UI overview](./ui-overview) for a full map of every page and tab.
+See the [UI overview](/features/ui-overview) for a full map of every page and tab.
 
 ## Next steps
 
 - [Core concepts](./concepts) — the vocabulary the dashboard and these docs use
 - [Reporter](./reporter) — every option, streaming, sharding, and locator healing
-- [UI overview](./ui-overview) — a map of every page and tab
+- [UI overview](/features/ui-overview) — a map of every page and tab
 - [Deployment](/operate/deployment) — running it properly for a team
 - [Desktop app](./desktop) — the same dashboard as a local app, if you skipped it above
 - [Upgrading](/operate/upgrading) — what a version bump does before you pull a new tag

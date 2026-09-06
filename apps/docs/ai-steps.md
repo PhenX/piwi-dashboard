@@ -18,7 +18,7 @@ await page.piwiRun('sign in as {email}', { email: 'ada@example.com' })
 The guiding principle is **the LLM is a compiler, not a runtime**. The first time a prompt is seen, an agent resolves it **once** into a committed, deterministic JSON artifact. Every run after that *replays* that artifact with ordinary Playwright calls — **zero LLM calls and zero network** in the default `replay` mode. Your CI stays fast, offline, and reproducible; the model is only ever involved while authoring.
 
 ::: tip This composes with the capture fixtures
-AI steps are a separate opt-in from the [capture fixtures](./capture-fixtures), and compose with them. Replayed actions flow through the instrumented page, so they feed traces, reports, and [locator healing](./locator-healing) exactly like hand-written code.
+AI steps are a separate opt-in from the [capture fixtures](./capture-fixtures), and compose with them. Replayed actions flow through the instrumented page, so they feed traces, reports, and [locator healing](/features/locator-healing) exactly like hand-written code.
 :::
 
 ## Setup
@@ -164,4 +164,4 @@ On the **server** side, two limits bound each authoring iteration — see the [A
 
 - [Reporter](./reporter) — installing and configuring the reporter.
 - [Capture fixtures](./capture-fixtures) — the sibling opt-in that powers healing and performance data.
-- [AI diagnosis](./ai-diagnosis) — the dashboard's failure-analysis AI (a different feature that reuses the same provider config).
+- [AI diagnosis](/features/ai-diagnosis) — the dashboard's failure-analysis AI (a different feature that reuses the same provider config).

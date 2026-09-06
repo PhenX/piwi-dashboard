@@ -85,7 +85,7 @@ a note.
 
 Fingerprints deliberately **ignore the failing stack frame**, so the same root cause reached from six
 different spec files stays one cluster. Full detail:
-[Failure clustering & AI diagnosis](./ai-diagnosis).
+[Failure clustering & AI diagnosis](/features/ai-diagnosis).
 
 ## Baseline (last green run)
 
@@ -117,7 +117,7 @@ A test case's **composite score** from three independent signals — retry passe
 across runs, and overall failure rate — plus a **root-cause class** (timing, network, assertion,
 environment, other) and an **impact ranking** in wasted CI minutes. It's a property of the test case,
 computed over its execution history, which is why a test needs a few runs of history before it can be
-called flaky. See [Flaky tests](./flaky-tests).
+called flaky. See [Flaky tests](/features/flaky-tests).
 
 ## Locator snapshot
 
@@ -127,7 +127,7 @@ the **call site** (`file:line`) rather than the selector text. One row per call 
 passing run.
 
 When that locator later fails, those snapshots are what Piwi ranks replacement locators from. See
-[Locator healing](./locator-healing).
+[Locator healing](/features/locator-healing).
 
 ## Environment
 
@@ -159,22 +159,22 @@ runs inside your network with a token it already has. So ownership works on day 
 `piwi:owner` annotation still wins wherever a team wants to be explicit.
 
 That derived owner is used in [pull-request comments](./ci#pull-request-feedback), on the flaky leaderboard, and by the
-`owners` [notification filter](./notifications#subscriptions), which routes a run only to the team whose tests broke.
-It needs an [SCM token](./ai-diagnosis#scm-grounded-context); without one, ownership falls back to annotations alone.
+`owners` [notification filter](/features/notifications#subscriptions), which routes a run only to the team whose tests broke.
+It needs an [SCM token](/features/ai-diagnosis#scm-grounded-context); without one, ownership falls back to annotations alone.
 
 ## Where each concept lives in the UI
 
 | Concept | URL | Docs |
 |---|---|---|
-| Project | `/projects/:id` | [UI overview](./ui-overview#project-detail) |
-| Test run | `/test-runs/:id` | [UI overview](./ui-overview#test-run-detail) |
-| Test case | `/test-cases/:id` | [UI overview](./evidence#the-test-case-page) |
-| Execution | `/test-run-cases/:id` | [UI overview](./evidence#one-execution-diagnosis-first) |
-| Failure cluster | `/failure-clusters/:id` | [AI diagnosis & clustering](./ai-diagnosis) |
-| Cross-project view | `/analytics` | [Analytics](./analytics) |
+| Project | `/projects/:id` | [UI overview](/features/ui-overview#project-detail) |
+| Test run | `/test-runs/:id` | [UI overview](/features/ui-overview#test-run-detail) |
+| Test case | `/test-cases/:id` | [UI overview](/features/evidence#the-test-case-page) |
+| Execution | `/test-run-cases/:id` | [UI overview](/features/evidence#one-execution-diagnosis-first) |
+| Failure cluster | `/failure-clusters/:id` | [AI diagnosis & clustering](/features/ai-diagnosis) |
+| Cross-project view | `/analytics` | [Analytics](/features/analytics) |
 
 ## See also
 
 - [Getting started](./getting-started) — get results flowing in
-- [UI overview](./ui-overview) — a map of every page
+- [UI overview](/features/ui-overview) — a map of every page
 - [Reporter](./reporter) — how each of these objects gets populated

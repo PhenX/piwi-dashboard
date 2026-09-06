@@ -34,7 +34,7 @@ The defaults are conservative, so the checklist above is short. Without any extr
 
 ## Optional, and worth a thought
 
-- **Public share links** are off by default (`PIWI_SHARE_LINKS_ENABLED`). If you turn them on, know that anyone with the link sees the execution or cluster without signing in — see [Share links](/share-links).
+- **Public share links** are off by default (`PIWI_SHARE_LINKS_ENABLED`). If you turn them on, know that anyone with the link sees the execution or cluster without signing in — see [Share links](/features/share-links).
 - **Retention.** Automatic pruning is opt-in; set `PIWI_RETENTION_DAYS` to cap how much run history you keep. See [Storage → Data retention](./storage#data-retention).
 
 ## Related

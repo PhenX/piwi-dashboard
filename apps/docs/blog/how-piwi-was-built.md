@@ -50,7 +50,7 @@ This is the part that changed the most. At the start, Piwi did roughly what its 
   <figcaption>One failing execution, diagnosis-first: the error, the wasted waits, the evidence, and a verdict, on one screen.</figcaption>
 </figure>
 
-Everything captured about a failed attempt now lands on a single [diagnosis-first page](/evidence): the raw error, a verdict (new regression or just flaky, how many retries, how long it has been failing), the test source as a real call stack (so a failure inside a helper shows the helper, not just the line that called it), screenshots and video, an environment diff and a visual diff against the last green run, console output, network requests with backend logs inlined, the app's state at the end, and the failure-time ARIA and DOM snapshots. Most of it comes from one opt-in file of capture fixtures in your Playwright setup.
+Everything captured about a failed attempt now lands on a single [diagnosis-first page](/features/evidence): the raw error, a verdict (new regression or just flaky, how many retries, how long it has been failing), the test source as a real call stack (so a failure inside a helper shows the helper, not just the line that called it), screenshots and video, an environment diff and a visual diff against the last green run, console output, network requests with backend logs inlined, the app's state at the end, and the failure-time ARIA and DOM snapshots. Most of it comes from one opt-in file of capture fixtures in your Playwright setup.
 
 With a trace attached it goes further: the complete call stack with real source read from the trace's own embedded files, and the full network waterfall. The Playwright trace viewer is bundled and served by the dashboard itself, so traces never leave your server. And each trace is stored as a slim events archive plus a shared, hash-deduplicated resource pool, so keeping every run costs much less than it sounds. Sensitive headers and token-shaped strings are masked before anything is shown.
 
@@ -95,11 +95,11 @@ When the locator breaks, Piwi works back from the failure through a ladder of ma
   <figcaption>Reference data is captured while tests pass: every locator that proves it works leaves ranked replacements behind.</figcaption>
 </figure>
 
-The one place Piwi does write is [auto-heal PRs](/auto-heal), and even there the developer stays in charge. The edits are one-line rewrites taken straight from the captured snapshot, so no model-generated code is ever in the write path. Piwi re-reads each file at the branch head and only touches lines that still match exactly (a drifted line is dropped, not guessed), and it opens a draft pull request you review, merge, or close. `@piwitests/core` exists so the reporter, the dashboard, the picker and the extension all score locators with the same logic.
+The one place Piwi does write is [auto-heal PRs](/features/auto-heal), and even there the developer stays in charge. The edits are one-line rewrites taken straight from the captured snapshot, so no model-generated code is ever in the write path. Piwi re-reads each file at the branch head and only touches lines that still match exactly (a drifted line is dropped, not guessed), and it opens a draft pull request you review, merge, or close. `@piwitests/core` exists so the reporter, the dashboard, the picker and the extension all score locators with the same logic.
 
 ## Flaky tests and wasted time
 
-A flaky test is a test whose result you cannot trust, and every suite has some. Piwi computes a [composite flakiness score](/flaky-tests) per test (retry passes, status flips, failure rate) and classifies the likely root cause, but the ranking that matters is a different one: impact, measured in wasted CI minutes. Retries multiplied by the average failed duration, plus whether the test blocks the pipeline. A test that flakes constantly but finishes in 200 ms costs nothing; one that flakes weekly and burns a four-minute timeout is the one to fix. **Fix the expensive ones, not the annoying ones.**
+A flaky test is a test whose result you cannot trust, and every suite has some. Piwi computes a [composite flakiness score](/features/flaky-tests) per test (retry passes, status flips, failure rate) and classifies the likely root cause, but the ranking that matters is a different one: impact, measured in wasted CI minutes. Retries multiplied by the average failed duration, plus whether the test blocks the pipeline. A test that flakes constantly but finishes in 200 ms costs nothing; one that flakes weekly and burns a four-minute timeout is the one to fix. **Fix the expensive ones, not the annoying ones.**
 
 <figure>
   <img src="/screenshots/flaky-detection.png" alt="The flaky tests tab: each test with its composite score, failure rate, retry passes and impact">
@@ -218,7 +218,7 @@ Three eras, several assistants, and **I was the architect throughout**: the desi
 
 ## Where it is now
 
-Eight months in, the mission fits in three sentences: **keep the history, explain the failures, hand back a fix**, with the rule that a feature serving none of them is an argument against building it. That clarity was earned, not designed up front. Piwi is at v0.25 and still pre-1.0; the most recent step, [auto-heal PRs](/auto-heal), is the most literal form yet of that third sentence.
+Eight months in, the mission fits in three sentences: **keep the history, explain the failures, hand back a fix**, with the rule that a feature serving none of them is an argument against building it. That clarity was earned, not designed up front. Piwi is at v0.25 and still pre-1.0; the most recent step, [auto-heal PRs](/features/auto-heal), is the most literal form yet of that third sentence.
 
 The rhythm is slower now, on purpose. I stabilize what exists: features, performance, security, with regular audits to keep the code cohesive, performant, maintainable and secure. New ideas still come, but each one has to answer two questions first: **would I actually use this? Will it help me the day I am fixing or improving my tests?** If the answer is no, it does not get built.
 

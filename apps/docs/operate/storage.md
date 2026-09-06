@@ -133,7 +133,7 @@ Large failure evidence captured per execution — the page's ARIA snapshot, the 
 
 ## Trace snapshots
 
-A Playwright 1.63 trace can record an **aria tree** and a **screenshot** before and after every action (`trace: { snapshots: { dom, aria, screen } }`). Those files ride inside the trace ZIP — `aria/<callId>-<phase>.json` and `screenshots/<callId>-<phase>.png` — and the dashboard keeps them in the slim events blob alongside the trace stream, so the [Screen tab and the filmstrip](/evidence#aria-and-screen-snapshots) read them straight back.
+A Playwright 1.63 trace can record an **aria tree** and a **screenshot** before and after every action (`trace: { snapshots: { dom, aria, screen } }`). Those files ride inside the trace ZIP — `aria/<callId>-<phase>.json` and `screenshots/<callId>-<phase>.png` — and the dashboard keeps them in the slim events blob alongside the trace stream, so the [Screen tab and the filmstrip](/features/evidence#aria-and-screen-snapshots) read them straight back.
 
 The two kinds cost very differently:
 
@@ -147,4 +147,4 @@ Unlike the network resource pool, these entries are not deduplicated across exec
 - [Database](./database) — SQLite versus PostgreSQL, and what lives there instead
 - [Configuration reference](/configuration#storage) — every `PIWI_STORAGE_*` and `PIWI_S3_*` variable
 - [Backups](./deployment#backups) — copying the storage directory alongside the database
-- [Offline export](/offline-export) — taking one investigation out of storage entirely
+- [Offline export](/features/offline-export) — taking one investigation out of storage entirely

@@ -58,7 +58,7 @@ You will not fix them all today, and disabling them is how suites rot. The usual
 `--grep-invert @quarantine` approach stops the test running, so nothing ever proves it recovered and the
 list only grows.
 
-[Quarantine in Piwi](../flaky-tests#quarantine-with-a-way-out) keeps the test running and reporting. It
+[Quarantine in Piwi](/features/flaky-tests#quarantine-with-a-way-out) keeps the test running and reporting. It
 is excluded from the [CI gate](../ci#blocking-a-merge)'s verdict and nothing else:
 
 - Passing runs accumulate as a **streak**; one failure resets it.
@@ -74,7 +74,7 @@ it can't grow unbounded.
 
 A flaky fix is easy to believe and hard to confirm. Each test case has a **stability trend** — pass
 rate, flaky rate, and average duration bucketed over time — which is the honest answer to "did that
-help?". If the suite-wide picture is what you need, [Analytics](../analytics) lifts the same signals
+help?". If the suite-wide picture is what you need, [Analytics](/features/analytics) lifts the same signals
 across every project, including wasted CI minutes and a global flaky leaderboard.
 
 ## Other ways in
@@ -93,6 +93,6 @@ Apple-silicon macOS only, and the installers aren't signed yet.
 
 ## See also
 
-- [Flaky tests](../flaky-tests) — the full scoring, quarantine, and performance reference
-- [Analytics](../analytics) — the same signals across every project
+- [Flaky tests](/features/flaky-tests) — the full scoring, quarantine, and performance reference
+- [Analytics](/features/analytics) — the same signals across every project
 - [Regression or flake?](./regression-or-flaky) — deciding whether one red test belongs on this list

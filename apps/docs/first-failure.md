@@ -20,11 +20,11 @@ The first line is a plain-English sentence built from the Playwright error, befo
 
 > `getByRole('button', { name: 'Pay' }) never became enabled — click timed out after 30 s`
 
-Under it, one row of facts: **why** (a new regression, or just flaky, or passed on retry), **since when** (the first run this started failing, with the commit and author), how many **other tests in this run** share the same cause, and the **owner**. The verbatim error is one click away under **Show raw error** — Piwi never rewrites it, it only leads with a readable summary. That same headline names the test on the run page, in [alerts](./notifications), in the [pull-request comment](./ci#pull-request-feedback), and in your terminal, so you recognize it everywhere.
+Under it, one row of facts: **why** (a new regression, or just flaky, or passed on retry), **since when** (the first run this started failing, with the commit and author), how many **other tests in this run** share the same cause, and the **owner**. The verbatim error is one click away under **Show raw error** — Piwi never rewrites it, it only leads with a readable summary. That same headline names the test on the run page, in [alerts](/features/notifications), in the [pull-request comment](./ci#pull-request-feedback), and in your terminal, so you recognize it everywhere.
 
 ## 2. The clues — why
 
-Below the headline is a short list of **[clues](./evidence#clues)**: deterministic, rule-based findings correlated from the evidence — *no model runs*. Things like:
+Below the headline is a short list of **[clues](/features/evidence#clues)**: deterministic, rule-based findings correlated from the evidence — *no model runs*. Things like:
 
 - *"GET /api/quote returned 504, 1.1 s before the failure"*
 - *"Element renamed — healing found it under a new identity"*
@@ -44,19 +44,19 @@ The error, trace, headline and clustering work with the reporter alone. The cons
 
 At the bottom, the **Fix** card gathers what to do about it, each part shown only when it applies:
 
-- a **[replacement locator](./locator-healing)** when a locator broke, ranked by stability and in your suite's own style;
-- the **[AI diagnosis](./ai-diagnosis)** summary, when you've configured a model (optional, and grounded in your real diff);
+- a **[replacement locator](/features/locator-healing)** when a locator broke, ranked by stability and in your suite's own style;
+- the **[AI diagnosis](/features/ai-diagnosis)** summary, when you've configured a model (optional, and grounded in your real diff);
 - **verify** — re-run in CI, or run it locally — and the tests this failure blocked.
 
 The point is to leave with something to do, not just something to read.
 
 ## You're not reading it alone
 
-This execution is one member of a **[failure cluster](./failure-clusters)** — Piwi groups every test that failed for the same reason, so forty red tests become three problems you triage once. From the cluster you get the full [fix plan](./ai-diagnosis), the owner, and — once a later run passes every test it covers — [confirmation the fix held](./ai-diagnosis#did-the-fix-work).
+This execution is one member of a **[failure cluster](/features/failure-clusters)** — Piwi groups every test that failed for the same reason, so forty red tests become three problems you triage once. From the cluster you get the full [fix plan](/features/ai-diagnosis), the owner, and — once a later run passes every test it covers — [confirmation the fix held](/features/ai-diagnosis#did-the-fix-work).
 
 ## Where to go next
 
-- [Failure evidence](./evidence) — the full reference for everything on this page
-- [Failure clusters & the inbox](./failure-clusters) — triaging failures as groups
+- [Failure evidence](/features/evidence) — the full reference for everything on this page
+- [Failure clusters & the inbox](/features/failure-clusters) — triaging failures as groups
 - [Capture fixtures](./capture-fixtures) — the one file that unlocks the richer evidence
 - [Core concepts](./concepts) — run, execution, cluster, fingerprint, baseline

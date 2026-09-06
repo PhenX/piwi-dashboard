@@ -61,7 +61,7 @@ By default, closing the window quits the app. From the tray icon you can enable:
 - **Start on login** — launch the app (hidden, into the tray) when you log in.
 
 While the window is hidden or unfocused, subscribed
-[notifications](/notifications) (the bell on a project page) show as **native
+[notifications](/features/notifications) (the bell on a project page) show as **native
 OS notifications**, and each one bumps an unread count on the dock icon
 (macOS/Linux) and in the tray tooltip. Focusing the window clears it.
 
@@ -180,7 +180,7 @@ folder automatically.
 
 ### Reproducing a failure and finding the breaking commit
 
-The [Reproduce section](/fix-plans#reproduce-and-bisect) of the Fix card shows
+The [Reproduce section](/features/fix-plans#reproduce-and-bisect) of the Fix card shows
 a copy-paste recipe on every build. Inside the app it can also run that recipe —
 and drive the whole `git bisect` — for you, against the linked folder, **without
 touching your checkout.**

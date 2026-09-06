@@ -88,7 +88,7 @@ Two selections exist for every project with no setup:
 | Key | What it resolves to |
 |---|---|
 | `failed` | Tests whose most recent execution failed or timed out. |
-| `quarantine-free` | The whole suite minus tests under an active [quarantine](/flaky-tests). |
+| `quarantine-free` | The whole suite minus tests under an active [quarantine](/features/flaky-tests). |
 
 They also double as worked examples of the definition format below.
 
@@ -228,6 +228,6 @@ coverage — an approximation, and a good one for smoke's job, which is breadth 
 
 - **Not instrumented test-impact analysis.** Predicates read _observed_ history — durations, pass rates, statuses — not
   a build-time dependency graph.
-- **Not a way to hide failures.** [Quarantine](/flaky-tests) decides a test's verdict; a selection only decides whether
+- **Not a way to hide failures.** [Quarantine](/features/flaky-tests) decides a test's verdict; a selection only decides whether
   it runs. The full suite stays your baseline — selections are for the fast loops in between.
 - **Not a hosted service.** Everything resolves on your instance against your data.

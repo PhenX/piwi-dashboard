@@ -105,7 +105,7 @@ don't want mid-release. Four routes that don't need it:
 
 **Pick from the trace, after the fact.** When the failing execution has an uploaded trace, the
 alternative-locators panel offers **Pick from trace**: it opens the trace in the dashboard's bundled
-[trace viewer](../evidence#trace-viewer), whose *Pick locator* tool works on the recorded page
+[trace viewer](/features/evidence#trace-viewer), whose *Pick locator* tool works on the recorded page
 snapshots. So a CI failure nobody watched live can still be picked visually, days later, from the page
 as it actually was.
 
@@ -126,7 +126,7 @@ dashboard. This one does still depend on captured snapshots — it reads the sam
 ## See also
 
 - [Capture fixtures](../capture-fixtures) — everything else the fixtures unlock
-- [Reporter](../locator-healing) — configuration and how the scoring works
-- [Reporter → Inspect the failing page live](../locator-healing#inspect-the-failing-page-live-local-runs) — the
+- [Reporter](/features/locator-healing) — configuration and how the scoring works
+- [Reporter → Inspect the failing page live](/features/locator-healing#inspect-the-failing-page-live-local-runs) — the
   full reference for the pause-on-failure options
 - [Browser extension](../extension) — picking and recording locators against a live page

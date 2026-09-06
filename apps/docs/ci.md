@@ -41,7 +41,7 @@ jobs:
 ```
 
 `actions/checkout` fetches a shallow clone by default. That's fine for the commit metadata Piwi
-records, but [AI diagnosis](./ai-diagnosis) reads the diff since the last green run from your git host
+records, but [AI diagnosis](/features/ai-diagnosis) reads the diff since the last green run from your git host
 over the API, not from the checkout — so no `fetch-depth` change is required.
 
 ## GitLab CI
@@ -143,7 +143,7 @@ best-effort — a failure in any channel is logged and never fails your run.
 [Piwi Dashboard] View run: https://piwi.example.com/test-runs/42
 ```
 
-The part between the title and the link is the failure **headline** — the one-line explanation the dashboard builds from the Playwright error (see [Failure evidence](./evidence#one-execution-diagnosis-first)). The GitHub job summary lists the same headline next to each failed test.
+The part between the title and the link is the failure **headline** — the one-line explanation the dashboard builds from the Playwright error (see [Failure evidence](/features/evidence#one-execution-diagnosis-first)). The GitHub job summary lists the same headline next to each failed test.
 
 The per-test link resolves to the failing execution's page (`/test-run-cases/:id`) and works in
 streaming and batch mode alike — it is built from what the reporter knows at that moment (run id,
@@ -211,11 +211,11 @@ What the comment says, in this order:
 3. **Flaky** — passed only on a retry.
 4. **New failure clusters** — root causes never seen before in this project.
 5. **Fixed by this change** — clusters this pull request closed, with how long they were open. See
-   [Did the fix work?](./ai-diagnosis#did-the-fix-work)
+   [Did the fix work?](/features/ai-diagnosis#did-the-fix-work)
 
 Each failure carries its error, its owner and tags when the test declares them (see
 [ownership metadata](./reporter#ownership-metadata-piwi-annotations)), and — when a locator broke — the
-[replacement locator](./locator-healing) captured from the last passing run. The footer reports the CI minutes
+[replacement locator](/features/locator-healing) captured from the last passing run. The footer reports the CI minutes
 the run spent on waits and failed attempts.
 
 ### What it needs
@@ -223,7 +223,7 @@ the run spent on waits and failed attempts.
 - **`PIWI_SITE_URL`** set on the dashboard. Every link in the comment is built from it; without it nothing is posted,
   because a comment full of unreachable links is worse than no comment.
 - **An SCM token with write access** to the repository — set globally, or per project on the project's edit page. The
-  same token the [AI diagnosis](./ai-diagnosis) SCM integration uses, but it now needs write scope: `repo` on GitHub,
+  same token the [AI diagnosis](/features/ai-diagnosis) SCM integration uses, but it now needs write scope: `repo` on GitHub,
   `api` on GitLab.
 - **Branch and commit metadata on the run**, which the reporter [detects automatically](#what-gets-detected).
 
@@ -237,7 +237,7 @@ host is logged rather than failing your pipeline.
 ## Re-run from the dashboard
 
 Once a cluster is fixed, the fastest way to prove it is to re-run exactly the affected tests — and a
-[filtered run that passes them all now closes the cluster](./ai-diagnosis#did-the-fix-work). The cluster page can
+[filtered run that passes them all now closes the cluster](/features/ai-diagnosis#did-the-fix-work). The cluster page can
 trigger that run in CI for you: **Re-run in CI**, next to *Copy retry command*, dispatches a workflow / pipeline with
 the cluster's retry arguments (`file:line` specs, `--project` when they share one) and links to the run it started. The
 last dispatch — when, by whom, and a link — shows under the Test evidence header.
@@ -306,7 +306,7 @@ evaluate the policy, prints every violation, and exits.
 | `--max-failed <n>` | More than `n` tests failed |
 | `--max-new-regressions <n>` | More than `n` tests newly started failing versus the last green run |
 | `--max-new-flaky <n>` | More than `n` tests newly started passing only on retry |
-| `--max-quarantined <n>` | More than `n` tests are [quarantined](./flaky-tests#quarantine-with-a-way-out) — a ceiling on quarantine debt |
+| `--max-quarantined <n>` | More than `n` tests are [quarantined](/features/flaky-tests#quarantine-with-a-way-out) — a ceiling on quarantine debt |
 | `--fail-on-new-cluster` | This run introduced a failure cluster never seen before |
 | `--fail-on-flaky` | This run contains any flaky test (passed only after a retry) — stricter than `--max-new-flaky`, which only counts tests *newly* flaky |
 
@@ -329,7 +329,7 @@ Three behaviors worth knowing:
 ## Notifying people instead
 
 If all you want is "tell the team when main goes red", you don't need any of the above — configure a
-[notification subscription](./notifications) on the dashboard side and let it push to Slack, email, or
+[notification subscription](/features/notifications) on the dashboard side and let it push to Slack, email, or
 a webhook. That keeps the alerting rules in one place instead of in every pipeline.
 
 ## Troubleshooting
@@ -353,12 +353,12 @@ two minutes — a cancelled job, an OOM-killed runner, a dropped network — the
 `interrupted` rather than leaving it `running` forever. If the reporter comes back (a long test, a
 transient blip) the next event revives the run automatically, so `interrupted` is only final when the
 job really died. Those runs are excluded by the **full runs only** filter in
-[Analytics](./analytics#scope).
+[Analytics](/features/analytics#scope).
 
 ## See also
 
 - [Reporter](./reporter) — every option, streaming, and locator healing
 - [Authentication](/operate/authentication) — creating the API key CI uses
 - [Concepts → Test run](./concepts#test-run) — why shards are one run
-- [Notifications](./notifications) — alerting without touching the pipeline
+- [Notifications](/features/notifications) — alerting without touching the pipeline
 - [Test tags & ownership](./reporter#test-tags) — what `--require-tag` matches on

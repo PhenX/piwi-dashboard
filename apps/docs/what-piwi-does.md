@@ -26,18 +26,18 @@ Explaining a failure is the heart of it, and it's a loop: gather the evidence, g
   <figcaption>The loop the whole product serves — gather, group, explain, hand back, then verify the fix held.</figcaption>
 </figure>
 
-Each step is a page on this site: the [failing execution](./evidence) and its [evidence](./evidence#clues), [failure clusters](./failure-clusters), [AI diagnosis](./ai-diagnosis), [locator healing](./locator-healing) and [auto-heal PRs](./auto-heal), and the [fix verification](./ai-diagnosis#did-the-fix-work) that closes it.
+Each step is a page on this site: the [failing execution](/features/evidence) and its [evidence](/features/evidence#clues), [failure clusters](/features/failure-clusters), [AI diagnosis](/features/ai-diagnosis), [locator healing](/features/locator-healing) and [auto-heal PRs](/features/auto-heal), and the [fix verification](/features/ai-diagnosis#did-the-fix-work) that closes it.
 
 ## Two rules
 
 Two rules run through every feature, and they're worth knowing before you adopt it:
 
-1. **The tool proposes, the developer decides.** Piwi never rewrites a test, never merges a fix, and never applies a patch on its own. It gathers, ranks and suggests; the last step is always yours. Even [auto-heal PRs](./auto-heal) only *open* a pull request for you to review and merge.
+1. **The tool proposes, the developer decides.** Piwi never rewrites a test, never merges a fix, and never applies a patch on its own. It gathers, ranks and suggests; the last step is always yours. Even [auto-heal PRs](/features/auto-heal) only *open* a pull request for you to review and merge.
 2. **Deterministic first, AI second.** Anything that has to be right every time — clustering, flaky scoring, locator ranking, fix verification — is computed without a model. AI sits on top, where a suggestion is enough, and what it produces is checked against your real source before you see it. AI is off by default and brings your own key.
 
 ## The pieces
 
-Piwi is a reporter that uploads from your Playwright run, a server (or the [desktop app](./desktop)) that keeps and analyzes the results, and a set of ways to reach them — the [browser extension](./extension), an [MCP server](./mcp) and [agent skills](./mcp#agent-skills) for coding agents, [SCM providers](./ci#pull-request-feedback) for PR feedback and healing, and [notifications](./notifications).
+Piwi is a reporter that uploads from your Playwright run, a server (or the [desktop app](./desktop)) that keeps and analyzes the results, and a set of ways to reach them — the [browser extension](./extension), an [MCP server](./mcp) and [agent skills](./mcp#agent-skills) for coding agents, [SCM providers](./ci#pull-request-feedback) for PR feedback and healing, and [notifications](/features/notifications).
 
 <figure>
   <img src="/diagrams/piwi-ecosystem.svg" alt="The Piwi pieces: a Playwright run and instrumented app feed one server or the desktop app, with the browser extension, coding agents, SCM providers and notifications arranged around it">
