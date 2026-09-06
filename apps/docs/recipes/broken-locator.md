@@ -77,9 +77,9 @@ Worth knowing before you switch it on:
 
 ## Requirements, honestly
 
-Locator healing needs the [capture fixtures](../capture-fixtures) in your test setup. The reporter alone
+Locator healing needs the [capture fixtures](/guide/capture-fixtures) in your test setup. The reporter alone
 uploads results without touching your test code, but it cannot see the DOM — the ranked alternatives
-come from [locator snapshots](../concepts#locator-snapshot) the fixtures record while the test runs.
+come from [locator snapshots](/guide/concepts#locator-snapshot) the fixtures record while the test runs.
 
 It is one file:
 
@@ -125,7 +125,7 @@ dashboard. This one does still depend on captured snapshots — it reads the sam
 
 ## See also
 
-- [Capture fixtures](../capture-fixtures) — everything else the fixtures unlock
+- [Capture fixtures](/guide/capture-fixtures) — everything else the fixtures unlock
 - [Reporter](/features/locator-healing) — configuration and how the scoring works
 - [Reporter → Inspect the failing page live](/features/locator-healing#inspect-the-failing-page-live-local-runs) — the
   full reference for the pause-on-failure options

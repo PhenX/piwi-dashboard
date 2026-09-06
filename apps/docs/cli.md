@@ -30,7 +30,7 @@ Several commands read connection settings from the environment as a fallback: `P
 
 ## `init`
 
-Wire a Playwright project up to a dashboard. It installs the reporter as a dev dependency, wraps `export default defineConfig(...)` with [`wrapConfig(...)`](./reporter#installing-via-wrapconfig), creates the [capture-fixtures](./capture-fixtures) file, records `PIWI_*` connection settings in `.env` / `.env.example` (and `.gitignore`), and installs the [agent skills](./mcp#agent-skills). **Every step is idempotent** — safe to re-run — and a config shape it will not rewrite is reported as `manual` with the exact change to make. See the [one-command setup](./getting-started#fast-path-one-command) in Getting started.
+Wire a Playwright project up to a dashboard. It installs the reporter as a dev dependency, wraps `export default defineConfig(...)` with [`wrapConfig(...)`](/guide/reporter#installing-via-wrapconfig), creates the [capture-fixtures](/guide/capture-fixtures) file, records `PIWI_*` connection settings in `.env` / `.env.example` (and `.gitignore`), and installs the [agent skills](./mcp#agent-skills). **Every step is idempotent** — safe to re-run — and a config shape it will not rewrite is reported as `manual` with the exact change to make. See the [one-command setup](/guide/getting-started#fast-path-one-command) in Getting started.
 
 ```bash
 npx @piwitests/reporter init --server-url http://localhost:3000 --project my-project
@@ -73,7 +73,7 @@ The five skills are `setup-piwi`, `investigate-failure`, `apply-locator-healing`
 
 ## `gate`
 
-Fail a CI job on the dashboard's analysis of a run — the [merge gate](./ci#blocking-a-merge). Point it at a run, give it at least one policy rule, and it exits non-zero when the rule is violated. The run defaults to `./piwi-run.json` (the reporter's [output file](./ci#getting-the-run-url-back-out-of-ci)) when present.
+Fail a CI job on the dashboard's analysis of a run — the [merge gate](/guide/ci#blocking-a-merge). Point it at a run, give it at least one policy rule, and it exits non-zero when the rule is violated. The run defaults to `./piwi-run.json` (the reporter's [output file](/guide/ci#getting-the-run-url-back-out-of-ci)) when present.
 
 ```bash
 npx @piwitests/reporter gate --max-new-regressions 0 --fail-on-flaky
@@ -102,7 +102,7 @@ The run source is resolved first-match-wins: `--run-id`, then `--from-file`, the
 
 ## `select` / `run` {#select-run}
 
-Resolve a saved [test selection](./test-selection) to the tests it matches. `select` prints the Playwright args (so you can compose them yourself); `run` executes `playwright test` with them. `run impact --base <ref>` runs the tests your working-tree diff impacts.
+Resolve a saved [test selection](/guide/test-selection) to the tests it matches. `select` prints the Playwright args (so you can compose them yourself); `run` executes `playwright test` with them. `run impact --base <ref>` runs the tests your working-tree diff impacts.
 
 ```bash
 npx @piwitests/reporter select smoke
@@ -129,11 +129,11 @@ npx @piwitests/reporter run impact --base origin/main
 
 Pass extra Playwright arguments after `--`: `piwi run smoke -- --headed --workers=1`.
 
-When `run` spawns Playwright and the target config has **no Piwi reporter**, it appends `--add-reporter @piwitests/reporter` so the run still reaches the dashboard — provided the installed Playwright is **1.63 or later** (the version that added the flag; it appends to the configured reporters rather than replacing them). It logs one line naming what it added. On older Playwright it logs that the reporter is not configured and runs as before. This trial append gives you results, traces and screenshots but not the [capture fixtures](./capture-fixtures) or [`wrapConfig`](./reporter#installing-via-wrapconfig) defaults — wire the reporter into the config (via [`init`](#init)) for the full set. A config that already lists the reporter is left untouched.
+When `run` spawns Playwright and the target config has **no Piwi reporter**, it appends `--add-reporter @piwitests/reporter` so the run still reaches the dashboard — provided the installed Playwright is **1.63 or later** (the version that added the flag; it appends to the configured reporters rather than replacing them). It logs one line naming what it added. On older Playwright it logs that the reporter is not configured and runs as before. This trial append gives you results, traces and screenshots but not the [capture fixtures](/guide/capture-fixtures) or [`wrapConfig`](/guide/reporter#installing-via-wrapconfig) defaults — wire the reporter into the config (via [`init`](#init)) for the full set. A config that already lists the reporter is left untouched.
 
 ## `ai`
 
-Manage committed natural-language [AI-step](./ai-steps) artifacts (`page.piwiLocator(...)` / `page.piwiRun(...)`). The LLM authors each entry once; CI replays the committed JSON deterministically with no model calls, so these commands are how you keep the committed set healthy.
+Manage committed natural-language [AI-step](/guide/ai-steps) artifacts (`page.piwiLocator(...)` / `page.piwiRun(...)`). The LLM authors each entry once; CI replays the committed JSON deterministically with no model calls, so these commands are how you keep the committed set healthy.
 
 ```bash
 npx @piwitests/reporter ai check
@@ -161,8 +161,8 @@ npx @piwitests/reporter ai prune
 
 ## Related
 
-- [Getting started](./getting-started) — `init` in the setup flow
-- [CI & sharding](./ci) — `gate` in a CI job, and the run output file
-- [Test selections](./test-selection) — what `select` / `run` resolve
-- [AI steps](./ai-steps) — the authoring/replay lifecycle `ai` manages
+- [Getting started](/guide/getting-started) — `init` in the setup flow
+- [CI & sharding](/guide/ci) — `gate` in a CI job, and the run output file
+- [Test selections](/guide/test-selection) — what `select` / `run` resolve
+- [AI steps](/guide/ai-steps) — the authoring/replay lifecycle `ai` manages
 - [MCP server → Agent skills](./mcp#agent-skills) — what `skills` installs

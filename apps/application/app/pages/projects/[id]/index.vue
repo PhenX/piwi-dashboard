@@ -1026,8 +1026,8 @@ const moreMenuItems = computed(() => {
                 <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">{{ project?.name }}</code> to send results here
                 — <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">npx @piwitests/reporter init</code> wires a
                 Playwright project in one command, or see the
-                <DocLink to="reporter" no-icon class="text-primary hover:underline">reporter docs</DocLink> for manual
-                setup.
+                <DocLink to="guide/reporter" no-icon class="text-primary hover:underline">reporter docs</DocLink> for
+                manual setup.
               </p>
             </EmptyState>
           </UCard>

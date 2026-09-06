@@ -25,7 +25,7 @@ Open `http://localhost:3000`. The SQLite database and file storage are created a
 
 > **Linux hosts:** without the `chown`, Docker auto-creates `.data` owned by `root` and the container (non-root UID 1001) can't write to it. Docker Desktop on Windows and macOS handles this for you.
 
-Then point the [Playwright reporter](https://piwitests.dev/reporter) at it — one `npm install` and four lines in `playwright.config.ts`, covered in the [getting started guide](https://piwitests.dev/getting-started).
+Then point the [Playwright reporter](https://piwitests.dev/guide/reporter) at it — one `npm install` and four lines in `playwright.config.ts`, covered in the [getting started guide](https://piwitests.dev/guide/getting-started).
 
 ---
 

@@ -29,7 +29,7 @@ npx @piwitests/reporter run smoke -- --workers=4
 ```
 
 Anything after `--` is passed straight to Playwright. The run is **stamped** with the selection it came from, so the
-dashboard shows `smoke · 42 tests` instead of an anonymous filter, and a [gate](/ci) can re-resolve the same definition
+dashboard shows `smoke · 42 tests` instead of an anonymous filter, and a [gate](/guide/ci) can re-resolve the same definition
 to check nothing was silently dropped.
 
 If the dashboard is unreachable, `piwi run` falls back to the full suite with a warning (and reuses the last good
@@ -161,7 +161,7 @@ npx @piwitests/reporter run smoke                 # run the subset, stamping the
 npx @piwitests/reporter gate --require-selection smoke   # then assert it held
 ```
 
-It composes with the other [gate](/ci) rules (`--max-new-regressions`, `--fail-on-flaky`, …). A quarantined test is
+It composes with the other [gate](/guide/ci) rules (`--max-new-regressions`, `--fail-on-flaky`, …). A quarantined test is
 exempt — quarantine already means "don't gate on this test".
 
 ## In the dashboard, and for agents

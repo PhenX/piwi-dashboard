@@ -2,7 +2,7 @@
 
 A custom Playwright reporter that sends your test results to a [Piwi Dashboard](https://piwitests.dev) server — run history, HTML reports, traces and performance metrics, streamed live as tests execute. With the optional capture fixtures it also unlocks locator healing, slow-endpoint analysis, Web Vitals, console capture and failure-time ARIA snapshots.
 
-📖 **[Full documentation](https://piwitests.dev/reporter)** · 🎮 **[Live demo](https://piwitests.dev/demo/)**
+📖 **[Full documentation](https://piwitests.dev/guide/reporter)** · 🎮 **[Live demo](https://piwitests.dev/demo/)**
 
 ## Installation
 
@@ -49,18 +49,18 @@ export const test = base.extend(piwiFixtures)
 export { expect }
 ```
 
-Import `test` from this file in your specs instead of `@playwright/test`. A spec that imports from `@playwright/test` directly still runs and reports fine — it just isn't captured. `extendPiwiFixtures(base)` is an equivalent one-line spelling. See the [capture fixtures guide](https://piwitests.dev/capture-fixtures) for the full feature matrix and composition patterns.
+Import `test` from this file in your specs instead of `@playwright/test`. A spec that imports from `@playwright/test` directly still runs and reports fine — it just isn't captured. `extendPiwiFixtures(base)` is an equivalent one-line spelling. See the [capture fixtures guide](https://piwitests.dev/guide/capture-fixtures) for the full feature matrix and composition patterns.
 
 ## What you get
 
 - **Run history, statuses, errors, traces, reports and live streaming** — with no test-code changes.
 - **Capture fixtures** add slow-endpoint analysis, Web Vitals, console capture, failure-time ARIA snapshots and locator healing.
-- **AI steps** (`page.piwiLocator(...)` / `page.piwiRun(...)`) drive flows in plain English, compiled once and replayed deterministically with zero LLM calls in CI — see [AI steps](https://piwitests.dev/ai-steps).
-- **CI-aware** — auto-detects the run label, branch and commit, publishes the run URL back to the pipeline, and shards into a single run. See [CI & sharding](https://piwitests.dev/ci).
+- **AI steps** (`page.piwiLocator(...)` / `page.piwiRun(...)`) drive flows in plain English, compiled once and replayed deterministically with zero LLM calls in CI — see [AI steps](https://piwitests.dev/guide/ai-steps).
+- **CI-aware** — auto-detects the run label, branch and commit, publishes the run URL back to the pipeline, and shards into a single run. See [CI & sharding](https://piwitests.dev/guide/ci).
 
 ## Configuration
 
-Every option can also be set via a `PIWI_*` environment variable (config wins over env). The full option and env-var reference lives in the [reporter documentation](https://piwitests.dev/reporter); authentication for CI (API keys) is covered under [Authentication](https://piwitests.dev/operate/authentication).
+Every option can also be set via a `PIWI_*` environment variable (config wins over env). The full option and env-var reference lives in the [reporter documentation](https://piwitests.dev/guide/reporter); authentication for CI (API keys) is covered under [Authentication](https://piwitests.dev/operate/authentication).
 
 ## Requirements
 

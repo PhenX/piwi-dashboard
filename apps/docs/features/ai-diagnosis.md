@@ -36,7 +36,7 @@ An already-generated AI **title** is left untouched — cheap-model titles aren'
 
 ### Triage: owner and known issue
 
-The cluster page's triage rail names an **owner** — who answers for these tests. It comes from a `piwi:owner` annotation on the test when one exists, otherwise from the repository's [CODEOWNERS](/concepts#tags-ownership) matched against the spec's file path (the source is labeled so you can tell which). The owner links to every test that owner is responsible for, and when it is derived from CODEOWNERS a one-line hint shows how to override it per test.
+The cluster page's triage rail names an **owner** — who answers for these tests. It comes from a `piwi:owner` annotation on the test when one exists, otherwise from the repository's [CODEOWNERS](/guide/concepts#tags-ownership) matched against the spec's file path (the source is labeled so you can tell which). The owner links to every test that owner is responsible for, and when it is derived from CODEOWNERS a one-line hint shows how to override it per test.
 
 The same rail pins a **known issue** — the Jira ticket, GitHub issue or PR that tracks the cluster. It is an entity link (`failure_cluster` type), so the provider and key are detected from the URL and unfurled; the key travels with the cluster wherever it is listed, so a triaged cluster shows what is already being done about it. Reporter or admin role is required to pin or remove one. Read the same links over MCP with [`list_links`](/mcp) (`entityType: 'failure_cluster'`).
 
@@ -95,7 +95,7 @@ The verdict badge stays separate from the status either way.
 Two [notifications](./notifications) follow the verdict: `cluster.fixed` whenever a fix is recorded (its payload says
 which verdict), and `cluster.regressed` when a fix does not hold.
 
-When [pull-request feedback](/ci#pull-request-feedback) is on, the comment gains a **Fixed by this change** section
+When [pull-request feedback](/guide/ci#pull-request-feedback) is on, the comment gains a **Fixed by this change** section
 naming what the pull request closed. That section is worth a comment on its own, so a green run that closed a cluster
 still gets one even with *only comment on failures* set.
 
@@ -258,7 +258,7 @@ When the failure is a broken locator, the context includes an **Alternative Loca
   <figcaption>The Locator fix panel — the broken locator, ranked replacements scored for stability, and a single recommended fix that preserves your locator style.</figcaption>
 </figure>
 
-This evidence is generated from the locator snapshots recorded by the [capture fixtures](/capture-fixtures) while tests run — make sure your specs import `test` from a fixtures file that extends `piwiFixtures`. Capture is gated by the default-on `captureLocators` reporter option. The same data drives the standalone **Locator fix** panel on the [execution](./evidence#one-execution-diagnosis-first) and cluster pages.
+This evidence is generated from the locator snapshots recorded by the [capture fixtures](/guide/capture-fixtures) while tests run — make sure your specs import `test` from a fixtures file that extends `piwiFixtures`. Capture is gated by the default-on `captureLocators` reporter option. The same data drives the standalone **Locator fix** panel on the [execution](./evidence#one-execution-diagnosis-first) and cluster pages.
 
 ## Fix plans
 
@@ -311,8 +311,8 @@ API keys are encrypted at rest with [`PIWI_SECRET_KEY`](/configuration#general).
 
 ## See also
 
-- [Core concepts](/concepts#error-fingerprint-failure-cluster) — fingerprints, clusters, and baselines in one place
-- [Privacy & data flow](/privacy) — exactly what a diagnosis sends, and where
+- [Core concepts](/guide/concepts#error-fingerprint-failure-cluster) — fingerprints, clusters, and baselines in one place
+- [Privacy & data flow](/guide/privacy) — exactly what a diagnosis sends, and where
 - [Configuration reference](/configuration) — all environment variables
 - [Notifications](./notifications) — subscribe to `cluster.new`, `cluster.fixed`, `cluster.regressed` and `diagnosis.completed` to get alerted when a new cluster appears, a fix lands or regresses, or a diagnosis completes (browser, email, Slack, or webhook)
 - [MCP server](/mcp) — let AI agents query clusters and diagnoses directly

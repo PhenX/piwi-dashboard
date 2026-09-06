@@ -138,7 +138,7 @@ The idea came from earlier experiments: I had built browser playgrounds for EF C
 
 ### AI steps: the LLM is a compiler, not a runtime
 
-The usual objection to natural-language tests is that a model in the hot path is slow, flaky, and a network dependency in CI. [AI steps](/ai-steps) keep it out of the path entirely: `page.piwiLocator('the email address field')` calls the model once, at authoring time, and every run after that is plain Playwright with **zero model calls and zero network**.
+The usual objection to natural-language tests is that a model in the hot path is slow, flaky, and a network dependency in CI. [AI steps](/guide/ai-steps) keep it out of the path entirely: `page.piwiLocator('the email address field')` calls the model once, at authoring time, and every run after that is plain Playwright with **zero model calls and zero network**.
 
 The obvious way to build this is to let the model emit the locator, cache the string, and replay it. That falls apart the moment you commit the cache to git: model output is not byte-stable, so every re-author rewrites the file and your diffs fill with noise, and a stored free-form selector is opaque and unsafe to run. So the model never returns a locator. It returns one decision from a closed schema, the element's ARIA role and accessible name, and a deterministic scorer in `@piwitests/core` compiles that into an allowlisted locator program:
 

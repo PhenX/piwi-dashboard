@@ -76,7 +76,7 @@ Make sure your test files import `test` from the Piwi Dashboard fixtures (or ext
 
 <<< @/snippets/fixtures.ts{ts}
 
-See the [capture fixtures guide](/capture-fixtures) for details.
+See the [capture fixtures guide](/guide/capture-fixtures) for details.
 
 ## Log entry format
 

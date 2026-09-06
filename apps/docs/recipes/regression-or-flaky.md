@@ -67,7 +67,7 @@ Not everyone wants to click through a dashboard mid-review.
 install. `get_run_insights` returns the same regression / recovery / new-flaky split this page walks
 through, and `get_test_stability_trend` answers "is this getting flakier?" for one test.
 
-**Wire it into CI.** The [CI gate](../ci#blocking-a-merge) already knows the difference: a test in
+**Wire it into CI.** The [CI gate](/guide/ci#blocking-a-merge) already knows the difference: a test in
 [quarantine](/features/flaky-tests#quarantine-with-a-way-out) keeps running and keeps reporting, but doesn't
 block the merge — and the gate always states how many failures it excluded.
 
@@ -79,5 +79,5 @@ fires separately when flakiness crosses your configured threshold.
 ## See also
 
 - [Flaky tests](/features/flaky-tests) — how the composite score and root-cause categories are computed
-- [Core concepts](../concepts) — *test case* vs *execution*, the distinction this recipe leans on
+- [Core concepts](/guide/concepts) — *test case* vs *execution*, the distinction this recipe leans on
 - [Timeline markers](/features/timeline-markers) — correlating a drop with a deploy

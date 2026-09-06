@@ -89,14 +89,14 @@ at most five, capped at 300 characters. When that head is only a bare timeout li
 `waiting for …` / `locator resolved to …` line of the call log is appended so the excerpt says what
 Playwright was waiting on. Slack and email messages lead with the headline, quote the same excerpt, and link each failure to its
 execution (`/test-run-cases/<executionId>`), falling back to the test's history page when a payload
-carries no execution id. The [pull-request comment](/ci#pull-request-feedback) quotes failures the same
+carries no execution id. The [pull-request comment](/guide/ci#pull-request-feedback) quotes failures the same
 way.
 
 `cluster.new` payloads similarly carry `sampleErrorExcerpt` (cut the same way) and `affectedCases`; `cluster.fixed` and `cluster.regressed` carry the cluster's `signature`, `title`, the `runId` that decided the verdict and, for a fix, the `commit` and `timeToResolutionMs`. These fields are **additive** — existing consumers keep working, but if you re-serialize the payload to re-check the HMAC, sign the exact bytes you received.
 
 ### Reaching the person who fixed it
 
-When an [SCM token](/ci#pull-request-feedback) is configured, `cluster.fixed` and `cluster.regressed` resolve the fixing commit's author through the provider and add a `fixAuthor` object — `{ name, email }` — to the payload (`cluster.regressed` uses the author of the fix that did not hold). On top of the normal subscription routing, the event is then delivered to that person directly:
+When an [SCM token](/guide/ci#pull-request-feedback) is configured, `cluster.fixed` and `cluster.regressed` resolve the fixing commit's author through the provider and add a `fixAuthor` object — `{ name, email }` — to the payload (`cluster.regressed` uses the author of the fix that did not hold). On top of the normal subscription routing, the event is then delivered to that person directly:
 
 - **Email**, through the same outbox, when SMTP is configured **and** the commit's email belongs to a registered Piwi user. The mail goes to that user's account email, never to the raw commit address, so a fix by an outside contributor never becomes a mail to a stranger.
 - **A browser notification** for that user, delivered even when they have no matching subscription.
@@ -114,7 +114,7 @@ A subscription controls *what* is delivered and *how*:
 - **Events** — one or more of the events above.
 - **Scope** — all projects, or a single project.
 - **Filters** — by branch, status, **owner** (deliver only when the run broke a test that team owns — see
-  [Tags & ownership](/concepts#tags-ownership)), or a numeric threshold (e.g. only notify on flakiness above N%).
+  [Tags & ownership](/guide/concepts#tags-ownership)), or a numeric threshold (e.g. only notify on flakiness above N%).
 - **Mode** — `realtime` (dispatched as events happen) or `digest` (held until the configured time, then sent as **one combined message** per email/Slack channel). Webhook and browser deliveries are always individual.
 - **Mute** — silence a subscription until a chosen time without deleting it.
 
@@ -137,7 +137,7 @@ Send a test email from **Settings → Notifications** to confirm delivery.
 
 ## See also
 
-- [CI & sharding](/ci) — the alternative: pull the run URL into your pipeline instead
+- [CI & sharding](/guide/ci) — the alternative: pull the run URL into your pipeline instead
 - [Authentication](/operate/authentication) — per-user channels and subscriptions
 - [Configuration reference](/configuration) — all environment variables
 - [AI diagnosis & failure clustering](./ai-diagnosis) — what triggers `cluster.new`, `cluster.fixed`, `cluster.regressed` and `diagnosis.completed`

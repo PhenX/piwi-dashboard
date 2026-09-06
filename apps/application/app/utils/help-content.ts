@@ -39,7 +39,7 @@ export const HELP_TOPICS = {
   'home.get-started': {
     title: 'Get started',
     text: 'Wire the Piwi reporter into your Playwright config to start sending results here. The wizard generates the snippet for you.',
-    doc: 'getting-started#using-the-piwi-dashboard-reporter',
+    doc: 'guide/getting-started#using-the-piwi-dashboard-reporter',
   },
   'home.failure-inbox': {
     title: 'Failure inbox',
@@ -95,7 +95,7 @@ export const HELP_TOPICS = {
   'analytics.slow-endpoints': {
     title: 'Slow endpoints',
     text: 'Backend calls captured during tests, aggregated across all projects by route: p50/p90 latency, error rate, and how many projects hit each one — a shared endpoint regressing shows up here first.',
-    doc: 'capture-fixtures',
+    doc: 'guide/capture-fixtures',
   },
 
   // ── Projects list ─────────────────────────────────────────────────────
@@ -110,7 +110,7 @@ export const HELP_TOPICS = {
   'project.import': {
     title: 'Importing past runs',
     text: 'Upload the archives Playwright writes to blob-report/ to backfill runs from before you adopted Piwi. One archive becomes one run, complete with traces and screenshots, and re-uploading the same archive changes nothing. Imports are silent by design — no notifications, AI diagnosis or regression signals, so a backfill never pages the team about months-old failures.',
-    doc: 'importing-runs',
+    doc: 'guide/importing-runs',
     envVars: ['PIWI_IMPORT_MAX_BYTES'],
   },
 
@@ -184,7 +184,7 @@ export const HELP_TOPICS = {
   'project.ci-rerun': {
     title: 'CI re-run',
     text: 'Lets a reporter or admin re-run a cluster’s affected tests in CI straight from its page — a workflow_dispatch on GitHub, a pipeline on GitLab, a custom pipeline on Bitbucket — passing the retry arguments through the input/variable you name. Uses the project’s SCM token (which needs write scope) and is off until you fill in your provider’s block.',
-    doc: 'ci#re-run-from-the-dashboard',
+    doc: 'guide/ci#re-run-from-the-dashboard',
   },
   'project.local-folder': {
     title: 'Linked local folder',
@@ -201,12 +201,12 @@ export const HELP_TOPICS = {
   'run.live': {
     title: 'Live run',
     text: 'This run is still streaming results in real time. Results and counts update as each test finishes.',
-    doc: 'reporter#live-streaming',
+    doc: 'guide/reporter#live-streaming',
   },
   'run.reports': {
     title: 'Storage & reports',
     text: 'HTML reports, traces and attachments uploaded with this run. A run can carry several reports (e.g. per shard).',
-    doc: 'reporter#multiple-reports',
+    doc: 'guide/reporter#multiple-reports',
   },
   'run.metadata': {
     title: 'Tags, links & custom data',
@@ -269,12 +269,12 @@ export const HELP_TOPICS = {
   'case.web-vitals': {
     title: 'Web Vitals',
     text: 'Core Web Vitals (LCP, CLS, etc.) captured during the test, measuring real loading and responsiveness of the page under test. When empty, the card says which of three things it means: not captured (add the capture fixtures), captured but nothing recorded, or not applicable (Web Vitals need a Chromium browser).',
-    doc: 'capture-fixtures',
+    doc: 'guide/capture-fixtures',
   },
   'case.console': {
     title: 'Console output',
     text: 'Browser console messages logged while this test ran — often the first clue for a JavaScript error behind a failure. An empty card says which of three things it means: not captured (add the capture fixtures — links to /setup), captured but the page logged nothing, or not applicable. When a trace but no fixtures were present, the entries are recovered from the trace and marked "derived from the trace".',
-    doc: 'capture-fixtures',
+    doc: 'guide/capture-fixtures',
   },
   'case.network': {
     title: 'Network requests',
@@ -512,7 +512,7 @@ export const HELP_TOPICS = {
   'settings.pr-feedback': {
     title: 'Pull-request feedback',
     text: 'When a run finishes on a branch with an open pull request, Piwi can post a summary comment — new failures separated from pre-existing ones, with suggested locators — and set a commit status. Needs PIWI_SITE_URL and an SCM token with write access.',
-    doc: 'ci#pull-request-feedback',
+    doc: 'guide/ci#pull-request-feedback',
     envVars: ['PIWI_SITE_URL'],
   },
   'settings.auto-heal': {
@@ -664,7 +664,7 @@ export const HELP_TOPICS = {
   'page-state': {
     title: 'App state at test end',
     text: 'URL, history state, storage key names + value lengths, and cookie names + flags captured when the test ended. Values are never captured. Disable with the reporter’s capturePageState option.',
-    doc: 'capture-fixtures',
+    doc: 'guide/capture-fixtures',
   },
 } as const satisfies Record<string, HelpTopic>;
 
