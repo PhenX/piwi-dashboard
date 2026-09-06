@@ -17,7 +17,7 @@ A scope bar at the top sets:
 - **Period** — last 7 / 30 / 90 days, last year, or all time.
 - **Projects** — optional; restrict to the projects you pick (intersected with the ones you can see).
 - **Environments** and **branches** — optional multi-select; restrict to runs labeled `production`,
-  `staging`, … or reported on the chosen branches (see [Environment](./concepts#environment)). These
+  `staging`, … or reported on the chosen branches (see [Environment](/concepts#environment)). These
   and the full-runs toggle are the same **filter bar** Home and each project page use.
 - **Full runs only** — exclude partial and interrupted runs, which otherwise skew pass rates.
 
@@ -58,7 +58,7 @@ on WebKit stands out without opening a single run.
 **Slow endpoints** — backend calls captured during tests, aggregated across all projects by normalized
 route: p50/p90 latency, error rate, and how many projects hit each one. A shared endpoint regressing
 shows up here before it's obvious in any single suite. Requires the
-[capture fixtures](./capture-fixtures).
+[capture fixtures](/capture-fixtures).
 
 ## Marking what you changed
 

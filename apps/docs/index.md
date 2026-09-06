@@ -116,12 +116,12 @@ Start from what you came here to do.
 - **Running it for a team** — [Deployment](/operate/deployment), [Configuration](/configuration),
   [Authentication](/operate/authentication), and [Privacy & data flow](/privacy).
 - **Letting an agent do the reading** — the [MCP server](/mcp) gives a coding agent 45 tools over your
-  test history, and [AI diagnosis](/ai-diagnosis) explains a cluster against your actual git diff with
+  test history, and [AI diagnosis](/features/ai-diagnosis) explains a cluster against your actual git diff with
   a provider you configure. Both optional; a local model works.
 
-Also here: [cross-project analytics](/analytics), [notifications](/notifications) to Slack, email or a
-webhook, [timeline markers](/timeline-markers) for annotating trends,
-[backend log capture](/backend-logs), [offline export](/offline-export) of an investigation,
+Also here: [cross-project analytics](/features/analytics), [notifications](/features/notifications) to Slack, email or a
+webhook, [timeline markers](/features/timeline-markers) for annotating trends,
+[backend log capture](/backend-logs), [offline export](/features/offline-export) of an investigation,
 [plain-English test steps](/ai-steps) compiled once and replayed with no model calls, and a
 [browser extension](/extension) that picks locators from the live page.
 

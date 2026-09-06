@@ -13,7 +13,7 @@ The same plan is reachable three ways:
 
 - **On the cluster page** — the cluster's single **Fix** card gathers the diagnosis and its patch (copy, `git apply`, download), the recommended locator fix, the verify command, and a **Copy as Markdown** action that hands you the whole plan for a ticket. **Re-run in CI** is the page's header action when that is configured. The failing tests are the page's **Affected tests** list and the owner is on the header's facts line, so the plan is assembled from the page you're already reading rather than duplicated in a card of its own.
 - **As Markdown** — `GET /api/failure-clusters/:id/fix-plan?format=markdown` returns the same rendering as plain text, so an export or a script can drop it straight into an issue.
-- **For agents** — the `get_fix_plan` [MCP tool](./mcp) returns the structured plan, so a coding agent gets in one call what a person reads on the card.
+- **For agents** — the `get_fix_plan` [MCP tool](/mcp) returns the structured plan, so a coding agent gets in one call what a person reads on the card.
 
 The last part is what makes it a loop rather than a lookup: the plan states which Playwright command runs exactly the affected tests, and that Piwi will record the fix once they pass — so an agent (or a person) can confirm the work instead of leaving someone to decide whether it landed. Nothing leaves your machine: the dashboard is yours, the model is whichever one you configured (including a local one), and the patch was validated against your own source before you saw it.
 
@@ -46,7 +46,7 @@ git bisect reset
 
 The bisect needs a **last-green commit** and an **SCM connection**: when Piwi has no commit for the failing run or for the last green run before it, or the two are the same commit, the section says so in one line instead of showing a script. The recipe is always there.
 
-In the [desktop app](./desktop#reproducing-a-failure-and-finding-the-breaking-commit) the same section can also do the work for you: **Reproduce here** runs the recipe against the linked folder in a throwaway `git worktree` — your checkout is never touched — and **Find the breaking commit here** drives the whole bisect step by step, with live progress and a stop that stops, then records the first bad commit on the cluster so it shows here and in the fix plan afterwards.
+In the [desktop app](/desktop#reproducing-a-failure-and-finding-the-breaking-commit) the same section can also do the work for you: **Reproduce here** runs the recipe against the linked folder in a throwaway `git worktree` — your checkout is never touched — and **Find the breaking commit here** drives the whole bisect step by step, with live progress and a stop that stops, then records the first bad commit on the cluster so it shows here and in the fix plan afterwards.
 
 ## Fixed before
 
@@ -61,5 +61,5 @@ A match is scored deterministically first — the same fingerprint family (error
 - [AI diagnosis & failure clustering](./ai-diagnosis) — the diagnosis and validated patch a fix plan wraps
 - [Failure clusters & the inbox](./failure-clusters) — the clusters a fix plan is attached to
 - [Auto-heal PRs](./auto-heal) — when Piwi opens the locator fix as a pull request itself
-- [MCP server](./mcp) — the `get_fix_plan` tool
-- [Desktop app](./desktop#reproducing-a-failure-and-finding-the-breaking-commit) — run the recipe and drive the bisect locally
+- [MCP server](/mcp) — the `get_fix_plan` tool
+- [Desktop app](/desktop#reproducing-a-failure-and-finding-the-breaking-commit) — run the recipe and drive the bisect locally

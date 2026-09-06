@@ -5,7 +5,7 @@ lang: en-US
 
 # UI overview
 
-This page is a **map of the dashboard** — where each view lives and what it's for. For the concepts behind a feature, follow the links to the dedicated pages ([Core concepts](./concepts), [Flaky tests](./flaky-tests), [AI diagnosis & clustering](./ai-diagnosis), [Reporter](./reporter)).
+This page is a **map of the dashboard** — where each view lives and what it's for. For the concepts behind a feature, follow the links to the dedicated pages ([Core concepts](/concepts), [Flaky tests](./flaky-tests), [AI diagnosis & clustering](./ai-diagnosis), [Reporter](/reporter)).
 
 The dashboard is a single-page app built with [Nuxt UI](https://ui.nuxt.com). It updates itself in real time over Server-Sent Events — pages refresh automatically when runs start or finish, so you never reload manually.
 
@@ -15,7 +15,7 @@ Blocks that aren't self-explanatory carry a small muted help icon (a circled que
 
 ## Open in IDE
 
-Every source path shown in the dashboard is clickable — hover it to reveal an **open in IDE** control that jumps to that file (and line) in VS Code or JetBrains. See [Open in IDE](./ide-integration) for setup and the available methods.
+Every source path shown in the dashboard is clickable — hover it to reveal an **open in IDE** control that jumps to that file (and line) in VS Code or JetBrains. See [Open in IDE](/ide-integration) for setup and the available methods.
 
 ## Navigation
 
@@ -29,7 +29,7 @@ The sidebar gives access to the top-level sections:
 | Settings | `/settings` | Configuration, in two groups — **Instance** (account, users, notifications, storage) and **Analysis** (AI diagnosis, wasted time, timeout hygiene, tags, pull requests) |
 | Setup *(admins)* | `/setup` | Connect the reporter, and a checklist of which optional capabilities are actually active on this instance |
 | API docs | `/docs` | Self-contained OpenAPI 3.1 reference (no external CDN) — browse endpoints and schemas, try requests live, copy cURL / fetch snippets |
-| MCP server | `/mcp` | Setup guide for connecting AI clients (see [MCP server](./mcp)) |
+| MCP server | `/mcp` | Setup guide for connecting AI clients (see [MCP server](/mcp)) |
 
 Everything else is reached by drilling into a project, run, or test case:
 
@@ -80,12 +80,12 @@ The complete history for one project. The header states the project's condition 
 Five tabs:
 
 - **Runs** — the run trend chart (timeline **Markers** open in a slide-over from the chart header, where they can be added, edited and deleted) over a table of every run with status, start time, duration, test counts, and browser badges. A row opens the run; selecting two runs and clicking **Compare** opens the newer run's **Changes** tab with the older as its baseline.
-- **Tests** — every unique test with status, executed-only pass rate, result breakdown, average duration, and last run; searchable, filterable by status, [tag](./reporter#test-tags), [lock](./reporter#test-locks), owner, priority and last-run age (stale cases hidden by default). **Group by File** groups the tests under each spec file and carries that file's pass rate, flaky rate, failure count, test count and average time in the group header. A row opens the test's full history.
-- **Failures** — one place for everything broken, switched with a segmented control: the **Failure clusters** (executions that failed the same way — see [AI diagnosis & clustering](./ai-diagnosis)), the **Flaky** tests scored by a composite flakiness metric with root-cause classification and impact ranking (see [Flaky tests](./flaky-tests#flaky-test-detection)), each with a **Quarantine** action, and the **Quarantine** list — tests excluded from the [CI gate](./ci#blocking-a-merge)'s verdict while still running, each with its passing streak and whether it has earned a release. See [Quarantine](./flaky-tests#quarantine-with-a-way-out).
-- **Performance** — average/P90 duration trends, a slowest-tests table, timeout opportunities, and the [slow endpoints](./slow-tests) for a selected run; the AI-step coverage card appears when the project replays committed [AI-step artifacts](./ai-steps).
+- **Tests** — every unique test with status, executed-only pass rate, result breakdown, average duration, and last run; searchable, filterable by status, [tag](/reporter#test-tags), [lock](/reporter#test-locks), owner, priority and last-run age (stale cases hidden by default). **Group by File** groups the tests under each spec file and carries that file's pass rate, flaky rate, failure count, test count and average time in the group header. A row opens the test's full history.
+- **Failures** — one place for everything broken, switched with a segmented control: the **Failure clusters** (executions that failed the same way — see [AI diagnosis & clustering](./ai-diagnosis)), the **Flaky** tests scored by a composite flakiness metric with root-cause classification and impact ranking (see [Flaky tests](./flaky-tests#flaky-test-detection)), each with a **Quarantine** action, and the **Quarantine** list — tests excluded from the [CI gate](/ci#blocking-a-merge)'s verdict while still running, each with its passing streak and whether it has earned a release. See [Quarantine](./flaky-tests#quarantine-with-a-way-out).
+- **Performance** — average/P90 duration trends, a slowest-tests table, timeout opportunities, and the [slow endpoints](./slow-tests) for a selected run; the AI-step coverage card appears when the project replays committed [AI-step artifacts](/ai-steps).
 - **Settings** *(admins when auth is enabled, otherwise everyone)* — project [access](/operate/authentication#project-access) (members) and the edit form: label, description, tags, default branch, per-project SCM token, and **AI diagnosis instructions** (project-specific context combined with the global instructions for every diagnosis).
 
-Project **import** (`/projects/:id/import`, admins only) backfills runs recorded before you adopted Piwi from Playwright blob reports, checking each archive against the server's size limit and the project's existing imports before uploading anything. See [Importing past runs](./importing-runs).
+Project **import** (`/projects/:id/import`, admins only) backfills runs recorded before you adopted Piwi from Playwright blob reports, checking each archive against the server's size limit and the project's existing imports before uploading anything. See [Importing past runs](/importing-runs).
 
 ## Test run detail
 
@@ -105,7 +105,7 @@ The right panel is tabbed:
   headline and source path, duration, browser, retries, wasted time and its cluster). **Group by** *Cluster*
   (the default on a red run — each group header names the cluster, its test count and triage status, with an
   *Open cluster* link, and passing tests fold into a collapsed *Passed* group), *File* (with per-file tallies),
-  *File + Describe* (the file nested by its describe blocks), *Lock* (each [lock](./reporter#test-locks) the run
+  *File + Describe* (the file nested by its describe blocks), *Lock* (each [lock](/reporter#test-locks) the run
   declared, holders grouped under it, when the run has locks) or *None*. Search matches the title, path **and**
   error text; filter by status, browser, lock, new regressions and
   newly flaky. Select failing rows for bulk triage (quarantine, or set the cluster status) in any grouping.
@@ -115,7 +115,7 @@ The right panel is tabbed:
   "new failures" count is computed once against that baseline. Disabled until the run finishes. See
   [What changed in a run](./run-changes).
 - **Timeline** — a horizontal per-worker timeline of test execution, with a *Show hooks and waits* toggle to reveal
-  setup, hook, fixture and wasted-wait spans and, when the run declared [locks](./reporter#test-locks), a *Show locks*
+  setup, hook, fixture and wasted-wait spans and, when the run declared [locks](/reporter#test-locks), a *Show locks*
   toggle that colors each holder's bar by the lock it held (one color per lock, legend above, and the bar tooltip lists
   a test's locks); click a bar to jump to that test. Beneath it, the **slowest tests**, a **Locks** table (per lock:
   its tests, how long it was held, its share of the run's wall time, and an estimate of the time that ran serialized
@@ -127,7 +127,7 @@ run summary and refreshes.
 
 ## Test case detail
 
-Two pages live under this heading, and [Core concepts](./concepts#execution) draws the line between
+Two pages live under this heading, and [Core concepts](/concepts#execution) draws the line between
 them: an **execution** (`/test-run-cases/:id`) answers *"why did this attempt fail?"*, and a **test
 case** (`/test-cases/:id`) answers *"how has this test behaved over time?"*. Most links from a run land
 on an execution; the test's title links to the test case above it.
@@ -175,12 +175,12 @@ opens with no network and no Piwi server. See [Offline export](./offline-export)
 | Users | `/settings/users` | User accounts, roles, project access, and API keys (shown once, stored hashed) — see [Authentication](/operate/authentication) |
 | Storage | `/settings/storage` | Storage stats and cleanup (bulk-delete runs older than N days) — see [Storage](/operate/storage#storage-management) |
 | Tags | `/settings/tags` | Create, color, edit, and delete the tags used to organize projects |
-| Pull requests | `/settings/pr-feedback` | What Piwi posts back to a pull request when a run finishes — see [Pull-request feedback](./ci#pull-request-feedback) |
-| Performance | `/settings/performance` | Wasted-time patterns (which Playwright waits count as "wasted time") and timeout-hygiene thresholds (oversized per-test timeouts, stale `test.slow()` marks) — see [Configuration](./configuration#wasted-time) |
+| Pull requests | `/settings/pr-feedback` | What Piwi posts back to a pull request when a run finishes — see [Pull-request feedback](/ci#pull-request-feedback) |
+| Performance | `/settings/performance` | Wasted-time patterns (which Playwright waits count as "wasted time") and timeout-hygiene thresholds (oversized per-test timeouts, stale `test.slow()` marks) — see [Configuration](/configuration#wasted-time) |
 | AI | `/settings/ai` | Provider/model roles, auto-diagnose, global instructions, and context limits — see [AI diagnosis](./ai-diagnosis#enabling-ai-diagnosis) |
 | Notifications | `/settings/notifications` | Channels, subscriptions, and SMTP — see [Notifications & alerts](./notifications) |
 
-Where an environment variable backs a setting, the field is shown read-only with a lock badge and the env var name (see [Configuration](./configuration)).
+Where an environment variable backs a setting, the field is shown read-only with a lock badge and the env var name (see [Configuration](/configuration)).
 
 ## Real-time updates
 

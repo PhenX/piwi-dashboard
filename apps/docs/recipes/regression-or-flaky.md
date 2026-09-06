@@ -53,9 +53,9 @@ Once you know it's a real regression, narrow the window:
 - The failing execution's **Verdict** card links back to the **last green run**, so you have two commits
   to diff between.
 - If the drop lines up with a deploy or an infrastructure change, a
-  [timeline marker](../timeline-markers) draws it as a vertical line on the trend chart — "it started
+  [timeline marker](/features/timeline-markers) draws it as a vertical line on the trend chart — "it started
   the day we switched CI runners" is a much faster answer than a bisect.
-- With [AI diagnosis](../ai-diagnosis) configured, the cluster's explanation is read against your actual
+- With [AI diagnosis](/features/ai-diagnosis) configured, the cluster's explanation is read against your actual
   git diff since the last green run, and any suggested patch is checked against your source before you
   see it. Optional, off by default.
 
@@ -68,16 +68,16 @@ install. `get_run_insights` returns the same regression / recovery / new-flaky s
 through, and `get_test_stability_trend` answers "is this getting flakier?" for one test.
 
 **Wire it into CI.** The [CI gate](../ci#blocking-a-merge) already knows the difference: a test in
-[quarantine](../flaky-tests#quarantine-with-a-way-out) keeps running and keeps reporting, but doesn't
+[quarantine](/features/flaky-tests#quarantine-with-a-way-out) keeps running and keeps reporting, but doesn't
 block the merge — and the gate always states how many failures it excluded.
 
-**Get told instead of looking.** [Notifications](../notifications) let you subscribe to
+**Get told instead of looking.** [Notifications](/features/notifications) let you subscribe to
 `run.failed.default_branch` rather than `run.failed`, so you hear about main going red instead of every
 red branch build — the difference between an alert people read and one people mute. `flakiness.spike`
 fires separately when flakiness crosses your configured threshold.
 
 ## See also
 
-- [Flaky tests](../flaky-tests) — how the composite score and root-cause categories are computed
+- [Flaky tests](/features/flaky-tests) — how the composite score and root-cause categories are computed
 - [Core concepts](../concepts) — *test case* vs *execution*, the distinction this recipe leans on
-- [Timeline markers](../timeline-markers) — correlating a drop with a deploy
+- [Timeline markers](/features/timeline-markers) — correlating a drop with a deploy

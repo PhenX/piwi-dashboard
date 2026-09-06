@@ -19,9 +19,9 @@ Every outbound connection Piwi can make is something you switched on:
 
 | Destination | When | Carries |
 |---|---|---|
-| Your AI provider | Only if you configure [AI diagnosis](./ai-diagnosis) | The diagnosis context: error text, failing steps, the relevant git diff, and — if enabled — failure screenshots |
+| Your AI provider | Only if you configure [AI diagnosis](/features/ai-diagnosis) | The diagnosis context: error text, failing steps, the relevant git diff, and — if enabled — failure screenshots |
 | Your git host | Only if you connect a repository with a token | API reads: commits and diffs for the project's repo |
-| Your SMTP server | Only if you configure [email notifications](./notifications) | Notification and account emails |
+| Your SMTP server | Only if you configure [email notifications](/features/notifications) | Notification and account emails |
 | Your Slack / webhook URLs | Only for subscriptions you create | The event payload (run status, cluster, test names) |
 | Your S3 endpoint | Only if you switch [storage](/operate/storage) to S3 | Trace files, HTML reports, attachments |
 | Google / GitHub | Only if you enable [OAuth sign-in](/operate/authentication#oauth-google-github) | The standard OAuth exchange |
@@ -32,7 +32,7 @@ The **AI provider** is the one worth pausing on, because it's the only case wher
 text can leave your network. It's opt-in, it goes only to the endpoint *you* set — including a local
 model over Ollama or vLLM, in which case nothing leaves the machine at all — you can preview the exact
 context before it's sent, and you can cap its size. See
-[AI diagnosis → Privacy](./ai-diagnosis#privacy).
+[AI diagnosis → Privacy](/features/ai-diagnosis#privacy).
 
 ## What never leaves your server
 

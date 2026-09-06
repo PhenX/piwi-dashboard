@@ -21,7 +21,7 @@ A test is flaky when its result isn't deterministic. Piwi computes a **composite
 
 The project's **Failures** tab has a **Flaky** view with a **configurable lookback window** so you can focus on recent behavior or a longer baseline. Each flaky test links to its history and carries a **Quarantine** action.
 
-**Per-environment scoping** — select a single environment in the project's filter bar and the flaky analysis is scoped to runs from that environment, so you can compare stability across `staging`, `production`, and `development` instead of blending them. (Set the environment via the reporter's `environment` option / `PIWI_ENVIRONMENT`; see the [reporter](./reporter) docs.)
+**Per-environment scoping** — select a single environment in the project's filter bar and the flaky analysis is scoped to runs from that environment, so you can compare stability across `staging`, `production`, and `development` instead of blending them. (Set the environment via the reporter's `environment` option / `PIWI_ENVIRONMENT`; see the [reporter](/reporter) docs.)
 
 <figure>
   <img src="/screenshots/flaky-detection.png" alt="Flaky tests tab listing tests with composite score, failure rate, retry passes, and flip counts">
@@ -63,7 +63,7 @@ Detecting a flaky test doesn't stop it blocking merges. Quarantine does — with
 The usual approach is `--grep-invert @quarantine`: the test stops running, so nothing ever proves it's fixed, and the
 list only grows. A year later nobody remembers why half of it is there.
 
-**A quarantined test in Piwi keeps running and keeps reporting.** It is excluded from the [CI gate](./ci#blocking-a-merge)'s
+**A quarantined test in Piwi keeps running and keeps reporting.** It is excluded from the [CI gate](/ci#blocking-a-merge)'s
 verdict and nothing else. That single difference is what makes the exit possible:
 
 - Passing runs after quarantine accumulate as a **streak**, and one failure resets it.
@@ -109,6 +109,6 @@ regression velocity, a global flaky leaderboard, and an auto-generated insights 
 - [Slow tests & wasted time](./slow-tests) — duration trends, slowest tests, and timeout opportunities
 - [Analytics](./analytics) — the same signals across every project
 - [UI overview](./ui-overview) — where each of these views lives in the dashboard
-- [Reporter](./reporter) — how retries, traces, and run metadata get captured
-- [Capture fixtures](./capture-fixtures) — the test-side setup behind network analysis and Web Vitals
+- [Reporter](/reporter) — how retries, traces, and run metadata get captured
+- [Capture fixtures](/capture-fixtures) — the test-side setup behind network analysis and Web Vitals
 - [AI diagnosis & failure clustering](./ai-diagnosis) — explain the failures behind the trends

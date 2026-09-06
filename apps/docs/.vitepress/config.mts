@@ -81,6 +81,7 @@ export default defineConfig({
       // groups no longer ride along on every page — the top nav is how a reader
       // reaches them from outside those prefixes. activeMatch keeps the nav item
       // highlighted across every page under the section.
+      { text: 'Features', link: '/features/ui-overview', activeMatch: '/features/' },
       { text: 'Recipes', link: '/recipes/' },
       { text: 'Operate', link: '/operate/deployment', activeMatch: '/operate/' },
       { text: 'Blog', link: '/blog/' },
@@ -95,10 +96,11 @@ export default defineConfig({
     // Multi-sidebar, keyed by URL path prefix (VitePress picks the sidebar whose
     // key prefixes the current path, longest match first). The restructure moves
     // each section under its own prefix so it can present a focused sidebar:
-    // Recipes live under /recipes/, the operator pages under /operate/. Every
-    // page not yet moved falls back to the journey-ordered '/' sidebar below. As
-    // the remaining sections move (guide/ features/ reference/), each gets a key
-    // here and leaves the fallback.
+    // Recipes live under /recipes/, the result-reading feature pages under
+    // /features/, the operator pages under /operate/. Every page not yet moved
+    // falls back to the journey-ordered '/' sidebar below. As the remaining
+    // sections move (guide/ reference/), each gets a key here and leaves the
+    // fallback.
     sidebar: {
       '/recipes/': [
         {
@@ -132,6 +134,32 @@ export default defineConfig({
           ],
         },
       ],
+      // Features — reading the results: what the dashboard shows you and does
+      // with a run, from the dashboard map through evidence, clusters, diagnosis,
+      // the fix, and the supporting lenses (analytics, notifications, sharing).
+      '/features/': [
+        {
+          text: 'Reading the results',
+          items: [
+            { text: 'UI overview', link: '/features/ui-overview' },
+            { text: 'Failure evidence', link: '/features/evidence' },
+            { text: 'Failure clusters & the inbox', link: '/features/failure-clusters' },
+            { text: 'AI diagnosis & clustering', link: '/features/ai-diagnosis' },
+            { text: 'Fix plans, reproduce & bisect', link: '/features/fix-plans' },
+            { text: 'What changed in a run', link: '/features/run-changes' },
+            { text: 'Flaky tests', link: '/features/flaky-tests' },
+            { text: 'Slow tests & wasted time', link: '/features/slow-tests' },
+            { text: 'Branches', link: '/features/branches' },
+            { text: 'Analytics', link: '/features/analytics' },
+            { text: 'Timeline markers', link: '/features/timeline-markers' },
+            { text: 'Notifications & alerts', link: '/features/notifications' },
+            { text: 'Locator healing', link: '/features/locator-healing' },
+            { text: 'Auto-heal PRs', link: '/features/auto-heal' },
+            { text: 'Offline export', link: '/features/offline-export' },
+            { text: 'Share links', link: '/features/share-links' },
+          ],
+        },
+      ],
       '/': [
         {
           text: 'Start here',
@@ -157,29 +185,9 @@ export default defineConfig({
           ],
         },
         {
-          text: 'Reading the results',
-          items: [
-            { text: 'UI overview', link: '/ui-overview' },
-            { text: 'Failure evidence', link: '/evidence' },
-            { text: 'Failure clusters & the inbox', link: '/failure-clusters' },
-            { text: 'AI diagnosis & clustering', link: '/ai-diagnosis' },
-            { text: 'Fix plans, reproduce & bisect', link: '/fix-plans' },
-            { text: 'What changed in a run', link: '/run-changes' },
-            { text: 'Flaky tests', link: '/flaky-tests' },
-            { text: 'Slow tests & wasted time', link: '/slow-tests' },
-            { text: 'Branches', link: '/branches' },
-            { text: 'Analytics', link: '/analytics' },
-            { text: 'Timeline markers', link: '/timeline-markers' },
-            { text: 'Notifications & alerts', link: '/notifications' },
-            { text: 'Locator healing', link: '/locator-healing' },
-            { text: 'Auto-heal PRs', link: '/auto-heal' },
-            { text: 'Offline export', link: '/offline-export' },
-            { text: 'Share links', link: '/share-links' },
-          ],
-        },
-        {
-          // The operator pages moved to the /operate/ sidebar (reached via the
-          // Operate nav). What remains here is the configuration reference and
+          // The result-reading feature pages moved to the /features/ sidebar
+          // (reached via the Features nav); the operator pages moved to
+          // /operate/. What remains here is the configuration reference and
           // generator, still at the root path until they move to Reference.
           text: 'Configuration',
           items: [

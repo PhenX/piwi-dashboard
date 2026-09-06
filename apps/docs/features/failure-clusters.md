@@ -89,6 +89,6 @@ project health and portfolio views. The cluster page shows the snooze state in i
 
 ## From an AI agent
 
-The [MCP server](./mcp) exposes the same queue: `list_open_clusters` takes an optional `queue` argument
+The [MCP server](/mcp) exposes the same queue: `list_open_clusters` takes an optional `queue` argument
 (`mine`, `regressions`, `fix-didnt-hold`, `quarantine-ready`, `merge-suggestions`) so an agent can pull the
 same focused list the dashboard shows, then triage with `set_cluster_status`.

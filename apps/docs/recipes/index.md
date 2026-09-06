@@ -32,11 +32,11 @@ know what exists and what it costs to switch on.
 | **[Capture fixtures](../capture-fixtures)** | Locator healing, network timing, Web Vitals, console, ARIA snapshots | One file in your test setup, imported by your specs |
 | **[MCP server](../mcp)** | Asking your coding agent instead of clicking | Nothing — it's built into the server at `/mcp` |
 | **REST API** | Scripts, dashboards of your own, CI steps | Nothing; see the [API docs](https://piwitests.dev/demo/docs) |
-| **[AI diagnosis](../ai-diagnosis)** | An explanation of a cluster read against your git diff | An LLM you configure. Off by default; a local model works |
+| **[AI diagnosis](/features/ai-diagnosis)** | An explanation of a cluster read against your git diff | An LLM you configure. Off by default; a local model works |
 | **[Open in IDE](../ide-integration)** | Jumping from a stack frame to the file | Per-browser config, no install |
 | **[Browser extension](../extension)** | Picking a locator against the live page | A one-click install from the [Chrome Web Store](https://chromewebstore.google.com/detail/piwi-picker/pakhnokpjboejcghgcmkjlpnogfjihhe) (Edge included) |
 | **[Desktop app](../desktop)** | Running all of this without Docker | Windows x64 or Apple-silicon macOS; installers aren't signed yet |
-| **[Notifications](../notifications)** | Being told instead of looking | An email, Slack, or webhook target |
+| **[Notifications](/features/notifications)** | Being told instead of looking | An email, Slack, or webhook target |
 
 If you only ever add one thing beyond the reporter, add the [capture fixtures](../capture-fixtures) —
 two of the five recipes above get materially better with them, and they're a single file.

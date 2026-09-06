@@ -200,7 +200,7 @@ Assignments are administrator-only and can be edited from either direction:
 
 Both edit the same underlying assignments, so use whichever is more convenient.
 
-> **Try it in the demo:** the [live demo](https://piwitests.dev/demo/) ships with several pre-seeded identities — an admin, a global CI reporter, and users scoped to one or two projects (plus one with none). Use the **Acting as** picker in the demo banner to switch between them and watch the project list, sidebar, and search change to match each user's access. Acting as the admin, change the assignments live and switch back to see the effect. See [UI overview → Live demo](/ui-overview#live-demo).
+> **Try it in the demo:** the [live demo](https://piwitests.dev/demo/) ships with several pre-seeded identities — an admin, a global CI reporter, and users scoped to one or two projects (plus one with none). Use the **Acting as** picker in the demo banner to switch between them and watch the project list, sidebar, and search change to match each user's access. Acting as the admin, change the assignments live and switch back to see the effect. See [UI overview → Live demo](/features/ui-overview#live-demo).
 
 ## API authentication
 
