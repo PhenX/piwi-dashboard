@@ -15,7 +15,7 @@ import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-w
 import { inlineCasePayloads } from '../../server/utils/case-payloads';
 import { buildFailureVerdict } from '../failure-verdict';
 import { buildFailureTimeline, type FailureTimeline, type TimelineCallsite } from '../failure-timeline';
-import { buildFailureClues, type FailureClue, type FailureCluePageDiff } from '../failure-clues';
+import { buildFailureClues, type FailureClue, type FailureClueInput, type FailureCluePageDiff } from '../failure-clues';
 import { parsePlaywrightError } from '../error-parse';
 import { failingStepParams } from '../describe-failure';
 import { diffAttempts, type AttemptDiffEntry, type AttemptEvidence } from '../attempt-diff';
@@ -578,19 +578,6 @@ export interface FailureCluesResult {
   failureAt: number | null;
 }
 
-/**
- * The deterministic clues for one failing execution: a rule-based correlation
- * pass over the same rows the execution detail already reads — the parsed
- * error, the timeline, network requests, the ARIA snapshot, locator healing,
- * app state, the environment diff, the run's sibling and same-worker
- * executions, and the cluster's fix history. Loads them once and hands them to
- * the pure `buildFailureClues`; shared by the REST endpoint, the demo mirror,
- * the AI-context builder and the MCP tools. Returns an empty list when the
- * execution does not exist.
- *
- * `slowRequestMs` lets the server pass the configured slow-request threshold;
- * without it the engine uses its 1500 ms default.
- */
 /** Reduce a page-diff result to the change (if any) at the failing locator's node, for the clue engine. */
 function pageDiffLocatorChange(pageDiff: Awaited<ReturnType<typeof getPageDiff>> | null): FailureCluePageDiff | null {
   if (pageDiff?.status !== 'ok') return null;
@@ -599,13 +586,25 @@ function pageDiffLocatorChange(pageDiff: Awaited<ReturnType<typeof getPageDiff>>
   return { locatorChange: { type: hunk.type, role: hunk.role, name: hunk.name, oldName: hunk.oldName ?? null } };
 }
 
-export async function getFailureClues(
+/**
+ * Load everything the clue engine reads for one failing execution — the parsed
+ * error, the timeline, network requests, the ARIA snapshot, locator healing,
+ * app state, the environment diff, the run's sibling and same-worker
+ * executions, and the cluster's fix history — as the pure `FailureClueInput`.
+ * Returns null when the execution does not exist. Separating the loading from
+ * `buildFailureClues` lets a fixture capture the exact input the seeded database
+ * produces, so a unit test can pin the ranking without a database.
+ *
+ * `slowRequestMs` lets the server pass the configured slow-request threshold;
+ * without it the engine uses its 1500 ms default.
+ */
+export async function loadFailureClueInput(
   db: DrizzleDB,
   id: number,
   opts: { slowRequestMs?: number | null } = {},
-): Promise<FailureCluesResult> {
+): Promise<FailureClueInput | null> {
   const [trc] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
-  if (!trc) return { clues: [], failureAt: null };
+  if (!trc) return null;
 
   const evidence = await inlineCasePayloads(db, trc);
 
@@ -717,7 +716,7 @@ export async function getFailureClues(
           ),
     ]);
 
-  const clues = buildFailureClues({
+  return {
     execution: {
       id: trc.id,
       testCaseId: trc.testCaseId,
@@ -767,9 +766,23 @@ export async function getFailureClues(
     cluster: clusterFix,
     timeout: trc.timeout ?? null,
     slowRequestMs: opts.slowRequestMs ?? null,
-  });
+  };
+}
 
-  return { clues, failureAt: timeline.failureAt };
+/**
+ * The ranked deterministic clues for one failing execution, plus the failure
+ * anchor the UI counts back from. Shared by the REST endpoint, the demo mirror,
+ * the AI-context builder and the MCP tools. Returns an empty list when the
+ * execution does not exist.
+ */
+export async function getFailureClues(
+  db: DrizzleDB,
+  id: number,
+  opts: { slowRequestMs?: number | null } = {},
+): Promise<FailureCluesResult> {
+  const input = await loadFailureClueInput(db, id, opts);
+  if (!input) return { clues: [], failureAt: null };
+  return { clues: buildFailureClues(input), failureAt: input.timeline ? input.timeline.failureAt : null };
 }
 
 /** Coerce a stored `startedAt` (epoch ms number or Date) to epoch ms. */

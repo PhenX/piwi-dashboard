@@ -63,6 +63,22 @@ node scripts/db-query.mjs "select id, status from test_runs_cases where status='
 
 Authentication is off on a plain dev server, so no key is needed.
 
+## Measure the failure pages' legibility
+
+```bash
+npm run app:measure -- --url http://localhost:3000        # against a running server
+npm run app:measure -- --json                             # boots + seeds its own server
+```
+
+`measure-detail-pages.mjs` reads the execution page (`/test-run-cases/:id`) and the failure
+cluster page (`/failure-clusters/:id`) after hydration and settle, and reports — inside the detail
+panel — the scroll offset of each block (header, headline, clues, evidence, the fix sections, what
+changed, affected tests, history), the panel's total scroll height, the interactive controls and
+help hints above the fold, the open code blocks and their height, the word count, the active
+evidence tab and the clue strengths. Default routes cover #37, #13 and clusters #10, #2, #5, #1;
+`--routes` overrides them, `--width`/`--height` the viewport, `--json` prints one object per route.
+Without `--url` it boots and seeds a throwaway server the same way the screenshot harness does.
+
 ## Seeded entry points
 
 The seed is generated deterministically from `scripts/generate-demo-seed.mjs`, so these ids are stable
