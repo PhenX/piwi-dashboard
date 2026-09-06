@@ -105,6 +105,7 @@ import {
   getTestRunCaseTraces,
   getTestCaseStabilityTrend,
   getFailureTimeline,
+  getExecutionSteps,
   getFailureClues,
   getAttemptDiff,
 } from '#shared/handlers/test-cases';
@@ -1066,6 +1067,14 @@ const routes: RouteEntry[] = [
     handler: async (m, _b, _q, ctx) => {
       await assertDemoEntityScope(ctx, 'execution', +m[1]!);
       return getFailureTimeline(await getDemoDb(), +m[1]!);
+    },
+  },
+  {
+    method: 'GET',
+    pattern: /^\/api\/test-run-cases\/(\d+)\/steps$/,
+    handler: async (m, _b, _q, ctx) => {
+      await assertDemoEntityScope(ctx, 'execution', +m[1]!);
+      return getExecutionSteps(await getDemoDb(), +m[1]!);
     },
   },
   {

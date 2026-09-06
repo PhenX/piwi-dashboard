@@ -224,7 +224,7 @@ export const HELP_TOPICS = {
   },
   'run.timeline': {
     title: 'Workers timeline',
-    text: 'When each test ran on each parallel worker. Gaps and long bars reveal poor parallelization or a single slow test stalling a shard. Turn on Show locks to see when each named lock was held and how much of the run it serialized.',
+    text: 'When each test ran on each parallel worker. Gaps and long bars reveal poor parallelization or a single slow test stalling a shard. Click a test to expand its steps into a nested waterfall on the same axis — like a span viewer. Turn on Show locks to see when each named lock was held and how much of the run it serialized.',
     doc: 'features/ui-overview#test-run-detail',
   },
   // ── Single execution (test-run-case) ──────────────────────────────────

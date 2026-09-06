@@ -1,11 +1,12 @@
 import { computed, type ComputedRef } from 'vue';
-import type { TestCaseResult, TestStepEvent, SetupStepEvent } from '~~/types/api';
+import type { TestCaseResult, TestStepEvent, SetupStepEvent, PerformanceStep } from '~~/types/api';
 import { isWastedWait, DEFAULT_WASTED_WAIT_PATTERNS } from '#shared/utils/wasted-waits';
+import { buildStepSpans } from '~/utils/step-spans';
 
 /** What a timeline bar represents; drives rendering, filtering and header counts. */
-export type TimelineItemKind = 'test' | 'setup' | 'hook' | 'fixture' | 'wait';
+export type TimelineItemKind = 'test' | 'setup' | 'hook' | 'fixture' | 'wait' | 'step';
 
-/** A single drawable element on the timeline: a test bar, hook/fixture segment, suite setup step, or wasted wait. */
+/** A single drawable element on the timeline: a test bar, hook/fixture segment, suite setup step, wasted wait, or an expanded step span. */
 export interface TimelineItem {
   /** Unique, stable identity — the v-for key and the hover-dimming comparand. */
   key: string;
@@ -18,10 +19,32 @@ export interface TimelineItem {
   start: number;
   duration: number;
   rowIndex: number;
-  /** Title of the test the segment belongs to (hooks/fixtures/waits only). */
+  /** Title of the test the segment belongs to (hooks/fixtures/waits/steps only). */
   parentTitle?: string | null;
   /** Lock names this execution held — test bars only (best effort). */
   locks?: string[] | null;
+  /** Reporter step category (`action`, `assertion`, `hook`, …) — step items only. */
+  category?: string;
+  /** Nesting depth within the expanded test (1 = top level) — step items only. */
+  depth?: number;
+  /** The step's target (rendered locator or URL) — step items only. */
+  subtitle?: string | null;
+  /** Curated per-step params — step items only. */
+  params?: Record<string, string | number | boolean> | null;
+  /** Error message when the step failed — step items only. */
+  error?: string | null;
+  /** Whether this test row is currently expanded — test items only. */
+  expanded?: boolean;
+}
+
+/** One worker lane: its identity, plus the flat lane band it occupies (base lane + span, in row units). */
+export interface WorkerRow {
+  shardIndex: number | null;
+  workerIndex: number;
+  /** Flat index of this worker's test lane. */
+  baseLane: number;
+  /** Number of lanes this worker occupies: 1 (the test lane) plus one per expanded step depth. */
+  laneSpan: number;
 }
 
 /** Per-lock summary for the Locks table under the timeline. */
@@ -126,6 +149,10 @@ export interface TimelineModelInput {
   setupSteps?: SetupStepEvent[] | null;
   /** Allowlist of glob patterns classifying which waits count as wasted time. */
   wastedPatterns?: string[] | null;
+  /** Execution ids whose step waterfall is expanded (drawn as nested sub-lanes). */
+  expandedExecutions?: Set<number> | null;
+  /** Execution id → its loaded step list, for the expanded rows. */
+  stepsByExecution?: Map<number, PerformanceStep[]> | null;
 }
 
 /** One worker lane: its identity plus the cases that ran on it. */
@@ -197,7 +224,8 @@ function stepKind(step: TestStepEvent, patterns: readonly string[]): 'hook' | 'f
  */
 export function useTimelineModel(props: TimelineModelInput): {
   timelineData: ComputedRef<TimelineItem[]>;
-  workerRows: ComputedRef<Array<{ shardIndex: number | null; workerIndex: number }>>;
+  workerRows: ComputedRef<WorkerRow[]>;
+  laneCount: ComputedRef<number>;
   shardGroups: ComputedRef<ShardGroup[]>;
   maxTime: ComputedRef<number>;
   runLocks: ComputedRef<string[]>;
@@ -210,40 +238,89 @@ export function useTimelineModel(props: TimelineModelInput): {
 
   const workerGroups = computed(() => groupByWorker(props.testCases));
 
-  const timelineData = computed<TimelineItem[]>(() => {
-    const workers = workerGroups.value;
-    const patterns = wastedPatterns.value;
-
-    // Anchor for absolute positioning: the earliest startedAt in the run. When
-    // no case carries a usable timestamp, fall back to packing each worker's
-    // cases sequentially.
-    let minStartedAt = Infinity;
-    for (const worker of workers) {
+  // The earliest startedAt in the run anchors absolute positioning; when no case
+  // carries a usable timestamp we fall back to packing cases sequentially.
+  const minStartedAt = computed(() => {
+    let min = Infinity;
+    for (const worker of workerGroups.value) {
       for (const tc of worker.cases) {
         const sa = toMs(tc.startedAt);
-        if (sa != null && sa > 0) minStartedAt = Math.min(minStartedAt, sa);
+        if (sa != null && sa > 0) min = Math.min(min, sa);
       }
     }
-    const hasStartedAt = Number.isFinite(minStartedAt);
-    const absoluteStart = (startedAt: unknown) => Math.max(0, (toMs(startedAt) ?? minStartedAt) - minStartedAt);
+    return min;
+  });
+  const hasStartedAt = computed(() => Number.isFinite(minStartedAt.value));
+
+  // Nested step spans per expanded execution, positioned on the run's absolute
+  // clock. Empty until a row is expanded and its steps have been fetched. Needs
+  // the case's startedAt to place steps, so it is skipped in the timestamp-less
+  // fallback mode (where a shared clock does not exist).
+  const expandedSpans = computed(() => {
+    const out = new Map<number, ReturnType<typeof buildStepSpans>>();
+    const expanded = props.expandedExecutions;
+    const stepsMap = props.stepsByExecution;
+    if (!expanded || !stepsMap || expanded.size === 0 || !hasStartedAt.value) return out;
+    for (const worker of workerGroups.value) {
+      for (const tc of worker.cases) {
+        if (!expanded.has(tc.executionId)) continue;
+        const steps = stepsMap.get(tc.executionId);
+        const startMs = toMs(tc.startedAt);
+        if (!steps || startMs == null) continue;
+        out.set(tc.executionId, buildStepSpans(steps, startMs));
+      }
+    }
+    return out;
+  });
+
+  // Lay workers out as flat lanes: each worker takes its test lane plus one lane
+  // per level of the deepest expanded step tree on it, so a worker's band grows
+  // only while one of its tests is expanded.
+  const workerLayout = computed<{ rows: WorkerRow[]; laneCount: number }>(() => {
+    const spans = expandedSpans.value;
+    const rows: WorkerRow[] = [];
+    let lane = 0;
+    for (const worker of workerGroups.value) {
+      let maxDepth = 0;
+      for (const tc of worker.cases) {
+        const r = spans.get(tc.executionId);
+        if (r) maxDepth = Math.max(maxDepth, r.maxDepth);
+      }
+      const laneSpan = 1 + maxDepth;
+      rows.push({ shardIndex: worker.shardIndex, workerIndex: worker.workerIndex, baseLane: lane, laneSpan });
+      lane += laneSpan;
+    }
+    return { rows, laneCount: lane };
+  });
+
+  const timelineData = computed<TimelineItem[]>(() => {
+    const workers = workerGroups.value;
+    const rows = workerLayout.value.rows;
+    const patterns = wastedPatterns.value;
+    const absolute = hasStartedAt.value;
+    const origin = minStartedAt.value;
+    const spans = expandedSpans.value;
+    const expanded = props.expandedExecutions;
+    const absoluteStart = (startedAt: unknown) => Math.max(0, (toMs(startedAt) ?? origin) - origin);
 
     const result: TimelineItem[] = [];
     // Per-worker end cursor; positions items in fallback mode and marks where
     // setup steps get appended.
     const rowEndByWorker = new Map<number, number>();
 
-    workers.forEach((worker, rowIndex) => {
+    workers.forEach((worker, i) => {
+      const baseLane = rows[i]!.baseLane;
       const rowItems: TimelineItem[] = [];
       // Fallback mode packs cases in start order; absolute mode keeps the
       // incoming order and sorts the finished row by start instead.
-      const cases = hasStartedAt
+      const cases = absolute
         ? worker.cases
         : [...worker.cases].sort((a, b) => (toMs(a.startedAt) ?? 0) - (toMs(b.startedAt) ?? 0));
       let cursor = 0;
 
       for (const tc of cases) {
         const duration = tc.duration ?? 1000;
-        const start = hasStartedAt ? absoluteStart(tc.startedAt) : cursor;
+        const start = absolute ? absoluteStart(tc.startedAt) : cursor;
         rowItems.push({
           key: `t${tc.executionId}`,
           kind: 'test',
@@ -253,17 +330,18 @@ export function useTimelineModel(props: TimelineModelInput): {
           workerIndex: worker.workerIndex,
           start,
           duration,
-          rowIndex,
+          rowIndex: baseLane,
           locks: tc.locks ?? null,
+          expanded: expanded?.has(tc.executionId) ?? false,
         });
         cursor = start + duration;
 
-        const steps = (tc.stepEvents ?? []) as TestStepEvent[];
-        steps.forEach((step, stepIndex) => {
+        const stepEvents = (tc.stepEvents ?? []) as TestStepEvent[];
+        stepEvents.forEach((step, stepIndex) => {
           const kind = stepKind(step, patterns);
           if (!kind) return;
           const stepDuration = step.duration || 0;
-          const stepStart = hasStartedAt ? absoluteStart(step.startedAt) : cursor;
+          const stepStart = absolute ? absoluteStart(step.startedAt) : cursor;
           rowItems.push({
             key: `s${tc.executionId}:${stepIndex}`,
             kind,
@@ -273,11 +351,36 @@ export function useTimelineModel(props: TimelineModelInput): {
             workerIndex: worker.workerIndex,
             start: stepStart,
             duration: stepDuration,
-            rowIndex,
+            rowIndex: baseLane,
             parentTitle: tc.title,
           });
           cursor = stepStart + stepDuration;
         });
+
+        // Expanded step waterfall: one nested sub-lane per depth, drawn only
+        // across this test's own span.
+        const stepResult = spans.get(tc.executionId);
+        if (stepResult) {
+          stepResult.spans.forEach((span, spanIndex) => {
+            rowItems.push({
+              key: `st${tc.executionId}:${spanIndex}`,
+              kind: 'step',
+              testCaseId: tc.executionId,
+              title: span.title,
+              status: span.status,
+              workerIndex: worker.workerIndex,
+              start: absoluteStart(span.startTime),
+              duration: span.duration,
+              rowIndex: baseLane + span.depth,
+              parentTitle: tc.title,
+              category: span.category,
+              depth: span.depth,
+              subtitle: span.subtitle ?? null,
+              params: span.params ?? null,
+              error: span.error ?? null,
+            });
+          });
+        }
       }
 
       rowItems.sort((a, b) => a.start - b.start);
@@ -293,20 +396,20 @@ export function useTimelineModel(props: TimelineModelInput): {
     // startedAt; in fallback mode they're appended after the worker's cases,
     // since without timestamps we can't interleave them accurately.
     if (props.setupSteps && props.setupSteps.length > 0) {
-      const rowIndexByWorker = new Map<number, number>();
-      workers.forEach((worker, rowIndex) => {
-        if (!rowIndexByWorker.has(worker.workerIndex)) rowIndexByWorker.set(worker.workerIndex, rowIndex);
+      const baseLaneByWorker = new Map<number, number>();
+      workers.forEach((worker, i) => {
+        if (!baseLaneByWorker.has(worker.workerIndex)) baseLaneByWorker.set(worker.workerIndex, rows[i]!.baseLane);
       });
 
       props.setupSteps.forEach((step, setupIndex) => {
         const workerIndex = step.workerIndex;
         if (workerIndex == null || workerIndex < 0) return;
-        const rowIndex = rowIndexByWorker.get(workerIndex);
-        if (rowIndex == null) return;
+        const baseLane = baseLaneByWorker.get(workerIndex);
+        if (baseLane == null) return;
 
         const duration = step.duration || 0;
         let start: number;
-        if (hasStartedAt) {
+        if (absolute) {
           start = absoluteStart(step.startedAt);
         } else {
           start = rowEndByWorker.get(workerIndex) ?? 0;
@@ -322,7 +425,7 @@ export function useTimelineModel(props: TimelineModelInput): {
           workerIndex,
           start,
           duration,
-          rowIndex,
+          rowIndex: baseLane,
           parentTitle: null,
         });
       });
@@ -331,10 +434,11 @@ export function useTimelineModel(props: TimelineModelInput): {
     return result;
   });
 
-  /** Ordered worker lanes; items with rowIndex i render on workerRows[i]. */
-  const workerRows = computed(() =>
-    workerGroups.value.map((worker) => ({ shardIndex: worker.shardIndex, workerIndex: worker.workerIndex })),
-  );
+  /** Ordered worker lanes with their flat-lane bands; items render on the lane at `rowIndex`. */
+  const workerRows = computed<WorkerRow[]>(() => workerLayout.value.rows);
+
+  /** Total flat lanes, including expanded step sub-lanes — the timeline's row count. */
+  const laneCount = computed(() => workerLayout.value.laneCount);
 
   /** Shard group boundaries derived from workerRows */
   const shardGroups = computed<ShardGroup[]>(() => {
@@ -368,5 +472,5 @@ export function useTimelineModel(props: TimelineModelInput): {
 
   const lockSummary = computed(() => computeLockSummary(timelineData.value, maxTime.value));
 
-  return { timelineData, workerRows, shardGroups, maxTime, runLocks, lockSummary };
+  return { timelineData, workerRows, laneCount, shardGroups, maxTime, runLocks, lockSummary };
 }

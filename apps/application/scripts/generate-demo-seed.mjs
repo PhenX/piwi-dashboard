@@ -444,25 +444,50 @@ function buildSeedStepEvents(caseStartMs, caseDuration, location, waitHeavy) {
   return { stepEvents: events, wastedMs };
 }
 
+/** Shape one themed step into the stored flat form, carrying its optional target/params. */
+function shapeStep(src, duration, startTime) {
+  const step = { title: src.title, duration, category: src.category, startTime };
+  // Playwright 1.63 shape (some projects only): the target in `subtitle`,
+  // curated arguments in `params`.
+  if (src.subtitle) step.subtitle = src.subtitle;
+  if (src.params) step.params = src.params;
+  return step;
+}
+
 /**
  * Scale a project's themed step titles to a case duration, laying each step's
  * absolute `startTime` end-to-end from `caseStartMs` so the failure timeline
- * places them on a real clock rather than estimating from durations.
+ * places them on a real clock rather than estimating from durations. A themed
+ * step with `children` becomes a `test.step`-style parent whose children lay
+ * end-to-end inside its window, so the timeline's per-test waterfall nests them
+ * by containment — the flat, pre-order shape Playwright's own step tree stores.
  */
 function buildSteps(proj, caseDuration, caseStartMs) {
   const total = proj.stepTitles.reduce((s, st) => s + st.weight, 0);
   let cursor = caseStartMs;
-  return proj.stepTitles.map((st) => {
+  const out = [];
+  for (const st of proj.stepTitles) {
     const duration = Math.round((st.weight / total) * caseDuration);
     const startTime = cursor;
     cursor += duration;
-    const step = { title: st.title, duration, category: st.category, startTime };
-    // Playwright 1.63 shape (some projects only): the target in `subtitle`,
-    // curated arguments in `params`.
-    if (st.subtitle) step.subtitle = st.subtitle;
-    if (st.params) step.params = st.params;
-    return step;
-  });
+    out.push(shapeStep(st, duration, startTime));
+
+    if (Array.isArray(st.children) && st.children.length > 0 && duration > 0) {
+      const childTotal = st.children.reduce((s, c) => s + (c.weight || 1), 0);
+      let childCursor = startTime;
+      st.children.forEach((child, i) => {
+        // Distribute the parent's window across its children; the last child
+        // ends exactly at the parent's end so containment stays clean.
+        const last = i === st.children.length - 1;
+        const childDur = last
+          ? Math.max(1, startTime + duration - childCursor)
+          : Math.max(1, Math.round(((child.weight || 1) / childTotal) * duration));
+        out.push(shapeStep(child, childDur, childCursor));
+        childCursor += childDur;
+      });
+    }
+  }
+  return out;
 }
 
 /** Themed network requests for one case (jittered durations; story overrides on failures). */
@@ -2649,6 +2674,7 @@ function collectAnchorSec() {
   for (const r of TEST_RUNS_CASES) {
     bump(r.started_at, 'ms');
     bump(r.created_at, 'ms');
+    for (const e of r.steps || []) bump(e.startTime, 'ms');
     for (const e of r.step_events || []) bump(e.startedAt, 'ms');
     for (const e of r.console_logs || []) bump(e.timestamp, 'ms');
   }
@@ -2667,10 +2693,13 @@ const D = '(SELECT delta_sec FROM _rebase)';
 const D_MS = `(SELECT delta_sec FROM _rebase) * 1000`;
 
 // Shift a JSON array column's per-element ms timestamp (`$.field`) in place,
-// preserving element order (json_each iterates in array order).
+// preserving element order (json_each iterates in array order). Elements that
+// carry no `$.field` are left untouched, so a shift never writes a null key.
 const shiftJsonMs = (table, column, field) =>
-  `UPDATE ${table} SET ${column} = (SELECT json_group_array(json_set(value, '$.${field}', ` +
-  `json_extract(value, '$.${field}') + ${D_MS})) FROM json_each(${table}.${column})) ` +
+  `UPDATE ${table} SET ${column} = (SELECT json_group_array(` +
+  `CASE WHEN json_extract(value, '$.${field}') IS NOT NULL ` +
+  `THEN json_set(value, '$.${field}', json_extract(value, '$.${field}') + ${D_MS}) ELSE value END) ` +
+  `FROM json_each(${table}.${column})) ` +
   `WHERE ${column} IS NOT NULL AND json_valid(${column});`;
 
 const REBASE_SQL = [
@@ -2702,6 +2731,7 @@ const REBASE_SQL = [
   `UPDATE locator_snapshots SET last_seen_at = last_seen_at + ${D_MS};`,
   '',
   '-- Millisecond timestamps embedded in JSON columns',
+  shiftJsonMs('test_runs_cases', 'steps', 'startTime'),
   shiftJsonMs('test_runs_cases', 'step_events', 'startedAt'),
   shiftJsonMs('test_runs_cases', 'console_logs', 'timestamp'),
   shiftJsonMs('network_requests', 'server_logs', 'timestamp'),

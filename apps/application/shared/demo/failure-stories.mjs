@@ -2264,10 +2264,98 @@ export const DEMO_PROJECTS = [
       ],
     },
     stepTitles: [
-      { title: 'Sign in', category: 'setup', weight: 900 },
-      { title: 'Navigate to section', category: 'navigation', weight: 600 },
-      { title: 'Perform admin action', category: 'action', weight: 1000 },
-      { title: 'Assert table state', category: 'assertion', weight: 700 },
+      {
+        title: 'Sign in',
+        category: 'test.step',
+        weight: 900,
+        children: [
+          {
+            title: 'Fill "admin@example.com"',
+            category: 'input',
+            weight: 200,
+            subtitle: "getByLabel('Email')",
+            params: { locator: "getByLabel('Email')", value: 'admin@example.com' },
+          },
+          {
+            title: 'Fill "********"',
+            category: 'input',
+            weight: 200,
+            subtitle: "getByLabel('Password')",
+            params: { locator: "getByLabel('Password')" },
+          },
+          {
+            title: 'Click',
+            category: 'action',
+            weight: 500,
+            subtitle: "getByRole('button', { name: 'Sign in' })",
+            params: { locator: "getByRole('button', { name: 'Sign in' })" },
+          },
+        ],
+      },
+      {
+        title: 'Navigate to section',
+        category: 'test.step',
+        weight: 600,
+        children: [
+          {
+            title: 'Click',
+            category: 'action',
+            weight: 300,
+            subtitle: "getByRole('link', { name: 'Users' })",
+            params: { locator: "getByRole('link', { name: 'Users' })" },
+          },
+          { title: 'Wait for load state', category: 'wait', weight: 300 },
+        ],
+      },
+      {
+        title: 'Perform admin action',
+        category: 'test.step',
+        weight: 1000,
+        children: [
+          {
+            title: 'Click',
+            category: 'action',
+            weight: 400,
+            subtitle: "getByRole('row', { name: 'Ada Lovelace' }).getByRole('button', { name: 'Edit' })",
+            params: { locator: "getByRole('row', { name: 'Ada Lovelace' })" },
+          },
+          {
+            title: 'Fill "Editor"',
+            category: 'input',
+            weight: 300,
+            subtitle: "getByLabel('Role')",
+            params: { locator: "getByLabel('Role')", value: 'Editor' },
+          },
+          {
+            title: 'Click',
+            category: 'action',
+            weight: 300,
+            subtitle: "getByRole('button', { name: 'Save' })",
+            params: { locator: "getByRole('button', { name: 'Save' })" },
+          },
+        ],
+      },
+      {
+        title: 'Assert table state',
+        category: 'test.step',
+        weight: 700,
+        children: [
+          {
+            title: 'Expect "toHaveText"',
+            category: 'assertion',
+            weight: 400,
+            subtitle: "getByRole('cell', { name: 'Editor' })",
+            params: { locator: "getByRole('cell', { name: 'Editor' })" },
+          },
+          {
+            title: 'Expect "toBeVisible"',
+            category: 'assertion',
+            weight: 300,
+            subtitle: "getByText('Saved')",
+            params: { locator: "getByText('Saved')" },
+          },
+        ],
+      },
     ],
   },
 ];

@@ -142,7 +142,17 @@ export interface DemoProject {
     sessionStorage: Array<{ key: string; length: number }>;
     cookies: Array<Record<string, unknown>>;
   } | null;
-  stepTitles: Array<{ title: string; category: string; weight: number }>;
+  stepTitles: DemoStepTitle[];
+}
+
+/** A themed step for a project's cases; `children` nest inside its time window. */
+export interface DemoStepTitle {
+  title: string;
+  category: string;
+  weight: number;
+  subtitle?: string;
+  params?: Record<string, string | number | boolean>;
+  children?: DemoStepTitle[];
 }
 
 export interface ScmCommitFile {
