@@ -716,9 +716,7 @@ const breadcrumbItems = computed(() => [
 
         <!-- ── What changed: moved up under the block; one line when empty ── -->
         <div ref="scmEl" class="scroll-mt-4">
-          <SectionCard icon="i-lucide-git-compare-arrows" title="What changed" help="cluster.scm">
-            <ClusterInvestigation />
-          </SectionCard>
+          <ClusterInvestigation />
         </div>
 
         <!-- ── Affected tests: the evidence selector, above the evidence ── -->

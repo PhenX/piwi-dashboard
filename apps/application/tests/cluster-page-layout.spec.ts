@@ -3,10 +3,11 @@ import { waitForHydration, retryPost } from './utils';
 import { PROJECT } from '#shared/test-project-names';
 
 /**
- * Failure-cluster detail page layout: one column, read top to bottom. The
- * header carries the triage control; the failure reads as a headline with a
- * "Show raw error" disclosure; the evidence is one tabbed card fed by an
- * affected-test selector; bulk actions live in the header's More menu.
+ * Failure-cluster detail page layout: one situation block, read top to bottom.
+ * The block carries the state line (the sentence, its one reconcile action and
+ * the Triage / Snooze menus) and the occurrence sparkline; the raw error is a
+ * "Raw error" disclosure on the facts line; the affected tests are the evidence
+ * selector above the tabbed evidence; What changed collapses to one line.
  */
 
 // Two cases sharing one fingerprint (identical error, different spec files) so
@@ -72,51 +73,53 @@ test.describe('Failure cluster page layout', () => {
     clusterId = await seedCluster(request);
   });
 
-  test('the header carries the triage control and the cluster facts', async ({ page }) => {
+  test('the state line carries the sentence, the Triage and Snooze menus and the occurrence facts', async ({
+    page,
+  }) => {
     await page.goto(`/failure-clusters/${clusterId}`);
     await waitForHydration(page);
 
-    // The segmented triage control (auth is disabled → the virtual admin can write).
-    const triage = page.getByRole('group', { name: 'Triage status' });
-    await expect(triage).toBeVisible();
-    await expect(triage.getByRole('button', { name: 'Open' })).toBeVisible();
-    await expect(triage.getByRole('button', { name: 'Resolved' })).toBeVisible();
-    await expect(triage.getByRole('button', { name: 'Ignored' })).toBeVisible();
+    // The one-verb state line, with its two menus (auth is disabled → the virtual
+    // admin can write). There is no segmented "Triage status" control any more.
+    const state = page.locator('[data-shot="cluster-state"]');
+    await expect(state).toBeVisible();
+    await expect(state).toContainText('Still failing');
+    await expect(state.getByRole('button', { name: 'Triage' })).toBeVisible();
+    await expect(state.getByRole('button', { name: 'Snooze' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Triage status' })).toHaveCount(0);
 
-    // The facts line states the count of affected tests, not a "Runs" card.
+    // The occurrence sparkline and its sentence carry the "2 tests" count; there
+    // is no "Runs" card.
+    await expect(page.locator('[data-shot="occurrence-sparkline"]')).toBeVisible();
     await expect(page.getByText(/2 tests/).first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Runs', exact: true })).toHaveCount(0);
   });
 
-  test('the evidence card is open by default with an affected-test selector', async ({ page }) => {
+  test('the affected-tests selector switches the evidence', async ({ page }) => {
     await page.goto(`/failure-clusters/${clusterId}`);
     await waitForHydration(page);
 
-    // The tabbed evidence card is not folded — its tab strip and the execution
-    // link are both visible without any expand.
+    // The tabbed evidence card is open, and the selected affected-test row carries
+    // the "Open execution" link.
     await expect(page.getByRole('tablist', { name: 'Evidence sections' })).toBeVisible();
     const link = page.getByRole('link', { name: 'Open execution' });
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute('href', /\/test-run-cases\/\d+/);
 
-    // The selector offers every affected case; switching it retargets the link.
+    // Selecting the other affected test retargets the evidence (and the link).
     const before = await link.getAttribute('href');
-    await page.getByRole('combobox', { name: 'Affected test' }).click();
-    await expect(page.getByRole('option', { name: 'login submits the form' })).toBeVisible();
-    await expect(page.getByRole('option', { name: 'checkout completes payment' })).toBeVisible();
-    // Pick the case that is not the current selection so the execution changes.
-    await page.getByRole('option', { selected: false }).first().click();
+    await page.locator('[data-shot="cluster-affected-tests"] [role="button"][aria-pressed="false"]').first().click();
     await expect
       .poll(async () => page.getByRole('link', { name: 'Open execution' }).getAttribute('href'))
       .not.toBe(before);
   });
 
-  test('the raw error is behind a "Show raw error" disclosure', async ({ page }) => {
+  test('the raw error is behind a "Raw error" disclosure', async ({ page }) => {
     await page.goto(`/failure-clusters/${clusterId}`);
     await waitForHydration(page);
 
     // Collapsed by default: the signature is not on the first screen.
-    const disclosure = page.getByRole('button', { name: 'Show raw error' });
+    const disclosure = page.getByRole('button', { name: 'Raw error' });
     await expect(disclosure).toBeVisible();
     await expect(page.getByText('TimeoutError: locator.click', { exact: false })).toBeHidden();
 
@@ -124,10 +127,11 @@ test.describe('Failure cluster page layout', () => {
     await expect(page.getByText('TimeoutError: locator.click', { exact: false }).first()).toBeVisible();
   });
 
-  test('what changed is a plain card, not a folded header', async ({ page }) => {
+  test('what changed collapses to one line when there is no SCM', async ({ page }) => {
     await page.goto(`/failure-clusters/${clusterId}`);
     await waitForHydration(page);
-    await expect(page.getByRole('heading', { name: 'What changed' })).toBeVisible();
+    // The seeded run has no SCM metadata, so What changed is one line, not a card.
+    await expect(page.getByText(/What changed:/)).toBeVisible();
   });
 
   test('selecting an affected test offers "Move to a new cluster"', async ({ page }) => {
@@ -136,7 +140,7 @@ test.describe('Failure cluster page layout', () => {
 
     await expect(page.getByRole('heading', { name: /Affected tests/ })).toBeVisible();
 
-    // Selecting a row reveals the bulk bar; the move action opens its confirm dialog.
+    // Checking a row reveals the bulk bar; the move action opens its confirm dialog.
     await page
       .getByRole('checkbox', { name: /^Select / })
       .first()
@@ -145,5 +149,67 @@ test.describe('Failure cluster page layout', () => {
     await expect(move).toBeVisible();
     await move.click();
     await expect(page.getByRole('button', { name: /Move \d+ test/ })).toBeVisible();
+  });
+});
+
+/**
+ * The situation block against the deterministic demo seed: #10 is fixed and
+ * verified but still open, #1 regressed, #5 replaces a locator over two affected
+ * tests. These run only on a demo-seeded server; a bare test DB skips them.
+ */
+test.describe('Cluster situation block on seeded clusters', () => {
+  let hasSeed = false;
+  test.beforeAll(async ({ request }) => {
+    hasSeed = (await request.get('/api/failure-clusters/10')).ok();
+  });
+  test.beforeEach(() => {
+    test.skip(!hasSeed, 'demo seed not loaded on this server');
+  });
+
+  test('#10 states "fixed and verified, still open" with one Mark resolved and the sparkline', async ({ page }) => {
+    await page.goto('/failure-clusters/10');
+    await waitForHydration(page);
+
+    const state = page.locator('[data-shot="cluster-state"]');
+    await expect(state).toContainText('Fixed in');
+    await expect(state).toContainText('verified, still marked open');
+    await expect(state.getByRole('button', { name: 'Mark resolved' })).toHaveCount(1);
+    await expect(state.getByRole('button', { name: 'Triage' })).toBeVisible();
+    await expect(state.getByRole('button', { name: 'Snooze' })).toBeVisible();
+
+    // The occurrence sparkline and its sentence.
+    await expect(page.locator('[data-shot="occurrence-sparkline"]')).toBeVisible();
+    await expect(page.getByText(/occurrences? in 1 test/)).toBeVisible();
+
+    // The next step applies the diagnosed fix.
+    await expect(page.locator('[data-shot="next-step"]')).toContainText('Apply the diagnosed fix');
+  });
+
+  test('#1 states the fix regressed', async ({ page }) => {
+    test.skip(!(await (await page.request.get('/api/failure-clusters/1')).ok()), 'no #1');
+    await page.goto('/failure-clusters/1');
+    await waitForHydration(page);
+    const state = page.locator('[data-shot="cluster-state"]');
+    await expect(state).toContainText('the fix did not hold');
+    await expect(state).toContainText(/back since run #\d+/);
+  });
+
+  test('#5 replaces a locator and its affected-test selector switches the evidence', async ({ page }) => {
+    test.skip(!(await (await page.request.get('/api/failure-clusters/5')).ok()), 'no #5');
+    await page.goto('/failure-clusters/5');
+    await waitForHydration(page);
+
+    await expect(page.locator('[data-shot="next-step"]')).toContainText('Replace the locator');
+
+    // Two affected tests → selecting the other row retargets the evidence.
+    const rows = page.locator('[data-shot="cluster-affected-tests"] [role="button"]');
+    if ((await rows.count()) > 1) {
+      const link = page.getByRole('link', { name: 'Open execution' });
+      const before = await link.getAttribute('href');
+      await page.locator('[data-shot="cluster-affected-tests"] [role="button"][aria-pressed="false"]').first().click();
+      await expect
+        .poll(async () => page.getByRole('link', { name: 'Open execution' }).getAttribute('href'))
+        .not.toBe(before);
+    }
   });
 });

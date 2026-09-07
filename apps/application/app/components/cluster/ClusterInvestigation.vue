@@ -31,9 +31,9 @@ const hasOpenBlock = computed(() => Boolean(scmChanges.value) || selectedCommitS
 </script>
 
 <template>
-  <div class="space-y-3">
-    <!-- Open block: the baseline picker and the diff, when there are commits or a diff. -->
-    <template v-if="hasOpenBlock">
+  <!-- Open: the full card with the baseline picker and the diff, when there are commits or a diff. -->
+  <SectionCard v-if="hasOpenBlock" icon="i-lucide-git-compare-arrows" title="What changed" help="cluster.scm">
+    <div class="space-y-3">
       <div class="pb-2 border-b border-default">
         <div class="flex items-center gap-2 flex-wrap">
           <span class="text-xs text-gray-500 font-medium shrink-0 inline-flex items-center gap-1">
@@ -73,30 +73,28 @@ const hasOpenBlock = computed(() => Boolean(scmChanges.value) || selectedCommitS
         <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin text-gray-400" />
       </div>
       <ScmChangesView v-else-if="scmChanges" :changes="scmChanges" />
+    </div>
+    <CommitBrowserModal
+      v-model:open="commitBrowserOpen"
+      :cluster-id="clusterId"
+      :initial-selected="selectedCommitShas"
+      :auto-selected-shas="autoSelectedCommits"
+      @confirm="selectedCommitShas = $event"
+    />
+  </SectionCard>
+
+  <!-- Collapsed: one line — nothing to diff yet. -->
+  <p v-else class="text-sm text-muted flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+    <span class="font-medium text-toned">What changed:</span>
+    <template v-if="contextLoading && !coverage">
+      <UIcon name="i-lucide-loader-circle" class="size-3.5 animate-spin" />
+      <span>looking for the change that broke this…</span>
     </template>
-
-    <!-- Still loading, nothing yet — a small spinner rather than the picker. -->
-    <div v-else-if="contextLoading && !coverage" class="flex items-center gap-2 text-xs text-gray-400 py-1">
-      <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
-      Looking for the change that broke this…
-    </div>
-
-    <!-- One line: a healthy resolve with an empty range, else why the diff is unavailable. -->
-    <p v-else-if="coverage && scmHealthy" class="text-xs text-gray-400">No commits in the range.</p>
-    <div v-else-if="coverage" class="flex items-start gap-1.5 text-xs">
-      <UIcon :name="scmStatus.icon" class="size-3.5 mt-0.5 shrink-0" :class="scmStatus.color" />
-      <div>
-        <span :class="scmStatus.color">{{ scmStatus.text }}</span>
-        <span v-if="scmStatus.detail" class="text-gray-400 ml-1">— {{ scmStatus.detail }}</span>
-      </div>
-    </div>
-  </div>
-
-  <CommitBrowserModal
-    v-model:open="commitBrowserOpen"
-    :cluster-id="clusterId"
-    :initial-selected="selectedCommitShas"
-    :auto-selected-shas="autoSelectedCommits"
-    @confirm="selectedCommitShas = $event"
-  />
+    <template v-else-if="coverage && scmHealthy">no commits in the range</template>
+    <template v-else-if="coverage">
+      <span :class="scmStatus.color">{{ scmStatus.text }}</span>
+      <span v-if="scmStatus.detail" class="text-gray-400">— {{ scmStatus.detail }}</span>
+    </template>
+    <template v-else>not available</template>
+  </p>
 </template>

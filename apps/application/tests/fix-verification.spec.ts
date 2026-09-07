@@ -171,9 +171,11 @@ test.describe.serial('Fix verification', () => {
     const cluster = (await clusters(request, projectId)).find((c) => c.fixVerification === 'regressed')!;
 
     await page.goto(`/failure-clusters/${cluster.id}`);
-    // The triage control shows the fix-verification badge and its one sentence.
-    await expect(page.getByText('Regressed').first()).toBeVisible();
-    await expect(page.getByText(new RegExp(`Regressed after run #${cluster.fixLandedRunId}`)).first()).toBeVisible();
+    // The state line folds the fix verification into one sentence: the fix came
+    // back, and it did not hold. No standalone "Regressed" badge.
+    const state = page.locator('[data-shot="cluster-state"]');
+    await expect(state).toContainText('the fix did not hold');
+    await expect(state).toContainText(/back since run #\d+/);
   });
 
   test('the project cluster list shows the verdict next to the triage status', async ({ page, request }) => {
