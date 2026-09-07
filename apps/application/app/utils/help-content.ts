@@ -46,10 +46,10 @@ export const HELP_TOPICS = {
     text: "A queue of the failures you still owe a decision. Switch queues to focus — new since you last looked, mine, regressions, fixes that didn't hold, quarantines ready to release, merge suggestions. Triage from the row or the keyboard: j / k move, x select, r resolve, i ignore, q quarantine, a assign, s snooze, l link, o open.",
     doc: 'features/failure-clusters#the-failure-inbox',
   },
-  'cluster.snooze': {
-    title: 'Snoozed',
-    text: 'This cluster is snoozed — hidden from every inbox queue until the deadline passes or, when snoozed until it recurs, until a new run fails it again. Snooze never changes the status; unsnooze to bring it back now.',
-    doc: 'features/failure-clusters#snoozing',
+  'cluster.state': {
+    title: 'Cluster state',
+    text: 'One sentence with one verb for where this cluster stands — still failing, fixed and verified, regressed, resolved, ignored, snoozed or quarantined — with the single action that reconciles it. Triage sets the status, a note and the assignee; Snooze hides it from the inbox without changing the status.',
+    doc: 'features/failure-clusters#the-state-line',
   },
 
   // ── Analytics ─────────────────────────────────────────────────────────
@@ -300,9 +300,6 @@ export const HELP_TOPICS = {
     text: 'Failures with the same error fingerprint are grouped into one cluster, so a single root cause shows up once instead of N times.',
     doc: 'features/ai-diagnosis#failure-clustering',
   },
-  'cluster.triage': {
-    text: 'Track a cluster’s state: set its status, add triage notes, or extract a subset of failures into a separate cluster.',
-  },
   'cluster.owner': {
     title: 'Owner',
     text: 'Who answers for this cluster’s tests. Taken from a `piwi:owner` annotation on the test when present, otherwise derived from the repository’s CODEOWNERS for the spec’s file path. The link filters this project’s test cases to that owner.',
@@ -310,11 +307,6 @@ export const HELP_TOPICS = {
   'cluster.known-issue': {
     title: 'Known issue',
     text: 'Pin the Jira ticket, GitHub issue or PR that tracks this cluster. The link’s key travels with the cluster wherever it is listed, so a triaged cluster shows what is already being done about it.',
-  },
-  'cluster.fix-verification': {
-    title: 'Fix verification',
-    text: 'Recorded when a run turns this cluster green — every test it covers ran and passed, in a full suite or a filtered re-run of just those tests: when the fix landed, how long the cluster stayed open, and whether the change matched the diagnosed files. If the failure comes back, the cluster is marked as regressed rather than quietly reopened.',
-    doc: 'features/ai-diagnosis#did-the-fix-work',
   },
   'cluster.fix-plan': {
     title: 'Fix',
