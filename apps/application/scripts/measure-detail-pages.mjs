@@ -102,6 +102,8 @@ function measurePage({ viewportHeight }) {
   const positions = {
     header: y(q('h1')),
     headline: y(q('[data-shot="failure-headline"]')),
+    situation: y(q('[data-shot="situation"]')),
+    nextStep: y(q('[data-shot="next-step"]')),
     clues: y(q('[data-shot="failure-clues"]')),
     evidence: y(headingSection('h2', 'Evidence')),
     fix: y(q('[data-shot="fix"]')),
@@ -165,6 +167,8 @@ async function measureRoute(page, base, route, { height }) {
 const POSITION_LABELS = [
   ['header', 'header (h1)'],
   ['headline', 'headline'],
+  ['situation', 'situation'],
+  ['nextStep', 'next step'],
   ['clues', 'clues'],
   ['evidence', 'evidence'],
   ['fix', 'fix'],

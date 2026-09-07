@@ -3,14 +3,18 @@ import type { AiStepIntent, AttemptOutcome, TestCaseHistoryPoint, TraceInfo } fr
 import { isPiwiAnnotation } from '@piwitests/core/test-meta';
 import { renderAnsi } from '~/utils';
 import { buildRetryCommand } from '~/utils/retry-command';
-import type { FailureVerdict } from '#shared/failure-verdict';
+import type { FailureVerdict, FailureWhy } from '#shared/failure-verdict';
 import type { FailureCluesResult } from '#shared/handlers/test-cases';
 import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator';
 import { EVIDENCE_SECTION_TAB } from '~/utils/evidence-sections';
 import type { FixSectionKey } from '~/components/shared/FixCard.vue';
 import type { BlockedCaseRef } from '~~/types/api';
-import type { ReproRecipe, BisectResult, ReproduceDesktopContext } from '#shared/reproduce';
-import type { FixedBeforeMatch } from '#shared/fix-plan.types';
+import { reproScript, type ReproRecipe, type BisectResult, type ReproduceDesktopContext } from '#shared/reproduce';
+import type { FixedBeforeMatch, FixPlan } from '#shared/fix-plan.types';
+import type { Situation, SituationPart } from '#shared/situation';
+import type { NextStep } from '#shared/next-step';
+import { commitUrl } from '#shared/scm-urls';
+import { condenseErrorText } from '#shared/error-fingerprint';
 
 const route = useRoute();
 const testCaseId = route.params.id;
@@ -30,17 +34,17 @@ const { data: historyData } = await useAsyncData(
   { default: (): TestCaseHistoryPoint[] => [], watch: [() => testCase.value?.testCaseId] },
 );
 
-// The deterministic clues for this execution: fed to the headline (top clue as
-// one line), the CluesCard, and the evidence tabs' default-tab choice.
+// The deterministic clues and the story that chains them: the story line leads
+// with the story (or the top clue), folds every clue under its disclosure, and
+// the top clue's section chooses the default evidence tab.
 const { data: cluesData } = await useFetch<FailureCluesResult>(`/api/test-run-cases/${testCaseId}/clues`, {
   default: (): FailureCluesResult => ({ clues: [], story: null, failureAt: null }),
 });
 const clues = computed(() => cluesData.value?.clues ?? []);
+const story = computed(() => cluesData.value?.story ?? null);
 const cluesFailureAt = computed(() => cluesData.value?.failureAt ?? null);
 const topClue = computed(() => clues.value[0] ?? null);
 const topClueSection = computed(() => topClue.value?.citations?.[0]?.section ?? null);
-// The headline prints the strongest clue, so the Other clues card lists the rest.
-const otherClues = computed(() => clues.value.slice(1));
 
 const { data: traceData, refresh: refreshTraces } = await useFetch(`/api/test-run-cases/${testCaseId}/traces`, {
   transform: (r: { items: TraceInfo[] }) => r.items,
@@ -128,6 +132,41 @@ const clusterDiagnosis = computed(() => {
 const confidenceColor = (c?: string | null): 'success' | 'warning' | 'neutral' =>
   c === 'high' ? 'success' : c === 'medium' ? 'warning' : 'neutral';
 
+// The story is the one explanation on the first screen. A completed diagnosis
+// leads the story line only when no deterministic story chained the clues — the
+// story stays primary when it exists.
+const storyDiagnosis = computed(() =>
+  !story.value && clusterDiagnosis.value
+    ? { summary: clusterDiagnosis.value.summary as string, confidence: clusterDiagnosis.value.confidence ?? null }
+    : null,
+);
+
+// The situation sentence and the single next step, built server-side from the
+// verdict and the same healing / diagnosis facts the toolbox reads.
+const situation = computed(() => (testCase.value as { situation?: Situation | null } | null)?.situation ?? null);
+const nextStep = computed(() => (testCase.value as { nextStep?: NextStep | null } | null)?.nextStep ?? null);
+
+// The situation's leading why renders as the one exceptional badge; the rest as
+// prose. A `commit` part links to the SCM host only when the run has a repository.
+const WHY_BADGE: Record<FailureWhy, { label: string; color: 'error' | 'warning' | 'neutral' }> = {
+  'new-regression': { label: 'New regression', color: 'error' },
+  'passed-on-retry': { label: 'Passed on retry', color: 'warning' },
+  'new-flaky': { label: 'Newly flaky', color: 'warning' },
+  infrastructure: { label: 'Infrastructure failure', color: 'neutral' },
+};
+const leadWhy = computed<FailureWhy | null>(() => verdict.value?.why ?? null);
+const repositoryUrl = computed(() => reproduceData.value?.desktop?.repositoryUrl ?? null);
+function situationCommitHref(part: SituationPart): string | null {
+  return part.id != null ? commitUrl(repositoryUrl.value, String(part.id)) : null;
+}
+
+// The story, situation and next lines are only for a problem execution; a passing
+// one shows identity and facts alone.
+const isProblem = computed(() => {
+  const s = testCase.value?.status;
+  return s === 'failed' || s === 'timedout' || s === 'timedOut' || s === 'didnotrun';
+});
+
 const blockedTests = computed(() => (testCase.value as { blockedTests?: BlockedCaseRef[] } | null)?.blockedTests ?? []);
 
 /** A locator-resolution failure — the only case the Locator fix section applies to. */
@@ -164,6 +203,19 @@ const { data: fixedBeforeData, refresh: refreshFixedBefore } = await useAsyncDat
   { default: (): FixedBeforeMatch[] => [], watch: [() => failureCluster.value?.id] },
 );
 const fixedBefore = computed(() => fixedBeforeData.value ?? []);
+
+// The cluster's fix plan — its diagnosis patch backs the next step's copy /
+// download / open-in-IDE actions, so it is fetched once here rather than by each
+// action.
+const { data: fixPlanData } = await useAsyncData<FixPlan | null>(
+  `test-run-case-fix-plan-${testCaseId}`,
+  () => {
+    const id = failureCluster.value?.id;
+    return id ? $fetch<FixPlan>(`/api/failure-clusters/${id}/fix-plan`).catch(() => null) : Promise.resolve(null);
+  },
+  { default: (): FixPlan | null => null, watch: [() => failureCluster.value?.id] },
+);
+const fixPlanPatch = computed(() => fixPlanData.value?.diagnosis?.patch ?? null);
 
 const applyingId = ref<number | null>(null);
 const applyToast = useToast();
@@ -339,7 +391,9 @@ function attemptLink(a: AttemptOutcome): string | null {
   return !isCurrentAttempt(a) && a.executionId ? `/test-run-cases/${a.executionId}` : null;
 }
 
-// ── Retry command (header primary action) ───────────────────────────────────
+// ── Retry command ────────────────────────────────────────────────────────────
+// The trailing "then" on the next-step line, plus the More menu and the Verify
+// section — no longer an always-on header button.
 const retryCases = computed(() => [
   {
     filePath: testCase.value?.filePath ?? '',
@@ -349,8 +403,7 @@ const retryCases = computed(() => [
   },
 ]);
 const retryCommand = computed(() => buildRetryCommand(retryCases.value));
-const { copy: copyRetry, copied: retryCopied } = useCopy();
-const retryTitle = computed(() => (retryCopied.value ? 'Copied!' : copyPreview(retryCommand.value)));
+const { copy: copyRetry } = useCopy();
 
 onMounted(() => {
   desktopBridge.value = !!tauriCore();
@@ -418,6 +471,15 @@ const linksModalOpen = ref(false);
 // ── Navbar More menu ────────────────────────────────────────────────────────
 const moreMenuItems = computed(() => {
   const items: { label: string; icon: string; color?: 'warning'; onSelect: () => void }[] = [];
+  // The retry command was the header's always-on primary; it now lives here and
+  // on the next-step line (for code-change steps) and in the Verify section.
+  if (retryCommand.value && !desktopBridge.value) {
+    items.push({
+      label: 'Copy retry command',
+      icon: 'i-lucide-clipboard',
+      onSelect: () => copyRetry(retryCommand.value, { toast: 'Retry command copied' }),
+    });
+  }
   if (canWrite.value && testCase.value?.testCaseId) {
     items.push(
       quarantined.value
@@ -486,10 +548,18 @@ onUnmounted(disconnectRunStream);
 
 // ── Section locator ─────────────────────────────────────────────────────────
 // A clue or diagnosis citation reveals the evidence it came from: the evidence
-// tabs handle the tabbed sections (switch tab + scroll), while the on-page error
-// and locator-fix blocks scroll in place.
-const headlineCard = ref<{ revealError: () => void } | null>(null);
+// tabs handle the tabbed sections (switch tab + scroll), while the raw error and
+// locator-fix blocks scroll in place.
+const rawErrorOpen = ref(false);
+const rawErrorEl = ref<HTMLElement | null>(null);
 const fixCardEl = ref<HTMLElement | null>(null);
+const evidenceEl = ref<HTMLElement | null>(null);
+const locatorPanel = ref<{
+  copyPatch: () => void;
+  copyRecommendedLocator: () => void;
+  openPicker: () => void;
+  expandAlternatives: () => void;
+} | null>(null);
 const evidenceTabs = ref<{
   canLocate: (id: string) => boolean;
   revealSection: (id: string) => boolean;
@@ -499,11 +569,15 @@ const evidenceTabs = ref<{
 function scrollToEl(el: HTMLElement | null) {
   el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
-// The raw error lives in the headline card's disclosure; the locator fix lives
-// in the Fix card. A citation reveals or scrolls to the block that holds it.
+// The raw error is a disclosure on the facts line; the locator fix lives in the
+// Fix card. A citation reveals or scrolls to the block that holds it.
+function revealRawError() {
+  rawErrorOpen.value = true;
+  nextTick(() => scrollToEl(rawErrorEl.value));
+}
 const pageSections: Record<string, () => void> = {
-  sampleError: () => headlineCard.value?.revealError(),
-  executionError: () => headlineCard.value?.revealError(),
+  sampleError: revealRawError,
+  executionError: revealRawError,
   locatorHealing: () => scrollToEl(fixCardEl.value),
 };
 provide(clusterSectionLocatorKey, {
@@ -515,6 +589,127 @@ provide(clusterSectionLocatorKey, {
     else evidenceTabs.value?.revealSection(id);
   },
 });
+
+// ── Next step: turn one action id into the real behaviour ────────────────────
+// The next-step line stays presentation-only; the page owns the wiring, reusing
+// the same fetches and panels the toolbox does rather than issuing new requests.
+const { copyGitApply: copyGitApplyPatch, downloadPatch: downloadPatchFile } = usePatchActions();
+const { copyPrompt: copyAiPromptFor } = useCopyAiPrompt();
+const { copy: copyPlain } = useCopy();
+const { openInIde } = useOpenInIde();
+const triageToast = useToast();
+
+/** Scroll to a Fix-card section by its `data-shot`, falling back to the card. */
+function scrollToFixSection(key: 'diagnosis' | 'reproduce' | 'locator-fix') {
+  const el = import.meta.client ? document.querySelector<HTMLElement>(`[data-shot="fix-${key}"]`) : null;
+  scrollToEl(el ?? fixCardEl.value);
+}
+
+async function setClusterStatus(status: 'open' | 'resolved') {
+  const id = failureCluster.value?.id;
+  if (!id) return;
+  try {
+    await $fetch(`/api/failure-clusters/${id}/status`, { method: 'PATCH', body: { status } });
+    triageToast.add({
+      title: status === 'resolved' ? 'Cluster marked resolved' : 'Cluster reopened',
+      color: 'success',
+    });
+    await refresh();
+  } catch {
+    triageToast.add({ title: 'Could not update the cluster', color: 'error' });
+  }
+}
+
+/** The file (and line) a unified diff targets — for the open-in-IDE action. */
+function patchTargetFile(patch: string): { filePath: string; line: number | null } | null {
+  const file = patch.match(/^\+\+\+ b\/(.+)$/m) ?? patch.match(/^--- a\/(.+)$/m);
+  if (!file?.[1]) return null;
+  const hunk = patch.match(/^@@ -\d+(?:,\d+)? \+(\d+)/m);
+  return { filePath: file[1].trim(), line: hunk ? Number(hunk[1]) : null };
+}
+
+async function handleNextStepAction(action: string, payload?: Record<string, unknown>) {
+  const project = testCase.value?.testRun?.project;
+  switch (action) {
+    case 'open-execution': {
+      const id = payload?.executionId;
+      if (id) await navigateTo(`/test-run-cases/${id}`);
+      break;
+    }
+    case 'mark-resolved':
+      await setClusterStatus('resolved');
+      break;
+    case 'reopen':
+      await setClusterStatus('open');
+      break;
+    case 'copy-patch':
+      locatorPanel.value?.copyPatch();
+      break;
+    case 'copy-locator':
+      locatorPanel.value?.copyRecommendedLocator();
+      break;
+    case 'pick-from-snapshot':
+      scrollToFixSection('locator-fix');
+      locatorPanel.value?.openPicker();
+      break;
+    case 'all-alternatives':
+      scrollToFixSection('locator-fix');
+      locatorPanel.value?.expandAlternatives();
+      break;
+    case 'copy-git-apply':
+      if (fixPlanPatch.value) copyGitApplyPatch(fixPlanPatch.value);
+      break;
+    case 'download-patch':
+      if (fixPlanPatch.value)
+        downloadPatchFile(fixPlanPatch.value, `piwi-fix-cluster-${failureCluster.value?.id ?? ''}`);
+      break;
+    case 'open-in-ide': {
+      const target = fixPlanPatch.value ? patchTargetFile(fixPlanPatch.value) : null;
+      if (target)
+        openInIde({
+          filePath: target.filePath,
+          line: target.line,
+          projectKey: project?.id,
+          projectName: project?.name,
+        });
+      break;
+    }
+    case 'read-diagnosis':
+    case 'diagnose':
+      scrollToFixSection('diagnosis');
+      break;
+    case 'reproduce':
+      scrollToFixSection('reproduce');
+      break;
+    case 'attempts-tab':
+      evidenceTabs.value?.selectTab('attempts');
+      nextTick(() => scrollToEl(evidenceEl.value));
+      break;
+    case 'quarantine':
+      await toggleQuarantine();
+      break;
+    case 'rerun-in-ci':
+      await triggerRerun();
+      break;
+    case 'copy-recipe': {
+      const recipe = reproduceData.value?.reproduce;
+      if (recipe) copyPlain(reproScript(recipe, 'bash'), { toast: 'Recipe copied' });
+      break;
+    }
+    case 'copy-ai-prompt':
+      await copyAiPromptFor(`/api/test-run-cases/${testCaseId}/diagnosis-context`);
+      break;
+    case 'configure-ai':
+      await navigateTo('/settings/ai');
+      break;
+    case 'what-changed':
+      if (failureCluster.value) await navigateTo(`/failure-clusters/${failureCluster.value.id}`);
+      break;
+    case 're-diagnose':
+      if (failureCluster.value) await navigateTo(`/failure-clusters/${failureCluster.value.id}#fix-plan`);
+      break;
+  }
+}
 </script>
 
 <template>
@@ -584,224 +779,336 @@ provide(clusterSectionLocatorKey, {
     <template #body>
       <!-- No side gutter below `sm`: the cards go full-bleed to the screen edge. -->
       <div class="flex flex-col gap-4 p-4 max-sm:px-0 max-w-6xl mx-auto w-full">
-        <!-- ── Header ─────────────────────────────────────────────────── -->
-        <DetailHeader :status="testCase?.status ?? ''" :title="testCase?.title ?? ''" :badges="headerBadges">
-          <template #badges-extra>
-            <QuarantinedChip v-if="quarantined" />
-          </template>
-
-          <template #primary>
-            <UButton
-              v-if="retryCommand && !desktopBridge"
-              size="xs"
-              color="warning"
-              variant="subtle"
-              :icon="retryCopied ? 'i-lucide-check' : 'i-lucide-clipboard'"
-              :title="retryTitle"
-              aria-label="Copy retry command"
-              @click="copyRetry(retryCommand, { toast: 'Retry command copied' })"
-            >
-              <span class="hidden sm:inline">Copy retry command</span>
-            </UButton>
-            <DesktopRunLocallyButton
-              :project-id="testCase?.testRun?.project?.id"
-              :project-label="testCase?.testRun?.project?.label ?? testCase?.testRun?.project?.name"
-              :cases="retryCases"
-            />
-          </template>
-
-          <template #facts>
-            <OpenInIdeLink
-              v-if="ideTarget?.filePath || testCase?.location"
-              :file-path="ideTarget?.filePath"
-              :line="ideTarget?.line"
-              :location="ideTarget ? undefined : (testCase?.location ?? undefined)"
-              :project-key="testCase?.testRun?.project?.id"
-              :project-name="testCase?.testRun?.project?.name"
-            />
-            <span v-if="browser" class="inline-flex items-center gap-1">
-              <BrowserBadge :browser="{ ...browser, viewport: undefined }" size="sm" />
-              <span v-if="browser.viewport" class="tabular-nums">
-                {{ browser.viewport.width }}×{{ browser.viewport.height }}
+        <!-- ── One block: what broke, what is going on, what to do next ── -->
+        <SituationBlock help="case.situation">
+          <!-- Line 1: identity kicker — status, title, marks, quarantine -->
+          <template #identity>
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              <StatusChip :status="testCase?.status ?? ''" class="shrink-0" />
+              <span class="font-medium text-highlighted min-w-0 break-words">
+                {{ testCase?.title || `Execution #${testCaseId}` }}
               </span>
-            </span>
-            <span v-if="testCase?.status !== 'didnotrun'" class="inline-flex items-center gap-1 tabular-nums">
-              <DurationValue :ms="testCase?.duration" class="font-medium text-toned" />
-              <span v-if="historicalTiming" class="text-dimmed">
-                (avg <DurationValue :ms="historicalTiming.avg" />,
-                <span :class="historicalTiming.diff > 0 ? 'text-red-600' : 'text-green-600'">
-                  {{ historicalTiming.diff > 0 ? '+' : '' }}{{ historicalTiming.pct }}%</span
-                >)
-              </span>
-            </span>
-            <span
-              v-if="attempts && attempts.length > 1"
-              class="inline-flex items-center gap-1"
-              role="group"
-              aria-label="Attempts of this test in this run"
-            >
-              <template v-for="a in attempts" :key="a.retry">
-                <NuxtLink
-                  v-if="attemptLink(a)"
-                  :to="attemptLink(a)!"
-                  :title="`${attemptTitle(a)} — open this attempt`"
-                  class="inline-flex rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary hover:opacity-80"
-                >
-                  <UBadge :color="attemptColor(a.status)" variant="soft" size="sm" class="font-mono">
-                    {{ a.retry + 1 }}/{{ attempts.length }}
-                    <UIcon :name="a.status === 'passed' ? 'i-lucide-check' : 'i-lucide-x'" class="w-3 h-3" />
-                  </UBadge>
-                </NuxtLink>
+              <template v-for="badge in headerBadges" :key="badge.label">
                 <UBadge
-                  v-else
-                  :color="attemptColor(a.status)"
-                  variant="soft"
-                  size="sm"
-                  class="font-mono"
-                  :class="isCurrentAttempt(a) ? 'ring-2 ring-offset-1 ring-primary' : ''"
-                  :title="isCurrentAttempt(a) ? `${attemptTitle(a)} — this execution` : attemptTitle(a)"
-                  :aria-current="isCurrentAttempt(a) ? 'true' : undefined"
+                  :color="badge.color ?? 'neutral'"
+                  variant="subtle"
+                  size="xs"
+                  :title="badge.title"
+                  :class="['inline-flex items-center gap-1', badge.mono ? 'font-mono' : '']"
                 >
-                  {{ a.retry + 1 }}/{{ attempts.length }}
-                  <UIcon :name="a.status === 'passed' ? 'i-lucide-check' : 'i-lucide-x'" class="w-3 h-3" />
+                  <UIcon v-if="badge.icon" :name="badge.icon" class="size-3 shrink-0" />
+                  {{ badge.label }}
                 </UBadge>
               </template>
-            </span>
-            <span v-if="scmInfo?.branch || scmInfo?.commit" class="inline-flex items-center gap-1">
-              <UIcon name="i-lucide-git-branch" class="size-3.5 shrink-0" />
-              <span v-if="scmInfo?.branch" class="font-medium">{{ scmInfo.branch }}</span>
-              <code v-if="scmInfo?.commit" class="font-mono bg-elevated px-1 py-0.5 rounded" :title="scmInfo.commit">{{
-                scmInfo.commit.length >= 8 ? scmInfo.commit.substring(0, 8) : scmInfo.commit
-              }}</code>
-            </span>
-            <a
-              v-if="ciInfo?.buildUrl || ciInfo?.buildNumber"
-              :href="ciInfo?.buildUrl || undefined"
-              :target="ciInfo?.buildUrl ? '_blank' : undefined"
-              :class="
-                ciInfo?.buildUrl
-                  ? 'text-primary hover:underline inline-flex items-center gap-1'
-                  : 'inline-flex items-center gap-1'
-              "
-            >
-              <UIcon name="i-lucide-cloud" class="size-3.5 shrink-0" />
-              {{ ciInfo?.buildNumber ? `Build #${ciInfo.buildNumber}` : 'View build' }}
-            </a>
-            <ClientOnly>
-              <span
-                v-if="testCase?.startedAt"
-                class="text-dimmed"
-                :title="new Date(testCase.startedAt).toLocaleString()"
-              >
-                {{ formatRelativeTime(testCase.startedAt) }}
-              </span>
-            </ClientOnly>
+              <QuarantinedChip v-if="quarantined" />
+            </div>
           </template>
 
-          <template #details>
-            <div v-if="environment || ciInfo" class="space-y-1">
-              <p class="text-xs font-medium text-muted uppercase tracking-wide">CI &amp; environment</p>
-              <p v-if="environment">
-                Environment: <span class="text-highlighted">{{ environment }}</span>
-              </p>
-              <p v-if="ciInfo?.provider">Provider: {{ ciInfo.provider }}</p>
-              <p v-if="ciInfo?.workflow || ciInfo?.jobName">
-                <template v-if="ciInfo?.workflow">{{ ciInfo.workflow }}</template>
-                <template v-if="ciInfo?.workflow && ciInfo?.jobName"> · </template>
-                <template v-if="ciInfo?.jobName">{{ ciInfo.jobName }}</template>
-              </p>
-            </div>
-            <div v-if="testCase?.testRun?.playwrightVersion || testCase?.testRun?.reporterVersion" class="space-y-1">
-              <p class="text-xs font-medium text-muted uppercase tracking-wide">Tooling</p>
-              <p>
-                <template v-if="testCase?.testRun?.playwrightVersion"
-                  >Playwright v{{ testCase.testRun.playwrightVersion }}</template
-                >
-                <template v-if="testCase?.testRun?.playwrightVersion && testCase?.testRun?.reporterVersion">
-                  ·
+          <!-- Line 2: the headline — the page's h1 -->
+          <template v-if="verdict" #headline>
+            <h1
+              data-shot="failure-headline"
+              class="text-lg sm:text-xl font-semibold leading-snug text-highlighted break-words"
+            >
+              <FailureHeadline :parts="verdict.parts" />
+            </h1>
+            <p
+              v-if="verdict.detail && !story"
+              class="font-mono text-xs text-muted truncate mt-1"
+              :title="verdict.detail"
+            >
+              {{ verdict.detail }}
+            </p>
+          </template>
+
+          <!-- Line 3: most likely — the story line, with every clue folded under it -->
+          <template v-if="verdict && (story || clues.length)" #story>
+            <StoryLine :story="story" :clues="clues" :failure-at="cluesFailureAt" :diagnosis="storyDiagnosis" />
+          </template>
+
+          <!-- Line 4: the situation sentence — one clause per fact, with links -->
+          <template v-if="situation" #situation>
+            <p data-shot="situation" class="text-sm text-toned leading-relaxed">
+              <template v-for="(part, i) in situation.parts" :key="i">
+                <template v-if="i === 0 && leadWhy">
+                  <UBadge :color="WHY_BADGE[leadWhy].color" variant="subtle" size="sm" class="mr-0.5 align-middle">
+                    {{ WHY_BADGE[leadWhy].label }}
+                  </UBadge>
+                  <span>{{ part.text.slice(WHY_BADGE[leadWhy].label.length) }}</span>
                 </template>
-                <template v-if="testCase?.testRun?.reporterVersion"
-                  >Piwi v{{ testCase.testRun.reporterVersion }}</template
+                <NuxtLink
+                  v-else-if="part.href"
+                  :to="part.href"
+                  class="text-primary hover:underline"
+                  :class="part.kind === 'commit' ? 'font-mono' : ''"
+                  >{{ part.text }}</NuxtLink
                 >
-              </p>
-            </div>
-            <div class="space-y-1">
-              <p class="text-xs font-medium text-muted uppercase tracking-wide">Execution</p>
-              <p class="tabular-nums">
-                Worker {{ testCase?.workerIndex ?? '—'
-                }}<template v-if="testCase?.shardIndex != null"> · Shard {{ testCase.shardIndex }}</template> ·
-                {{ stepsCount }} steps
-              </p>
-              <p
-                v-if="testCase?.slowestStep && testCase?.status !== 'didnotrun'"
-                class="truncate"
-                :title="testCase.slowestStep"
-              >
-                Slowest step: {{ testCase.slowestStep }}
-                <span v-if="testCase.slowestStepDuration">(<DurationValue :ms="testCase.slowestStepDuration" />)</span>
-              </p>
-              <p v-if="(testCase?.wastedTimeMs ?? 0) > 0">
-                Wasted in fixed waits: <DurationValue :ms="testCase?.wastedTimeMs" />
-              </p>
-            </div>
-            <div v-if="testCase?.locks?.length" class="space-y-1">
-              <p class="text-xs font-medium text-muted uppercase tracking-wide">Locks</p>
-              <p class="flex flex-wrap items-center gap-1.5">
-                <span
-                  v-for="lock in testCase.locks"
-                  :key="lock"
-                  class="inline-flex items-center gap-1 text-highlighted"
-                  title="Only one holder of this lock runs at a time"
+                <a
+                  v-else-if="part.kind === 'commit' && situationCommitHref(part)"
+                  :href="situationCommitHref(part)!"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-primary hover:underline font-mono"
+                  >{{ part.text }}</a
                 >
-                  <UIcon name="i-lucide-lock" class="size-3 text-warning" />{{ lock }}
+                <span v-else-if="part.kind === 'commit'" class="font-mono">{{ part.text }}</span>
+                <span v-else-if="part.kind === 'owner'" class="text-highlighted">{{ part.text }}</span>
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </p>
+          </template>
+
+          <!-- Line 5: the next step -->
+          <template v-if="isProblem && nextStep" #next>
+            <NextStepLine :next-step="nextStep" :retry-command="retryCommand" @action="handleNextStepAction" />
+          </template>
+
+          <!-- Line 6: the facts line, one size smaller, with Details and Raw error -->
+          <template #facts>
+            <div class="flex items-center gap-x-2 gap-y-1 flex-wrap text-xs text-muted">
+              <OpenInIdeLink
+                v-if="ideTarget?.filePath || testCase?.location"
+                :file-path="ideTarget?.filePath"
+                :line="ideTarget?.line"
+                :location="ideTarget ? undefined : (testCase?.location ?? undefined)"
+                :project-key="testCase?.testRun?.project?.id"
+                :project-name="testCase?.testRun?.project?.name"
+              />
+              <!-- Secondary facts collapse at 390px; they stay in Details below. -->
+              <span class="max-sm:hidden inline-flex items-center gap-x-2 gap-y-1 flex-wrap">
+                <span v-if="browser" class="inline-flex items-center gap-1">
+                  <BrowserBadge :browser="{ ...browser, viewport: undefined }" size="sm" />
+                  <span v-if="browser.viewport" class="tabular-nums">
+                    {{ browser.viewport.width }}×{{ browser.viewport.height }}
+                  </span>
                 </span>
-              </p>
+                <span v-if="testCase?.status !== 'didnotrun'" class="inline-flex items-center gap-1 tabular-nums">
+                  <DurationValue :ms="testCase?.duration" class="font-medium text-toned" />
+                  <span v-if="historicalTiming" class="text-dimmed">
+                    (avg <DurationValue :ms="historicalTiming.avg" />,
+                    <span :class="historicalTiming.diff > 0 ? 'text-red-600' : 'text-green-600'">
+                      {{ historicalTiming.diff > 0 ? '+' : '' }}{{ historicalTiming.pct }}%</span
+                    >)
+                  </span>
+                </span>
+                <span
+                  v-if="attempts && attempts.length > 1"
+                  class="inline-flex items-center gap-1"
+                  role="group"
+                  aria-label="Attempts of this test in this run"
+                >
+                  <template v-for="a in attempts" :key="a.retry">
+                    <NuxtLink
+                      v-if="attemptLink(a)"
+                      :to="attemptLink(a)!"
+                      :title="`${attemptTitle(a)} — open this attempt`"
+                      class="inline-flex rounded-md outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary hover:opacity-80"
+                    >
+                      <UBadge :color="attemptColor(a.status)" variant="soft" size="sm" class="font-mono">
+                        {{ a.retry + 1 }}/{{ attempts.length }}
+                        <UIcon :name="a.status === 'passed' ? 'i-lucide-check' : 'i-lucide-x'" class="w-3 h-3" />
+                      </UBadge>
+                    </NuxtLink>
+                    <UBadge
+                      v-else
+                      :color="attemptColor(a.status)"
+                      variant="soft"
+                      size="sm"
+                      class="font-mono"
+                      :class="isCurrentAttempt(a) ? 'ring-2 ring-offset-1 ring-primary' : ''"
+                      :title="isCurrentAttempt(a) ? `${attemptTitle(a)} — this execution` : attemptTitle(a)"
+                      :aria-current="isCurrentAttempt(a) ? 'true' : undefined"
+                    >
+                      {{ a.retry + 1 }}/{{ attempts.length }}
+                      <UIcon :name="a.status === 'passed' ? 'i-lucide-check' : 'i-lucide-x'" class="w-3 h-3" />
+                    </UBadge>
+                  </template>
+                </span>
+                <span v-if="scmInfo?.branch" class="inline-flex items-center gap-1">
+                  <UIcon name="i-lucide-git-branch" class="size-3.5 shrink-0" />
+                  <span class="font-medium">{{ scmInfo.branch }}</span>
+                </span>
+                <a
+                  v-if="ciInfo?.buildUrl || ciInfo?.buildNumber"
+                  :href="ciInfo?.buildUrl || undefined"
+                  :target="ciInfo?.buildUrl ? '_blank' : undefined"
+                  :class="
+                    ciInfo?.buildUrl
+                      ? 'text-primary hover:underline inline-flex items-center gap-1'
+                      : 'inline-flex items-center gap-1'
+                  "
+                >
+                  <UIcon name="i-lucide-cloud" class="size-3.5 shrink-0" />
+                  {{ ciInfo?.buildNumber ? `Build #${ciInfo.buildNumber}` : 'View build' }}
+                </a>
+                <ClientOnly>
+                  <span
+                    v-if="testCase?.startedAt"
+                    class="text-dimmed"
+                    :title="new Date(testCase.startedAt).toLocaleString()"
+                  >
+                    {{ formatRelativeTime(testCase.startedAt) }}
+                  </span>
+                </ClientOnly>
+              </span>
+
+              <UPopover>
+                <UButton
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  trailing-icon="i-lucide-chevron-down"
+                  label="Details"
+                  class="shrink-0"
+                />
+                <template #content>
+                  <div class="p-3 space-y-2 text-sm max-w-sm">
+                    <!-- The facts that collapse on mobile, kept reachable here. -->
+                    <div class="space-y-1 sm:hidden">
+                      <p class="text-xs font-medium text-muted uppercase tracking-wide">Run</p>
+                      <p v-if="testCase?.status !== 'didnotrun'" class="tabular-nums">
+                        Duration: <DurationValue :ms="testCase?.duration" />
+                      </p>
+                      <p v-if="scmInfo?.branch">
+                        Branch: <span class="text-highlighted">{{ scmInfo.branch }}</span>
+                      </p>
+                      <p v-if="ciInfo?.buildNumber">Build #{{ ciInfo.buildNumber }}</p>
+                      <ClientOnly>
+                        <p v-if="testCase?.startedAt">{{ formatRelativeTime(testCase.startedAt) }}</p>
+                      </ClientOnly>
+                    </div>
+                    <div v-if="environment || ciInfo" class="space-y-1">
+                      <p class="text-xs font-medium text-muted uppercase tracking-wide">CI &amp; environment</p>
+                      <p v-if="environment">
+                        Environment: <span class="text-highlighted">{{ environment }}</span>
+                      </p>
+                      <p v-if="ciInfo?.provider">Provider: {{ ciInfo.provider }}</p>
+                      <p v-if="ciInfo?.workflow || ciInfo?.jobName">
+                        <template v-if="ciInfo?.workflow">{{ ciInfo.workflow }}</template>
+                        <template v-if="ciInfo?.workflow && ciInfo?.jobName"> · </template>
+                        <template v-if="ciInfo?.jobName">{{ ciInfo.jobName }}</template>
+                      </p>
+                    </div>
+                    <div
+                      v-if="testCase?.testRun?.playwrightVersion || testCase?.testRun?.reporterVersion"
+                      class="space-y-1"
+                    >
+                      <p class="text-xs font-medium text-muted uppercase tracking-wide">Tooling</p>
+                      <p>
+                        <template v-if="testCase?.testRun?.playwrightVersion"
+                          >Playwright v{{ testCase.testRun.playwrightVersion }}</template
+                        >
+                        <template v-if="testCase?.testRun?.playwrightVersion && testCase?.testRun?.reporterVersion">
+                          ·
+                        </template>
+                        <template v-if="testCase?.testRun?.reporterVersion"
+                          >Piwi v{{ testCase.testRun.reporterVersion }}</template
+                        >
+                      </p>
+                    </div>
+                    <div class="space-y-1">
+                      <p class="text-xs font-medium text-muted uppercase tracking-wide">Execution</p>
+                      <p class="tabular-nums">
+                        Worker {{ testCase?.workerIndex ?? '—'
+                        }}<template v-if="testCase?.shardIndex != null"> · Shard {{ testCase.shardIndex }}</template> ·
+                        {{ stepsCount }} steps
+                      </p>
+                      <p
+                        v-if="testCase?.slowestStep && testCase?.status !== 'didnotrun'"
+                        class="truncate"
+                        :title="testCase.slowestStep"
+                      >
+                        Slowest step: {{ testCase.slowestStep }}
+                        <span v-if="testCase.slowestStepDuration"
+                          >(<DurationValue :ms="testCase.slowestStepDuration" />)</span
+                        >
+                      </p>
+                      <p v-if="(testCase?.wastedTimeMs ?? 0) > 0">
+                        Wasted in fixed waits: <DurationValue :ms="testCase?.wastedTimeMs" />
+                      </p>
+                    </div>
+                    <div v-if="testCase?.locks?.length" class="space-y-1">
+                      <p class="text-xs font-medium text-muted uppercase tracking-wide">Locks</p>
+                      <p class="flex flex-wrap items-center gap-1.5">
+                        <span
+                          v-for="lock in testCase.locks"
+                          :key="lock"
+                          class="inline-flex items-center gap-1 text-highlighted"
+                          title="Only one holder of this lock runs at a time"
+                        >
+                          <UIcon name="i-lucide-lock" class="size-3 text-warning" />{{ lock }}
+                        </span>
+                      </p>
+                    </div>
+                    <div v-if="testCase?.tags?.length || testCase?.testMeta" class="space-y-1">
+                      <p class="text-xs font-medium text-muted uppercase tracking-wide">Tags</p>
+                      <TestMetaBadges :tags="testCase?.tags" :meta="testCase?.testMeta" />
+                    </div>
+                    <div v-if="testCase?.executionId" class="space-y-1">
+                      <p class="text-xs font-medium text-muted uppercase tracking-wide">Links</p>
+                      <EntityLinks
+                        entity-type="test_case"
+                        :entity-id="testCase.executionId"
+                        :links="(testCase as any)?.stableLinks ?? null"
+                        readonly
+                      />
+                    </div>
+                  </div>
+                </template>
+              </UPopover>
+
+              <!-- Raw error: the verbatim ANSI output, one click below the block. -->
+              <button
+                v-if="testCase?.error"
+                type="button"
+                class="inline-flex items-center gap-1 text-primary hover:underline shrink-0"
+                :aria-expanded="rawErrorOpen"
+                @click="rawErrorOpen = !rawErrorOpen"
+              >
+                <UIcon :name="rawErrorOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3.5" />
+                Raw error
+              </button>
             </div>
-            <div v-if="testCase?.tags?.length || testCase?.testMeta" class="space-y-1">
-              <p class="text-xs font-medium text-muted uppercase tracking-wide">Tags</p>
-              <TestMetaBadges :tags="testCase?.tags" :meta="testCase?.testMeta" />
-            </div>
-            <div v-if="testCase?.executionId" class="space-y-1">
-              <p class="text-xs font-medium text-muted uppercase tracking-wide">Links</p>
-              <EntityLinks
-                entity-type="test_case"
-                :entity-id="testCase.executionId"
-                :links="(testCase as any)?.stableLinks ?? null"
-                readonly
+
+            <div v-if="rawErrorOpen && testCase?.error" ref="rawErrorEl" class="mt-2 space-y-1 scroll-mt-4">
+              <div class="flex justify-end">
+                <UButton
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  icon="i-lucide-clipboard"
+                  aria-label="Copy failure"
+                  title="Copy failure"
+                  @click="copyFailure"
+                >
+                  Copy failure
+                </UButton>
+              </div>
+              <div
+                class="text-xs font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto rounded bg-red-50 dark:bg-red-950/20 p-3"
+                v-html="renderAnsi(condenseErrorText(testCase.error))"
               />
             </div>
           </template>
-        </DetailHeader>
+        </SituationBlock>
 
-        <!-- Why this execution never ran — the whole story for a did-not-run case. -->
+        <!-- Why this execution never ran — pinned under the block for a did-not-run case. -->
         <DidNotRunCard
           :status="testCase?.status"
           :reason="(testCase as any)?.didNotRunReason ?? null"
           :blocked-by-case="(testCase as any)?.blockedByCase ?? null"
         />
 
-        <!-- ── What broke, in one line, with the raw error one click away ── -->
-        <TestCaseHeadlineCard
-          v-if="verdict"
-          ref="headlineCard"
-          :verdict="verdict"
-          :top-clue="topClue"
-          :cluster-triage-status="failureCluster?.status ?? null"
-          :error="testCase?.error ?? null"
-          @copy-failure="copyFailure"
-        />
-
-        <!-- The clues after the strongest one — the headline prints the first -->
-        <CluesCard :clues="otherClues" :failure-at="cluesFailureAt" title="Other clues" />
-
         <!-- ── Evidence ───────────────────────────────────────────────── -->
-        <EvidenceTabs
-          ref="evidenceTabs"
-          :test-case="testCase"
-          :traces="(traceData as TraceInfo[]) ?? []"
-          :has-trace="hasTrace"
-          :default-section="topClueSection"
-        />
+        <div ref="evidenceEl" class="scroll-mt-4">
+          <EvidenceTabs
+            ref="evidenceTabs"
+            :test-case="testCase"
+            :traces="(traceData as TraceInfo[]) ?? []"
+            :has-trace="hasTrace"
+            :default-section="topClueSection"
+          />
+        </div>
 
         <!-- ── What to do ─────────────────────────────────────────────── -->
         <div ref="fixCardEl" class="scroll-mt-4">
@@ -810,6 +1117,7 @@ provide(clusterSectionLocatorKey, {
             <template #locator-fix>
               <LocatorHealingPanel
                 v-if="testCase?.testRun?.id"
+                ref="locatorPanel"
                 :run-id="testCase.testRun.id"
                 :test-runs-case-id="Number(testCaseId)"
                 :ai-intents="aiIntents"

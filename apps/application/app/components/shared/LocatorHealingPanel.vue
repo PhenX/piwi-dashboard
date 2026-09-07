@@ -341,7 +341,24 @@ const narrowing = computed(() => healing.value?.narrowingSuggestion ?? null);
 
 // Forward the fold/scroll so a clue or AI citation to `locatorHealing` can reveal it.
 const cardRef = ref<{ reveal?: () => void } | null>(null);
-defineExpose({ reveal: () => cardRef.value?.reveal?.() });
+// The next-step line drives the panel's own copy/pick logic rather than
+// duplicating it: reveal the panel, then run the same action its buttons do.
+defineExpose({
+  reveal: () => cardRef.value?.reveal?.(),
+  copyPatch: () => copyGitApply(),
+  copyRecommendedLocator: () => {
+    const loc = recommended.value?.locator;
+    if (loc) copyLocator(loc, 'top');
+  },
+  openPicker: () => {
+    cardRef.value?.reveal?.();
+    pickerOpen.value = true;
+  },
+  expandAlternatives: () => {
+    cardRef.value?.reveal?.();
+    showAllAlternatives.value = true;
+  },
+});
 </script>
 
 <template>

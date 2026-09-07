@@ -228,15 +228,10 @@ export const HELP_TOPICS = {
     doc: 'features/ui-overview#test-run-detail',
   },
   // ── Single execution (test-run-case) ──────────────────────────────────
-  'case.headline': {
-    title: 'Failure headline',
-    text: 'What broke, in one sentence built from the Playwright error itself: the locator, the last state its call log reported, the expected and received values, the timeout. The chips say why (new regression, passed on retry), since when and on which commit, how many other tests in the run share the cause, and who owns the test. The raw error is right below, verbatim.',
+  'case.situation': {
+    title: 'Situation',
+    text: 'One block that answers three questions: what broke (the headline, built from the Playwright error itself), what is most likely behind it (the story that chains the deterministic clues, or the diagnosis when one completed), what is going on (since when, on which commit, in how many other tests, who owns it — one sentence), and what to do next (one action chosen by a policy). Every clue, the raw error and the rest of the facts are one click away.',
     doc: 'features/evidence#one-execution-diagnosis-first',
-  },
-  'case.clues': {
-    title: 'Clues',
-    text: 'Deterministic findings a set of rules correlate from the evidence already captured — a request that failed just before the click, a console error naming the failing element, a renamed element, the page ending on a login route, the previous test on this worker failing. No model runs; each clue is ranked by strength and cites the evidence section it came from, so a click jumps straight to it. The same clues are fed to the AI diagnosis as evidence to confirm or refute.',
-    doc: 'features/evidence#clues',
   },
   'case.fix': {
     title: 'Fix',
