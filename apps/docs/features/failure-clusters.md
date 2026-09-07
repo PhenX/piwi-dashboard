@@ -73,6 +73,23 @@ falls back to the repository's `CODEOWNERS`. You can override it by **assigning*
 an assignee takes precedence over the derived owner, and the **Mine** queue matches either one against the
 signed-in user (by name or email, best effort).
 
+## The state line
+
+The cluster page states where a cluster stands in **one sentence with one verb**, next to a coloured dot:
+*still failing*, *fixed and verified — still open*, *stopped failing*, *regressed — the fix did not hold*,
+*resolved*, *ignored*, *snoozed* or *all tests quarantined*. When the machine-observed verdict and the human
+status disagree — a fix landed and was verified but nobody closed the cluster, or a resolved cluster started
+failing again — the line offers the **one action** that reconciles them (*Mark resolved*, *Reopen*,
+*Unsnooze*, *Release*). Fix verification is folded into that sentence rather than shown as a separate badge.
+
+Two menus sit beside it:
+
+- **Triage** sets the status (open / resolved / ignored), an optional note, and the assignee.
+- **Snooze** hides the cluster from the inbox (see below), or brings a snoozed one back.
+
+The occurrence sparkline above the line shows how often the cluster failed across the project's recent runs,
+oldest to newest, with a summary — *N occurrences in M tests over D · last X ago*.
+
 ## Snoozing
 
 Some failures are real but not now — a known flake you're waiting to reproduce, a break you'll get to next
@@ -86,7 +103,7 @@ Three durations are offered:
   queue with a **snoozed, back** badge so you know it woke on its own.
 
 Snooze never changes a cluster's triage status, and a snoozed cluster does not count as "failing now" in the
-project health and portfolio views. The cluster page shows the snooze state in its triage control, with an
+project health and portfolio views. The cluster page shows the snooze state in its state line, with an
 **Unsnooze** action to bring it back immediately.
 
 ## From an AI agent

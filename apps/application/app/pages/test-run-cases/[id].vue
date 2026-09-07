@@ -9,7 +9,7 @@ import { clusterSectionLocatorKey } from '~/composables/useClusterSectionLocator
 import { EVIDENCE_SECTION_TAB } from '~/utils/evidence-sections';
 import type { FixSectionKey } from '~/components/shared/FixCard.vue';
 import type { BlockedCaseRef } from '~~/types/api';
-import { reproScript, type ReproRecipe, type BisectResult, type ReproduceDesktopContext } from '#shared/reproduce';
+import type { ReproRecipe, BisectResult, ReproduceDesktopContext } from '#shared/reproduce';
 import type { FixedBeforeMatch, FixPlan } from '#shared/fix-plan.types';
 import type { Situation, SituationPart } from '#shared/situation';
 import type { NextStep } from '#shared/next-step';
@@ -591,12 +591,9 @@ provide(clusterSectionLocatorKey, {
 });
 
 // ── Next step: turn one action id into the real behaviour ────────────────────
-// The next-step line stays presentation-only; the page owns the wiring, reusing
-// the same fetches and panels the toolbox does rather than issuing new requests.
-const { copyGitApply: copyGitApplyPatch, downloadPatch: downloadPatchFile } = usePatchActions();
-const { copyPrompt: copyAiPromptFor } = useCopyAiPrompt();
-const { copy: copyPlain } = useCopy();
-const { openInIde } = useOpenInIde();
+// The next-step line stays presentation-only; the page owns the wiring through
+// the shared composable, reusing the same fetches and panels the toolbox does
+// rather than issuing new requests. Page-specific targets are callbacks.
 const triageToast = useToast();
 
 /** Scroll to a Fix-card section by its `data-shot`, falling back to the card. */
@@ -620,96 +617,33 @@ async function setClusterStatus(status: 'open' | 'resolved') {
   }
 }
 
-/** The file (and line) a unified diff targets — for the open-in-IDE action. */
-function patchTargetFile(patch: string): { filePath: string; line: number | null } | null {
-  const file = patch.match(/^\+\+\+ b\/(.+)$/m) ?? patch.match(/^--- a\/(.+)$/m);
-  if (!file?.[1]) return null;
-  const hunk = patch.match(/^@@ -\d+(?:,\d+)? \+(\d+)/m);
-  return { filePath: file[1].trim(), line: hunk ? Number(hunk[1]) : null };
-}
-
-async function handleNextStepAction(action: string, payload?: Record<string, unknown>) {
-  const project = testCase.value?.testRun?.project;
-  switch (action) {
-    case 'open-execution': {
-      const id = payload?.executionId;
-      if (id) await navigateTo(`/test-run-cases/${id}`);
-      break;
-    }
-    case 'mark-resolved':
-      await setClusterStatus('resolved');
-      break;
-    case 'reopen':
-      await setClusterStatus('open');
-      break;
-    case 'copy-patch':
-      locatorPanel.value?.copyPatch();
-      break;
-    case 'copy-locator':
-      locatorPanel.value?.copyRecommendedLocator();
-      break;
-    case 'pick-from-snapshot':
-      scrollToFixSection('locator-fix');
-      locatorPanel.value?.openPicker();
-      break;
-    case 'all-alternatives':
-      scrollToFixSection('locator-fix');
-      locatorPanel.value?.expandAlternatives();
-      break;
-    case 'copy-git-apply':
-      if (fixPlanPatch.value) copyGitApplyPatch(fixPlanPatch.value);
-      break;
-    case 'download-patch':
-      if (fixPlanPatch.value)
-        downloadPatchFile(fixPlanPatch.value, `piwi-fix-cluster-${failureCluster.value?.id ?? ''}`);
-      break;
-    case 'open-in-ide': {
-      const target = fixPlanPatch.value ? patchTargetFile(fixPlanPatch.value) : null;
-      if (target)
-        openInIde({
-          filePath: target.filePath,
-          line: target.line,
-          projectKey: project?.id,
-          projectName: project?.name,
-        });
-      break;
-    }
-    case 'read-diagnosis':
-    case 'diagnose':
-      scrollToFixSection('diagnosis');
-      break;
-    case 'reproduce':
-      scrollToFixSection('reproduce');
-      break;
-    case 'attempts-tab':
-      evidenceTabs.value?.selectTab('attempts');
-      nextTick(() => scrollToEl(evidenceEl.value));
-      break;
-    case 'quarantine':
-      await toggleQuarantine();
-      break;
-    case 'rerun-in-ci':
-      await triggerRerun();
-      break;
-    case 'copy-recipe': {
-      const recipe = reproduceData.value?.reproduce;
-      if (recipe) copyPlain(reproScript(recipe, 'bash'), { toast: 'Recipe copied' });
-      break;
-    }
-    case 'copy-ai-prompt':
-      await copyAiPromptFor(`/api/test-run-cases/${testCaseId}/diagnosis-context`);
-      break;
-    case 'configure-ai':
-      await navigateTo('/settings/ai');
-      break;
-    case 'what-changed':
-      if (failureCluster.value) await navigateTo(`/failure-clusters/${failureCluster.value.id}`);
-      break;
-    case 're-diagnose':
-      if (failureCluster.value) await navigateTo(`/failure-clusters/${failureCluster.value.id}#fix-plan`);
-      break;
-  }
-}
+const { handle: handleNextStepAction } = useNextStepActions({
+  clusterId: () => failureCluster.value?.id ?? null,
+  fixPlanPatch: () => fixPlanPatch.value,
+  ideProject: () => testCase.value?.testRun?.project ?? null,
+  locatorPanel: () => locatorPanel.value,
+  reproRecipe: () => reproduceData.value?.reproduce ?? null,
+  diagnosisContextEndpoint: () => `/api/test-run-cases/${testCaseId}/diagnosis-context`,
+  scrollToDiagnosis: () => scrollToFixSection('diagnosis'),
+  scrollToReproduce: () => scrollToFixSection('reproduce'),
+  scrollToLocatorFix: () => scrollToFixSection('locator-fix'),
+  selectAttemptsTab: () => {
+    evidenceTabs.value?.selectTab('attempts');
+    nextTick(() => scrollToEl(evidenceEl.value));
+  },
+  setClusterStatus,
+  quarantine: () => toggleQuarantine(),
+  rerunInCi: () => triggerRerun(),
+  openExecution: (id) => {
+    navigateTo(`/test-run-cases/${id}`);
+  },
+  whatChanged: () => {
+    if (failureCluster.value) navigateTo(`/failure-clusters/${failureCluster.value.id}`);
+  },
+  reDiagnose: () => {
+    if (failureCluster.value) navigateTo(`/failure-clusters/${failureCluster.value.id}#fix-plan`);
+  },
+});
 </script>
 
 <template>

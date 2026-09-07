@@ -13,7 +13,7 @@ A **fix plan** gathers everything Piwi knows about a failure cluster into one an
 
 The same plan is reachable three ways:
 
-- **On the cluster page** — the cluster's single **Fix** card gathers the diagnosis and its patch (copy, `git apply`, download), the recommended locator fix, the verify command, and a **Copy as Markdown** action that hands you the whole plan for a ticket. **Re-run in CI** is the page's header action when that is configured. The failing tests are the page's **Affected tests** list and the owner is on the header's facts line, so the plan is assembled from the page you're already reading rather than duplicated in a card of its own.
+- **On the cluster page** — the cluster's single **Fix** card gathers the diagnosis and its patch (copy, `git apply`, download), the recommended locator fix, the verify command, and a **Copy as Markdown** action that hands you the whole plan for a ticket. The recommended action leads the page as the **Next** line of the situation block, the failing tests are the page's **Affected tests** selector, the owner is on the identity line, and **Re-run in CI** lives in the ⋯ menu when it is configured — so the plan is assembled from the page you're already reading rather than duplicated in a card of its own.
 - **As Markdown** — `GET /api/failure-clusters/:id/fix-plan?format=markdown` returns the same rendering as plain text, so an export or a script can drop it straight into an issue.
 - **For agents** — the `get_fix_plan` [MCP tool](/features/mcp) returns the structured plan, so a coding agent gets in one call what a person reads on the card.
 

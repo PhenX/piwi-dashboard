@@ -38,6 +38,9 @@ defineProps<{ help?: HelpTopicKey }>();
     <!-- Line 4: the situation sentence -->
     <div v-if="$slots.situation"><slot name="situation" /></div>
 
+    <!-- Line 4b: the cluster's occurrence sparkline and state line (cluster page only) -->
+    <div v-if="$slots.state"><slot name="state" /></div>
+
     <!-- Line 5: the next step -->
     <div v-if="$slots.next"><slot name="next" /></div>
 

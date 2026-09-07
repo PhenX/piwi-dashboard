@@ -48,6 +48,13 @@ const props = withDefaults(
     /** Render a selection checkbox on a failing row and reflect `selected`. */
     selectable?: boolean;
     selected?: boolean;
+    /**
+     * Make the whole row a selector: a click anywhere (and the title) emits
+     * `select` instead of navigating, and `active` reflects the chosen row. Used
+     * by the cluster page's affected-tests list to switch the evidence.
+     */
+    selectOnClick?: boolean;
+    active?: boolean;
     /** The step this row's worker is on right now (live runs only). */
     liveStep?: LiveStepInfo | null;
     highlighted?: boolean;
@@ -75,6 +82,8 @@ const props = withDefaults(
     quarantined: false,
     selectable: false,
     selected: false,
+    selectOnClick: false,
+    active: false,
     liveStep: null,
     highlighted: false,
     projectKey: null,
@@ -84,7 +93,7 @@ const props = withDefaults(
   },
 );
 
-const emit = defineEmits<{ toggle: [] }>();
+const emit = defineEmits<{ toggle: []; select: [] }>();
 
 const tc = computed(() => props.testCase);
 
@@ -117,8 +126,18 @@ const clusterLabel = computed(() =>
 <template>
   <div
     class="border-b border-default px-3 py-2.5 text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
-    :class="highlighted ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : ''"
+    :class="[
+      highlighted ? 'animate-pulse bg-yellow-100 dark:bg-yellow-900/30' : '',
+      active ? 'bg-primary/5 ring-1 ring-inset ring-primary/40' : '',
+      selectOnClick ? 'cursor-pointer' : '',
+    ]"
     :style="indent ? { paddingLeft: `${12 + indent}px` } : undefined"
+    :role="selectOnClick ? 'button' : undefined"
+    :aria-pressed="selectOnClick ? (active ? 'true' : 'false') : undefined"
+    :tabindex="selectOnClick ? 0 : undefined"
+    @click="selectOnClick ? emit('select') : undefined"
+    @keydown.enter.self="selectOnClick ? emit('select') : undefined"
+    @keydown.space.self.prevent="selectOnClick ? emit('select') : undefined"
   >
     <div class="flex items-start gap-2 min-w-0">
       <input
@@ -127,6 +146,7 @@ const clusterLabel = computed(() =>
         class="size-4 shrink-0 mt-0.5 cursor-pointer accent-primary focus-visible:ring-2 focus-visible:ring-primary rounded"
         :checked="selected"
         :aria-label="`Select ${title}`"
+        @click.stop
         @change="emit('toggle')"
       />
       <span class="size-4 shrink-0 mt-0.5" role="img" :aria-label="`Status: ${statusHint}`" :title="statusHint">
@@ -145,7 +165,7 @@ const clusterLabel = computed(() =>
             :href="href"
             class="text-highlighted hover:text-primary hover:underline font-medium break-words min-w-0"
             :title="title"
-            @click.prevent="navigateTo(href)"
+            @click.prevent="selectOnClick ? emit('select') : navigateTo(href)"
             >{{ title }}</a
           >
           <BadgeGroup :badges="badges" :max="badgeMax" />

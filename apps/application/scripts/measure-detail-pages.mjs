@@ -103,6 +103,7 @@ function measurePage({ viewportHeight }) {
     header: y(q('h1')),
     headline: y(q('[data-shot="failure-headline"]')),
     situation: y(q('[data-shot="situation"]')),
+    clusterState: y(q('[data-shot="cluster-state"]')),
     nextStep: y(q('[data-shot="next-step"]')),
     clues: y(q('[data-shot="failure-clues"]')),
     evidence: y(headingSection('h2', 'Evidence')),
@@ -124,7 +125,11 @@ function measurePage({ viewportHeight }) {
   const controls = [...panel.querySelectorAll(controlSelector)].filter((el) => el.getBoundingClientRect().width > 0);
   const controlsAboveFold = controls.filter(aboveFold).length;
 
-  const helpHints = [...panel.querySelectorAll('button[aria-label^="Help:"]')];
+  // Only visible hints count — a zero-size hint in a hidden tab panel is not
+  // "above the fold" in any real sense, the same filter the controls use.
+  const helpHints = [...panel.querySelectorAll('button[aria-label^="Help:"]')].filter(
+    (el) => el.getBoundingClientRect().width > 0,
+  );
   const helpAboveFold = helpHints.filter(aboveFold).length;
 
   const pres = [...panel.querySelectorAll('pre')];
@@ -168,6 +173,7 @@ const POSITION_LABELS = [
   ['header', 'header (h1)'],
   ['headline', 'headline'],
   ['situation', 'situation'],
+  ['clusterState', 'cluster state'],
   ['nextStep', 'next step'],
   ['clues', 'clues'],
   ['evidence', 'evidence'],
