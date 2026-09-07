@@ -55,8 +55,13 @@ function baseInput(overrides: Partial<FailureClueInput> = {}): FailureClueInput 
   };
 }
 
+/** The ranked clue list (buildFailureClues now returns `{ clues, story }`). */
+function runClues(input: FailureClueInput) {
+  return buildFailureClues(input).clues;
+}
+
 function rules(input: FailureClueInput): string[] {
-  return buildFailureClues(input).map((c) => c.rule);
+  return runClues(input).map((c) => c.rule);
 }
 
 describe('buildFailureClues — wrong-page from a navigation step params.url', () => {
@@ -84,7 +89,7 @@ describe('buildFailureClues — wrong-page from a navigation step params.url', (
         ],
       }),
     );
-    const clue = buildFailureClues(baseInput({ appState: null, timeline })).find((c) => c.rule === 'wrong-page');
+    const clue = runClues(baseInput({ appState: null, timeline })).find((c) => c.rule === 'wrong-page');
     expect(clue?.title).toBe('The test ended on /login');
   });
 
@@ -103,7 +108,7 @@ describe('buildFailureClues — wrong-page from a navigation step params.url', (
         ],
       }),
     );
-    const clue = buildFailureClues(baseInput({ appState: { url: 'https://shop.example.com/error' }, timeline })).find(
+    const clue = runClues(baseInput({ appState: { url: 'https://shop.example.com/error' }, timeline })).find(
       (c) => c.rule === 'wrong-page',
     );
     expect(clue?.title).toBe('The test ended on /error');
@@ -112,7 +117,7 @@ describe('buildFailureClues — wrong-page from a navigation step params.url', (
 
 describe('buildFailureClues — robustness', () => {
   test('empty input never throws and yields no clues', () => {
-    const clues = buildFailureClues({
+    const report = buildFailureClues({
       execution: { id: 1, testCaseId: 1 },
       parsedError: null,
       timeline: null,
@@ -127,7 +132,8 @@ describe('buildFailureClues — robustness', () => {
       cluster: null,
       timeout: null,
     });
-    expect(clues).toEqual([]);
+    expect(report.clues).toEqual([]);
+    expect(report.story).toBeNull();
   });
 
   test('caps the ranked list at 8 clues', () => {
@@ -163,16 +169,15 @@ describe('buildFailureClues — robustness', () => {
       cluster: { fixCommit: 'abc1234def', fixLandedRunId: 3, fixVerification: 'regressed' },
       consoleLogs: [{ type: 'error', text: 'Pay button stays disabled', timestamp: T0 + 3_000 }],
     });
-    expect(buildFailureClues(input).length).toBeLessThanOrEqual(8);
+    expect(runClues(input).length).toBeLessThanOrEqual(8);
   });
 
   test('ranks strong clues before weaker ones', () => {
     const input = baseInput({
-      environmentDiff: { status: 'ok', entries: [{ key: 'viewport', label: 'Viewport' }] }, // medium
-      cluster: { fixCommit: 'abc1234', fixLandedRunId: 3, fixVerification: 'regressed' }, // weak
+      environmentDiff: { status: 'ok', entries: [{ key: 'colorScheme', label: 'Color scheme' }] }, // weak
       networkRequests: [{ method: 'POST', url: '/api/pay', status: 500, duration: 200, startTime: T0 + 4_500 }], // strong
     });
-    const ordered = buildFailureClues(input);
+    const ordered = runClues(input);
     expect(ordered[0]!.strength).toBe('strong');
     expect(ordered[ordered.length - 1]!.strength).toBe('weak');
   });
@@ -183,7 +188,7 @@ describe('failed-request-before-failure', () => {
     const input = baseInput({
       networkRequests: [{ method: 'GET', url: '/api/quote', status: 504, duration: 1_500, startTime: T0 + 2_000 }],
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'failed-request-before-failure');
+    const clue = runClues(input).find((c) => c.rule === 'failed-request-before-failure');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('strong');
     expect(clue!.detail).toContain('/api/quote');
@@ -204,7 +209,7 @@ describe('slow-request-overlapping-failure', () => {
     const input = baseInput({
       networkRequests: [{ method: 'GET', url: '/api/slow', status: 200, duration: 3_000, startTime: T0 + 1_800 }],
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'slow-request-overlapping-failure');
+    const clue = runClues(input).find((c) => c.rule === 'slow-request-overlapping-failure');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('medium');
     expect(clue!.detail).toContain('/api/slow');
@@ -223,7 +228,7 @@ describe('console-mentions-target', () => {
     const input = baseInput({
       consoleLogs: [{ type: 'error', text: 'The Pay button stays disabled after quote', timestamp: T0 + 3_000 }],
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'console-mentions-target');
+    const clue = runClues(input).find((c) => c.rule === 'console-mentions-target');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('strong');
     expect(clue!.citations[0]).toEqual({ section: 'console', index: 0 });
@@ -233,7 +238,7 @@ describe('console-mentions-target', () => {
     const input = baseInput({
       consoleLogs: [{ type: 'warning', text: 'Pay still pending', timestamp: T0 + 3_000 }],
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'console-mentions-target');
+    const clue = runClues(input).find((c) => c.rule === 'console-mentions-target');
     expect(clue?.strength).toBe('medium');
   });
 
@@ -246,17 +251,35 @@ describe('console-mentions-target', () => {
 });
 
 describe('page-structure-changed', () => {
-  test('positive: the failing locator maps to a renamed node in the page diff', () => {
+  test('medium when the locator resolved (a rename is context, not cause)', () => {
+    // The base PAY_ERROR resolves the locator then fails on "not enabled", so the
+    // structure change cannot be the cause and stays medium.
     const input = baseInput({
       pageDiff: {
         locatorChange: { type: 'renamed', role: 'button', name: 'Pay now', oldName: 'Pay' },
       },
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'page-structure-changed');
+    const clue = runClues(input).find((c) => c.rule === 'page-structure-changed');
     expect(clue).toBeTruthy();
-    expect(clue!.strength).toBe('strong');
+    expect(clue!.strength).toBe('medium');
     expect(clue!.detail).toContain('"Pay"');
     expect(clue!.citations[0]!.section).toBe('pageDiff');
+  });
+
+  test('strong when the locator never resolved (a rename can be the cause)', () => {
+    const notFound = [
+      'locator.click: Timeout 10000ms exceeded.',
+      'Call log:',
+      "  - waiting for getByRole('button', { name: 'Pay' })",
+    ].join('\n');
+    const input = baseInput({
+      parsedError: parsePlaywrightError(notFound),
+      pageDiff: {
+        locatorChange: { type: 'renamed', role: 'button', name: 'Pay now', oldName: 'Pay' },
+      },
+    });
+    const clue = runClues(input).find((c) => c.rule === 'page-structure-changed');
+    expect(clue!.strength).toBe('strong');
   });
 
   test('positive: a removed node the locator names', () => {
@@ -293,7 +316,7 @@ describe('backend-error-attached', () => {
         },
       ],
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'backend-error-attached');
+    const clue = runClues(input).find((c) => c.rule === 'backend-error-attached');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('strong');
     expect(clue!.citations[0]).toEqual({ section: 'serverLogs', index: 0 });
@@ -335,7 +358,7 @@ describe('element-renamed', () => {
         capturedAt: null,
       },
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'element-renamed');
+    const clue = runClues(input).find((c) => c.rule === 'element-renamed');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('strong');
     expect(clue!.citations[0]).toEqual({ section: 'locatorHealing' });
@@ -368,7 +391,7 @@ describe('element-present-but-blocked', () => {
     const input = baseInput({
       ariaSnapshot: '- button "Pay" [disabled]\n- textbox "Card number"',
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'element-present-but-blocked');
+    const clue = runClues(input).find((c) => c.rule === 'element-present-but-blocked');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('strong');
     expect(clue!.citations.map((c) => c.section)).toContain('ariaSnapshot');
@@ -385,7 +408,7 @@ describe('element-present-but-blocked', () => {
 describe('wrong-page', () => {
   test('positive: the page ended on /login', () => {
     const input = baseInput({ appState: { url: 'https://app.test/login?next=/checkout' } });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'wrong-page');
+    const clue = runClues(input).find((c) => c.rule === 'wrong-page');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('strong');
     expect(clue!.detail).toContain('/login');
@@ -394,7 +417,7 @@ describe('wrong-page', () => {
 
   test('positive: the page drifted away from the last navigation target', () => {
     const input = baseInput({ appState: { url: 'https://app.test/session-expired' } });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'wrong-page');
+    const clue = runClues(input).find((c) => c.rule === 'wrong-page');
     expect(clue).toBeTruthy();
   });
 
@@ -412,7 +435,7 @@ describe('worker-pollution', () => {
         { id: 10, testCaseId: 1, title: 'this test', status: 'failed', startedAt: T0 },
       ],
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'worker-pollution');
+    const clue = runClues(input).find((c) => c.rule === 'worker-pollution');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('medium');
     expect(clue!.detail).toContain('leaves a modal open');
@@ -434,7 +457,7 @@ describe('timeout-budget', () => {
   test('positive: the failed step used most of the timeout', () => {
     // Failed step 3500ms of a 4000ms timeout → 87%.
     const input = baseInput({ timeout: 4_000 });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'timeout-budget');
+    const clue = runClues(input).find((c) => c.rule === 'timeout-budget');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('medium');
     expect(clue!.citations[0]).toEqual({ section: 'steps' });
@@ -451,17 +474,31 @@ describe('environment-changed', () => {
     const input = baseInput({
       environmentDiff: { status: 'ok', entries: [{ key: 'viewport', label: 'Viewport' }] },
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'environment-changed');
+    const clue = runClues(input).find((c) => c.rule === 'environment-changed');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('medium');
     expect(clue!.citations[0]).toEqual({ section: 'environmentDiff' });
   });
 
-  test('an environment-label-only diff is weak', () => {
+  test('the environment label is a content change, so it stays medium', () => {
     const input = baseInput({
       environmentDiff: { status: 'ok', entries: [{ key: 'environment', label: 'Environment label' }] },
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'environment-changed');
+    const clue = runClues(input).find((c) => c.rule === 'environment-changed');
+    expect(clue?.strength).toBe('medium');
+  });
+
+  test('a tool-version or color-scheme diff alone stays weak', () => {
+    const input = baseInput({
+      environmentDiff: {
+        status: 'ok',
+        entries: [
+          { key: 'playwrightVersion', label: 'Playwright version' },
+          { key: 'colorScheme', label: 'Color scheme' },
+        ],
+      },
+    });
+    const clue = runClues(input).find((c) => c.rule === 'environment-changed');
     expect(clue?.strength).toBe('weak');
   });
 
@@ -480,7 +517,7 @@ describe('browser-specific', () => {
         { browser: 'firefox', status: 'passed' },
       ],
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'browser-specific');
+    const clue = runClues(input).find((c) => c.rule === 'browser-specific');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('medium');
     expect(clue!.detail).toContain('firefox');
@@ -498,21 +535,10 @@ describe('browser-specific', () => {
   });
 });
 
-describe('fixed-before', () => {
-  test('positive: a cluster with a recorded fix that regressed', () => {
+describe('fixed-before is no longer a clue', () => {
+  test('a regressed cluster does not add a clue (the fact moves to the verdict)', () => {
     const input = baseInput({
       cluster: { fixCommit: 'abc1234def567', fixLandedRunId: 3, fixVerification: 'regressed' },
-    });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'fixed-before');
-    expect(clue).toBeTruthy();
-    expect(clue!.strength).toBe('weak');
-    expect(clue!.detail).toContain('abc1234');
-    expect(clue!.citations[0]).toEqual({ section: 'priorDiagnosis' });
-  });
-
-  test('negative: a cluster whose fix still holds does not fire', () => {
-    const input = baseInput({
-      cluster: { fixCommit: 'abc1234def567', fixLandedRunId: 3, fixVerification: 'stopped-failing' },
     });
     expect(rules(input)).not.toContain('fixed-before');
   });
@@ -543,7 +569,7 @@ describe('lock-holder-failed', () => {
         },
       ],
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'lock-holder-failed');
+    const clue = runClues(input).find((c) => c.rule === 'lock-holder-failed');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('strong');
     expect(clue!.detail).toContain('db');
@@ -623,7 +649,7 @@ describe('lock-cross-shard', () => {
         },
       ],
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'lock-cross-shard');
+    const clue = runClues(input).find((c) => c.rule === 'lock-cross-shard');
     expect(clue).toBeTruthy();
     expect(clue!.strength).toBe('medium');
     expect(clue!.detail).toContain('db');
@@ -692,7 +718,7 @@ describe('dialog-open-on-failure', () => {
     const input = baseInput({
       dialogs: [{ type: 'confirm', message: 'Stay signed in?', closedAt: T0 + 4_800 }],
     });
-    const clue = buildFailureClues(input).find((c) => c.rule === 'dialog-open-on-failure');
+    const clue = runClues(input).find((c) => c.rule === 'dialog-open-on-failure');
     expect(clue).toBeDefined();
     expect(clue!.strength).toBe('strong');
     expect(clue!.title).toContain('confirm');
@@ -708,5 +734,137 @@ describe('dialog-open-on-failure', () => {
 
   test('no dialogs, no clue', () => {
     expect(rules(baseInput())).not.toContain('dialog-open-on-failure');
+  });
+});
+
+describe('the story pass', () => {
+  test('blocked-by-pending-request chains the blocked element, the slow request and the console line', () => {
+    const quote = {
+      method: 'POST',
+      url: 'https://shop.example.com/api/checkout/quote',
+      status: 200,
+      duration: 3_000,
+      startTime: T0 + 1_600,
+    };
+    const warning = {
+      type: 'warning',
+      text: 'price quote still pending after 20s — Pay stays disabled',
+      timestamp: T0 + 3_500,
+    };
+    const timeline = buildFailureTimeline(timelineInput({ networkRequests: [quote], consoleLogs: [warning] }));
+    const { story } = buildFailureClues(
+      baseInput({ timeline, ariaSnapshot: 'button "Pay"', networkRequests: [quote], consoleLogs: [warning] }),
+    );
+    expect(story?.id).toBe('blocked-by-pending-request');
+    expect(story!.clueIds).toContain('element-present-but-blocked');
+    expect(story!.clueIds).toContain('slow-request-overlapping-failure');
+    expect(story!.clueIds).toContain('console-mentions-target');
+    expect(story!.strength).toBe('strong');
+    expect(story!.sentence.toLowerCase()).toContain('/api/checkout/quote');
+  });
+
+  test('renamed chains element-renamed and page-structure-changed', () => {
+    const healing = {
+      source: 'element-match',
+      recommendation: { recommended: { locator: "getByRole('button', { name: 'Pay now' })" } },
+    } as unknown as FailureClueInput['healing'];
+    const { story } = buildFailureClues(
+      baseInput({
+        healing,
+        pageDiff: { locatorChange: { type: 'renamed', role: 'button', name: 'Pay now', oldName: 'Pay' } },
+      }),
+    );
+    expect(story?.id).toBe('renamed');
+    expect(story!.sentence).toContain('renamed from "Pay" to "Pay now"');
+  });
+
+  test('removed fires when a node is gone and healing found no rename', () => {
+    const { story } = buildFailureClues(
+      baseInput({
+        pageDiff: { locatorChange: { type: 'removed', role: 'button', name: 'Refresh', oldName: null } },
+      }),
+    );
+    expect(story?.id).toBe('removed');
+    expect(story!.sentence).toContain('"Refresh"');
+  });
+
+  test('wrong-page chains the wrong page and a failed request', () => {
+    const failed = {
+      method: 'GET',
+      url: 'https://app.test/api/session',
+      status: 500,
+      duration: 100,
+      startTime: T0 + 4_700,
+    };
+    const timeline = buildFailureTimeline(timelineInput({ networkRequests: [failed] }));
+    const { story } = buildFailureClues(
+      baseInput({ timeline, appState: { url: 'https://app.test/login' }, networkRequests: [failed] }),
+    );
+    expect(story?.id).toBe('wrong-page');
+  });
+
+  test('polluted-worker fires from the previous worker execution failing', () => {
+    const { story } = buildFailureClues(
+      baseInput({
+        workerExecutions: [
+          { id: 9, testCaseId: 2, title: 'prior test', status: 'failed', startedAt: T0 - 1_000 },
+          { id: 10, testCaseId: 1, title: 'this test', status: 'failed', startedAt: T0 },
+        ],
+      }),
+    );
+    expect(story?.id).toBe('polluted-worker');
+    expect(story!.sentence).toContain('prior test');
+  });
+
+  test('backend-error chains the server log and the request', () => {
+    const req = {
+      method: 'POST',
+      url: 'https://app.test/api/pay',
+      status: 500,
+      duration: 200,
+      startTime: T0 + 4_600,
+      serverLogs: [{ level: 'error', message: 'charge failed: card declined', timestamp: T0 + 4_650 }],
+    };
+    const timeline = buildFailureTimeline(timelineInput({ networkRequests: [req] }));
+    const { story } = buildFailureClues(baseInput({ timeline, networkRequests: [req] }));
+    expect(story?.id).toBe('backend-error');
+    expect(story!.sentence).toContain('card declined');
+  });
+
+  test('timing chains the timeout budget and the slow request', () => {
+    const slow = {
+      method: 'GET',
+      url: 'https://app.test/api/report',
+      status: 200,
+      duration: 4_000,
+      startTime: T0 + 1_600,
+    };
+    const timeline = buildFailureTimeline(
+      timelineInput({
+        timeout: 4_000,
+        duration: 4_000,
+        networkRequests: [slow],
+        steps: [
+          {
+            title: "page.waitForResponse('/api/report')",
+            category: 'action',
+            duration: 3_800,
+            startTime: T0,
+            error: 'timed out',
+          },
+        ],
+      }),
+    );
+    const { story } = buildFailureClues(
+      baseInput({ timeline, timeout: 4_000, networkRequests: [slow], parsedError: null, ariaSnapshot: null }),
+    );
+    expect(story?.id).toBe('timing');
+  });
+
+  test('no combination yields a null story', () => {
+    const { story } = buildFailureClues(
+      baseInput({ environmentDiff: { status: 'ok', entries: [{ key: 'viewport' }] } }),
+    );
+    expect(story).toBeNull();
   });
 });

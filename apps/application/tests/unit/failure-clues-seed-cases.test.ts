@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, test, expect } from 'vitest';
-import { buildFailureClues, type FailureClue, type FailureClueInput } from '#shared/failure-clues';
+import { buildFailureClues, type FailureCluesReport, type FailureClueInput } from '#shared/failure-clues';
 
 /**
  * A frozen baseline of the ordered clue ranking for four seeded executions. The
@@ -19,37 +19,46 @@ function loadInput(executionId: number): FailureClueInput {
 }
 
 /** The ranked clue output reduced to the two fields the baseline pins. */
-function ranking(clues: FailureClue[]): Array<[string, string]> {
-  return clues.map((clue) => [clue.rule, clue.strength]);
+function ranking(report: FailureCluesReport): Array<[string, string]> {
+  return report.clues.map((clue) => [clue.rule, clue.strength]);
 }
 
 describe('buildFailureClues — seeded failure ranking baseline', () => {
   test('#37 — checkout, Pay click timeout', () => {
-    expect(ranking(buildFailureClues(loadInput(37)))).toEqual([
-      ['page-structure-changed', 'strong'],
+    const report = buildFailureClues(loadInput(37));
+    // The blocked element leads; the resolved-locator page-structure change drops
+    // to medium and behind the story members; the fixed-before fact left the list.
+    expect(ranking(report)).toEqual([
       ['element-present-but-blocked', 'strong'],
       ['console-mentions-target', 'medium'],
       ['slow-request-overlapping-failure', 'medium'],
-      ['fixed-before', 'weak'],
+      ['page-structure-changed', 'medium'],
     ]);
+    expect(report.story?.id).toBe('blocked-by-pending-request');
   });
 
   test('#13 — same cluster, earlier run', () => {
-    expect(ranking(buildFailureClues(loadInput(13)))).toEqual([
-      ['page-structure-changed', 'strong'],
+    const report = buildFailureClues(loadInput(13));
+    expect(ranking(report)).toEqual([
       ['element-present-but-blocked', 'strong'],
       ['console-mentions-target', 'medium'],
       ['slow-request-overlapping-failure', 'medium'],
-      ['environment-changed', 'medium'],
-      ['fixed-before', 'weak'],
+      ['page-structure-changed', 'medium'],
+      ['environment-changed', 'weak'],
     ]);
+    expect(report.story?.id).toBe('blocked-by-pending-request');
   });
 
   test("#781 — cluster #10's latest occurrence, toHaveCount on getByRole('row')", () => {
-    expect(ranking(buildFailureClues(loadInput(781)))).toEqual([['environment-changed', 'medium']]);
+    const report = buildFailureClues(loadInput(781));
+    // A Playwright-version and color-scheme diff only, so environment stays weak.
+    expect(ranking(report)).toEqual([['environment-changed', 'weak']]);
+    expect(report.story).toBeNull();
   });
 
   test("#587 — cluster #5's latest occurrence, .modal.is-open timeout", () => {
-    expect(ranking(buildFailureClues(loadInput(587)))).toEqual([]);
+    const report = buildFailureClues(loadInput(587));
+    expect(ranking(report)).toEqual([]);
+    expect(report.story).toBeNull();
   });
 });

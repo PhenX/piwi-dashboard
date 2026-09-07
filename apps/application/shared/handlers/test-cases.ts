@@ -14,8 +14,17 @@ import { eq, and, desc, sql, isNull, isNotNull } from 'drizzle-orm';
 import { computeWastedMs, DEFAULT_WASTED_WAIT_PATTERNS } from '../utils/wasted-waits';
 import { inlineCasePayloads } from '../../server/utils/case-payloads';
 import { buildFailureVerdict } from '../failure-verdict';
+import { buildSituation } from '../situation';
+import { computeNextStep } from '../next-step';
+import { getClusterPatchFacts } from './failure-clusters';
 import { buildFailureTimeline, type FailureTimeline, type TimelineCallsite } from '../failure-timeline';
-import { buildFailureClues, type FailureClue, type FailureClueInput, type FailureCluePageDiff } from '../failure-clues';
+import {
+  buildFailureClues,
+  type FailureClue,
+  type FailureStory,
+  type FailureClueInput,
+  type FailureCluePageDiff,
+} from '../failure-clues';
 import { parsePlaywrightError } from '../error-parse';
 import { failingStepParams } from '../describe-failure';
 import { diffAttempts, type AttemptDiffEntry, type AttemptEvidence } from '../attempt-diff';
@@ -169,6 +178,9 @@ export async function getTestRunCase(
   // Custom wasted-wait patterns; null = the defaults are in effect, so the
   // stored wasted_time_ms (computed at ingest) is authoritative.
   wastedPatterns: readonly string[] | null = null,
+  // Server-only signals the next-step policy reads; the demo and MCP callers
+  // omit them.
+  opts: { aiConfigured?: boolean; ciRerunAvailable?: boolean; now?: Date } = {},
 ) {
   const [trc] = await db.select().from(testRunsCases).where(eq(testRunsCases.id, id));
   if (!trc) return null;
@@ -284,6 +296,11 @@ export async function getTestRunCase(
         isNew: cluster.firstSeenRunId === trc.testRunId,
         sameRunCaseCount: Number(sameRun?.count ?? 0),
         diagnosis: diagnosis ?? null,
+        fixVerification: cluster.fixVerification ?? null,
+        fixCommit: cluster.fixCommit ?? null,
+        fixLandedRunId: cluster.fixLandedRunId ?? null,
+        fixLandedAt: cluster.fixLandedAt ?? null,
+        assignee: cluster.assignee ?? null,
       };
     }
   }
@@ -402,6 +419,42 @@ export async function getTestRunCase(
     owner: testCase?.owner ?? null,
   });
 
+  // The situation sentence and the single next step — built from the verdict and
+  // the same healing / diagnosis facts the toolbox reads, so the top of the page
+  // says what to do without re-deriving it in the UI.
+  const healing = await getLocatorHealing(db, id).catch(() => null);
+  const patchFacts = failureCluster ? await getClusterPatchFacts(db, failureCluster.id) : null;
+  const situation = verdict
+    ? buildSituation({
+        why: verdict.why,
+        since: verdict.since,
+        cluster: verdict.cluster,
+        owner: verdict.owner,
+        clusterStatus: failureCluster?.status ?? null,
+        assignee: failureCluster?.assignee ?? null,
+        now: opts.now,
+      })
+    : null;
+  const nextStep = computeNextStep({
+    status: trc.status,
+    blockedByCase: blockedByCase ? { id: blockedByCase.id, title: blockedByCase.title } : null,
+    clusterStatus: failureCluster?.status ?? null,
+    fixVerification: failureCluster?.fixVerification ?? null,
+    fixLandedRunId: failureCluster?.fixLandedRunId ?? null,
+    fixCommit: failureCluster?.fixCommit ?? null,
+    hasHealingRecommendation: Boolean(healing && healing.applicable !== false && healing.recommendation?.recommended),
+    diagnosisCompleted: patchFacts?.diagnosisCompleted ?? false,
+    diagnosisSummary: patchFacts?.summary ?? null,
+    patchFile: patchFacts?.patchFile ?? null,
+    patchAppliesCleanly: patchFacts?.patchAppliesCleanly ?? false,
+    why: verdict?.why ?? null,
+    errorKind: verdict?.kind ?? null,
+    aiConfigured: opts.aiConfigured ?? false,
+    ciRerunAvailable: opts.ciRerunAvailable ?? false,
+    clusterId: failureCluster?.id ?? null,
+    executionId: trc.id,
+  });
+
   return {
     id: trc.id,
     testCaseId: trc.testCaseId,
@@ -450,6 +503,8 @@ export async function getTestRunCase(
     blockedTests,
     failureCluster,
     verdict,
+    situation,
+    nextStep,
     quarantined,
     testRun: testRun ? { ...testRunPublic, project, reports: reportList } : testRun,
     attachments: attachmentList,
@@ -574,6 +629,8 @@ export async function getExecutionSteps(db: DrizzleDB, id: number): Promise<Exec
 /** What the clue engine returns for one execution, plus the failure anchor the UI needs. */
 export interface FailureCluesResult {
   clues: FailureClue[];
+  /** The story chaining the clues into one sentence, or null when no combination matches. */
+  story: FailureStory | null;
   /** The moment of failure, in ms relative to the timeline origin — the `t+0` the card counts back from. */
   failureAt: number | null;
 }
@@ -770,10 +827,11 @@ export async function loadFailureClueInput(
 }
 
 /**
- * The ranked deterministic clues for one failing execution, plus the failure
- * anchor the UI counts back from. Shared by the REST endpoint, the demo mirror,
- * the AI-context builder and the MCP tools. Returns an empty list when the
- * execution does not exist.
+ * The ranked deterministic clues for one failing execution, the story that
+ * chains them when a combination matches, and the failure anchor the UI counts
+ * back from. Shared by the REST endpoint, the demo mirror, the AI-context
+ * builder and the MCP tools. Returns an empty list when the execution does not
+ * exist.
  */
 export async function getFailureClues(
   db: DrizzleDB,
@@ -781,8 +839,9 @@ export async function getFailureClues(
   opts: { slowRequestMs?: number | null } = {},
 ): Promise<FailureCluesResult> {
   const input = await loadFailureClueInput(db, id, opts);
-  if (!input) return { clues: [], failureAt: null };
-  return { clues: buildFailureClues(input), failureAt: input.timeline ? input.timeline.failureAt : null };
+  if (!input) return { clues: [], story: null, failureAt: null };
+  const { clues, story } = buildFailureClues(input);
+  return { clues, story, failureAt: input.timeline ? input.timeline.failureAt : null };
 }
 
 /** Coerce a stored `startedAt` (epoch ms number or Date) to epoch ms. */

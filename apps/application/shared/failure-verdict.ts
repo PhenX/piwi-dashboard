@@ -41,6 +41,16 @@ export interface FailureVerdict extends FailureDescription {
     isFirstFailure: boolean;
     /** The commit and author the run reported, when the reporter collected SCM metadata. */
     commit: FailureVerdictCommit | null;
+    /**
+     * The earlier fix that did not hold — set when the execution's cluster
+     * carries a fix verification that later regressed. Null otherwise.
+     */
+    fixedBefore: {
+      commit: string | null;
+      commitShort: string | null;
+      runId: number | null;
+      at: string | Date | null;
+    } | null;
   };
   cluster: {
     id: number;
@@ -90,6 +100,11 @@ export interface FailureVerdictInput {
         firstSeenRunId: number;
         firstSeenAt?: string | Date | null;
         sameRunCaseCount: number;
+        /** Fix-verification facts, so a regressed fix surfaces as `since.fixedBefore`. */
+        fixVerification?: string | null;
+        fixCommit?: string | null;
+        fixLandedRunId?: number | null;
+        fixLandedAt?: string | Date | null;
       })
     | null;
   /** The test's `piwi:owner` annotation; CODEOWNERS is layered on by the server route. */
@@ -123,6 +138,19 @@ export function buildFailureVerdict(input: FailureVerdictInput): FailureVerdict 
   const sha = input.scm?.commit?.trim() || null;
   const cluster = input.cluster ?? null;
 
+  // A cluster whose recorded fix regressed carries the "fixed once before, the
+  // fix did not hold" fact; it belongs to the situation, not the clue list.
+  const fixSha = cluster?.fixCommit?.trim() || null;
+  const fixedBefore =
+    cluster && cluster.fixVerification === 'regressed' && (fixSha || cluster.fixLandedRunId != null)
+      ? {
+          commit: fixSha,
+          commitShort: fixSha ? fixSha.slice(0, 7) : null,
+          runId: cluster.fixLandedRunId ?? null,
+          at: cluster.fixLandedAt ?? null,
+        }
+      : null;
+
   return {
     ...description,
     kind: parsed.kind,
@@ -142,6 +170,7 @@ export function buildFailureVerdict(input: FailureVerdictInput): FailureVerdict 
             branch: input.scm?.branch?.trim() || null,
           }
         : null,
+      fixedBefore,
     },
     cluster: cluster
       ? { id: cluster.id, name: describeCluster(cluster), otherTestsInRun: Math.max(0, cluster.sameRunCaseCount - 1) }

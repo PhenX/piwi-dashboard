@@ -11,16 +11,67 @@
 import { eq, and, desc, sql, inArray, or, isNull, lte } from 'drizzle-orm';
 
 import type { DrizzleDB } from './db';
-import type { OpenFailureCluster } from '../../types/api';
+import type { OpenFailureCluster, OccurrenceSeriesPoint } from '../../types/api';
 import { recomputeClusterOccurrences } from './failure-cluster-ops';
 import { getQuarantinedCaseIds, listQuarantine, addQuarantine } from './quarantine';
 import { clusterClue, computeSnooze, type SnoozeOption } from '../inbox-queues';
+import { parsePlaywrightError } from '#shared/error-parse';
+import { failingStepParams } from '#shared/describe-failure';
+import { computeClusterState, type ClusterState } from '#shared/cluster-state';
+import { computeNextStep, type NextStep } from '#shared/next-step';
+import { getLocatorHealing } from '../../server/utils/locator-healing';
+
+/** Whether a stored patch validation reports the patch applying to the current tree. */
+function patchApplies(status: unknown): boolean {
+  return status === 'applies' || status === 'applies-with-offset';
+}
+
+/**
+ * The cluster's completed diagnosis reduced to the facts the next-step policy
+ * reads: whether a completed diagnosis exists, its one-line summary, the file
+ * its patch touches, and whether that patch validates as applying cleanly.
+ */
+export interface ClusterPatchFacts {
+  diagnosisCompleted: boolean;
+  summary: string | null;
+  patchFile: string | null;
+  patchAppliesCleanly: boolean;
+}
+
+export async function getClusterPatchFacts(db: DrizzleDB, clusterId: number): Promise<ClusterPatchFacts> {
+  const [diag] = await db
+    .select({ status: failureDiagnoses.status, summary: failureDiagnoses.summary, details: failureDiagnoses.details })
+    .from(failureDiagnoses)
+    .where(and(eq(failureDiagnoses.clusterId, clusterId), eq(failureDiagnoses.scope, 'cluster')));
+  if (!diag || diag.status !== 'completed') {
+    return { diagnosisCompleted: false, summary: null, patchFile: null, patchAppliesCleanly: false };
+  }
+  const details = (diag.details ?? null) as {
+    suggestedFix?: { patch?: unknown; file?: unknown; description?: unknown; patchValidation?: { status?: unknown } };
+    patchValidation?: { status?: unknown };
+  } | null;
+  const sf = details?.suggestedFix ?? null;
+  const patch = typeof sf?.patch === 'string' ? sf.patch : null;
+  const validationStatus = sf?.patchValidation?.status ?? details?.patchValidation?.status ?? null;
+  return {
+    diagnosisCompleted: true,
+    summary: diag.summary ?? (typeof sf?.description === 'string' ? sf.description : null),
+    patchFile: typeof sf?.file === 'string' ? sf.file : null,
+    patchAppliesCleanly: Boolean(patch) && patchApplies(validationStatus),
+  };
+}
 
 type ProjectScope = 'all' | Set<number>;
 
 const VALID_STATUSES = ['open', 'resolved', 'ignored'];
 
-export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
+export async function getFailureCluster(
+  db: DrizzleDB,
+  clusterId: number,
+  // Server-only signals the next-step policy reads; the demo and MCP callers
+  // omit them (a demo instance configures neither AI nor a CI re-run).
+  opts: { aiConfigured?: boolean; ciRerunAvailable?: boolean; now?: Date } = {},
+) {
   const [cluster] = await db.select().from(failureClusters).where(eq(failureClusters.id, clusterId));
   if (!cluster) return null;
 
@@ -90,6 +141,92 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
     ? { name: annotationOwner, source: 'annotation' as const }
     : (null as { name: string; source: 'annotation' | 'codeowners' } | null);
 
+  // The project's recent runs, newest first — the frame for both the occurrence
+  // sparkline (last 20) and the "still failing / quiet" decision.
+  const projectRuns = await db
+    .select({ id: testRuns.id, startedAt: testRuns.startTime })
+    .from(testRuns)
+    .where(eq(testRuns.projectId, cluster.projectId))
+    .orderBy(desc(testRuns.startTime))
+    .limit(50);
+  const seriesRuns = projectRuns.slice(0, 20);
+  const seriesRunIds = seriesRuns.map((r) => r.id);
+  const occurrenceRows =
+    seriesRunIds.length > 0
+      ? await db
+          .select({ runId: testRunsCases.testRunId, occurrences: sql<number>`count(*)` })
+          .from(testRunsCases)
+          .where(and(eq(testRunsCases.failureClusterId, clusterId), inArray(testRunsCases.testRunId, seriesRunIds)))
+          .groupBy(testRunsCases.testRunId)
+      : [];
+  const occurrencesByRun = new Map(occurrenceRows.map((r: any) => [r.runId, Number(r.occurrences)]));
+  // Oldest first, one point per run with 0 where the cluster did not occur.
+  const occurrenceSeries: OccurrenceSeriesPoint[] = seriesRuns
+    .map((r) => ({ runId: r.id, startedAt: r.startedAt, occurrences: occurrencesByRun.get(r.id) ?? 0 }))
+    .reverse();
+
+  const quarantinedCount = affectedTestCases.filter((t: any) => quarantinedIds.has(t.testCaseId)).length;
+
+  const clusterState: ClusterState = computeClusterState(
+    {
+      status: cluster.status ?? 'open',
+      assignee: cluster.assignee ?? null,
+      fixVerification: cluster.fixVerification ?? null,
+      fixCommit: cluster.fixCommit ?? null,
+      fixLandedRunId: cluster.fixLandedRunId ?? null,
+      lastSeenRunId: cluster.lastSeenRunId,
+      lastSeenAt: lastRun?.startTime ?? null,
+      updatedAt: cluster.updatedAt ?? null,
+      triageNote: cluster.triageNote ?? null,
+      snoozedUntil: cluster.snoozedUntil ?? null,
+      snoozeMode: cluster.snoozeMode ?? null,
+      affectedTests: Number(countRow?.affectedTests ?? 0),
+      quarantinedTests: quarantinedCount,
+    },
+    { runIdsNewestFirst: projectRuns.map((r) => r.id), now: opts.now },
+  );
+
+  // The next-step policy runs on the cluster's latest occurrence: its locator
+  // healing and error kind, plus the cluster's diagnosed patch and fix state.
+  const patchFacts = await getClusterPatchFacts(db, clusterId);
+  let hasHealingRecommendation = false;
+  let latestErrorKind: ReturnType<typeof parsePlaywrightError>['kind'] | null = null;
+  if (latestOccurrence?.id) {
+    const [healing, [latestExec]] = await Promise.all([
+      getLocatorHealing(db, latestOccurrence.id).catch(() => null),
+      db
+        .select({ error: testRunsCases.error, steps: testRunsCases.steps })
+        .from(testRunsCases)
+        .where(eq(testRunsCases.id, latestOccurrence.id)),
+    ]);
+    hasHealingRecommendation = Boolean(healing && healing.applicable !== false && healing.recommendation?.recommended);
+    if (latestExec?.error) {
+      latestErrorKind = parsePlaywrightError(latestExec.error, {
+        stepParams: failingStepParams(
+          Array.isArray(latestExec.steps) ? (latestExec.steps as Parameters<typeof failingStepParams>[0]) : null,
+        ),
+      }).kind;
+    }
+  }
+
+  const nextStep: NextStep = computeNextStep({
+    status: cluster.status ?? 'open',
+    clusterStatus: cluster.status ?? 'open',
+    fixVerification: cluster.fixVerification ?? null,
+    fixLandedRunId: cluster.fixLandedRunId ?? null,
+    fixCommit: cluster.fixCommit ?? null,
+    hasHealingRecommendation,
+    diagnosisCompleted: patchFacts.diagnosisCompleted,
+    diagnosisSummary: patchFacts.summary,
+    patchFile: patchFacts.patchFile,
+    patchAppliesCleanly: patchFacts.patchAppliesCleanly,
+    errorKind: latestErrorKind,
+    aiConfigured: opts.aiConfigured ?? false,
+    ciRerunAvailable: opts.ciRerunAvailable ?? false,
+    clusterId,
+    executionId: latestOccurrence?.id ?? null,
+  });
+
   return {
     ...cluster,
     affectedTests: Number(countRow?.affectedTests ?? 0),
@@ -117,6 +254,9 @@ export async function getFailureCluster(db: DrizzleDB, clusterId: number) {
     })),
     links,
     owner,
+    clusterState,
+    occurrenceSeries,
+    nextStep,
   };
 }
 
