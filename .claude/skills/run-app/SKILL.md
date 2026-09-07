@@ -44,6 +44,9 @@ npm run app:dev:bg          # dev server on http://localhost:3000, detached, wai
 
 - Nuxt HMR picks up edits; there is no need to restart per change. Compile errors show up in
   `.data/dev-server.log`, not in the browser.
+- `app:seed:dev` also copies the committed evidence media (`public/demo/{screenshots,traces,videos}`)
+  into the storage directory under the `demo/…` paths the seeded rows reference, so the failure pages
+  serve the real screenshot, trace and video through `/api/files/` instead of a broken image.
 - The Playwright E2E config reuses a server already on port 3000 (`npm run app:test -- <spec>`), so one
   background server serves both your screenshots and the specs.
 - Capture against it with `npm run app:screens -- --route <path> --url http://localhost:3000`.
@@ -59,6 +62,22 @@ node scripts/db-query.mjs "select id, status from test_runs_cases where status='
 ```
 
 Authentication is off on a plain dev server, so no key is needed.
+
+## Measure the failure pages' legibility
+
+```bash
+npm run app:measure -- --url http://localhost:3000        # against a running server
+npm run app:measure -- --json                             # boots + seeds its own server
+```
+
+`measure-detail-pages.mjs` reads the execution page (`/test-run-cases/:id`) and the failure
+cluster page (`/failure-clusters/:id`) after hydration and settle, and reports — inside the detail
+panel — the scroll offset of each block (header, headline, clues, evidence, the fix sections, what
+changed, affected tests, history), the panel's total scroll height, the interactive controls and
+help hints above the fold, the open code blocks and their height, the word count, the active
+evidence tab and the clue strengths. Default routes cover #37, #13 and clusters #10, #2, #5, #1;
+`--routes` overrides them, `--width`/`--height` the viewport, `--json` prints one object per route.
+Without `--url` it boots and seeds a throwaway server the same way the screenshot harness does.
 
 ## Seeded entry points
 
