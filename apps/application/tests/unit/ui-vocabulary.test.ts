@@ -70,6 +70,11 @@ const RULES: Rule[] = [
     re: /\b(Regression status|Failure verdict|AI verdict|Diagnosis result|Resolution card)\b/i,
   },
   {
+    id: 'clue-labels',
+    hint: 'the story leads with "Most likely" and its disclosure is "All clues"',
+    re: /\b(The one clue|Other clues)\b/,
+  },
+  {
     id: 'since-last-pass',
     hint: 'the Changes tab replaced "Since last pass"',
     re: /\bSince last pass\b/i,

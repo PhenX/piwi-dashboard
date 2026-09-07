@@ -99,10 +99,10 @@ const { data: cluesData } = await useAsyncData<FailureCluesResult>(
 );
 
 const clues = computed(() => cluesData.value?.clues ?? []);
+const story = computed(() => cluesData.value?.story ?? null);
 const cluesFailureAt = computed(() => cluesData.value?.failureAt ?? null);
 const topClue = computed(() => clues.value[0] ?? null);
 const topClueSection = computed(() => topClue.value?.citations?.[0]?.section ?? null);
-const otherClues = computed(() => clues.value.slice(1));
 const hasTrace = computed(() => (execTraces.value?.length ?? 0) > 0);
 const selectedRunId = computed(() => (execution.value as { testRun?: { id?: number } } | null)?.testRun?.id ?? null);
 
@@ -556,13 +556,19 @@ const breadcrumbItems = computed(() => [
         </DetailHeader>
 
         <!-- ── What broke, in one line ────────────────────────────────── -->
-        <template v-if="clusterVerdict">
-          <TestCaseHeadlineCard :verdict="clusterVerdict" :top-clue="topClue" :provenance="headlineProvenance">
-            <!-- The cluster's identity facts live in the header facts line above;
-                 the headline stays the explanation, so its own fact row is empty. -->
-            <template #facts><span class="hidden" /></template>
-          </TestCaseHeadlineCard>
-        </template>
+        <UCard v-if="clusterVerdict" data-shot="failure-headline">
+          <h2 class="text-lg sm:text-xl font-semibold leading-snug text-highlighted break-words">
+            <FailureHeadline :parts="clusterVerdict.parts" />
+          </h2>
+          <p
+            v-if="clusterVerdict.detail"
+            class="font-mono text-xs text-muted truncate mt-1"
+            :title="clusterVerdict.detail"
+          >
+            {{ clusterVerdict.detail }}
+          </p>
+          <p v-if="headlineProvenance" class="text-xs text-dimmed mt-1">{{ headlineProvenance }}</p>
+        </UCard>
         <UCard v-else>
           <h2 class="text-lg font-semibold text-highlighted">{{ clusterName }}</h2>
           <p v-if="headlineProvenance" class="text-xs text-dimmed mt-1">{{ headlineProvenance }}</p>
@@ -589,8 +595,8 @@ const breadcrumbItems = computed(() => [
           </div>
         </div>
 
-        <!-- Deterministic clues beyond the strongest (which sits in the headline) -->
-        <CluesCard v-if="otherClues.length" :clues="otherClues" :failure-at="cluesFailureAt" title="Other clues" />
+        <!-- Most likely: the story that chains the clues, with every clue folded under it -->
+        <StoryLine v-if="story || clues.length" :story="story" :clues="clues" :failure-at="cluesFailureAt" />
 
         <!-- ── Evidence ───────────────────────────────────────────────── -->
         <div v-if="selectedExecId" class="space-y-2">

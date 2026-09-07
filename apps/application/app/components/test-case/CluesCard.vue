@@ -1,10 +1,14 @@
 <script setup lang="ts">
 /**
- * The clues card: the deterministic, rule-based findings for one failing
+ * The clue list: the deterministic, rule-based findings for one failing
  * execution, ranked strongest first. Each clue carries a strength chip, its
  * `t-N s` before the failure when it is anchored in time, and citation chips
  * that reveal the evidence section backing it — the same section-locator
  * mechanism the AI citations use, so a clue doubles as a jump into the funnel.
+ *
+ * It is the body of the story line's `more ▸` disclosure: a small heading and
+ * the ranked list, with no card wrapper or help hint of its own (the situation
+ * block carries the page's one hint).
  *
  * Pure presentation: the clues arrive pre-built from `/clues` (the deterministic
  * `buildFailureClues`); this component only draws them and wires the jumps.
@@ -12,13 +16,12 @@
 import type { FailureClue, FailureClueStrength } from '#shared/failure-clues';
 import { DIAGNOSIS_SECTION_SHORT } from '#shared/diagnosis-sections';
 import { useClusterSectionLocator } from '~/composables/useClusterSectionLocator';
-import SectionCard from '../shared/SectionCard.vue';
 
 const props = defineProps<{
   clues: FailureClue[];
   /** The moment of failure in ms relative to the timeline origin — anchors `t-N s`. */
   failureAt?: number | null;
-  /** Card heading — the cluster page renders the non-leading clues as "Other clues". */
+  /** The disclosure heading — rendered as "{title} (N)". */
   title?: string;
 }>();
 
@@ -44,15 +47,8 @@ function citationLabel(section: string): string {
 </script>
 
 <template>
-  <SectionCard
-    v-if="clues.length"
-    icon="i-lucide-search-check"
-    icon-class="text-primary"
-    :title="title ?? 'Clues'"
-    :count="clues.length"
-    help="case.clues"
-    data-shot="failure-clues"
-  >
+  <div v-if="clues.length" data-shot="failure-clues" class="space-y-2 rounded-md border border-default p-2.5">
+    <p v-if="title" class="text-xs font-medium text-muted">{{ title }} ({{ clues.length }})</p>
     <ul class="space-y-2.5">
       <li
         v-for="clue in clues"
@@ -88,5 +84,5 @@ function citationLabel(section: string): string {
         </div>
       </li>
     </ul>
-  </SectionCard>
+  </div>
 </template>

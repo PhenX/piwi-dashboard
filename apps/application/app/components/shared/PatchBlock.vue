@@ -14,7 +14,7 @@ const props = defineProps<{
   downloadName?: string;
 }>();
 
-const { copy, copied } = useCopy();
+const { copy, copied, copyGitApply: copyGitApplyPatch, downloadPatch: downloadPatchFile } = usePatchActions();
 
 const badge = computed<{
   color: 'success' | 'warning' | 'error' | 'neutral';
@@ -70,23 +70,11 @@ const errorLine = computed(() =>
 );
 
 function copyGitApply() {
-  copy(`git apply <<'EOF'\n${props.patch}\nEOF`, { toast: 'git apply command copied' });
+  copyGitApplyPatch(props.patch);
 }
 
 function downloadPatch() {
-  const body = props.patch.endsWith('\n') ? props.patch : props.patch + '\n';
-  const blob = new Blob([body], { type: 'text/x-patch' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${props.downloadName || 'piwi-fix'}.patch`;
-  document.body.appendChild(a);
-  a.click();
-  // Defer cleanup so the download isn't cut short mid-flight in some browsers.
-  setTimeout(() => {
-    a.remove();
-    URL.revokeObjectURL(url);
-  }, 1000);
+  downloadPatchFile(props.patch, props.downloadName || 'piwi-fix');
 }
 </script>
 

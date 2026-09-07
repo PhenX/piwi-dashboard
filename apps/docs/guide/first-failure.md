@@ -10,27 +10,25 @@ You've landed your first run ([Getting started](./getting-started)) and one test
 Open the failing test from the run page (click its row) to reach its **execution page**.
 
 <figure>
-  <img src="/screenshots/gather-evidence.png" alt="A failing execution laid out diagnosis-first: the header, a one-line headline, the other clues, and one evidence card with tabs">
-  <figcaption>One failing execution, read top to bottom: the headline, the clues, the evidence, and the fix.</figcaption>
+  <img src="/screenshots/gather-evidence.png" alt="A failing execution laid out diagnosis-first: one situation block — headline, most likely, situation and next step — and one evidence card with tabs">
+  <figcaption>One failing execution, read top to bottom: the situation block that says what broke, what is most likely and what to do, then the evidence.</figcaption>
 </figure>
 
 ## 1. The headline — what broke
 
-The first line is a plain-English sentence built from the Playwright error, before you read a word of the raw error itself:
+The top of the page is one **situation block**. Its heading is a plain-English sentence built from the Playwright error, before you read a word of the raw error itself:
 
 > `getByRole('button', { name: 'Pay' }) never became enabled — click timed out after 30 s`
 
-Under it, one row of facts: **why** (a new regression, or just flaky, or passed on retry), **since when** (the first run this started failing, with the commit and author), how many **other tests in this run** share the same cause, and the **owner**. The verbatim error is one click away under **Show raw error** — Piwi never rewrites it, it only leads with a readable summary. That same headline names the test on the run page, in [alerts](/features/notifications), in the [pull-request comment](./ci#pull-request-feedback), and in your terminal, so you recognize it everywhere.
+The verbatim error is one click away under **Raw error** — Piwi never rewrites it, it only leads with a readable summary. That same headline names the test on the run page, in [alerts](/features/notifications), in the [pull-request comment](./ci#pull-request-feedback), and in your terminal, so you recognize it everywhere.
 
-## 2. The clues — why
+## 2. Most likely — why
 
-Below the headline is a short list of **[clues](/features/evidence#clues)**: deterministic, rule-based findings correlated from the evidence — *no model runs*. Things like:
+Under the headline, the **Most likely** line gives you the one explanation, not a pile of them. When several **[clues](/features/evidence#clues)** — deterministic, rule-based findings correlated from the evidence, *no model runs* — form a known combination, it reads as one sentence:
 
-- *"GET /api/quote returned 504, 1.1 s before the failure"*
-- *"Element renamed — healing found it under a new identity"*
-- *"Page ended on /login, not /checkout"*
+> *"the Pay button stayed disabled because POST /api/checkout/quote was still in flight (28 s); the console said so 1.5 s before the click gave up"*
 
-Each clue carries a strength and a **citation** to the evidence it came from; click it and the page jumps to the proof. This is usually where the answer is.
+It carries a strength chip and how many clues **agree**; a **more** disclosure lists every clue, each with a **citation** to the evidence it came from — click it and the page jumps to the proof. Below that, the **situation** sentence says since when, on which commit, how many other tests share the cause, and who owns it, and the **Next** line names the one thing to do — apply the diagnosed patch, replace the locator, or reproduce locally — with the button to do it.
 
 ## 3. The evidence — see it
 

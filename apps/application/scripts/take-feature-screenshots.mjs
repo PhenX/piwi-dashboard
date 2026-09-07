@@ -592,22 +592,22 @@ const SCENES = [
   // ── Failure headline (report artifacts) ──────────────────────────────────
   {
     name: 'failure-headline',
-    description: 'Failing execution: the one-line headline card with Show raw error at its foot',
+    description: 'Failing execution: the situation block — headline, most likely, situation and next step',
     tags: ['desktop'],
-    // Execution 37 is clustered with a sibling in its run, so the facts row
-    // carries the cluster link next to the why and since-when chips.
+    // Execution 37 is clustered with a sibling in its run, so the situation
+    // sentence carries the cluster link next to the regression badge.
     route: '/test-run-cases/37',
     viewport: { width: 1280, height: 900 },
-    of: '[data-shot="failure-headline"]',
+    of: '[data-shot="situation-block"]',
     pad: 12,
   },
   {
     name: 'failure-headline-mobile',
-    description: 'The same headline card at phone width',
+    description: 'The same situation block at phone width',
     tags: ['desktop'],
     route: '/test-run-cases/37',
     viewport: { width: 375, height: 812 },
-    of: '[data-shot="failure-headline"]',
+    of: '[data-shot="situation-block"]',
     pad: 8,
   },
 

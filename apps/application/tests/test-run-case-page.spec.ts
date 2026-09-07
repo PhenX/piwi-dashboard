@@ -3,11 +3,12 @@ import { waitForHydration, retryPost } from './utils';
 import { PROJECT } from '#shared/test-project-names';
 
 /**
- * The single-column execution page: a header, the failure headline (with the raw
- * error one click away behind *Show raw error*), the other clues, one evidence
+ * The single-column execution page: one situation block — identity, the failure
+ * headline, the most likely explanation, the situation sentence and the next
+ * step, with the raw error one click away behind *Raw error* — then one evidence
  * card with content-level tabs (Timeline, Screen, Source, Network, Console,
  * State, Performance), then the Fix card and the History block. A passing
- * execution shows the same page with the Timeline tab selected and no Fix card.
+ * execution shows identity and facts only, on the Timeline tab, with no Fix card.
  */
 test.describe('Test-run-case page', () => {
   test.describe.configure({ mode: 'serial' });
@@ -84,22 +85,31 @@ test.describe('Test-run-case page', () => {
     passedCaseId = run.testCases.find((c: { status: string }) => c.status === 'passed').executionId;
   });
 
-  test('failing execution leads with the headline, the raw error one click away, then evidence and fix', async ({
+  test('failing execution leads with the situation block, the raw error one click away, then evidence and fix', async ({
     page,
   }) => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
 
-    // The one-line headline leads the page.
+    // One block frames the top; the headline is its h1.
+    const block = page.locator('[data-shot="situation-block"]');
+    await expect(block).toBeVisible();
     const headline = page.getByRole('heading', {
       name: /getByRole\('button', \{ name: 'Pay' \}\) was not found on the page — click timed out after 30 s/,
     });
     await expect(headline).toBeVisible();
-    await expect(page.getByText('First failure in this run')).toBeVisible();
 
-    // The raw error is a disclosure in the headline card, collapsed by default,
+    // The situation sentence says since when, in one clause; the next step follows.
+    const situation = page.locator('[data-shot="situation"]');
+    await expect(situation).toBeVisible();
+    await expect(situation).toContainText(/failed in this run/i);
+    const nextStep = page.locator('[data-shot="next-step"]');
+    await expect(nextStep).toBeVisible();
+    await expect(nextStep).toContainText('Next:');
+
+    // The raw error is a disclosure on the facts line, collapsed by default,
     // and reachable — with its Copy failure action — in one click.
-    const showRaw = page.getByRole('button', { name: 'Show raw error' });
+    const showRaw = page.getByRole('button', { name: 'Raw error' });
     await expect(showRaw).toBeVisible();
     await showRaw.click();
     await expect(page.getByRole('button', { name: 'Copy failure' })).toBeVisible();
@@ -125,26 +135,31 @@ test.describe('Test-run-case page', () => {
     expect(tabsY).toBeLessThan(fixY);
   });
 
-  test('passing execution opens on the Timeline tab', async ({ page }) => {
+  test('passing execution shows identity and facts only, on the Timeline tab', async ({ page }) => {
     await page.goto(`/test-run-cases/${passedCaseId}`);
     await waitForHydration(page);
 
     const timelineTab = page.getByRole('tab', { name: /^Timeline/ });
     await expect(timelineTab).toBeVisible();
     await expect(timelineTab).toHaveAttribute('aria-selected', 'true');
-    // No failure → no headline, no raw-error disclosure, no Fix card.
-    await expect(page.getByRole('button', { name: 'Show raw error' })).toHaveCount(0);
+    // No failure → no headline, no story, no situation, no next step, no Fix card.
+    await expect(page.getByRole('button', { name: 'Raw error' })).toHaveCount(0);
+    await expect(page.locator('[data-shot="situation"]')).toHaveCount(0);
+    await expect(page.locator('[data-shot="next-step"]')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Fix', exact: true })).toHaveCount(0);
     // A passing execution shows the steps table without the failure axis or its controls.
     await expect(page.getByRole('button', { name: 'Around the failure' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: /^Steps/ })).toBeVisible();
   });
 
-  test('the header offers a Copy retry command action', async ({ page }) => {
+  test('the retry command is in the More menu, not an always-on header button', async ({ page }) => {
     await page.goto(`/test-run-cases/${failedCaseId}`);
     await waitForHydration(page);
-    // The button keeps its label as accessible name even when icon-only in a narrow header.
-    await expect(page.getByRole('button', { name: /Copy retry command/ })).toBeVisible();
+    // The header no longer carries a standing Copy retry command button.
+    await expect(page.getByRole('button', { name: /Copy retry command/ })).toHaveCount(0);
+    // It is reachable in the More actions menu.
+    await page.getByRole('button', { name: 'More actions' }).click();
+    await expect(page.getByRole('menuitem', { name: /Copy retry command/ })).toBeVisible();
   });
 
   test('the Performance tab opens and shows its Web Vitals block', async ({ page }) => {
@@ -220,6 +235,15 @@ test.describe('Test-run-case page', () => {
     await expect(disclosure.getByText('locator', { exact: true })).toBeVisible();
   });
 
+  test('the story line folds every clue under a "more" disclosure titled "All clues"', async ({ page }) => {
+    await page.goto(`/test-run-cases/${failedCaseId}`);
+    await waitForHydration(page);
+    // This synthetic failure has no chained story, but its clues still list under
+    // the disclosure — and never as "The one clue" / "Other clues".
+    await expect(page.getByText('The one clue')).toHaveCount(0);
+    await expect(page.getByText('Other clues')).toHaveCount(0);
+  });
+
   test('History block opens populated from the SSR payload, without refetching or a hydration mismatch', async ({
     page,
   }) => {
@@ -243,5 +267,71 @@ test.describe('Test-run-case page', () => {
     await expect(historyCard.getByRole('link', { name: 'Test history' })).toBeVisible();
     expect(historyCalls).toEqual([]);
     expect(hydrationErrors).toEqual([]);
+  });
+});
+
+/**
+ * The story line, the situation sentence and the next step read from the
+ * deterministic demo seed: #37 chains the blocked-by-pending-request story and
+ * proposes the diagnosed patch, #587 replaces a locator, #682 reproduces. These
+ * run only when the seeded cases are present (a demo-seeded server); a bare test
+ * DB has no such ids, so the block skips rather than fails.
+ */
+test.describe('Situation block on seeded cases', () => {
+  let hasSeed = false;
+  test.beforeAll(async ({ request }) => {
+    hasSeed = (await request.get('/api/test-run-cases/37')).ok();
+  });
+  test.beforeEach(() => {
+    test.skip(!hasSeed, 'demo seed not loaded on this server');
+  });
+
+  test('#37 reads the story, the regression situation and the diagnosed-fix next step', async ({ page }) => {
+    await page.goto('/test-run-cases/37');
+    await waitForHydration(page);
+
+    // Most likely — the blocked-by-pending-request story, Strong, 3 clues agree.
+    await expect(page.getByText('Most likely:')).toBeVisible();
+    await expect(page.getByText('Strong', { exact: true })).toBeVisible();
+    await expect(page.getByText(/3 clues agree/)).toBeVisible();
+
+    // The situation sentence names the regression once, and links the cluster.
+    const situation = page.locator('[data-shot="situation"]');
+    await expect(situation).toContainText('New regression');
+    await expect(situation.getByRole('link', { name: /cluster #/ })).toBeVisible();
+
+    // The next step applies the diagnosed fix, with the trailing retry command.
+    const next = page.locator('[data-shot="next-step"]');
+    await expect(next).toContainText('Apply the diagnosed fix');
+    await expect(next.getByRole('button', { name: 'Copy git apply' })).toBeVisible();
+    await expect(next.getByRole('button', { name: 'Copy retry command' })).toBeVisible();
+
+    // "New regression" appears exactly once on the page.
+    await expect(page.getByText('New regression')).toHaveCount(1);
+  });
+
+  test('#587 proposes replacing the locator', async ({ page }) => {
+    test.skip(!(await (await page.request.get('/api/test-run-cases/587')).ok()), 'no #587');
+    await page.goto('/test-run-cases/587');
+    await waitForHydration(page);
+    const next = page.locator('[data-shot="next-step"]');
+    await expect(next).toContainText('Replace the locator');
+    await expect(next.getByRole('button', { name: 'Copy patch' })).toBeVisible();
+  });
+
+  test('#682 proposes reproducing locally', async ({ page }) => {
+    test.skip(!(await (await page.request.get('/api/test-run-cases/682')).ok()), 'no #682');
+    await page.goto('/test-run-cases/682');
+    await waitForHydration(page);
+    const next = page.locator('[data-shot="next-step"]');
+    await expect(next).toContainText('Reproduce locally');
+    await expect(next.getByRole('button', { name: 'Copy recipe' })).toBeVisible();
+  });
+
+  test('#13 leads with the most-likely explanation', async ({ page }) => {
+    test.skip(!(await (await page.request.get('/api/test-run-cases/13')).ok()), 'no #13');
+    await page.goto('/test-run-cases/13');
+    await waitForHydration(page);
+    await expect(page.getByText('Most likely:')).toBeVisible();
   });
 });
